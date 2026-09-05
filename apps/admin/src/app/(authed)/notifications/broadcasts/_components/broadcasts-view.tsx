@@ -42,47 +42,87 @@ import { serverVerdict } from '@/lib/server-verdict';
  * does not try to predict any of them.
  */
 
+/**
+ * Every audience the API can resolve, and how a person names one.
+ *
+ * `fields` rather than one optional box: a role or a permission at a
+ * seller needs BOTH the company and the thing, and an option that
+ * silently resolved to nobody because half of it was missing is worse
+ * than not offering it. Two of these were left out of the first version
+ * for exactly that reason — the capability existed and no person could
+ * reach it.
+ */
 const AUDIENCES: ReadonlyArray<{
   readonly label: string;
   readonly hint: string;
-  readonly build: (v: string) => AudienceSelector;
-  readonly field: string | null;
+  readonly fields: readonly string[];
+  readonly build: (v: readonly string[]) => AudienceSelector;
 }> = [
   {
     label: 'Every seller',
     hint: 'every active user at every company',
+    fields: [],
     build: () => ({ kind: 'ALL_SELLERS' }),
-    field: null,
   },
   {
     label: 'One company',
-    hint: 'seller id',
-    build: (v) => ({ kind: 'SELLER_ORG', sellerId: v }),
-    field: 'Seller id',
+    hint: 'everyone at that seller',
+    fields: ['Seller id'],
+    build: (v) => ({ kind: 'SELLER_ORG', sellerId: v[0] ?? '' }),
+  },
+  {
+    label: 'A role at one company',
+    hint: 'a company can rename its own roles, so prefer a permission where one fits',
+    fields: ['Seller id', 'Role key, e.g. finance'],
+    build: (v) => ({ kind: 'SELLER_ROLE', sellerId: v[0] ?? '', roleKey: v[1] ?? '' }),
+  },
+  {
+    label: 'Whoever holds a permission at one company',
+    hint: 'the durable way to say "whoever handles orders there"',
+    fields: ['Seller id', 'Permission key, e.g. orders.view'],
+    build: (v) => ({ kind: 'SELLER_PERMISSION', sellerId: v[0] ?? '', permission: v[1] ?? '' }),
+  },
+  {
+    label: 'One person at a seller',
+    hint: 'a single seller user',
+    fields: ['Seller user id'],
+    build: (v) => ({ kind: 'SELLER_USER', sellerUserId: v[0] ?? '' }),
   },
   {
     label: 'Every staff member',
     hint: 'everyone with an admin login',
+    fields: [],
     build: () => ({ kind: 'ALL_STAFF' }),
-    field: null,
   },
   {
     label: 'A staff role',
-    hint: 'role key, e.g. warehouse_supervisor',
-    build: (v) => ({ kind: 'STAFF_ROLE', roleKey: v }),
-    field: 'Role key',
+    hint: 'roles can be invented and renamed; a permission survives that',
+    fields: ['Role key, e.g. warehouse_supervisor'],
+    build: (v) => ({ kind: 'STAFF_ROLE', roleKey: v[0] ?? '' }),
   },
   {
-    label: 'Whoever holds a permission',
-    hint: 'survives an admin inventing a new role — the permission is the durable fact',
-    build: (v) => ({ kind: 'STAFF_PERMISSION', permission: v }),
-    field: 'Permission key',
+    label: 'Whoever holds a staff permission',
+    hint: 'the durable fact about what somebody does here',
+    fields: ['Permission key, e.g. warehouse.pack'],
+    build: (v) => ({ kind: 'STAFF_PERMISSION', permission: v[0] ?? '' }),
+  },
+  {
+    label: 'One staff member',
+    hint: 'a single admin user',
+    fields: ['Staff id'],
+    build: (v) => ({ kind: 'STAFF_USER', staffId: v[0] ?? '' }),
+  },
+  {
+    label: 'Everyone subscribed to a topic',
+    hint: 'people who opted IN to this topic on their own notifications page',
+    fields: ['Topic key, e.g. seller.order_dispatched'],
+    build: (v) => ({ kind: 'SUBSCRIBERS', topic: v[0] ?? '' }),
   },
 ];
 
 export function BroadcastsView(): ReactElement {
   const [audienceIdx, setAudienceIdx] = useState(0);
-  const [audienceValue, setAudienceValue] = useState('');
+  const [audienceValues, setAudienceValues] = useState<string[]>([]);
   const [channels, setChannels] = useState<string[]>(['IN_APP']);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -94,7 +134,11 @@ export function BroadcastsView(): ReactElement {
   const history = useBroadcasts();
 
   const pick = AUDIENCES[audienceIdx] ?? AUDIENCES[0]!;
-  const audience: AudienceSelector[] = [pick.build(audienceValue.trim())];
+  const audience: AudienceSelector[] = [pick.build(audienceValues.map((v) => v.trim()))];
+  // Every named field has to be filled: a selector missing half of
+  // itself resolves to nobody, and "0 people" is a confusing way to
+  // learn you left a box empty.
+  const audienceComplete = pick.fields.every((_, i) => (audienceValues[i] ?? '').trim() !== '');
   const previewed = preview.data ?? null;
   const ready =
     previewed !== null && title.trim().length >= 3 && body.trim().length >= 3 && !send.isPending;
@@ -135,7 +179,7 @@ export function BroadcastsView(): ReactElement {
               value={audienceIdx}
               onChange={(e) => {
                 setAudienceIdx(Number(e.target.value));
-                setAudienceValue('');
+                setAudienceValues([]);
                 preview.reset();
               }}
             >
@@ -145,18 +189,21 @@ export function BroadcastsView(): ReactElement {
                 </option>
               ))}
             </Select>
-            {pick.field !== null && (
+            {pick.fields.map((field, i) => (
               <Input
-                aria-label={pick.field}
+                key={field}
+                aria-label={field}
                 className="font-mono"
-                placeholder={pick.field}
-                value={audienceValue}
+                placeholder={field}
+                value={audienceValues[i] ?? ''}
                 onChange={(e) => {
-                  setAudienceValue(e.target.value);
+                  const next = [...audienceValues];
+                  next[i] = e.target.value;
+                  setAudienceValues(next);
                   preview.reset();
                 }}
               />
-            )}
+            ))}
           </FormField>
 
           <div>
@@ -191,7 +238,7 @@ export function BroadcastsView(): ReactElement {
           <div className="flex flex-wrap items-center gap-3">
             <Button
               variant="secondary"
-              disabled={preview.isPending || channels.length === 0}
+              disabled={preview.isPending || channels.length === 0 || !audienceComplete}
               onClick={() => {
                 setError(null);
                 setSent(null);

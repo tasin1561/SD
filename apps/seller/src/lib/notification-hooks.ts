@@ -25,6 +25,13 @@ export interface FeedPage {
   nextCursor: string | null;
 }
 
+export interface TopicDef {
+  topic: string;
+  label: string;
+  description: string;
+  group: string;
+}
+
 export interface SubscriptionView {
   topic: string;
   mode: 'SUBSCRIBED' | 'MUTED';
@@ -79,6 +86,21 @@ export function useMarkAllNotificationsRead(): UseMutationResult<unknown, Error,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['seller-notifications'] });
     },
+  });
+}
+
+/**
+ * The topics that can be chosen about, with names.
+ *
+ * Silencing something used to mean typing its code into a box. Nobody
+ * knows the codes, so in practice nothing was mutable.
+ */
+export function useNotificationTopics(): UseQueryResult<TopicDef[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['notification-topics'],
+    queryFn: () => client.request<TopicDef[]>(`${BASE}/topics`),
+    staleTime: 60 * 60_000,
   });
 }
 

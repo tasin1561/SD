@@ -10,8 +10,17 @@ function build() {
     findFirst: jest.fn(async () => null),
     create: jest.fn(async (_args: { data: Record<string, unknown> }) => ({ id: 'issue-1' })),
   };
-  const svc = new SystemIssueService({ client: { systemIssue } } as never);
-  return { svc, systemIssue };
+  // Recording a problem and telling somebody are two acts; the notifier
+  // is the second. Recorded rather than stubbed away so the cases below
+  // can assert on WHO is told, and when nobody is.
+  const notify = jest.fn(async () => undefined);
+  const svc = new SystemIssueService(
+    { client: { systemIssue } } as never,
+    {
+      notify,
+    } as never,
+  );
+  return { svc, systemIssue, notify };
 }
 
 describe('SystemIssueService — what reaches the board', () => {

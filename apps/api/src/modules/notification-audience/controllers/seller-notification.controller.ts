@@ -23,6 +23,10 @@ import {
   type SubscriptionView,
 } from '../services/notification-subscription.service';
 import { FeedQueryDto, SetSubscriptionDto } from '../dto/notification.dto';
+import {
+  NotificationTopicCatalogService,
+  type TopicDef,
+} from '../services/notification-topic-catalog.service';
 
 /**
  * A seller user's own inbox and their standing choices.
@@ -50,6 +54,7 @@ export class SellerNotificationController {
   constructor(
     private readonly feed: NotificationFeedService,
     private readonly subs: NotificationSubscriptionService,
+    private readonly catalog: NotificationTopicCatalogService,
   ) {}
 
   @Get()
@@ -79,6 +84,15 @@ export class SellerNotificationController {
   @ApiOperation({ summary: 'Mark everything read' })
   readAll(@CurrentSeller() seller: AuthenticatedSeller): Promise<{ marked: number }> {
     return this.feed.markAllRead(seller.userId);
+  }
+
+  @Get('topics')
+  @ApiOperation({
+    summary:
+      'The topics that can be chosen about, with names. Silencing something used to mean typing its code — nobody knows the codes',
+  })
+  topics(): readonly TopicDef[] {
+    return this.catalog.forSubject(NotificationSubjectType.SELLER_USER);
   }
 
   @Get('subscriptions')

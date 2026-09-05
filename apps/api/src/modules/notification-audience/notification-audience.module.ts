@@ -9,6 +9,7 @@ import { SellerNotificationController } from './controllers/seller-notification.
 import { NotificationAudienceService } from './services/notification-audience.service';
 import { NotificationBroadcastService } from './services/notification-broadcast.service';
 import { NotificationDispatchService } from './services/notification-dispatch.service';
+import { NotificationTopicCatalogService } from './services/notification-topic-catalog.service';
 import { NotificationFeedService } from './services/notification-feed.service';
 import { NotificationPolicyService } from './services/notification-policy.service';
 import { NotificationSubscriptionService } from './services/notification-subscription.service';
@@ -35,6 +36,7 @@ import { NotificationSubscriptionService } from './services/notification-subscri
     AdminNotificationBroadcastController,
   ],
   providers: [
+    NotificationTopicCatalogService,
     NotificationAudienceService,
     NotificationPolicyService,
     NotificationDispatchService,
@@ -44,6 +46,11 @@ import { NotificationSubscriptionService } from './services/notification-subscri
     SellerJwtGuard,
     StaffJwtGuard,
   ],
-  exports: [NotificationAudienceService, NotificationDispatchService, NotificationPolicyService],
+  exports: [
+    NotificationTopicCatalogService,
+    NotificationAudienceService,
+    NotificationDispatchService,
+    NotificationPolicyService,
+  ],
 })
 export class NotificationAudienceModule {}

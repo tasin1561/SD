@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SystemIssueNotifier } from './system-issue-notifier.service';
 
 export interface RaiseIssueInput {
   readonly kind: SystemIssueKind;
@@ -64,7 +65,10 @@ export interface SystemIssueView {
 export class SystemIssueService {
   private readonly logger = new Logger(SystemIssueService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: SystemIssueNotifier,
+  ) {}
 
   /**
    * Open an issue, or record that an open one happened again.
@@ -115,6 +119,20 @@ export class SystemIssueService {
         select: { id: true },
       });
       this.logger.warn({ ...input, issueId: created.id }, 'System issue raised');
+      // Tell somebody. ONLY on a new issue — a recurrence bumps the
+      // count above and returns before reaching here, so a job failing
+      // nightly for a fortnight interrupts one person once rather than
+      // fourteen times. Awaited rather than fired-and-forgotten so a
+      // caller that finishes immediately (a sweep, a request handler)
+      // cannot exit with the notification still in flight; the notifier
+      // swallows its own failures, so this cannot throw.
+      await this.notifier.notify({
+        issueId: created.id,
+        kind: input.kind,
+        severity: input.severity,
+        title: input.title,
+        detail: input.detail,
+      });
       return { id: created.id, isNew: true };
     } catch (err) {
       // Lost a race to another raise of the same key, or the write

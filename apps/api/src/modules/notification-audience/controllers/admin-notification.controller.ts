@@ -23,6 +23,10 @@ import {
   type SubscriptionView,
 } from '../services/notification-subscription.service';
 import { FeedQueryDto, SetSubscriptionDto } from '../dto/notification.dto';
+import {
+  NotificationTopicCatalogService,
+  type TopicDef,
+} from '../services/notification-topic-catalog.service';
 
 /**
  * A staff member's own inbox and their standing choices.
@@ -49,6 +53,7 @@ export class AdminNotificationController {
   constructor(
     private readonly feed: NotificationFeedService,
     private readonly subs: NotificationSubscriptionService,
+    private readonly catalog: NotificationTopicCatalogService,
   ) {}
 
   @Get()
@@ -78,6 +83,15 @@ export class AdminNotificationController {
   @ApiOperation({ summary: 'Mark everything read' })
   readAll(@CurrentStaff() staff: AuthenticatedStaff): Promise<{ marked: number }> {
     return this.feed.markAllRead(staff.id);
+  }
+
+  @Get('topics')
+  @ApiOperation({
+    summary:
+      'The topics that can be chosen about, with names. Silencing something used to mean typing its code — nobody knows the codes',
+  })
+  topics(): readonly TopicDef[] {
+    return this.catalog.forSubject(NotificationSubjectType.STAFF_USER);
   }
 
   @Get('subscriptions')

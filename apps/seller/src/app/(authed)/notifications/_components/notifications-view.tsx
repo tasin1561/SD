@@ -2,21 +2,15 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Button,
-  Card,
-  CardBody,
-  Input,
-  PageHeader,
-  Section,
-  StatusBadge,
-} from '@skydrop/ui/components';
+import { Button, Card, CardBody, PageHeader, Section, StatusBadge } from '@skydrop/ui/components';
 import {
   useClearNotificationSubscription,
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotificationFeed,
   useNotificationSubscriptions,
+  useNotificationTopics,
+  type TopicDef,
   useSetNotificationSubscription,
 } from '@/lib/notification-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -38,6 +32,15 @@ export function NotificationsView(): ReactElement {
   const setSub = useSetNotificationSubscription();
   const clearSub = useClearNotificationSubscription();
   const [error, setError] = useState<string | null>(null);
+  const topics = useNotificationTopics();
+
+  // A topic with no row follows its default, which is ON. Only an
+  // explicit MUTED row switches something off.
+  const muted = new Set((subs.data ?? []).filter((s) => s.mode === 'MUTED').map((s) => s.topic));
+  const grouped = (topics.data ?? []).reduce<Record<string, TopicDef[]>>((acc, t) => {
+    (acc[t.group] ??= []).push(t);
+    return acc;
+  }, {});
 
   const items = feed.data?.items ?? [];
 
@@ -106,10 +109,10 @@ export function NotificationsView(): ReactElement {
 
       <Card>
         <CardBody>
-          <h2 className="text-sm font-semibold">What you have silenced</h2>
+          <h2 className="text-sm font-semibold">What reaches you</h2>
           <p className="text-text-muted mt-0.5 text-xs">
-            Anything not listed here follows its default. Messages about your account and
-            credentials cannot be silenced — they only ever go to your email.
+            Switch off anything you would rather not see here. Messages about your account and
+            credentials are not listed — they only ever go to your email, and cannot be silenced.
           </p>
           <p className="text-text-faint mt-1 text-xs">
             These are YOUR choices, for YOUR inbox. What the company as a whole is emailed about is
@@ -119,74 +122,54 @@ export function NotificationsView(): ReactElement {
             </Link>
             .
           </p>
-          {(subs.data ?? []).length === 0 ? (
-            <p className="text-text-muted mt-3 text-sm">Nothing silenced.</p>
-          ) : (
-            <ul className="divide-border-subtle mt-2 divide-y">
-              {(subs.data ?? []).map((s) => (
-                <li key={s.topic} className="flex items-center justify-between gap-3 py-2">
-                  <div>
-                    <div className="font-mono text-xs">{s.topic}</div>
-                    <div className="text-text-faint text-xs">
-                      {s.mode === 'MUTED'
-                        ? s.mutedChannels.length > 0
-                          ? `silenced on ${s.mutedChannels.join(', ').toLowerCase()}`
-                          : 'silenced'
-                        : 'subscribed'}
-                    </div>
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={() => clearSub.mutate(s.topic)}>
-                    Reset
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
 
-          <SilenceForm
-            onSubmit={(topic) => {
-              setError(null);
-              setSub.mutate(
-                { topic, mode: 'MUTED' },
-                { onError: (e) => setError(serverVerdict(e)) },
-              );
-            }}
-            pending={setSub.isPending}
-          />
+          {topics.isLoading ? (
+            <p className="text-text-muted mt-3 text-sm">Loading…</p>
+          ) : (
+            Object.entries(grouped).map(([group, defs]) => (
+              <div key={group} className="mt-4">
+                <h3 className="text-text-faint text-xs font-medium uppercase tracking-wide">
+                  {group}
+                </h3>
+                <ul className="divide-border-subtle mt-1 divide-y">
+                  {defs.map((d) => {
+                    const on = !muted.has(d.topic);
+                    return (
+                      <li key={d.topic} className="flex items-start justify-between gap-4 py-2.5">
+                        <div className="min-w-0">
+                          <div className="text-sm">{d.label}</div>
+                          <div className="text-text-muted text-xs">{d.description}</div>
+                        </div>
+                        <label className="flex shrink-0 items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            aria-label={`Notify me about: ${d.label}`}
+                            onChange={() => {
+                              setError(null);
+                              if (on) {
+                                setSub.mutate(
+                                  { topic: d.topic, mode: 'MUTED' },
+                                  { onError: (e) => setError(serverVerdict(e)) },
+                                );
+                              } else {
+                                clearSub.mutate(d.topic, {
+                                  onError: (e) => setError(serverVerdict(e)),
+                                });
+                              }
+                            }}
+                          />
+                          <span className="text-text-faint">{on ? 'On' : 'Off'}</span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))
+          )}
         </CardBody>
       </Card>
     </Section>
-  );
-}
-
-function SilenceForm({
-  onSubmit,
-  pending,
-}: {
-  readonly onSubmit: (topic: string) => void;
-  readonly pending: boolean;
-}): ReactElement {
-  const [topic, setTopic] = useState('');
-  return (
-    <div className="mt-4 flex flex-wrap items-center gap-2">
-      <Input
-        aria-label="Topic to silence"
-        className="font-mono"
-        placeholder="topic code, e.g. stock.low"
-        value={topic}
-        onChange={(e) => setTopic(e.target.value)}
-      />
-      <Button
-        size="sm"
-        variant="secondary"
-        disabled={pending || topic.trim().length < 2}
-        onClick={() => {
-          onSubmit(topic.trim());
-          setTopic('');
-        }}
-      >
-        Silence it
-      </Button>
-    </div>
   );
 }
