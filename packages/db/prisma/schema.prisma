@@ -4209,6 +4209,14 @@ model NotificationLog {
   attemptNumber        Int                       @default(1) @map("attempt_number")
   parentNotificationId String?                   @map("parent_notification_id") @db.Uuid
   readAt               DateTime?                 @map("read_at") @db.Timestamptz
+  /// The recipient cleared this from their own inbox.
+  ///
+  /// NOT a delete. `notification_logs` is the ledger the NOTIF-2 dedup
+  /// gate reads: remove a row and a re-emit of the same event sends
+  /// again, so "delete" would quietly reopen the hole the partial
+  /// unique exists to close. Dismissing hides it from one person's
+  /// feed and leaves the record of what was sent intact.
+  dismissedAt          DateTime?                 @map("dismissed_at") @db.Timestamptz
   createdAt            DateTime                  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime                  @updatedAt @map("updated_at") @db.Timestamptz
 

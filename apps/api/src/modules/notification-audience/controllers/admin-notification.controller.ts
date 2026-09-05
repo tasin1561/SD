@@ -78,6 +78,39 @@ export class AdminNotificationController {
     return this.feed.markRead(staff.id, id);
   }
 
+  @Post(':id/unread')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Put one back to unread. Reading something and having dealt with it are different things.',
+  })
+  markUnread(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id') id: string,
+  ): Promise<{ readAt: null }> {
+    return this.feed.markUnread(staff.id, id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Clear one from your inbox. Hides it from you; the record of what was sent is kept, because the dedup gate reads it.',
+  })
+  dismiss(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id') id: string,
+  ): Promise<{ dismissedAt: Date }> {
+    return this.feed.dismiss(staff.id, id);
+  }
+
+  @Delete()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Clear everything currently in your inbox.' })
+  dismissAll(@CurrentStaff() staff: AuthenticatedStaff): Promise<{ dismissed: number }> {
+    return this.feed.dismissAll(staff.id);
+  }
+
   @Post('read-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark everything read' })

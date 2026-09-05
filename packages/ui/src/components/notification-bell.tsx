@@ -126,11 +126,21 @@ export function NotificationBell({
               <ul className="divide-border-subtle divide-y">
                 {items.map((n) => (
                   <li key={n.id} className={n.readAt === null ? 'bg-surface-raised/40' : ''}>
-                    <button
-                      type="button"
+                    {/*
+                      A LINK, not a button. The dropdown truncates —
+                      there is no room for a paragraph beside a bell —
+                      so clicking has to take you somewhere the whole
+                      thing is readable, anchored at this one. A button
+                      that only marked it read left the text you were
+                      reaching for still cut off, which is the thing
+                      being fixed.
+                    */}
+                    <Link
+                      href={`${viewAllHref}#${n.id}`}
                       className="block w-full px-3 py-2 text-left"
                       onClick={() => {
                         if (n.readAt === null) onMarkRead?.(n.id);
+                        setOpen(false);
                       }}
                     >
                       <div className="flex items-start gap-2">
@@ -146,11 +156,11 @@ export function NotificationBell({
                           )}
                           <div className="text-text-muted line-clamp-2 text-xs">{n.body}</div>
                           <div className="text-text-faint mt-0.5 text-[11px] tabular-nums">
-                            {new Date(n.createdAt).toLocaleString()}
+                            {new Date(n.createdAt).toLocaleString()} · read it
                           </div>
                         </div>
                       </div>
-                    </button>
+                    </Link>
                   </li>
                 ))}
               </ul>

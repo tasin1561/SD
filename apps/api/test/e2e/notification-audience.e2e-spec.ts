@@ -185,6 +185,128 @@ describe('Notification audience (e2e)', () => {
     expect(after.readAt).not.toBeNull();
   });
 
+  it('read, unread, and cleared — the full round trip', async () => {
+    await dispatcher().dispatch({
+      audience: [{ kind: 'SELLER_USER', sellerUserId: alpha.userId }],
+      topic: 'test.hello',
+      category: NotificationCategory.OPERATIONAL,
+      channels: [NotificationChannel.IN_APP],
+      title: 'Something happened',
+      body: 'The whole body, which the bell has no room for.',
+      triggerEvent: 'e2e',
+    });
+    const row = await h.prisma.notificationLog.findFirstOrThrow({
+      where: { toInAppUserId: alpha.userId },
+      select: { id: true },
+    });
+
+    // Read it.
+    await request(h.baseUrl)
+      .post(`/seller/notifications/${row.id}/read`)
+      .set(alpha.auth)
+      .expect(200);
+    let feed = await request(h.baseUrl).get('/seller/notifications').set(alpha.auth).expect(200);
+    expect(feed.body.unreadCount).toBe(0);
+    expect(feed.body.items[0].readAt).not.toBeNull();
+    // The list carries the WHOLE body — the bell truncates, this does
+    // not, which is the point of being able to open one.
+    expect(feed.body.items[0].body).toBe('The whole body, which the bell has no room for.');
+
+    // Put it back to unread.
+    await request(h.baseUrl)
+      .post(`/seller/notifications/${row.id}/unread`)
+      .set(alpha.auth)
+      .expect(200);
+    feed = await request(h.baseUrl).get('/seller/notifications').set(alpha.auth).expect(200);
+    expect(feed.body.unreadCount).toBe(1);
+    expect(feed.body.items[0].readAt).toBeNull();
+
+    // Clear it.
+    await request(h.baseUrl).delete(`/seller/notifications/${row.id}`).set(alpha.auth).expect(200);
+    feed = await request(h.baseUrl).get('/seller/notifications').set(alpha.auth).expect(200);
+    expect(feed.body.items).toHaveLength(0);
+    expect(feed.body.unreadCount).toBe(0);
+
+    // The ROW SURVIVES. notification_logs is the ledger the dedup gate
+    // reads: delete it and a re-emit of the same event sends again.
+    const still = await h.prisma.notificationLog.findUnique({ where: { id: row.id } });
+    expect(still).not.toBeNull();
+    expect(still?.dismissedAt).not.toBeNull();
+  });
+
+  it('one person clearing a broadcast does not clear it for anybody else', async () => {
+    await dispatcher().dispatch({
+      audience: [{ kind: 'ALL_SELLERS' }],
+      topic: 'system.announcement',
+      category: NotificationCategory.ANNOUNCEMENT,
+      channels: [NotificationChannel.IN_APP],
+      title: 'Sunday maintenance',
+      body: 'We will be down.',
+      triggerEvent: 'e2e',
+    });
+    const mine = await h.prisma.notificationLog.findFirstOrThrow({
+      where: { toInAppUserId: alpha.userId },
+      select: { id: true },
+    });
+    await request(h.baseUrl).delete(`/seller/notifications/${mine.id}`).set(alpha.auth).expect(200);
+
+    expect(
+      (await request(h.baseUrl).get('/seller/notifications').set(alpha.auth).expect(200)).body
+        .items,
+    ).toHaveLength(0);
+    // Dismissal is per row, and a broadcast writes one row per person.
+    expect(
+      (await request(h.baseUrl).get('/seller/notifications').set(beta.auth).expect(200)).body.items,
+    ).toHaveLength(1);
+  });
+
+  it('clearing somebody else’s notification is a 404', async () => {
+    await dispatcher().dispatch({
+      audience: [{ kind: 'SELLER_USER', sellerUserId: alpha.userId }],
+      topic: 'test.hello',
+      category: NotificationCategory.OPERATIONAL,
+      channels: [NotificationChannel.IN_APP],
+      title: 'Alpha',
+      body: 'body',
+      triggerEvent: 'e2e',
+    });
+    const row = await h.prisma.notificationLog.findFirstOrThrow({
+      where: { toInAppUserId: alpha.userId },
+      select: { id: true },
+    });
+    await request(h.baseUrl).delete(`/seller/notifications/${row.id}`).set(beta.auth).expect(404);
+    await request(h.baseUrl)
+      .post(`/seller/notifications/${row.id}/unread`)
+      .set(beta.auth)
+      .expect(404);
+  });
+
+  it('clear-all empties the inbox and leaves every row on record', async () => {
+    for (const n of [1, 2, 3]) {
+      await dispatcher().dispatch({
+        audience: [{ kind: 'SELLER_USER', sellerUserId: alpha.userId }],
+        topic: `test.batch${n}`,
+        category: NotificationCategory.OPERATIONAL,
+        channels: [NotificationChannel.IN_APP],
+        title: `Notice ${n}`,
+        body: 'body',
+        triggerEvent: 'e2e',
+      });
+    }
+    const res = await request(h.baseUrl)
+      .delete('/seller/notifications')
+      .set(alpha.auth)
+      .expect(200);
+    expect(res.body.dismissed).toBe(3);
+    expect(
+      (await request(h.baseUrl).get('/seller/notifications').set(alpha.auth).expect(200)).body
+        .items,
+    ).toHaveLength(0);
+    expect(await h.prisma.notificationLog.count({ where: { toInAppUserId: alpha.userId } })).toBe(
+      3,
+    );
+  });
+
   it('the inbox is self-service: it needs no permission grant', async () => {
     // The seller's OWNER role holds everything, so prove it on the
     // narrowest login there is. A VIEWER holds `orders.view` and

@@ -50,7 +50,13 @@ describe('NotificationFeedService', () => {
     await c.svc.list('me');
     expect(c.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { toInAppUserId: 'me', channel: NotificationChannel.IN_APP },
+        // `dismissedAt: null` is part of the filter, not incidental —
+        // a cleared notification has to be gone from the list.
+        where: {
+          toInAppUserId: 'me',
+          channel: NotificationChannel.IN_APP,
+          dismissedAt: null,
+        },
         orderBy: { createdAt: 'desc' },
       }),
     );
@@ -134,6 +140,104 @@ describe('NotificationFeedService', () => {
       toInAppUserId: 'me',
       channel: NotificationChannel.IN_APP,
       readAt: null,
+    });
+  });
+});
+
+describe('NotificationFeedService — unread and clearing', () => {
+  function make(existing: Record<string, unknown> | null = null) {
+    const updateMany: jest.Mock<
+      Promise<{ count: number }>,
+      [{ where: Record<string, unknown>; data: Record<string, unknown> }]
+    > = jest.fn(async (_a) => ({ count: 1 }));
+    const findFirst = jest.fn(async () => existing as never);
+    const prisma = {
+      client: {
+        notificationLog: {
+          updateMany,
+          findFirst,
+          findMany: jest.fn(async () => []),
+          count: jest.fn(async () => 0),
+        },
+      },
+    };
+    return { svc: new NotificationFeedService(prisma as never), updateMany, findFirst };
+  }
+
+  it('marking unread clears readAt, scoped to the caller', async () => {
+    const c = make();
+    await c.svc.markUnread('me', 'n1');
+    expect(c.updateMany.mock.calls[0]?.[0]).toMatchObject({
+      where: { id: 'n1', toInAppUserId: 'me', dismissedAt: null },
+      data: { readAt: null },
+    });
+  });
+
+  it('somebody else’s notification cannot be un-read', async () => {
+    const c = make();
+    c.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
+    await expect(c.svc.markUnread('me', 'theirs')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('DELETE dismisses — it never removes the row', async () => {
+    // notification_logs is the ledger the NOTIF-2 dedup gate reads.
+    // Deleting a row would let a re-emit of the same event send again,
+    // so "delete" on screen has to mean "hide it from this person".
+    const c = make();
+    await c.svc.dismiss('me', 'n1');
+    const call = c.updateMany.mock.calls[0]?.[0];
+    expect(call?.data).toMatchObject({ dismissedAt: expect.any(Date) });
+    expect(call?.where).toMatchObject({ id: 'n1', toInAppUserId: 'me' });
+  });
+
+  it('dismissing twice is idempotent, not an error', async () => {
+    const dismissedAt = new Date('2026-09-05T00:00:00Z');
+    const c = make({ dismissedAt });
+    c.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
+    // Two tabs and a slow network are not a failure.
+    await expect(c.svc.dismiss('me', 'n1')).resolves.toEqual({ dismissedAt });
+  });
+
+  it('dismissing something that is not yours is a 404', async () => {
+    const c = make(null);
+    c.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
+    await expect(c.svc.dismiss('me', 'theirs')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('clear-all touches only this person’s undismissed in-app rows', async () => {
+    const c = make();
+    await c.svc.dismissAll('me');
+    expect(c.updateMany.mock.calls[0]?.[0]?.where).toMatchObject({
+      toInAppUserId: 'me',
+      channel: NotificationChannel.IN_APP,
+      dismissedAt: null,
+    });
+  });
+
+  it('a dismissed row is gone from the list AND from the unread count', async () => {
+    // Hidden in one place and counted in the other would leave a badge
+    // pointing at nothing — the shape that makes people stop trusting
+    // the number.
+    const c = make();
+    await c.svc.list('me');
+    await c.svc.unreadCount('me');
+    const prisma = (
+      c.svc as unknown as {
+        prisma: {
+          client: {
+            notificationLog: {
+              findMany: jest.Mock;
+              count: jest.Mock;
+            };
+          };
+        };
+      }
+    ).prisma;
+    expect(prisma.client.notificationLog.findMany.mock.calls[0]?.[0]?.where).toMatchObject({
+      dismissedAt: null,
+    });
+    expect(prisma.client.notificationLog.count.mock.calls[0]?.[0]?.where).toMatchObject({
+      dismissedAt: null,
     });
   });
 });

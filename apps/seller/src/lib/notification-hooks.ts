@@ -38,6 +38,8 @@ export interface SubscriptionView {
   mutedChannels: string[];
 }
 
+const FEED_KEY = 'seller-notifications';
+
 const BASE = '/api/seller/notifications';
 
 /**
@@ -101,6 +103,47 @@ export function useNotificationTopics(): UseQueryResult<TopicDef[], Error> {
     queryKey: ['notification-topics'],
     queryFn: () => client.request<TopicDef[]>(`${BASE}/topics`),
     staleTime: 60 * 60_000,
+  });
+}
+
+export function useMarkNotificationUnread(): UseMutationResult<unknown, Error, string> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => client.request(`${BASE}/${id}/unread`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [FEED_KEY] });
+    },
+  });
+}
+
+/**
+ * Clear one from this person's inbox.
+ *
+ * Called "delete" on screen because that is what it does FOR THEM, but
+ * the row survives: notification_logs is the ledger the dedup gate
+ * reads, and removing a row would let a re-emit of the same event send
+ * again.
+ */
+export function useDismissNotification(): UseMutationResult<unknown, Error, string> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id) => client.request(`${BASE}/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [FEED_KEY] });
+    },
+  });
+}
+
+export function useDismissAllNotifications(): UseMutationResult<unknown, Error, void> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => client.request(BASE, { method: 'DELETE' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [FEED_KEY] });
+    },
   });
 }
 
