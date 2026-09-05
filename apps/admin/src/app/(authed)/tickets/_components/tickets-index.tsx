@@ -41,7 +41,11 @@ const PAGE_SIZE = 25;
  * The default filter is OPEN: this is a worklist, not an archive.
  */
 export function TicketsIndex(): ReactElement {
-  const [status, setStatus] = useState<string>(TicketStatus.OPEN);
+  // STAGE, not raw status. "Closed" is four different outcomes in the
+  // database — refunded, goods back, write-off, not upheld — and a
+  // filter listing all four made somebody choose which kind of finished
+  // they meant in order to ask "is it finished".
+  const [status, setStatus] = useState<string>('OPEN');
   const [ticketType, setTicketType] = useState<string>('');
   const [page, setPage] = useState(1);
   // The row IS the link now: one way in, and it is the page rather than
@@ -49,7 +53,7 @@ export function TicketsIndex(): ReactElement {
   const router = useRouter();
 
   const list = useTicketsList({
-    ...(status === '' ? {} : { status }),
+    ...(status === '' ? {} : { stage: status }),
     ...(ticketType === '' ? {} : { ticketType }),
     page,
     pageSize: PAGE_SIZE,
@@ -77,10 +81,8 @@ export function TicketsIndex(): ReactElement {
         <Stat
           label="Matching this filter"
           value={list.isLoading ? '—' : total}
-          tone={status === TicketStatus.OPEN && total > 0 ? 'warn' : 'neutral'}
-          hint={
-            status === TicketStatus.OPEN ? 'Open tickets waiting on a decision' : 'Across all pages'
-          }
+          tone={status === 'OPEN' && total > 0 ? 'warn' : 'neutral'}
+          hint={status === 'OPEN' ? 'Open tickets waiting on a decision' : 'Across all pages'}
         />
         <Stat
           label="Refunded on this page"
@@ -108,12 +110,10 @@ export function TicketsIndex(): ReactElement {
           onChange={(e) => changeFilter(() => setStatus(e.target.value))}
           className="w-56"
         >
-          <option value="">All statuses</option>
-          {Object.values(TicketStatus).map((s) => (
-            <option key={s} value={s}>
-              {humanise(s)}
-            </option>
-          ))}
+          <option value="">All</option>
+          <option value="OPEN">Open</option>
+          <option value="REVIEWING">Reviewing</option>
+          <option value="CLOSED">Closed</option>
         </Select>
 
         <label className="text-text-muted ml-2 text-xs" htmlFor="ticket-type">

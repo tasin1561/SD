@@ -144,6 +144,8 @@ export interface UnitDiscrepancyReport {
 
 export function useSellerTickets(query: {
   status?: string;
+  /** 'OPEN' | 'REVIEWING' | 'CLOSED' — the three the screens speak in. */
+  stage?: string;
   orderId?: string;
 }): UseQueryResult<readonly TicketView[]> {
   const client = useApiClient();
@@ -152,6 +154,7 @@ export function useSellerTickets(query: {
     queryFn: () => {
       const qs = new URLSearchParams();
       if (query.status !== undefined && query.status !== '') qs.set('status', query.status);
+      if (query.stage !== undefined && query.stage !== '') qs.set('stage', query.stage);
       if (query.orderId !== undefined && query.orderId !== '') qs.set('orderId', query.orderId);
       const suffix = qs.toString() === '' ? '' : `?${qs.toString()}`;
       return client.request<readonly TicketView[]>(`/api/seller/tickets${suffix}`);

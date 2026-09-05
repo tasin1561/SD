@@ -37,6 +37,28 @@ const TICKET_NAMES = {
   shipment: { select: { shipmentNumber: true } },
 } as const;
 
+/**
+ * The three stages a ticket travels, and the statuses behind each.
+ *
+ * The screens ask "open, reviewing or closed" because that is the
+ * question somebody has. The database keeps four CLOSED statuses apart
+ * because they are different outcomes and one of them moved money
+ * (TKT-1) — so the grouping lives here, once, rather than as a list of
+ * four values pasted into every filter that wants "finished".
+ */
+export type TicketStage = 'OPEN' | 'REVIEWING' | 'CLOSED';
+
+export const STAGE_STATUSES: Readonly<Record<TicketStage, readonly TicketStatus[]>> = {
+  OPEN: [TicketStatus.OPEN],
+  REVIEWING: [TicketStatus.NEGOTIATING],
+  CLOSED: [
+    TicketStatus.RESOLVED_REFUND,
+    TicketStatus.RESOLVED_RETURNED,
+    TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED,
+    TicketStatus.REJECTED,
+  ],
+};
+
 export interface OpenTicketInput {
   readonly ticketType: TicketType;
   readonly sellerId: string;
@@ -481,6 +503,7 @@ export class TicketService {
     sellerId: string,
     status?: TicketStatus,
     orderId?: string,
+    stage?: TicketStage,
   ): Promise<readonly TicketView[]> {
     const rows = await this.prisma.client.ticket.findMany({
       // An order may carry SEVERAL tickets — a re-attempt, then a
@@ -490,7 +513,13 @@ export class TicketService {
       // which question.
       where: {
         sellerId,
-        ...(status === undefined ? {} : { status }),
+        // Same rule as the admin list: an explicit status wins, and
+        // `stage` expands to the statuses behind it (STAGE_STATUSES).
+        ...(status !== undefined
+          ? { status }
+          : stage === undefined
+            ? {}
+            : { status: { in: [...STAGE_STATUSES[stage]] } }),
         ...(orderId === undefined ? {} : { orderId }),
       },
       orderBy: { createdAt: 'desc' },
@@ -532,6 +561,8 @@ export class TicketService {
   async listForAdmin(filters: {
     sellerId?: string;
     status?: TicketStatus;
+    /** The three stages the ticket screens speak in. See STAGE_STATUSES. */
+    stage?: TicketStage;
     ticketType?: TicketType;
     page?: number;
     pageSize?: number;
@@ -540,7 +571,14 @@ export class TicketService {
     const pageSize = Math.min(200, Math.max(1, filters.pageSize ?? 50));
     const where = {
       ...(filters.sellerId === undefined ? {} : { sellerId: filters.sellerId }),
-      ...(filters.status === undefined ? {} : { status: filters.status }),
+      // `stage` and `status` are both accepted; the narrower one wins,
+      // so an explicit status still works for anything that wants a
+      // single outcome (a report, a saved link).
+      ...(filters.status !== undefined
+        ? { status: filters.status }
+        : filters.stage === undefined
+          ? {}
+          : { status: { in: [...STAGE_STATUSES[filters.stage]] } }),
       ...(filters.ticketType === undefined ? {} : { ticketType: filters.ticketType }),
     };
     const [rows, total] = await Promise.all([

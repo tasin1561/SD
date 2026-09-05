@@ -240,6 +240,8 @@ function qs(params: Record<string, string | number | undefined>): string {
 export function useTicketsList(
   query: {
     status?: string;
+    /** 'OPEN' | 'REVIEWING' | 'CLOSED' — the three the screens use. */
+    stage?: string;
     ticketType?: string;
     sellerId?: string;
     page?: number;

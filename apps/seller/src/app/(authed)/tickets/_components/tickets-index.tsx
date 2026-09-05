@@ -49,7 +49,11 @@ export function SellerTicketsIndex(): ReactElement {
   // Which ticket's courier conversation is open. One at a time: these are
   // long verbatim threads, and expanding several turns the list into a wall.
   const [openThread, setOpenThread] = useState<string | null>(null);
-  const list = useSellerTickets(status === '' ? {} : { status });
+  // Filtered by STAGE, not by raw status. "Closed" is four different
+  // outcomes in the database — refunded, goods back, write-off, not
+  // upheld — and a filter offering all four made somebody pick which
+  // kind of finished they meant in order to ask "is it finished".
+  const list = useSellerTickets(status === '' ? {} : { stage: status });
 
   const rows = list.data ?? [];
   const open = rows.filter(
@@ -95,12 +99,10 @@ export function SellerTicketsIndex(): ReactElement {
           onChange={(e) => setStatus(e.target.value)}
           className="w-56"
         >
-          <option value="">All statuses</option>
-          {Object.values(TicketStatus).map((s) => (
-            <option key={s} value={s}>
-              {humanise(s)}
-            </option>
-          ))}
+          <option value="">All</option>
+          <option value="OPEN">Open</option>
+          <option value="REVIEWING">Reviewing</option>
+          <option value="CLOSED">Closed</option>
         </Select>
       </Toolbar>
 
@@ -244,9 +246,4 @@ export function SellerTicketsIndex(): ReactElement {
       <RaiseTicketModal open={raising} onOpenChange={setRaising} />
     </div>
   );
-}
-
-function humanise(value: string): string {
-  const lower = value.replaceAll('_', ' ').toLowerCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }

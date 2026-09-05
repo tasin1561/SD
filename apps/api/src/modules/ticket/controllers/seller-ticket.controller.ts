@@ -18,7 +18,7 @@ import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { CreateSellerTicketDto } from '../dto/ticket.dto';
-import { TicketService, type TicketView } from '../services/ticket.service';
+import { type TicketStage, TicketService, type TicketView } from '../services/ticket.service';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
 
@@ -116,8 +116,11 @@ export class SellerTicketController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @Query('status') status?: TicketStatus,
     @Query('orderId') orderId?: string,
+    // Open / Reviewing / Closed — the three the screens speak in.
+    // `status` still works for anything wanting one exact outcome.
+    @Query('stage') stage?: TicketStage,
   ): Promise<readonly TicketView[]> {
-    return this.tickets.listForSeller(seller.id, status, orderId);
+    return this.tickets.listForSeller(seller.id, status, orderId, stage);
   }
 
   @Get(':ticketId')

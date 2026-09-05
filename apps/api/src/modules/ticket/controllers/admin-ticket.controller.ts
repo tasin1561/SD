@@ -18,7 +18,7 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { TransitionTicketDto } from '../dto/ticket.dto';
-import { TicketService, type TicketView } from '../services/ticket.service';
+import { type TicketStage, TicketService, type TicketView } from '../services/ticket.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
 
@@ -41,6 +41,7 @@ export class AdminTicketController {
   list(
     @Query('sellerId') sellerId?: string,
     @Query('status') status?: TicketStatus,
+    @Query('stage') stage?: TicketStage,
     @Query('ticketType') ticketType?: TicketType,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
@@ -48,6 +49,7 @@ export class AdminTicketController {
     return this.tickets.listForAdmin({
       ...(sellerId === undefined ? {} : { sellerId }),
       ...(status === undefined ? {} : { status }),
+      ...(stage === undefined ? {} : { stage }),
       ...(ticketType === undefined ? {} : { ticketType }),
       ...(page === undefined ? {} : { page: Number(page) }),
       ...(pageSize === undefined ? {} : { pageSize: Number(pageSize) }),
