@@ -30,7 +30,14 @@ import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-moda
  * They are what the parcel was routed on. Hiding them would invite the
  * question; showing them as fixed answers it.
  */
-export function ConsigneePanel({ orderId }: { readonly orderId: string }): ReactElement {
+export function ConsigneePanel({
+  orderId,
+  onClose,
+}: {
+  readonly orderId: string;
+  /** Put it away again. The Recipient card is what opens it. */
+  readonly onClose?: () => void;
+}): ReactElement {
   const toast = useToast();
   const info = useConsignee(orderId);
   const history = useConsigneeHistory(orderId);
@@ -125,6 +132,15 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
               >
                 <Info size={10} className="text-warning shrink-0" aria-hidden />
                 Locked by the courier
+              </button>
+            )}
+            {onClose !== undefined && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-text-faint hover:text-text-body ml-auto text-xs underline underline-offset-2"
+              >
+                Close
               </button>
             )}
           </div>

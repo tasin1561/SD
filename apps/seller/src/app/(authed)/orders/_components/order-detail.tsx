@@ -153,6 +153,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   // SAME query key the trouble panel uses, so asking here costs nothing
   // — TanStack serves both from one fetch — and it keeps the header
   // from offering a button the server would refuse.
+  // The consignee editor is HIDDEN until asked for. It shows the same
+  // three fields the Recipient card already shows, so having both open
+  // at once was the same data twice, a screen apart — and the editable
+  // copy was the one that got read first.
+  const [editingCustomer, setEditingCustomer] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const deliveryActions = useDeliveryActions(orderId);
@@ -317,8 +322,14 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
 
           {/* Correcting the consignee sits with the parcel, not in a
               settings screen: it is only ever done while looking at a
-              specific delivery that is about to go wrong. */}
-          <ConsigneePanel orderId={orderId} />
+              specific delivery that is about to go wrong — and now only
+              when somebody has actually asked to change something, via
+              Edit on the Recipient card. */}
+          {editingCustomer && (
+            <div id="customer-details">
+              <ConsigneePanel orderId={orderId} onClose={() => setEditingCustomer(false)} />
+            </div>
+          )}
 
           {/*
             `mt-6` because the panels above space themselves from what
@@ -339,7 +350,39 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             {/* The facts, in the order a seller checks them: who it is
                 going to, what is in it, what it costs, the paperwork. */}
             <div className="min-w-0 space-y-4">
-              <Section title={<Titled icon={User}>Recipient</Titled>}>
+              <Section
+                title={<Titled icon={User}>Recipient</Titled>}
+                action={
+                  // `orders.create` is what the SERVER requires to save
+                  // a consignee change ("whoever may commit the company
+                  // to a delivery is who may change where it goes").
+                  // Gating on anything else shows an Edit whose save
+                  // comes back 403 — cosmetic RBAC that disagrees with
+                  // the boundary is worse than none.
+                  identity !== null && can(identity, 'orders.create') ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditingCustomer(true);
+                        // Opened, then scrolled to. The editor is full
+                        // width at the top — it needs the room — so
+                        // revealing it without moving there would look
+                        // like the button did nothing.
+                        window.setTimeout(
+                          () =>
+                            document
+                              .getElementById('customer-details')
+                              ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+                          50,
+                        );
+                      }}
+                    >
+                      <Pencil size={12} /> Edit
+                    </Button>
+                  ) : undefined
+                }
+              >
                 <Card>
                   <CardBody>
                     <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
