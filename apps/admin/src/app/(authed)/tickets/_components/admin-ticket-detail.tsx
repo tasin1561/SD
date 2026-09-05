@@ -101,10 +101,29 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           <DescriptionList
             items={[
               { label: 'Type', value: t.ticketType.toLowerCase().replaceAll('_', ' ') },
-              { label: 'Order', value: t.orderId === null ? '—' : <Ident value={t.orderId} /> },
+              {
+                label: 'Order',
+                // The NUMBER. An operator quoting a ticket to a seller
+                // or a courier needs the name they both use.
+                value:
+                  t.orderId === null ? (
+                    '—'
+                  ) : t.orderNumber !== null ? (
+                    <span className="font-mono text-xs">{t.orderNumber}</span>
+                  ) : (
+                    <Ident value={t.orderId} />
+                  ),
+              },
               {
                 label: 'Parcel',
-                value: t.shipmentId === null ? '—' : <Ident value={t.shipmentId} />,
+                value:
+                  t.shipmentId === null ? (
+                    '—'
+                  ) : t.shipmentNumber !== null ? (
+                    <span className="font-mono text-xs">{t.shipmentNumber}</span>
+                  ) : (
+                    <Ident value={t.shipmentId} />
+                  ),
               },
               { label: 'Courier', value: t.courierCode ?? '—' },
             ]}

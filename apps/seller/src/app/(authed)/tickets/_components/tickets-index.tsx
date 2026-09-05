@@ -174,8 +174,14 @@ export function SellerTicketsIndex(): ReactElement {
                     {t.orderId === null ? (
                       <span className="text-text-faint">—</span>
                     ) : (
-                      <Link href={`/orders/${t.orderId}`} className="text-accent hover:underline">
-                        <Ident value={`${t.orderId.slice(0, 8)}…`} />
+                      <Link
+                        href={`/orders/${t.orderId}`}
+                        className="text-accent font-mono text-xs hover:underline"
+                      >
+                        {/* The order NUMBER. A truncated uuid is not a
+                            shorter name for something, it is a name
+                            nobody has. */}
+                        {t.orderNumber ?? <Ident value={`${t.orderId.slice(0, 8)}…`} />}
                       </Link>
                     )}
                   </Td>

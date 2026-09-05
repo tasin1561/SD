@@ -94,15 +94,18 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
                 { label: 'Courier', value: ticket.courierCode ?? <Dash /> },
                 {
                   label: 'Order',
+                  // The NUMBER, not the uuid. A uuid cannot be read
+                  // aloud, repeated down a phone, or matched against
+                  // the order list; the id is still what the link uses.
                   value:
                     ticket.orderId === null ? (
                       <Dash />
                     ) : (
                       <Link
                         href={`/orders/${ticket.orderId}`}
-                        className="text-accent hover:underline"
+                        className="text-accent font-mono hover:underline"
                       >
-                        <Ident value={ticket.orderId} />
+                        {ticket.orderNumber ?? <Ident value={ticket.orderId} />}
                       </Link>
                     ),
                 },
@@ -112,7 +115,13 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
                   // the order — so the id is evidence to quote at us, not
                   // a link to nowhere.
                   value:
-                    ticket.shipmentId === null ? <Dash /> : <Ident value={ticket.shipmentId} />,
+                    ticket.shipmentId === null ? (
+                      <Dash />
+                    ) : ticket.shipmentNumber !== null ? (
+                      <span className="font-mono text-xs">{ticket.shipmentNumber}</span>
+                    ) : (
+                      <Ident value={ticket.shipmentId} />
+                    ),
                 },
                 {
                   label: 'Closed',

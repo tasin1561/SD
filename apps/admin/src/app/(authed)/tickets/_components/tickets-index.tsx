@@ -187,7 +187,7 @@ export function TicketsIndex(): ReactElement {
                       onClick={(e) => e.stopPropagation()}
                       className="text-accent hover:underline"
                     >
-                      <Ident value={`${t.orderId.slice(0, 8)}…`} />
+                      {t.orderNumber ?? <Ident value={`${t.orderId.slice(0, 8)}…`} />}
                     </Link>
                   )}
                 </Td>

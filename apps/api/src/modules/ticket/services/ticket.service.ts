@@ -24,6 +24,19 @@ export interface TicketActor {
   readonly sellerUserId?: string | null;
 }
 
+/**
+ * The two names a person can actually read, pulled with every ticket.
+ *
+ * Declared once so a new read cannot forget them and silently render a
+ * uuid — which is what every ticket screen did until now: an order
+ * shown as `01a043c6-7fbf-…` cannot be repeated down a phone, matched
+ * against the order list, or recognised at all.
+ */
+const TICKET_NAMES = {
+  order: { select: { orderNumber: true } },
+  shipment: { select: { shipmentNumber: true } },
+} as const;
+
 export interface OpenTicketInput {
   readonly ticketType: TicketType;
   readonly sellerId: string;
@@ -52,7 +65,17 @@ export interface TicketView {
   readonly status: TicketStatus;
   readonly sellerId: string;
   readonly orderId: string | null;
+  /**
+   * What a person calls the order — `SD-2026-26-000004`.
+   *
+   * The id is a uuid, and a uuid on a screen is something nobody can
+   * read, repeat down a phone, or match against the order list. The id
+   * stays for links; this is what gets shown.
+   */
+  readonly orderNumber: string | null;
   readonly shipmentId: string | null;
+  /** Likewise `SH-2026-09-000017` for the parcel. */
+  readonly shipmentNumber: string | null;
   readonly shipmentItemId: string | null;
   readonly courierCode: string | null;
   readonly issueCategoryExternalId: string | null;
@@ -471,6 +494,7 @@ export class TicketService {
         ...(orderId === undefined ? {} : { orderId }),
       },
       orderBy: { createdAt: 'desc' },
+      include: TICKET_NAMES,
     });
     return rows.map((r) => this.toView(r));
   }
@@ -478,7 +502,10 @@ export class TicketService {
   /** Seller-scoped detail read — never leaks another seller's ticket. */
   /** Unscoped read for staff — an operator sees every ticket. */
   async getById(ticketId: string): Promise<TicketView> {
-    const row = await this.prisma.client.ticket.findUnique({ where: { id: ticketId } });
+    const row = await this.prisma.client.ticket.findUnique({
+      where: { id: ticketId },
+      include: TICKET_NAMES,
+    });
     if (!row) {
       throw new NotFoundException({
         code: 'TICKET_NOT_FOUND',
@@ -491,6 +518,7 @@ export class TicketService {
   async getForSeller(sellerId: string, ticketId: string): Promise<TicketView> {
     const row = await this.prisma.client.ticket.findFirst({
       where: { id: ticketId, sellerId },
+      include: TICKET_NAMES,
     });
     if (!row) {
       throw new NotFoundException({
@@ -521,6 +549,7 @@ export class TicketService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include: TICKET_NAMES,
       }),
       this.prisma.client.ticket.count({ where }),
     ]);
@@ -569,6 +598,8 @@ export class TicketService {
     createdAt: Date;
     issueCategoryExternalId: string | null;
     issueSubcategoryExternalId: string | null;
+    order?: { orderNumber: string } | null;
+    shipment?: { shipmentNumber: string } | null;
   }): TicketView {
     return {
       id: row.id,
@@ -578,7 +609,9 @@ export class TicketService {
       status: row.status,
       sellerId: row.sellerId,
       orderId: row.orderId,
+      orderNumber: row.order?.orderNumber ?? null,
       shipmentId: row.shipmentId,
+      shipmentNumber: row.shipment?.shipmentNumber ?? null,
       shipmentItemId: row.shipmentItemId,
       courierCode: row.courierCode,
       subject: row.subject,

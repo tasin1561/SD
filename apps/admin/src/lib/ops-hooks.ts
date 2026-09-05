@@ -55,7 +55,10 @@ export interface TicketView {
   readonly status: TicketStatus;
   readonly sellerId: string;
   readonly orderId: string | null;
+  /** What a person calls it — `SD-2026-26-000004`. The id is for links. */
+  readonly orderNumber: string | null;
   readonly shipmentId: string | null;
+  readonly shipmentNumber: string | null;
   readonly shipmentItemId: string | null;
   readonly courierCode: string | null;
   readonly subject: string;
