@@ -121,14 +121,16 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
               ]}
             />
 
-            {ticket.description !== null && ticket.description !== '' && (
-              // Verbatim, as written when the ticket was raised — a
-              // seller reading their own words back should recognise
-              // them, and ours are the record of what we found.
-              <p className="text-text-body bg-surface-raised border-border mt-4 rounded-[var(--radius-2)] border px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap">
-                {ticket.description}
-              </p>
-            )}
+            {/*
+              The description is NOT repeated here.
+
+              It is the first thing the seller said, and the conversation
+              below opens with exactly that message — so printing it in
+              the facts card too showed the same sentence twice, a few
+              centimetres apart, with nothing to say why. This card is
+              for the facts ABOUT the ticket; what was said belongs in
+              the thread, in order, with a time against it.
+            */}
           </CardBody>
         </Card>
       </Section>

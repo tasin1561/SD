@@ -109,11 +109,14 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               { label: 'Courier', value: t.courierCode ?? '—' },
             ]}
           />
-          {t.description !== null && t.description.trim() !== '' && (
-            <p className="bg-surface-raised border-border text-text-body mt-3 rounded border px-3 py-2 text-sm whitespace-pre-wrap">
-              {t.description}
-            </p>
-          )}
+          {/*
+            The description is NOT repeated here — the conversation
+            below opens with exactly this message, so printing it in the
+            facts card too showed the same sentence twice a few
+            centimetres apart. Facts about the ticket here; what was
+            said belongs in the thread, in order, with a time on it.
+            Same change as the seller page.
+          */}
         </CardBody>
       </Card>
 
