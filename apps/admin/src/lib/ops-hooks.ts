@@ -3034,6 +3034,31 @@ export function useResolveIssue(): UseMutationResult<
   });
 }
 
+/**
+ * Tell people about open issues nobody was ever told about.
+ *
+ * Safe to press twice: the dedup key is the issue, so a second run
+ * announces nothing. It exists because `raise()` only announces a NEW
+ * issue — anything open before notifying was added is otherwise silent
+ * forever, and a notify that failed leaves the same silence.
+ */
+export function useAnnounceUnnotifiedIssues(): UseMutationResult<
+  { open: number; announced: number; alreadyAnnounced: number },
+  Error,
+  void
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<{ open: number; announced: number; alreadyAnnounced: number }>(
+        '/api/admin/system-issues/announce-unnotified',
+        { method: 'POST' },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-system-issues'] }),
+  });
+}
+
 export interface ConsigneeEditability {
   readonly editable: boolean;
   readonly reason: string;

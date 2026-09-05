@@ -23,7 +23,23 @@ describe('SystemIssueNotifier', () => {
         return { groupId: 'g', recipients: 1, delivered: 1, skipped: 0, failures: 0 };
       }),
     };
-    return { svc: new SystemIssueNotifier(dispatch as never), calls, dispatch };
+    // The sweep reads open issues and asks which were already told
+    // about; the per-issue tests never reach it.
+    const issueFindMany = jest.fn(async () => [] as never);
+    const logFindMany = jest.fn(async () => [] as never);
+    const prisma = {
+      client: {
+        systemIssue: { findMany: issueFindMany },
+        notificationLog: { findMany: logFindMany },
+      },
+    };
+    return {
+      svc: new SystemIssueNotifier(dispatch as never, prisma as never),
+      calls,
+      dispatch,
+      issueFindMany,
+      logFindMany,
+    };
   }
 
   const base = {
@@ -115,6 +131,108 @@ describe('SystemIssueNotifier', () => {
   it('draining with nothing in flight is a no-op', async () => {
     const c = make();
     await expect(c.svc.drainInFlight()).resolves.toBeUndefined();
+  });
+});
+
+describe('announceUnnotified — the ones nobody was told about', () => {
+  function sweep(
+    open: ReadonlyArray<Record<string, unknown>>,
+    alreadyToldEventIds: readonly string[] = [],
+  ) {
+    const calls: Record<string, unknown>[] = [];
+    const dispatch = {
+      dispatch: jest.fn(async (input: Record<string, unknown>) => {
+        calls.push(input);
+        return { groupId: 'g', recipients: 1, delivered: 1, skipped: 0, failures: 0 };
+      }),
+    };
+    const prisma = {
+      client: {
+        // Typed rather than inferred: a mock whose only return is an
+        // empty array narrows its args to `never`, and reading
+        // `.mock.calls[0][0]` off it stops compiling.
+        systemIssue: {
+          findMany: jest.fn(
+            async (_args: { where: Record<string, { in?: unknown[] } | null> }) => open as never,
+          ),
+        },
+        notificationLog: {
+          findMany: jest.fn(
+            async () => alreadyToldEventIds.map((eventId) => ({ eventId })) as never,
+          ),
+        },
+      },
+    };
+    return {
+      svc: new SystemIssueNotifier(dispatch as never, prisma as never),
+      calls,
+      issueFindMany: prisma.client.systemIssue.findMany,
+    };
+  }
+
+  const ISSUE = {
+    id: 'issue-1',
+    kind: SystemIssueKind.INTEGRATION,
+    severity: SystemIssueSeverity.HIGH,
+    title: 'A courier has refused this parcel four times',
+    detail: 'Place it by hand or fix what they objected to.',
+  };
+
+  it('announces an open issue nobody was told about', async () => {
+    // The case this exists for: `raise()` only announces a NEW issue,
+    // so everything open the day notifying was added is otherwise
+    // silent forever.
+    const c = sweep([ISSUE]);
+    expect(await c.svc.announceUnnotified()).toEqual({
+      open: 1,
+      announced: 1,
+      alreadyAnnounced: 0,
+    });
+    expect(c.calls[0]?.eventId).toBe('system_issue:issue-1');
+  });
+
+  it('says nothing about one that was already announced', async () => {
+    const c = sweep([ISSUE], ['system_issue:issue-1']);
+    expect(await c.svc.announceUnnotified()).toEqual({
+      open: 1,
+      announced: 0,
+      alreadyAnnounced: 1,
+    });
+    expect(c.calls).toHaveLength(0);
+  });
+
+  it('is safe to re-run: the dedup key is the issue, not the run', async () => {
+    // Idempotence here is a property of the NOTIF-2 partial unique on
+    // `system_issue:<id>`, not of this query being right — which is
+    // what makes it safe behind a button.
+    const c = sweep([ISSUE]);
+    await c.svc.announceUnnotified();
+    expect(c.calls[0]?.eventId).toBe('system_issue:issue-1');
+    // Even if the "was it told?" lookup were wrong, the second send
+    // carries the identical event id and the unique index refuses it.
+    const second = sweep([ISSUE]);
+    await second.svc.announceUnnotified();
+    expect(second.calls[0]?.eventId).toBe(c.calls[0]?.eventId);
+  });
+
+  it('only looks at OPEN issues, and only HIGH or CRITICAL', async () => {
+    const c = sweep([]);
+    await c.svc.announceUnnotified();
+    const where = c.issueFindMany.mock.calls[0]?.[0]?.where ?? {};
+    expect(where).toMatchObject({
+      resolvedAt: null,
+      severity: { in: [SystemIssueSeverity.HIGH, SystemIssueSeverity.CRITICAL] },
+    });
+  });
+
+  it('nothing open is a clean no-op', async () => {
+    const c = sweep([]);
+    expect(await c.svc.announceUnnotified()).toEqual({
+      open: 0,
+      announced: 0,
+      alreadyAnnounced: 0,
+    });
+    expect(c.calls).toHaveLength(0);
   });
 });
 

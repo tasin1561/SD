@@ -5,6 +5,7 @@ import {
   SystemIssueKind,
   SystemIssueSeverity,
 } from '@skydrop/db';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
 import { topicForIssue } from '../../notification-audience/services/notification-topic-catalog.service';
 
@@ -66,7 +67,66 @@ export class SystemIssueNotifier {
    */
   private readonly inFlight = new Set<Promise<void>>();
 
-  constructor(private readonly dispatch: NotificationDispatchService) {}
+  constructor(
+    private readonly dispatch: NotificationDispatchService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  /**
+   * Announce every open issue nobody was ever told about.
+   *
+   * ── WHY THIS IS NOT JUST A BACKFILL ──────────────────────────────
+   * It reads as a one-off — the issues that were already open the day
+   * notifying was added are permanently silent, because `raise()` only
+   * announces a NEW issue. But there is a standing hole of the same
+   * shape: `notify()` swallows its own failures on purpose (its callers
+   * are inside failure paths), so a dispatch that fails leaves an issue
+   * open and unannounced with nothing anywhere to say so. This is what
+   * finds those.
+   *
+   * ── ONCE EACH, BY CONSTRUCTION ───────────────────────────────────
+   * "Was this announced?" is answered by asking for a notification_logs
+   * row carrying its `system_issue:<id>` event id, and the NOTIF-2
+   * partial unique means a re-run cannot double-send even if the query
+   * were wrong. Idempotence here is a property of the dedup key, not of
+   * remembering to be careful — so this is safe to re-run, and safe to
+   * put behind a button.
+   *
+   * OPERATOR-TRIGGERED. It reaches real people, so a person decides
+   * when — the same reasoning as CUR-10.
+   */
+  async announceUnnotified(): Promise<{
+    readonly open: number;
+    readonly announced: number;
+    readonly alreadyAnnounced: number;
+  }> {
+    const open = await this.prisma.client.systemIssue.findMany({
+      where: {
+        resolvedAt: null,
+        severity: { in: [SystemIssueSeverity.HIGH, SystemIssueSeverity.CRITICAL] },
+      },
+      orderBy: { firstSeenAt: 'asc' },
+      select: { id: true, kind: true, severity: true, title: true, detail: true },
+    });
+
+    const told = await this.prisma.client.notificationLog.findMany({
+      where: { eventId: { in: open.map((i) => `system_issue:${i.id}`) } },
+      select: { eventId: true },
+      distinct: ['eventId'],
+    });
+    const already = new Set(told.map((t) => t.eventId));
+
+    let announced = 0;
+    for (const issue of open) {
+      if (already.has(`system_issue:${issue.id}`)) continue;
+      // Sequential, not parallel: this is a handful of rows by
+      // definition — if it were ever many, the right response is to ask
+      // why that many problems are open, not to send them faster.
+      await this.notify({ ...issue, issueId: issue.id });
+      announced += 1;
+    }
+    return { open: open.length, announced, alreadyAnnounced: open.length - announced };
+  }
 
   /** Await everything still going out. Called by the e2e reset. */
   async drainInFlight(): Promise<void> {

@@ -20,6 +20,7 @@ import {
 import { AlertTriangle } from 'lucide-react';
 import {
   useAcknowledgeIssue,
+  useAnnounceUnnotifiedIssues,
   useResolveIssue,
   useSystemIssues,
   type SystemIssueView,
@@ -73,6 +74,7 @@ export function SystemIssuesIndex(): ReactElement {
   const list = useSystemIssues(includeResolved, usePermission('system.settings.view'));
   const ack = useAcknowledgeIssue();
   const resolve = useResolveIssue();
+  const announce = useAnnounceUnnotifiedIssues();
   const toast = useToast();
   const [resolving, setResolving] = useState<SystemIssueView | null>(null);
   const [note, setNote] = useState('');
@@ -102,11 +104,44 @@ export function SystemIssuesIndex(): ReactElement {
         title="Needs a person"
         subtitle="Everything the system could not fix by itself. These do not break a screen — they stop figures moving — so they are collected here rather than left in a log."
         action={
-          <Button variant="ghost" size="md" onClick={() => setIncludeResolved((v) => !v)}>
-            {includeResolved ? 'Open only' : 'Show closed too'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {mayResolve && (
+              <Button
+                variant="secondary"
+                size="md"
+                disabled={announce.isPending}
+                onClick={() => announce.mutate()}
+                title="Only an issue nobody has been told about is announced. Pressing this twice sends nothing the second time."
+              >
+                {announce.isPending ? 'Telling people…' : 'Notify unannounced'}
+              </Button>
+            )}
+            <Button variant="ghost" size="md" onClick={() => setIncludeResolved((v) => !v)}>
+              {includeResolved ? 'Open only' : 'Show closed too'}
+            </Button>
+          </div>
         }
       />
+
+      {announce.data !== undefined && (
+        <Card>
+          <CardBody>
+            <p className="text-sm">
+              {announce.data.announced === 0
+                ? `Nothing to send — all ${announce.data.open} open issue(s) had already been announced.`
+                : `Told people about ${announce.data.announced} of ${announce.data.open} open issue(s); ${announce.data.alreadyAnnounced} had already been announced.`}
+            </p>
+          </CardBody>
+        </Card>
+      )}
+
+      {announce.isError && (
+        <Card>
+          <CardBody>
+            <p className="text-status-failed-fg text-sm">{serverVerdict(announce.error)}</p>
+          </CardBody>
+        </Card>
+      )}
 
       {open.length > 0 && (
         <Toolbar>
