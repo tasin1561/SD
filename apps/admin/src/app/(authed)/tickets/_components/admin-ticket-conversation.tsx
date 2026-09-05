@@ -112,32 +112,52 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
         <p className="text-text-muted text-sm">Nothing said yet.</p>
       ) : (
         <ol className="space-y-3">
-          {bubbles.map((b) => (
-            <li key={b.key} className="flex justify-start">
-              <div className="max-w-[85%]">
-                <p className="text-text-muted mb-1 text-xs">
-                  {b.who} ·{' '}
-                  {new Date(b.at).toLocaleString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </p>
-                <div
-                  className={
-                    b.side === 'SELLER'
-                      ? 'bg-accent/10 border-accent/30 rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                      : b.side === 'COURIER'
-                        ? 'bg-warning/10 border-warning/30 rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                        : 'bg-surface-raised border-border rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                  }
-                >
-                  {b.body}
+          {bubbles.map((b) => {
+            /*
+              The SELLER sits on the right, here and on their own ticket
+              page. Everything used to be left-aligned, so two voices in
+              one thread were told apart only by a small grey label —
+              which is not how anybody reads a conversation.
+              
+              Right for the seller rather than for US, deliberately: the
+              seller app already puts their words on the right, so the
+              thread has the same shape whichever side you read it from.
+              A thread that mirrors depending on who is logged in is one
+              nobody can screenshot and discuss.
+            */
+            const sellerSide = b.side === 'SELLER';
+            return (
+              <li key={b.key} className={sellerSide ? 'flex justify-end' : 'flex justify-start'}>
+                <div className="max-w-[85%]">
+                  <p
+                    className={[
+                      'text-text-muted mb-1 text-xs',
+                      sellerSide ? 'text-right' : 'text-left',
+                    ].join(' ')}
+                  >
+                    {b.who} ·{' '}
+                    {new Date(b.at).toLocaleString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                  <div
+                    className={
+                      sellerSide
+                        ? 'bg-accent/10 border-accent/30 rounded-lg rounded-tr-sm border px-3 py-2 text-sm whitespace-pre-wrap'
+                        : b.side === 'COURIER'
+                          ? 'bg-warning/10 border-warning/30 rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
+                          : 'bg-surface-raised border-border rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
+                    }
+                  >
+                    {b.body}
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ol>
       )}
 
