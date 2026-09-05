@@ -1,7 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { OrderSource, OrderStatus } from '@skydrop/db';
-import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class ListOrdersQueryDto {
   @ApiProperty({ required: false, enum: OrderStatus })
@@ -16,12 +25,23 @@ export class ListOrdersQueryDto {
 
   @ApiProperty({
     required: false,
-    description: 'Matches orderNumber / sellerOrderRef / recipient name / phone.',
+    description:
+      'Matches orderNumber / sellerOrderRef / recipient name / phone / AWB waybill number.',
   })
   @IsOptional()
   @IsString()
   @MaxLength(120)
   search?: string;
+
+  @ApiProperty({ required: false, description: 'ISO instant — orders placed at or after this.' })
+  @IsOptional()
+  @IsISO8601()
+  placedFrom?: string;
+
+  @ApiProperty({ required: false, description: 'ISO instant — orders placed at or before this.' })
+  @IsOptional()
+  @IsISO8601()
+  placedTo?: string;
 
   @ApiProperty({ required: false, default: 1, minimum: 1 })
   @IsOptional()

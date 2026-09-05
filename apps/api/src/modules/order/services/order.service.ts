@@ -104,6 +104,9 @@ export interface ListOrdersQuery {
   status?: OrderStatus;
   source?: OrderSource;
   search?: string;
+  /** ISO instants. Both optional — either end alone is a valid filter. */
+  placedFrom?: string;
+  placedTo?: string;
 }
 
 export interface AdminListOrdersQuery extends ListOrdersQuery {
@@ -997,7 +1000,24 @@ export class OrderService {
         { sellerOrderRef: { contains: query.search, mode: 'insensitive' } },
         { recipientName: { contains: query.search, mode: 'insensitive' } },
         { recipientPhoneE164: { contains: query.search, mode: 'insensitive' } },
+        // The WAYBILL. It is the number a courier quotes, a customer
+        // reads off a text message and a seller pastes from an email —
+        // and it was the one identifier on the parcel that this search
+        // could not find.
+        {
+          orderShipments: {
+            some: { shipment: { awbNumber: { contains: query.search, mode: 'insensitive' } } },
+          },
+        },
       ];
+    }
+    // Placed between. Both ends optional, so "everything since the
+    // 1st" and "everything before today" are one control away.
+    if (query.placedFrom !== undefined || query.placedTo !== undefined) {
+      where.placedAt = {
+        ...(query.placedFrom === undefined ? {} : { gte: new Date(query.placedFrom) }),
+        ...(query.placedTo === undefined ? {} : { lte: new Date(query.placedTo) }),
+      };
     }
     const [items, total] = await Promise.all([
       this.prisma.client.order.findMany({
@@ -1031,7 +1051,24 @@ export class OrderService {
         { sellerOrderRef: { contains: query.search, mode: 'insensitive' } },
         { recipientName: { contains: query.search, mode: 'insensitive' } },
         { recipientPhoneE164: { contains: query.search, mode: 'insensitive' } },
+        // The WAYBILL. It is the number a courier quotes, a customer
+        // reads off a text message and a seller pastes from an email —
+        // and it was the one identifier on the parcel that this search
+        // could not find.
+        {
+          orderShipments: {
+            some: { shipment: { awbNumber: { contains: query.search, mode: 'insensitive' } } },
+          },
+        },
       ];
+    }
+    // Placed between. Both ends optional, so "everything since the
+    // 1st" and "everything before today" are one control away.
+    if (query.placedFrom !== undefined || query.placedTo !== undefined) {
+      where.placedAt = {
+        ...(query.placedFrom === undefined ? {} : { gte: new Date(query.placedFrom) }),
+        ...(query.placedTo === undefined ? {} : { lte: new Date(query.placedTo) }),
+      };
     }
     const [items, total] = await Promise.all([
       this.prisma.client.order.findMany({

@@ -1,6 +1,15 @@
 import type { ReactElement } from 'react';
 import { PageHeader } from '@skydrop/ui/components';
-import { Webhook, Bell, Key, ShieldCheck, PackageSearch, ReceiptText, Wallet } from 'lucide-react';
+import {
+  Webhook,
+  Bell,
+  Key,
+  ShieldCheck,
+  PackageSearch,
+  ReceiptText,
+  Wallet,
+  BellRing,
+} from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 
 /**
@@ -60,9 +69,20 @@ export default function SettingsPage(): ReactElement {
     {
       href: '/settings/notifications',
       icon: <Bell size={20} />,
-      title: 'Notification preferences',
+      title: 'Company notification preferences',
       description:
-        'Pick channels (email/SMS/in-app/webhook) per category, set quiet hours and timezone.',
+        'What this COMPANY is emailed about, by category, and the quiet hours those emails respect.',
+    },
+    {
+      // The other grain, and it needs saying which is which: the tile
+      // above is what the company is emailed; this is what reaches one
+      // person's own inbox. Two tiles both called "notifications" with
+      // no distinction is how somebody changes the wrong one.
+      href: '/notifications/settings',
+      icon: <BellRing size={20} />,
+      title: 'Your own notifications',
+      description:
+        'What reaches YOUR inbox, topic by topic. Your choices, separate from the company’s.',
     },
     {
       href: '/settings/api-keys',

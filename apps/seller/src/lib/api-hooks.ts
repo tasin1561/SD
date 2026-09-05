@@ -96,6 +96,8 @@ async function fetchOrders(
   const sp = new URLSearchParams();
   if (query.status) sp.set('status', query.status);
   if (query.search) sp.set('search', query.search);
+  if (query.placedFrom) sp.set('placedFrom', query.placedFrom);
+  if (query.placedTo) sp.set('placedTo', query.placedTo);
   if (query.page) sp.set('page', String(query.page));
   if (query.pageSize) sp.set('pageSize', String(query.pageSize));
   const qs = sp.toString();

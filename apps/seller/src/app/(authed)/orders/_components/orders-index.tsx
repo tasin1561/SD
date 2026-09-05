@@ -65,6 +65,24 @@ import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 
 const STATUSES = Object.values(OrderStatus);
 const PAGE_SIZES = [15, 20, 50, 100] as const;
+
+/**
+ * When it was placed, as presets rather than two date pickers.
+ *
+ * The question a seller actually has is "since when", and a pair of
+ * pickers asks for two answers to get one. `days: null` is everything.
+ */
+const RANGES: ReadonlyArray<{
+  readonly key: string;
+  readonly label: string;
+  readonly days: number | null;
+}> = [
+  { key: '', label: 'Any time', days: null },
+  { key: '1', label: 'Today', days: 1 },
+  { key: '7', label: 'Last 7 days', days: 7 },
+  { key: '30', label: 'Last 30 days', days: 30 },
+  { key: '90', label: 'Last 90 days', days: 90 },
+];
 const DEFAULT_PAGE_SIZE = 20;
 
 /**
@@ -118,6 +136,7 @@ const RETURNING: readonly OrderStatus[] = [
 interface QueryParams {
   readonly status: OrderStatus | '';
   readonly search: string;
+  readonly range: string;
   readonly page: number;
   readonly pageSize: number;
 }
@@ -128,6 +147,7 @@ function parseParams(sp: URLSearchParams): QueryParams {
   return {
     status: status && (STATUSES as string[]).includes(status) ? status : '',
     search: sp.get('search') ?? '',
+    range: RANGES.some((r) => r.key === (sp.get('range') ?? '')) ? (sp.get('range') ?? '') : '',
     page: Math.max(1, Number(sp.get('page')) || 1),
     pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : DEFAULT_PAGE_SIZE,
   };
@@ -168,6 +188,7 @@ export function OrdersIndex(): ReactElement {
       const nextSp = new URLSearchParams();
       if (merged.status) nextSp.set('status', merged.status);
       if (merged.search) nextSp.set('search', merged.search);
+      if (merged.range) nextSp.set('range', merged.range);
       if (merged.page !== 1) nextSp.set('page', String(merged.page));
       if (merged.pageSize !== DEFAULT_PAGE_SIZE) nextSp.set('pageSize', String(merged.pageSize));
       const qs = nextSp.toString();
@@ -176,14 +197,22 @@ export function OrdersIndex(): ReactElement {
     [params, router],
   );
 
+  // The range resolved to an instant at render time rather than stored
+  // as one: a URL carrying "last 7 days" still means the last 7 days
+  // tomorrow, where a stored timestamp would quietly mean last week.
+  const days = RANGES.find((r) => r.key === params.range)?.days ?? null;
+  const placedFrom =
+    days === null ? undefined : new Date(Date.now() - days * 86_400_000).toISOString();
+
   const list = useOrdersList({
     ...(params.status ? { status: params.status } : {}),
     ...(params.search ? { search: params.search } : {}),
+    ...(placedFrom === undefined ? {} : { placedFrom }),
     page: params.page,
     pageSize: params.pageSize,
   });
 
-  const filtered = params.status !== '' || params.search !== '';
+  const filtered = params.status !== '' || params.search !== '' || params.range !== '';
 
   return (
     <div>
@@ -291,7 +320,7 @@ export function OrdersIndex(): ReactElement {
               />
               <Input
                 aria-label="Search orders"
-                placeholder="Order number, ref, recipient name or phone…"
+                placeholder="Order number, ref, AWB, recipient name or phone…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full pl-8"
@@ -301,6 +330,19 @@ export function OrdersIndex(): ReactElement {
               Search
             </Button>
           </form>
+
+          <Select
+            aria-label="Placed when"
+            value={params.range}
+            onChange={(e) => updateUrl({ range: e.target.value, page: 1 })}
+            className="w-[150px]"
+          >
+            {RANGES.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.label}
+              </option>
+            ))}
+          </Select>
 
           <Select
             aria-label="Filter by status"
@@ -324,7 +366,7 @@ export function OrdersIndex(): ReactElement {
               size="md"
               onClick={() => {
                 setSearchInput('');
-                updateUrl({ status: '', search: '', page: 1 });
+                updateUrl({ status: '', search: '', range: '', page: 1 });
               }}
             >
               Clear

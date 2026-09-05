@@ -18,7 +18,11 @@ import type { ActorType, OrderEventType, OrderStatus } from '@skydrop/db';
  *  permissive for re-use. */
 export interface ListSellerOrdersQuery {
   readonly status?: OrderStatus;
+  /** orderNumber / sellerOrderRef / recipient name / phone / AWB. */
   readonly search?: string;
+  /** ISO instants; either end alone is a valid filter. */
+  readonly placedFrom?: string;
+  readonly placedTo?: string;
   readonly page?: number;
   readonly pageSize?: number;
 }

@@ -5,19 +5,13 @@ import Link from 'next/link';
 import { Button, Card, CardBody, PageHeader, Section } from '@skydrop/ui/components';
 import { usePermission } from '@/lib/use-permission';
 import {
-  useClearNotificationSubscription,
   useMarkAllNotificationsRead,
   useDismissAllNotifications,
   useDismissNotification,
   useMarkNotificationRead,
   useMarkNotificationUnread,
   useNotificationFeed,
-  useNotificationSubscriptions,
-  useNotificationTopics,
-  type TopicDef,
-  useSetNotificationSubscription,
 } from '@/lib/notification-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Everything that has been sent to this person, and what they have
@@ -40,19 +34,7 @@ export function NotificationsView(): ReactElement {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const markAll = useMarkAllNotificationsRead();
-  const subs = useNotificationSubscriptions();
-  const setSub = useSetNotificationSubscription();
-  const clearSub = useClearNotificationSubscription();
-  const [error, setError] = useState<string | null>(null);
-  const topics = useNotificationTopics();
 
-  // A topic with no row follows its default, which is ON. Only an
-  // explicit MUTED row switches something off.
-  const muted = new Set((subs.data ?? []).filter((s) => s.mode === 'MUTED').map((s) => s.topic));
-  const grouped = (topics.data ?? []).reduce<Record<string, TopicDef[]>>((acc, t) => {
-    (acc[t.group] ??= []).push(t);
-    return acc;
-  }, {});
   // Cosmetic only (FE-2) — the server gates the broadcast endpoints.
   const canBroadcast = usePermission('notifications.broadcast');
 
@@ -98,14 +80,6 @@ export function NotificationsView(): ReactElement {
           </div>
         }
       />
-
-      {error !== null && (
-        <Card>
-          <CardBody>
-            <p className="text-status-failed-fg text-sm">{error}</p>
-          </CardBody>
-        </Card>
-      )}
 
       <Card>
         <CardBody>
@@ -205,61 +179,18 @@ export function NotificationsView(): ReactElement {
         </CardBody>
       </Card>
 
-      <Card>
-        <CardBody>
-          <h2 className="text-sm font-semibold">What reaches you</h2>
-          <p className="text-text-muted mt-0.5 text-xs">
-            Switch off anything you would rather not see here. Messages about your account and
-            credentials are not listed — they only ever go to your email, and cannot be silenced.
-          </p>
-
-          {topics.isLoading ? (
-            <p className="text-text-muted mt-3 text-sm">Loading…</p>
-          ) : (
-            Object.entries(grouped).map(([group, defs]) => (
-              <div key={group} className="mt-4">
-                <h3 className="text-text-faint text-xs font-medium uppercase tracking-wide">
-                  {group}
-                </h3>
-                <ul className="divide-border-subtle mt-1 divide-y">
-                  {defs.map((d) => {
-                    const on = !muted.has(d.topic);
-                    return (
-                      <li key={d.topic} className="flex items-start justify-between gap-4 py-2.5">
-                        <div className="min-w-0">
-                          <div className="text-sm">{d.label}</div>
-                          <div className="text-text-muted text-xs">{d.description}</div>
-                        </div>
-                        <label className="flex shrink-0 items-center gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            checked={on}
-                            aria-label={`Notify me about: ${d.label}`}
-                            onChange={() => {
-                              setError(null);
-                              if (on) {
-                                setSub.mutate(
-                                  { topic: d.topic, mode: 'MUTED' },
-                                  { onError: (e) => setError(serverVerdict(e)) },
-                                );
-                              } else {
-                                clearSub.mutate(d.topic, {
-                                  onError: (e) => setError(serverVerdict(e)),
-                                });
-                              }
-                            }}
-                          />
-                          <span className="text-text-faint">{on ? 'On' : 'Off'}</span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))
-          )}
-        </CardBody>
-      </Card>
+      {/*
+        The preferences moved to their own page. They are a standing
+        decision — set once, changed rarely — and they were sitting
+        under a list that is read several times a day, pushing it up the
+        screen every time somebody came to check what had happened.
+      */}
+      <p className="text-text-muted text-sm">
+        <Link className="text-accent underline underline-offset-2" href="/notifications/settings">
+          Choose what reaches you
+        </Link>{' '}
+        — switch off anything you would rather not see here.
+      </p>
     </Section>
   );
 }
