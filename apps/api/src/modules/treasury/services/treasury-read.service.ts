@@ -23,6 +23,32 @@ export interface TreasuryOverview {
     }>;
   };
   /**
+   * Capital sitting in a courier's PREPAID wallet.
+   *
+   * It is ours and it is not in the bank. We paid it across, they have
+   * not spent it yet, and it comes back to us as carriage rather than as
+   * cash — so leaving it out of the totals makes the business look
+   * poorer than it is by exactly the float we are carrying.
+   *
+   * NOT a double count: the recharge already debited the bank account
+   * when it was recorded, so the money left one asset and arrived in
+   * another. Counting both sides of that is what makes them add up.
+   *
+   * `capturedAt` is on every line because this is the one figure here
+   * that is not derived from our own ledger — it is what the courier
+   * said when we last looked, and how stale that is changes how much
+   * weight it can carry.
+   */
+  readonly courierWallets: {
+    readonly accounts: ReadonlyArray<{
+      readonly courierAccountId: string;
+      readonly label: string;
+      readonly balanceInr: string;
+      readonly capturedAt: string | null;
+    }>;
+    readonly totalInr: string;
+  };
+  /**
    * What we OWE sellers against what we HOLD for them. The single
    * number that says whether client money is covered.
    */
@@ -114,6 +140,44 @@ export class TreasuryReadService {
       };
     });
 
+    /*
+      THE LATEST balance per courier account, not every snapshot.
+
+      `courier_wallet_balances` keeps one row per read so the burn rate
+      is answerable; the treasury wants only the newest per account.
+      Taken by `capturedAt DESC` within each account rather than by a
+      global max, which would show one account's figure and drop the
+      others.
+    */
+    const courierAccounts = await this.prisma.client.courierAccount.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        label: true,
+        walletBalances: {
+          orderBy: { capturedAt: 'desc' },
+          take: 1,
+          select: { balanceInr: true, capturedAt: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const walletLines = courierAccounts
+      // An account we have never read is left OUT rather than shown as
+      // zero: "we do not know" and "it is empty" are different, and only
+      // one of them should reduce the money we think we have.
+      .filter((a) => a.walletBalances.length > 0)
+      .map((a) => ({
+        courierAccountId: a.id,
+        label: a.label,
+        balanceInr: (a.walletBalances[0]?.balanceInr ?? ZERO).toFixed(2),
+        capturedAt: a.walletBalances[0]?.capturedAt.toISOString() ?? null,
+      }));
+    const walletTotal = walletLines.reduce(
+      (acc, l) => acc.add(new Prisma.Decimal(l.balanceInr)),
+      ZERO,
+    );
+
     const owedInr = owed.reduce((acc, r) => acc.add(r.balance), ZERO);
     const heldInr = held._sum.signedAmount ?? ZERO;
     const gap = owedInr.sub(heldInr);
@@ -121,6 +185,7 @@ export class TreasuryReadService {
     return {
       accounts: enriched,
       totals: { byCurrency },
+      courierWallets: { accounts: walletLines, totalInr: walletTotal.toFixed(2) },
       clientMoney: {
         owedToSellersInr: owedInr.toFixed(2),
         heldForSellersInr: heldInr.toFixed(2),

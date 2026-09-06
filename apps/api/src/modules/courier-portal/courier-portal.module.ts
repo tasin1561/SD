@@ -19,6 +19,7 @@ import { PortalTicketSyncService } from './services/portal-ticket-sync.service';
 import { TicketModule } from '../ticket/ticket.module';
 import { TicketHandlingModule } from '../ticket-handling/ticket-handling.module';
 import { SystemIssuesModule } from '../system-issues/system-issues.module';
+import { CourierWalletReconcileService } from './services/courier-wallet-reconcile.service';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -67,6 +68,7 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     PortalTaxonomyService,
     PortalDispatcherService,
     PortalTicketSyncService,
+    CourierWalletReconcileService,
     PortalCanaryService,
     PortalQueue,
     WalletLedgerFetcherService,

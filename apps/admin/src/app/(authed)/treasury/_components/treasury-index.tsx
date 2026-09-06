@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
 import {
@@ -134,6 +135,27 @@ export function TreasuryIndex(): ReactElement {
               }
               tone={overview.data.clientMoney.covered ? 'good' : 'bad'}
             />
+            {/* Not in any bank account, and easy to forget it is ours
+                at all: the recharge debited the account when it was
+                recorded, so without this line the money reads as spent.
+                Links out rather than expanding here — reconciling it is
+                its own page and its own question. */}
+            {Number(overview.data.courierWallets.totalInr) > 0 ||
+            overview.data.courierWallets.accounts.length > 0 ? (
+              <Link href="/courier-wallet">
+                <Stat
+                  label="In courier wallets"
+                  value={
+                    <Money
+                      amount={overview.data.courierWallets.totalInr}
+                      currency="INR"
+                      convert={false}
+                    />
+                  }
+                  hint="Prepaid float — ours, held on their system"
+                />
+              </Link>
+            ) : null}
             {overview.data.totals.byCurrency.map((c) => (
               <Stat
                 key={c.currency}

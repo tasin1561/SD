@@ -922,6 +922,21 @@ export interface TreasuryOverviewView {
     readonly gapInr: string;
     readonly covered: boolean;
   };
+  /**
+   * Our capital sitting in couriers' prepaid wallets. An asset, not
+   * cash: the recharge already debited the bank account, so the money
+   * left one asset and arrived in another — it is not double-counted
+   * against the account totals above.
+   */
+  readonly courierWallets: {
+    readonly accounts: ReadonlyArray<{
+      readonly courierAccountId: string;
+      readonly label: string;
+      readonly balanceInr: string;
+      readonly capturedAt: string | null;
+    }>;
+    readonly totalInr: string;
+  };
 }
 
 export function useTreasuryOverview(enabled = true): UseQueryResult<TreasuryOverviewView> {
@@ -3505,6 +3520,152 @@ export function useHandoverScan(): UseMutationResult<HandoverScanResult, Error, 
       // A duplicate has just stopped this operator; the banner has to
       // know without waiting for a refetch interval.
       void qc.invalidateQueries({ queryKey: ['admin-scan-block'] });
+    },
+  });
+}
+
+/* ── Courier wallets — the prepaid float at the courier ───────────── */
+
+export interface CourierWalletAccountView {
+  readonly courierAccountId: string;
+  readonly label: string;
+  readonly courierCode: string;
+  readonly balanceInr: string | null;
+  readonly capturedAt: string | null;
+  readonly statedCreditInr: string | null;
+  readonly statedDebitInr: string | null;
+  readonly unrecordedCount: number;
+  readonly mismatchCount: number;
+}
+
+export interface CourierRechargeView {
+  readonly id: string;
+  readonly courierAccountId: string;
+  readonly accountLabel: string;
+  readonly externalTxnId: string;
+  readonly bankTxnRef: string | null;
+  readonly amountInr: string;
+  readonly status: string;
+  readonly occurredAt: string;
+  readonly matchState: 'UNRECORDED' | 'MATCHED' | 'AMOUNT_MISMATCH' | 'RESOLVED';
+  readonly bankEntryId: string | null;
+  readonly bankAmountInr: string | null;
+  readonly bankAccountLabel: string | null;
+  readonly resolutionNote: string | null;
+  readonly resolvedAt: string | null;
+}
+
+export interface UnmatchedCourierPaymentView {
+  readonly bankEntryId: string;
+  readonly accountLabel: string;
+  readonly amountInr: string;
+  readonly reference: string | null;
+  readonly occurredAt: string;
+  readonly note: string | null;
+}
+
+export function useCourierWalletAccounts(): UseQueryResult<{
+  accounts: readonly CourierWalletAccountView[];
+}> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-courier-wallet', 'accounts'],
+    queryFn: () =>
+      client.request<{ accounts: readonly CourierWalletAccountView[] }>(
+        '/api/admin/courier-wallet/accounts',
+      ),
+  });
+}
+
+export function useCourierRecharges(
+  matchState?: string,
+): UseQueryResult<{ recharges: readonly CourierRechargeView[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-courier-wallet', 'recharges', matchState ?? 'all'],
+    queryFn: () =>
+      client.request<{ recharges: readonly CourierRechargeView[] }>(
+        `/api/admin/courier-wallet/recharges${
+          matchState === undefined ? '' : `?matchState=${matchState}`
+        }`,
+      ),
+  });
+}
+
+export function useUnmatchedCourierPayments(): UseQueryResult<{
+  payments: readonly UnmatchedCourierPaymentView[];
+}> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-courier-wallet', 'unmatched'],
+    queryFn: () =>
+      client.request<{ payments: readonly UnmatchedCourierPaymentView[] }>(
+        '/api/admin/courier-wallet/unmatched-payments',
+      ),
+  });
+}
+
+export function useRecordRechargeBankSide(): UseMutationResult<
+  { bankEntryId: string },
+  Error,
+  { rechargeId: string; bankAccountId: string; note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rechargeId, ...body }) =>
+      client.request<{ bankEntryId: string }>(
+        `/api/admin/courier-wallet/recharges/${rechargeId}/record-bank-side`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-courier-wallet'] });
+      // The bank book moved, so every figure derived from it did too.
+      void qc.invalidateQueries({ queryKey: ['admin-treasury'] });
+    },
+  });
+}
+
+export function useResolveRecharge(): UseMutationResult<
+  { resolved: true },
+  Error,
+  { rechargeId: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rechargeId, reason }) =>
+      client.request<{ resolved: true }>(
+        `/api/admin/courier-wallet/recharges/${rechargeId}/resolve`,
+        { method: 'POST', body: { reason } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-courier-wallet'] }),
+  });
+}
+
+export function useRecordCourierPayment(): UseMutationResult<
+  { bankEntryId: string },
+  Error,
+  {
+    bankAccountId: string;
+    courierAccountId: string;
+    amountInr: string;
+    occurredAt: string;
+    reference: string;
+    note?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<{ bankEntryId: string }>('/api/admin/courier-wallet/payments', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-courier-wallet'] });
+      void qc.invalidateQueries({ queryKey: ['admin-treasury'] });
     },
   });
 }

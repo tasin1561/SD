@@ -95,6 +95,7 @@ model StaffUser {
   ticketsOpened              Ticket[]                      @relation("TicketOpenedByStaff")
   ticketsResolved            Ticket[]                      @relation("TicketResolvedByStaff")
   ticketMessageRelays        TicketMessageRelay[]
+  courierRechargesResolved   CourierWalletRecharge[]       @relation("CourierRechargeResolvedBy")
   courierSettlementsRecorded CourierSettlement[]           @relation("CourierSettlementRecordedBy")
   stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
   inboundFreightSettled      InboundFreightCharge[]        @relation("InboundFreightSettledBy")
@@ -3907,6 +3908,9 @@ model CourierAccount {
   // Exactly one DEFAULT active account per (courier_id, environment) —
   // partial unique index courier_accounts_default_uq
   // (WHERE is_default AND deleted_at IS NULL), migration-managed.
+  walletRecharges CourierWalletRecharge[]
+  walletBalances  CourierWalletBalance[]
+
   @@index([courierId, environment])
   @@index([isActive])
   @@index([deletedAt])
@@ -7059,6 +7063,104 @@ enum BankOwnerKind {
 /// What a movement WAS. Kept coarse on purpose — a category that names
 /// the business event survives a reorganisation of the code that caused
 /// it, where a name copied from a service does not.
+/// Whether a courier-wallet recharge and our own books agree.
+/// A recharge of a courier's prepaid wallet, as THEY recorded it.
+///
+/// ── WHY THIS EXISTS ──────────────────────────────────────────────────
+/// Delhivery's wallet is prepaid: we send money, they issue waybills
+/// against it. Every rupee in there left one of our bank accounts, and
+/// until now nothing checked that the two sides agreed. Money could
+/// leave the treasury labelled "courier recharge" and never arrive, and
+/// the only symptom would be a balance that ran out sooner than
+/// expected — months later, with no way to tell which payment was
+/// missing.
+///
+/// ── THE BANK'S OWN REFERENCE IS WHAT MAKES THIS EXACT ────────────────
+/// Their recharge list carries the BANK's transaction id
+/// (`164531411356`) beside their own (`MRC17885146743279740`). So
+/// matching is an exact reference comparison, not a guess at amount and
+/// date — which would pair two ₹20,000 recharges on the same morning
+/// arbitrarily and call it reconciled.
+model CourierWalletRecharge {
+  id               String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierAccountId String @map("courier_account_id") @db.Uuid
+
+  /// THEIR id for it — `MRC…`. Unique per account, and the dedup key: a
+  /// nightly re-read of the same window must restate a recharge, never
+  /// record a second one.
+  externalTxnId String   @map("external_txn_id")
+  /// The BANK's reference, as their page prints it. What our own entry
+  /// is matched on.
+  bankTxnRef    String?  @map("bank_txn_ref")
+  amountInr     Decimal  @map("amount_inr") @db.Decimal(14, 2)
+  /// Their word — "Success", and anything else they may say.
+  status        String
+  occurredAt    DateTime @map("occurred_at") @db.Timestamptz
+
+  /// OUR side, once matched or recorded. UNIQUE: one bank payment funds
+  /// one recharge, and letting a single entry answer for two would hide
+  /// exactly the shortfall this table exists to find.
+  bankEntryId String?              @unique @map("bank_entry_id") @db.Uuid
+  matchState  CourierRechargeMatch @default(UNRECORDED) @map("match_state")
+
+  /// Set when a person decided what an unmatched one was. Never
+  /// auto-cleared — a resolution is somebody's judgement on the record.
+  resolvedByStaffId String?   @map("resolved_by_staff_id") @db.Uuid
+  resolvedAt        DateTime? @map("resolved_at") @db.Timestamptz
+  resolutionNote    String?   @map("resolution_note") @db.Text
+
+  firstSeenAt DateTime @default(now()) @map("first_seen_at") @db.Timestamptz
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  courierAccount CourierAccount @relation(fields: [courierAccountId], references: [id])
+  bankEntry      BankEntry?     @relation(fields: [bankEntryId], references: [id])
+  resolvedBy     StaffUser?     @relation("CourierRechargeResolvedBy", fields: [resolvedByStaffId], references: [id])
+
+  @@unique([courierAccountId, externalTxnId])
+  @@index([matchState])
+  @@index([occurredAt])
+  @@index([bankTxnRef])
+  @@map("courier_wallet_recharges")
+}
+
+/// What the courier said their wallet held, when we last looked.
+///
+/// A SNAPSHOT per read rather than a single current figure: "how fast
+/// are we burning it" is the question that decides when to top up, and
+/// it cannot be answered from one number. It also makes the balance
+/// check auditable after the fact — the figure we reconciled against is
+/// still there.
+model CourierWalletBalance {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierAccountId String   @map("courier_account_id") @db.Uuid
+  balanceInr       Decimal  @map("balance_inr") @db.Decimal(14, 2)
+  /// Their own running totals, read from the same page. Kept because a
+  /// balance that disagrees with credits minus debits means something is
+  /// missing from the transaction list they showed us.
+  totalCreditInr   Decimal? @map("total_credit_inr") @db.Decimal(14, 2)
+  totalDebitInr    Decimal? @map("total_debit_inr") @db.Decimal(14, 2)
+  capturedAt       DateTime @default(now()) @map("captured_at") @db.Timestamptz
+
+  courierAccount CourierAccount @relation(fields: [courierAccountId], references: [id])
+
+  @@index([courierAccountId, capturedAt])
+  @@map("courier_wallet_balances")
+}
+
+enum CourierRechargeMatch {
+  /// Their recharge, our bank entry, same amount. Nothing to do.
+  MATCHED         @map("matched")
+  /// At the courier, nothing in our books. Either somebody forgot the
+  /// entry or somebody else's money funded it — both need a person.
+  UNRECORDED      @map("unrecorded")
+  /// Linked, but the two amounts disagree. Money went somewhere.
+  AMOUNT_MISMATCH @map("amount_mismatch")
+  /// A person looked and said what it was. Carries who and why.
+  RESOLVED        @map("resolved")
+
+  @@map("courier_recharge_match")
+}
+
 enum BankEntryType {
   OPENING_BALANCE           @map("opening_balance")
   /// Courier paying us COD they collected.
@@ -7082,6 +7184,12 @@ enum BankEntryType {
   /// a seller's held balance ours; a refund gives it back. Always a
   /// PAIR summing to zero, so the account total still matches the
   /// statement while the ownership split follows the wallet.
+  /// Money leaving OUR account to top up a courier's prepaid wallet.
+  /// Its own type because it is neither an expense (we get it back as
+  /// carriage) nor a transfer (it leaves the treasury entirely), and
+  /// because "what have we put into Delhivery this month" has to be
+  /// answerable without reading notes.
+  COURIER_WALLET_RECHARGE
   RECLASSIFICATION          @map("reclassification")
 
   @@map("bank_entry_type")
@@ -7226,6 +7334,8 @@ model BankEntry {
 
   /// "What did the system do, and what did a person do" — the question
   /// this column exists to answer, so it is indexed for it.
+  courierRecharge CourierWalletRecharge?
+
   @@index([actorType])
   @@index([accountId, occurredAt])
   @@index([accountId, ownerKind, sellerId])

@@ -61,8 +61,38 @@ function make(
   const resolveByKey = jest.fn(async () => 1);
   const issues = { raise, resolveByKey } as unknown as SystemIssueService;
 
-  const svc = new WalletSyncService(prisma, fetcher, importer, audit, issues);
-  return { svc, fetch, importDelhiveryWallet, auditLog, findMany, raise, resolveByKey };
+  /**
+   * The recharge reconciliation, which the sync runs after the import.
+   *
+   * Recorded rather than stubbed to nothing: it reuses the session the
+   * ledger fetch has just signed in with, and these cases assert the
+   * ledger import still succeeds when the reconciliation fails — its
+   * failures are its own to raise.
+   */
+  const reconcile = jest.fn(async () => ({
+    accounts: 1,
+    rechargesSeen: 0,
+    newlySeen: 0,
+    matched: 0,
+    unrecorded: 0,
+    amountMismatched: 0,
+    paidButNeverArrived: 0,
+    lowBalance: 0,
+  }));
+
+  const svc = new WalletSyncService(prisma, fetcher, importer, audit, issues, {
+    reconcile,
+  } as never);
+  return {
+    svc,
+    fetch,
+    importDelhiveryWallet,
+    auditLog,
+    findMany,
+    raise,
+    resolveByKey,
+    reconcile,
+  };
 }
 
 describe('WalletSyncService', () => {
@@ -210,5 +240,24 @@ describe('WalletSyncService — it says when it needs a person', () => {
     const { svc, resolveByKey } = make({ enabled: true, writes: true });
     await svc.sync();
     expect(resolveByKey).toHaveBeenCalledWith('wallet-sync:acct-1', expect.any(String));
+  });
+});
+
+describe('the recharge reconciliation runs alongside the ledger', () => {
+  it('runs after a successful import — same session, no second login', async () => {
+    // A second nightly login against a courier's portal is load for
+    // nothing, and the session it needs has just been used.
+    const { svc, reconcile } = make({});
+    await svc.sync();
+    expect(reconcile).toHaveBeenCalledTimes(1);
+  });
+
+  it('a reconciliation failure does NOT fail the ledger import', async () => {
+    // The import has already succeeded and written costs by this point.
+    // Losing that because the recharge check could not run would throw
+    // away the work and re-do it tomorrow.
+    const { svc, reconcile } = make({});
+    reconcile.mockRejectedValueOnce(new Error('portal unreachable'));
+    await expect(svc.sync()).resolves.toBeDefined();
   });
 });

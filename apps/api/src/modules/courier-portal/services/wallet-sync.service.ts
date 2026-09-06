@@ -9,6 +9,7 @@ import {
   WalletImportService,
   type WalletImportResult,
 } from '../../wallet-ledger/services/wallet-import.service';
+import { CourierWalletReconcileService } from './courier-wallet-reconcile.service';
 
 const SETTING_ENABLED = 'courier.wallet_sync_enabled';
 const SETTING_WRITE = 'courier.wallet_sync_writes_enabled';
@@ -67,6 +68,7 @@ export class WalletSyncService {
     private readonly importer: WalletImportService,
     private readonly audit: AuditLogService,
     private readonly issues: SystemIssueService,
+    private readonly walletReconcile: CourierWalletReconcileService,
   ) {}
 
   async sync(now: Date = new Date()): Promise<WalletSyncSummary> {
@@ -192,6 +194,30 @@ export class WalletSyncService {
       metadata: { courierCode: 'delhivery', ...summary, accounts: results.map((r) => ({ ...r })) },
     });
     this.logger.log({ accounts: results.length, failed, wrote: writes }, 'Wallet ledger sync done');
+
+    /*
+      AND THE OTHER HALF OF THE WALLET.
+
+      The ledger above says what the courier CHARGED us. This says what
+      we PUT IN, and whether every rupee of it left one of our own bank
+      accounts — the prepaid float is our capital sitting on somebody
+      else's system, and until now nothing checked either direction.
+
+      Run here rather than on its own cron because it needs the same
+      signed-in session that has just been used, and a second nightly
+      login against a courier's portal is load for nothing. Its failures
+      are its own — it raises them itself — so they never fail the
+      ledger import that has already succeeded.
+    */
+    try {
+      const recon = await this.walletReconcile.reconcile();
+      this.logger.log(recon, 'Courier wallet reconciliation done');
+    } catch (err) {
+      this.logger.error(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Courier wallet reconciliation could not run',
+      );
+    }
     return summary;
   }
 

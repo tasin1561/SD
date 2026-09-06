@@ -197,11 +197,20 @@ export class SystemIssueService implements OnModuleDestroy {
    * clears its own alarm rather than leaving a stale row for a human to
    * tidy. No-op when nothing is open.
    */
-  async resolveByKey(dedupeKey: string, note: string): Promise<number> {
+  async resolveByKey(dedupeKey: string, note: string, staffId?: string | null): Promise<number> {
     try {
       const res = await this.prisma.client.systemIssue.updateMany({
         where: { dedupeKey, resolvedAt: null },
-        data: { resolvedAt: new Date(), resolutionNote: note },
+        data: {
+          resolvedAt: new Date(),
+          resolutionNote: note,
+          // Optional because the ordinary caller is a sweep noticing the
+          // problem has gone, and crediting a person with that would be
+          // a false record. A person who answered the issue by acting on
+          // it — recording the payment the issue asked for — passes it,
+          // so the row says who rather than "it cleared itself".
+          ...(staffId == null ? {} : { resolvedByStaffId: staffId }),
+        },
       });
       if (res.count > 0) this.logger.log({ dedupeKey }, 'System issue cleared itself');
       return res.count;

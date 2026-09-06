@@ -382,6 +382,12 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // (SET NULL) but are per-suite data, so they go as well.
         // expense_categories is SEEDED and deliberately NOT truncated —
         // same treatment as couriers (MUST #12).
+        // Courier wallet reconciliation. Its FK to bank_entries is SET
+        // NULL, so truncating the entries alone would leave recharges
+        // reading as "never paid for" — the exact state the sweep raises
+        // a CRITICAL about. Cleared here, ahead of the entries (MUST #12).
+        'courier_wallet_recharges',
+        'courier_wallet_balances',
         'bank_entries',
         'bank_transfers',
         'investments',

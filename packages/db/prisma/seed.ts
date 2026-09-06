@@ -459,6 +459,15 @@ const systemSettings: SystemSettingSeed[] = [
       'Let the nightly sync WRITE what it read into the shipment cost columns. While OFF it parses the real file and reports exactly what it would change, which is how a login or a page change surfaces as a report rather than as wrong money in the P&L.',
   },
   {
+    key: 'courier.delhivery_wallet_low_balance_inr',
+    category: 'courier',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '10000.00',
+    displayName: 'Delhivery wallet — warn below this balance',
+    description:
+      'Their wallet is prepaid: at zero they stop issuing waybills and every confirmed order stops booking. This is the point at which a warning is worth interrupting somebody for — high enough to leave time to transfer money, low enough that it is not crying wolf every week.',
+  },
+  {
     key: 'courier.wallet_sync_window_days',
     category: 'courier',
     valueType: SettingValueType.INT,

@@ -76,6 +76,7 @@ export {
   WebhookStatus,
   DeliveryAttemptOutcome,
   DeliveryFailureReason,
+  CourierRechargeMatch,
   SystemIssueKind,
   TicketHandling,
   SystemIssueSeverity,

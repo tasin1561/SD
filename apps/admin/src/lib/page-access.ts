@@ -66,6 +66,8 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // Seeing what we hold is an ordinary finance question; recording a
   // movement is gated separately on money.treasury.manage at the API.
   ['/treasury', 'money.treasury.view'],
+  // The prepaid float IS the treasury, sitting on somebody else's system.
+  ['/courier-wallet', 'money.treasury.view'],
   // The P&L reads the same ledgers the treasury does, plus the wallet
   // and charge tables — everything it shows is money, so the treasury
   // gate is the right one rather than a new permission nobody holds.

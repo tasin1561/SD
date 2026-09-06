@@ -148,6 +148,7 @@ export function AuthedShell({
         { href: '/withdrawals', label: 'Withdrawals', icon: <Wallet size={15} /> },
         { href: '/topups', label: 'Top-ups', icon: <Wallet size={15} /> },
         { href: '/treasury', label: 'Treasury', icon: <Vault size={15} /> },
+        { href: '/courier-wallet', label: 'Courier wallets', icon: <Wallet size={15} /> },
         { href: '/pnl', label: 'Profit & loss', icon: <TrendingUp size={15} /> },
         { href: '/expenses', label: 'Expenses', icon: <ReceiptText size={15} /> },
         { href: '/liabilities', label: 'What we owe', icon: <Scale size={15} /> },

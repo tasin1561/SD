@@ -92,6 +92,7 @@ import { SellerWalletWithdrawalModule } from './modules/seller-wallet-withdrawal
 import { AdminSellerWalletModule } from './modules/admin-seller-wallet/admin-seller-wallet.module';
 import { SellerTrackingModule } from './modules/seller-tracking/seller-tracking.module';
 import { TreasuryModule } from './modules/treasury/treasury.module';
+import { CourierWalletModule } from './modules/courier-wallet/courier-wallet.module';
 import { AdminRemittanceModule } from './modules/admin-remittance/admin-remittance.module';
 import { AdminReportsModule } from './modules/admin-reports/admin-reports.module';
 import { AdminWebhookDeliveriesModule } from './modules/admin-webhook-deliveries/admin-webhook-deliveries.module';
@@ -224,6 +225,7 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     CourierWalletImportModule,
     AdminRemittanceModule,
     TreasuryModule,
+    CourierWalletModule,
     AdminSellerWalletModule,
     SellerTrackingModule,
     AdminReportsModule,
