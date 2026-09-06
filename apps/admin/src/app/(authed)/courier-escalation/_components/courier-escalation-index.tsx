@@ -35,10 +35,12 @@ import {
   useRequestModeChange,
   useResumeCourierChannel,
   type OpsQueueItem,
+  useCourierTaxonomy,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { EscalationTabs } from './escalation-tabs';
+import Link from 'next/link';
 
 /**
  * The courier escalation console — the MANUAL consumer of the outbox.
@@ -124,12 +126,19 @@ export function CourierEscalationIndex(): ReactElement {
             <div className="flex items-start gap-3">
               <AlertTriangle size={18} className="mt-0.5 shrink-0" />
               <div className="text-sm">
-                <p className="font-medium">Every message here needs a human.</p>
+                <p className="font-medium">Delhivery has no ticket write API.</p>
                 <p className="text-text-muted mt-1">
-                  Delhivery has no ticket write API — MCP is read-only and their notification emails
-                  do not accept replies. Automation cannot post on your behalf yet, whatever the
-                  write mode says. Changing the mode will not change that; it is ready for when they
-                  ship write operations.
+                  MCP is read-only and their notification emails do not accept replies, so nothing
+                  here can be posted through an API — whatever the write mode says.
+                </p>
+                <p className="text-text-muted mt-1">
+                  The BROWSER channel can. It drives their own “Raise a ticket” form, and it is what
+                  actually sends these. It ships withholding every click:{' '}
+                  <Link href="/courier-escalation/portal" className="text-accent hover:underline">
+                    Portal worker
+                  </Link>{' '}
+                  is where it is turned on, and off. Until it is LIVE, every message here needs a
+                  person.
                 </p>
               </div>
             </div>
@@ -388,6 +397,24 @@ function ModeSwitch(): ReactElement {
   const confirm = useConfirmModeChange();
   const [mode, setMode] = useState('MANUAL');
   const [reason, setReason] = useState('');
+  /*
+    WHICH categories may go unattended.
+
+    Hardcoded to `[]` until now, with a comment saying the taxonomy had
+    never been fetched so the server would refuse anything else. That
+    stopped being true: the taxonomy is seeded, thirty categories with
+    their human-only locks set, and the server accepts a list drawn from
+    it. So AUTO mode was reachable and meant nothing — the worker claims
+    only what is on this list, and the list could not be changed.
+
+    Human-only categories are not offered at all. The server refuses them
+    by name (`CATEGORY_IS_HUMAN_ONLY`) and would be right to, but a
+    checkbox that exists only to be rejected is a worse way to say
+    "never".
+  */
+  const taxonomy = useCourierTaxonomy();
+  const selectable = (taxonomy.data ?? []).filter((c) => !c.isHumanOnly);
+  const [auto, setAuto] = useState<string[]>([]);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [code, setCode] = useState('');
 
@@ -402,6 +429,35 @@ function ModeSwitch(): ReactElement {
               <option value="SUPERVISED">SUPERVISED — prepared, held for approval</option>
               <option value="AUTO">AUTO — unattended, except locked categories</option>
             </Select>
+            {mode === 'AUTO' ? (
+              <div className="border-border rounded-md border p-3">
+                <p className="text-text-strong text-xs font-medium">
+                  Which categories may go unattended
+                </p>
+                <p className="text-text-muted mt-0.5 mb-2 text-xs">
+                  Anything not ticked still goes to the queue for a person, even in AUTO.
+                </p>
+                <div className="max-h-48 space-y-1 overflow-auto">
+                  {selectable.map((c) => (
+                    <label key={c.externalId} className="flex items-start gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={auto.includes(c.externalId)}
+                        onChange={(e) =>
+                          setAuto((prev) =>
+                            e.target.checked
+                              ? [...prev, c.externalId]
+                              : prev.filter((x) => x !== c.externalId),
+                          )
+                        }
+                      />
+                      <span>{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <Textarea
               rows={2}
               placeholder="Why (at least 30 characters — this goes in the audit log)"
@@ -415,12 +471,13 @@ function ModeSwitch(): ReactElement {
                 onClick={() => {
                   void (async () => {
                     try {
-                      // The auto list stays empty: the locks are enforced
-                      // by category ID and the taxonomy has never been
-                      // fetched, so the server refuses a non-empty list.
                       const r = await request.mutateAsync({
                         writeMode: mode,
-                        autoCategories: [],
+                        // Only meaningful in AUTO; the other two modes
+                        // route everything to a person regardless, and
+                        // carrying a stale list into MANUAL would leave
+                        // it armed for whenever somebody switched back.
+                        autoCategories: mode === 'AUTO' ? auto : [],
                         reason,
                       });
                       setChallengeId(r.challengeId);
