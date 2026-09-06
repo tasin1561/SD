@@ -167,7 +167,18 @@ export class PortalDispatcherService {
     const mode = shadow ? CourierPortalMode.SHADOW : CourierPortalMode.LIVE;
     const escalation = await this.prisma.client.courierEscalation.findUnique({
       where: { id: item.escalationId },
-      select: { externalTicketId: true, awbNumber: true },
+      select: {
+        externalTicketId: true,
+        awbNumber: true,
+        // Their WORDS for the category and the subcategory. The chips
+        // carry no ids, so the labels are what a raise can act on — and
+        // they are read from the ticket rather than from the outbox item,
+        // because the item holds one category id and their modal asks two
+        // questions.
+        ticket: {
+          select: { issueCategoryExternalId: true, issueSubcategoryExternalId: true },
+        },
+      },
     });
 
     const page = await this.session.page();
@@ -235,10 +246,32 @@ export class PortalDispatcherService {
       return;
     }
 
+    const labels = await this.categoryLabels(
+      escalation?.ticket?.issueCategoryExternalId ?? item.categoryId,
+      escalation?.ticket?.issueSubcategoryExternalId ?? null,
+    );
+    if (labels.category === null) {
+      // We hold an id their taxonomy no longer names. Raising on a
+      // guessed label would file the wrong kind of ticket, so this stops.
+      await this.record(
+        item.id,
+        mode,
+        'NOT_ELIGIBLE',
+        `No label held for category ${item.categoryId} — refetch the taxonomy`,
+      );
+      counters['notEligible'] = (counters['notEligible'] as number) + 1;
+      return;
+    }
+
     const modal = new RaiseTicketModal(page);
     await modal.open(awb);
     const res = await modal.raise(
-      { awbNumber: awb, categoryId: item.categoryId, body: item.body },
+      {
+        awbNumber: awb,
+        categoryLabel: labels.category,
+        subcategoryLabel: labels.subcategory,
+        body: item.body,
+      },
       shadow,
     );
 
@@ -299,5 +332,30 @@ export class PortalDispatcherService {
     await this.prisma.client.courierPortalRun.create({
       data: { outboxItemId, kind: 'dispatch', mode, outcome, detail },
     });
+  }
+
+  /**
+   * Our stored ids turned back into the courier's own words.
+   *
+   * One query for both, and `null` for a category we no longer have a
+   * label for rather than a slug dressed up as one — a raise driven by a
+   * guessed label clicks whichever chip is nearest, which is the failure
+   * the echo check exists to catch and this avoids reaching at all.
+   */
+  private async categoryLabels(
+    categoryId: string | null,
+    subcategoryId: string | null,
+  ): Promise<{ category: string | null; subcategory: string | null }> {
+    const ids = [categoryId, subcategoryId].filter((v): v is string => typeof v === 'string');
+    if (ids.length === 0) return { category: null, subcategory: null };
+    const rows = await this.prisma.client.courierIssueCategory.findMany({
+      where: { externalId: { in: ids } },
+      select: { externalId: true, label: true },
+    });
+    const byId = new Map(rows.map((r) => [r.externalId, r.label]));
+    return {
+      category: categoryId === null ? null : (byId.get(categoryId) ?? null),
+      subcategory: subcategoryId === null ? null : (byId.get(subcategoryId) ?? null),
+    };
   }
 }

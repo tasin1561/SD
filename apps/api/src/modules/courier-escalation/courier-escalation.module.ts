@@ -24,6 +24,8 @@ import { CourierOutboxDispatcherService } from './services/courier-outbox-dispat
 import { CourierOutboxReconcilerService } from './services/courier-outbox-reconciler.service';
 import { CourierOutboxService } from './services/courier-outbox.service';
 import { InboundEmailAuthService } from './services/inbound-email-auth.service';
+import { SystemIssuesModule } from '../system-issues/system-issues.module';
+import { SellerIssueEscalationService } from './services/seller-issue-escalation.service';
 
 /**
  * Phases 2-4 of the courier-escalation work.
@@ -64,6 +66,9 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
     CourierDelhiveryModule, // the support adapter + its capability flags
     EmailModule, // the 2FA code for a write-mode change
     AuthCommonModule, // audit
+    // A seller's issue that cannot reach Delhivery goes on the board
+    // rather than nowhere.
+    SystemIssuesModule,
   ],
   controllers: [
     InboundEmailController,
@@ -71,6 +76,7 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
     SellerCourierEscalationController,
   ],
   providers: [
+    SellerIssueEscalationService,
     {
       // Every courier support desk. Adding one means implementing
       // CourierSupportAdapter and appending it HERE — the outbox, the
@@ -97,6 +103,15 @@ import { InboundEmailAuthService } from './services/inbound-email-auth.service';
     CourierEscalationService,
     CourierTemplateReviewService,
   ],
-  exports: [CourierChannelSettingsService, CourierOutboxService, CourierEscalationService],
+  exports: [
+    CourierChannelSettingsService,
+    CourierOutboxService,
+    CourierEscalationService,
+    SellerIssueEscalationService,
+    // The portal is the SECOND inbound channel after email, and both
+    // store what the courier said through the same door — the dedup and
+    // the classification live there, not in each reader.
+    CourierEscalationIngestService,
+  ],
 })
 export class CourierEscalationModule {}

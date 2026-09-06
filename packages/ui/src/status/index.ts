@@ -208,6 +208,10 @@ export function ticketStatusLabel(status: TicketStatus): string {
       return 'Closed · write-off';
     case TicketStatus.REJECTED:
       return 'Closed · not upheld';
+    // Says only what happened. The courier finished; we decided nothing,
+    // and the seller can reopen it if they disagree with how it was left.
+    case TicketStatus.CLOSED_BY_COURIER:
+      return 'Closed · by the courier';
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled TicketStatus: ${String(exhaustive)}`);
@@ -229,6 +233,10 @@ export function ticketStatusKind(status: TicketStatus): StatusKind {
       return 'cancelled';
     case TicketStatus.REJECTED:
       return 'failed';
+    // Neutral on purpose: 'delivered' green would read as a win and
+    // 'failed' red as a refusal, and it is neither.
+    case TicketStatus.CLOSED_BY_COURIER:
+      return 'cancelled';
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled TicketStatus: ${String(exhaustive)}`);

@@ -62,6 +62,24 @@ export interface TaxonomyFetchResult {
  * not on the auto list and cannot be — but somebody should know it
  * exists, because it may be the one their sellers now need.
  */
+/**
+ * A stable id for a category we have never seen.
+ *
+ * Only ever used for a NEW label — an existing one keeps whatever id it
+ * already had — so this never has to agree with the hand-written slugs
+ * in the seed. Deterministic so that the same new category fetched twice
+ * is one row, not two.
+ */
+export function slugifyCategory(label: string): string {
+  return (
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'unnamed'
+  );
+}
+
 @Injectable()
 export class PortalTaxonomyService {
   private readonly logger = new Logger(PortalTaxonomyService.name);
@@ -90,7 +108,7 @@ export class PortalTaxonomyService {
   ): Promise<TaxonomyFetchResult> {
     const modal = new RaiseTicketModal(page);
     await modal.open(awbNumber);
-    const offered = await modal.offeredCategoryIds();
+    const offeredLabels = await modal.offeredCategoryLabels();
 
     const before = await this.prisma.client.courierIssueCategory.findMany({
       where: { courierCode },
@@ -98,6 +116,25 @@ export class PortalTaxonomyService {
     });
     const beforeIds = new Set(before.map((b) => b.externalId));
     const beforeLabels = new Map(before.map((b) => [b.externalId, b.label]));
+    /*
+      LABEL → the id we already hold for it.
+
+      Their chips carry no ids at all (see RaiseTicketModal), so a fetch
+      can only report labels — and the ids we hold are hand-chosen slugs
+      (`reattempt-delay`), not anything a slugifier would reproduce from
+      the text. Matching on the label keeps every existing row and its id
+      exactly as it is; only a label we have never seen mints a new one.
+
+      Which means a RE-WORDED category arrives as a new row rather than
+      an edit. That is the honest reading: we cannot tell a re-wording
+      from a new category without an id, and inventing the link would
+      silently re-point every ticket filed under the old one.
+    */
+    const idByLabel = new Map(before.map((b) => [b.label.trim().toLowerCase(), b.externalId]));
+    const offered = offeredLabels.map((label) => ({
+      label,
+      id: idByLabel.get(label.trim().toLowerCase()) ?? slugifyCategory(label),
+    }));
 
     let created = 0;
     let changed = 0;
@@ -123,7 +160,7 @@ export class PortalTaxonomyService {
       ids.push({ id: o.id, label: o.label, humanOnly });
     }
 
-    const seen = new Set(offered.map((o) => o.id));
+    const seen = new Set(offered.map((o: { id: string }) => o.id));
     const disappeared = [...beforeIds].filter((id) => !seen.has(id));
     const humanOnly = ids.filter((i) => i.humanOnly).length;
 

@@ -7,6 +7,7 @@ import { AdminTicketController } from './controllers/admin-ticket.controller';
 import { SellerTicketController } from './controllers/seller-ticket.controller';
 import { TicketService } from './services/ticket.service';
 import { TicketStateMachineService } from './services/ticket-state-machine.service';
+import { CourierEscalationModule } from '../courier-escalation/courier-escalation.module';
 
 /**
  * R7 — unified ticket system (scrap/damage + seller-raised issues).
@@ -14,7 +15,13 @@ import { TicketStateMachineService } from './services/ticket-state-machine.servi
  * SCRAP_DAMAGE ticket inside its inspection transaction.
  */
 @Module({
-  imports: [AuthCommonModule, SellerWalletModule],
+  imports: [
+    AuthCommonModule,
+    SellerWalletModule,
+    // A seller raising an issue now opens the courier conversation for
+    // it. No cycle: courier-escalation imports nothing from here.
+    CourierEscalationModule,
+  ],
   controllers: [SellerTicketController, AdminTicketController],
   providers: [TicketService, TicketStateMachineService, SellerJwtGuard, StaffJwtGuard],
   exports: [TicketService],

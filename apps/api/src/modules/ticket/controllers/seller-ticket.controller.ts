@@ -21,6 +21,7 @@ import { CreateSellerTicketDto } from '../dto/ticket.dto';
 import { type TicketStage, TicketService, type TicketView } from '../services/ticket.service';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
+import { SellerIssueEscalationService } from '../../courier-escalation/services/seller-issue-escalation.service';
 
 /**
  * R7 — seller-facing parcel-issue tickets. Raising one is an OPS-domain
@@ -34,17 +35,20 @@ import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
 @RequireSellerPermissions('tickets.view')
 @Controller('seller/tickets')
 export class SellerTicketController {
-  constructor(private readonly tickets: TicketService) {}
+  constructor(
+    private readonly tickets: TicketService,
+    private readonly escalation: SellerIssueEscalationService,
+  ) {}
 
   @Post()
   @RequireSellerPermissions('tickets.create')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Raise a parcel/order issue ticket' })
-  create(
+  async create(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Body() body: CreateSellerTicketDto,
   ): Promise<TicketView> {
-    return this.tickets.open(
+    const ticket = await this.tickets.open(
       {
         ticketType: TicketType.SELLER_RAISED_ISSUE,
         sellerId: seller.id,
@@ -57,6 +61,26 @@ export class SellerTicketController {
       },
       { type: ActorType.SELLER, sellerUserId: seller.userId },
     );
+
+    /*
+      POST-COMMIT, fire-and-forget: the ticket is the durable fact and
+      it has already saved. A courier conversation that cannot be opened
+      must never fail the seller's report — they would be told it did
+      not go through while we are holding it — so the escalation runs
+      after, swallows its own failures, and puts them on the board.
+
+      Not awaited, because the seller is waiting on this response and
+      the portal is a browser session on the other side of an
+      internet: making them watch it would trade their whole page load
+      against a step that has its own retry.
+    */
+    void this.escalation.escalate({
+      ticketId: ticket.id,
+      sellerId: seller.id,
+      description: body.description ?? null,
+    });
+
+    return ticket;
   }
 
   @Post(':ticketId/notes')

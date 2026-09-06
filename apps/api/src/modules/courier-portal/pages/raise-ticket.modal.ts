@@ -2,8 +2,16 @@ import type { Page } from 'playwright';
 
 export interface RaiseTicketInput {
   readonly awbNumber: string;
-  /** THEIR category id. Never a label — see the class doc. */
-  readonly categoryId: string;
+  /**
+   * THEIR label for the category, exactly as the chip reads.
+   *
+   * A label and not an id, and that is forced rather than chosen: their
+   * modal offers chips with text on them and no value attribute to
+   * match — see the class doc for what stops a near-miss.
+   */
+  readonly categoryLabel: string;
+  /** The chip under "Select a subcategory". Null when they offer none. */
+  readonly subcategoryLabel: string | null;
   readonly body: string;
   /** Absolute paths. Damage and fake-remark cases depend on photos. */
   readonly attachmentPaths?: readonly string[];
@@ -19,34 +27,51 @@ export type RaiseTicketOutcome =
   | { readonly kind: 'TASK_PENDING'; readonly taskRef: string | null }
   | { readonly kind: 'SHADOW'; readonly wouldRaise: RaiseTicketInput };
 
+/** Their ticket id as a person reads it: `J1788584000522861`. */
+const TICKET_ID_RE = /\bJ\d{12,20}\b/;
+
+/** Whitespace-collapsed and lowercased — chips wrap across lines. */
+function norm(s: string): string {
+  return s.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 /**
- * The raise-ticket modal, driven by the fetched taxonomy.
+ * Delhivery ONE's "Raise a ticket" modal.
  *
- * ── SCHEMA-DRIVEN, NOT NINE FLOWS ────────────────────────────────────
- * There are nine issue categories and their availability varies per
- * shipment state. Hard-coding nine paths would mean nine things to
- * re-verify whenever Delhivery reorders a dropdown, and the ninth would
- * be the one nobody noticed had broken. So this drives ONE flow: select
- * the option whose value matches the category ID we were given, fill the
- * body, attach, submit.
+ * ── IT IS A CONVERSATION, NOT A FORM ─────────────────────────────────
+ * The first version of this file drove a `<select>` and a Submit button,
+ * which is what a support form usually looks like and is not what this
+ * is. Their modal is a chat: it asks "Help us understand your issue" and
+ * offers CHIPS; clicking one echoes it back as your own message and the
+ * next question appears. Category, then subcategory, then a free-text
+ * box capped at 300 characters, then "Raise this Issue". Four steps,
+ * each revealed by the one before, so there is nothing to fill in
+ * up-front and no way to skip ahead.
  *
- * ── IDS, NEVER LABELS ────────────────────────────────────────────────
- * Selection is by option `value` — Delhivery's own id — with the label
- * used only as a fallback for finding the control. A label match would
- * break silently on a re-wording, and "silently" is the problem: it would
- * pick a NEIGHBOURING category rather than fail, and file the wrong kind
- * of ticket.
+ * ── LABELS, BECAUSE THERE ARE NO IDS ─────────────────────────────────
+ * The old file said "IDS, NEVER LABELS" and was right about the danger:
+ * matching on text breaks silently on a re-wording, and silently means
+ * picking a NEIGHBOURING chip and filing the wrong kind of ticket. But
+ * the chips carry no value attribute, so the choice is not available.
+ *
+ * What replaces it is the modal's own echo. Every chip clicked comes
+ * back as a message bubble with its text, so after clicking we READ THAT
+ * BACK and refuse unless it matches what we meant to pick. A re-wording
+ * now fails loudly at the click instead of quietly at the desk. The
+ * labels themselves come from `courier_issue_categories`, which is their
+ * taxonomy as we last fetched it — not a list typed in here.
  *
  * ── FOUR OUTCOMES, NONE OF THEM ERRORS ───────────────────────────────
  * Created, already exists, not eligible, task pending. All four are
- * normal answers to a reasonable request. Treating any of them as a
- * failure would mean retrying — and retrying "already exists" is how you
- * discover their dedup is per (awb, category) rather than exact.
+ * normal answers to a reasonable request, and retrying "already exists"
+ * is how you discover their dedup is per (awb, category) rather than
+ * exact.
  *
- * TODO(delhivery-portal): every selector and every outcome string below
- * is inferred and has never run against one.delhivery.com. The four
- * outcomes are real (they are in the brief); how the page SAYS them is
- * the guess.
+ * TODO(delhivery-portal): the STEPS and the visible text are taken from
+ * the real portal (2026-09-06). The CSS beneath them is still inferred —
+ * every locator below is anchored on text a person can see rather than
+ * on a class name, precisely because the text is the part that has been
+ * confirmed.
  */
 export class RaiseTicketModal {
   constructor(
@@ -54,60 +79,94 @@ export class RaiseTicketModal {
     private readonly origin = 'https://one.delhivery.com',
   ) {}
 
+  /**
+   * Get to the modal for one waybill.
+   *
+   * Via the ORDER, because that is the only route that binds the ticket
+   * to a parcel: the modal stamps "Orders Involved: <awb>" from the page
+   * it was opened on, and a ticket raised without one is a paragraph
+   * their desk cannot act on. Search the forward-orders list for the AWB,
+   * open the single result, then "Need Help".
+   */
   async open(awbNumber: string): Promise<void> {
-    await this.page.goto(`${this.origin}/support?awb=${encodeURIComponent(awbNumber)}`, {
+    await this.page.goto(`${this.origin}/orders/forward/all-shipments`, {
       waitUntil: 'domcontentloaded',
     });
-    const trigger = this.page
-      .locator('button:has-text("Raise"), button:has-text("New ticket"), button:has-text("Create")')
+    const search = this.page
+      .locator('input[placeholder*="AWB" i], input[placeholder*="Search" i]')
       .first();
-    if ((await trigger.count()) > 0) await trigger.click();
+    await search.fill(awbNumber);
+    await search.press('Enter');
+    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+
+    // The row for THIS waybill, never "the first row". A search that
+    // returned nothing leaves the previous list on screen, and clicking
+    // its first row would open somebody else's parcel and raise a ticket
+    // against it.
+    const row = this.page.locator(`text=${awbNumber}`).first();
+    await row.click({ timeout: 20_000 });
+    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+
+    await this.page.locator('button:has-text("Need Help")').first().click({ timeout: 20_000 });
+    await this.page.locator('text=Raise a ticket').first().waitFor({ timeout: 20_000 });
   }
 
   /**
    * Which categories the portal is offering RIGHT NOW for this shipment.
    *
-   * This is the eligibility check, and it is a read rather than a rule:
-   * availability depends on shipment state, which we do not model and
-   * should not try to. Asking is cheaper and cannot drift.
+   * A read rather than a rule: availability depends on shipment state,
+   * which we do not model and should not try to. Asking is cheaper and
+   * cannot drift.
    */
-  async offeredCategoryIds(): Promise<{ id: string; label: string }[]> {
-    const select = this.page.locator('select[name*="categor" i], select[id*="categor" i]').first();
-    if ((await select.count()) === 0) return [];
-    const options = select.locator('option');
-    const n = await options.count();
-    const out: { id: string; label: string }[] = [];
-    for (let i = 0; i < n; i += 1) {
-      const id = (await options.nth(i).getAttribute('value')) ?? '';
-      const label = (await options.nth(i).innerText()).trim();
-      if (id !== '') out.push({ id, label });
-    }
-    return out;
+  async offeredCategoryLabels(): Promise<string[]> {
+    const chips = this.chipsUnder('Help us understand your issue');
+    return this.textsOf(chips);
   }
 
   async raise(input: RaiseTicketInput, shadow: boolean): Promise<RaiseTicketOutcome> {
-    const offered = await this.offeredCategoryIds();
-    if (offered.length > 0 && !offered.some((o) => o.id === input.categoryId)) {
+    const offered = await this.offeredCategoryLabels();
+    if (offered.length > 0 && !offered.some((o) => norm(o) === norm(input.categoryLabel))) {
       // Asked, and told no. Not a failure — this shipment's state simply
       // does not admit this category.
       return {
         kind: 'NOT_ELIGIBLE',
-        reason: `Category ${input.categoryId} is not offered for AWB ${input.awbNumber}`,
+        reason:
+          `"${input.categoryLabel}" is not offered for AWB ${input.awbNumber}. ` +
+          `They are offering: ${offered.join(' | ')}`,
       };
     }
 
     if (shadow) {
       // Navigated, opened the modal, read the real offered categories and
-      // confirmed ours is among them. Only the submit is withheld.
+      // confirmed ours is among them. Only the clicks are withheld, which
+      // is exactly what makes shadow mode evidence rather than a dry run.
       return { kind: 'SHADOW', wouldRaise: input };
     }
 
-    await this.page
-      .locator('select[name*="categor" i], select[id*="categor" i]')
-      .first()
-      .selectOption(input.categoryId);
+    const picked = await this.pickChip(input.categoryLabel);
+    if (!picked) {
+      return {
+        kind: 'NOT_ELIGIBLE',
+        reason: `The category chip "${input.categoryLabel}" did not take — their wording has moved`,
+      };
+    }
 
-    await this.page.locator('textarea, [role="textbox"]').first().fill(input.body);
+    if (input.subcategoryLabel !== null) {
+      const sub = await this.pickChip(input.subcategoryLabel);
+      if (!sub) {
+        return {
+          kind: 'NOT_ELIGIBLE',
+          reason: `The subcategory chip "${input.subcategoryLabel}" did not take`,
+        };
+      }
+    }
+
+    // Their box is capped at 300. Cut HERE rather than letting the field
+    // silently drop the tail, so what we believe we sent and what they
+    // received are the same string.
+    const box = this.page.locator('textarea').last();
+    await box.waitFor({ timeout: 20_000 });
+    await box.fill(input.body.slice(0, 300));
 
     const files = input.attachmentPaths ?? [];
     if (files.length > 0) {
@@ -115,21 +174,62 @@ export class RaiseTicketModal {
       if ((await upload.count()) > 0) await upload.setInputFiles([...files]);
     }
 
-    await this.page
-      .locator('button:has-text("Submit"), button:has-text("Raise"), button[type="submit"]')
-      .first()
-      .click();
+    await this.page.locator('button:has-text("Raise this Issue")').first().click();
 
     return this.readOutcome();
+  }
+
+  /**
+   * Click a chip and make the portal confirm which one it took.
+   *
+   * The echo is the whole safety property. Their modal repeats every
+   * choice back as your own message, so a click that landed on a
+   * neighbouring chip — the failure a text match invites — is visible
+   * immediately rather than at their desk a day later. Returns false
+   * instead of throwing: a chip that will not take is "not eligible",
+   * which is an answer, not a fault.
+   */
+  private async pickChip(label: string): Promise<boolean> {
+    const chip = this.page
+      .locator(`button:text-is("${label}"), [role="button"]:text-is("${label}")`)
+      .first();
+    if ((await chip.count()) === 0) return false;
+    await chip.click();
+
+    try {
+      // The echo carries the SAME text; waiting for a second occurrence
+      // is what distinguishes "clicked" from "still just the chip".
+      await this.page.locator(`text=${label}`).nth(1).waitFor({ timeout: 10_000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private chipsUnder(heading: string): ReturnType<Page['locator']> {
+    return this.page
+      .locator(`:below(:text("${heading}"))`)
+      .locator('button, [role="button"]')
+      .filter({ hasNotText: /^(Attach File|Raise this Issue|Reset Categories)$/ });
+  }
+
+  private async textsOf(loc: ReturnType<Page['locator']>): Promise<string[]> {
+    const n = await loc.count();
+    const out: string[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const t = (await loc.nth(i).innerText()).trim();
+      if (t !== '') out.push(t);
+    }
+    return out;
   }
 
   /**
    * Read which of the four things happened.
    *
    * Ordered most-specific first: "already exists" and "task" phrasing are
-   * checked before a generic success, because a page can say both ("Ticket
-   * already exists — created earlier today") and the specific reading is
-   * the useful one.
+   * checked before a generic success, because a page can say both
+   * ("Ticket already exists — created earlier today") and the specific
+   * reading is the useful one.
    */
   private async readOutcome(): Promise<RaiseTicketOutcome> {
     try {
@@ -154,16 +254,16 @@ export class RaiseTicketModal {
   /**
    * Their ticket id, if the page shows one.
    *
+   * Matched on their actual shape — `J` and a long run of digits — not
+   * on a "Ticket ID:" preamble, because the support list prints the id
+   * on its own with the waybill beneath it and no label at all.
+   *
    * Returns null rather than guessing. A wrong id bound to an escalation
-   * would thread another seller's replies into this conversation, which is
-   * worse than having no id at all — the same reasoning as the read
-   * pipeline's NO_ESCALATION.
+   * would thread another seller's replies into this conversation, which
+   * is worse than having no id at all.
    */
   private async findTicketId(): Promise<string | null> {
     const text = await this.page.locator('body').innerText();
-    const m =
-      /ticket\s*(?:id|no\.?|number)\s*[:#-]?\s*([A-Z0-9-]{4,24})/i.exec(text) ??
-      /#([0-9]{5,12})\b/.exec(text);
-    return m?.[1] ?? null;
+    return TICKET_ID_RE.exec(text)?.[0] ?? null;
   }
 }

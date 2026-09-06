@@ -15,6 +15,8 @@ import { WalletLedgerModule } from '../wallet-ledger/wallet-ledger.module';
 import { PortalTaxonomyService } from './services/portal-taxonomy.service';
 import { ConsigneeVerifyService } from './services/consignee-verify.service';
 import { ConsigneeVerifyWorker } from './queue/consignee-verify.worker';
+import { PortalTicketSyncService } from './services/portal-ticket-sync.service';
+import { TicketModule } from '../ticket/ticket.module';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -49,12 +51,17 @@ import { ConsigneeVerifyWorker } from './queue/consignee-verify.worker';
     EmailModule,
     AuthCommonModule,
     WalletLedgerModule,
+    // The sweep closes OUR ticket when Delhivery closes theirs, through
+    // the sanctioned write boundary. No cycle: ticket imports
+    // courier-escalation, and neither imports this.
+    TicketModule,
   ],
   providers: [
     PortalSessionService,
     PortalPacingService,
     PortalTaxonomyService,
     PortalDispatcherService,
+    PortalTicketSyncService,
     PortalCanaryService,
     PortalQueue,
     WalletLedgerFetcherService,

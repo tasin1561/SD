@@ -6,10 +6,16 @@ import { PortalCanaryService } from '../services/portal-canary.service';
 import { PortalDispatcherService } from '../services/portal-dispatcher.service';
 import { PortalSessionService } from '../services/portal-session.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { PortalTicketSyncService } from '../services/portal-ticket-sync.service';
 
 export const PORTAL_QUEUE = 'courier-portal';
 export const JOB_PORTAL_DISPATCH = 'portal-dispatch';
 export const JOB_PORTAL_CANARY = 'portal-canary';
+/**
+ * Read Delhivery's support tickets back: their replies, and their
+ * closures. The half of the conversation nothing was collecting.
+ */
+export const JOB_PORTAL_TICKET_SYNC = 'portal-ticket-sync';
 
 /**
  * The canary's timezone. Explicit for the same reason the NDR runner's is:
@@ -43,6 +49,7 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly dispatcher: PortalDispatcherService,
     private readonly canary: PortalCanaryService,
+    private readonly ticketSync: PortalTicketSyncService,
     private readonly session: PortalSessionService,
     private readonly workerRole: WorkerRoleService,
     private readonly issues: SystemIssueService,
@@ -60,6 +67,20 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
       JOB_PORTAL_DISPATCH,
       {},
       { repeat: { pattern: '*/15 * * * *' }, removeOnComplete: 20, removeOnFail: 50 },
+    );
+    /*
+      Every 20 minutes.
+
+      Paced against what it is worth: a seller waiting on Delhivery's
+      answer is not watching the second hand, and each sweep is a browser
+      walking three tabs of their portal. More often would cost real
+      session load for minutes of latency nobody notices; much less often
+      and a ticket they closed at nine reads as open all morning.
+    */
+    await this.queue.add(
+      JOB_PORTAL_TICKET_SYNC,
+      {},
+      { repeat: { pattern: '*/20 * * * *' }, removeOnComplete: 20, removeOnFail: 50 },
     );
     await this.queue.add(
       JOB_PORTAL_CANARY,
@@ -79,6 +100,11 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
       async (job: Job): Promise<void> => {
         if (job.name === JOB_PORTAL_DISPATCH) {
           await this.dispatcher.runCycle();
+          return;
+        }
+        if (job.name === JOB_PORTAL_TICKET_SYNC) {
+          const res = await this.ticketSync.sync();
+          this.logger.log(res, 'Courier ticket sync complete');
           return;
         }
         if (job.name === JOB_PORTAL_CANARY) {

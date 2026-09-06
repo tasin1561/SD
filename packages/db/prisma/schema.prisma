@@ -6268,6 +6268,14 @@ enum TicketStatus {
   RESOLVED_WRITE_OFF_ACCEPTED @map("resolved_write_off_accepted")
   /// Not a valid claim (e.g. seller-raised issue found unfounded).
   REJECTED                    @map("rejected")
+  /// The COURIER closed their side and we have not decided an outcome.
+  ///
+  /// Its own value because none of the four above is true of it:
+  /// Delhivery finishing tells us no money moved, no goods came back,
+  /// the seller accepted nothing and we rejected nothing. Reusing any of
+  /// them would tell a seller something about their own complaint that
+  /// nobody decided.
+  CLOSED_BY_COURIER           @map("closed_by_courier")
 
   @@map("ticket_status")
 }
