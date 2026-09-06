@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 export interface PricedLineInput {
   readonly goodsReceiptLineId: string;
@@ -218,6 +219,10 @@ export class InboundFreightAmortisationService {
     orderId: string,
     sellerId: string,
   ): Promise<DebitResult> {
+    // WAL-7: the idempotency read must be serialised against a
+    // concurrent one, or both see "not charged" and both charge.
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+
     const already = await tx.sellerWalletEntry.findFirst({
       where: {
         linkedOrderId: orderId,

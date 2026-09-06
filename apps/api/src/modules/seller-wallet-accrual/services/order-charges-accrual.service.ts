@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ActorType, ChargeType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
  * R1c (revised-plan roadmap) — the shared ORDER_CHARGES debit,
@@ -30,6 +31,10 @@ export class OrderChargesAccrualService {
     orderId: string,
     sellerId: string,
   ): Promise<boolean> {
+    // WAL-7: the idempotency read must be serialised against a
+    // concurrent one, or both see "not charged" and both charge.
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+
     const already = await tx.sellerWalletEntry.findFirst({
       where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES },
       select: { id: true },

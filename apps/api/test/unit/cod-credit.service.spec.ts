@@ -1,6 +1,9 @@
 import { Prisma } from '@skydrop/db';
 import { CodCreditService } from '../../src/modules/seller-wallet-accrual/services/cod-credit.service';
 import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
+
+/** WAL-7's advisory lock, as the fake sees it. */
+const lockTaken = jest.fn(async () => 1);
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 
 /**
@@ -39,6 +42,11 @@ function makeSut(opts: {
   const withholdings: Array<Record<string, unknown>> = [];
 
   const tx = {
+    // The wallet advisory lock (WAL-7). Recorded rather than stubbed
+    // away: a guard that reads the ledger before writing must serialise
+    // against a concurrent one, and a fake with no $executeRaw would let
+    // an unlocked version pass this suite.
+    $executeRaw: lockTaken,
     sellerWalletEntry: {
       findFirst: jest.fn(async () => (opts.alreadyCredited ? { id: 'existing' } : null)),
     },

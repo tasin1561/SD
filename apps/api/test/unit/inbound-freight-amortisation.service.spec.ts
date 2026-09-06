@@ -8,6 +8,9 @@ import {
 import { InboundFreightAmortisationService } from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
+
+/** WAL-7's advisory lock, as the fake sees it. */
+const lockTaken = jest.fn(async () => 1);
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 
 type AnyArgs = Record<string, unknown>;
@@ -102,6 +105,11 @@ function makeSut(
     stockBatch: { findUnique: batchFindUnique },
     inboundFreightAllocation: { update: allocUpdate },
     inboundFreightCharge: { update: chargeUpdate },
+    // The wallet advisory lock (WAL-7). Recorded rather than stubbed
+    // away: a guard that reads the ledger before writing must serialise
+    // against a concurrent one, and a fake with no $executeRaw would let
+    // an unlocked version pass this suite.
+    $executeRaw: lockTaken,
     sellerWalletEntry: { findFirst: walletFindFirst },
     shipmentItem: { findMany: itemFindMany },
   };

@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, Prisma, WalletEntryDirection } from '@skydrop/db';
+import { Currency, ActorType, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
  * Giving the delivery fee back when an order is called off before it ships.
@@ -59,6 +60,10 @@ export class OrderChargesRefundService {
     reason: string,
   ): Promise<Prisma.Decimal | null> {
     return this.prisma.client.$transaction(async (tx) => {
+      // WAL-7: two concurrent refunds would both read "charged, not yet
+      // refunded" and both credit the seller back.
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+
       const charged = await tx.sellerWalletEntry.findFirst({
         where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES },
         select: { id: true, amount: true, currency: true },

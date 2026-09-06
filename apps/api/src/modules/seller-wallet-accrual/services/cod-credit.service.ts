@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ActorType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
  * Paying a seller their COD money.
@@ -125,6 +126,25 @@ export class CodCreditService {
     if (grossInr.lessThanOrEqualTo(0)) {
       return NOT_CREDITED(mode, 'Nothing to credit — the order has no COD amount');
     }
+    /*
+      WAL-7: a guard that READS before it writes must hold the lock.
+
+      `findFirst`-then-insert inside a transaction feels safe and is not.
+      Under READ COMMITTED two concurrent transactions each take a
+      snapshot, each see no row, and each insert — a transaction gives no
+      protection against a row that does not exist yet. The advisory lock
+      inside `applyEntry` serialises the WRITES, but by then both callers
+      have already decided they were first.
+
+      Taken here, the second caller blocks until the first commits and
+      its `findFirst` then sees the committed row. This is the rule
+      WAL-7 already states — "any future money guard that reads a balance
+      or COUNTS ROWS before writing must hold this same lock inside the
+      same transaction" — which the withdrawal path honours and these
+      accrual paths did not.
+    */
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+
     const already = await tx.sellerWalletEntry.findFirst({
       where: { linkedOrderId: orderId, direction: WalletEntryDirection.COD_COLLECTION },
       select: { id: true },

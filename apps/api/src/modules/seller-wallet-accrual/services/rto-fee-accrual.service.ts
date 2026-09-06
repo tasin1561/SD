@@ -10,6 +10,7 @@ import {
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { PricingEngineService } from '../../pricing/services/pricing-engine.service';
 import { OrderChargesAccrualService } from './order-charges-accrual.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
  * What a returned parcel costs.
@@ -59,6 +60,10 @@ export class RtoFeeAccrualService {
     orderId: string,
     sellerId: string,
   ): Promise<{ deliveryFeeSwept: boolean; rtoFeeInr: string | null }> {
+    // WAL-7: the idempotency read must be serialised against a
+    // concurrent one, or both see "not charged" and both charge.
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+
     // 1. The outbound leg, if nobody has charged it yet.
     //
     // Ordering matters: this sums the order's charge lines, so it must

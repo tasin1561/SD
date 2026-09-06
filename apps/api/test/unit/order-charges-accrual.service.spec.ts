@@ -1,5 +1,8 @@
 import { ChargeType, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { OrderChargesAccrualService } from '../../src/modules/seller-wallet-accrual/services/order-charges-accrual.service';
+
+/** WAL-7's advisory lock, as the fake sees it. */
+const lockTaken = jest.fn(async () => 1);
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 
 type AnyArgs = Record<string, unknown>;
@@ -22,6 +25,11 @@ function makeService(
   }));
   const wallet = { applyEntry };
   const tx = {
+    // The wallet advisory lock (WAL-7). Recorded rather than stubbed
+    // away: a guard that reads the ledger before writing must serialise
+    // against a concurrent one, and a fake with no $executeRaw would let
+    // an unlocked version pass this suite.
+    $executeRaw: lockTaken,
     sellerWalletEntry: { findFirst },
     orderCharge: { findMany: orderChargeFindMany },
   };

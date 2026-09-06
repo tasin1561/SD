@@ -41,6 +41,9 @@ function makeService(
   );
 
   const tx = {
+    // WAL-7's advisory lock, as the fake sees it — a tx with no
+    // $executeRaw would let an unlocked money guard pass this suite.
+    $executeRaw: jest.fn(async () => 1),
     sellerWalletEntry: { findFirst: walletEntryFindFirst },
     orderCharge: { findMany: orderChargeFindMany },
   };
@@ -208,6 +211,7 @@ describe('AccrualExecutionService.executeAccrual', () => {
       codAmountInr: new Prisma.Decimal('500'),
     }));
     const tx = {
+      $executeRaw: jest.fn(async () => 1),
       sellerWalletEntry: { findFirst: walletEntryFindFirst },
       orderCharge: { findMany: orderChargeFindMany },
     };
