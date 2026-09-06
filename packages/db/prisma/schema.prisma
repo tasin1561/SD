@@ -7224,6 +7224,9 @@ model BankEntry {
   investment      Investment?         @relation(fields: [investmentId], references: [id])
   createdBy       StaffUser?          @relation("BankEntryCreatedBy", fields: [createdByStaffId], references: [id])
 
+  /// "What did the system do, and what did a person do" — the question
+  /// this column exists to answer, so it is indexed for it.
+  @@index([actorType])
   @@index([accountId, occurredAt])
   @@index([accountId, ownerKind, sellerId])
   @@index([sellerId])
