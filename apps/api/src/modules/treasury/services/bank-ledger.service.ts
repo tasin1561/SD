@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
+import { ActorType, BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
@@ -29,6 +29,13 @@ export interface PostEntryInput {
    */
   readonly amountCurrency: Currency;
   readonly owner: OwnerRef;
+  /**
+   * WHO moved it. Defaults to SYSTEM, which is honest for the paths that
+   * have no person behind them — a settlement landing, an attribution
+   * pair — and wrong to assume for one that does. A staff-driven post
+   * passes STAFF and its `staffId`.
+   */
+  readonly actorType?: ActorType;
   readonly occurredAt: Date;
   readonly reference?: string | null;
   readonly note?: string | null;
@@ -136,6 +143,10 @@ export class BankLedgerService {
 
     const created = await db.bankEntry.create({
       data: {
+        // Named rather than inferred from the staff id: a null there
+        // could mean the system or could mean nobody knows, and a bank
+        // book must not leave that open.
+        actorType: input.actorType ?? (input.staffId == null ? ActorType.SYSTEM : ActorType.STAFF),
         accountId: input.accountId,
         type: input.type,
         signedAmount: amount,

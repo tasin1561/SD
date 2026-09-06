@@ -46,6 +46,15 @@ export class OrderChargesAccrualService {
       select: { type: true, amountInr: true },
     });
     let total = new Prisma.Decimal(0);
+    // What the total is MADE OF, in the seller's own ledger.
+    //
+    // Every other direction says what it was — "COD collected
+    // (settled)", "GST withheld at 18.00%" — and this one, the largest
+    // category by count, said nothing at all: nine of nine rows in
+    // production carried a null note. A seller reading their ledger saw
+    // "Order charges" and a number, and had to open the order to learn
+    // it was delivery plus tax.
+    const parts: string[] = [];
     for (const c of charges) {
       if (c.type === ChargeType.REFUND) continue;
       // The return fee has its OWN wallet direction (RTO_FEE) and is
@@ -54,6 +63,7 @@ export class OrderChargesAccrualService {
       // buried inside an ORDER_CHARGES total.
       if (c.type === ChargeType.RTO_FEE) continue;
       total = total.add(c.amountInr);
+      parts.push(`${c.type.toLowerCase().replaceAll('_', ' ')} ${c.amountInr.toFixed(2)}`);
     }
     if (total.lte(0)) return false;
 
@@ -64,6 +74,7 @@ export class OrderChargesAccrualService {
       amount: total,
       linkedOrderId: orderId,
       actorType: ActorType.SYSTEM,
+      note: `Order charges — ${parts.join(', ')}`,
     });
     return true;
   }

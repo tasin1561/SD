@@ -6092,6 +6092,20 @@ model SellerWalletEntry {
 
   topupRequest WalletTopupRequest? @relation("TopupWalletEntry")
 
+  /// NINE directions may happen exactly once per order, enforced by a
+  /// migration-only PARTIAL unique
+  /// (seller_wallet_entries_once_per_order_uq): cod_collection,
+  /// cod_collection_fee, customer_return_fee, gst_withholding,
+  /// inbound_freight, instant_pay_fee, order_charges,
+  /// order_charges_refund, rto_fee.
+  ///
+  /// Prisma cannot express a partial unique, and an unconditional one
+  /// would be WRONG: an order may carry several tickets and so several
+  /// SCRAP_REFUNDs, and an operator may correct the same order more than
+  /// once with an ADJUSTMENT. Those are excluded on purpose.
+  ///
+  /// It is the second gate, not the first — WAL-7's advisory lock is what
+  /// the callers take. This is what still holds when one of them forgets.
   @@index([sellerId, currency, createdAt])
   // Lets applyEntry find the wallet's LAST entry — and therefore its
   // current balance — with a single index seek instead of sorting the
@@ -7184,8 +7198,21 @@ model BankEntry {
   note       String?  @db.Text
   occurredAt DateTime @map("occurred_at") @db.Timestamptz
 
-  createdByStaffId String?  @map("created_by_staff_id") @db.Uuid
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  /// WHO moved this money.
+  ///
+  /// `createdByStaffId` alone could not say. A null there means EITHER
+  /// "the system posted it" — a settlement landing, a charge
+  /// reclassifying cash from a seller to capital — or "we do not know
+  /// who", and those are very different answers to ask of a bank book.
+  /// Ten of the first eighteen rows were null with nothing to tell them
+  /// apart.
+  ///
+  /// The wallet ledger has carried `actorType` since it was written; the
+  /// bank book did not get it. STAFF rows still name the person in
+  /// `createdByStaffId`.
+  actorType        ActorType @default(SYSTEM) @map("actor_type")
+  createdByStaffId String?   @map("created_by_staff_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   account         PlatformBankAccount @relation(fields: [accountId], references: [id])
   // RESTRICT, not the default SET NULL for an optional relation: a
