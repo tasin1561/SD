@@ -139,7 +139,25 @@ export class PortalTicketSyncService {
         const mine = await this.prisma.client.courierEscalation.findMany({
           where: {
             courierCode,
-            ...(accountId === null ? {} : { courierAccountId: accountId }),
+            /*
+              THIS ACCOUNT, OR NONE RECORDED.
+
+              `courierAccountId` was added after these rows existed, so
+              every escalation opened before it carries null — and one
+              opened from an inbound email has no shipment to ask. A
+              filter of `= accountId` excludes exactly those, silently:
+              the sweep read all 280 of their tickets, matched nothing,
+              and reported a clean run. Observed in production, where the
+              one live escalation is a legacy row.
+
+              Including nulls is right rather than merely lenient: with
+              one account they ARE this account, and with several an
+              unattributed conversation is better swept by whichever
+              session can see it than by none.
+            */
+            ...(accountId === null
+              ? {}
+              : { OR: [{ courierAccountId: accountId }, { courierAccountId: null }] }),
             ticket: { status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] } },
           },
           select: {
