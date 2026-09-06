@@ -233,13 +233,33 @@ export class PortalSessionService {
    * rather than by a copy string, because copy changes and a missed
    * login page means every subsequent selector fails confusingly.
    */
+  /**
+   * Are we looking at a login surface?
+   *
+   * ── THE URL IS THE ANSWER, AND IT IS ENOUGH ──────────────────────────
+   * Both of their login surfaces say so in the address: `/v2/login` on
+   * the app, and `ucp-auth.delhivery.com` for the password. Nothing else
+   * is needed, and everything else that WAS here caused a bug.
+   *
+   * It used to also return true for any "Continue" button on the page.
+   * That was reasoning about the login page's own first step — email,
+   * then Continue, no password field — but it is a fact about a BUTTON,
+   * and their signed-in dashboard has one too. So a perfectly good
+   * session read as logged-out, `login()` ran, `/v2/login` bounced
+   * straight back to `/home` because we were already authenticated, and
+   * the flow then waited thirty seconds for a password step that could
+   * never come.
+   *
+   * That failed six times over seven hours before the error message was
+   * good enough to say where it had ended — on `/home`, which is the
+   * whole diagnosis in one word.
+   *
+   * The password check stays: it costs nothing and catches an auth page
+   * served from a URL we do not recognise.
+   */
   private async looksLikeLogin(page: Page): Promise<boolean> {
-    if (/login|signin|auth/i.test(page.url())) return true;
-    // The first step of their flow asks for an EMAIL only — there is no
-    // password field on it, so looking for one alone would read the
-    // login page as a logged-in one.
-    if ((await page.locator('input[type="password"]').count()) > 0) return true;
-    return (await page.getByRole('button', { name: /^continue$/i }).count()) > 0;
+    if (/login|signin|ucp-auth/i.test(page.url())) return true;
+    return (await page.locator('input[type="password"]').count()) > 0;
   }
 
   private async login(page: Page, courierAccountId: string | null): Promise<void> {
@@ -286,6 +306,15 @@ export class PortalSessionService {
     //   5. Continue hands off to ucp-auth.delhivery.com, a different
     //      origin, for the PASSWORD.
     await page.goto(`${PORTAL_ORIGIN}/v2/login`, { waitUntil: 'domcontentloaded' });
+    // Their login page bounces a signed-in session straight to the app.
+    // Belt to the braces above: if we are already authenticated there is
+    // nothing to log in to, and pressing on would wait out the password
+    // timeout for no reason.
+    await page.waitForTimeout(2_500);
+    if (!/\/v2\/login/.test(page.url())) {
+      this.logger.log('Already signed in — the login page redirected us to the app');
+      return;
+    }
 
     const emailBox = page
       .locator('input[type="email"], input[name="username"], input[name="email"]')
