@@ -90,58 +90,151 @@ export class PortalTicketSyncService {
 
     try {
       /*
-        EVERY account, not one session.
+        NOTHING TO DO, so do not open a browser.
 
-        A courier login reaches one company's panel, so each account has
-        its own ticket list — and a sweep of the default session would
-        read one company's tickets and report the others as though they
-        did not exist. With a single account today the two are the same
-        thing; the day a second is added, the difference is silence on
-        every ticket it carries.
-
-        `null` when no account is configured: that is the session the
-        wallet sync and the dispatcher already fall back to, and dropping
-        the sweep entirely would be worse than reading the default one.
+        The scan is nine page loads against their portal. With no live
+        escalation there is no question it could answer, and running it
+        anyway is load on somebody else's systems to learn nothing.
       */
+      const live = await this.prisma.client.courierEscalation.count({
+        where: {
+          courierCode,
+          ticket: { status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] } },
+        },
+      });
+      if (live === 0) {
+        this.logger.debug('No live courier escalations; ticket sync stood down');
+        return { listed: 0, bound: 0, ingested: 0, closed: 0, skipped: 0 };
+      }
+
       const accounts = await this.accountsToSweep(courierCode);
 
       for (const accountId of accounts) {
         const page = await this.session.page(accountId);
         const list = new SupportTicketsPage(page);
-        const rows = await list.listAll();
-        listed += rows.length;
+        const scan = await list.listOpenAndResolved();
+        listed += scan.rows.length;
 
-        for (const row of rows) {
+        const byId = new Map(scan.rows.map((r) => [r.externalTicketId, r]));
+        const unboundByAwb = new Map<string, (typeof scan.rows)[number]>();
+        for (const r of scan.rows) {
+          if (r.awbNumber !== null && !unboundByAwb.has(r.awbNumber))
+            unboundByAwb.set(r.awbNumber, r);
+        }
+
+        /*
+          OURS, not theirs.
+
+          The account holds ~200 open tickets and about eleven are ours —
+          the rest are the client's other business on the same login.
+          Driving the sweep from OUR escalations rather than from their
+          list is what turns two hundred thread opens into a handful, and
+          it is the difference between a sweep that takes fifteen minutes
+          and one that takes twenty seconds.
+
+          Terminal tickets are excluded: a conversation we have already
+          closed has nothing left to read, and re-reading it every twenty
+          minutes forever is the cost that grows without bound.
+        */
+        const mine = await this.prisma.client.courierEscalation.findMany({
+          where: {
+            courierCode,
+            ...(accountId === null ? {} : { courierAccountId: accountId }),
+            ticket: { status: { in: [TicketStatus.OPEN, TicketStatus.NEGOTIATING] } },
+          },
+          select: {
+            id: true,
+            externalTicketId: true,
+            awbNumber: true,
+            portalRowHash: true,
+            ticketId: true,
+          },
+        });
+
+        for (const esc of mine) {
           try {
-            const escalationId = await this.bind(row);
-            if (escalationId === null) {
-              // Their panel holds tickets nobody here raised — a person
-              // filing one by hand is a real case. Not an error, and NOT
-              // something to invent an escalation for: fabricating the
-              // seller link would thread somebody else's parcel into this
-              // conversation.
+            let row = esc.externalTicketId === null ? undefined : byId.get(esc.externalTicketId);
+
+            // BIND: a raise does not reliably hand back its id, and the
+            // list is the only place the id and the waybill meet.
+            if (esc.externalTicketId === null && esc.awbNumber !== null) {
+              const candidate = unboundByAwb.get(esc.awbNumber);
+              if (
+                candidate !== undefined &&
+                (await this.claim(esc.awbNumber, candidate.externalTicketId))
+              ) {
+                bound += 1;
+                row = candidate;
+              }
+            }
+
+            if (row === undefined) {
+              /*
+                In neither Open nor Resolved.
+
+                That is Delhivery having closed it — the same conclusion
+                the Closed tab would give, reached without paging through
+                a tab that grows forever. Guarded on a COMPLETE scan: a
+                login bounce returns zero rows, and acting on that would
+                close every seller's ticket at once.
+              */
+              if (!scan.complete || esc.externalTicketId === null) {
+                skipped += 1;
+                continue;
+              }
+              if (await this.closeThrough(esc.id, esc.externalTicketId, 'closed')) closed += 1;
+              continue;
+            }
+
+            // UNCHANGED: the row reads exactly as it did last sweep, so
+            // there is nothing new to read and no reason to spend ten
+            // seconds opening it.
+            if (esc.portalRowHash === row.rowHash) {
               skipped += 1;
               continue;
             }
-            if (row.awbNumber !== null) bound += 1;
 
             ingested += await this.ingestThread(page, list, row);
-            if (row.state !== 'OPEN')
-              closed += (await this.closeThrough(escalationId, row)) ? 1 : 0;
+            await this.prisma.client.courierEscalation.update({
+              where: { id: esc.id },
+              data: { portalRowHash: row.rowHash },
+            });
+
+            if (row.state === 'RESOLVED') {
+              if (await this.closeThrough(esc.id, row.externalTicketId, 'resolved')) closed += 1;
+            }
           } catch (err) {
-            // One bad ticket must not cost the other two hundred their
-            // sweep — the same per-item isolation as the AWB fan-out.
+            // One bad ticket must not cost the others their sweep — the
+            // same per-item isolation as the AWB fan-out.
             this.logger.warn(
-              { externalTicketId: row.externalTicketId, err: this.msg(err) },
-              'Ticket sync failed for one ticket; continuing',
+              { escalationId: esc.id, err: this.msg(err) },
+              'Ticket sync failed for one escalation; continuing',
             );
           }
         }
+
+        if (!scan.complete) {
+          // Said out loud rather than logged: an incomplete scan means
+          // closure inference was withheld, so a ticket Delhivery closed
+          // this morning still reads as open here.
+          await this.issues.raise({
+            kind: SystemIssueKind.INTEGRATION,
+            severity: SystemIssueSeverity.MEDIUM,
+            title: 'Only part of the courier ticket list could be read',
+            detail:
+              `A sweep of Delhivery's support tabs did not finish. Their stated totals were ` +
+              `${JSON.stringify(scan.statedTotals)} and ${scan.rows.length} rows were read.\n\n` +
+              'Replies were still collected for the tickets that WERE seen. What was withheld ' +
+              'is closing: a ticket missing from a half-read list looks closed, and acting on ' +
+              "that would close every seller's ticket at once. A login challenge is the usual " +
+              'cause — check the portal session.',
+            source: 'PortalTicketSyncService',
+            dedupeKey: `portal-ticket-scan-partial:${accountId ?? 'default'}`,
+            metadata: { accountId, rows: scan.rows.length, statedTotals: scan.statedTotals },
+          });
+        }
       }
     } catch (err) {
-      // The sweep itself could not run — no session, portal moved,
-      // login challenged. That is silence on every seller's question at
-      // once, so it says so rather than logging and stopping.
       const message = this.msg(err);
       this.logger.error({ err: message }, 'Courier ticket sync could not run');
       await this.issues.raise({
@@ -163,6 +256,26 @@ export class PortalTicketSyncService {
   }
 
   /**
+   * Claim a ticket id for the escalation holding that waybill.
+   *
+   * Guarded, not read-then-write: two sweeps overlapping would otherwise
+   * both see "no id" and both claim the same escalation for different
+   * tickets. Only ever claims one that has NO id — a parcel carries
+   * several tickets over its life, and re-pointing a bound escalation
+   * would thread a September reply into an August conversation.
+   */
+  private async claim(awbNumber: string, externalTicketId: string): Promise<boolean> {
+    const res = await this.prisma.client.courierEscalation.updateMany({
+      where: { awbNumber, externalTicketId: null },
+      data: { externalTicketId },
+    });
+    if (res.count > 0) {
+      this.logger.log({ externalTicketId, awbNumber }, 'Bound a courier ticket to its escalation');
+    }
+    return res.count > 0;
+  }
+
+  /**
    * Which portal sessions to walk.
    *
    * The ACTIVE accounts for this courier — an account switched off still
@@ -181,45 +294,6 @@ export class PortalTicketSyncService {
       orderBy: { createdAt: 'asc' },
     });
     return accounts.length === 0 ? [null] : accounts.map((a) => a.id);
-  }
-
-  /**
-   * Find the escalation this row belongs to, binding the id if needed.
-   *
-   * By id first — that is exact. Then by WAYBILL, but only onto an
-   * escalation that has no id yet: a parcel can carry several tickets
-   * over its life, and matching an open escalation to whichever ticket
-   * shares its waybill would thread a September reply into an August
-   * conversation. An escalation that already has an id is never
-   * re-pointed.
-   */
-  private async bind(row: PortalTicketRow): Promise<string | null> {
-    const byId = await this.prisma.client.courierEscalation.findFirst({
-      where: { externalTicketId: row.externalTicketId },
-      select: { id: true },
-    });
-    if (byId !== null) return byId.id;
-
-    if (row.awbNumber === null) return null;
-
-    const claimed = await this.prisma.client.courierEscalation.updateMany({
-      // Guarded, not read-then-write: two sweeps overlapping would
-      // otherwise both see "no id" and both claim the same escalation
-      // for different tickets.
-      where: { awbNumber: row.awbNumber, externalTicketId: null },
-      data: { externalTicketId: row.externalTicketId },
-    });
-    if (claimed.count === 0) return null;
-
-    const bound = await this.prisma.client.courierEscalation.findFirst({
-      where: { externalTicketId: row.externalTicketId },
-      select: { id: true },
-    });
-    this.logger.log(
-      { externalTicketId: row.externalTicketId, awbNumber: row.awbNumber },
-      'Bound a courier ticket to its escalation',
-    );
-    return bound?.id ?? null;
   }
 
   /**
@@ -272,7 +346,11 @@ export class PortalTicketSyncService {
    * has no edge to CLOSED_BY_COURIER, so a re-run is refused by the
    * state machine rather than by a flag here.
    */
-  private async closeThrough(escalationId: string, row: PortalTicketRow): Promise<boolean> {
+  private async closeThrough(
+    escalationId: string,
+    externalTicketId: string,
+    how: 'resolved' | 'closed',
+  ): Promise<boolean> {
     const escalation = await this.prisma.client.courierEscalation.findUnique({
       where: { id: escalationId },
       select: { ticketId: true, ticket: { select: { status: true } } },
@@ -286,7 +364,7 @@ export class PortalTicketSyncService {
       {
         to: TicketStatus.CLOSED_BY_COURIER,
         notes:
-          `Delhivery moved ticket ${row.externalTicketId} to ${row.state.toLowerCase()}. ` +
+          `Delhivery marked ticket ${externalTicketId} ${how}. ` +
           'Their last word is in the conversation above. If this is not settled for you, ' +
           'reply here and we will take it back to them.',
       },

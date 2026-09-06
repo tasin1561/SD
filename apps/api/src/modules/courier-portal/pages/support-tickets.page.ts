@@ -1,14 +1,8 @@
+import { createHash } from 'node:crypto';
 import type { Page } from 'playwright';
 
-/** Which of their three tabs a ticket is sitting in. */
-export type PortalTicketState = 'OPEN' | 'RESOLVED' | 'CLOSED';
-
-/** Their tab path, for going back to the row that was in it. */
-export const TAB_PATH: Readonly<Record<PortalTicketState, string>> = {
-  OPEN: 'open',
-  RESOLVED: 'resolved',
-  CLOSED: 'closed',
-};
+/** Which of their tabs a ticket is sitting in. */
+export type PortalTicketState = 'OPEN' | 'RESOLVED';
 
 export interface PortalTicketRow {
   /** Their id as a person reads it: `J1788584000522861`. */
@@ -16,52 +10,84 @@ export interface PortalTicketRow {
   /** The waybill printed under the id. Null when the row shows none. */
   readonly awbNumber: string | null;
   readonly state: PortalTicketState;
+  /**
+   * A hash of the whole row as it reads today.
+   *
+   * Whether the thread is worth opening. Not a parsed timestamp — the
+   * question is "has anything about this changed", and the whole row
+   * answers it without teaching us their date format.
+   */
+  readonly rowHash: string;
+}
+
+export interface PortalTicketScan {
+  readonly rows: readonly PortalTicketRow[];
+  /**
+   * Did EVERY page of BOTH tabs read cleanly?
+   *
+   * Load-bearing, because absence is how closure is inferred: a ticket
+   * of ours that is in neither tab has been closed. On a partial scan
+   * that reasoning inverts into a catastrophe — a login bounce returns
+   * zero rows, every ticket looks absent, and every seller's ticket gets
+   * closed at once. So closure is inferred ONLY when this is true.
+   */
+  readonly complete: boolean;
+  /** Their own stated total per tab, for the sanity check. */
+  readonly statedTotals: Readonly<Record<string, number | null>>;
 }
 
 const TICKET_ID_RE = /\bJ\d{12,20}\b/;
 const AWB_RE = /\b\d{11,14}\b/;
+/** "Showing 1 - 30 of 206" */
+const TOTAL_RE = /Showing\s*([\d,]+)\s*-\s*([\d,]+)\s*of\s*([\d,]+)/i;
 
+/** Only these two. See `listOpenAndResolved`. */
 const TABS: ReadonlyArray<{ path: string; state: PortalTicketState }> = [
   { path: 'open', state: 'OPEN' },
   { path: 'resolved', state: 'RESOLVED' },
-  { path: 'closed', state: 'CLOSED' },
 ];
 
+/** Their pagination is a Vue component with stable class names. */
+const NEXT = 'a.ap-pagination__next';
+const DISABLED = 'ap-pagination__link--disabled';
+
 /**
- * Delhivery ONE's support list — the three tabs, and what is in them.
+ * Delhivery ONE's support list.
  *
- * ── THE ONLY PLACE THAT KNOWS A TICKET'S STATE ───────────────────────
- * Their ticket detail page shows a status pill, but the LIST is what
- * partitions Open / Resolved / Closed, and the partition is the fact we
- * need: "has Delhivery finished with this" is answered by which tab the
- * row is in, not by parsing a word out of a page.
+ * ── OPEN AND RESOLVED. NEVER CLOSED ──────────────────────────────────
+ * Three tabs exist and only two are read. A ticket of ours that is in
+ * neither has been closed, which is the same conclusion the Closed tab
+ * would have given — reached by NOT looking rather than by paging
+ * through it. That matters because Closed grows without bound while Open
+ * and Resolved are bounded by how much work is outstanding: today 206
+ * and 30-odd, against a Closed tab that will hold every ticket the
+ * account ever raised.
  *
- * ── AND THE ONLY PLACE THAT BINDS AN ID TO A PARCEL ──────────────────
- * Raising a ticket does not reliably hand back its id — the modal
- * confirms and closes. The list prints the id and the waybill together,
- * which is what lets a ticket we raised minutes ago be matched to the
- * escalation that raised it. Without this, every raise would be a write
- * we could never read back.
+ * The inference has one dangerous failure and it is guarded, not hoped
+ * about: a scan that did not complete makes everything look absent. An
+ * expired session bounces to /v2/login and returns zero rows — observed,
+ * not imagined — and acting on that would close every seller's ticket in
+ * one sweep. `PortalTicketScan.complete` is what the caller must check.
+ *
+ * ── EVERY PAGE, BY CLICKING ──────────────────────────────────────────
+ * `?page=2` is ignored: their pagination is client-side and the URL
+ * never changes. The per-page select offers exactly one option, 30, so
+ * there is no way to ask for a bigger page either. What works is
+ * clicking `a.ap-pagination__next` until it carries
+ * `ap-pagination__link--disabled`.
+ *
+ * The first version read whatever was on screen and stopped — 30 rows of
+ * 206, silently missing 176 tickets and reporting a clean sweep.
  *
  * ── TWO IDS, AND THERE IS NO LINK BETWEEN THEM ───────────────────────
  * `J1788584000522861` is what the list prints and what a person quotes.
- * The detail page lives at `/support/<uuid>`, a different identifier
- * entirely — and NOTHING on the list carries it. The id is a
- * `<span class="text-cta-primary cursor-pointer">` with a click handler,
- * not an anchor, so there is no href to read and no route that accepts
- * the J-id.
- *
- * That was found by probing the real portal, and it mattered: the first
- * version read `a[href*="/support/"]`, got null on every row, and would
- * have swept three tabs, matched every ticket and opened none of them —
- * silently, reporting a clean run every twenty minutes.
- *
- * So opening one means CLICKING it and then waiting for their router to
- * land, which is what `openByTicketId` does.
+ * The detail lives at `/support/<uuid>`, and NOTHING on the list carries
+ * it: the id is a `<span class="text-cta-primary cursor-pointer">` with
+ * a click handler, not an anchor. So opening one means clicking it.
  *
  * VERIFIED against one.delhivery.com on 2026-09-06: the table, the row
- * text (id, waybill, email, category, subcategory, dates, status), the
- * three tab URLs, and the click-through.
+ * text, both tab URLs, the pagination markup, the stated totals, and the
+ * click-through.
  */
 export class SupportTicketsPage {
   constructor(
@@ -70,69 +96,141 @@ export class SupportTicketsPage {
   ) {}
 
   /**
-   * Every ticket across all three tabs.
+   * Every ticket in Open and Resolved, across every page.
    *
-   * All three every time, deliberately: a ticket that moved from Open to
-   * Closed since the last sweep is exactly the event worth catching, and
-   * reading only the open tab would make a closure look like a ticket
-   * that had vanished.
+   * `maxPages` is a runaway guard, not a limit anybody should hit: 206
+   * tickets is 7 pages, so 40 leaves an order of magnitude of headroom
+   * and still stops a broken "next" button from looping until the job
+   * times out.
    */
-  async listAll(maxPerTab = 200): Promise<PortalTicketRow[]> {
-    const out: PortalTicketRow[] = [];
+  async listOpenAndResolved(maxPages = 40): Promise<PortalTicketScan> {
+    const rows: PortalTicketRow[] = [];
+    const statedTotals: Record<string, number | null> = {};
+    let complete = true;
+
     for (const tab of TABS) {
-      out.push(...(await this.listTab(tab.path, tab.state, maxPerTab)));
+      try {
+        const res = await this.scanTab(tab.path, tab.state, maxPages);
+        rows.push(...res.rows);
+        statedTotals[tab.path] = res.statedTotal;
+        // Their own count against ours. A tab that says 206 and yields
+        // 30 has stopped paginating somewhere, and treating that as a
+        // full read is what closes 176 tickets that are simply on page
+        // two.
+        if (res.statedTotal !== null && res.rows.length < res.statedTotal) complete = false;
+        if (!res.pagedToEnd) complete = false;
+      } catch {
+        complete = false;
+        statedTotals[tab.path] = null;
+      }
     }
-    return out;
+    return { rows, complete, statedTotals };
   }
 
-  private async listTab(
+  private async scanTab(
     path: string,
     state: PortalTicketState,
-    max: number,
-  ): Promise<PortalTicketRow[]> {
+    maxPages: number,
+  ): Promise<{ rows: PortalTicketRow[]; statedTotal: number | null; pagedToEnd: boolean }> {
     await this.page.goto(`${this.origin}/support/support-tickets/${path}`, {
       waitUntil: 'domcontentloaded',
     });
-    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+    await this.settle();
 
-    const rows = this.page.locator('tr, [role="row"]');
-    const n = Math.min(await rows.count(), max);
-    const out: PortalTicketRow[] = [];
+    const rows: PortalTicketRow[] = [];
     const seen = new Set<string>();
+    const statedTotal = await this.statedTotal();
+    let pagedToEnd = false;
 
+    for (let pageNo = 0; pageNo < maxPages; pageNo += 1) {
+      rows.push(...(await this.rowsOnScreen(state, seen)));
+
+      const next = this.page.locator(NEXT).first();
+      if ((await next.count()) === 0) {
+        pagedToEnd = true;
+        break;
+      }
+      const cls = (await next.getAttribute('class')) ?? '';
+      if (cls.includes(DISABLED)) {
+        pagedToEnd = true;
+        break;
+      }
+      await next.click();
+      // Their table re-renders in place; a settle plus a beat is what
+      // separates "page two" from "page one read twice". The dedup on
+      // ticket id is the belt to that brace.
+      await this.settle();
+      await this.page.waitForTimeout(800);
+    }
+    return { rows, statedTotal, pagedToEnd };
+  }
+
+  private async rowsOnScreen(
+    state: PortalTicketState,
+    seen: Set<string>,
+  ): Promise<PortalTicketRow[]> {
+    const trs = this.page.locator('tr, [role="row"]');
+    const n = await trs.count();
+    const out: PortalTicketRow[] = [];
     for (let i = 0; i < n; i += 1) {
-      const row = rows.nth(i);
-      const text = (await row.innerText().catch(() => '')).trim();
+      const text = (
+        await trs
+          .nth(i)
+          .innerText()
+          .catch(() => '')
+      ).trim();
       if (text === '') continue;
       const id = TICKET_ID_RE.exec(text)?.[0];
       if (id === undefined || seen.has(id)) continue;
       seen.add(id);
-
       // The waybill is read from the text AFTER the id is removed, so a
       // ticket id's own digits can never be mistaken for one.
       const awb = AWB_RE.exec(text.replace(id, ' '))?.[0] ?? null;
-      out.push({ externalTicketId: id, awbNumber: awb, state });
+      out.push({
+        externalTicketId: id,
+        awbNumber: awb,
+        state,
+        rowHash: createHash('sha256').update(text.replace(/\s+/g, ' ')).digest('hex').slice(0, 32),
+      });
     }
     return out;
+  }
+
+  /** "Showing 1 - 30 of 206" → 206. Null when they do not say. */
+  private async statedTotal(): Promise<number | null> {
+    const text = await this.page
+      .locator('.ap-pagination__perpage')
+      .first()
+      .innerText()
+      .catch(() => '');
+    const m = TOTAL_RE.exec(text.replace(/\s+/g, ' '));
+    const raw = m?.[3]?.replace(/,/g, '');
+    return raw === undefined ? null : Number(raw);
   }
 
   /**
    * Open one ticket's thread by clicking its id.
    *
    * Their id is a span with a click handler, so this is the only way in.
-   * Returns the detail URL their router lands on — the caller stores it
-   * so a later read can go straight there instead of walking the list
-   * again.
-   *
-   * Returns null rather than assuming: if the route never changes we did
-   * not open the ticket, and reading whatever is on screen would attach
-   * one ticket's messages to another.
+   * Returns the detail URL their router lands on, or null — if the route
+   * never changes we did not open the ticket, and reading whatever is on
+   * screen would attach one ticket's messages to another.
    */
   async openByTicketId(externalTicketId: string, tab: string): Promise<string | null> {
     await this.page.goto(`${this.origin}/support/support-tickets/${tab}`, {
       waitUntil: 'domcontentloaded',
     });
-    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+    await this.settle();
+
+    // Their search is what makes this affordable: the ticket may be on
+    // page six, and paging to it would cost as much as the whole scan.
+    const search = this.page.locator('input[placeholder*="ticket" i]').first();
+    if ((await search.count()) > 0) {
+      await search.fill(externalTicketId);
+      await search.press('Enter');
+      await this.settle();
+      await this.page.waitForTimeout(800);
+    }
 
     const link = this.page.locator(`span:text-is("${externalTicketId}")`).first();
     if ((await link.count()) === 0) return null;
@@ -145,4 +243,14 @@ export class SupportTicketsPage {
     }
     return this.page.url();
   }
+
+  private async settle(): Promise<void> {
+    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+  }
 }
+
+/** Their tab path, for going back to the row that was in it. */
+export const TAB_PATH: Readonly<Record<PortalTicketState, string>> = {
+  OPEN: 'open',
+  RESOLVED: 'resolved',
+};
