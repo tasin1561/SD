@@ -20,9 +20,22 @@ import { PortalSessionService } from '../../src/modules/courier-portal/services/
  * These pin the distinction as a question about the URL, which is the
  * only thing that actually differs.
  */
-/** No dependency is reached: only the pure URL check is under test. */
+/**
+ * No dependency is reached: only the pure URL check is under test.
+ *
+ * Every constructor argument, spelled out rather than spread — a count
+ * that drifts should fail to COMPILE here, which is exactly how this
+ * file first went red in CI.
+ */
 function svc(): PortalSessionService {
-  return new PortalSessionService({} as never, {} as never, {} as never, {} as never, {} as never);
+  return new PortalSessionService(
+    {} as never, // prisma
+    {} as never, // credentials
+    {} as never, // settings
+    {} as never, // email
+    {} as never, // audit
+    {} as never, // issues
+  );
 }
 
 /** The private under test, reached the way the service calls it. */
