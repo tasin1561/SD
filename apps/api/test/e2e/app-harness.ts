@@ -22,6 +22,11 @@ import { NotificationListener } from '../../src/modules/notifications/services/n
 import { SystemIssueNotifier } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
 import { staffRoleKeyForEnum } from '../../src/common/auth/staff-role-key';
+import { SellerIssueEscalationService } from '../../src/modules/courier-escalation/services/seller-issue-escalation.service';
+import { OutboundWebhookListener } from '../../src/modules/seller-webhook-delivery/services/outbound-webhook-listener.service';
+import { OrderDeliveredInvoiceListener } from '../../src/modules/invoice/services/order-delivered-invoice-listener.service';
+import { OrderDeliveredAccrualListener } from '../../src/modules/seller-wallet-accrual/services/order-delivered-accrual-listener.service';
+import { DeliveryFailedListener } from '../../src/modules/delivery-action/services/delivery-failed-listener.service';
 
 export interface AppHarness {
   app: NestExpressApplication;
@@ -156,6 +161,38 @@ export async function drainSystemIssueNotifier(app: NestExpressApplication): Pro
  * `void issues.raise(...)` — which is how all fifty-odd call sites
  * reach it — could still be inserting when the reset truncated.
  */
+/**
+ * Every remaining fire-and-forget writer, quiesced.
+ *
+ * Resolved by TYPE rather than by a list of names so a new listener is
+ * one import away from being covered, and pinned by `drain-hooks.spec`
+ * so it cannot be skipped.
+ */
+export async function drainAll(app: NestExpressApplication): Promise<void> {
+  const drainables = [
+    OutboundWebhookListener,
+    OrderDeliveredInvoiceListener,
+    OrderDeliveredAccrualListener,
+    DeliveryFailedListener,
+  ];
+  for (const token of drainables) {
+    try {
+      const svc = app.get(token, { strict: false }) as { drainInFlight?: () => Promise<void> };
+      if (typeof svc.drainInFlight === 'function') await svc.drainInFlight();
+    } catch {
+      // Not registered in this app; nothing in flight by definition.
+    }
+  }
+}
+
+export async function drainSellerIssueEscalation(app: NestExpressApplication): Promise<void> {
+  try {
+    await app.get(SellerIssueEscalationService, { strict: false }).drainInFlight();
+  } catch {
+    // Not registered in this app; nothing in flight by definition.
+  }
+}
+
 export async function drainSystemIssues(app: NestExpressApplication): Promise<void> {
   try {
     await app.get(SystemIssueService, { strict: false }).drainInFlight();
@@ -185,6 +222,27 @@ export async function resetAuthState(
     // wants an AccessExclusiveLock — the same 40P01 the notifier drain
     // was added for, one layer down. Found on CI, shard 4 of 4.
     await drainSystemIssues(app);
+    // And the newest writer of the same shape: a seller raising an issue
+    // opens the courier conversation AFTER the response goes out, so its
+    // INSERT outlives the request and races this reset. Found on CI,
+    // shard 1 of 4, as a 40P01 naming neither the test nor the cause.
+    await drainSellerIssueEscalation(app);
+    /*
+      AND THE FOUR THAT WERE NEVER WIRED.
+
+      Nine services expose `drainInFlight()`; five were awaited here.
+      The other four are bus listeners doing exactly the same async DB
+      work after the transaction that triggered them has returned —
+      invoices, accruals, outbound webhooks, delivery-failure handling.
+      Each is the same 40P01 waiting to happen, and "waiting" is the
+      word: a deadlock only fires when the write and the TRUNCATE
+      overlap, which is why they show up as one red shard out of four
+      rather than as a failing test.
+
+      `drain-hooks.spec.ts` now asserts this list is complete, so the
+      tenth cannot be forgotten.
+    */
+    await drainAll(app);
   }
   // Order-critical chain (CLAUDE MUST #12): Module-8 warehouse rows
   // (shipment_items FK stock_batches/warehouse_bins; shipments FK

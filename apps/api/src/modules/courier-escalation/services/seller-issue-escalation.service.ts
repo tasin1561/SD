@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
@@ -42,8 +42,31 @@ import { CourierEscalationService } from './courier-escalation.service';
  * somebody can carry it by hand.
  */
 @Injectable()
-export class SellerIssueEscalationService {
+export class SellerIssueEscalationService implements OnModuleDestroy {
   private readonly logger = new Logger(SellerIssueEscalationService.name);
+
+  /**
+   * Escalations still being opened.
+   *
+   * `escalate` is called with `void` from the seller's ticket handler —
+   * correct, because a slow portal must not hold their browser — which
+   * means its writes outlive the request that started them. That is the
+   * shape CLAUDE.md's drain rule exists for, and skipping it here cost a
+   * CI shard: the INSERT holds a RowShareLock on orders and sellers
+   * while the harness TRUNCATE wants an AccessExclusiveLock, and
+   * Postgres kills one with a 40P01 that names neither the test nor the
+   * cause.
+   */
+  private readonly inFlight = new Set<Promise<unknown>>();
+
+  /** Await every escalation still opening. Public for the e2e harness. */
+  async drainInFlight(): Promise<void> {
+    await Promise.allSettled([...this.inFlight]);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.drainInFlight();
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -58,7 +81,22 @@ export class SellerIssueEscalationService {
    * escalation and the outbox own their own writes (the M5 saga rule),
    * and a slow portal must not hold a seller's browser.
    */
-  async escalate(input: {
+  escalate(input: {
+    ticketId: string;
+    sellerId: string;
+    description: string | null;
+  }): Promise<void> {
+    // Registered before it is returned, so a caller that fires and
+    // forgets is still drainable. `finally` rather than `then`: a
+    // rejected escalation must leave the set too, or the drain waits
+    // forever on work that already gave up.
+    const p = this.escalateInner(input);
+    this.inFlight.add(p);
+    void p.finally(() => this.inFlight.delete(p));
+    return p;
+  }
+
+  private async escalateInner(input: {
     ticketId: string;
     sellerId: string;
     description: string | null;
