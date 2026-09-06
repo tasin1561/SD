@@ -7184,13 +7184,13 @@ enum BankEntryType {
   /// a seller's held balance ours; a refund gives it back. Always a
   /// PAIR summing to zero, so the account total still matches the
   /// statement while the ownership split follows the wallet.
+  RECLASSIFICATION          @map("reclassification")
   /// Money leaving OUR account to top up a courier's prepaid wallet.
   /// Its own type because it is neither an expense (we get it back as
   /// carriage) nor a transfer (it leaves the treasury entirely), and
   /// because "what have we put into Delhivery this month" has to be
   /// answerable without reading notes.
-  COURIER_WALLET_RECHARGE
-  RECLASSIFICATION          @map("reclassification")
+  COURIER_WALLET_RECHARGE   @map("courier_wallet_recharge")
 
   @@map("bank_entry_type")
 }
