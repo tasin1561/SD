@@ -3,6 +3,7 @@
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import {
+  TicketHandlingBadge,
   Card,
   EmptyState,
   ErrorNote,
@@ -47,6 +48,10 @@ export function TicketsIndex(): ReactElement {
   // they meant in order to ask "is it finished".
   const [status, setStatus] = useState<string>('OPEN');
   const [ticketType, setTicketType] = useState<string>('');
+  // WHO is carrying it. The question a person opening this page is
+  // usually asking is "what must I pick up", and before this there was
+  // no way to ask it.
+  const [handling, setHandling] = useState<string>('');
   const [page, setPage] = useState(1);
   // The row IS the link now: one way in, and it is the page rather than
   // a modal that could only ever show a summary of it.
@@ -55,6 +60,7 @@ export function TicketsIndex(): ReactElement {
   const list = useTicketsList({
     ...(status === '' ? {} : { stage: status }),
     ...(ticketType === '' ? {} : { ticketType }),
+    ...(handling === '' ? {} : { handling }),
     page,
     pageSize: PAGE_SIZE,
   });
@@ -132,6 +138,27 @@ export function TicketsIndex(): ReactElement {
             </option>
           ))}
         </Select>
+
+        <label className="text-text-muted ml-2 text-xs" htmlFor="ticket-handling">
+          Handling
+        </label>
+        <Select
+          id="ticket-handling"
+          value={handling}
+          onChange={(e) => changeFilter(() => setHandling(e.target.value))}
+          className="w-48"
+        >
+          {/*
+            NONE is deliberately not offered. A scrap ticket raised by
+            RTO inspection has no courier to be carried to, so it is
+            neither "software has this" nor "somebody must pick this up";
+            offering it as a third answer would invite the reading that
+            it is waiting on someone.
+          */}
+          <option value="">Auto and manual</option>
+          <option value="MANUAL">Manual — needs a person</option>
+          <option value="AUTO">Auto — software is carrying it</option>
+        </Select>
       </Toolbar>
 
       {list.isError ? (
@@ -164,6 +191,7 @@ export function TicketsIndex(): ReactElement {
           <THead>
             <Tr>
               <Th>Type</Th>
+              <Th>Handling</Th>
               <Th>Subject</Th>
               <Th>Order</Th>
               <Th>Status</Th>
@@ -176,6 +204,9 @@ export function TicketsIndex(): ReactElement {
               <Tr key={t.id} onActivate={() => router.push(`/tickets/${t.id}`)}>
                 <Td className="text-text-muted whitespace-nowrap text-xs">
                   {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Scrap / damage' : 'Seller issue'}
+                </Td>
+                <Td className="whitespace-nowrap">
+                  <TicketHandlingBadge handling={t.handling} />
                 </Td>
                 <Td className="max-w-xs truncate">{t.subject}</Td>
                 <Td>

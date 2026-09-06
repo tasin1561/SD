@@ -70,6 +70,14 @@ export interface TicketView {
    */
   readonly issueCategoryLabel: string | null;
   readonly issueSubcategoryLabel: string | null;
+  /**
+   * WHO is carrying this to the courier: NONE / AUTO / MANUAL.
+   *
+   * Only Delhivery has ticket automation, so a Shiprocket or
+   * manually-placed parcel's issue moves only when a person moves it.
+   * A ticket whose automated attempt failed falls back to MANUAL.
+   */
+  readonly handling: 'NONE' | 'AUTO' | 'MANUAL';
   readonly subject: string;
   readonly description: string | null;
   readonly resolutionAmountInr: string | null;

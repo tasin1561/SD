@@ -74,9 +74,12 @@ export class CourierChannelSettingsService {
     const row = await this.prisma.client.courierChannelSettings.upsert({
       where: { courierCode },
       update: {},
-      // Fails CLOSED into existence: an absent row resolves to MANUAL
-      // with no auto categories, never to something permissive.
-      create: { courierCode, writeMode: CourierWriteMode.MANUAL, autoCategories: [] },
+      // Fails SAFE into existence: an absent row resolves to SUPERVISED
+      // with NO auto categories. Supervised is not permissive — the
+      // worker prepares and holds for one click, and the empty category
+      // list is what actually decides whether anything may go
+      // unattended. MANUAL here only ever meant "retype it yourself".
+      create: { courierCode, writeMode: CourierWriteMode.SUPERVISED, autoCategories: [] },
     });
     const paused = row.pausedUntil !== null && row.pausedUntil.getTime() > Date.now();
     return {

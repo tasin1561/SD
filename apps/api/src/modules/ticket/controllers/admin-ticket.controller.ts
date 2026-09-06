@@ -18,7 +18,12 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { TransitionTicketDto } from '../dto/ticket.dto';
-import { type TicketStage, TicketService, type TicketView } from '../services/ticket.service';
+import {
+  type TicketHandlingFilter,
+  type TicketStage,
+  TicketService,
+  type TicketView,
+} from '../services/ticket.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
 
@@ -43,6 +48,8 @@ export class AdminTicketController {
     @Query('status') status?: TicketStatus,
     @Query('stage') stage?: TicketStage,
     @Query('ticketType') ticketType?: TicketType,
+    /** AUTO = software is carrying it to the courier; MANUAL = a person must. */
+    @Query('handling') handling?: TicketHandlingFilter,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<{ items: readonly TicketView[]; total: number; page: number; pageSize: number }> {
@@ -51,6 +58,7 @@ export class AdminTicketController {
       ...(status === undefined ? {} : { status }),
       ...(stage === undefined ? {} : { stage }),
       ...(ticketType === undefined ? {} : { ticketType }),
+      ...(handling === undefined ? {} : { handling }),
       ...(page === undefined ? {} : { page: Number(page) }),
       ...(pageSize === undefined ? {} : { pageSize: Number(pageSize) }),
     });

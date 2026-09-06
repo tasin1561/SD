@@ -1,8 +1,9 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
-import { SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
+import { SystemIssueKind, SystemIssueSeverity, TicketHandling } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { CourierEscalationService } from './courier-escalation.service';
+import { TicketHandlingService } from '../../ticket-handling/services/ticket-handling.service';
 
 /**
  * A seller's issue, put to the courier.
@@ -72,6 +73,7 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly escalations: CourierEscalationService,
     private readonly issues: SystemIssueService,
+    private readonly handling: TicketHandlingService,
   ) {}
 
   /**
@@ -104,6 +106,34 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
     try {
       const parcel = await this.resolveParcel(input.ticketId);
       const awbNumber = parcel?.awbNumber ?? null;
+
+      /*
+        SAY WHO IS CARRYING IT, BEFORE TRYING.
+
+        Only Delhivery has ticket automation. A Shiprocket or
+        manually-placed parcel has no portal to drive, so its issue moves
+        only when a person moves it — and a ticket that does not say so
+        sits in a queue nobody is watching, because everybody assumes
+        software has it.
+
+        Stamped first and independently of whether the raise then
+        succeeds: the label is about what CAN happen, and the fallback
+        below is what records that it did not.
+      */
+      const handling = this.handling.initialFor(parcel?.courierCode ?? null);
+      await this.handling.set(input.ticketId, handling);
+
+      if (handling === TicketHandling.MANUAL) {
+        // Nothing to enqueue: there is no automation for this courier,
+        // so an outbox item would sit PENDING forever waiting for a
+        // worker that will never claim it. The label is the handoff.
+        this.logger.log(
+          { ticketId: input.ticketId, courierCode: parcel?.courierCode ?? null },
+          'Ticket is manual-handling — no courier automation for this carrier',
+        );
+        return;
+      }
+
       if (awbNumber === null) {
         /*
           NO AWB, NO TICKET — and this is a decision, not a gap.
@@ -155,6 +185,14 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
         { ticketId: input.ticketId, err: message },
         'Could not put a seller issue to the courier',
       );
+      // The automated attempt failed, so a person has to carry it. Told
+      // on the ticket itself as well as on the board, because the queue
+      // is where somebody will actually be looking for work.
+      const fellBack = await this.handling.fallBackToManual(input.ticketId).catch(() => false);
+      if (!fellBack) {
+        // Already manual — a second failure raises no new alarm.
+        return;
+      }
       try {
         void this.issues.raise({
           kind: SystemIssueKind.INTEGRATION,
@@ -186,10 +224,12 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
    * waybill is the authoritative fact that a parcel exists on their
    * system, and the status says only where it physically is.
    */
-  private async resolveParcel(
-    ticketId: string,
-  ): Promise<{ awbNumber: string; courierAccountId: string | null } | null> {
-    const pick = { awbNumber: true, courierAccountId: true } as const;
+  private async resolveParcel(ticketId: string): Promise<{
+    awbNumber: string | null;
+    courierAccountId: string | null;
+    courierCode: string | null;
+  } | null> {
+    const pick = { awbNumber: true, courierAccountId: true, courierCode: true } as const;
     const ticket = await this.prisma.client.ticket.findUnique({
       where: { id: ticketId },
       select: {
@@ -212,7 +252,14 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
     // order whose latest is another — and the raise would go to a panel
     // that cannot see the waybill it was given.
     const from = ticket.shipment ?? ticket.order?.orderShipments[0]?.shipment ?? null;
-    if (from?.awbNumber == null) return null;
-    return { awbNumber: from.awbNumber, courierAccountId: from.courierAccountId };
+    if (from === null) return null;
+    // The courier is returned even with no waybill yet: WHO would carry
+    // this is knowable before the parcel is booked, and it is what
+    // decides whether the ticket is labelled AUTO or MANUAL.
+    return {
+      awbNumber: from.awbNumber,
+      courierAccountId: from.courierAccountId,
+      courierCode: from.courierCode,
+    };
   }
 }

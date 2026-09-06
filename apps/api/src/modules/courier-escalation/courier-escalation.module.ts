@@ -26,6 +26,7 @@ import { CourierOutboxService } from './services/courier-outbox.service';
 import { InboundEmailAuthService } from './services/inbound-email-auth.service';
 import { SystemIssuesModule } from '../system-issues/system-issues.module';
 import { SellerIssueEscalationService } from './services/seller-issue-escalation.service';
+import { TicketHandlingModule } from '../ticket-handling/ticket-handling.module';
 
 /**
  * Phases 2-4 of the courier-escalation work.
@@ -69,6 +70,9 @@ import { SellerIssueEscalationService } from './services/seller-issue-escalation
     // A seller's issue that cannot reach Delhivery goes on the board
     // rather than nowhere.
     SystemIssuesModule,
+    // WHO is carrying a ticket. Its own module because putting it in
+    // `ticket` would close a cycle — R3 says extract, never forwardRef.
+    TicketHandlingModule,
   ],
   controllers: [
     InboundEmailController,

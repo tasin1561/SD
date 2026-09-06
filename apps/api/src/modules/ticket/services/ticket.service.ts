@@ -9,6 +9,7 @@ import {
   Currency,
   Prisma,
   type RtoItemCondition,
+  TicketHandling,
   TicketStatus,
   TicketType,
   WalletEntryDirection,
@@ -47,6 +48,9 @@ const TICKET_NAMES = {
  * four values pasted into every filter that wants "finished".
  */
 export type TicketStage = 'OPEN' | 'REVIEWING' | 'CLOSED';
+
+/** The screens' word for it: is a person carrying this, or is software? */
+export type TicketHandlingFilter = 'AUTO' | 'MANUAL';
 
 export const STAGE_STATUSES: Readonly<Record<TicketStage, readonly TicketStatus[]>> = {
   OPEN: [TicketStatus.OPEN],
@@ -635,6 +639,8 @@ export class TicketService {
     /** The three stages the ticket screens speak in. See STAGE_STATUSES. */
     stage?: TicketStage;
     ticketType?: TicketType;
+    /** AUTO = software is carrying it; MANUAL = a person must. */
+    handling?: TicketHandlingFilter;
     page?: number;
     pageSize?: number;
   }): Promise<{ items: readonly TicketView[]; total: number; page: number; pageSize: number }> {
@@ -651,6 +657,11 @@ export class TicketService {
           ? {}
           : { status: { in: [...STAGE_STATUSES[filters.stage]] } }),
       ...(filters.ticketType === undefined ? {} : { ticketType: filters.ticketType }),
+      // A queue of work is only legible if you can ask "what must a
+      // person pick up". NONE is deliberately not offered as a filter:
+      // a scrap ticket has no courier to carry it to, so it belongs in
+      // neither answer.
+      ...(filters.handling === undefined ? {} : { handling: filters.handling }),
     };
     const [rows, total] = await Promise.all([
       this.prisma.client.ticket.findMany({
@@ -783,6 +794,7 @@ export class TicketService {
       createdAt: Date;
       issueCategoryExternalId: string | null;
       issueSubcategoryExternalId: string | null;
+      handling: TicketHandling;
       order?: { orderNumber: string } | null;
       shipment?: { shipmentNumber: string } | null;
     },

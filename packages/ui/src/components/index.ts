@@ -31,6 +31,7 @@ export * from './message-relay-status';
 export * from './page';
 export * from './product-thumb';
 export * from './status-badge';
+export * from './ticket-handling-badge';
 export * from './theme-init';
 export * from './theme-toggle';
 export * from './toast';

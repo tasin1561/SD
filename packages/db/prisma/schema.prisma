@@ -2111,7 +2111,12 @@ model CourierChannelSettings {
   id          String @id @default(dbgenerated("uuidv7()")) @db.Uuid
   courierCode String @unique @map("courier_code")
 
-  writeMode      CourierWriteMode @default(MANUAL) @map("write_mode")
+  /// SUPERVISED by default: the worker prepares the raise and holds it
+  /// for one click. MANUAL made every ticket a retyping job, and AUTO
+  /// unattended is not where a channel should start — the middle one is
+  /// the only setting where the automation is exercised and a person
+  /// still sees what it would have sent.
+  writeMode      CourierWriteMode @default(SUPERVISED) @map("write_mode")
   /// Delhivery category IDs the worker may act on unattended. EMPTY is
   /// the shipped state and the only safe one while the taxonomy is
   /// unfetched. Claims/Finance and Protect VAS can never appear here —
@@ -6285,6 +6290,27 @@ enum TicketType {
   @@map("ticket_type")
 }
 
+/// WHO is carrying this ticket to the courier.
+///
+/// Not a preference and not a setting — a fact about what can actually
+/// happen to this parcel. Only Delhivery has ticket automation; a
+/// Shiprocket or manually-placed parcel has no portal to drive, so the
+/// only way its issue reaches anyone is a person doing it. Saying that
+/// out loud on the ticket is what stops it sitting in a queue nobody is
+/// watching because everybody assumed software had it.
+enum TicketHandling {
+  /// Not a courier conversation at all — a scrap/damage ticket raised by
+  /// RTO inspection has nobody outside to tell.
+  NONE   @map("none")
+  /// Software is carrying it. Delhivery, with the portal channel on.
+  AUTO   @map("auto")
+  /// A person must carry it: a courier with no automation, or a Delhivery
+  /// ticket whose automated attempt FAILED and fell back.
+  MANUAL @map("manual")
+
+  @@map("ticket_handling")
+}
+
 enum TicketStatus {
   OPEN                        @map("open")
   /// Under discussion with the seller and/or courier.
@@ -6351,6 +6377,13 @@ model Ticket {
 
   subject     String
   description String? @db.Text
+
+  /// WHO is carrying this to the courier — see `TicketHandling`.
+  ///
+  /// Starts as what the courier makes possible and FALLS BACK to MANUAL
+  /// when an automated attempt fails. Never falls forward: a ticket a
+  /// person has picked up is not handed back to software mid-conversation.
+  handling TicketHandling @default(NONE)
 
   // Resolution.
   resolutionAmountInr     Decimal? @map("resolution_amount_inr") @db.Decimal(14, 2)

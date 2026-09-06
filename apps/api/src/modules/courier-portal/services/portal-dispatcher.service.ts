@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, CourierOutboxKind, CourierPortalMode } from '@skydrop/db';
+import {
+  ActorType,
+  CourierOutboxKind,
+  CourierPortalMode,
+  SystemIssueKind,
+  SystemIssueSeverity,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CourierChannelSettingsService } from '../../courier-escalation/services/courier-channel-settings.service';
 import { CourierOutboxService } from '../../courier-escalation/services/courier-outbox.service';
@@ -7,6 +13,8 @@ import { RaiseTicketModal } from '../pages/raise-ticket.modal';
 import { TicketDetailPage } from '../pages/ticket-detail.page';
 import { PortalChallengeError, PortalSessionService } from './portal-session.service';
 import { PortalPacingService } from './portal-pacing.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { TicketHandlingService } from '../../ticket-handling/services/ticket-handling.service';
 
 export interface PortalCycleSummary {
   readonly mode: CourierPortalMode;
@@ -61,6 +69,8 @@ export class PortalDispatcherService {
     private readonly settings: CourierChannelSettingsService,
     private readonly session: PortalSessionService,
     private readonly pacing: PortalPacingService,
+    private readonly issues: SystemIssueService,
+    private readonly handling: TicketHandlingService,
   ) {}
 
   /** Public so it doubles as the manual ops trigger. */
@@ -174,6 +184,7 @@ export class PortalDispatcherService {
         // one company, so a raise on the wrong session is filed against a
         // waybill that account cannot see.
         courierAccountId: true,
+        ticketId: true,
         // Their WORDS for the category and the subcategory. The chips
         // carry no ids, so the labels are what a raise can act on — and
         // they are read from the ticket rather than from the outbox item,
@@ -259,6 +270,11 @@ export class PortalDispatcherService {
       escalation?.ticket?.issueSubcategoryExternalId ?? null,
     );
     if (labels.category === null) {
+      await this.handOverToAPerson(
+        escalation?.ticketId ?? null,
+        awb,
+        `No label held for category ${item.categoryId ?? '?'}`,
+      );
       // We hold an id their taxonomy no longer names. Raising on a
       // guessed label would file the wrong kind of ticket, so this stops.
       await this.record(
@@ -316,6 +332,9 @@ export class PortalDispatcherService {
           errorClass: 'REJECTED',
           actorType: ActorType.SYSTEM,
         });
+        // The automated raise is not going to happen for this one, so it
+        // stops reading AUTO and a person is told there is work.
+        await this.handOverToAPerson(escalation?.ticketId ?? null, awb, res.reason);
         return;
       case 'TASK_PENDING':
         // Creation is async on their side. Dispatched, outcome unknown —
@@ -365,5 +384,40 @@ export class PortalDispatcherService {
       category: categoryId === null ? null : (byId.get(categoryId) ?? null),
       subcategory: subcategoryId === null ? null : (byId.get(subcategoryId) ?? null),
     };
+  }
+
+  /**
+   * The automation cannot carry this one; say so where work is picked up.
+   *
+   * TWO places, because they answer different questions. The TICKET's
+   * handling label is what a person filtering "manual" on the queue
+   * sees, and it is where they will actually go looking. The board is
+   * how somebody finds out without looking.
+   *
+   * Guarded on the label actually MOVING: a ticket already manual raises
+   * no new alarm, so a courier that refuses the same category nightly
+   * interrupts one person once rather than every night.
+   */
+  private async handOverToAPerson(
+    ticketId: string | null,
+    awbNumber: string,
+    reason: string,
+  ): Promise<void> {
+    if (ticketId === null) return;
+    const moved = await this.handling.fallBackToManual(ticketId).catch(() => false);
+    if (!moved) return;
+    await this.issues.raise({
+      kind: SystemIssueKind.INTEGRATION,
+      severity: SystemIssueSeverity.HIGH,
+      title: 'A courier ticket could not be raised automatically',
+      detail:
+        `The automated raise for AWB ${awbNumber} did not go through: ${reason}\n\n` +
+        'The ticket is now marked MANUAL, so it shows on /tickets under the manual filter. ' +
+        "Raise it on Delhivery's portal by hand and record the ticket id on the escalation " +
+        'so their replies thread back to the seller.',
+      source: 'PortalDispatcherService',
+      dedupeKey: `courier-raise-manual:${ticketId}`,
+      metadata: { ticketId, awbNumber, reason },
+    });
   }
 }

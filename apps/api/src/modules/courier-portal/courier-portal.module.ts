@@ -17,6 +17,8 @@ import { ConsigneeVerifyService } from './services/consignee-verify.service';
 import { ConsigneeVerifyWorker } from './queue/consignee-verify.worker';
 import { PortalTicketSyncService } from './services/portal-ticket-sync.service';
 import { TicketModule } from '../ticket/ticket.module';
+import { TicketHandlingModule } from '../ticket-handling/ticket-handling.module';
+import { SystemIssuesModule } from '../system-issues/system-issues.module';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -55,6 +57,9 @@ import { TicketModule } from '../ticket/ticket.module';
     // the sanctioned write boundary. No cycle: ticket imports
     // courier-escalation, and neither imports this.
     TicketModule,
+    // The dispatcher marks a ticket MANUAL when the raise cannot go.
+    TicketHandlingModule,
+    SystemIssuesModule,
   ],
   providers: [
     PortalSessionService,

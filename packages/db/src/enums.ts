@@ -77,6 +77,7 @@ export {
   DeliveryAttemptOutcome,
   DeliveryFailureReason,
   SystemIssueKind,
+  TicketHandling,
   SystemIssueSeverity,
   // Layer 8 — Couriers & Pricing
   CourierIntegrationType,
