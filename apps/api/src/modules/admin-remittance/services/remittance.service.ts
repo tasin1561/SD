@@ -5,6 +5,8 @@ import {
   BankOwnerKind,
   Currency,
   Prisma,
+  SystemIssueKind,
+  SystemIssueSeverity,
   WalletEntryDirection,
   WithdrawalRequestStatus,
 } from '@skydrop/db';
@@ -15,6 +17,7 @@ import { WithdrawalRequestService } from '../../seller-wallet-withdrawal/service
 import type { CreateRemittanceDto } from '../dto/create-remittance.dto';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * Phase 1B M23 — Admin records a manual bank transfer to a seller.
@@ -40,6 +43,7 @@ export class RemittanceService {
     private readonly wallet: WalletService,
     private readonly bank: BankLedgerService,
     private readonly withdrawals: WithdrawalRequestService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   /**
@@ -88,10 +92,46 @@ export class RemittanceService {
         `remittance ${remittanceId} closed withdrawal request ${only.id} for seller ${sellerId}`,
       );
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(
         `remittance ${remittanceId} recorded, but its withdrawal request was not closed: ` +
-          (err instanceof Error ? err.message : String(err)),
+          message,
       );
+      /*
+        "A human can still close it" was true and was not enough: no
+        human was ever TOLD to. The money has left the bank and the
+        seller's request stays APPROVED, so it reads as still owed —
+        which is how the same payout gets sent twice.
+
+        Keyed on the remittance, not the seller: one payment that
+        half-landed is one problem, and a seller with a second bad
+        remittance next month deserves its own row rather than a count
+        on an old one somebody already closed.
+      */
+      // Wrapped, even though `raise` swallows its own failures: this
+      // sits INSIDE a catch on a money path, and an alerter that throws
+      // there turns a handled problem into an unhandled one — the exact
+      // failure the surrounding try exists to prevent. A missing
+      // dependency is the realistic way that happens, and it costs one
+      // line to make it impossible.
+      try {
+        void this.issues.raise({
+          kind: SystemIssueKind.MONEY,
+          severity: SystemIssueSeverity.HIGH,
+          title: `Remittance ${remittanceId} paid, but its withdrawal request is still open`,
+          detail:
+            `The money was sent and recorded. Closing the matching withdrawal request then ` +
+            `failed: ${message}\n\n` +
+            'Until somebody closes it by hand, that request still reads as owed — which is how ' +
+            'the same payout goes out a second time. Open the seller on /withdrawals, check it ' +
+            'against this remittance, and mark it paid.',
+          source: 'RemittanceService',
+          dedupeKey: `remittance-withdrawal-unclosed:${remittanceId}`,
+          metadata: { remittanceId, sellerId, amountSent: amountSent.toFixed(2), error: message },
+        });
+      } catch {
+        // Nothing more to do — the log line above already said it.
+      }
     }
   }
 

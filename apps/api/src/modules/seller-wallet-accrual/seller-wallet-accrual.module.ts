@@ -21,6 +21,7 @@ import { PendingAccrualSchedulerService } from './services/pending-accrual-sched
 import { PendingAccrualSweepService } from './services/pending-accrual-sweep.service';
 import { PricingModule } from '../pricing/pricing.module';
 import { InboundFreightModule } from '../inbound-freight/inbound-freight.module';
+import { SystemIssuesModule } from '../system-issues/system-issues.module';
 
 /**
  * Phase 1B M22 — COD accrual on DELIVERED.
@@ -60,6 +61,9 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
     // The return fee is resolved per seller through the pricing engine
     // (global default, seller override wins).
     PricingModule,
+    // An order credited without being billed is revenue lost silently,
+    // one order at a time — it now says so on the board (MONEY).
+    SystemIssuesModule,
   ],
   controllers: [AdminChargesBillingController],
   providers: [

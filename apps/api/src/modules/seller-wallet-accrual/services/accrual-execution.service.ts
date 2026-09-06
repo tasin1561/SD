@@ -1,11 +1,12 @@
 import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import { Injectable, Logger } from '@nestjs/common';
-import { Currency, PaymentMode, Prisma } from '@skydrop/db';
+import { Currency, PaymentMode, Prisma, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { OrderChargesAccrualService } from './order-charges-accrual.service';
 import { CodCreditService } from './cod-credit.service';
 import { InboundFreightAmortisationService } from '../../inbound-freight/services/inbound-freight-amortisation.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
  * R2b (revised-plan roadmap) — the actual COD-credit + charges-debit
@@ -33,6 +34,7 @@ export class AccrualExecutionService {
     private readonly freightAmortisation: InboundFreightAmortisationService,
     private readonly codCredit: CodCreditService,
     private readonly orderCharges: OrderChargesService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async executeAccrual(orderId: string): Promise<void> {
@@ -65,10 +67,43 @@ export class AccrualExecutionService {
     try {
       await this.orderCharges.persistForOrderSystem(orderId);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(
-        { orderId, err: err instanceof Error ? err.message : String(err) },
+        { orderId, err: message },
         'Could not compute charges before accrual; the order may be delivered unbilled',
       );
+      /*
+        The comment above already knew the consequence — "the order may
+        be delivered unbilled" — and said it only to a log file. The
+        seller gets their COD credit either way, the parcel ships, the
+        customer is served, and we never invoice for carrying it. That
+        is revenue lost silently, one order at a time, and the count on
+        this issue is how many.
+      */
+      // Wrapped, even though `raise` swallows its own failures: this
+      // sits INSIDE a catch on a money path, and an alerter that throws
+      // there turns a handled problem into an unhandled one — the exact
+      // failure the surrounding try exists to prevent. A missing
+      // dependency is the realistic way that happens, and it costs one
+      // line to make it impossible.
+      try {
+        void this.issues.raise({
+          kind: SystemIssueKind.MONEY,
+          severity: SystemIssueSeverity.HIGH,
+          title: 'An order is being credited without being billed',
+          detail:
+            `Charges could not be computed before the accrual, so this order carries none: ` +
+            `${message}\n\n` +
+            'The seller is credited for the COD and never invoiced for the delivery. Check the ' +
+            'count — one is a single bad order, and a climbing count means every order through ' +
+            'this path is shipping unbilled. "Bill unbilled orders" on /wallets is the catch-up.',
+          source: 'AccrualExecutionService',
+          dedupeKey: 'accrual-charges-missing',
+          metadata: { orderId, error: message },
+        });
+      } catch {
+        // Nothing more to do — the log line above already said it.
+      }
     }
 
     await this.prisma.client.$transaction(async (tx) => {

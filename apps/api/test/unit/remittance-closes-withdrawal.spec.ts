@@ -17,6 +17,10 @@ const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
  */
 function makeSut(approved: Array<{ id: string; amountRequested: Prisma.Decimal }>) {
   const markPaid = jest.fn<Promise<never>, [string, string, string]>(async () => ({}) as never);
+  // A payout that cannot close its request now says so on the board:
+  // the money has left the bank and the request still reads as owed,
+  // which is how the same payout goes out twice.
+  const raise = jest.fn(async () => ({ id: 'issue-1', isNew: true }));
   // Typed: an untyped jest.fn gives `mock.calls` an empty tuple, so
   // reading calls[0][0] is a conversion from undefined. A warm
   // incremental typecheck misses it and a cold one does not.
@@ -25,6 +29,7 @@ function makeSut(approved: Array<{ id: string; amountRequested: Prisma.Decimal }
   Object.assign(svc, {
     prisma: { client: { withdrawalRequest: { findMany } } } as unknown as PrismaService,
     withdrawals: { markPaid },
+    issues: { raise },
     logger: { log: jest.fn(), warn: jest.fn() },
   });
   const close = (
@@ -37,7 +42,7 @@ function makeSut(approved: Array<{ id: string; amountRequested: Prisma.Decimal }
       ) => Promise<void>;
     }
   ).closeMatchingWithdrawal.bind(svc);
-  return { close, markPaid, findMany };
+  return { close, markPaid, findMany, raise };
 }
 
 describe('a remittance closes the withdrawal it paid', () => {
@@ -77,6 +82,36 @@ describe('a remittance closes the withdrawal it paid', () => {
     // in a moment ago and which a person can still resolve.
     const { close, markPaid } = makeSut([{ id: 'wr-1', amountRequested: D('500.00') }]);
     markPaid.mockRejectedValueOnce(new Error('conflict'));
+    await expect(close('s-1', 'rem-1', D('500.00'), 'staff-1')).resolves.toBeUndefined();
+  });
+
+  it('raises it on the board, naming the remittance', async () => {
+    // "A human can still resolve it" was true and was not enough: no
+    // human was ever told to.
+    const { close, markPaid, raise } = makeSut([{ id: 'wr-1', amountRequested: D('500.00') }]);
+    markPaid.mockRejectedValueOnce(new Error('conflict'));
+    await close('s-1', 'rem-1', D('500.00'), 'staff-1');
+    expect(raise).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'MONEY',
+        severity: 'HIGH',
+        // Keyed on the remittance: a second bad payout next month is
+        // its own problem, not a count on a row somebody already closed.
+        dedupeKey: 'remittance-withdrawal-unclosed:rem-1',
+      }),
+    );
+  });
+
+  it('still never throws when the BOARD is the thing that is broken', async () => {
+    // The reason this case exists: an alerting layer that throws inside
+    // a catch turns a handled problem into an unhandled one, and this
+    // catch is on the money path. Caught by this very suite when the
+    // raise was first added without a guard.
+    const { close, markPaid, raise } = makeSut([{ id: 'wr-1', amountRequested: D('500.00') }]);
+    markPaid.mockRejectedValueOnce(new Error('conflict'));
+    raise.mockImplementationOnce(() => {
+      throw new Error('the board is down');
+    });
     await expect(close('s-1', 'rem-1', D('500.00'), 'staff-1')).resolves.toBeUndefined();
   });
 

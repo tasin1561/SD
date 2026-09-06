@@ -88,6 +88,9 @@ function makeService(
     // Charges are ensured PRE-TX now: an order reaching delivery with
     // none would be billed nothing, silently.
     { persistForOrderSystem } as never,
+    // And when that fails it says so on the board, rather than only in
+    // a log line that already knew the consequence.
+    { raise: raiseIssue } as never,
   );
   return {
     svc,
@@ -97,6 +100,7 @@ function makeService(
     orderChargeFindMany,
     walletEntryFindFirst,
     debitForDeliveredOrder,
+    raiseIssue,
   };
 }
 
@@ -104,6 +108,13 @@ const persistForOrderSystem = jest.fn(async () => ({
   skipped: true,
   reason: 'CHARGES_ALREADY_EXIST',
 }));
+
+/**
+ * The board. An order that reaches delivery with no charges is credited
+ * for its COD and never invoiced for the carriage — revenue lost one
+ * order at a time, and until now said only to a log file.
+ */
+const raiseIssue = jest.fn(async () => ({ id: 'issue-1', isNew: true }));
 
 describe('AccrualExecutionService.executeAccrual', () => {
   it('on SETTLEMENT, delivery debits charges but does NOT credit COD', async () => {
@@ -235,6 +246,7 @@ describe('AccrualExecutionService.executeAccrual', () => {
       // Charges are ensured PRE-TX now: an order reaching delivery with
       // none would be billed nothing, silently.
       { persistForOrderSystem } as never,
+      { raise: raiseIssue } as never,
     );
 
     await svc.executeAccrual('order-1');
@@ -275,5 +287,39 @@ describe('AccrualExecutionService — charges exist before money is taken', () =
     // Best-effort: a failure here must not withhold the COD credit the
     // seller is owed for a parcel that was delivered.
     await expect(svc.executeAccrual('order-1')).resolves.toBeUndefined();
+  });
+
+  it('says on the board that the order is being credited unbilled', async () => {
+    // Best-effort is not the same as unnoticed. The seller gets their
+    // COD, the parcel ships, and we never invoice for carrying it —
+    // revenue lost one order at a time, which used to be stated only in
+    // a log line that already knew the consequence.
+    const { svc, raiseIssue } = makeService({});
+    persistForOrderSystem.mockClear();
+    raiseIssue.mockClear();
+    persistForOrderSystem.mockRejectedValueOnce(new Error('pricing unavailable'));
+
+    await svc.executeAccrual('order-1');
+
+    expect(raiseIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'MONEY',
+        severity: 'HIGH',
+        dedupeKey: 'accrual-charges-missing',
+        metadata: expect.objectContaining({ orderId: 'order-1' }),
+      }),
+    );
+  });
+
+  it('says nothing when the charges were computed fine', async () => {
+    // A board that fires on the happy path is a board people stop
+    // reading.
+    const { svc, raiseIssue } = makeService({});
+    persistForOrderSystem.mockClear();
+    raiseIssue.mockClear();
+
+    await svc.executeAccrual('order-1');
+
+    expect(raiseIssue).not.toHaveBeenCalled();
   });
 });

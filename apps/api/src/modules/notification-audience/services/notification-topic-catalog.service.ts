@@ -157,6 +157,13 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     group: 'System',
   },
   {
+    topic: topicForIssue(SystemIssueKind.MONEY),
+    label: 'Money that half-moved',
+    description:
+      'A payment went out or a charge did not land, and nothing downstream would have noticed on its own.',
+    group: 'Money',
+  },
+  {
     topic: topicForIssue(SystemIssueKind.OTHER),
     label: 'Everything else',
     description: 'A problem that did not fit another kind.',

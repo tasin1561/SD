@@ -5376,6 +5376,11 @@ enum SystemIssueKind {
   /// this one is ours, and the fix is a code change rather than a
   /// retry.
   API_ERROR                @map("api_error")
+  /// Money moved, or failed to, and nothing downstream will notice.
+  /// Its own kind because the audience is different: a code change
+  /// fixes an API_ERROR, whereas somebody in finance has to go and look
+  /// at what did or did not happen to a real payment.
+  MONEY                    @map("money")
   OTHER                    @map("other")
 
   @@map("system_issue_kind")
