@@ -72,6 +72,12 @@ function norm(s: string): string {
  * every locator below is anchored on text a person can see rather than
  * on a class name, precisely because the text is the part that has been
  * confirmed.
+ *
+ * This is the ONE page object still unproven, and it is unproven for a
+ * reason: verifying it means clicking "Raise this Issue", which files a
+ * real ticket with Delhivery's support desk. The READ path was probed
+ * end to end because reading costs them nothing; this half waits for a
+ * deliberate first parcel, which is what `portalMode: LIVE` gates.
  */
 export class RaiseTicketModal {
   constructor(

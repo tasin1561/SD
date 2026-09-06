@@ -3,14 +3,19 @@ import type { Page } from 'playwright';
 /** Which of their three tabs a ticket is sitting in. */
 export type PortalTicketState = 'OPEN' | 'RESOLVED' | 'CLOSED';
 
+/** Their tab path, for going back to the row that was in it. */
+export const TAB_PATH: Readonly<Record<PortalTicketState, string>> = {
+  OPEN: 'open',
+  RESOLVED: 'resolved',
+  CLOSED: 'closed',
+};
+
 export interface PortalTicketRow {
   /** Their id as a person reads it: `J1788584000522861`. */
   readonly externalTicketId: string;
   /** The waybill printed under the id. Null when the row shows none. */
   readonly awbNumber: string | null;
   readonly state: PortalTicketState;
-  /** Where the thread lives. Their detail URL is a UUID, not the J-id. */
-  readonly href: string | null;
 }
 
 const TICKET_ID_RE = /\bJ\d{12,20}\b/;
@@ -38,16 +43,25 @@ const TABS: ReadonlyArray<{ path: string; state: PortalTicketState }> = [
  * escalation that raised it. Without this, every raise would be a write
  * we could never read back.
  *
- * ── TWO IDS, AND THEY ARE NOT THE SAME ID ────────────────────────────
+ * ── TWO IDS, AND THERE IS NO LINK BETWEEN THEM ───────────────────────
  * `J1788584000522861` is what the list prints and what a person quotes.
  * The detail page lives at `/support/<uuid>`, a different identifier
- * entirely. So the row carries BOTH: the J-id to store and match on, the
- * href to navigate by. Storing only the J-id would leave us able to
- * recognise a ticket and unable to open it.
+ * entirely — and NOTHING on the list carries it. The id is a
+ * `<span class="text-cta-primary cursor-pointer">` with a click handler,
+ * not an anchor, so there is no href to read and no route that accepts
+ * the J-id.
  *
- * TODO(delhivery-portal): the URLs, the tab names and the id shapes are
- * from the real portal (2026-09-06). The row-level DOM is inferred —
- * every locator is anchored on visible text for that reason.
+ * That was found by probing the real portal, and it mattered: the first
+ * version read `a[href*="/support/"]`, got null on every row, and would
+ * have swept three tabs, matched every ticket and opened none of them —
+ * silently, reporting a clean run every twenty minutes.
+ *
+ * So opening one means CLICKING it and then waiting for their router to
+ * land, which is what `openByTicketId` does.
+ *
+ * VERIFIED against one.delhivery.com on 2026-09-06: the table, the row
+ * text (id, waybill, email, category, subcategory, dates, status), the
+ * three tab URLs, and the click-through.
  */
 export class SupportTicketsPage {
   constructor(
@@ -97,21 +111,38 @@ export class SupportTicketsPage {
       // The waybill is read from the text AFTER the id is removed, so a
       // ticket id's own digits can never be mistaken for one.
       const awb = AWB_RE.exec(text.replace(id, ' '))?.[0] ?? null;
-      const href = await row
-        .locator('a[href*="/support/"]')
-        .first()
-        .getAttribute('href')
-        .catch(() => null);
-
-      out.push({ externalTicketId: id, awbNumber: awb, state, href });
+      out.push({ externalTicketId: id, awbNumber: awb, state });
     }
     return out;
   }
 
-  /** Open one ticket's thread, by the href the list gave us. */
-  async openDetail(href: string): Promise<void> {
-    const url = href.startsWith('http') ? href : `${this.origin}${href}`;
-    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+  /**
+   * Open one ticket's thread by clicking its id.
+   *
+   * Their id is a span with a click handler, so this is the only way in.
+   * Returns the detail URL their router lands on — the caller stores it
+   * so a later read can go straight there instead of walking the list
+   * again.
+   *
+   * Returns null rather than assuming: if the route never changes we did
+   * not open the ticket, and reading whatever is on screen would attach
+   * one ticket's messages to another.
+   */
+  async openByTicketId(externalTicketId: string, tab: string): Promise<string | null> {
+    await this.page.goto(`${this.origin}/support/support-tickets/${tab}`, {
+      waitUntil: 'domcontentloaded',
+    });
     await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+
+    const link = this.page.locator(`span:text-is("${externalTicketId}")`).first();
+    if ((await link.count()) === 0) return null;
+    await link.click();
+
+    try {
+      await this.page.waitForURL(/\/support\/[0-9a-f-]{20,}/, { timeout: 30_000 });
+    } catch {
+      return null;
+    }
+    return this.page.url();
   }
 }

@@ -1800,6 +1800,18 @@ model CourierEscalation {
   categoryId       String? @map("category_id")
   awbNumber        String? @map("awb_number")
   courierCode      String  @default("delhivery") @map("courier_code")
+  /// WHICH of their accounts this conversation belongs on.
+  ///
+  /// A courier login reaches one company's panel and no other, so a
+  /// ticket raised on the wrong session is filed against a waybill that
+  /// account cannot even see — and their replies would never be found by
+  /// the sweep, which reads one account's ticket list at a time.
+  ///
+  /// Resolved from the SHIPMENT that carried the parcel (CACC-1: the
+  /// shipment records who carried it), never from a default. Nullable
+  /// because escalations that predate this, and ones opened from an
+  /// inbound email, have no shipment to ask.
+  courierAccountId String? @map("courier_account_id") @db.Uuid
 
   /// The classifier's latest read of where this stands. A LABEL, never
   /// an instruction: TypeScript decides what to do with it.

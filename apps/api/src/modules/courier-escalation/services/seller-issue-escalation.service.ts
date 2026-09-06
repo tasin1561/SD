@@ -64,7 +64,8 @@ export class SellerIssueEscalationService {
     description: string | null;
   }): Promise<void> {
     try {
-      const awbNumber = await this.resolveAwb(input.ticketId);
+      const parcel = await this.resolveParcel(input.ticketId);
+      const awbNumber = parcel?.awbNumber ?? null;
       if (awbNumber === null) {
         /*
           NO AWB, NO TICKET — and this is a decision, not a gap.
@@ -89,6 +90,12 @@ export class SellerIssueEscalationService {
       const escalation = await this.escalations.openForTicket({
         ticketId: input.ticketId,
         awbNumber,
+        // The account that actually carried it (CACC-1), so the raise
+        // lands on the panel that can see this waybill. Null only when
+        // the shipment predates account tracking — the dispatcher then
+        // falls back to the default session, which is what happens today
+        // for every escalation.
+        courierAccountId: parcel?.courierAccountId ?? null,
       });
 
       const body = (input.description ?? '').trim();
@@ -132,7 +139,7 @@ export class SellerIssueEscalationService {
   }
 
   /**
-   * The waybill this issue is about.
+   * The waybill this issue is about, and whose account carried it.
    *
    * Read from the ticket's own shipment, and from the ORDER's live
    * shipment when the ticket names no parcel — a seller raising an issue
@@ -141,26 +148,33 @@ export class SellerIssueEscalationService {
    * waybill is the authoritative fact that a parcel exists on their
    * system, and the status says only where it physically is.
    */
-  private async resolveAwb(ticketId: string): Promise<string | null> {
+  private async resolveParcel(
+    ticketId: string,
+  ): Promise<{ awbNumber: string; courierAccountId: string | null } | null> {
+    const pick = { awbNumber: true, courierAccountId: true } as const;
     const ticket = await this.prisma.client.ticket.findUnique({
       where: { id: ticketId },
       select: {
-        shipment: { select: { awbNumber: true } },
+        shipment: { select: pick },
         order: {
           select: {
             orderShipments: {
               where: { shipment: { awbNumber: { not: null } } },
               orderBy: { createdAt: 'desc' },
               take: 1,
-              select: { shipment: { select: { awbNumber: true } } },
+              select: { shipment: { select: pick } },
             },
           },
         },
       },
     });
     if (ticket === null) return null;
-    const direct = ticket.shipment?.awbNumber ?? null;
-    if (direct !== null) return direct;
-    return ticket.order?.orderShipments[0]?.shipment.awbNumber ?? null;
+    // The waybill AND the account come from the SAME shipment row. Read
+    // separately they could disagree — a ticket naming one parcel and an
+    // order whose latest is another — and the raise would go to a panel
+    // that cannot see the waybill it was given.
+    const from = ticket.shipment ?? ticket.order?.orderShipments[0]?.shipment ?? null;
+    if (from?.awbNumber == null) return null;
+    return { awbNumber: from.awbNumber, courierAccountId: from.courierAccountId };
   }
 }

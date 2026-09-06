@@ -20,6 +20,8 @@ import {
 
 interface FakeNode {
   readonly text: string;
+  /** Their thread right-aligns the CLIENT's own messages. */
+  readonly mine?: boolean;
 }
 
 /**
@@ -46,14 +48,23 @@ function fakePage(opts: {
   };
 
   const locator = (sel: string): unknown => {
-    const isThread = /message|comment/.test(sel);
-    const isBox = /textarea|textbox/.test(sel);
-    const isSubmit = /Submit|Send|submit/.test(sel);
+    // The REAL shapes, confirmed against one.delhivery.com on
+    // 2026-09-06. A fake that models the old guesses would keep passing
+    // while the page object matched nothing — which is exactly how the
+    // wrong selectors survived this suite in the first place.
+    const isThread = sel.includes('scroll-window');
+    const isBox = sel.includes('Enter your message');
     const isResolve = /Resolve|Close ticket/.test(sel);
 
     return {
-      count: async () => (isThread ? nodesFor().length : isBox || isSubmit || isResolve ? 1 : 0),
-      nth: (i: number) => ({ innerText: async () => nodesFor()[i]?.text ?? '' }),
+      count: async () => (isThread ? nodesFor().length : isBox || isResolve ? 1 : 0),
+      nth: (i: number) => ({
+        innerText: async () => nodesFor()[i]?.text ?? '',
+        getAttribute: async (name: string) =>
+          name === 'class'
+            ? `flex items-start${nodesFor()[i]?.mine === true ? ' justify-end' : ''}`
+            : null,
+      }),
       innerText: async () =>
         nodesFor()
           .map((n) => n.text)
@@ -61,6 +72,15 @@ function fakePage(opts: {
       first: () => ({
         fill: async (v: string) => {
           state.filled = v;
+        },
+        // Their composer is a single-line input and submits on Enter —
+        // there is no submit button with a name to click.
+        press: async () => {
+          state.clicked += 1;
+          if (state.filled !== null) {
+            state.posted = state.filled;
+            phase = 'after';
+          }
         },
         click: async () => {
           state.clicked += 1;
@@ -70,6 +90,7 @@ function fakePage(opts: {
           }
         },
         count: async () => 1,
+        waitFor: async () => undefined,
       }),
     };
   };
@@ -78,6 +99,7 @@ function fakePage(opts: {
     goto: async () => undefined,
     url: () => 'https://one.delhivery.com/support/TKT1',
     waitForLoadState: async () => undefined,
+    waitForURL: async () => undefined,
     locator,
     fill: async () => undefined,
     click: async () => undefined,

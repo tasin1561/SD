@@ -5,6 +5,16 @@ import { createHash } from 'node:crypto';
 export interface PortalThreadMessage {
   readonly body: string;
   readonly normalised: string;
+  /**
+   * OURS, not the courier's.
+   *
+   * Their thread right-aligns the client's own messages with
+   * `justify-end`, exactly as a chat does. Without this every read would
+   * hand our own words back as things Delhivery said — the seller would
+   * see their own message quoted to them as a reply, and the classifier
+   * would label our text with a courier state.
+   */
+  readonly mine: boolean;
 }
 
 export type PostCommentOutcome =
@@ -42,14 +52,23 @@ function hash(body: string): string {
  * and the caller leaves it for the reconciler; it never asserts success
  * and never retries on its own.
  *
- * ── SELECTORS ARE A GUESS ────────────────────────────────────────────
- * TODO(delhivery-portal): every selector in this file is inferred from
- * ordinary support-desk markup and has never been run against
- * one.delhivery.com. They are deliberately broad (several candidates per
- * element, `:has-text` over class names) because a brittle selector fails
- * as "no messages found", which read-before-write would then interpret as
- * "not present" — and that is the one misreading that could cause a
- * duplicate. Correct these against the real DOM before LIVE.
+ * ── SELECTORS VERIFIED AGAINST THE REAL PORTAL (2026-09-06) ──────────
+ * Every selector here was inferred from ordinary support-desk markup
+ * until a read-only probe ran against one.delhivery.com with the live
+ * session. Two of the guesses were wrong in the worst way — silently:
+ *
+ *   - The thread was read with `[data-testid="ticket-message"]` and
+ *     friends, which matched NOTHING. `readThread` returned [], and an
+ *     empty thread is indistinguishable from a selector miss — so
+ *     read-before-write would have concluded "not present" and posted a
+ *     duplicate into a thread the customer reads.
+ *   - The composer was assumed to be a `<textarea>`. It is an
+ *     `<input placeholder="Enter your message">`, so every reply would
+ *     have thrown on `fill` instead of sending.
+ *
+ * What is actually there: `.scroll-window > .space-y-6 > div`, one div
+ * per message, and the client's own carry `justify-end`. Confirmed by
+ * reading a real ticket: one message ours, two theirs, correctly split.
  */
 export class TicketDetailPage {
   constructor(
@@ -57,10 +76,42 @@ export class TicketDetailPage {
     private readonly origin = 'https://one.delhivery.com',
   ) {}
 
-  async open(externalTicketId: string): Promise<void> {
-    await this.page.goto(`${this.origin}/support/${encodeURIComponent(externalTicketId)}`, {
-      waitUntil: 'domcontentloaded',
-    });
+  /**
+   * Open a thread by its DETAIL url.
+   *
+   * Takes the url and not the `J…` id: their detail page lives at
+   * `/support/<uuid>`, a different identifier entirely, and there is no
+   * route that accepts the id a person reads. The list is what maps one
+   * to the other.
+   */
+  async open(detailUrl: string): Promise<void> {
+    const url = detailUrl.startsWith('http') ? detailUrl : `${this.origin}${detailUrl}`;
+    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+    await this.settle();
+  }
+
+  /** Wait for the conversation itself, not merely for the shell. */
+  async settle(): Promise<void> {
+    await this.page
+      .locator('text=Support Conversations')
+      .first()
+      .waitFor({ timeout: 30_000 })
+      .catch(() => undefined);
+    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+  }
+
+  /**
+   * Which of their three states this ticket is in, read from the detail.
+   *
+   * The word sits immediately after "Ticket ID" in the header. Null when
+   * the page has not rendered it — never a guess, because "not Open"
+   * would close a seller's ticket on a slow page.
+   */
+  async readState(): Promise<'OPEN' | 'RESOLVED' | 'CLOSED' | null> {
+    const text = (await this.page.locator('body').innerText()).replace(/\s+/g, ' ');
+    const m = /Ticket ID\s*(Open|Resolved|Closed)/i.exec(text);
+    const word = m?.[1]?.toUpperCase();
+    return word === 'OPEN' || word === 'RESOLVED' || word === 'CLOSED' ? word : null;
   }
 
   /**
@@ -72,24 +123,22 @@ export class TicketDetailPage {
    * licence to post — see `readBackOrUnverified`.
    */
   async readThread(): Promise<PortalThreadMessage[]> {
-    const candidates = [
-      '[data-testid="ticket-message"]',
-      '.ticket-comment',
-      '.comment-body',
-      '[class*="message"] [class*="body"]',
-    ];
-    for (const sel of candidates) {
-      const nodes = this.page.locator(sel);
-      const n = await nodes.count();
-      if (n === 0) continue;
-      const out: PortalThreadMessage[] = [];
-      for (let i = 0; i < n; i += 1) {
-        const text = (await nodes.nth(i).innerText()).trim();
-        if (text !== '') out.push({ body: text, normalised: normalise(text) });
-      }
-      if (out.length > 0) return out;
+    // Their thread is `.scroll-window > .space-y-6 > div`, one div per
+    // message, and the client's own carry `justify-end`. Read from the
+    // real page rather than from a list of plausible class names — the
+    // guessed ones matched nothing at all, and a selector that finds
+    // nothing is indistinguishable from a thread with no messages.
+    const rows = this.page.locator('.scroll-window .space-y-6 > div');
+    const n = await rows.count();
+    const out: PortalThreadMessage[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const row = rows.nth(i);
+      const text = (await row.innerText().catch(() => '')).trim();
+      if (text === '') continue;
+      const cls = (await row.getAttribute('class').catch(() => '')) ?? '';
+      out.push({ body: text, normalised: normalise(text), mine: cls.includes('justify-end') });
     }
-    return [];
+    return out;
   }
 
   private present(thread: readonly PortalThreadMessage[], body: string): boolean {
@@ -120,14 +169,14 @@ export class TicketDetailPage {
     }
 
     // 2. WRITE.
-    const box = this.page
-      .locator('textarea[name="comment"], textarea[placeholder*="comment" i], [role="textbox"]')
-      .first();
+    // An INPUT, not a textarea — theirs is a chat composer. The old
+    // selector looked only for textareas and would have found nothing,
+    // so every reply would have thrown on `fill` rather than posting.
+    const box = this.page.locator('input[placeholder="Enter your message"]').first();
     await box.fill(body);
-    await this.page
-      .locator('button:has-text("Submit"), button:has-text("Send"), button[type="submit"]')
-      .first()
-      .click();
+    // Enter, because the send control is an icon with no accessible name
+    // and a single-line composer submits on Enter by construction.
+    await box.press('Enter');
 
     // 3. READ BACK.
     return this.readBackOrUnverified(body);

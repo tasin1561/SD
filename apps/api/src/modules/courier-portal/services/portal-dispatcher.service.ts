@@ -170,6 +170,10 @@ export class PortalDispatcherService {
       select: {
         externalTicketId: true,
         awbNumber: true,
+        // WHICH panel this conversation lives on. A courier login reaches
+        // one company, so a raise on the wrong session is filed against a
+        // waybill that account cannot see.
+        courierAccountId: true,
         // Their WORDS for the category and the subcategory. The chips
         // carry no ids, so the labels are what a raise can act on — and
         // they are read from the ticket rather than from the outbox item,
@@ -181,7 +185,11 @@ export class PortalDispatcherService {
       },
     });
 
-    const page = await this.session.page();
+    // The account that carried the parcel (CACC-1), not the default
+    // session. Null falls back to the default, which is the only
+    // behaviour that existed before and stays right for an escalation
+    // opened from an inbound email with no shipment behind it.
+    const page = await this.session.page(escalation?.courierAccountId ?? null);
 
     if (item.kind === CourierOutboxKind.COMMENT) {
       const ticketId = escalation?.externalTicketId ?? '';

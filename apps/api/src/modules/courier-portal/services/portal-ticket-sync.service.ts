@@ -12,7 +12,7 @@ import { CourierChannelSettingsService } from '../../courier-escalation/services
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { TicketService } from '../../ticket/services/ticket.service';
 import { PortalSessionService } from './portal-session.service';
-import { SupportTicketsPage, type PortalTicketRow } from '../pages/support-tickets.page';
+import { SupportTicketsPage, TAB_PATH, type PortalTicketRow } from '../pages/support-tickets.page';
 import { TicketDetailPage } from '../pages/ticket-detail.page';
 
 export interface TicketSyncResult {
@@ -89,34 +89,53 @@ export class PortalTicketSyncService {
     let skipped = 0;
 
     try {
-      const page = await this.session.page();
-      const list = new SupportTicketsPage(page);
-      const rows = await list.listAll();
-      listed = rows.length;
+      /*
+        EVERY account, not one session.
 
-      for (const row of rows) {
-        try {
-          const escalationId = await this.bind(row);
-          if (escalationId === null) {
-            // Their panel holds tickets nobody here raised — a person
-            // filing one by hand is a real case. Not an error, and NOT
-            // something to invent an escalation for: fabricating the
-            // seller link would thread somebody else's parcel into this
-            // conversation.
-            skipped += 1;
-            continue;
+        A courier login reaches one company's panel, so each account has
+        its own ticket list — and a sweep of the default session would
+        read one company's tickets and report the others as though they
+        did not exist. With a single account today the two are the same
+        thing; the day a second is added, the difference is silence on
+        every ticket it carries.
+
+        `null` when no account is configured: that is the session the
+        wallet sync and the dispatcher already fall back to, and dropping
+        the sweep entirely would be worse than reading the default one.
+      */
+      const accounts = await this.accountsToSweep(courierCode);
+
+      for (const accountId of accounts) {
+        const page = await this.session.page(accountId);
+        const list = new SupportTicketsPage(page);
+        const rows = await list.listAll();
+        listed += rows.length;
+
+        for (const row of rows) {
+          try {
+            const escalationId = await this.bind(row);
+            if (escalationId === null) {
+              // Their panel holds tickets nobody here raised — a person
+              // filing one by hand is a real case. Not an error, and NOT
+              // something to invent an escalation for: fabricating the
+              // seller link would thread somebody else's parcel into this
+              // conversation.
+              skipped += 1;
+              continue;
+            }
+            if (row.awbNumber !== null) bound += 1;
+
+            ingested += await this.ingestThread(page, list, row);
+            if (row.state !== 'OPEN')
+              closed += (await this.closeThrough(escalationId, row)) ? 1 : 0;
+          } catch (err) {
+            // One bad ticket must not cost the other two hundred their
+            // sweep — the same per-item isolation as the AWB fan-out.
+            this.logger.warn(
+              { externalTicketId: row.externalTicketId, err: this.msg(err) },
+              'Ticket sync failed for one ticket; continuing',
+            );
           }
-          if (row.awbNumber !== null) bound += 1;
-
-          ingested += await this.ingestThread(page, list, row, escalationId);
-          if (row.state !== 'OPEN') closed += (await this.closeThrough(escalationId, row)) ? 1 : 0;
-        } catch (err) {
-          // One bad ticket must not cost the other two hundred their
-          // sweep — the same per-item isolation as the AWB fan-out.
-          this.logger.warn(
-            { externalTicketId: row.externalTicketId, err: this.msg(err) },
-            'Ticket sync failed for one ticket; continuing',
-          );
         }
       }
     } catch (err) {
@@ -141,6 +160,27 @@ export class PortalTicketSyncService {
     }
 
     return { listed, bound, ingested, closed, skipped };
+  }
+
+  /**
+   * Which portal sessions to walk.
+   *
+   * The ACTIVE accounts for this courier — an account switched off still
+   * holds real parcels moving towards real customers (CUR-16), so its
+   * tickets are still read; `isActive` governs new parcels, not whether
+   * we listen. Falls back to the default session when none is
+   * configured.
+   */
+  private async accountsToSweep(courierCode: string): Promise<(string | null)[]> {
+    const accounts = await this.prisma.client.courierAccount.findMany({
+      // Through the COURIER, because an account carries `courierId` and
+      // the code is the courier's. Matching on a string field that does
+      // not exist is what the compiler just refused.
+      where: { courier: { code: courierCode }, deletedAt: null },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return accounts.length === 0 ? [null] : accounts.map((a) => a.id);
   }
 
   /**
@@ -182,20 +222,32 @@ export class PortalTicketSyncService {
     return bound?.id ?? null;
   }
 
-  /** Store what the courier said. Dedup is the ingest service's job. */
+  /**
+   * Store what the COURIER said. Dedup is the ingest service's job.
+   *
+   * Only their side. Their thread right-aligns the client's own messages
+   * and `readThread` reports that as `mine`, so our own words are
+   * skipped here rather than stored as things Delhivery told us — which
+   * would quote a seller's message back to them as a reply and label our
+   * own text with a courier state.
+   */
   private async ingestThread(
     page: Awaited<ReturnType<PortalSessionService['page']>>,
     list: SupportTicketsPage,
     row: PortalTicketRow,
-    escalationId: string,
   ): Promise<number> {
-    if (row.href === null) return 0;
-    await list.openDetail(row.href);
+    // Clicked, not navigated: their list prints the id as a span with a
+    // click handler and carries no link to the detail at all.
+    const url = await list.openByTicketId(row.externalTicketId, TAB_PATH[row.state]);
+    if (url === null) return 0;
+
     const detail = new TicketDetailPage(page);
+    await detail.settle();
     const thread = await detail.readThread();
 
     let stored = 0;
     for (const message of thread) {
+      if (message.mine) continue;
       const res = await this.ingest.ingest({
         externalTicketId: row.externalTicketId,
         body: message.body,
@@ -210,7 +262,6 @@ export class PortalTicketSyncService {
       });
       if (res.kind === 'STORED') stored += 1;
     }
-    void escalationId;
     return stored;
   }
 

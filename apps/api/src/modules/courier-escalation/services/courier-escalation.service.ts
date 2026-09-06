@@ -83,6 +83,15 @@ export class CourierEscalationService {
     awbNumber?: string | null;
     categoryId?: string | null;
     courierCode?: string;
+    /**
+     * WHICH of the courier's accounts carried this parcel (CACC-1).
+     *
+     * Carried on the escalation so every later step — the raise, the
+     * replies, the closure — happens on the panel that can actually see
+     * the waybill. A ticket raised on the wrong login is filed against a
+     * parcel that account does not have.
+     */
+    courierAccountId?: string | null;
   }): Promise<{ id: string; created: boolean }> {
     const existing = await this.prisma.client.courierEscalation.findUnique({
       where: { ticketId: input.ticketId },
@@ -97,6 +106,7 @@ export class CourierEscalationService {
           awbNumber: input.awbNumber ?? null,
           categoryId: input.categoryId ?? null,
           courierCode: input.courierCode ?? 'delhivery',
+          courierAccountId: input.courierAccountId ?? null,
         },
         select: { id: true },
       });
