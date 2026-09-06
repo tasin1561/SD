@@ -14,6 +14,9 @@ CREATE INDEX "tickets_handling_idx" ON "tickets" ("handling");
 -- holds it for one click, which is how the portal selectors get exercised
 -- with somebody watching. seedSystemSettings is create-only on value
 -- columns, so the already-deployed row needs this rather than a seed edit.
+ALTER TABLE "courier_channel_settings"
+  ALTER COLUMN "write_mode" SET DEFAULT 'supervised';
+
 UPDATE "courier_channel_settings"
    SET "write_mode" = 'supervised'
  WHERE "courier_code" = 'delhivery'

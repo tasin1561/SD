@@ -296,27 +296,43 @@ export class PortalSessionService {
       .getByRole('button', { name: /^continue$/i })
       .first()
       .click();
-    // Explicit settle rather than waitForLoadState: none of these steps
-    // is a navigation — the page rewrites itself in place, so the load
-    // state never changes and waiting on it returns instantly.
-    await page.waitForTimeout(4_500);
+    /*
+      THEIR FLOW GOT SHORTER, AND THE OLD ONE STILL WORKS.
 
-    await this.dismissResetPasswordModal(page);
+      Verified on 2026-09-06: email → Continue now lands DIRECTLY on
+      ucp-auth.delhivery.com with the password field. There is no company
+      step and no reset-password nag any more — the account has since
+      been reduced to one company, and both of those were conditional on
+      having more than one.
 
-    // The company step. Present whenever the login reaches more than one
-    // company; absent for a single-company login, which is why this is
-    // conditional rather than assumed.
-    const chose = await this.chooseCompany(page, company);
-    if (chose) {
-      await page
-        .getByRole('button', { name: /^continue$/i })
-        .first()
-        .click();
+      So the middle steps are attempted only while we are still on their
+      app origin. Running a company probe against the AUTH page is how a
+      stray click lands somewhere with no password on it, and the symptom
+      is a thirty-second wait for a field that was never coming.
+
+      Waiting on the URL rather than on a fixed sleep, for the same
+      reason: the old 4.5s was tuned to a flow with an extra hop in it.
+    */
+    await page.waitForURL(/ucp-auth\.delhivery\.com/, { timeout: 20_000 }).catch(() => undefined);
+
+    if (!/ucp-auth\.delhivery\.com/.test(page.url())) {
+      // Still on their app: the longer flow. Dismiss the nag, choose the
+      // company, and Continue again.
+      await page.waitForTimeout(2_500);
+      await this.dismissResetPasswordModal(page);
+
+      const chose = await this.chooseCompany(page, company);
+      if (chose) {
+        await page
+          .getByRole('button', { name: /^continue$/i })
+          .first()
+          .click();
+      }
       // THIS one IS a navigation — to the auth origin — and it is the
       // slowest step in the flow.
       await page.waitForURL(/ucp-auth\.delhivery\.com/, { timeout: 60_000 }).catch(() => undefined);
-      await page.waitForTimeout(3_000);
     }
+    await page.waitForTimeout(2_000);
 
     // The password lives on the auth origin the Continue redirects to.
     //
@@ -326,7 +342,34 @@ export class PortalSessionService {
     // something nobody can type into, which reads like a page that never
     // loaded.
     const passwordBox = page.locator('input[type="password"]:visible').first();
-    await passwordBox.waitFor({ state: 'visible', timeout: 30_000 });
+    try {
+      await passwordBox.waitFor({ state: 'visible', timeout: 30_000 });
+    } catch {
+      /*
+        SAY WHERE WE WERE.
+
+        The bare timeout reads "waiting for input[type=password] to be
+        visible" and nothing else, which is true and useless: the field
+        is missing on the login page, on a Google OAuth screen, on a
+        challenge page and on a blank one, and those need four different
+        answers. Finding out which cost a probe against the live portal.
+        The URL and the first line of the page make the next one
+        self-diagnosing.
+      */
+      const where = page.url();
+      const seen = (
+        await page
+          .locator('body')
+          .innerText()
+          .catch(() => '')
+      )
+        .replace(/\s+/g, ' ')
+        .slice(0, 200);
+      throw new Error(
+        `The password step never appeared. Ended on ${where} — page reads: "${seen}". ` +
+          'Their login flow has moved, or this landed on a challenge rather than the password.',
+      );
+    }
     await passwordBox.fill(password);
     await page
       .getByRole('button', { name: /^log ?in$/i })

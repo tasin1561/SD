@@ -6420,6 +6420,8 @@ model Ticket {
   @@index([ticketType])
   @@index([orderId])
   @@index([shipmentId])
+  /// The queue filter: "what must a person pick up".
+  @@index([handling])
   @@map("tickets")
 }
 
