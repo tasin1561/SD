@@ -1831,6 +1831,8 @@ model CourierEscalation {
   @@index([externalTicketId])
   @@index([awbNumber])
   @@index([needsReviewAt])
+  /// The sweep walks one account's tickets at a time.
+  @@index([courierAccountId])
   @@map("courier_escalations")
 }
 
