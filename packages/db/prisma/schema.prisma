@@ -5371,6 +5371,11 @@ enum SystemIssueKind {
   COURIER_CREDENTIAL       @map("courier_credential")
   TRACKING_STALLED         @map("tracking_stalled")
   INTEGRATION              @map("integration")
+  /// An endpoint threw something nobody anticipated — a 5xx. Distinct
+  /// from INTEGRATION, which is somebody else's system being unwell;
+  /// this one is ours, and the fix is a code change rather than a
+  /// retry.
+  API_ERROR                @map("api_error")
   OTHER                    @map("other")
 
   @@map("system_issue_kind")

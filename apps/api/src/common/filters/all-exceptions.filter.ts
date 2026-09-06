@@ -7,6 +7,7 @@ import {
   type ExceptionFilter,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import type { SystemIssueService } from '../../modules/system-issues/services/system-issue.service';
 
 interface StructuredError {
   code: string;
@@ -18,6 +19,18 @@ interface StructuredError {
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
+
+  /**
+   * REQUIRED, not optional, and not injected.
+   *
+   * The filter is constructed by hand in `main.ts` (and in the e2e
+   * harness), so there is no DI to forget — which is exactly why the
+   * parameter is required rather than defaulted. An optional one would
+   * let a refactor drop the argument and take every 5xx off the board
+   * with nothing failing anywhere; required, the compiler asks the
+   * question.
+   */
+  constructor(private readonly issues: SystemIssueService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -32,6 +45,28 @@ export class AllExceptionsFilter implements ExceptionFilter {
         { requestId, path: req.url, method: req.method, err: exception },
         'Unhandled exception',
       );
+      /*
+        A 5xx is a request that failed for a reason nobody anticipated,
+        and until now it went to a log file and stopped there. Somebody
+        was told "something went wrong" and we found out when they rang.
+
+        Fire-and-forget and never awaited: the caller is waiting on a
+        response, and a board write must not be the thing that delays
+        or breaks it. `raise` swallows its own failures for the same
+        reason every alerting layer here does — we are already inside a
+        failure path, and an alerter that throws turns a handled
+        problem into an unhandled one.
+      */
+      void this.issues.reportRequestFailure({
+        method: req.method,
+        // The ROUTE, not the URL. `/admin/tickets/:ticketId` groups
+        // every ticket's failures into one issue with a count;
+        // `/admin/tickets/01a05d96-…` would open a fresh one per
+        // request and bury the board in a thousand copies of one bug.
+        route: req.route?.path ?? req.url,
+        exception,
+        requestId,
+      });
     } else {
       this.logger.warn({ requestId, path: req.url, method: req.method, status, code: body.code });
     }

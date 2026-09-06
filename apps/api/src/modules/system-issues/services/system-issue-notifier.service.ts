@@ -235,6 +235,11 @@ export function permissionsFor(kind: SystemIssueKind): readonly string[] {
       // A parcel whose scans stopped matching its order. Whoever works
       // orders sees the consequence first.
       return [RESOLVER, 'orders.view'];
+    case SystemIssueKind.API_ERROR:
+      // An endpoint of ours is throwing. Nobody's ROLE fixes that — it
+      // is a code change — so it goes to whoever opens the board,
+      // rather than to a team who would only forward it.
+      return [RESOLVER];
     case SystemIssueKind.INTEGRATION:
     case SystemIssueKind.OTHER:
       return [RESOLVER];

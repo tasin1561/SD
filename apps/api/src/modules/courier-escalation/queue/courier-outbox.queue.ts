@@ -88,6 +88,12 @@ export class CourierOutboxQueue implements OnModuleInit, OnModuleDestroy {
         'Courier outbox job failed',
       );
     });
+    this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(CourierOutboxQueue.name, err);
+      this.logger.error({ err: err.message }, 'Courier outbox worker error');
+    });
     this.logger.log(`Courier outbox worker ready (queue=${COURIER_OUTBOX_QUEUE})`);
   }
 

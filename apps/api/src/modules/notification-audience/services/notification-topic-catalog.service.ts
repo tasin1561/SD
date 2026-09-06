@@ -150,6 +150,13 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     group: 'System',
   },
   {
+    topic: topicForIssue(SystemIssueKind.API_ERROR),
+    label: 'An endpoint is failing',
+    description:
+      'A request to our own API threw something nobody anticipated, so whoever made it was told only that something went wrong.',
+    group: 'System',
+  },
+  {
     topic: topicForIssue(SystemIssueKind.OTHER),
     label: 'Everything else',
     description: 'A problem that did not fit another kind.',

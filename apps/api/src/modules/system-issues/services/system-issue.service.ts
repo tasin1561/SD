@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, type OnModuleDestroy } from '@nestjs/common';
 import { Prisma, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SystemIssueNotifier } from './system-issue-notifier.service';
@@ -62,13 +62,46 @@ export interface SystemIssueView {
  * as AuditLogService.
  */
 @Injectable()
-export class SystemIssueService {
+export class SystemIssueService implements OnModuleDestroy {
   private readonly logger = new Logger(SystemIssueService.name);
+
+  /**
+   * Raises still going out.
+   *
+   * Fifty-odd call sites reach this service as `void this.issues…` —
+   * every worker's failure hooks, the exception filter, the sweeps —
+   * because raising an issue must never delay or break the failure path
+   * that triggered it. That is right in production and is exactly the
+   * shape CLAUDE.md's drain rule exists for: work that outlives its
+   * caller needs a way to be quiesced, or in the e2e harness it races
+   * the reset. Its INSERT holds a RowShareLock on the tables it
+   * references while the harness's TRUNCATE wants an
+   * AccessExclusiveLock, and Postgres kills one with a 40P01 naming
+   * neither the test nor the cause.
+   *
+   * Tracked HERE rather than at each caller: fifty-three `void`s cannot
+   * each be remembered, and the fifty-fourth would reopen the hole. The
+   * notifier already had its own drain (NOTIF-19) — this is the layer
+   * beneath it, which nothing was awaiting.
+   */
+  private readonly inFlight = new Set<Promise<unknown>>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifier: SystemIssueNotifier,
   ) {}
+
+  /**
+   * Await every raise still in flight. Public for the e2e harness, and
+   * awaited in `onModuleDestroy` so a shutdown cannot cut one short.
+   */
+  async drainInFlight(): Promise<void> {
+    await Promise.allSettled([...this.inFlight]);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.drainInFlight();
+  }
 
   /**
    * Open an issue, or record that an open one happened again.
@@ -78,7 +111,18 @@ export class SystemIssueService {
    * NULL` is what enforces that — not a read-then-write, which under
    * READ COMMITTED lets two concurrent raises both insert.
    */
-  async raise(input: RaiseIssueInput): Promise<{ id: string; isNew: boolean } | null> {
+  raise(input: RaiseIssueInput): Promise<{ id: string; isNew: boolean } | null> {
+    // Registered before it is returned, so a caller that fires and
+    // forgets is still drainable. `finally` rather than `then`: a
+    // rejected raise must leave the set too, or the drain waits forever
+    // on work that already gave up.
+    const p = this.raiseInner(input);
+    this.inFlight.add(p);
+    void p.finally(() => this.inFlight.delete(p));
+    return p;
+  }
+
+  private async raiseInner(input: RaiseIssueInput): Promise<{ id: string; isNew: boolean } | null> {
     const now = new Date();
     try {
       // Bump first: the common case after the first failure is a repeat.
@@ -234,6 +278,62 @@ export class SystemIssueService {
       source: workerName,
       dedupeKey: `worker-error:${workerName}`,
       metadata: { workerName, error: message },
+    });
+  }
+
+  /**
+   * An endpoint threw something nobody anticipated.
+   *
+   * A 5xx used to reach a log file and stop there: the caller saw
+   * "something went wrong", and we found out when somebody rang. This
+   * is the other half of the board — the workers report the work that
+   * did not happen in the background, and this reports the work that
+   * did not happen while a person was waiting for it.
+   *
+   * MEDIUM, deliberately, not HIGH. "Something has stopped working and
+   * will stay stopped" is exactly what an unhandled exception is, and
+   * MEDIUM puts it on the page without interrupting anybody (NOTIF-16
+   * notifies on HIGH and CRITICAL only). A board that pages on every
+   * 500 is a board people mute, and the muting outlasts the incident.
+   * The COUNT is what carries urgency here: one occurrence is usually
+   * one bad row, and a number climbing through the hundreds is an
+   * endpoint that is down.
+   *
+   * Deduped on `METHOD route + error name`, so the same bug on the same
+   * endpoint is one row that gets heavier rather than a thousand rows
+   * that get scrolled past. The error NAME and not its message: a
+   * message often carries the id it choked on, which would split one
+   * bug across every request that hit it.
+   */
+  async reportRequestFailure(input: {
+    method: string;
+    route: string;
+    exception: unknown;
+    requestId: string | null;
+  }): Promise<void> {
+    const err = input.exception;
+    const name = err instanceof Error ? err.name : typeof err;
+    const message = err instanceof Error ? err.message : String(err);
+    const where = `${input.method} ${input.route}`;
+    await this.raise({
+      kind: SystemIssueKind.API_ERROR,
+      severity: SystemIssueSeverity.MEDIUM,
+      title: `${where} is failing`,
+      detail:
+        `A request failed with an unhandled ${name}: ${message}\n\n` +
+        'Whoever made this request was told "something went wrong" and got nothing. ' +
+        'Check the count — one occurrence is usually a single bad row, while a climbing ' +
+        'count means this endpoint is down for everybody using it. The request id below ' +
+        'finds the full stack trace in the process logs.',
+      source: where,
+      dedupeKey: `api-error:${where}:${name}`,
+      metadata: {
+        method: input.method,
+        route: input.route,
+        errorName: name,
+        error: message,
+        requestId: input.requestId,
+      },
     });
   }
 

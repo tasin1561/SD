@@ -9,6 +9,7 @@ import helmet from 'helmet';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { SystemIssueService } from './modules/system-issues/services/system-issue.service';
 import { EnvService } from './config/env.service';
 
 /** The three courier document pushes — the only routes that may be big. */
@@ -86,7 +87,11 @@ async function bootstrap(): Promise<void> {
     exposedHeaders: ['X-Request-Id'],
   });
 
-  app.useGlobalFilters(new AllExceptionsFilter());
+  // `strict: false` so it resolves from wherever SystemIssuesModule
+  // sits in the graph. The filter takes it as a REQUIRED argument, so
+  // a refactor that drops this line does not compile — a 5xx going
+  // unrecorded is exactly the kind of silence that lasts months.
+  app.useGlobalFilters(new AllExceptionsFilter(app.get(SystemIssueService, { strict: false })));
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -71,6 +71,15 @@ export class BinSnapshotSweepService implements OnModuleInit, OnModuleDestroy {
       },
       { connection: this.redis.createConnection(), concurrency: 1 },
     );
+    this.worker.on('failed', (job, err) => {
+      // Only once BullMQ has stopped retrying: an exhausted job is
+      // work that definitively did not happen.
+      void this.issues.reportJobFailure(BinSnapshotSweepService.name, job, err);
+      this.logger.warn(
+        { jobId: job?.id, err: err?.message },
+        'Bin snapshot sweep job failed (will retry per BullMQ policy)',
+      );
+    });
     this.worker.on('error', (err) => {
       // Say it where somebody will see it: a worker erroring
       // breaks no screen, the work simply stops happening.

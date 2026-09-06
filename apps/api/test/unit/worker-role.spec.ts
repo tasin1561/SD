@@ -71,3 +71,50 @@ describe('every in-process worker consults the gate', () => {
     expect(startAt).toBeGreaterThan(gateAt);
   });
 });
+
+/**
+ * Every worker's failures reach the board.
+ *
+ * `/system-issues` is where a person looks to answer "is anything
+ * broken". That only works if every background worker actually reports,
+ * and a worker that forgets is invisible in exactly the way that
+ * matters: it behaves perfectly until the day its work stops happening,
+ * and then it stops SILENTLY. Nothing breaks, no screen changes,
+ * figures simply stop moving.
+ *
+ * Five workers had already drifted when this was written — four never
+ * reported an exhausted job (agent-presence, waybill-refill,
+ * wallet-sync, nsa-sweep) and one was blind to its own connection
+ * errors (ndr). None of it was deliberate; each was a hook somebody did
+ * not copy. So the check is STRUCTURAL, over the same derived file list
+ * as the gate above: anything that constructs a Worker must wire both
+ * hooks, and a sixth one cannot drift without this failing.
+ *
+ * The two are deliberately separate reports, and both are required:
+ * `error` is usually a Redis blip, while an EXHAUSTED job is a piece of
+ * work that definitively did not happen.
+ */
+describe('every in-process worker reports its failures', () => {
+  const root = resolve(__dirname, '../..');
+  const files = globSync('src/modules/**/*.ts', { cwd: root }).filter((f) =>
+    /new Worker\s*(<[^>]*>)?\s*\(/.test(readFileSync(resolve(root, f), 'utf8')),
+  );
+
+  it('finds the workers to check', () => {
+    expect(files.length).toBeGreaterThanOrEqual(16);
+  });
+
+  it.each(files)('%s reports an exhausted job', (file) => {
+    const src = readFileSync(resolve(root, file), 'utf8');
+    // Via the service, not merely logged: a log line is not somewhere
+    // anybody looks before being told there is something to look for.
+    expect(src).toContain("on('failed'");
+    expect(src).toContain('reportJobFailure');
+  });
+
+  it.each(files)('%s reports its own worker errors', (file) => {
+    const src = readFileSync(resolve(root, file), 'utf8');
+    expect(src).toContain("on('error'");
+    expect(src).toContain('reportWorkerError');
+  });
+});

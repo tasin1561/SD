@@ -71,6 +71,12 @@ export class NdrWorker implements OnModuleInit, OnModuleDestroy {
       void this.issues.reportJobFailure(NdrWorker.name, job, err);
       this.logger.warn({ jobId: job?.id, name: job?.name, err: err?.message }, 'NDR job failed');
     });
+    this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(NdrWorker.name, err);
+      this.logger.error({ err: err.message }, 'NDR worker error');
+    });
     this.logger.log(`NDR worker ready (queue=${NDR_QUEUE_NAME})`);
   }
 

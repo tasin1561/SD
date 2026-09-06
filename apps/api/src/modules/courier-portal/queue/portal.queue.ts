@@ -94,6 +94,12 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
       void this.issues.reportJobFailure(PortalQueue.name, job, err);
       this.logger.warn({ jobId: job?.id, name: job?.name, err: err?.message }, 'Portal job failed');
     });
+    this.worker.on('error', (err) => {
+      // Say it where somebody will see it: a worker erroring
+      // breaks no screen, the work simply stops happening.
+      void this.issues.reportWorkerError(PortalQueue.name, err);
+      this.logger.error({ err: err.message }, 'Courier portal worker error');
+    });
 
     this.logger.log(`Portal worker ready (queue=${PORTAL_QUEUE}, canary tz=${PORTAL_TIMEZONE})`);
   }

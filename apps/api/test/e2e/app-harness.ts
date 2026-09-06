@@ -17,6 +17,7 @@ import argon2 from 'argon2';
 import { prisma, StaffRole, type PrismaClient } from '@skydrop/db';
 import { AppModule } from '../../src/app.module';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
+import { SystemIssueService } from '../../src/modules/system-issues/services/system-issue.service';
 import { NotificationListener } from '../../src/modules/notifications/services/notification-listener.service';
 import { SystemIssueNotifier } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
@@ -45,7 +46,7 @@ export async function bootTestApp(): Promise<AppHarness> {
   app.set('trust proxy', 1);
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cookieParser());
-  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalFilters(new AllExceptionsFilter(app.get(SystemIssueService, { strict: false })));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -147,6 +148,22 @@ export async function drainSystemIssueNotifier(app: NestExpressApplication): Pro
   }
 }
 
+/**
+ * Await any system issue still being RAISED.
+ *
+ * The fourth drain hook, and the one the other three implied: the
+ * notifier was drained while the service that calls it was not, so a
+ * `void issues.raise(...)` — which is how all fifty-odd call sites
+ * reach it — could still be inserting when the reset truncated.
+ */
+export async function drainSystemIssues(app: NestExpressApplication): Promise<void> {
+  try {
+    await app.get(SystemIssueService, { strict: false }).drainInFlight();
+  } catch {
+    // Not registered in this app; nothing in flight by definition.
+  }
+}
+
 export async function resetAuthState(
   prisma: PrismaClient,
   app?: NestExpressApplication,
@@ -161,6 +178,13 @@ export async function resetAuthState(
     // that names neither the test nor the cause. Found on CI, one shard
     // out of four.
     await drainSystemIssueNotifier(app);
+    // And the layer BENEATH the notifier: raising an issue is itself
+    // fire-and-forget from fifty-odd call sites (every worker failure
+    // hook, the exception filter, the sweeps), and nothing was awaiting
+    // those. Its INSERT holds a RowShareLock while the TRUNCATE below
+    // wants an AccessExclusiveLock — the same 40P01 the notifier drain
+    // was added for, one layer down. Found on CI, shard 4 of 4.
+    await drainSystemIssues(app);
   }
   // Order-critical chain (CLAUDE MUST #12): Module-8 warehouse rows
   // (shipment_items FK stock_batches/warehouse_bins; shipments FK

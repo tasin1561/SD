@@ -75,3 +75,106 @@ describe('SystemIssueService — what reaches the board', () => {
     });
   });
 });
+
+describe('an endpoint that threw', () => {
+  it('records the ROUTE, not the URL, so one bug is one row', async () => {
+    const { svc, systemIssue } = build();
+    await svc.reportRequestFailure({
+      method: 'GET',
+      route: '/admin/tickets/:ticketId',
+      exception: new TypeError('Cannot read properties of undefined'),
+      requestId: 'req-1',
+    });
+    const arg = systemIssue.create.mock.calls[0]?.[0] as {
+      data: { dedupeKey: string; title: string; metadata: Record<string, unknown> };
+    };
+    // Keyed on the route and the error NAME. The URL would open a fresh
+    // issue per request and bury the board; the error MESSAGE often
+    // carries the id it choked on, which splits one bug across every
+    // request that hit it.
+    expect(arg.data.dedupeKey).toBe('api-error:GET /admin/tickets/:ticketId:TypeError');
+    expect(arg.data.title).toBe('GET /admin/tickets/:ticketId is failing');
+    expect(arg.data.metadata.requestId).toBe('req-1');
+  });
+
+  it('is MEDIUM, so it lands on the page without paging anybody', async () => {
+    const { svc, systemIssue, notify } = build();
+    await svc.reportRequestFailure({
+      method: 'POST',
+      route: '/seller/orders',
+      exception: new Error('boom'),
+      requestId: null,
+    });
+    const arg = systemIssue.create.mock.calls[0]?.[0] as { data: { severity: string } };
+    expect(arg.data.severity).toBe('MEDIUM');
+    // notify() is still called — it is the notifier that decides MEDIUM
+    // does not interrupt anybody (NOTIF-16). Asserted here so a future
+    // change that starts paging on every 500 is a deliberate one.
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ severity: 'MEDIUM' }));
+  });
+
+  it('survives a thrown non-Error', async () => {
+    const { svc, systemIssue } = build();
+    // Anything can be thrown in JavaScript, and a filter that only
+    // handles Error would itself throw inside the failure path.
+    await svc.reportRequestFailure({
+      method: 'GET',
+      route: '/x',
+      exception: 'a string',
+      requestId: null,
+    });
+    expect(systemIssue.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('raises are drainable', () => {
+  /**
+   * Fifty-odd call sites reach this service as `void issues.raise(...)`.
+   * That is correct — raising must never delay the failure path that
+   * triggered it — and it is why the work needs somewhere to be
+   * awaited. Undrained, it races the e2e reset's TRUNCATE and Postgres
+   * kills one of them with a 40P01 naming neither the test nor the
+   * cause. Found on CI, shard 4 of 4.
+   */
+  it('drainInFlight waits for a raise nobody awaited', async () => {
+    const { svc, systemIssue } = build();
+    let release: () => void = () => {};
+    systemIssue.create.mockImplementationOnce(
+      async () =>
+        new Promise((res) => {
+          release = () => res({ id: 'issue-slow' });
+        }),
+    );
+    void svc.reportWorkerError('SlowWorker', new Error('x'));
+    // Let the fire-and-forget reach the create() that is now hanging.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    let drained = false;
+    const draining = svc.drainInFlight().then(() => {
+      drained = true;
+    });
+    await Promise.resolve();
+    expect(drained).toBe(false);
+
+    release();
+    await draining;
+    expect(drained).toBe(true);
+  });
+
+  it('a raise that FAILED still leaves the set — the drain cannot hang on it', async () => {
+    const { svc, systemIssue } = build();
+    systemIssue.updateMany.mockRejectedValueOnce(new Error('db gone'));
+    // Swallowed by design: the caller is already handling a failure and
+    // must not inherit a second one.
+    await svc.raise({
+      kind: 'OTHER',
+      severity: 'LOW',
+      title: 't',
+      detail: 'd',
+      source: 's',
+      dedupeKey: 'k',
+    } as never);
+    await expect(svc.drainInFlight()).resolves.toBeUndefined();
+  });
+});
