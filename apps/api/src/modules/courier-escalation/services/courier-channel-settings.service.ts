@@ -214,6 +214,69 @@ export class CourierChannelSettingsService {
    * Apply a mode change. Called ONLY after the 2FA challenge is
    * confirmed — this method does not decide who may call it.
    */
+  /**
+   * Turn the browser channel on, or off.
+   *
+   * ── WHY THIS EXISTS AT ALL ───────────────────────────────────────────
+   * `portalMode` is the master gate — SHADOW does everything up to the
+   * click and withholds it — and until now it had NO setter. Not an
+   * endpoint, not a service method: the only way to move it was an
+   * UPDATE against the database.
+   *
+   * That is the wrong way round. Turning it ON is a deliberate act
+   * somebody plans; turning it OFF is what you reach for when a courier
+   * is being posted nonsense in your name, and a kill switch you can
+   * only reach through a database console is not a kill switch. This is
+   * here for the OFF direction first.
+   *
+   * ── SEPARATE FROM `writeMode`, AND SEPARATE FROM `pause` ─────────────
+   * Three variables that get confused: writeMode is who prepares the
+   * work, portalMode is whether the browser may actually click, pause is
+   * what the system concluded about its own health. Going LIVE must not
+   * silently widen the write mode, and pausing must not lose it.
+   *
+   * Audited HIGH in both directions. Going live is what lets software
+   * type into a courier's support desk; coming back is what somebody
+   * will want to find in the log afterwards.
+   */
+  async applyPortalMode(input: {
+    courierCode: string;
+    portalMode: CourierPortalMode;
+    staffId: string;
+    reason: string;
+  }): Promise<ChannelSettingsView> {
+    const reason = input.reason.trim();
+    if (reason.length < 10) {
+      throw new BadRequestException({
+        code: 'REASON_TOO_SHORT',
+        message: 'Say why in at least ten characters — this is the switch that lets a browser act.',
+      });
+    }
+    const before = await this.get(input.courierCode);
+
+    await this.prisma.client.courierChannelSettings.update({
+      where: { courierCode: input.courierCode },
+      data: { portalMode: input.portalMode, updatedByStaffId: input.staffId },
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: input.staffId,
+      actorId: input.staffId,
+      action: 'courier.channel.portal_mode_changed',
+      entityType: 'courier',
+      entityId: input.courierCode,
+      severity: 'HIGH',
+      metadata: { from: before.portalMode, to: input.portalMode, reason },
+    });
+
+    this.logger.warn(
+      { courierCode: input.courierCode, from: before.portalMode, to: input.portalMode },
+      'Courier portal mode changed',
+    );
+    return this.get(input.courierCode);
+  }
+
   async applyMode(input: {
     courierCode: string;
     writeMode: CourierWriteMode;

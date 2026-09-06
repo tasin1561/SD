@@ -1,8 +1,9 @@
 'use client';
 
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Lock } from 'lucide-react';
 import {
+  Button,
   Card,
   CardBody,
   EmptyState,
@@ -10,6 +11,7 @@ import {
   PageHeader,
   Section,
   SkeletonRows,
+  Input,
   Stat,
   StatusBadge,
   TBody,
@@ -18,10 +20,17 @@ import {
   THead,
   Th,
   Tr,
+  useToast,
 } from '@skydrop/ui/components';
-import { useCourierPortalRuns, useCourierTaxonomy, useCourierChannel } from '@/lib/ops-hooks';
+import {
+  useCourierPortalRuns,
+  useCourierTaxonomy,
+  useCourierChannel,
+  useSetPortalMode,
+} from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { EscalationTabs } from '../../_components/escalation-tabs';
+import { usePermission } from '@/lib/use-permission';
 
 /**
  * What the portal worker did — or, in SHADOW, would have done.
@@ -60,6 +69,8 @@ export function CourierPortalIndex(): ReactElement {
         subtitle="The browser tier. It runs in a separate process from the API, and in SHADOW it reads and decides without writing anything."
       />
       <EscalationTabs />
+
+      <PortalModeSwitch current={channel.data?.settings.portalMode ?? null} />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <Stat
@@ -215,4 +226,84 @@ function outcomeKind(
 
 function humanise(value: string): string {
   return value.toLowerCase().replace(/_/g, ' ');
+}
+
+/**
+ * The switch that lets the browser actually click — and, more
+ * importantly, the one that stops it.
+ *
+ * Going LIVE asks for a typed reason and a confirmation, because it is
+ * the moment software starts typing into a courier's support desk in our
+ * name. Coming BACK is one click with a reason pre-filled: the whole
+ * point of an off switch is that it is faster to reach than the thing it
+ * stops. Both are audited HIGH; the server is the boundary either way
+ * (FE-2), and its verdict is shown verbatim.
+ */
+function PortalModeSwitch({ current }: { readonly current: string | null }): ReactElement {
+  const setMode = useSetPortalMode();
+  const toast = useToast();
+  const canManage = usePermission('courier.accounts.manage');
+  const [reason, setReason] = useState('');
+  const live = current === 'LIVE';
+
+  if (!canManage || current === null) return <></>;
+
+  const go = (portalMode: 'SHADOW' | 'LIVE', why: string): void => {
+    void (async () => {
+      try {
+        await setMode.mutateAsync({ portalMode, reason: why });
+        toast.success(portalMode === 'LIVE' ? 'Portal is LIVE' : 'Portal is back in SHADOW');
+        setReason('');
+      } catch (err) {
+        toast.error(serverVerdict(err));
+      }
+    })();
+  };
+
+  return (
+    <Card className="mb-4">
+      <CardBody>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-text-strong text-sm font-medium">
+              Browser channel: {live ? 'LIVE — it clicks' : 'SHADOW — it withholds every click'}
+            </p>
+            <p className="text-text-muted mt-0.5 text-xs">
+              {live
+                ? 'Software is raising tickets on the courier’s portal in our name.'
+                : 'Everything up to the click happens and is recorded. Nothing reaches the courier.'}
+            </p>
+          </div>
+          {live ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={setMode.isPending}
+              onClick={() => go('SHADOW', 'Stopping the browser channel from the portal page')}
+            >
+              Stop — back to SHADOW
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Why (10+ chars)"
+                aria-label="Reason for going live"
+                className="w-56"
+              />
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={reason.trim().length < 10 || setMode.isPending}
+                onClick={() => go('LIVE', reason.trim())}
+              >
+                Go LIVE
+              </Button>
+            </div>
+          )}
+        </div>
+      </CardBody>
+    </Card>
+  );
 }

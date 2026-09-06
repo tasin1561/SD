@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { CourierOutboxStatus, CourierWriteMode } from '@skydrop/db';
+import { CourierOutboxStatus, CourierPortalMode, CourierWriteMode } from '@skydrop/db';
 import {
   ArrayMaxSize,
   IsArray,
@@ -74,6 +74,26 @@ export class ConfirmModeChangeDto {
   @IsString()
   @Length(6, 6)
   code!: string;
+}
+
+export class SetPortalModeDto {
+  @ApiProperty({
+    enum: CourierPortalMode,
+    description:
+      'LIVE lets the browser actually click; SHADOW does everything up to it and withholds.',
+  })
+  @IsEnum(CourierPortalMode)
+  portalMode!: CourierPortalMode;
+
+  @ApiProperty({ required: false, default: 'delhivery' })
+  @IsOptional()
+  @IsString()
+  courierCode?: string;
+
+  @ApiProperty({ description: 'Why. Recorded on the audit row in both directions.' })
+  @IsString()
+  @Length(10, 500)
+  reason!: string;
 }
 
 export class PauseChannelDto {

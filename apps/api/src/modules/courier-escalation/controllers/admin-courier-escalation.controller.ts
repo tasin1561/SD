@@ -30,6 +30,7 @@ import {
   RecordInboundDto,
   RejectCandidateDto,
   RequestModeChangeDto,
+  SetPortalModeDto,
 } from '../dto/courier-ops.dto';
 import {
   CourierEscalationService,
@@ -238,6 +239,38 @@ export class AdminCourierEscalationController {
       staffId: staff.id,
       challengeId: body.challengeId,
       code: body.code,
+    });
+  }
+
+  /**
+   * The browser channel's own switch, in both directions.
+   *
+   * Behind `courier.accounts.manage` rather than `courier.ops.write`:
+   * letting a browser type into a courier's support desk is the same
+   * class of act as switching that courier on or off, not the same as
+   * clearing the ops queue. A NEW permission key would have been the
+   * neater fit and the worse one — a key added today reaches no role
+   * that already exists, so the switch would 403 for everybody on the
+   * day it shipped. The OFF direction is the reason this endpoint
+   * exists at all: a kill switch reachable only through a database
+   * console is not a kill switch.
+   */
+  @Post('channel/portal-mode')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('courier.accounts.manage')
+  @ApiOperation({
+    summary:
+      'Turn the portal browser channel LIVE or back to SHADOW. Separate from writeMode: going live must not silently widen who prepares the work.',
+  })
+  portalMode(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Body() body: SetPortalModeDto,
+  ): Promise<ChannelSettingsView> {
+    return this.settings.applyPortalMode({
+      courierCode: body.courierCode ?? 'delhivery',
+      portalMode: body.portalMode,
+      staffId: staff.id,
+      reason: body.reason,
     });
   }
 

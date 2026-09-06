@@ -2135,6 +2135,30 @@ export function usePauseCourierChannel(): UseMutationResult<
   });
 }
 
+/**
+ * Turn the browser channel LIVE, or back to SHADOW.
+ *
+ * The OFF direction is why this exists: `portalMode` had no setter at
+ * all, so the only way to stop a browser acting in your name was a
+ * database console. A kill switch you cannot reach is not one.
+ */
+export function useSetPortalMode(): UseMutationResult<
+  CourierChannelView['settings'],
+  Error,
+  { portalMode: 'SHADOW' | 'LIVE'; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<CourierChannelView['settings']>(
+        '/api/admin/courier-escalation/channel/portal-mode',
+        { method: 'POST', body },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['courier-escalation'] }),
+  });
+}
+
 export function useResumeCourierChannel(): UseMutationResult<
   CourierChannelView['settings'],
   Error,

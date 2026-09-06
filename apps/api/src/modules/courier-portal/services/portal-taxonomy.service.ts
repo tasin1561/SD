@@ -131,7 +131,7 @@ export class PortalTaxonomyService {
       silently re-point every ticket filed under the old one.
     */
     const idByLabel = new Map(before.map((b) => [b.label.trim().toLowerCase(), b.externalId]));
-    const offered = offeredLabels.map((label) => ({
+    const offered = offeredLabels.map((label: string) => ({
       label,
       id: idByLabel.get(label.trim().toLowerCase()) ?? slugifyCategory(label),
     }));

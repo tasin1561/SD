@@ -30,11 +30,6 @@ export type RaiseTicketOutcome =
 /** Their ticket id as a person reads it: `J1788584000522861`. */
 const TICKET_ID_RE = /\bJ\d{12,20}\b/;
 
-/** Whitespace-collapsed and lowercased — chips wrap across lines. */
-function norm(s: string): string {
-  return s.replace(/\s+/g, ' ').trim().toLowerCase();
-}
-
 /**
  * Delhivery ONE's "Raise a ticket" modal.
  *
@@ -94,51 +89,143 @@ export class RaiseTicketModal {
    * their desk cannot act on. Search the forward-orders list for the AWB,
    * open the single result, then "Need Help".
    */
+  /**
+   * Settle, and wait for their SPINNER to go.
+   *
+   * `networkidle` is not enough on its own and that cost a verification
+   * run: their list renders, the network goes quiet, and a full-screen
+   * `.ap-loading__overlay` is still up intercepting every click.
+   * Playwright reports the row as "visible, enabled and stable" and then
+   * retries the click for twenty seconds against something invisible on
+   * top of it — a failure that reads like a missing row rather than a
+   * covered one.
+   */
+  private async settle(): Promise<void> {
+    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+    await this.page
+      .locator('.ap-loading__overlay')
+      .waitFor({ state: 'detached', timeout: 20_000 })
+      .catch(() => undefined);
+  }
+
   async open(awbNumber: string): Promise<void> {
-    await this.page.goto(`${this.origin}/orders/forward/all-shipments`, {
+    /*
+      VIA THE HEADER SEARCH, NOT THE ORDERS LIST.
+
+      The first version searched a list at `/orders/forward/all-shipments`
+      and clicked the matching row. Verified against the live portal, that
+      path does not work at all: that URL renders NO list (their real tabs
+      are delivered / in-transit / ready-to-ship / …), and even on a tab
+      that does render, a parcel is only in ONE of them — so finding an
+      order would mean knowing its state first, which is the thing we are
+      opening the order to find out.
+
+      Worse, it failed in the shape that hides itself. A search that
+      returns nothing leaves the PREVIOUS list on screen, so `text=<awb>`
+      matched a stale row and the run looked like it had found the parcel.
+      That is how the first verification pass "passed".
+
+      Their header search is state-independent and is what a person uses:
+      type the waybill, a suggestion appears, click it, and you are on the
+      order. Confirmed end to end on 2026-09-06.
+    */
+    await this.page.goto(`${this.origin}/orders/forward/delivered`, {
       waitUntil: 'domcontentloaded',
     });
-    const search = this.page
-      .locator('input[placeholder*="AWB" i], input[placeholder*="Search" i]')
-      .first();
-    await search.fill(awbNumber);
-    await search.press('Enter');
-    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+    await this.settle();
 
-    // The row for THIS waybill, never "the first row". A search that
-    // returned nothing leaves the previous list on screen, and clicking
-    // its first row would open somebody else's parcel and raise a ticket
-    // against it.
-    const row = this.page.locator(`text=${awbNumber}`).first();
-    await row.click({ timeout: 20_000 });
-    await this.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
+    const header = this.page.locator('input[placeholder="Search multiple AWBs"]').first();
+    await header.waitFor({ state: 'visible', timeout: 20_000 });
+    await header.fill(awbNumber);
+
+    // Their suggestion list is debounced and renders as `AWB <number>`.
+    // Matched on that exact string so a partial match on another parcel
+    // cannot be clicked — opening the wrong order would raise a ticket
+    // against somebody else's parcel.
+    const suggestion = this.page.locator(`text=AWB ${awbNumber}`).first();
+    await suggestion.waitFor({ state: 'visible', timeout: 20_000 });
+    await suggestion.click();
+
+    // Their router lands on /orders/forward/<uuid>.
+    await this.page.waitForURL(/\/orders\/forward\/[0-9a-f-]{20,}/, { timeout: 30_000 });
+    await this.settle();
 
     await this.page.locator('button:has-text("Need Help")').first().click({ timeout: 20_000 });
     await this.page.locator('text=Raise a ticket').first().waitFor({ timeout: 20_000 });
+    await this.page.waitForTimeout(1_500);
   }
 
   /**
-   * Which categories the portal is offering RIGHT NOW for this shipment.
+   * Is the portal offering this category for this shipment RIGHT NOW?
    *
    * A read rather than a rule: availability depends on shipment state,
    * which we do not model and should not try to. Asking is cheaper and
    * cannot drift.
+   *
+   * By EXACT TEXT, on any element. Their chips are not `<button>`s and
+   * carry no role — verified against the live modal, where a
+   * `button, [role="button"]` scan found fourteen controls belonging to
+   * the ORDER PAGE BEHIND the modal and none of the chips. Matching the
+   * text is what actually finds them.
+   */
+  async isOffered(label: string): Promise<boolean> {
+    return (await this.chip(label).count()) > 0;
+  }
+
+  /**
+   * Every category chip the modal is showing, for the taxonomy fetch.
+   *
+   * Read from the block under their "SHIPMENT ISSUE" heading rather than
+   * by element type — the chips are plain elements with click handlers,
+   * so there is nothing to select on but position and text.
+   *
+   * Returns [] when the block cannot be found, and the caller treats
+   * that as "learned nothing" rather than "they offer nothing": an empty
+   * read and an empty list are indistinguishable here, and deleting a
+   * taxonomy on a selector miss would be far worse than not updating it.
    */
   async offeredCategoryLabels(): Promise<string[]> {
-    const chips = this.chipsUnder('Help us understand your issue');
-    return this.textsOf(chips);
+    // Locators, not `page.evaluate`: the API's tsconfig carries no DOM
+    // lib, so `document` does not exist in this codebase at all — and
+    // adding it to reach into a third party's page would put every
+    // browser global in scope for a Node service.
+    const heading = this.page.getByText('SHIPMENT ISSUE', { exact: true }).first();
+    if ((await heading.count()) === 0) return [];
+    const leaves = heading.locator('xpath=..').locator('xpath=.//*[not(*)]');
+    const n = await leaves.count();
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < n; i += 1) {
+      const t = (
+        await leaves
+          .nth(i)
+          .innerText()
+          .catch(() => '')
+      )
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (t === '' || t === 'SHIPMENT ISSUE' || t.length > 90) continue;
+      // Their timestamp line sits in the same block.
+      if (/^\d{1,2} \w+, \d{4}/.test(t)) continue;
+      if (seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+    }
+    return out;
+  }
+
+  /** The chip itself. `.first()`, because a clicked chip is echoed. */
+  private chip(label: string) {
+    return this.page.getByText(label, { exact: true }).first();
   }
 
   async raise(input: RaiseTicketInput, shadow: boolean): Promise<RaiseTicketOutcome> {
-    const offered = await this.offeredCategoryLabels();
-    if (offered.length > 0 && !offered.some((o) => norm(o) === norm(input.categoryLabel))) {
+    if (!(await this.isOffered(input.categoryLabel))) {
       // Asked, and told no. Not a failure — this shipment's state simply
       // does not admit this category.
       return {
         kind: 'NOT_ELIGIBLE',
-        reason:
-          `"${input.categoryLabel}" is not offered for AWB ${input.awbNumber}. ` +
-          `They are offering: ${offered.join(' | ')}`,
+        reason: `"${input.categoryLabel}" is not offered for AWB ${input.awbNumber}`,
       };
     }
 
@@ -196,9 +283,7 @@ export class RaiseTicketModal {
    * which is an answer, not a fault.
    */
   private async pickChip(label: string): Promise<boolean> {
-    const chip = this.page
-      .locator(`button:text-is("${label}"), [role="button"]:text-is("${label}")`)
-      .first();
+    const chip = this.chip(label);
     if ((await chip.count()) === 0) return false;
     await chip.click();
 
@@ -210,23 +295,6 @@ export class RaiseTicketModal {
     } catch {
       return false;
     }
-  }
-
-  private chipsUnder(heading: string): ReturnType<Page['locator']> {
-    return this.page
-      .locator(`:below(:text("${heading}"))`)
-      .locator('button, [role="button"]')
-      .filter({ hasNotText: /^(Attach File|Raise this Issue|Reset Categories)$/ });
-  }
-
-  private async textsOf(loc: ReturnType<Page['locator']>): Promise<string[]> {
-    const n = await loc.count();
-    const out: string[] = [];
-    for (let i = 0; i < n; i += 1) {
-      const t = (await loc.nth(i).innerText()).trim();
-      if (t !== '') out.push(t);
-    }
-    return out;
   }
 
   /**
