@@ -11,6 +11,7 @@ import {
   ErrorNote,
   FormField,
   Ident,
+  IssueCategoryLine,
   PageHeader,
   Select,
   SkeletonRows,
@@ -123,7 +124,21 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           </div>
           <DescriptionList
             items={[
-              { label: 'Type', value: t.ticketType.toLowerCase().replaceAll('_', ' ') },
+              {
+                label: 'Type',
+                // Who is asking, then what about — in the COURIER's own
+                // words, so an operator taking it to them is already
+                // speaking their vocabulary.
+                value: (
+                  <span className="block">
+                    {t.ticketType.toLowerCase().replaceAll('_', ' ')}
+                    <IssueCategoryLine
+                      categoryLabel={t.issueCategoryLabel}
+                      subcategoryLabel={t.issueSubcategoryLabel}
+                    />
+                  </span>
+                ),
+              },
               {
                 label: 'Order',
                 // The NUMBER. An operator quoting a ticket to a seller

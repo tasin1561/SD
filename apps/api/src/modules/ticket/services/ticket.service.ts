@@ -102,6 +102,20 @@ export interface TicketView {
   readonly courierCode: string | null;
   readonly issueCategoryExternalId: string | null;
   readonly issueSubcategoryExternalId: string | null;
+  /**
+   * The courier's own WORDS for what the seller picked — "Delivery
+   * delay", "Not attempted". Resolved on read, never stored: the
+   * taxonomy is re-fetched from the courier and its rows replaced, so a
+   * label copied at create time would drift from what they call it
+   * today. Recording their `externalId` rather than a FK is exactly
+   * what makes the natural key survive that refetch.
+   *
+   * Null on a ticket raised before there was a taxonomy, and on one
+   * whose category the courier has since retired — the id stays, so
+   * nothing is lost; there is just no current word for it.
+   */
+  readonly issueCategoryLabel: string | null;
+  readonly issueSubcategoryLabel: string | null;
   readonly subject: string;
   readonly description: string | null;
   readonly resolutionAmountInr: string | null;
@@ -512,6 +526,49 @@ export class TicketService {
     return this.toView(updated);
   }
 
+  /**
+   * externalId → the courier's own word for it, for a whole page in ONE
+   * query.
+   *
+   * Batched rather than resolved per row: the id lives on the ticket
+   * and the word lives in a table the courier owns, and a join per
+   * ticket is how a fifty-row list becomes fifty-one queries.
+   *
+   * Looked up by `externalId` alone. The natural key is
+   * `(courierCode, externalId)`, but the taxonomy the seller picked
+   * from is NOT the same thing as the courier carrying the parcel — a
+   * ticket may name Delhivery's category and have no courier at all
+   * yet, which is the ordinary case for an issue raised before
+   * dispatch. Today exactly one courier publishes a taxonomy, so there
+   * is nothing to be ambiguous about; the day a second one does, the
+   * ticket has to record WHICH taxonomy it chose from, and that is a
+   * column, not a cleverer query here.
+   */
+  private async issueLabels(
+    rows: readonly {
+      issueCategoryExternalId: string | null;
+      issueSubcategoryExternalId: string | null;
+    }[],
+  ): Promise<ReadonlyMap<string, string>> {
+    const ids = new Set<string>();
+    for (const r of rows) {
+      // `typeof id === 'string'`, not `!== null`. The declared type says
+      // one or the other, but this is fed by whatever a caller selected,
+      // and a row that simply did not ask for the column arrives as
+      // undefined — which a null check waves through and then puts
+      // straight into the `in` list.
+      for (const id of [r.issueCategoryExternalId, r.issueSubcategoryExternalId]) {
+        if (typeof id === 'string' && id !== '') ids.add(id);
+      }
+    }
+    if (ids.size === 0) return new Map();
+    const found = await this.prisma.client.courierIssueCategory.findMany({
+      where: { externalId: { in: [...ids] } },
+      select: { externalId: true, label: true },
+    });
+    return new Map(found.map((f) => [f.externalId, f.label]));
+  }
+
   async listForSeller(
     sellerId: string,
     status?: TicketStatus,
@@ -538,7 +595,8 @@ export class TicketService {
       orderBy: { createdAt: 'desc' },
       include: TICKET_NAMES,
     });
-    return rows.map((r) => this.toView(r));
+    const labels = await this.issueLabels(rows);
+    return rows.map((r) => this.toView(r, labels));
   }
 
   /** Seller-scoped detail read — never leaks another seller's ticket. */
@@ -554,7 +612,7 @@ export class TicketService {
         message: `Ticket ${ticketId} not found`,
       });
     }
-    return this.toView(row);
+    return this.toView(row, await this.issueLabels([row]));
   }
 
   async getForSeller(sellerId: string, ticketId: string): Promise<TicketView> {
@@ -568,7 +626,7 @@ export class TicketService {
         message: `Ticket ${ticketId} not found`,
       });
     }
-    return this.toView(row);
+    return this.toView(row, await this.issueLabels([row]));
   }
 
   async listForAdmin(filters: {
@@ -604,7 +662,8 @@ export class TicketService {
       }),
       this.prisma.client.ticket.count({ where }),
     ]);
-    return { items: rows.map((r) => this.toView(r)), total, page, pageSize };
+    const labels = await this.issueLabels(rows);
+    return { items: rows.map((r) => this.toView(r, labels)), total, page, pageSize };
   }
 
   async listEvents(ticketId: string): Promise<
@@ -705,31 +764,49 @@ export class TicketService {
     }
   }
 
-  private toView(row: {
-    id: string;
-    ticketType: TicketType;
-    status: TicketStatus;
-    sellerId: string;
-    orderId: string | null;
-    shipmentId: string | null;
-    shipmentItemId: string | null;
-    courierCode: string | null;
-    subject: string;
-    description: string | null;
-    resolutionAmountInr: Prisma.Decimal | null;
-    resolutionWalletEntryId: string | null;
-    resolutionNotes: string | null;
-    resolvedAt: Date | null;
-    createdAt: Date;
-    issueCategoryExternalId: string | null;
-    issueSubcategoryExternalId: string | null;
-    order?: { orderNumber: string } | null;
-    shipment?: { shipmentNumber: string } | null;
-  }): TicketView {
+  private toView(
+    row: {
+      id: string;
+      ticketType: TicketType;
+      status: TicketStatus;
+      sellerId: string;
+      orderId: string | null;
+      shipmentId: string | null;
+      shipmentItemId: string | null;
+      courierCode: string | null;
+      subject: string;
+      description: string | null;
+      resolutionAmountInr: Prisma.Decimal | null;
+      resolutionWalletEntryId: string | null;
+      resolutionNotes: string | null;
+      resolvedAt: Date | null;
+      createdAt: Date;
+      issueCategoryExternalId: string | null;
+      issueSubcategoryExternalId: string | null;
+      order?: { orderNumber: string } | null;
+      shipment?: { shipmentNumber: string } | null;
+    },
+    /**
+     * externalId → the courier's word for it. Absent on the WRITE paths
+     * (`open` / `transition`), which is deliberate: both are followed by
+     * a refetch of the read path, and `open` can be handed a transaction
+     * from the RTO inspection — a taxonomy lookup does not belong inside
+     * somebody else's stock transaction.
+     */
+    labels?: ReadonlyMap<string, string>,
+  ): TicketView {
     return {
       id: row.id,
       issueCategoryExternalId: row.issueCategoryExternalId,
       issueSubcategoryExternalId: row.issueSubcategoryExternalId,
+      issueCategoryLabel:
+        row.issueCategoryExternalId === null
+          ? null
+          : (labels?.get(row.issueCategoryExternalId) ?? null),
+      issueSubcategoryLabel:
+        row.issueSubcategoryExternalId === null
+          ? null
+          : (labels?.get(row.issueSubcategoryExternalId) ?? null),
       ticketType: row.ticketType,
       status: row.status,
       sellerId: row.sellerId,

@@ -28,6 +28,10 @@ function ticketRow(over: Partial<AnyArgs> = {}): AnyArgs {
     resolutionNotes: null,
     resolvedAt: null,
     createdAt: new Date(),
+    // Present and null by default, as Prisma returns them — a fake that
+    // omits a column is a fake that never sees an undefined.
+    issueCategoryExternalId: null,
+    issueSubcategoryExternalId: null,
     ...over,
   };
 }
@@ -64,6 +68,12 @@ function makeService(
     count: opts.claimLoses ? 0 : 1,
   }));
   const eventCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ id: 'ev-1' }));
+  // The courier's own vocabulary, resolved on read. Keyed on externalId,
+  // so a view carrying an id gets the word for it.
+  const issueCategoryFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => [
+    { externalId: 'CAT-1', label: 'Delivery delay' },
+    { externalId: 'SUB-1', label: 'Not attempted' },
+  ]);
   const eventFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => []);
 
   const tx = {
@@ -74,6 +84,7 @@ function makeService(
   const client = {
     ticket: { findUnique, findFirst, create, update, updateMany, findMany, count },
     ticketEvent: { create: eventCreate, findMany: eventFindMany },
+    courierIssueCategory: { findMany: issueCategoryFindMany },
     $transaction,
   };
   const prisma = { client } as unknown as PrismaService;
@@ -103,6 +114,7 @@ function makeService(
     recomputeCacheAfterCommit,
     auditLog,
     findMany,
+    issueCategoryFindMany,
     claim: updateMany,
   };
 }
@@ -424,5 +436,59 @@ describe('TicketService.markRelayed', () => {
     await expect(svc.markRelayed(TICKET, EVENT, STAFF)).rejects.toMatchObject({
       response: { code: 'TICKET_EVENT_NOT_FOUND' },
     });
+  });
+});
+
+/**
+ * The category the seller picked, in the courier's own words.
+ *
+ * Resolved on READ rather than stored: the taxonomy is re-fetched from
+ * the courier and its rows replaced, so a label copied at create time
+ * would slowly stop matching what they call it. What is pinned here is
+ * that the resolution happens ONCE for a page, and that a ticket with
+ * no category asks for nothing at all.
+ */
+describe('TicketService issue-category labels', () => {
+  it('resolves category + subcategory into the courier’s words', async () => {
+    const { svc, findMany, issueCategoryFindMany } = makeService();
+    findMany.mockResolvedValueOnce([
+      ticketRow({ issueCategoryExternalId: 'CAT-1', issueSubcategoryExternalId: 'SUB-1' }),
+    ]);
+    const [view] = await svc.listForSeller(SELLER);
+    expect(view?.issueCategoryLabel).toBe('Delivery delay');
+    expect(view?.issueSubcategoryLabel).toBe('Not attempted');
+    expect(issueCategoryFindMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for nothing when no ticket on the page carries a category', async () => {
+    const { svc, issueCategoryFindMany } = makeService();
+    const [view] = await svc.listForSeller(SELLER);
+    expect(view?.issueCategoryLabel).toBeNull();
+    expect(issueCategoryFindMany).not.toHaveBeenCalled();
+  });
+
+  it('resolves a whole page in ONE query, not one per row', async () => {
+    const { svc, findMany, issueCategoryFindMany } = makeService();
+    findMany.mockResolvedValueOnce([
+      ticketRow({ id: 't1', issueCategoryExternalId: 'CAT-1' }),
+      ticketRow({ id: 't2', issueCategoryExternalId: 'CAT-1' }),
+      ticketRow({ id: 't3', issueCategoryExternalId: 'SUB-1' }),
+    ]);
+    const views = await svc.listForSeller(SELLER);
+    expect(views).toHaveLength(3);
+    expect(issueCategoryFindMany).toHaveBeenCalledTimes(1);
+    // Deduped — 'CAT-1' twice is one id to look up.
+    expect(issueCategoryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { externalId: { in: ['CAT-1', 'SUB-1'] } } }),
+    );
+  });
+
+  it('leaves the label null for a category the courier has since retired', async () => {
+    const { svc, findMany } = makeService();
+    findMany.mockResolvedValueOnce([ticketRow({ issueCategoryExternalId: 'GONE-9' })]);
+    const [view] = await svc.listForSeller(SELLER);
+    // The id survives — nothing is lost; there is just no current word.
+    expect(view?.issueCategoryExternalId).toBe('GONE-9');
+    expect(view?.issueCategoryLabel).toBeNull();
   });
 });

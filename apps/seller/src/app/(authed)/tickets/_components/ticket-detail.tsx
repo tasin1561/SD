@@ -9,6 +9,7 @@ import {
   DescriptionList,
   ErrorNote,
   Ident,
+  IssueCategoryLine,
   Money,
   PageHeader,
   Section,
@@ -89,7 +90,21 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
             <DescriptionList
               columns={3}
               items={[
-                { label: 'Type', value: humanise(ticket.ticketType) },
+                {
+                  label: 'Type',
+                  // Who is asking, then what about. The category the
+                  // seller picked is the fastest thing on the page for
+                  // recognising their own ticket in a list of four.
+                  value: (
+                    <span className="block">
+                      {humanise(ticket.ticketType)}
+                      <IssueCategoryLine
+                        categoryLabel={ticket.issueCategoryLabel}
+                        subcategoryLabel={ticket.issueSubcategoryLabel}
+                      />
+                    </span>
+                  ),
+                },
                 { label: 'Status', value: <TicketStatusBadge status={ticket.status} /> },
                 { label: 'Courier', value: ticket.courierCode ?? <Dash /> },
                 {

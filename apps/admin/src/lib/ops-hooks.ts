@@ -61,6 +61,15 @@ export interface TicketView {
   readonly shipmentNumber: string | null;
   readonly shipmentItemId: string | null;
   readonly courierCode: string | null;
+  /**
+   * The courier's own words for the category the seller picked when
+   * they raised it. Resolved server-side on read — the taxonomy is
+   * re-fetched from the courier, so a label stored at create time would
+   * drift from what they call it now. Null on a ticket raised before
+   * there was a taxonomy, or one we opened ourselves off an inspection.
+   */
+  readonly issueCategoryLabel: string | null;
+  readonly issueSubcategoryLabel: string | null;
   readonly subject: string;
   readonly description: string | null;
   readonly resolutionAmountInr: string | null;

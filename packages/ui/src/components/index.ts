@@ -25,6 +25,7 @@ export * from './open-external';
 export * from './order-journey';
 export * from './form';
 export * from './modal';
+export * from './issue-category-line';
 export * from './menu-button';
 export * from './message-relay-status';
 export * from './page';
