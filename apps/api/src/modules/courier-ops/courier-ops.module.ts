@@ -14,9 +14,6 @@ import { CourierOpsDispatchService } from './services/courier-ops-dispatch.servi
 import { CourierShipmentActionService } from './services/courier-shipment-action.service';
 import { CourierShipmentInsightService } from './services/courier-shipment-insight.service';
 import { ShipmentCourierContextService } from './services/shipment-courier-context.service';
-import { MarginPricingQueue } from './queue/margin-pricing.queue';
-import { MarginPricingWorker } from './queue/margin-pricing.worker';
-import { SystemIssuesModule } from '../system-issues/system-issues.module';
 
 /**
  * courier-ops — the orchestration layer over the Delhivery adapter.
@@ -40,10 +37,7 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
  * periodically — registering a pickup location, reading real margin.
  */
 @Module({
-  // SystemIssuesModule so the nightly pricing sweep can say when it
-  // priced nothing — a batch failing entirely reads identically to
-  // "there was nothing to do" in a log nobody opens.
-  imports: [CourierShiprocketModule, AuthCommonModule, CourierDelhiveryModule, SystemIssuesModule],
+  imports: [CourierShiprocketModule, AuthCommonModule, CourierDelhiveryModule],
   controllers: [AdminCourierOpsController, AdminPickupController, AdminCourierNetworkController],
   providers: [
     ShipmentCourierContextService,
@@ -53,8 +47,6 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     CourierShipmentActionService,
     CourierPickupService,
     CourierMarginReportService,
-    MarginPricingQueue,
-    MarginPricingWorker,
     CourierWarehouseRegistrationService,
     StaffJwtGuard,
   ],

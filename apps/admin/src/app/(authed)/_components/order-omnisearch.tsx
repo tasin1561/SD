@@ -65,14 +65,24 @@ export function OrderOmnisearch(): ReactElement | null {
   }
 
   return (
-    <div ref={boxRef} className="relative w-full max-w-xs">
+    <div ref={boxRef} className="relative w-[22rem] max-w-[34vw]">
       <div className="relative">
         <Search
           className="text-text-faint pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
           aria-hidden
         />
+        {/*
+          Styled like a real control, not left to `sd-field`.
+
+          `sd-field` only sets a WIDTH — the border, ground and focus
+          ring live on the Input primitive, and this is a raw input
+          because it needs the icon inset. Without them the box rendered
+          as a magnifier and some grey placeholder floating in the
+          header, which reads as a label rather than something you can
+          type into.
+        */}
         <input
-          className="sd-field w-full pl-8"
+          className="sd-field bg-bg border-border text-text-bright placeholder:text-text-faint focus:border-accent focus:ring-accent/25 min-h-[34px] w-full rounded-[5px] border py-1.5 pr-3 pl-8 text-sm transition-colors focus:ring-2 focus:outline-none"
           type="search"
           value={term}
           placeholder="Order, AWB, name or phone…"

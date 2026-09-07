@@ -39,9 +39,13 @@ import { useRouter } from 'next/navigation';
  *    the run is opt-in (a button, not an on-mount fetch) and the sample
  *    size is stated next to the totals. A total labelled "margin" over
  *    an unstated sample reads as the whole business.
- *  - It is MEASURED, not assumed. The comparison is against what
- *    Delhivery actually charges, not the rate card's typed-in cost —
- *    `assumptionDrift` shows how far apart those two are.
+ *  - It is MEASURED, not assumed. The cost side is what Delhivery
+ *    actually BILLED, read from their own wallet ledger and imported
+ *    nightly — never a quote. "Quote against the rate card" asks their
+ *    calculator what a parcel would cost, which is useful for spotting
+ *    a lane priced wrongly, and writes nothing: an estimate in the
+ *    invoiced column is indistinguishable from a real charge, and the
+ *    P&L reads that column as measured cost.
  */
 export function MarginIndex(): ReactElement {
   const router = useRouter();
@@ -92,14 +96,10 @@ export function MarginIndex(): ReactElement {
                 setRun(true);
                 void live.refetch();
               }}
-              title="Asks the courier what each unpriced parcel cost. One rate-limited call per shipment."
+              title="Asks the courier's rate calculator what each parcel WOULD cost. An estimate — it writes nothing, and never replaces the invoiced figure."
             >
               <Play size={13} aria-hidden />
-              {live.isFetching
-                ? 'Pricing…'
-                : unpriced > 0
-                  ? `Price ${unpriced} unpriced`
-                  : 'Re-price live'}
+              {live.isFetching ? 'Quoting…' : 'Quote against the rate card'}
             </Button>
           </div>
         }
@@ -113,15 +113,16 @@ export function MarginIndex(): ReactElement {
         </Card>
       ) : data.rows.length === 0 ? (
         <EmptyState
-          title="No costs recorded yet"
-          description="Nothing in this window has a courier cost against it. Pressing Run asks the courier what each parcel cost — one rate-limited call per shipment — and keeps the answers, so this page fills in from then on."
+          title="Not invoiced yet"
+          description="Nothing in this window has been billed by the courier. Their ledger is imported every night, and each parcel appears here once they charge for it."
         />
       ) : (
         <>
           {!run && (
             <Card className="mb-4">
               <CardBody className="text-text-muted text-xs">
-                From costs already recorded — no courier was contacted.
+                What the courier actually BILLED, from their own ledger — imported nightly and
+                overwritten whenever a charge is re-cut.
                 {unpriced > 0 && (
                   <>
                     {' '}

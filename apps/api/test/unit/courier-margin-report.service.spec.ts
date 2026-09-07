@@ -275,27 +275,35 @@ describe('CourierWarehouseRegistrationService — the exact-name guard', () => {
   });
 });
 
-describe('CourierMarginReportService — the cost it learns is kept', () => {
-  it('persists the real cost onto the shipment, so the P&L has a base to read', async () => {
-    // Each row costs a live call to a rate-limited API. Discarding the
-    // answer meant every report, and the P&L behind it, started from
-    // nothing again.
+describe('CourierMarginReportService — it writes NOTHING', () => {
+  it('never touches the shipment, because this is a QUOTE and not the invoice', async () => {
+    /*
+      Reversed on 2026-09-07, and the reversal is the point.
+
+      This used to persist its figure into
+      `shipments.actual_courier_cost_inr` — "keep what we just paid to
+      learn", which sounds thrifty and was wrong. That column is what the
+      courier BILLED, and this endpoint is their rate CALCULATOR: it
+      answers what a parcel would cost given its weight and pincodes.
+
+      Writing an estimate there made it indistinguishable from a real
+      charge — same column, same `actual_courier_cost_at` stamp — and the
+      P&L reads that column as measured cost. The nightly wallet-ledger
+      sync overwrites it from the actual invoice, but only for AWBs
+      inside the export window the courier returns (about a week), so a
+      parcel estimated outside that window kept the guess permanently
+      with nothing anywhere to say so.
+    */
     const sut = makeReport();
     await sut.svc.report('staff-1', WINDOW);
-    expect(sut.shipmentUpdate).toHaveBeenCalledTimes(1);
-    const arg = sut.shipmentUpdate.mock.calls[0]?.[0];
-    expect(arg?.where.id).toBe('ship-1');
-    expect(String(arg?.data['actualCourierCostInr'])).toBe('176.29');
+    expect(sut.shipmentUpdate).not.toHaveBeenCalled();
   });
 
-  it('a failed write does NOT discard the reading it already paid for', async () => {
-    // The persist sits outside the cost-lookup try on purpose: the price
-    // is already known and already in the report, so a database blip
-    // must not turn a successful reading into a skipped row.
-    const sut = makeReport({ failPersist: true });
+  it('still REPORTS the quote — the comparison is what it is for', async () => {
+    // Not writing is not the same as not answering. Billed against a
+    // quote is how a lane priced wrongly is spotted.
+    const sut = makeReport();
     const r = await sut.svc.report('staff-1', WINDOW);
-    expect(r.sampledShipments).toBe(1);
-    expect(r.skipped).toHaveLength(0);
     expect(r.rows[0]?.actualCourierCostInr).toBe('176.29');
   });
 });

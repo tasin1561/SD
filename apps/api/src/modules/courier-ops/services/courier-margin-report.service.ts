@@ -1,5 +1,5 @@
 import { ShiprocketClientService } from '../../courier-shiprocket/services/shiprocket-client.service';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ChargeType, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import {
@@ -81,8 +81,6 @@ const SHIPPING_CHARGE_TYPES = [
  */
 @Injectable()
 export class CourierMarginReportService {
-  private readonly logger = new Logger(CourierMarginReportService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: ShipmentCourierContextService,
@@ -210,37 +208,27 @@ export class CourierMarginReportService {
         continue;
       }
 
-      // Keep what we just paid to learn.
-      //
-      // Each row above cost a live call to a rate-limited API, and
-      // discarding the answer meant the next report — and the P&L —
-      // started from nothing again. Persisting turns a sampled report
-      // into an accumulating cost base.
-      //
-      // Deliberately OUTSIDE the try above, and swallowed: the cost is
-      // already known and already in the report, so a failed write must
-      // not turn a successful reading into a skipped row. Best-effort,
-      // and the next run re-prices it.
-      //
-      // Still no repricing, no charge rewritten, no wallet moved. This
-      // records what the carriage COST; what we bill for it stays a
-      // commercial decision made by a person.
-      try {
-        await this.prisma.client.shipment.update({
-          where: { id: s.id },
-          data: {
-            actualCourierCostInr: new Prisma.Decimal(
-              rows[rows.length - 1]?.actualCourierCostInr ?? '0',
-            ),
-            actualCourierCostAt: new Date(),
-          },
-        });
-      } catch {
-        this.logger.warn(
-          { shipmentId: s.id },
-          'Priced the shipment but could not persist the cost; the report is unaffected.',
-        );
-      }
+      /*
+        NOTHING IS PERSISTED FROM HERE.
+
+        This used to write the figure into `shipments.actual_courier_cost_inr`
+        — "keep what we just paid to learn", which sounds thrifty and was
+        wrong. That column is the INVOICED cost, and this endpoint is
+        Delhivery's rate CALCULATOR: it answers what a parcel would be
+        charged given its weight and pincodes, not what they billed.
+
+        Writing an estimate there made it indistinguishable from a real
+        charge — same column, same `actual_courier_cost_at` stamp — and
+        the P&L reads that column as measured cost. The nightly wallet
+        ledger sync overwrites it from the actual invoice, but only for
+        AWBs inside the export window Delhivery returns (about a week),
+        so a parcel estimated outside that window kept the guess
+        permanently with nothing to say so.
+
+        The invoice is the only thing that decides what a parcel cost.
+        This report compares what we BILLED against a quote, which is
+        useful for spotting a lane priced wrongly, and it says so.
+      */
     }
 
     return {
@@ -262,122 +250,6 @@ export class CourierMarginReportService {
    * figure we compare against is pre-tax on the same basis, and mixing
    * the two would flatter or damn the margin by 18% for no real reason.
    */
-  /**
-   * Price everything that has no cost against it yet.
-   *
-   * ── WHY A NIGHTLY BATCH AND NOT A HOOK ON DELIVERY ───────────────────
-   * Each parcel is one call to a rate-limited endpoint. Firing on
-   * delivery would spread that across the day, which sounds gentler and
-   * is not: deliveries arrive in bursts, the calls would land in the
-   * same bursts, and a WAF block would then hit the same path that
-   * serves the tracking webhook. A batch runs when nothing else is
-   * competing, and can be capped.
-   *
-   * ── IT PRICES ONLY WHAT IS MISSING ───────────────────────────────────
-   * `actual_courier_cost_inr IS NULL` is the whole filter. A parcel
-   * already priced is never re-asked, so the cost of running this every
-   * night is the number of parcels that moved that day, not the number
-   * that exist. Re-pricing is a deliberate act on the report page.
-   *
-   * ── AND ONLY WHAT HAS SETTLED ────────────────────────────────────────
-   * A parcel dispatched an hour ago has no final charge yet, and asking
-   * would record a quote as though it were a bill. `minAgeHours` holds
-   * it back; the parcel is picked up on a later night, which is the
-   * whole point of it being a sweep rather than a hook.
-   */
-  async priceUnpriced(input: {
-    staffId: string | null;
-    limit: number;
-    minAgeHours: number;
-  }): Promise<{ considered: number; priced: number; failed: number; skipped: number }> {
-    const originPin = await this.context.originPin();
-    if (originPin === null) {
-      // Nothing can be priced without a lane origin, and pretending
-      // otherwise would spend calls to learn that N times.
-      return { considered: 0, priced: 0, failed: 0, skipped: 0 };
-    }
-
-    const before = new Date(Date.now() - input.minAgeHours * 3_600_000);
-    const shipments = await this.prisma.client.shipment.findMany({
-      where: {
-        deletedAt: null,
-        isManualCourier: false,
-        awbNumber: { not: null },
-        actualCourierCostInr: null,
-        createdAt: { lte: before },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: input.limit,
-      select: {
-        id: true,
-        destPostalCode: true,
-        totalWeightGrams: true,
-        declaredWeightGrams: true,
-        chargeableWeightGrams: true,
-        codAmountInr: true,
-        courierCode: true,
-        // Shiprocket prices per ACCOUNT, so the check needs to know
-        // which one carried it (CUR-14).
-        courierAccountId: true,
-        orderShipments: { select: { orderId: true }, take: 1 },
-      },
-    });
-
-    let priced = 0;
-    let failed = 0;
-    let skipped = 0;
-
-    // Sequential, like the report: this is the rate-budgeted endpoint,
-    // and firing the batch at once is what trips the WAF.
-    for (const s of shipments) {
-      const orderId = s.orderShipments[0]?.orderId ?? null;
-      const billed = orderId === null ? null : await this.billedShipping(orderId);
-      if (billed === null) {
-        // Nothing to compare against, so the call would buy nothing.
-        skipped += 1;
-        continue;
-      }
-      const isCod = s.codAmountInr !== null && s.codAmountInr.greaterThan(0);
-      const weightGrams = s.chargeableWeightGrams ?? s.declaredWeightGrams ?? s.totalWeightGrams;
-      try {
-        const check =
-          s.courierCode === 'shiprocket'
-            ? await this.shiprocketCheck(s, originPin, weightGrams, isCod, billed)
-            : await this.reconciliation.check(
-                {
-                  originPin,
-                  destinationPin: s.destPostalCode,
-                  chargeableWeightGrams: weightGrams,
-                  isCod,
-                  billedToSellerInr: billed.toString(),
-                },
-                input.staffId === null
-                  ? courierActor.runner('margin-nightly-pricing')
-                  : courierActor.operator(input.staffId),
-              );
-        await this.prisma.client.shipment.update({
-          where: { id: s.id },
-          data: {
-            actualCourierCostInr: new Prisma.Decimal(check.actualCourierCostInr),
-            actualCourierCostAt: new Date(),
-          },
-        });
-        priced += 1;
-      } catch (err) {
-        // One parcel's failure never costs the rest theirs — the same
-        // per-item isolation as the AWB fan-out. It stays unpriced and
-        // is simply picked up tomorrow.
-        failed += 1;
-        this.logger.warn(
-          { shipmentId: s.id, err: err instanceof Error ? err.message : String(err) },
-          'Could not price shipment; leaving it for the next sweep',
-        );
-      }
-    }
-
-    return { considered: shipments.length, priced, failed, skipped };
-  }
-
   /**
    * The same report, from what we ALREADY KNOW.
    *
