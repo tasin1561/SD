@@ -259,6 +259,7 @@ export function AppShell({
   identitySecondary,
   identityHref,
   headerActions,
+  headerCenter,
   drawerActions,
   footerNote,
   pathname,
@@ -294,6 +295,15 @@ export function AppShell({
    */
   readonly identityHref?: string;
   readonly headerActions?: ReactNode;
+  /**
+   * The one thing that belongs in the MIDDLE of the header.
+   *
+   * A search reachable from every page is a fixed point in the chrome,
+   * and putting it with the right-hand actions squeezed the identity
+   * and the sign-out button until both wrapped. Its own slot, so the
+   * three regions size independently.
+   */
+  readonly headerCenter?: ReactNode;
   /**
    * The same actions for the mobile drawer footer. Deliberately a second
    * slot rather than re-rendering `headerActions`: the drawer footer sits
@@ -460,11 +470,26 @@ export function AppShell({
             </span>
           </div>
 
-          {/* Desktop: context label + identity + sign out. */}
-          <div className="text-text-faint hidden min-w-0 flex-1 text-xs tracking-[0.08em] uppercase lg:block">
+          {/*
+            Desktop: context label · CENTRE · identity + sign out.
+
+            Three slots, and the middle one is centred by giving the two
+            outer ones EQUAL flex rather than by centring the middle
+            itself — otherwise the search drifts left or right as the
+            section label and the email change length, which is exactly
+            what a fixed point in the chrome must not do.
+
+            The label truncates and the centre does not shrink below its
+            own width: a search box that narrows to nothing on a laptop
+            is worse than one that pushes a label out of the way.
+          */}
+          <div className="text-text-faint hidden min-w-0 flex-1 basis-0 truncate text-xs tracking-[0.08em] uppercase lg:block">
             {sectionLabel}
           </div>
-          <div className="hidden shrink-0 items-center gap-3 lg:flex">
+          {headerCenter !== undefined && (
+            <div className="hidden shrink-0 justify-center lg:flex">{headerCenter}</div>
+          )}
+          <div className="hidden min-w-0 flex-1 basis-0 shrink-0 items-center justify-end gap-3 lg:flex">
             {headerActions}
             {identityHref === undefined ? (
               <div className="min-w-0 text-right leading-tight">

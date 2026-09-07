@@ -202,15 +202,12 @@ export function AuthedShell({
         // their own account — the page has no nav entry because it is
         // not a section of the product, it is about them.
         identityHref="/account"
-        headerActions={
-          <>
-            {/* Reachable from EVERY page, because the moment somebody
-                needs a parcel is rarely the moment they are on the
-                orders list. */}
-            <OrderOmnisearch />
-            <NotificationBellContainer />
-          </>
-        }
+        // Reachable from EVERY page, because the moment somebody needs a
+        // parcel is rarely the moment they are on the orders list. In its
+        // OWN slot: sharing the right-hand one squeezed the identity and
+        // the sign-out button until both wrapped.
+        headerCenter={<OrderOmnisearch />}
+        headerActions={<NotificationBellContainer />}
         footerNote="Phase 1A"
         pathname={pathname}
         Link={Link}

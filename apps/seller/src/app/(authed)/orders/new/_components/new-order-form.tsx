@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
@@ -812,11 +813,25 @@ export function NewOrderForm(): ReactElement {
         <CardBody>
           <h2 className="text-text-bright text-sm font-medium mb-3">Notes</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Only when there is a choice to make. One shopfront is
-                the ordinary case, and a select with a single option is
-                a question nobody asked. */}
-            {openStores.length > 1 && (
-              <FormField label="Store" hint="Which of your shopfronts this order was placed on">
+            {/*
+              Always SHOWN, only sometimes a CHOICE.
+
+              A dropdown with one option is a question nobody asked —
+              but hiding the field entirely leaves somebody with two
+              shopfronts in mind wondering where the setting went, and
+              somebody with one unable to see which brand their order is
+              filed under. One store reads as a statement with a way to
+              add another; two or more becomes a select.
+            */}
+            <FormField
+              label="Store"
+              hint={
+                openStores.length > 1
+                  ? 'Which of your shopfronts this order was placed on'
+                  : 'Every order is filed under a shopfront. Add another to sell under more than one brand.'
+              }
+            >
+              {openStores.length > 1 ? (
                 <Select value={form.storeId} onChange={(e) => set('storeId', e.target.value)}>
                   {openStores.map((st) => (
                     <option key={st.id} value={st.id}>
@@ -825,8 +840,18 @@ export function NewOrderForm(): ReactElement {
                     </option>
                   ))}
                 </Select>
-              </FormField>
-            )}
+              ) : (
+                <div className="border-border bg-surface-raised flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+                  <span>{openStores[0]?.name ?? 'Your default store'}</span>
+                  <Link
+                    href="/settings/stores"
+                    className="text-text-muted hover:text-text text-xs underline underline-offset-2"
+                  >
+                    Manage stores
+                  </Link>
+                </div>
+              )}
+            </FormField>
             <FormField label="Your reference">
               <Input
                 value={form.sellerOrderRef}

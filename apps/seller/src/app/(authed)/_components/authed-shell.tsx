@@ -131,11 +131,12 @@ export function AuthedShell({
         navGroups={visibleGroups}
         identityPrimary={identity.companyName}
         identitySecondary={identity.emailDisplay}
+        // Reachable from EVERY page: the moment somebody needs an order
+        // is rarely the moment they are on the orders list. In its OWN
+        // slot so it does not squeeze the identity beside it.
+        headerCenter={<OrderOmnisearch />}
         headerActions={
           <div className="flex items-center gap-1">
-            {/* Reachable from EVERY page: the moment somebody needs an
-                order is rarely the moment they are on the orders list. */}
-            <OrderOmnisearch />
             <MenuButton label="Quick actions" items={quickActions} Link={Link} />
             <NotificationBellContainer />
           </div>
