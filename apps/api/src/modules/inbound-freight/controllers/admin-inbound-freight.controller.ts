@@ -57,6 +57,18 @@ export class AdminInboundFreightController {
     });
   }
 
+  @Get(':freightChargeId/cost-breakdown')
+  @ApiOperation({
+    summary:
+      'How the bill was split across the lines it covers, and what has actually been paid against it — the working behind the total.',
+  })
+  costBreakdown(
+    @Param('freightChargeId', new ParseUUIDPipe({ version: '7' }))
+    freightChargeId: string,
+  ): ReturnType<InboundFreightService['costBreakdown']> {
+    return this.svc.costBreakdown(freightChargeId);
+  }
+
   @Post()
   @RequirePermissions('money.freight.manage')
   @HttpCode(HttpStatus.CREATED)

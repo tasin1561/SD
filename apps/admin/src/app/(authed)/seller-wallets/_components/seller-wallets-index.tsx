@@ -30,7 +30,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { isWalletCredit, walletDirectionLabel } from '@skydrop/ui/status';
-import type { WalletEntryDirection } from '@skydrop/db';
+import { WalletEntryDirection } from '@skydrop/db';
 import {
   useReconcileSellerWallets,
   useSellerWalletOverview,
@@ -40,6 +40,9 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 
 type Filter = 'all' | 'credit' | 'debt' | 'payout';
+
+/** Every direction the label helpers can actually answer for. */
+const KNOWN_DIRECTIONS = new Set<string>(Object.values(WalletEntryDirection));
 
 /**
  * Every seller's wallet in one place.
@@ -407,7 +410,22 @@ function initials(name: string): string {
 function WalletRow({ row }: { readonly row: SellerWalletRow }): ReactElement {
   const balance = Number(row.balanceInr);
   const inDebt = balance < 0;
-  const direction = row.lastMovementDirection as WalletEntryDirection | null;
+  /*
+    Checked, not cast.
+
+    `walletDirectionLabel` and `isWalletCredit` are exhaustive switches
+    that THROW on an unrecognised value — right at compile time, fatal
+    at runtime, because a render that throws takes the whole page with
+    it. That is exactly what happened when the API sent the database
+    value (`order_charges`) instead of the enum name.
+
+    The API is fixed; this makes the page survive it happening again,
+    because "one row has no label" is a far better failure than "seller
+    wallets does not load".
+  */
+  const direction = KNOWN_DIRECTIONS.has(row.lastMovementDirection ?? '')
+    ? (row.lastMovementDirection as WalletEntryDirection)
+    : null;
 
   return (
     <Tr>

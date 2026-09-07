@@ -358,6 +358,49 @@ export function useRecordFreight(): UseMutationResult<
   });
 }
 
+/** How a freight bill was split, and what has been paid against it. */
+export interface FreightCostBreakdownView {
+  readonly ourCostInr: string | null;
+  readonly lines: ReadonlyArray<{
+    readonly skuCode: string | null;
+    readonly productName: string | null;
+    readonly units: number;
+    readonly unitWeightGrams: number | null;
+    readonly chargeableWeightKg: string | null;
+    readonly rateInr: string;
+    readonly lineTotalInr: string;
+    readonly perUnitInr: string;
+    readonly unitsSettled: number;
+    readonly amountSettledInr: string;
+  }>;
+  readonly payments: ReadonlyArray<{
+    readonly accountLabel: string;
+    readonly currency: string;
+    readonly amount: string;
+    readonly occurredAt: string;
+    readonly reference: string | null;
+    readonly recordedByName: string | null;
+  }>;
+  readonly paidTotalByCurrency: ReadonlyArray<{
+    readonly currency: string;
+    readonly amount: string;
+  }>;
+}
+
+/** Fetched only when a bill is opened — it is the long answer. */
+export function useFreightCostBreakdown(
+  freightChargeId: string | null,
+): UseQueryResult<FreightCostBreakdownView> {
+  const client = useApiClient();
+  const id = freightChargeId === null ? '' : freightChargeId;
+  return useQuery({
+    queryKey: ['admin-freight', 'breakdown', freightChargeId],
+    enabled: freightChargeId !== null,
+    queryFn: () =>
+      client.request<FreightCostBreakdownView>(`/api/admin/inbound-freight/${id}/cost-breakdown`),
+  });
+}
+
 /**
  * Pay the forwarder AND attribute it, in one call.
  *

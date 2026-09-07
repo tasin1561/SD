@@ -459,6 +459,33 @@ const systemSettings: SystemSettingSeed[] = [
       'Let the nightly sync WRITE what it read into the shipment cost columns. While OFF it parses the real file and reports exactly what it would change, which is how a login or a page change surfaces as a report rather than as wrong money in the P&L.',
   },
   {
+    key: 'courier.margin_nightly_pricing_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Courier cost — price unpriced parcels nightly',
+    description:
+      'Each night, ask the courier what each parcel that has no cost against it actually cost, and keep the answer. Without this the delivery margin is measured only over parcels somebody pressed Run on. OFF by default: every parcel is one call to a rate-limited courier, and a batch that starts the moment it deploys is a batch nobody decided to run.',
+  },
+  {
+    key: 'courier.margin_nightly_pricing_limit',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 100,
+    displayName: 'Courier cost — parcels to price per night',
+    description:
+      'The nightly cap. Sized against the rate-limit budget rather than the backlog: a night that does not finish leaves the rest for tomorrow, which is what a sweep is for.',
+  },
+  {
+    key: 'courier.margin_nightly_pricing_min_age_hours',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 24,
+    displayName: 'Courier cost — wait this long before pricing',
+    description:
+      'How old a parcel must be before its cost is asked for. A parcel dispatched an hour ago has no final charge yet, and asking would record a quote as though it were a bill.',
+  },
+  {
     key: 'courier.delhivery_wallet_low_balance_inr',
     category: 'courier',
     valueType: SettingValueType.DECIMAL,

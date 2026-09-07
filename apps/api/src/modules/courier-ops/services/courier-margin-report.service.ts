@@ -263,6 +263,122 @@ export class CourierMarginReportService {
    * the two would flatter or damn the margin by 18% for no real reason.
    */
   /**
+   * Price everything that has no cost against it yet.
+   *
+   * ── WHY A NIGHTLY BATCH AND NOT A HOOK ON DELIVERY ───────────────────
+   * Each parcel is one call to a rate-limited endpoint. Firing on
+   * delivery would spread that across the day, which sounds gentler and
+   * is not: deliveries arrive in bursts, the calls would land in the
+   * same bursts, and a WAF block would then hit the same path that
+   * serves the tracking webhook. A batch runs when nothing else is
+   * competing, and can be capped.
+   *
+   * ── IT PRICES ONLY WHAT IS MISSING ───────────────────────────────────
+   * `actual_courier_cost_inr IS NULL` is the whole filter. A parcel
+   * already priced is never re-asked, so the cost of running this every
+   * night is the number of parcels that moved that day, not the number
+   * that exist. Re-pricing is a deliberate act on the report page.
+   *
+   * ── AND ONLY WHAT HAS SETTLED ────────────────────────────────────────
+   * A parcel dispatched an hour ago has no final charge yet, and asking
+   * would record a quote as though it were a bill. `minAgeHours` holds
+   * it back; the parcel is picked up on a later night, which is the
+   * whole point of it being a sweep rather than a hook.
+   */
+  async priceUnpriced(input: {
+    staffId: string | null;
+    limit: number;
+    minAgeHours: number;
+  }): Promise<{ considered: number; priced: number; failed: number; skipped: number }> {
+    const originPin = await this.context.originPin();
+    if (originPin === null) {
+      // Nothing can be priced without a lane origin, and pretending
+      // otherwise would spend calls to learn that N times.
+      return { considered: 0, priced: 0, failed: 0, skipped: 0 };
+    }
+
+    const before = new Date(Date.now() - input.minAgeHours * 3_600_000);
+    const shipments = await this.prisma.client.shipment.findMany({
+      where: {
+        deletedAt: null,
+        isManualCourier: false,
+        awbNumber: { not: null },
+        actualCourierCostInr: null,
+        createdAt: { lte: before },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: input.limit,
+      select: {
+        id: true,
+        destPostalCode: true,
+        totalWeightGrams: true,
+        declaredWeightGrams: true,
+        chargeableWeightGrams: true,
+        codAmountInr: true,
+        courierCode: true,
+        // Shiprocket prices per ACCOUNT, so the check needs to know
+        // which one carried it (CUR-14).
+        courierAccountId: true,
+        orderShipments: { select: { orderId: true }, take: 1 },
+      },
+    });
+
+    let priced = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    // Sequential, like the report: this is the rate-budgeted endpoint,
+    // and firing the batch at once is what trips the WAF.
+    for (const s of shipments) {
+      const orderId = s.orderShipments[0]?.orderId ?? null;
+      const billed = orderId === null ? null : await this.billedShipping(orderId);
+      if (billed === null) {
+        // Nothing to compare against, so the call would buy nothing.
+        skipped += 1;
+        continue;
+      }
+      const isCod = s.codAmountInr !== null && s.codAmountInr.greaterThan(0);
+      const weightGrams = s.chargeableWeightGrams ?? s.declaredWeightGrams ?? s.totalWeightGrams;
+      try {
+        const check =
+          s.courierCode === 'shiprocket'
+            ? await this.shiprocketCheck(s, originPin, weightGrams, isCod, billed)
+            : await this.reconciliation.check(
+                {
+                  originPin,
+                  destinationPin: s.destPostalCode,
+                  chargeableWeightGrams: weightGrams,
+                  isCod,
+                  billedToSellerInr: billed.toString(),
+                },
+                input.staffId === null
+                  ? courierActor.runner('margin-nightly-pricing')
+                  : courierActor.operator(input.staffId),
+              );
+        await this.prisma.client.shipment.update({
+          where: { id: s.id },
+          data: {
+            actualCourierCostInr: new Prisma.Decimal(check.actualCourierCostInr),
+            actualCourierCostAt: new Date(),
+          },
+        });
+        priced += 1;
+      } catch (err) {
+        // One parcel's failure never costs the rest theirs — the same
+        // per-item isolation as the AWB fan-out. It stays unpriced and
+        // is simply picked up tomorrow.
+        failed += 1;
+        this.logger.warn(
+          { shipmentId: s.id, err: err instanceof Error ? err.message : String(err) },
+          'Could not price shipment; leaving it for the next sweep',
+        );
+      }
+    }
+
+    return { considered: shipments.length, priced, failed, skipped };
+  }
+
+  /**
    * The same report, from what we ALREADY KNOW.
    *
    * ── WHY THIS EXISTS ──────────────────────────────────────────────────

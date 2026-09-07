@@ -947,6 +947,125 @@ export class InboundFreightService {
     }
   }
 
+  /**
+   * How a freight bill came to be what it is.
+   *
+   * ── TWO SIDES, AND THEY ANSWER DIFFERENT QUESTIONS ───────────────────
+   * The ALLOCATION lines say how the bill was split — freight is priced
+   * by weight, so a heavy SKU carries more of it than a light one, and
+   * a bill that looks wrong is usually one line that does. Without them
+   * "₹3,000" is a number with no working, and the only way to check it
+   * is to re-derive the split by hand from a spreadsheet.
+   *
+   * The PAYMENTS say what has actually gone out against it, from which
+   * account and in which currency. That is a different question from
+   * what the forwarder billed — a part payment, or one made in BDT, is
+   * exactly the case where the two figures diverge and the difference
+   * is the bank's charge.
+   *
+   * Read-only, and derived: no total is stored, so this cannot drift
+   * from the rows it is built out of.
+   */
+  async costBreakdown(freightChargeId: string): Promise<{
+    lines: ReadonlyArray<{
+      skuCode: string | null;
+      productName: string | null;
+      units: number;
+      unitWeightGrams: number | null;
+      chargeableWeightKg: string | null;
+      rateInr: string;
+      lineTotalInr: string;
+      perUnitInr: string;
+      unitsSettled: number;
+      amountSettledInr: string;
+    }>;
+    payments: ReadonlyArray<{
+      accountLabel: string;
+      currency: string;
+      amount: string;
+      occurredAt: string;
+      reference: string | null;
+      recordedByName: string | null;
+    }>;
+    ourCostInr: string | null;
+    paidTotalByCurrency: ReadonlyArray<{ currency: string; amount: string }>;
+  }> {
+    const charge = await this.prisma.client.inboundFreightCharge.findUnique({
+      where: { id: freightChargeId },
+      select: {
+        ourCostInr: true,
+        allocations: {
+          orderBy: { lineTotalInr: 'desc' },
+          select: {
+            units: true,
+            unitWeightGrams: true,
+            chargeableWeightKg: true,
+            rateInr: true,
+            lineTotalInr: true,
+            perUnitInr: true,
+            unitsSettled: true,
+            amountSettledInr: true,
+            variant: { select: { skuCode: true, product: { select: { name: true } } } },
+          },
+        },
+        bankEntries: {
+          orderBy: { occurredAt: 'desc' },
+          select: {
+            signedAmount: true,
+            currency: true,
+            occurredAt: true,
+            reference: true,
+            account: { select: { label: true } },
+            createdBy: { select: { emailDisplay: true } },
+          },
+        },
+      },
+    });
+    if (charge === null) {
+      throw new NotFoundException({
+        code: 'FREIGHT_CHARGE_NOT_FOUND',
+        message: 'No such freight bill',
+      });
+    }
+
+    // Totalled PER CURRENCY, never added together. Two payments in two
+    // currencies have no meaningful sum, and one would invite reading
+    // ৳2,500 + ₹1,000 as ₹3,500.
+    const byCurrency = new Map<string, Prisma.Decimal>();
+    for (const e of charge.bankEntries) {
+      const abs = e.signedAmount.abs();
+      byCurrency.set(e.currency, (byCurrency.get(e.currency) ?? new Prisma.Decimal(0)).add(abs));
+    }
+
+    return {
+      ourCostInr: charge.ourCostInr?.toFixed(2) ?? null,
+      lines: charge.allocations.map((a) => ({
+        skuCode: a.variant?.skuCode ?? null,
+        productName: a.variant?.product?.name ?? null,
+        units: a.units,
+        unitWeightGrams: a.unitWeightGrams,
+        chargeableWeightKg: a.chargeableWeightKg?.toString() ?? null,
+        rateInr: a.rateInr.toString(),
+        lineTotalInr: a.lineTotalInr.toFixed(2),
+        perUnitInr: a.perUnitInr.toString(),
+        unitsSettled: a.unitsSettled,
+        amountSettledInr: a.amountSettledInr.toFixed(2),
+      })),
+      payments: charge.bankEntries.map((e) => ({
+        accountLabel: e.account.label,
+        currency: e.currency,
+        amount: e.signedAmount.abs().toFixed(2),
+        occurredAt: e.occurredAt.toISOString(),
+        reference: e.reference,
+        recordedByName: e.createdBy?.emailDisplay ?? null,
+      })),
+      paidTotalByCurrency: [...byCurrency.entries()].map(([currency, amount]) => ({
+        currency,
+        amount: amount.toFixed(2),
+      })),
+    };
+  }
+
   private toView(
     row: Prisma.InboundFreightChargeGetPayload<{
       include: {

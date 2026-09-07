@@ -4,6 +4,7 @@ import {
   Currency,
   Prisma,
   TopupRequestStatus,
+  WalletEntryDirection,
   WithdrawalRequestStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -237,8 +238,29 @@ export class AdminSellerWalletService {
       WHERE currency = 'inr'
       ORDER BY seller_id, id DESC
     `;
+    /*
+      Back to the ENUM value, not the column value.
+
+      `direction::text` yields what Postgres stores — `order_charges` —
+      while every consumer switches on the Prisma name, `ORDER_CHARGES`.
+      Those switches are exhaustive and THROW on an unrecognised value
+      (F2 discipline), so handing over the raw column took the whole
+      seller-wallets page down with "Unhandled WalletEntryDirection".
+
+      Checked against the enum rather than merely upper-cased: the
+      @map convention makes the transform right today, and a future
+      value that breaks it should arrive as an unlabelled row instead of
+      a blank page.
+    */
+    const known = new Set<string>(Object.values(WalletEntryDirection));
     const lastByseller = new Map(
-      lastMovements.map((m) => [m.seller_id, { direction: m.direction, at: m.created_at }]),
+      lastMovements.map((m) => {
+        const asEnum = m.direction.toUpperCase();
+        return [
+          m.seller_id,
+          { direction: known.has(asEnum) ? asEnum : null, at: m.created_at },
+        ] as const;
+      }),
     );
 
     const [withdrawals, topups] = await Promise.all([
