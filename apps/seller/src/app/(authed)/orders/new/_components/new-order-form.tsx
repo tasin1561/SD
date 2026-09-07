@@ -404,7 +404,8 @@ export function NewOrderForm(): ReactElement {
     }
     // A line cannot exist without a product now — it is created by
     // clicking one — so the only thing left to check is the quantity.
-    if (items.length === 0) return 'Add at least one product from the list.';
+    if (items.length === 0)
+      return 'At least one product is required — add one from the list on the right.';
     for (const it of items) {
       const qty = Number(it.quantity);
       if (!Number.isFinite(qty) || qty < 1) return `Quantity must be at least 1 for ${it.skuCode}.`;
@@ -1153,22 +1154,35 @@ export function NewOrderForm(): ReactElement {
         from the button that commits them.
       */}
       <div className="border-border bg-surface/95 sticky bottom-0 z-10 mt-4 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t px-3 py-2 backdrop-blur sm:-mx-5 sm:px-5 sm:py-3 lg:-mx-6 lg:px-6">
-        <p className="text-text-muted text-xs">
-          {items.length === 0
-            ? 'No products yet'
-            : // "products", not "lines" — a line is what the order model
-              // calls it and nobody outside this codebase does.
-              `${items.length} ${items.length === 1 ? 'product' : 'products'}`}
-          {form.paymentMode === 'COD' && computedCollectable > 0 && (
-            <>
-              {' · '}
-              <span className="text-text-bright font-mono tabular-nums">
-                ₹{computedCollectable.toLocaleString('en-IN')}
-              </span>{' '}
-              to collect
-            </>
-          )}
-        </p>
+        {/*
+          The refusal goes HERE, next to the button that was refused.
+
+          It used to render only at the bottom of the form, which on a
+          two-column layout is well below the fold — so pressing Submit
+          with an empty field looked like pressing Submit did nothing,
+          and the reason was a scroll away. The bar is the one part of
+          this page that is always on screen.
+        */}
+        {error === null ? (
+          <p className="text-text-muted text-xs">
+            {items.length === 0
+              ? 'No products yet'
+              : // "products", not "lines" — a line is what the order model
+                // calls it and nobody outside this codebase does.
+                `${items.length} ${items.length === 1 ? 'product' : 'products'}`}
+            {form.paymentMode === 'COD' && computedCollectable > 0 && (
+              <>
+                {' · '}
+                <span className="text-text-bright font-mono tabular-nums">
+                  ₹{computedCollectable.toLocaleString('en-IN')}
+                </span>{' '}
+                to collect
+              </>
+            )}
+          </p>
+        ) : (
+          <p className="text-critical min-w-0 flex-1 text-xs font-medium max-sm:w-full">{error}</p>
+        )}
         <div className="flex items-center gap-2 max-sm:w-full">{actions}</div>
       </div>
 

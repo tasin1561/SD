@@ -522,32 +522,42 @@ export function AppShell({
           {headerCenter !== undefined && (
             <div className="hidden shrink-0 justify-center lg:flex">{headerCenter}</div>
           )}
-          {/* Phone and tablet only — the desktop copy lives in the
-              action cluster below, so the two never both render. */}
-          {headerAlways !== undefined && (
-            <div className="ml-auto flex shrink-0 items-center lg:hidden">{headerAlways}</div>
-          )}
-          <div className="hidden min-w-0 flex-1 basis-0 shrink-0 items-center justify-end gap-3 lg:flex">
+          {/*
+            ONE cluster at every width, not two.
+
+            `headerAlways` renders exactly once — mounting it twice and
+            hiding one copy gives the hidden one its own state, so the
+            invisible bell can be "open" while the visible one is shut,
+            and a query for the button finds the wrong element. What
+            changes at `lg` is only which of its SIBLINGS come along.
+
+            `ml-auto` pushes it right on a phone; at `lg` the flex-1
+            basis-0 takes over and the cluster becomes the third of the
+            three equal regions that keep the search centred.
+          */}
+          <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-3 lg:flex-1 lg:basis-0">
             {headerAlways}
-            {headerActions}
-            {identityHref === undefined ? (
-              <div className="min-w-0 text-right leading-tight">
-                <div className="text-text-body truncate text-xs">{identityPrimary}</div>
-                <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
-              </div>
-            ) : (
-              <Link
-                href={identityHref}
-                className="hover:bg-surface-raised min-w-0 rounded-[6px] px-2 py-1 text-right leading-tight transition-colors"
-                aria-current={undefined}
-                onClick={() => undefined}
-              >
-                <div className="text-text-body truncate text-xs">{identityPrimary}</div>
-                <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
-              </Link>
-            )}
-            <ThemeToggle />
-            <SignOutButton onSignOut={onSignOut} signingOut={signingOut} iconOnly />
+            <div className="hidden min-w-0 items-center gap-3 lg:flex">
+              {headerActions}
+              {identityHref === undefined ? (
+                <div className="min-w-0 text-right leading-tight">
+                  <div className="text-text-body truncate text-xs">{identityPrimary}</div>
+                  <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
+                </div>
+              ) : (
+                <Link
+                  href={identityHref}
+                  className="hover:bg-surface-raised min-w-0 rounded-[6px] px-2 py-1 text-right leading-tight transition-colors"
+                  aria-current={undefined}
+                  onClick={() => undefined}
+                >
+                  <div className="text-text-body truncate text-xs">{identityPrimary}</div>
+                  <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
+                </Link>
+              )}
+              <ThemeToggle />
+              <SignOutButton onSignOut={onSignOut} signingOut={signingOut} iconOnly />
+            </div>
           </div>
         </header>
 

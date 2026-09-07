@@ -275,7 +275,11 @@ export function NotificationBell({
                 type="button"
                 aria-label="Close notifications"
                 onClick={() => setOpen(false)}
-                className="text-text-faint hover:text-text-body flex h-7 w-7 items-center justify-center rounded-[4px]"
+                // A round, bordered target rather than a bare glyph.
+                // An icon on its own does not read as a control until
+                // you hover it, which is exactly when you no longer
+                // need telling.
+                className="border-border bg-surface-raised text-text-faint hover:border-border-strong hover:text-text-body flex h-7 w-7 items-center justify-center rounded-full border transition-colors"
               >
                 <X size={14} aria-hidden />
               </button>
@@ -407,7 +411,12 @@ export function NotificationBell({
                             aria-label="Dismiss this notification"
                             title="Dismiss"
                             onClick={() => onDismiss(n.id)}
-                            className="text-text-faint hover:text-text-body flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px]"
+                            // Same round target, and it goes CRITICAL on
+                            // hover: dismissing takes the row off this
+                            // person's feed for good (NOTIF-21), so the
+                            // control should say so before the click
+                            // rather than after it.
+                            className="border-border bg-surface-raised text-text-faint hover:border-[var(--color-critical-ring)] hover:bg-[var(--color-critical-tint)] hover:text-critical flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors"
                           >
                             <X size={13} aria-hidden />
                           </button>
