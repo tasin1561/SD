@@ -8,7 +8,11 @@ import {
   Card,
   CardBody,
   ErrorState,
+  FormField,
+  Input,
   LoadingState,
+  Modal,
+  ModalFooter,
   Money,
   PageHeader,
   Section,
@@ -22,14 +26,31 @@ import {
   Th,
   Tr,
 } from '@skydrop/ui/components';
-import { useBankEntries, useExpenseCategories, useInvestments } from '@/lib/ops-hooks';
+import {
+  useAttributeExpense,
+  useBankEntries,
+  useExpenseCategories,
+  useFreightSearch,
+  useInvestments,
+  type BankEntryView,
+  type FreightChargeView,
+} from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 import { CategoryModal } from './category-modal';
 import { ExpenseModal } from './expense-modal';
 import { InvestmentModal } from './investment-modal';
 import { InvestmentReturnModal } from './investment-return-modal';
 
 type Tab = 'spending' | 'investments';
+
+/**
+ * Categories whose costs belong to a LEG rather than to running the
+ * business. An entry filed here with nothing attached is counted twice
+ * in the P&L — once as that leg's cost, once as operating expenses —
+ * so these are the only rows worth offering an Attribute action on.
+ */
+const LEG_CATEGORIES = new Set(['freight_forwarder', 'courier_charges']);
 
 /**
  * What we spend, and what we have parked.
@@ -154,6 +175,8 @@ function SpendingTab({
   readonly canWrite: boolean;
 }): ReactElement {
   const [categoryId, setCategoryId] = useState('');
+  const [attributing, setAttributing] = useState<BankEntryView | null>(null);
+  const onAttribute = setAttributing;
   const categories = useExpenseCategories(false);
   const entries = useBankEntries({
     type: 'EXPENSE',
@@ -228,11 +251,12 @@ function SpendingTab({
                 <Th align="right">Amount</Th>
                 <Th>Reference</Th>
                 <Th>Recorded by</Th>
+                <Th align="right">Consignment</Th>
               </Tr>
             </THead>
             <TBody>
               {items.length === 0 ? (
-                <TableEmpty colSpan={6}>
+                <TableEmpty colSpan={7}>
                   {categoryId === ''
                     ? 'Nothing recorded yet. Every expense paid from one of our accounts appears here.'
                     : 'Nothing filed under this category yet.'}
@@ -253,11 +277,6 @@ function SpendingTab({
                         <StatusBadge kind="pending" label="Uncategorised" />
                       ) : (
                         <span className="text-sm">{e.categoryName}</span>
-                      )}
-                      {e.inboundFreightChargeId !== null && (
-                        <div className="text-text-faint mt-0.5 text-xs">
-                          attributed to a consignment
-                        </div>
                       )}
                     </Td>
                     <Td className="text-text-muted text-sm">{e.accountLabel}</Td>
@@ -281,6 +300,20 @@ function SpendingTab({
                         {new Date(e.recordedAt).toLocaleDateString('en-IN')}
                       </div>
                     </Td>
+                    <Td align="right">
+                      {e.inboundFreightChargeId !== null ? (
+                        <span className="text-status-delivered-fg text-xs">Attributed</span>
+                      ) : LEG_CATEGORIES.has(e.categoryCode ?? '') && canWrite ? (
+                        // Offered only on the categories where leaving
+                        // it unattached is an actual double count. On
+                        // rent or software there is no leg to attach to.
+                        <Button variant="ghost" size="sm" onClick={() => onAttribute(e)}>
+                          Attribute
+                        </Button>
+                      ) : (
+                        <span className="text-text-faint">—</span>
+                      )}
+                    </Td>
                   </Tr>
                 ))
               )}
@@ -288,7 +321,158 @@ function SpendingTab({
           </Table>
         </>
       )}
+
+      {attributing !== null && (
+        <AttributeModal entry={attributing} onClose={() => setAttributing(null)} />
+      )}
     </Section>
+  );
+}
+
+/**
+ * Attach an already-recorded expense to the consignment it paid for.
+ *
+ * The bill is found by searching, because the person doing this is
+ * holding a forwarder's invoice and what is printed on it is a
+ * consignment number — not a row in a dropdown of every open bill.
+ */
+function AttributeModal({
+  entry,
+  onClose,
+}: {
+  readonly entry: BankEntryView;
+  readonly onClose: () => void;
+}): ReactElement {
+  const [term, setTerm] = useState('');
+  const [picked, setPicked] = useState<FreightChargeView | null>(null);
+  const [costInr, setCostInr] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const results = useFreightSearch(term);
+  const attribute = useAttributeExpense();
+  const amount = Math.abs(Number(entry.signedAmount)).toFixed(2);
+  // A ৳2,000 payment against a ₹3,000 bill needs its INR cost stated —
+  // converting at a posted rate would absorb the bank's charges and the
+  // rate actually achieved (TRE-5).
+  const needsInr = entry.currency !== 'INR';
+
+  async function save(): Promise<void> {
+    setError(null);
+    if (picked === null) {
+      setError('Find the consignment this paid for');
+      return;
+    }
+    if (needsInr && (costInr.trim() === '' || !Number.isFinite(Number(costInr)))) {
+      setError('Enter what this cost in INR');
+      return;
+    }
+    try {
+      await attribute.mutateAsync({
+        freightChargeId: picked.id,
+        bankEntryId: entry.id,
+        ...(needsInr ? { costInr: Number(costInr).toFixed(2) } : {}),
+      });
+      onClose();
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title="Attach this to a consignment"
+      description={`${entry.currency} ${amount} from ${entry.accountLabel}. Attaching it moves the cost out of operating expenses and into that consignment's leg — where it is currently being counted twice.`}
+    >
+      <div className="space-y-4">
+        {picked === null ? (
+          <FormField
+            label="Which consignment"
+            required
+            hint="Search by consignment number, receipt or seller."
+          >
+            <Input
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="e.g. CN-2026-08"
+              autoFocus
+            />
+            {term.trim().length >= 2 && (
+              <div className="border-border mt-1 max-h-44 overflow-y-auto rounded-md border">
+                {results.isLoading ? (
+                  <p className="text-text-muted px-3 py-2 text-xs">Searching…</p>
+                ) : (results.data ?? []).length === 0 ? (
+                  <p className="text-text-muted px-3 py-2 text-xs">No freight bill matches that.</p>
+                ) : (
+                  (results.data ?? []).map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      className="hover:bg-surface-raised block w-full px-3 py-2 text-left"
+                      onClick={() => setPicked(f)}
+                    >
+                      <div className="text-sm">{f.consignmentNumber ?? 'Consignment'}</div>
+                      <div className="text-text-muted text-xs">
+                        {f.sellerCompanyName ?? ''} · billed {f.totalInr}
+                        {f.ourCostInr === null ? ' · no cost recorded' : ` · cost ${f.ourCostInr}`}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </FormField>
+        ) : (
+          <FormField label="Attaching to">
+            <div className="border-border bg-surface-raised flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">
+                  {picked.consignmentNumber ?? 'Consignment'}
+                </div>
+                <div className="text-text-muted truncate text-xs">
+                  {picked.sellerCompanyName ?? ''} · billed {picked.totalInr}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="text-text-muted hover:text-text shrink-0 text-xs underline underline-offset-2"
+                onClick={() => setPicked(null)}
+              >
+                Change
+              </button>
+            </div>
+          </FormField>
+        )}
+
+        {needsInr && (
+          <FormField
+            label="What it cost us (₹)"
+            required
+            hint={`Paid in ${entry.currency}, but a consignment's cost is reported in INR. Read this off the INR side of the statement rather than converting at a posted rate.`}
+          >
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={costInr}
+              onChange={(e) => setCostInr(e.target.value)}
+              placeholder="0.00"
+            />
+          </FormField>
+        )}
+        {error !== null && <p className="text-danger text-sm">{error}</p>}
+      </div>
+      <ModalFooter>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button disabled={attribute.isPending} onClick={() => void save()}>
+          {attribute.isPending ? 'Attaching…' : 'Attach'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }
 

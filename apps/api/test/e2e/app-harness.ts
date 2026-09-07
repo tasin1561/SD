@@ -939,8 +939,19 @@ export async function defaultStoreFor(
     select: { id: true, name: true },
   });
   if (existing !== null) return existing;
+  // Named after the seller, as production does — the harness must not
+  // be the only place a store is called something else.
+  const seller = await prisma.seller.findUnique({
+    where: { id: sellerId },
+    select: { companyName: true },
+  });
   return prisma.sellerStore.create({
-    data: { sellerId, name: 'Default store', isDefault: true, isActive: true },
+    data: {
+      sellerId,
+      name: (seller?.companyName ?? 'Default store').trim().slice(0, 80),
+      isDefault: true,
+      isActive: true,
+    },
     select: { id: true, name: true },
   });
 }

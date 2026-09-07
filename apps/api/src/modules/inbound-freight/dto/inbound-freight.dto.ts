@@ -144,6 +144,20 @@ export class PayForwarderDto {
   readonly note?: string;
 }
 
+export class AttributeExpenseDto {
+  @ApiProperty({ description: 'An expense already recorded on /expenses' })
+  @IsUUID('7')
+  readonly bankEntryId!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'What it cost in INR. Required when the expense is not in INR — read off the statement, not converted at a posted rate.',
+  })
+  @IsOptional()
+  @Matches(/^\d{1,12}(\.\d{1,2})?$/, { message: 'Amount must be a number with up to 2 decimals' })
+  readonly costInr?: string;
+}
+
 export class WaiveInboundFreightDto {
   @ApiProperty({
     description:

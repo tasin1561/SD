@@ -100,6 +100,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/fx', 'fx.view'],
   ['/leads', 'leads.view'],
   ['/sellers', 'sellers.view'],
+  ['/stores', 'sellers.view'],
   ['/courier-accounts', 'courier.accounts.view'],
   ['/delhivery', 'courier.waybills.manage'],
   ['/courier-escalation', 'courier.ops.view'],

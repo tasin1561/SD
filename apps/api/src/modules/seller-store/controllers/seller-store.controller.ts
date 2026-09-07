@@ -72,7 +72,7 @@ export class SellerStoreController {
     return this.stores.create(
       seller.id,
       { name: body.name, note: body.note ?? null },
-      { sellerUserId: seller.userId },
+      { kind: 'SELLER', sellerUserId: seller.userId },
     );
   }
 
@@ -89,6 +89,7 @@ export class SellerStoreController {
     @Body() body: UpdateStoreDto,
   ): Promise<StoreView> {
     return this.stores.update(seller.id, storeId, body, {
+      kind: 'SELLER',
       sellerUserId: seller.userId,
     });
   }
@@ -102,6 +103,7 @@ export class SellerStoreController {
     @Param('storeId', new ParseUUIDPipe({ version: '7' })) storeId: string,
   ): Promise<StoreView> {
     return this.stores.makeDefault(seller.id, storeId, {
+      kind: 'SELLER',
       sellerUserId: seller.userId,
     });
   }
@@ -119,6 +121,7 @@ export class SellerStoreController {
     @Body() body: SetStoreActiveDto,
   ): Promise<StoreView> {
     return this.stores.setActive(seller.id, storeId, body.isActive, {
+      kind: 'SELLER',
       sellerUserId: seller.userId,
     });
   }

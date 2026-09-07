@@ -167,6 +167,7 @@ export function AuthedShell({
       items: [
         { href: '/leads', label: 'Invite requests', icon: <Inbox size={15} /> },
         { href: '/sellers', label: 'Sellers', icon: <Store size={15} /> },
+        { href: '/stores', label: 'Seller stores', icon: <Building2 size={15} /> },
         { href: '/courier-accounts', label: 'Courier accounts', icon: <Building2 size={15} /> },
         { href: '/delhivery', label: 'Delhivery', icon: <Gauge size={15} /> },
         { href: '/courier-escalation', label: 'Escalations', icon: <Inbox size={15} /> },

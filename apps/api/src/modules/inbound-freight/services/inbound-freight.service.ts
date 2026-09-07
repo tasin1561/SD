@@ -948,6 +948,154 @@ export class InboundFreightService {
   }
 
   /**
+   * Attach an expense that was ALREADY recorded to the bill it belongs
+   * to.
+   *
+   * ── WHY THIS EXISTS SEPARATELY FROM PAYING ───────────────────────────
+   * `recordForwarderPayment` writes the cash and the attribution
+   * together, which is the right path going forward. It does nothing
+   * for the payments already sitting on /expenses as loose entries —
+   * and those are exactly the ones being counted twice, because the
+   * P&L reports an unlinked forwarder payment as an operating expense
+   * while the leg it belongs to still reads as unpriced.
+   *
+   * So this only ever moves an entry from "general" to "attributed". No
+   * money is created, moved or restated: the amount, the account, the
+   * owner and the date are all left alone, and the ONLY column touched
+   * on the entry is the link. That is why it does not go through
+   * `BankLedgerService.post()` (TRE-1) — nothing about the cash changes.
+   *
+   * ── THE INR FIGURE, AGAIN ────────────────────────────────────────────
+   * A ৳2,000 payment against a ₹3,000 bill needs its INR cost stated,
+   * for the TRE-5 reason: converting at a posted rate would absorb the
+   * bank's charges and the rate actually achieved.
+   */
+  async attributeExistingPayment(
+    staffId: string,
+    freightChargeId: string,
+    input: { readonly bankEntryId: string; readonly costInr?: string | null },
+    ctx?: ClientContext,
+  ): Promise<FreightChargeView> {
+    const charge = await this.prisma.client.inboundFreightCharge.findUnique({
+      where: { id: freightChargeId },
+      select: {
+        id: true,
+        ourCostInr: true,
+        consignment: { select: { consignmentNumber: true } },
+      },
+    });
+    if (charge === null) {
+      throw new NotFoundException({
+        code: 'FREIGHT_CHARGE_NOT_FOUND',
+        message: 'No such freight bill',
+      });
+    }
+
+    const entry = await this.prisma.client.bankEntry.findUnique({
+      where: { id: input.bankEntryId },
+      select: {
+        id: true,
+        type: true,
+        currency: true,
+        signedAmount: true,
+        inboundFreightChargeId: true,
+      },
+    });
+    if (entry === null) {
+      throw new NotFoundException({ code: 'BANK_ENTRY_NOT_FOUND', message: 'No such bank entry' });
+    }
+    if (entry.type !== BankEntryType.EXPENSE) {
+      // A settlement or a top-up is not a payment to a forwarder, and
+      // letting one be attributed would take real cash out of the line
+      // it actually belongs to.
+      throw new ConflictException({
+        code: 'ENTRY_NOT_AN_EXPENSE',
+        message: 'Only an expense can be attributed to a freight bill.',
+      });
+    }
+    if (entry.inboundFreightChargeId !== null) {
+      // Refused rather than moved. Re-pointing an entry at a different
+      // bill silently changes two legs' margins at once, and the person
+      // doing it can see only one of them.
+      throw new ConflictException({
+        code: 'ENTRY_ALREADY_ATTRIBUTED',
+        message: 'This expense is already attached to a consignment.',
+      });
+    }
+
+    const paidAmount = entry.signedAmount.abs();
+    let costInr: Prisma.Decimal;
+    if (entry.currency === Currency.INR) {
+      costInr = paidAmount;
+    } else {
+      if (input.costInr == null || input.costInr === '') {
+        throw new BadRequestException({
+          code: 'FREIGHT_COST_INR_REQUIRED',
+          message:
+            `This expense is in ${entry.currency} and the P&L is in INR. ` +
+            'Give what it cost in INR as well — read off the statement rather than ' +
+            'converted at a posted rate, so bank charges and the rate actually ' +
+            'achieved are not silently absorbed.',
+        });
+      }
+      costInr = new Prisma.Decimal(input.costInr);
+      if (costInr.lessThanOrEqualTo(0)) {
+        throw new BadRequestException({
+          code: 'FREIGHT_COST_NOT_POSITIVE',
+          message: 'The INR cost must be a positive number',
+        });
+      }
+    }
+
+    const updated = await this.prisma.client.$transaction(async (tx) => {
+      // Through the LEDGER, which owns bank_entries (TRE-1). It writes
+      // the link guarded on it still being absent, so two people
+      // attributing the same expense from two screens cannot both win.
+      const claimed = await this.bank.attributeToFreightCharge(entry.id, freightChargeId, tx);
+      if (!claimed.claimed) {
+        throw new ConflictException({
+          code: 'ENTRY_ALREADY_ATTRIBUTED',
+          message: 'Somebody else attached this expense while you were on this page.',
+        });
+      }
+      return tx.inboundFreightCharge.update({
+        where: { id: freightChargeId },
+        // Only when unset. A part payment must not restate a known
+        // invoice down to what has cleared.
+        data: charge.ourCostInr === null ? { ourCostInr: costInr } : {},
+        include: {
+          consignment: { select: { consignmentNumber: true } },
+          goodsReceipt: { select: { receiptNumber: true } },
+          seller: { select: { companyName: true } },
+        },
+      });
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      action: 'staff.inbound_freight.payment_attributed',
+      entityType: 'inbound_freight_charge',
+      entityId: freightChargeId,
+      // It moves a cost out of operating expenses and into a leg, which
+      // changes two figures on the P&L at once.
+      severity: 'HIGH',
+      metadata: {
+        bankEntryId: entry.id,
+        paidAmount: paidAmount.toFixed(2),
+        paidCurrency: entry.currency,
+        costInr: costInr.toFixed(2),
+        ourCostWas: charge.ourCostInr?.toString() ?? null,
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    });
+
+    return this.toView(updated);
+  }
+
+  /**
    * How a freight bill came to be what it is.
    *
    * ── TWO SIDES, AND THEY ANSWER DIFFERENT QUESTIONS ───────────────────

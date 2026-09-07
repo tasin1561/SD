@@ -26,6 +26,7 @@ import {
   Wallet,
   Warehouse,
 } from 'lucide-react';
+import { OrderOmnisearch } from './order-omnisearch';
 
 /**
  * The seller shell.
@@ -132,6 +133,9 @@ export function AuthedShell({
         identitySecondary={identity.emailDisplay}
         headerActions={
           <div className="flex items-center gap-1">
+            {/* Reachable from EVERY page: the moment somebody needs an
+                order is rarely the moment they are on the orders list. */}
+            <OrderOmnisearch />
             <MenuButton label="Quick actions" items={quickActions} Link={Link} />
             <NotificationBellContainer />
           </div>

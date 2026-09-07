@@ -23,6 +23,7 @@ import type { AuthenticatedStaff } from '../../../common/types/request';
 import {
   ListInboundFreightQueryDto,
   RecordInboundFreightDto,
+  AttributeExpenseDto,
   PayForwarderDto,
   SetFreightOurCostDto,
   WaiveInboundFreightDto,
@@ -152,6 +153,28 @@ export class AdminInboundFreightController {
         reference: body.reference ?? null,
         note: body.note ?? null,
       },
+      ctx,
+    );
+  }
+
+  @Post(':freightChargeId/attribute-expense')
+  @RequirePermissions('money.freight.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Attach an expense that was ALREADY recorded to this bill. Moves a cost out of operating expenses and into this leg — where it was being counted twice.',
+  })
+  attributeExpense(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('freightChargeId', new ParseUUIDPipe({ version: '7' }))
+    freightChargeId: string,
+    @Body() body: AttributeExpenseDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<FreightChargeView> {
+    return this.svc.attributeExistingPayment(
+      staff.id,
+      freightChargeId,
+      { bankEntryId: body.bankEntryId, costInr: body.costInr ?? null },
       ctx,
     );
   }

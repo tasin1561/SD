@@ -99,7 +99,7 @@ describe('SellerStoreService writes', () => {
     // Promoting one is its own act, so adding a store cannot quietly
     // move where every future order is filed.
     const { svc, create } = makeSut();
-    await svc.create('seller-1', { name: 'Instagram' }, { sellerUserId: 'su-1' });
+    await svc.create('seller-1', { name: 'Instagram' }, { kind: 'SELLER', sellerUserId: 'su-1' });
     expect(create.mock.calls[0]?.[0]?.data).toMatchObject({ isDefault: false, isActive: true });
   });
 
@@ -110,7 +110,7 @@ describe('SellerStoreService writes', () => {
     const { svc, updateMany, update } = makeSut({
       store: { id: 'st-2', name: 'Instagram', isActive: true, isDefault: false },
     });
-    await svc.makeDefault('seller-1', 'st-2', { sellerUserId: 'su-1' });
+    await svc.makeDefault('seller-1', 'st-2', { kind: 'SELLER', sellerUserId: 'su-1' });
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { isDefault: false } }),
     );
@@ -126,14 +126,14 @@ describe('SellerStoreService writes', () => {
       store: { id: 'st-2', name: 'Shut', isActive: false, isDefault: false },
     });
     await expect(
-      svc.makeDefault('seller-1', 'st-2', { sellerUserId: 'su-1' }),
+      svc.makeDefault('seller-1', 'st-2', { kind: 'SELLER', sellerUserId: 'su-1' }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('the DEFAULT store cannot be closed', async () => {
     const { svc } = makeSut({ store: { name: 'Default store', isDefault: true } });
     await expect(
-      svc.setActive('seller-1', 'st-1', false, { sellerUserId: 'su-1' }),
+      svc.setActive('seller-1', 'st-1', false, { kind: 'SELLER', sellerUserId: 'su-1' }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -142,7 +142,7 @@ describe('SellerStoreService writes', () => {
     // underneath it, so the update carries the isDefault it saw.
     const { svc, updateMany } = makeSut({ store: { name: 'Instagram', isDefault: false } });
     updateMany.mockResolvedValueOnce({ count: 1 });
-    await svc.setActive('seller-1', 'st-1', false, { sellerUserId: 'su-1' });
+    await svc.setActive('seller-1', 'st-1', false, { kind: 'SELLER', sellerUserId: 'su-1' });
     expect(updateMany.mock.calls[0]?.[0]?.where).toMatchObject({ isDefault: false });
   });
 });

@@ -33,7 +33,7 @@ import type { SellerRegisterViaInvitationDto } from './dto/register-via-invitati
 import { provisionDefaultSellerRoles } from '../../common/auth/seller-role-provisioning';
 import { ALL_SELLER_PERMISSION_KEYS } from '../../common/auth/seller-permissions';
 import { generateSellerInitials } from './util/seller-initials';
-import { DEFAULT_STORE_NAME } from '../seller-store/services/seller-store.service';
+import { defaultStoreName } from '../seller-store/services/seller-store.service';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -252,7 +252,10 @@ export class SellerAuthService {
       await tx.sellerStore.create({
         data: {
           sellerId: createdSeller.id,
-          name: DEFAULT_STORE_NAME,
+          // Their own business name — a seller with one shopfront
+          // should see something they recognise, not a placeholder
+          // that reads like a setting they forgot to fill in.
+          name: defaultStoreName(input.companyName),
           isDefault: true,
           isActive: true,
         },

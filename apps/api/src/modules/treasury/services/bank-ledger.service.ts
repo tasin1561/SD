@@ -106,6 +106,36 @@ export class BankLedgerService {
    * transaction as the event. A bank line that commits without its cause
    * is how a statement stops matching the story.
    */
+  /**
+   * Attach an existing expense to the consignment freight bill it paid
+   * for.
+   *
+   * ── WHY THIS LIVES HERE AND NOT IN THE FREIGHT SERVICE ───────────────
+   * It changes no amount, no account, no owner and no date — the ONLY
+   * column it touches is the link. That made it tempting to write from
+   * the freight service directly, and the structural guard on TRE-1
+   * refused: `bank_entries` has one writer, and "it is only an
+   * attribution" is exactly the argument the second writer always makes.
+   * Ownership of the table is what keeps every other rule about it
+   * enforceable.
+   *
+   * Guarded on the link still being ABSENT, so two people attributing
+   * the same expense from two screens cannot both succeed. Returns
+   * whether it claimed it; the caller decides what that means.
+   */
+  async attributeToFreightCharge(
+    entryId: string,
+    freightChargeId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ claimed: boolean }> {
+    const db = tx ?? this.prisma.client;
+    const res = await db.bankEntry.updateMany({
+      where: { id: entryId, inboundFreightChargeId: null },
+      data: { inboundFreightChargeId: freightChargeId },
+    });
+    return { claimed: res.count > 0 };
+  }
+
   async post(input: PostEntryInput, tx?: Prisma.TransactionClient): Promise<{ id: string }> {
     const db = tx ?? this.prisma.client;
     const amount = new Prisma.Decimal(input.signedAmount);

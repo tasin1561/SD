@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
+import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
+import { AdminSellerStoreController } from './controllers/admin-seller-store.controller';
 import { SellerStoreController } from './controllers/seller-store.controller';
 import { SellerStoreService } from './services/seller-store.service';
 
@@ -14,8 +16,8 @@ import { SellerStoreService } from './services/seller-store.service';
  */
 @Module({
   imports: [AuthCommonModule],
-  controllers: [SellerStoreController],
-  providers: [SellerStoreService, SellerJwtGuard],
+  controllers: [SellerStoreController, AdminSellerStoreController],
+  providers: [SellerStoreService, SellerJwtGuard, StaffJwtGuard],
   exports: [SellerStoreService],
 })
 export class SellerStoreModule {}

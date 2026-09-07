@@ -358,6 +358,35 @@ export function useRecordFreight(): UseMutationResult<
   });
 }
 
+/**
+ * Attach an expense that was already recorded to the bill it belongs to.
+ *
+ * Moves a cost out of operating expenses and into its leg — where it
+ * was being counted twice, because the P&L reports an unlinked
+ * forwarder payment as general spending while the leg still reads as
+ * unpriced.
+ */
+export function useAttributeExpense(): UseMutationResult<
+  FreightChargeView,
+  Error,
+  { freightChargeId: string; bankEntryId: string; costInr?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ freightChargeId, ...body }) =>
+      client.request<FreightChargeView>(
+        `/api/admin/inbound-freight/${freightChargeId}/attribute-expense`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-freight'] });
+      // The ledger row, the P&L and the treasury all change at once.
+      void qc.invalidateQueries({ queryKey: ['admin-treasury'] });
+    },
+  });
+}
+
 /** How a freight bill was split, and what has been paid against it. */
 export interface FreightCostBreakdownView {
   readonly ourCostInr: string | null;
@@ -3863,5 +3892,108 @@ export function useRecordCourierPayment(): UseMutationResult<
       void qc.invalidateQueries({ queryKey: ['admin-courier-wallet'] });
       void qc.invalidateQueries({ queryKey: ['admin-treasury'] });
     },
+  });
+}
+
+/* ── Seller shopfronts, seen and fixed from our side ──────────────── */
+
+export interface AdminStoreView {
+  readonly id: string;
+  readonly name: string;
+  readonly note: string | null;
+  readonly isDefault: boolean;
+  readonly isActive: boolean;
+  readonly orderCount: number;
+  readonly createdAt: string;
+}
+
+export interface SellerStoresGroupView {
+  readonly sellerId: string;
+  readonly companyName: string;
+  readonly email: string;
+  readonly stores: readonly AdminStoreView[];
+}
+
+const STORES_KEY = ['admin-seller-stores'] as const;
+
+export function useSellerStores(
+  sellerId: string,
+  enabled = true,
+): UseQueryResult<readonly SellerStoresGroupView[]> {
+  const client = useApiClient();
+  const qs = sellerId === '' ? '' : `?sellerId=${encodeURIComponent(sellerId)}`;
+  return useQuery({
+    queryKey: [...STORES_KEY, sellerId],
+    queryFn: () =>
+      client.request<readonly SellerStoresGroupView[]>(`/api/admin/seller-stores${qs}`),
+    enabled,
+  });
+}
+
+export function useAdminCreateStore(): UseMutationResult<
+  AdminStoreView,
+  Error,
+  { sellerId: string; name: string; note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sellerId, ...body }) =>
+      client.request<AdminStoreView>(`/api/admin/seller-stores/sellers/${sellerId}`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: STORES_KEY }),
+  });
+}
+
+export function useAdminRenameStore(): UseMutationResult<
+  AdminStoreView,
+  Error,
+  { sellerId: string; storeId: string; name: string; note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sellerId, storeId, ...body }) =>
+      client.request<AdminStoreView>(`/api/admin/seller-stores/sellers/${sellerId}/${storeId}`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: STORES_KEY }),
+  });
+}
+
+export function useAdminMakeStoreDefault(): UseMutationResult<
+  AdminStoreView,
+  Error,
+  { sellerId: string; storeId: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sellerId, storeId }) =>
+      client.request<AdminStoreView>(
+        `/api/admin/seller-stores/sellers/${sellerId}/${storeId}/make-default`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: STORES_KEY }),
+  });
+}
+
+export function useAdminSetStoreActive(): UseMutationResult<
+  AdminStoreView,
+  Error,
+  { sellerId: string; storeId: string; isActive: boolean }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sellerId, storeId, isActive }) =>
+      client.request<AdminStoreView>(
+        `/api/admin/seller-stores/sellers/${sellerId}/${storeId}/active`,
+        { method: 'PATCH', body: { isActive } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: STORES_KEY }),
   });
 }

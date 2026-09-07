@@ -8,6 +8,19 @@ import { ActorType, AuditSeverity, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 
+/**
+ * WHO is changing a shopfront.
+ *
+ * A seller managing their own, or a staff member doing it for them.
+ * Kept as a union rather than an optional staff id because the audit
+ * row must say which — "the seller renamed their store" and "we renamed
+ * it for them" are different facts, and only one of them is ours to
+ * answer for when they ask why it changed.
+ */
+export type StoreActor =
+  | { kind: 'SELLER'; sellerUserId: string | null }
+  | { kind: 'STAFF'; staffId: string };
+
 export interface StoreView {
   readonly id: string;
   readonly name: string;
@@ -18,8 +31,47 @@ export interface StoreView {
   readonly createdAt: string;
 }
 
-/** The name every seller's first shopfront is given. */
-export const DEFAULT_STORE_NAME = 'Default store';
+/**
+ * The audit row's who, for either kind of actor.
+ *
+ * A staff change carries `staffUserId` so it reads as OURS in the
+ * seller's history rather than as something they did — which is the
+ * question asked when they ring up about a store they do not remember
+ * closing.
+ */
+function actorFields(
+  sellerId: string,
+  actor: StoreActor,
+): { actorType: ActorType; sellerId: string; actorId?: string | null; staffUserId?: string } {
+  return actor.kind === 'STAFF'
+    ? { actorType: ActorType.STAFF, sellerId, staffUserId: actor.staffId }
+    : { actorType: ActorType.SELLER, sellerId, actorId: actor.sellerUserId };
+}
+
+/** One seller, and every shopfront they sell under. */
+export interface SellerStoresGroup {
+  readonly sellerId: string;
+  readonly companyName: string;
+  readonly email: string;
+  readonly stores: readonly StoreView[];
+}
+
+/**
+ * What a seller's FIRST shopfront is called.
+ *
+ * Their own business name, not "Default store". A seller with one
+ * shopfront — which is nearly all of them — should see something they
+ * recognise on their orders and in the selector, not a placeholder that
+ * reads like a setting they forgot to fill in.
+ *
+ * Trimmed and capped to the column's length. Falls back only when the
+ * company name is somehow empty, which the registration form does not
+ * allow: a store with no name at all cannot be shown or picked.
+ */
+export function defaultStoreName(companyName: string): string {
+  const trimmed = companyName.trim().slice(0, 80);
+  return trimmed === '' ? 'Default store' : trimmed;
+}
 
 /**
  * A seller's shopfronts — the ONLY writer of `seller_stores`.
@@ -56,11 +108,63 @@ export class SellerStoreService {
    * orders to belong. Takes the caller's tx for exactly that reason —
    * a company and its shopfront come up together or not at all.
    */
-  async createDefaultFor(tx: Prisma.TransactionClient, sellerId: string): Promise<{ id: string }> {
+  async createDefaultFor(
+    tx: Prisma.TransactionClient,
+    sellerId: string,
+    companyName: string,
+  ): Promise<{ id: string }> {
     return tx.sellerStore.create({
-      data: { sellerId, name: DEFAULT_STORE_NAME, isDefault: true, isActive: true },
+      data: { sellerId, name: defaultStoreName(companyName), isDefault: true, isActive: true },
       select: { id: true },
     });
+  }
+
+  /**
+   * Every seller and their shopfronts, for the admin view.
+   *
+   * Driven from SELLERS, not from stores — a seller with no store is
+   * exactly the row worth seeing, because it means their orders have
+   * nowhere to be filed. That cannot happen for a company created after
+   * this shipped, which is precisely why an empty list here would be a
+   * finding rather than a blank.
+   */
+  async allBySeller(sellerId: string | null): Promise<readonly SellerStoresGroup[]> {
+    const sellers = await this.prisma.client.seller.findMany({
+      where: { deletedAt: null, ...(sellerId === null ? {} : { id: sellerId }) },
+      orderBy: { companyName: 'asc' },
+      select: {
+        id: true,
+        companyName: true,
+        email: true,
+        stores: {
+          where: { deletedAt: null },
+          orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+          select: {
+            id: true,
+            name: true,
+            note: true,
+            isDefault: true,
+            isActive: true,
+            createdAt: true,
+            _count: { select: { orders: true } },
+          },
+        },
+      },
+    });
+    return sellers.map((s) => ({
+      sellerId: s.id,
+      companyName: s.companyName,
+      email: s.email,
+      stores: s.stores.map((r) => ({
+        id: r.id,
+        name: r.name,
+        note: r.note,
+        isDefault: r.isDefault,
+        isActive: r.isActive,
+        orderCount: r._count.orders,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    }));
   }
 
   async list(sellerId: string, includeInactive = true): Promise<readonly StoreView[]> {
@@ -149,7 +253,7 @@ export class SellerStoreService {
   async create(
     sellerId: string,
     input: { name: string; note?: string | null },
-    actor: { sellerUserId: string | null },
+    actor: StoreActor,
   ): Promise<StoreView> {
     const name = input.name.trim();
     if (name === '') {
@@ -187,13 +291,7 @@ export class SellerStoreService {
     }
 
     await this.audit.log({
-      actorType: ActorType.SELLER,
-      sellerId,
-      // The PERSON at the company, when there is one. Kept in metadata
-      // because the audit row's typed fields stop at the seller, and
-      // "who at this company renamed the store" is the question asked
-      // later.
-      actorId: actor.sellerUserId,
+      ...actorFields(sellerId, actor),
       action: 'seller.store.created',
       entityType: 'seller_store',
       entityId: created.id,
@@ -207,7 +305,7 @@ export class SellerStoreService {
     sellerId: string,
     storeId: string,
     input: { name?: string; note?: string | null },
-    actor: { sellerUserId: string | null },
+    actor: StoreActor,
   ): Promise<StoreView> {
     const before = await this.prisma.client.sellerStore.findFirst({
       where: { id: storeId, sellerId, deletedAt: null },
@@ -244,13 +342,7 @@ export class SellerStoreService {
     }
 
     await this.audit.log({
-      actorType: ActorType.SELLER,
-      sellerId,
-      // The PERSON at the company, when there is one. Kept in metadata
-      // because the audit row's typed fields stop at the seller, and
-      // "who at this company renamed the store" is the question asked
-      // later.
-      actorId: actor.sellerUserId,
+      ...actorFields(sellerId, actor),
       action: 'seller.store.updated',
       entityType: 'seller_store',
       entityId: storeId,
@@ -271,11 +363,7 @@ export class SellerStoreService {
    * the index would refuse the second write with the first already
    * committed.
    */
-  async makeDefault(
-    sellerId: string,
-    storeId: string,
-    actor: { sellerUserId: string | null },
-  ): Promise<StoreView> {
+  async makeDefault(sellerId: string, storeId: string, actor: StoreActor): Promise<StoreView> {
     const target = await this.prisma.client.sellerStore.findFirst({
       where: { id: storeId, sellerId, deletedAt: null },
       select: { id: true, name: true, isActive: true, isDefault: true },
@@ -300,13 +388,7 @@ export class SellerStoreService {
     });
 
     await this.audit.log({
-      actorType: ActorType.SELLER,
-      sellerId,
-      // The PERSON at the company, when there is one. Kept in metadata
-      // because the audit row's typed fields stop at the seller, and
-      // "who at this company renamed the store" is the question asked
-      // later.
-      actorId: actor.sellerUserId,
+      ...actorFields(sellerId, actor),
       action: 'seller.store.made_default',
       entityType: 'seller_store',
       entityId: storeId,
@@ -330,7 +412,7 @@ export class SellerStoreService {
     sellerId: string,
     storeId: string,
     isActive: boolean,
-    actor: { sellerUserId: string | null },
+    actor: StoreActor,
   ): Promise<StoreView> {
     const store = await this.prisma.client.sellerStore.findFirst({
       where: { id: storeId, sellerId, deletedAt: null },
@@ -361,13 +443,7 @@ export class SellerStoreService {
     }
 
     await this.audit.log({
-      actorType: ActorType.SELLER,
-      sellerId,
-      // The PERSON at the company, when there is one. Kept in metadata
-      // because the audit row's typed fields stop at the seller, and
-      // "who at this company renamed the store" is the question asked
-      // later.
-      actorId: actor.sellerUserId,
+      ...actorFields(sellerId, actor),
       action: isActive ? 'seller.store.reopened' : 'seller.store.closed',
       entityType: 'seller_store',
       entityId: storeId,

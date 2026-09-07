@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   InboundFreightBasis,
   InboundFreightMode,
@@ -61,6 +61,8 @@ function makeSut(
     settingsThrows?: boolean;
     /** INR by default; 'BDT' drives the cross-currency payment path. */
     bankCurrency?: 'INR' | 'BDT';
+    /** An already-recorded expense, for the attribution cases. */
+    bankEntry?: AnyArgs | null;
     loaded?: AnyArgs | null;
     claimCount?: number;
   } = {},
@@ -117,6 +119,8 @@ function makeSut(
     // Resolved by CODE inside recordForwarderPayment — the caller never
     // picks the category, so one cost cannot be filed two ways.
     expenseCategory: { findUnique: jest.fn(async () => ({ id: 'cat-freight' })) },
+    // The expense being attributed to a bill, when a case supplies one.
+    bankEntry: { findUnique: jest.fn(async () => opts.bankEntry ?? null) },
     // The account decides the entry's currency (TRE-2) and therefore
     // whether a separate INR figure has to be supplied.
     platformBankAccount: {
@@ -208,7 +212,11 @@ function makeSut(
   const post = jest.fn(async (_input: Record<string, unknown>, _tx?: unknown) => ({
     id: 'be-1',
   }));
-  const bank = { post } as unknown as BankLedgerService;
+  // TRE-1: bank_entries has ONE writer, and attaching an expense to a
+  // freight bill is still a write to it — "it is only an attribution"
+  // is the argument the second writer always makes.
+  const attributeToFreightCharge = jest.fn(async () => ({ claimed: true }));
+  const bank = { post, attributeToFreightCharge } as unknown as BankLedgerService;
 
   return {
     svc: new InboundFreightService(prisma, audit, settings, wallet, amortisation, bank),
@@ -219,6 +227,7 @@ function makeSut(
     chargeUpdateMany,
     chargeUpdate,
     post,
+    attributeToFreightCharge,
   };
 }
 
@@ -567,5 +576,68 @@ describe('paying the forwarder from a BDT account', () => {
     await svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment);
     const data = chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
     expect(data.ourCostInr?.toFixed(2)).toBe('2500.00');
+  });
+});
+
+describe('InboundFreightService.attributeExistingPayment', () => {
+  const entry = (over: AnyArgs = {}): AnyArgs => ({
+    id: 'be-9',
+    type: 'EXPENSE',
+    currency: 'INR',
+    signedAmount: new Prisma.Decimal('-3000.00'),
+    inboundFreightChargeId: null,
+    ...over,
+  });
+
+  it('links through the LEDGER, never by writing bank_entries itself', async () => {
+    // TRE-1. Ownership of the table is what keeps every other rule
+    // about it enforceable, and this write changes no money at all —
+    // which is exactly the argument that would have bypassed it.
+    const ctx = makeSut({ loaded: chargeRow({ ourCostInr: null }), bankEntry: entry() });
+    await ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' });
+    expect(ctx.attributeToFreightCharge).toHaveBeenCalled();
+  });
+
+  it('fills in our cost from an INR expense', async () => {
+    const ctx = makeSut({ loaded: chargeRow({ ourCostInr: null }), bankEntry: entry() });
+    await ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' });
+    const data = ctx.chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
+    expect(data.ourCostInr?.toFixed(2)).toBe('3000.00');
+  });
+
+  it('refuses a non-INR expense with no INR cost — it will not guess a rate', async () => {
+    // A ৳2,000 payment against a ₹3,000 bill. Converting at a posted
+    // rate would absorb the bank's charges and the rate achieved.
+    const ctx = makeSut({
+      loaded: chargeRow({ ourCostInr: null }),
+      bankEntry: entry({ currency: 'BDT', signedAmount: new Prisma.Decimal('-2000.00') }),
+    });
+    await expect(
+      ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('refuses an entry that is not an expense', async () => {
+    // A settlement or a top-up is not a payment to a forwarder, and
+    // attributing one takes real cash out of the line it belongs to.
+    const ctx = makeSut({
+      loaded: chargeRow({ ourCostInr: null }),
+      bankEntry: entry({ type: 'COURIER_SETTLEMENT' }),
+    });
+    await expect(
+      ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('refuses one that is already attached rather than re-pointing it', async () => {
+    // Re-pointing changes two legs' margins at once and the person
+    // doing it can see only one of them.
+    const ctx = makeSut({
+      loaded: chargeRow({ ourCostInr: null }),
+      bankEntry: entry({ inboundFreightChargeId: 'fc-other' }),
+    });
+    await expect(
+      ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
