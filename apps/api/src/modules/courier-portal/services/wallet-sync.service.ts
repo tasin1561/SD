@@ -15,6 +15,26 @@ const SETTING_ENABLED = 'courier.wallet_sync_enabled';
 const SETTING_WRITE = 'courier.wallet_sync_writes_enabled';
 const SETTING_WINDOW_DAYS = 'courier.wallet_sync_window_days';
 
+/** Days of slack before a short export counts as short. */
+const COVERAGE_SLACK_DAYS = 3;
+/** Below this, a short span means a quiet week rather than a short window. */
+const MIN_ROWS_TO_JUDGE_COVERAGE = 50;
+
+/**
+ * How many days a file spans, from its earliest charge to its latest.
+ *
+ * ISO strings rather than Dates because that is what the importer
+ * reports, and re-parsing them here keeps the comparison next to the
+ * thing being compared.
+ */
+function spanDays(fromIso: string | null, toIso: string | null): number | null {
+  if (fromIso === null || toIso === null) return null;
+  const a = Date.parse(fromIso);
+  const b = Date.parse(toIso);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.max(0, Math.round((b - a) / 86_400_000));
+}
+
 /** One account's fetch. Several Delhivery accounts means several. */
 export interface WalletSyncAccountResult {
   readonly courierAccountId: string;
@@ -22,6 +42,10 @@ export interface WalletSyncAccountResult {
   readonly fileBytes: number | null;
   readonly result: WalletImportResult | null;
   readonly error: string | null;
+  /** Whether their date picker took the window we asked for. */
+  readonly rangeApplied: boolean | null;
+  /** How many days the file we got back actually spans. */
+  readonly coveredDays: number | null;
 }
 
 export interface WalletSyncSummary {
@@ -106,7 +130,7 @@ export class WalletSyncService {
 
     for (const account of accounts) {
       try {
-        const file = await this.fetcher.fetch(account.id, from, now);
+        const { bytes: file, rangeApplied } = await this.fetcher.fetch(account.id, from, now);
         // dryRun is the inverse of the write switch: in SHADOW it parses
         // the real file and reports exactly what it WOULD change.
         const result = await this.importer.importDelhiveryWallet(file, null, {
@@ -115,13 +139,17 @@ export class WalletSyncService {
           // parcels and "not ours" keeps meaning something.
           courierAccountId: account.id,
         });
+        const coveredDays = spanDays(result.periodFrom, result.periodTo);
         results.push({
           courierAccountId: account.id,
           label: account.label,
           fileBytes: file.length,
           result,
           error: null,
+          rangeApplied,
+          coveredDays,
         });
+        await this.reportCoverage(account, windowDays, coveredDays, rangeApplied, result);
         // It worked, so clear its own alarm. A job that starts working
         // again should not leave a stale row for a person to tidy.
         await this.issues.resolveByKey(
@@ -143,6 +171,8 @@ export class WalletSyncService {
           fileBytes: null,
           result: null,
           error: message,
+          rangeApplied: null,
+          coveredDays: null,
         });
 
         // Say so where somebody will see it. A cost sync that stops
@@ -219,6 +249,84 @@ export class WalletSyncService {
       );
     }
     return summary;
+  }
+
+  /**
+   * Did we get the window we asked for?
+   *
+   * `wallet_sync_window_days` is not a preference — it is the whole
+   * reason this re-reads a wide range every night instead of fetching
+   * yesterday. Delhivery re-cuts a charge weeks after the parcel moved,
+   * so an export that only ever covers the last few days imports each
+   * parcel's FIRST figure and never sees the correction: precisely the
+   * error the importer exists to avoid, arriving silently, as costs
+   * that look settled and are not.
+   *
+   * Nothing was comparing the two. The setting said 45 days and every
+   * file that came back covered about 7, because their date picker is
+   * driven best-effort and the export falls back to the page default —
+   * a failure the page object anticipated in a comment and then
+   * discarded the evidence for.
+   *
+   * Checked against the FILE rather than against the picker, so it
+   * fires whichever way the window was lost: a picker we could not
+   * drive, a picker we drove that they ignored, or a cap they applied
+   * server-side. `rangeApplied` only says which of those it was.
+   *
+   * Guarded on row count because the span is the earliest and latest
+   * CHARGE in the file, not a stated export range: on an account with a
+   * handful of rows a short span means a quiet week, not a short
+   * window, and an alarm that fires on quiet is one people learn to
+   * ignore.
+   */
+  private async reportCoverage(
+    account: { id: string; label: string },
+    windowDays: number,
+    coveredDays: number | null,
+    rangeApplied: boolean,
+    result: WalletImportResult,
+  ): Promise<void> {
+    const key = `wallet-sync-window:${account.id}`;
+    const enoughRows = result.rowsRead >= MIN_ROWS_TO_JUDGE_COVERAGE;
+    const short =
+      coveredDays !== null && enoughRows && coveredDays + COVERAGE_SLACK_DAYS < windowDays;
+
+    if (!short) {
+      await this.issues.resolveByKey(key, 'The export covered the window we asked for.');
+      return;
+    }
+
+    await this.issues.raise({
+      kind: SystemIssueKind.COURIER_COST_SYNC,
+      // Not urgent — today's costs ARE being recorded. What is lost is
+      // the revision to an older one, which shows up as a margin that
+      // is quietly wrong rather than as anything stopping.
+      severity: SystemIssueSeverity.MEDIUM,
+      title: `Delhivery only gave ${account.label} ${coveredDays} days of ledger, not ${windowDays}`,
+      detail:
+        `The nightly sync asks for ${windowDays} days so a charge re-cut weeks later gets ` +
+        `re-read. The export that came back spans ${coveredDays} days ` +
+        `(${result.periodFrom ?? '?'} to ${result.periodTo ?? '?'}), so a revision older than ` +
+        `that will never be picked up and those parcels keep the first figure they were given.\n\n` +
+        (rangeApplied
+          ? 'Their date picker accepted the range, so the cap is theirs — the export may have a ' +
+            'maximum span. Exporting a longer range by hand from the Finances page and uploading ' +
+            'it on the Delhivery page is the way to catch up.'
+          : 'Their date picker could not be driven, so the export fell back to whatever range ' +
+            'the page defaults to. The picker has probably changed shape and needs looking at.'),
+      source: 'WalletSyncService',
+      dedupeKey: key,
+      metadata: {
+        courierAccountId: account.id,
+        label: account.label,
+        windowDays,
+        coveredDays,
+        rangeApplied,
+        periodFrom: result.periodFrom,
+        periodTo: result.periodTo,
+        rowsRead: result.rowsRead,
+      },
+    });
   }
 
   private async flag(key: string, fallback: boolean): Promise<boolean> {

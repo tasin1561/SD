@@ -14,6 +14,10 @@ function make(
     windowDays?: number;
     pageThrows?: Error;
     accounts?: Array<{ id: string; label: string }>;
+    rangeApplied?: boolean;
+    periodFrom?: string;
+    periodTo?: string;
+    rowsRead?: number;
   } = {},
 ) {
   const settings: Record<string, AnyArgs> = {
@@ -32,12 +36,12 @@ function make(
 
   const fetch = jest.fn(async () => {
     if (opts.pageThrows) throw opts.pageThrows;
-    return Buffer.from('a ledger file');
+    return { bytes: Buffer.from('a ledger file'), rangeApplied: opts.rangeApplied ?? true };
   });
   const fetcher = { fetch } as unknown as WalletLedgerFetcherService;
 
   const importDelhiveryWallet = jest.fn(async () => ({
-    rowsRead: 5,
+    rowsRead: opts.rowsRead ?? 5,
     rowsSkipped: 0,
     awbsInFile: 4,
     forwardWritten: 3,
@@ -48,8 +52,8 @@ function make(
     sumInr: '100.00',
     statedTotalInr: '100.00',
     totalsAgree: true,
-    periodFrom: null,
-    periodTo: null,
+    periodFrom: opts.periodFrom ?? null,
+    periodTo: opts.periodTo ?? null,
     dryRun: false,
   }));
   const importer = { importDelhiveryWallet } as unknown as WalletImportService;
@@ -259,5 +263,64 @@ describe('the recharge reconciliation runs alongside the ledger', () => {
     const { svc, reconcile } = make({});
     reconcile.mockRejectedValueOnce(new Error('portal unreachable'));
     await expect(svc.sync()).resolves.toBeDefined();
+  });
+
+  /**
+   * The window is the whole point of a nightly re-read, and nothing was
+   * checking we got it. The setting said 45 days; every real export came
+   * back covering about 7, so a charge Delhivery re-cut later than that
+   * would never be re-read and the parcel would keep its first figure —
+   * silently, as a margin that is quietly wrong.
+   */
+  describe('the window we asked for versus the one we got', () => {
+    const busy = (days: number) => ({
+      rowsRead: 2000,
+      periodFrom: new Date(Date.now() - days * 86_400_000).toISOString(),
+      periodTo: new Date().toISOString(),
+    });
+
+    it('raises when the export covers far less than the window', async () => {
+      const { svc, raise } = make({ enabled: true, writes: true, windowDays: 45, ...busy(7) });
+      await svc.sync();
+      const call = (raise.mock.calls as unknown as AnyArgs[][]).find(
+        (c) => (c[0] as { dedupeKey?: string }).dedupeKey === 'wallet-sync-window:acct-1',
+      );
+      expect(call).toBeDefined();
+      expect((call?.[0] as { metadata?: { coveredDays?: number } }).metadata?.coveredDays).toBe(7);
+    });
+
+    it('says nothing when the export covers the window', async () => {
+      const { svc, raise } = make({ enabled: true, writes: true, windowDays: 45, ...busy(44) });
+      await svc.sync();
+      const call = (raise.mock.calls as unknown as AnyArgs[][]).find(
+        (c) => (c[0] as { dedupeKey?: string }).dedupeKey === 'wallet-sync-window:acct-1',
+      );
+      expect(call).toBeUndefined();
+    });
+
+    it('does NOT cry short on a quiet account', async () => {
+      // The span is the earliest and latest CHARGE, not a stated export
+      // range: on a handful of rows a short span is a quiet week. An
+      // alarm that fires on quiet is one people learn to ignore.
+      const { svc, raise } = make({
+        enabled: true,
+        writes: true,
+        windowDays: 45,
+        rowsRead: 4,
+        periodFrom: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        periodTo: new Date().toISOString(),
+      });
+      await svc.sync();
+      const call = (raise.mock.calls as unknown as AnyArgs[][]).find(
+        (c) => (c[0] as { dedupeKey?: string }).dedupeKey === 'wallet-sync-window:acct-1',
+      );
+      expect(call).toBeUndefined();
+    });
+
+    it('records whether their date picker took the range', async () => {
+      const { svc } = make({ enabled: true, writes: true, rangeApplied: false });
+      const summary = await svc.sync();
+      expect(summary.accounts[0]?.rangeApplied).toBe(false);
+    });
   });
 });

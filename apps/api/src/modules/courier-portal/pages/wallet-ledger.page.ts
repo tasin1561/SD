@@ -22,14 +22,19 @@ export class WalletLedgerPage {
    * The window is a ROLLING one, not "yesterday": Delhivery re-cuts a
    * charge weeks after the parcel moved, so a narrow window would
    * capture each parcel's first figure and never see the correction.
-   * The caller decides how wide; this just asks for it.
+   * The caller decides how wide; this just asks for it — and is TOLD
+   * whether the ask landed. `setDateRange`'s answer used to be dropped
+   * on the floor, which made the "the caller is told" promise below
+   * false: a picker that stopped working looked exactly like a picker
+   * that worked, and the only symptom was a narrower export nobody
+   * compared against what was requested.
    */
-  async download(from: Date, to: Date): Promise<Buffer> {
+  async download(from: Date, to: Date): Promise<{ bytes: Buffer; rangeApplied: boolean }> {
     await this.page.goto(`https://one.delhivery.com${FINANCES_PATH}`, {
       waitUntil: 'domcontentloaded',
     });
 
-    await this.setDateRange(from, to);
+    const rangeApplied = await this.setDateRange(from, to);
 
     // Playwright must be waiting BEFORE the click — a download that
     // starts while nothing is listening is simply lost.
@@ -46,7 +51,7 @@ export class WalletLedgerPage {
     for await (const chunk of stream) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer));
     }
-    return Buffer.concat(chunks);
+    return { bytes: Buffer.concat(chunks), rangeApplied };
   }
 
   /**

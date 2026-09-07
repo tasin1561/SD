@@ -16,22 +16,29 @@ export class WalletLedgerFetcherService {
 
   constructor(private readonly session: PortalSessionService) {}
 
-  async fetch(courierAccountId: string, from: Date, to: Date): Promise<Buffer> {
+  async fetch(
+    courierAccountId: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ bytes: Buffer; rangeApplied: boolean }> {
     // Signed in AS THAT ACCOUNT's company — each has its own wallet, and
     // reading the wrong one would import another company's costs.
     const page = await this.session.page(courierAccountId);
     try {
-      const bytes = await new WalletLedgerPage(page).download(from, to);
+      const { bytes, rangeApplied } = await new WalletLedgerPage(page).download(from, to);
       this.logger.log(
         {
           courierAccountId,
           bytes: bytes.length,
           from: from.toISOString(),
           to: to.toISOString(),
+          // False means the export is whatever range their page defaults
+          // to, not the one we asked for.
+          rangeApplied,
         },
         'Downloaded the Delhivery wallet ledger',
       );
-      return bytes;
+      return { bytes, rangeApplied };
     } finally {
       await page.close().catch(() => undefined);
     }
