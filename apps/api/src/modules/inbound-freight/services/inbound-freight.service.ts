@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
+  BankEntryType,
+  BankOwnerKind,
   ConsignmentLeg,
   ConsignmentRoute,
   Currency,
@@ -22,6 +24,15 @@ import { SettingsResolverService } from '../../settings/services/settings-resolv
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { InboundFreightAmortisationService } from './inbound-freight-amortisation.service';
+import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
+
+/**
+ * Where a forwarder payment is filed. Resolved rather than asked for:
+ * this payment is a forwarder payment by construction, and letting the
+ * caller choose the category would let one cost be filed two ways and
+ * stop the expense breakdown adding up.
+ */
+const FORWARDER_EXPENSE_CATEGORY = 'freight_forwarder';
 
 export interface FreightChargeView {
   readonly id: string;
@@ -118,6 +129,7 @@ export class InboundFreightService {
     private readonly settings: SettingsResolverService,
     private readonly wallet: WalletService,
     private readonly amortisation: InboundFreightAmortisationService,
+    private readonly bank: BankLedgerService,
   ) {}
 
   /**
@@ -504,6 +516,137 @@ export class InboundFreightService {
     return this.toView(row);
   }
 
+  /**
+   * Pay the forwarder, and attribute it to the consignment in one act.
+   *
+   * ── WHY THIS EXISTS ──────────────────────────────────────────────────
+   * There were two freight numbers and nothing joined them.
+   * `ourCostInr` is what the forwarder billed us and is the cost side of
+   * the P&L's BD→India line. The cash going out was recorded separately
+   * on /expenses, where it lands in operating expenses. Record both —
+   * which the P&L's own coverage note told you to do — and the same
+   * rupees were subtracted TWICE, once from gross and once from net.
+   *
+   * Recording the payment HERE writes the bank entry, links it to the
+   * bill and fills in the cost, in one transaction. TRE-3: the flow that
+   * moves money writes the cash side alongside the business event, so a
+   * payment cannot exist without its attribution or an attribution
+   * without its payment.
+   *
+   * ── WHAT IT DOES NOT DO ──────────────────────────────────────────────
+   * It does not touch the SELLER side. What we owe the forwarder and
+   * what the seller owes us are independent facts (the same reason
+   * `setOurCost` is settable after settlement), and this must not
+   * disturb the amortisation.
+   *
+   * `ourCostInr` is filled in only when it is UNSET. A part payment
+   * against a known invoice must not rewrite the invoice down to what
+   * has been paid so far — the cost is what they billed, not what has
+   * cleared, and the P&L recognises it once either way.
+   */
+  async recordForwarderPayment(
+    staffId: string,
+    freightChargeId: string,
+    input: {
+      readonly bankAccountId: string;
+      readonly amountInr: string;
+      readonly occurredAt: Date;
+      readonly reference?: string | null;
+      readonly note?: string | null;
+    },
+    ctx?: ClientContext,
+  ): Promise<FreightChargeView> {
+    const amount = new Prisma.Decimal(input.amountInr);
+    if (amount.lessThanOrEqualTo(0)) {
+      throw new BadRequestException({
+        code: 'FREIGHT_PAYMENT_NOT_POSITIVE',
+        message: 'A payment to the forwarder is money going out — give a positive amount',
+      });
+    }
+
+    const existing = await this.prisma.client.inboundFreightCharge.findUnique({
+      where: { id: freightChargeId },
+      select: {
+        id: true,
+        ourCostInr: true,
+        consignment: { select: { consignmentNumber: true } },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        code: 'FREIGHT_CHARGE_NOT_FOUND',
+        message: 'No such freight bill',
+      });
+    }
+
+    // The category is resolved rather than asked for: this payment is a
+    // forwarder payment by construction, and letting the caller choose
+    // would let the same cost be filed two ways.
+    const category = await this.prisma.client.expenseCategory.findUnique({
+      where: { code: FORWARDER_EXPENSE_CATEGORY },
+      select: { id: true },
+    });
+
+    const row = await this.prisma.client.$transaction(async (tx) => {
+      const entry = await this.bank.post(
+        {
+          accountId: input.bankAccountId,
+          type: BankEntryType.EXPENSE,
+          // Negative: the money leaves. Unlike a courier wallet recharge
+          // this does NOT become another asset — it is spent.
+          signedAmount: amount.negated(),
+          amountCurrency: Currency.INR,
+          // Ours. The seller is billed for freight separately, through
+          // the wallet, and attributing this to them would move their
+          // held cash for a payment they did not make.
+          owner: { kind: BankOwnerKind.CAPITAL },
+          actorType: ActorType.STAFF,
+          staffId,
+          occurredAt: input.occurredAt,
+          inboundFreightChargeId: freightChargeId,
+          ...(category === null ? {} : { expenseCategoryId: category.id }),
+          reference: input.reference ?? null,
+          note:
+            `Forwarder payment — ${existing.consignment.consignmentNumber}` +
+            `${input.note == null || input.note === '' ? '' : ` — ${input.note}`}`,
+        },
+        tx,
+      );
+
+      const updated = await tx.inboundFreightCharge.update({
+        where: { id: freightChargeId },
+        data: existing.ourCostInr === null ? { ourCostInr: amount } : {},
+        include: {
+          consignment: { select: { consignmentNumber: true } },
+          goodsReceipt: { select: { receiptNumber: true } },
+        },
+      });
+      return { updated, bankEntryId: entry.id };
+    });
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      action: 'staff.inbound_freight.forwarder_paid',
+      entityType: 'inbound_freight_charge',
+      entityId: freightChargeId,
+      // Real money leaving a real account, on somebody's say-so.
+      severity: 'HIGH',
+      metadata: {
+        bankAccountId: input.bankAccountId,
+        bankEntryId: row.bankEntryId,
+        amountInr: amount.toFixed(2),
+        ourCostWas: existing.ourCostInr?.toString() ?? null,
+        reference: input.reference ?? null,
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    });
+
+    return this.toView(row.updated);
+  }
+
   async waive(
     staffId: string,
     freightChargeId: string,
@@ -595,11 +738,29 @@ export class InboundFreightService {
   async listForAdmin(query: {
     sellerId?: string;
     status?: InboundFreightStatus;
+    /**
+     * Free text over the consignment number, the goods-receipt number
+     * and the seller's company name — the three things somebody holding
+     * a forwarder's invoice might actually recognise. Case-insensitive
+     * and a substring, because a person types the tail of a number they
+     * are reading off paper rather than the whole of it.
+     */
+    search?: string;
   }): Promise<readonly FreightChargeView[]> {
+    const term = query.search?.trim() ?? '';
     const rows = await this.prisma.client.inboundFreightCharge.findMany({
       where: {
         ...(query.sellerId === undefined ? {} : { sellerId: query.sellerId }),
         ...(query.status === undefined ? {} : { status: query.status }),
+        ...(term === ''
+          ? {}
+          : {
+              OR: [
+                { consignment: { consignmentNumber: { contains: term, mode: 'insensitive' } } },
+                { goodsReceipt: { receiptNumber: { contains: term, mode: 'insensitive' } } },
+                { seller: { companyName: { contains: term, mode: 'insensitive' } } },
+              ],
+            }),
       },
       include: {
         consignment: { select: { consignmentNumber: true } },

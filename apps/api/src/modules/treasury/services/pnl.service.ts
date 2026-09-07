@@ -4,6 +4,21 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 const ZERO = new Prisma.Decimal(0);
 
+/**
+ * Expense categories whose costs belong to a LEG, not to running the
+ * business. Money filed here that is not attributed to a consignment is
+ * reported as such rather than quietly inflating operating expenses
+ * while its leg's margin reads better than it is.
+ *
+ * `courier_charges` is on the list for a different reason worth stating:
+ * what a courier bills us is already captured per parcel
+ * (`shipments.actual_courier_cost_inr`) and is funded out of the prepaid
+ * wallet, which is an asset transfer rather than an expense. A payment
+ * filed here is therefore either a double count or a cost the delivery
+ * line cannot see.
+ */
+const LEG_EXPENSE_CATEGORIES = ['freight_forwarder', 'courier_charges'];
+
 /** One way the business makes (or loses) money, and how well we can see it. */
 export interface PnlLine {
   readonly key: string;
@@ -37,6 +52,15 @@ export interface PnlReport {
   readonly netInr: string;
   /** True when every line's cost side is fully measured. */
   readonly complete: boolean;
+  /**
+   * Leg costs sitting in operating expenses with no consignment behind
+   * them. Null when there are none.
+   */
+  readonly unattributedLegCosts: {
+    readonly amountInr: string;
+    readonly count: number;
+    readonly note: string;
+  } | null;
 }
 
 /**
@@ -60,12 +84,13 @@ export class PnlService {
   constructor(private readonly prisma: PrismaService) {}
 
   async report(from: Date, to: Date): Promise<PnlReport> {
-    const [inbound, delivery, rto, fx, expenses] = await Promise.all([
+    const [inbound, delivery, rto, fx, expenses, unattributed] = await Promise.all([
       this.inboundFreight(from, to),
       this.delivery(from, to),
       this.rto(from, to),
       this.fx(from, to),
       this.expenses(from, to),
+      this.unattributedLegCosts(from, to),
     ]);
 
     const lines = [inbound, delivery, rto, fx];
@@ -79,6 +104,17 @@ export class PnlService {
       operatingExpensesInr: expenses.toFixed(2),
       netInr: gross.sub(expenses).toFixed(2),
       complete: lines.every((l) => l.coverage.priced === l.coverage.total),
+      unattributedLegCosts:
+        unattributed === null
+          ? null
+          : {
+              amountInr: unattributed.countInr,
+              count: unattributed.count,
+              note:
+                'Recorded as an operating expense with no consignment behind it, so the leg ' +
+                'it belongs to reads better than it is. Pay the forwarder from the freight ' +
+                'bill instead — that records the cash AND attributes it in one step.',
+            },
     };
   }
 
@@ -270,17 +306,67 @@ export class PnlService {
     };
   }
 
-  /** Everything we spend to exist — rent, salaries, software. */
+  /**
+   * Everything we spend to exist — rent, salaries, software.
+   *
+   * ── AND NOT WHAT A LEG HAS ALREADY COUNTED ───────────────────────────
+   * A payment attributed to a consignment's freight bill is ALREADY in
+   * this report, as the cost side of the BD→India line. Counting the
+   * same cash again here subtracts it twice — once from gross margin,
+   * once from net — and the difference is invisible, because both
+   * figures look plausible on their own.
+   *
+   * That was live: the forwarder payment was recorded on /expenses while
+   * `ourCostInr` sat empty, so the freight line read as pure profit and
+   * printed a note asking somebody to "add it on the freight bill" —
+   * which would have created the double count the moment anyone obeyed.
+   * Paying the forwarder from the bill now writes both sides at once
+   * (`recordForwarderPayment`), and the link is what tells an ATTRIBUTED
+   * cost from a general one.
+   *
+   * An UNLINKED forwarder payment still counts here, deliberately: it
+   * belongs to no consignment, so operating expenses is exactly where it
+   * belongs. `unattributedNote` is what stops that being silent.
+   */
   private async expenses(from: Date, to: Date): Promise<Prisma.Decimal> {
     const agg = await this.prisma.client.bankEntry.aggregate({
       where: {
         type: BankEntryType.EXPENSE,
         occurredAt: { gte: from, lte: to },
+        inboundFreightChargeId: null,
       },
       _sum: { signedAmount: true },
     });
     // Expenses are posted negative (money leaving); report the magnitude.
     return (agg._sum.signedAmount ?? ZERO).abs();
+  }
+
+  /**
+   * Costs sitting in operating expenses that look like they belong to a
+   * leg — a forwarder or courier charge nobody attributed.
+   *
+   * Reported rather than moved. We cannot know WHICH consignment an
+   * unlinked forwarder payment was for, and guessing would put a real
+   * number against the wrong parcel; but leaving it unmentioned means a
+   * leg's margin reads better than it is while the money hides in a
+   * total nobody breaks down.
+   */
+  private async unattributedLegCosts(
+    from: Date,
+    to: Date,
+  ): Promise<{ countInr: string; count: number } | null> {
+    const rows = await this.prisma.client.bankEntry.findMany({
+      where: {
+        type: BankEntryType.EXPENSE,
+        occurredAt: { gte: from, lte: to },
+        inboundFreightChargeId: null,
+        expenseCategory: { code: { in: LEG_EXPENSE_CATEGORIES } },
+      },
+      select: { signedAmount: true },
+    });
+    if (rows.length === 0) return null;
+    const total = rows.reduce((t, r) => t.add(r.signedAmount.abs()), ZERO);
+    return { countInr: total.toFixed(2), count: rows.length };
   }
 
   private line(input: {

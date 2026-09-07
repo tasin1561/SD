@@ -45,6 +45,16 @@ export interface PostEntryInput {
   readonly settlementId?: string | null;
   readonly topupRequestId?: string | null;
   readonly withdrawalRequestId?: string | null;
+  /**
+   * The consignment freight bill this payment settles.
+   *
+   * Set ONLY by `InboundFreightService.recordForwarderPayment`, which
+   * posts the entry in the same transaction as the cost it belongs to.
+   * A linked entry is excluded from the P&L's operating expenses,
+   * because that cost is already carried by its own leg — see the
+   * column comment in the schema.
+   */
+  readonly inboundFreightChargeId?: string | null;
   readonly staffId?: string | null;
 }
 
@@ -160,6 +170,7 @@ export class BankLedgerService {
         settlementId: input.settlementId ?? null,
         topupRequestId: input.topupRequestId ?? null,
         withdrawalRequestId: input.withdrawalRequestId ?? null,
+        inboundFreightChargeId: input.inboundFreightChargeId ?? null,
         reference: input.reference ?? null,
         note: input.note ?? null,
         occurredAt: input.occurredAt,

@@ -14,6 +14,12 @@ function makeSut(opts: {
   returned?: Array<{ actualRtoCostInr: Prisma.Decimal | null }>;
   fxSpread?: Prisma.Decimal | null;
   expenses?: Prisma.Decimal | null;
+  /**
+   * EXPENSE entries filed under a leg category with no consignment
+   * behind them — reported rather than moved, because we cannot know
+   * which consignment they were for.
+   */
+  unattributed?: Array<{ signedAmount: Prisma.Decimal }>;
 }) {
   const client = {
     inboundFreightCharge: { findMany: async () => opts.freight ?? [] },
@@ -37,6 +43,7 @@ function makeSut(opts: {
             args.where.type === 'FX_SPREAD' ? (opts.fxSpread ?? null) : (opts.expenses ?? null),
         },
       }),
+      findMany: async () => opts.unattributed ?? [],
     },
   };
   return new PnlService({ client } as unknown as PrismaService);
@@ -194,5 +201,57 @@ describe('ShipmentCostService', () => {
     await expect(sut.svc.record('staff-1', 'sh1', {})).rejects.toMatchObject({
       response: { code: 'NO_COST_GIVEN' },
     });
+  });
+});
+
+describe('a cost already counted by its leg is not counted again', () => {
+  it('excludes freight payments LINKED to a bill from operating expenses', async () => {
+    /*
+      The double count this closes. `ourCostInr` is the cost side of the
+      BD→India line; the cash going out used to be recorded separately
+      as an expense, where it lands in operating expenses. Enter both —
+      which the report's own coverage note told people to do — and the
+      same rupees come off gross AND off net.
+
+      The fake asserts the QUERY, because that is where the fix lives:
+      the aggregate must be scoped to entries with no freight link.
+    */
+    let scoped: unknown;
+    const client = {
+      inboundFreightCharge: { findMany: async () => [] },
+      orderCharge: { aggregate: async () => ({ _sum: { amountInr: null } }) },
+      shipment: { findMany: async () => [] },
+      sellerWalletEntry: { aggregate: async () => ({ _sum: { amount: null } }) },
+      bankEntry: {
+        aggregate: async (args: { where: Record<string, unknown> }) => {
+          if (args.where['type'] === 'EXPENSE') scoped = args.where['inboundFreightChargeId'];
+          return { _sum: { signedAmount: null } };
+        },
+        findMany: async () => [],
+      },
+    };
+    const svc = new PnlService({ client } as unknown as PrismaService);
+    await svc.report(FROM, TO);
+    expect(scoped).toBeNull();
+  });
+
+  it('REPORTS a leg cost nobody attributed rather than hiding it', async () => {
+    // Moving it would mean guessing which consignment it was for, and a
+    // real number against the wrong parcel is worse than an unassigned
+    // one. Leaving it unmentioned means the leg's margin reads better
+    // than it is while the money sits in a total nobody breaks down.
+    const svc = makeSut({
+      unattributed: [{ signedAmount: D('-2000') }, { signedAmount: D('-500') }],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(r.unattributedLegCosts).not.toBeNull();
+    expect(r.unattributedLegCosts?.amountInr).toBe('2500.00');
+    expect(r.unattributedLegCosts?.count).toBe(2);
+  });
+
+  it('says nothing when there is nothing to say', async () => {
+    const svc = makeSut({});
+    const r = await svc.report(FROM, TO);
+    expect(r.unattributedLegCosts).toBeNull();
   });
 });

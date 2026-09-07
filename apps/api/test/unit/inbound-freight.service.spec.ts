@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import {
   InboundFreightBasis,
   InboundFreightMode,
@@ -12,6 +13,7 @@ import type { AuditLogService } from '../../src/modules/auth-common/services/aud
 import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 import type { InboundFreightAmortisationService } from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
+import type { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -110,6 +112,9 @@ function makeSut(
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
     goodsReceipt: { findFirst: receiptFindFirst },
     inboundFreightAllocation: { create: jest.fn(async () => ({ id: 'alloc-1' })) },
+    // Resolved by CODE inside recordForwarderPayment — the caller never
+    // picks the category, so one cost cannot be filed two ways.
+    expenseCategory: { findUnique: jest.fn(async () => ({ id: 'cat-freight' })) },
     inboundFreightCharge: {
       findUnique: jest.fn(async () =>
         opts.loaded === undefined ? (opts.existing ?? null) : opts.loaded,
@@ -182,13 +187,27 @@ function makeSut(
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs, unknown?]>(async () => 'a1');
   const audit = { log: auditLog } as unknown as AuditLogService;
 
+  /**
+   * The bank side of a forwarder payment (TRE-1: `post()` is the only
+   * writer of bank_entries). Recorded rather than stubbed away — the
+   * whole point of `recordForwarderPayment` is that the cash entry and
+   * the attribution are written together, so the cases below assert on
+   * what it was handed.
+   */
+  const post = jest.fn(async (_input: Record<string, unknown>, _tx?: unknown) => ({
+    id: 'be-1',
+  }));
+  const bank = { post } as unknown as BankLedgerService;
+
   return {
-    svc: new InboundFreightService(prisma, audit, settings, wallet, amortisation),
+    svc: new InboundFreightService(prisma, audit, settings, wallet, amortisation, bank),
     planFromPricedLines,
     applyEntry,
     auditLog,
     created,
     chargeUpdateMany,
+    chargeUpdate,
+    post,
   };
 }
 
@@ -405,5 +424,78 @@ describe('InboundFreightService.waive', () => {
     await expect(sut.svc.waive(STAFF, CHARGE, REASON)).rejects.toMatchObject({
       response: { code: 'FREIGHT_NOT_PENDING' },
     });
+  });
+});
+
+describe('InboundFreightService.recordForwarderPayment', () => {
+  const payment = {
+    bankAccountId: 'ba-1',
+    amountInr: '2000.00',
+    occurredAt: new Date('2026-09-01T00:00:00Z'),
+  };
+
+  it('posts the cash NEGATIVE, as capital, LINKED to the bill', async () => {
+    // The link is the whole point: without it the same rupees are
+    // subtracted twice in the P&L — once as this leg's cost, once again
+    // in operating expenses — and both figures look plausible alone.
+    const { svc, post } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
+    await svc.recordForwarderPayment('st-1', 'fc-1', payment);
+
+    const call = post.mock.calls[0]?.[0] as unknown as {
+      signedAmount: Prisma.Decimal;
+      owner: { kind: string };
+      type: string;
+      inboundFreightChargeId: string;
+      expenseCategoryId: string;
+      occurredAt: Date;
+    };
+    expect(call.signedAmount.toFixed(2)).toBe('-2000.00');
+    expect(call.type).toBe('EXPENSE');
+    // Ours. The seller is billed for freight through the wallet, and
+    // attributing this to them would move held cash they never paid.
+    expect(call.owner.kind).toBe('CAPITAL');
+    expect(call.inboundFreightChargeId).toBe('fc-1');
+    expect(call.expenseCategoryId).toBe('cat-freight');
+    // The date the bank moved it, not today.
+    expect(call.occurredAt.toISOString()).toBe('2026-09-01T00:00:00.000Z');
+  });
+
+  it('fills in our cost when it was unset', async () => {
+    const { svc, chargeUpdate } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
+    await svc.recordForwarderPayment('st-1', 'fc-1', payment);
+    const data = chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
+    expect(data.ourCostInr?.toFixed(2)).toBe('2000.00');
+  });
+
+  it('does NOT rewrite a known cost down to a part payment', async () => {
+    // What the forwarder BILLED and what has CLEARED are different
+    // questions. A ₹2,000 instalment against a ₹5,000 invoice must not
+    // restate the invoice — the P&L recognises the cost once, in full.
+    const { svc, chargeUpdate } = makeSut({
+      loaded: chargeRow({ ourCostInr: new Prisma.Decimal('5000.00') }),
+    });
+    await svc.recordForwarderPayment('st-1', 'fc-1', payment);
+    expect(chargeUpdate.mock.calls[0]?.[0]?.['data']).toEqual({});
+  });
+
+  it('refuses a zero or negative payment', async () => {
+    const { svc, post } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
+    await expect(
+      svc.recordForwarderPayment('st-1', 'fc-1', { ...payment, amountInr: '0' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('audits HIGH — real money leaving a real account', async () => {
+    const { svc, auditLog } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
+    await svc.recordForwarderPayment('st-1', 'fc-1', payment);
+    const entry = auditLog.mock.calls.at(-1)?.[0] as unknown as {
+      action: string;
+      severity: string;
+      metadata: { amountInr: string };
+    };
+    expect(entry.action).toBe('staff.inbound_freight.forwarder_paid');
+    expect(entry.severity).toBe('HIGH');
+    expect(entry.metadata.amountInr).toBe('2000.00');
   });
 });

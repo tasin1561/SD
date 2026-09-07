@@ -356,6 +356,57 @@ export function useRecordFreight(): UseMutationResult<
   });
 }
 
+/**
+ * Pay the forwarder AND attribute it, in one call.
+ *
+ * Deliberately not the generic record-entry endpoint: that writes cash
+ * with no link, and an unlinked forwarder payment is counted twice in
+ * the P&L — once as this leg's cost, once in operating expenses.
+ */
+export function usePayForwarder(): UseMutationResult<
+  FreightChargeView,
+  Error,
+  {
+    freightChargeId: string;
+    bankAccountId: string;
+    amountInr: string;
+    occurredAt: string;
+    reference?: string;
+    note?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ freightChargeId, ...body }) =>
+      client.request<FreightChargeView>(
+        `/api/admin/inbound-freight/${freightChargeId}/pay-forwarder`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-freight'] });
+      // The bank book moved and the leg's cost side changed, so every
+      // figure derived from either did too.
+      void qc.invalidateQueries({ queryKey: ['admin-treasury'] });
+    },
+  });
+}
+
+/** Freight bills matching free text — for attributing a payment to one. */
+export function useFreightSearch(search: string): UseQueryResult<readonly FreightChargeView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-freight', 'search', search],
+    // Nothing typed is not "search for everything": an empty term would
+    // pull two hundred bills to populate a picker nobody has used yet.
+    enabled: search.trim().length >= 2,
+    queryFn: () =>
+      client.request<readonly FreightChargeView[]>(
+        `/api/admin/inbound-freight?search=${encodeURIComponent(search.trim())}`,
+      ),
+  });
+}
+
 export function useSetFreightOurCost(): UseMutationResult<
   FreightChargeView,
   Error,
@@ -1000,6 +1051,15 @@ export interface PnlReportView {
   readonly operatingExpensesInr: string;
   readonly netInr: string;
   readonly complete: boolean;
+  /**
+   * Leg costs recorded as plain operating expenses, with no consignment
+   * behind them. Null when there are none.
+   */
+  readonly unattributedLegCosts: {
+    readonly amountInr: string;
+    readonly count: number;
+    readonly note: string;
+  } | null;
 }
 
 export function usePnl(

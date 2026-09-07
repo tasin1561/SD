@@ -23,6 +23,7 @@ import type { AuthenticatedStaff } from '../../../common/types/request';
 import {
   ListInboundFreightQueryDto,
   RecordInboundFreightDto,
+  PayForwarderDto,
   SetFreightOurCostDto,
   WaiveInboundFreightDto,
 } from '../dto/inbound-freight.dto';
@@ -52,6 +53,7 @@ export class AdminInboundFreightController {
     return this.svc.listForAdmin({
       ...(query.sellerId === undefined ? {} : { sellerId: query.sellerId }),
       ...(query.status === undefined ? {} : { status: query.status }),
+      ...(query.search === undefined ? {} : { search: query.search }),
     });
   }
 
@@ -111,6 +113,34 @@ export class AdminInboundFreightController {
     @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<FreightChargeView> {
     return this.svc.setOurCost(staff.id, freightChargeId, body.ourCostInr, ctx);
+  }
+
+  @Post(':freightChargeId/pay-forwarder')
+  @RequirePermissions('money.freight.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Pay the forwarder for this consignment: writes the bank entry, attributes it to the bill, and fills in our cost if it was unset. Use this rather than a loose expense — an unattributed forwarder payment is counted twice in the P&L.',
+  })
+  payForwarder(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('freightChargeId', new ParseUUIDPipe({ version: '7' }))
+    freightChargeId: string,
+    @Body() body: PayForwarderDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<FreightChargeView> {
+    return this.svc.recordForwarderPayment(
+      staff.id,
+      freightChargeId,
+      {
+        bankAccountId: body.bankAccountId,
+        amountInr: body.amountInr,
+        occurredAt: new Date(body.occurredAt),
+        reference: body.reference ?? null,
+        note: body.note ?? null,
+      },
+      ctx,
+    );
   }
 
   @Post(':freightChargeId/waive')

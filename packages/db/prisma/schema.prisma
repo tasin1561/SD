@@ -1628,6 +1628,10 @@ model InboundFreightCharge {
   consignment  Consignment                @relation(fields: [consignmentId], references: [id])
   goodsReceipt GoodsReceipt               @relation(fields: [goodsReceiptId], references: [id])
   allocations  InboundFreightAllocation[]
+  /// What we have actually PAID the forwarder against this bill, as
+  /// bank entries. Plural: an invoice may be settled in instalments, and
+  /// a single link would make the second payment look unattributed.
+  bankEntries  BankEntry[]
   settledBy    StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
   walletEntry  SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
 
@@ -7336,7 +7340,23 @@ model BankEntry {
   /// this column exists to answer, so it is indexed for it.
   courierRecharge CourierWalletRecharge?
 
+  /// The consignment freight bill this payment settles.
+  ///
+  /// A cost recorded on a leg is ALREADY in the P&L through that leg's
+  /// margin, so counting the same cash again as an operating expense
+  /// subtracts it twice — once from gross, once from net. This link is
+  /// what lets the P&L tell an attributed cost from a general one; an
+  /// unlinked forwarder payment stays in operating expenses, which is
+  /// right, because it belongs to no consignment.
+  ///
+  /// RESTRICT, not SET NULL: nulling the link would silently return the
+  /// entry to operating expenses and re-create the double count with
+  /// nothing to show it happened.
+  inboundFreightChargeId String?               @map("inbound_freight_charge_id") @db.Uuid
+  inboundFreightCharge   InboundFreightCharge? @relation(fields: [inboundFreightChargeId], references: [id], onDelete: Restrict)
+
   @@index([actorType])
+  @@index([inboundFreightChargeId])
   @@index([accountId, occurredAt])
   @@index([accountId, ownerKind, sellerId])
   @@index([sellerId])

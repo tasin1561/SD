@@ -300,6 +300,75 @@ export async function resetAuthState(
 }
 
 /**
+ * Run a TRUNCATE, and if it deadlocks, SAY WHAT IT DEADLOCKED WITH.
+ *
+ * ── THE FAILURE THIS REPLACES ────────────────────────────────────────
+ * A `40P01` from Postgres names two process ids and two relation OIDs.
+ * It names neither the test, nor the table, nor the query on the other
+ * side — so every occurrence has cost a full CI cycle just to work out
+ * WHICH un-drained writer was racing the reset. That has now happened
+ * four times, each time diagnosed by reading source and guessing.
+ *
+ * Before retrying, this asks `pg_stat_activity` what else is running in
+ * this database and prints it. The blocking statement IS the answer:
+ * it names the table, which names the service, which is the one missing
+ * a `drainInFlight()` from the chain above.
+ *
+ * ── AND THEN IT RETRIES ──────────────────────────────────────────────
+ * The reset is idempotent, and a deadlock means the other side won and
+ * has now finished — so a second attempt truncates its rows too. That
+ * turns a leaked write from "one red shard out of four, in a suite that
+ * has nothing to do with it" into a printed diagnosis plus a green run.
+ *
+ * It does NOT make a leak acceptable. `drain-hooks.spec.ts` still fails
+ * the build for a drainable service missing from the chain; this only
+ * stops an undiagnosed one costing a CI cycle to name.
+ */
+export async function truncateWithDiagnostics(
+  prisma: PrismaClient,
+  sql: string,
+  attempts = 3,
+): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await prisma.$executeRawUnsafe(sql);
+      return;
+    } catch (err) {
+      // Matched on the SQLSTATE in the message rather than on Prisma's
+      // own error code: `40P01` is what Postgres says and is stable,
+      // while which Prisma code wraps it depends on the call shape.
+      const deadlocked = /40P01|deadlock detected/.test(
+        err instanceof Error ? err.message : String(err),
+      );
+      if (!deadlocked || attempt >= attempts) throw err;
+
+      try {
+        const busy = await prisma.$queryRawUnsafe<
+          Array<{ pid: number; state: string | null; query: string | null }>
+        >(
+          `SELECT pid, state, query FROM pg_stat_activity
+             WHERE datname = current_database()
+               AND pid <> pg_backend_pid()
+               AND state <> 'idle'`,
+        );
+
+        // Printed rather than logged: this is a test harness, and the
+        // whole point is that it lands in the CI output beside the
+        // failure it explains.
+        console.error(
+          `[e2e reset] TRUNCATE deadlocked (attempt ${attempt}). Concurrent statements:\n` +
+            busy.map((b) => `  pid ${b.pid} [${b.state ?? '?'}] ${b.query ?? ''}`).join('\n') +
+            '\nThe table named above belongs to a fire-and-forget writer that is not ' +
+            'drained in resetAuthState — add its drainInFlight() to the chain.',
+        );
+      } catch {
+        // Diagnostics must never replace the original failure.
+      }
+    }
+  }
+}
+
+/**
  * Wipes the Phase-1B + revised-plan (R0-R6) tables that FK-RESTRICT
  * `sellers` or `orders` (CLAUDE MUST #12).
  *
@@ -324,7 +393,8 @@ export async function resetAuthState(
  * and diff against this list.
  */
 export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
-  await prisma.$executeRawUnsafe(
+  await truncateWithDiagnostics(
+    prisma,
     'TRUNCATE TABLE ' +
       [
         // D3 waybill pool — no FK to sellers/orders (shipment_id is a soft
@@ -424,7 +494,8 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
  * Phase 1A.
  */
 export async function resetCatalogState(prisma: PrismaClient): Promise<void> {
-  await prisma.$executeRawUnsafe(
+  await truncateWithDiagnostics(
+    prisma,
     'TRUNCATE TABLE ' +
       [
         'product_images',
@@ -451,7 +522,8 @@ export async function resetCatalogState(prisma: PrismaClient): Promise<void> {
  * intentionally NOT truncated — only test-created zones/bins.
  */
 export async function resetInventoryState(prisma: PrismaClient): Promise<void> {
-  await prisma.$executeRawUnsafe(
+  await truncateWithDiagnostics(
+    prisma,
     'TRUNCATE TABLE ' +
       [
         // R4 serialized units — FK-RESTRICT sellers/variants/warehouses;
@@ -504,7 +576,8 @@ export async function resetInventoryState(prisma: PrismaClient): Promise<void> {
  * order_items/order_events/address-cache child ordering.
  */
 export async function resetOrderState(prisma: PrismaClient): Promise<void> {
-  await prisma.$executeRawUnsafe(
+  await truncateWithDiagnostics(
+    prisma,
     'TRUNCATE TABLE ' +
       [
         // FKs orders AND sellers with RESTRICT — named explicitly rather
@@ -533,7 +606,8 @@ export async function resetOrderState(prisma: PrismaClient): Promise<void> {
  * is test teardown, not an app mutation path.
  */
 export async function resetCallCenterState(prisma: PrismaClient): Promise<void> {
-  await prisma.$executeRawUnsafe(
+  await truncateWithDiagnostics(
+    prisma,
     'TRUNCATE TABLE ' +
       // call_assignment_holds FKs call_queue_entries with CASCADE, so
       // the truncate below would take it — named explicitly anyway
@@ -574,7 +648,8 @@ export async function resetCallCenterState(prisma: PrismaClient): Promise<void> 
  * cascading; the order of the table list is documentary.
  */
 export async function resetWarehouseState(prisma: PrismaClient): Promise<void> {
-  await prisma.$executeRawUnsafe(
+  await truncateWithDiagnostics(
+    prisma,
     'TRUNCATE TABLE ' +
       [
         // Module 10 (F9) — must precede shipments because courier_webhooks

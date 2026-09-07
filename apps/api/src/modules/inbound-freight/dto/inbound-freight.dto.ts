@@ -5,11 +5,13 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsEnum,
   IsNumberString,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   MinLength,
   ValidateNested,
@@ -102,6 +104,34 @@ export class SetFreightOurCostDto {
   readonly ourCostInr!: string;
 }
 
+export class PayForwarderDto {
+  @ApiProperty({ description: 'Which of our accounts the money left' })
+  @IsUUID()
+  readonly bankAccountId!: string;
+
+  @ApiProperty({ description: 'What we paid the forwarder, in INR', example: '2000.00' })
+  // A string, not a number: a rupee figure through JSON's float is how
+  // 2000.10 becomes 2000.0999999999999.
+  @Matches(/^\d{1,12}(\.\d{1,2})?$/, { message: 'Amount must be a number with up to 2 decimals' })
+  readonly amountInr!: string;
+
+  @ApiProperty({ description: 'When the bank actually moved it' })
+  @IsDateString()
+  readonly occurredAt!: string;
+
+  @ApiPropertyOptional({ description: "The bank's own reference for the payment" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  readonly reference?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  readonly note?: string;
+}
+
 export class WaiveInboundFreightDto {
   @ApiProperty({
     description:
@@ -124,4 +154,13 @@ export class ListInboundFreightQueryDto {
   @IsOptional()
   @IsUUID('7')
   readonly sellerId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "Free text over consignment number, goods-receipt number and seller name — what somebody holding a forwarder's invoice would recognise.",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  readonly search?: string;
 }

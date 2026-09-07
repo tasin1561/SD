@@ -107,6 +107,33 @@ export function PnlIndex(): ReactElement {
             />
           </div>
 
+          {pnl.data.unattributedLegCosts !== null && (
+            <Card>
+              <CardBody>
+                {/* Different from the coverage warning above: that one
+                    says a cost is MISSING. This says a cost is recorded
+                    but filed where the leg it belongs to cannot see it,
+                    so that leg reads better than it is. */}
+                <div className="flex gap-2 text-sm text-warning">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
+                  <p>
+                    <strong>
+                      <Money
+                        amount={pnl.data.unattributedLegCosts.amountInr}
+                        currency="INR"
+                        convert={false}
+                      />
+                    </strong>{' '}
+                    of leg costs across {pnl.data.unattributedLegCosts.count}{' '}
+                    {pnl.data.unattributedLegCosts.count === 1 ? 'entry' : 'entries'} sit in
+                    operating expenses with nothing to attribute them to.{' '}
+                    {pnl.data.unattributedLegCosts.note}
+                  </p>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
           {!pnl.data.complete && (
             <Card>
               <CardBody>
