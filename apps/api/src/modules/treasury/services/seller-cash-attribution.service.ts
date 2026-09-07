@@ -58,15 +58,16 @@ export class SellerCashAttributionService {
       // rest: a charge moves nothing between banks, it changes whose
       // the cash already sitting there is.
       //
-      // GST_WITHHOLDING moves the same way despite not being a charge:
-      // the cash sits in our account and stops being the seller's, which
-      // is what keeps seller-held cash equal to the wallet liability
-      // (TRE-4). That the capital side is really owed to the government
-      // is a liability the bank book does not model — its two buckets
-      // are "held for a seller" and "not", and withheld tax is not the
-      // seller's. It already moved this way when it was written as
-      // ORDER_CHARGES, so this preserves the behaviour rather than
-      // deciding something new.
+      // GST_WITHHOLDING moves the same way: the cash sits in our
+      // account and stops being the seller's, which is what keeps
+      // seller-held cash equal to the wallet liability (TRE-4).
+      //
+      // This used to carry a caveat — that the capital side was really
+      // owed to the government and the bank book could not model it.
+      // That caveat is GONE as of 2026-09-07: the courier bills GST on
+      // the shipping alongside their charge and remits it, so no return
+      // of ours sits behind this deduction. TO_CAPITAL is now simply
+      // true rather than true-with-an-asterisk.
       case WalletEntryDirection.ORDER_CHARGES:
       case WalletEntryDirection.RTO_FEE:
       case WalletEntryDirection.CUSTOMER_RETURN_FEE:

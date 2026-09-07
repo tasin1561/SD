@@ -14,6 +14,14 @@ export interface RemittanceListItem {
   readonly paidAt: string;
   readonly note: string | null;
   readonly createdAt: string;
+  /**
+   * WHICH of our accounts the money left. Null on payouts recorded
+   * before the account was captured — shown as "not recorded" rather
+   * than blank, so an old row and a missing answer stay apart.
+   */
+  readonly paidFromLabel: string | null;
+  readonly paidFromBank: string | null;
+  readonly recordedByName: string | null;
 }
 
 export interface RemittanceListResponse {

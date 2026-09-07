@@ -357,6 +357,13 @@ export class RemittanceService {
           note: true,
           createdAt: true,
           seller: { select: { companyName: true } },
+          // WHICH of our accounts the money left. The column has been
+          // here since the payout flow was written and was simply never
+          // returned, so the page could show a payout without saying
+          // where it came from — the one thing needed to match it
+          // against a statement.
+          paidFromAccount: { select: { label: true, bankName: true, currency: true } },
+          staff: { select: { emailDisplay: true } },
         },
       }),
       this.prisma.client.remittance.count({ where }),
@@ -375,6 +382,12 @@ export class RemittanceService {
         paidAt: r.paidAt.toISOString(),
         note: r.note,
         createdAt: r.createdAt.toISOString(),
+        // Null for payouts recorded before the account was captured;
+        // shown as "not recorded" rather than blank, so an old row and a
+        // missing answer stay distinguishable.
+        paidFromLabel: r.paidFromAccount?.label ?? null,
+        paidFromBank: r.paidFromAccount?.bankName ?? null,
+        recordedByName: r.staff?.emailDisplay ?? null,
       })),
       total,
       page,

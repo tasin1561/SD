@@ -13,6 +13,7 @@ import {
 } from '@skydrop/ui/components';
 import { usePayForwarder, useSetFreightOurCost, type FreightChargeView } from '@/lib/ops-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
+import { useFxRatesList } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 
@@ -177,9 +178,25 @@ function PayForwarderModal({
 }): ReactElement {
   const pay = usePayForwarder();
   const banks = usePlatformBankAccounts(usePermission('money.view'));
+  // Read unconditionally — `a && usePermission(b)` short-circuits, which
+  // skips a hook call and changes the hook ORDER between renders.
+  const canReadFx = usePermission('fx.view');
   const [bankAccountId, setBankAccountId] = useState('');
   const [amountPaid, setAmountPaid] = useState(row.ourCostInr ?? '');
   const [costInr, setCostInr] = useState('');
+  /*
+    The rate used to reach the INR figure.
+
+    Typed here rather than only pulled from the FX table, because the
+    rate that matters is the one the BANK gave on this transfer — not
+    the one posted that morning. It is PRE-FILLED from the current rate
+    so the ordinary case is one keystroke, and the INR box stays
+    editable underneath: a bank charge shows up as an INR figure that
+    does not match rate × amount, and that difference is a real cost
+    (TRE-5) rather than something to round away.
+  */
+  const [rate, setRate] = useState('');
+  const [rateTouched, setRateTouched] = useState(false);
   const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -189,6 +206,39 @@ function PayForwarderModal({
   const accounts = (banks.data ?? []).filter((b) => b.isActive);
   const account = accounts.find((b) => b.id === bankAccountId);
   const crossCurrency = account !== undefined && account.currency !== 'INR';
+  const fx = useFxRatesList(canReadFx && crossCurrency);
+  // Their currency → INR. Falls back to the reciprocal of the INR→X
+  // rate, which is what the table actually stores for BDT.
+  const posted =
+    account === undefined
+      ? null
+      : ((): string | null => {
+          const direct = (fx.data ?? []).find(
+            (r) => r.fromCurrency === account.currency && r.toCurrency === 'INR',
+          );
+          if (direct !== undefined) return Number(direct.rate).toFixed(4);
+          const inverse = (fx.data ?? []).find(
+            (r) => r.fromCurrency === 'INR' && r.toCurrency === account.currency,
+          );
+          return inverse === undefined || Number(inverse.rate) === 0
+            ? null
+            : (1 / Number(inverse.rate)).toFixed(4);
+        })();
+
+  const effectiveRate = rateTouched || rate !== '' ? rate : (posted ?? '');
+  // What rate × amount comes to. Shown beside the INR box rather than
+  // forced into it, so a figure read off a statement is never silently
+  // overwritten by an arithmetic one.
+  const computed =
+    effectiveRate !== '' && amountPaid !== '' && Number.isFinite(Number(effectiveRate))
+      ? (Number(amountPaid) * Number(effectiveRate)).toFixed(2)
+      : null;
+
+  // The INR figure follows the rate until somebody types over it. Not a
+  // one-way binding: once edited it stays edited, because a statement
+  // figure must never be silently replaced by an arithmetic one.
+  const [costTouched, setCostTouched] = useState(false);
+  const shownCost = costTouched ? costInr : (computed ?? costInr);
 
   async function save(): Promise<void> {
     setError(null);
@@ -196,7 +246,7 @@ function PayForwarderModal({
       setError('Choose the account and enter what was paid');
       return;
     }
-    if (crossCurrency && (costInr.trim() === '' || Number.isNaN(Number(costInr)))) {
+    if (crossCurrency && (shownCost.trim() === '' || Number.isNaN(Number(shownCost)))) {
       setError('Enter what the payment cost in INR — the P&L is in INR');
       return;
     }
@@ -205,7 +255,7 @@ function PayForwarderModal({
         freightChargeId: row.id,
         bankAccountId,
         amountPaid: Number(amountPaid).toFixed(2),
-        ...(crossCurrency ? { costInr: Number(costInr).toFixed(2) } : {}),
+        ...(crossCurrency ? { costInr: Number(shownCost).toFixed(2) } : {}),
         occurredAt: new Date(`${occurredAt}T00:00:00Z`).toISOString(),
         ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
       });
@@ -261,21 +311,55 @@ function PayForwarderModal({
             <Input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
           </FormField>
         </div>
-        {crossCurrency && (
-          <FormField
-            label="What it cost us (₹)"
-            required
-            hint="Read off the INR side of the statement, not converted at a posted rate — that way the bank's charges and the rate actually achieved are recorded rather than absorbed."
-          >
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={costInr}
-              onChange={(e) => setCostInr(e.target.value)}
-              placeholder="e.g. 6200.00"
-            />
-          </FormField>
+        {crossCurrency && account !== undefined && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              label={`Rate (1 ${account.currency} = ₹)`}
+              required
+              hint={
+                posted === null
+                  ? 'No posted rate found — enter the rate the bank gave you.'
+                  : `Posted rate ${posted}. Change it to the rate the bank actually gave.`
+              }
+            >
+              <Input
+                type="number"
+                step="0.000001"
+                min="0"
+                value={effectiveRate}
+                onChange={(e) => {
+                  setRateTouched(true);
+                  setRate(e.target.value);
+                  // Typing a rate re-takes control of the INR box, so a
+                  // corrected rate is not ignored because a stale
+                  // computed figure had already been "touched".
+                  setCostTouched(false);
+                }}
+                placeholder={posted ?? 'e.g. 0.7200'}
+              />
+            </FormField>
+            <FormField
+              label="What it cost us (₹)"
+              required
+              hint={
+                computed !== null && shownCost !== computed
+                  ? `Rate × amount is ₹${computed} — the difference is the bank's charge, and recording it is the point.`
+                  : 'Worked out from the rate. Overwrite it with the INR figure on the statement if they differ.'
+              }
+            >
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={shownCost}
+                onChange={(e) => {
+                  setCostTouched(true);
+                  setCostInr(e.target.value);
+                }}
+                placeholder="e.g. 6200.00"
+              />
+            </FormField>
+          </div>
         )}
         <FormField label="Reference" hint="Their invoice number or the bank's transaction id">
           <Input value={reference} onChange={(e) => setReference(e.target.value)} />

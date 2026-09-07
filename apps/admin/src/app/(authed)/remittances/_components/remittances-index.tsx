@@ -197,6 +197,7 @@ export function RemittancesIndex(): ReactElement {
                 <th className="text-left px-3 py-2 font-medium">Seller</th>
                 <th className="text-right px-3 py-2 font-medium">Source</th>
                 <th className="text-right px-3 py-2 font-medium">Destination</th>
+                <th className="text-left px-3 py-2 font-medium">Paid from</th>
                 <th className="text-left px-3 py-2 font-medium">Bank ref</th>
                 <th className="text-right px-3 py-2 font-medium">FX</th>
               </tr>
@@ -228,8 +229,26 @@ export function RemittancesIndex(): ReactElement {
                       direction="credit"
                     />
                   </td>
+                  <td className="px-3 py-2 text-text-body text-xs">
+                    {/* Without this a payout says money went out and not
+                        where from, which is the one thing needed to
+                        match it against a statement. */}
+                    {r.paidFromLabel === null ? (
+                      <span className="text-text-faint">Not recorded</span>
+                    ) : (
+                      <>
+                        {r.paidFromLabel}
+                        {r.paidFromBank !== null && (
+                          <div className="text-text-faint">{r.paidFromBank}</div>
+                        )}
+                      </>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <Ident value={r.bankReference} />
+                    {r.recordedByName !== null && (
+                      <div className="text-text-faint mt-0.5 text-xs">by {r.recordedByName}</div>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right text-text-muted skydrop-tabular text-xs">
                     {r.sourceCurrency === r.currency ? '—' : Number(r.fxRateSnapshot).toFixed(4)}

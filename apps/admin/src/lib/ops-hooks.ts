@@ -1013,19 +1013,38 @@ export interface BankEntryView {
   readonly ownerKind: 'SELLER' | 'CAPITAL';
   readonly sellerName: string | null;
   readonly categoryName: string | null;
+  readonly categoryCode: string | null;
   readonly reference: string | null;
   readonly note: string | null;
   readonly occurredAt: string;
+  /**
+   * WHO recorded it and WHEN — a different fact from when the money
+   * moved. Null for the entries a FLOW wrote rather than a person.
+   */
+  readonly recordedByName: string | null;
+  readonly recordedAt: string;
+  readonly inboundFreightChargeId: string | null;
 }
 
 export function useBankEntries(
-  params: { accountId?: string; limit?: number },
+  params: {
+    accountId?: string;
+    limit?: number;
+    type?: string;
+    expenseCategoryId?: string;
+    from?: string;
+    to?: string;
+  },
   enabled = true,
 ): UseQueryResult<{ items: BankEntryView[] }> {
   const client = useApiClient();
   const sp = new URLSearchParams();
   if (params.accountId) sp.set('accountId', params.accountId);
   if (params.limit) sp.set('limit', String(params.limit));
+  if (params.type) sp.set('type', params.type);
+  if (params.expenseCategoryId) sp.set('expenseCategoryId', params.expenseCategoryId);
+  if (params.from) sp.set('from', params.from);
+  if (params.to) sp.set('to', params.to);
   return useQuery({
     queryKey: ['admin-treasury', 'entries', params],
     queryFn: () =>

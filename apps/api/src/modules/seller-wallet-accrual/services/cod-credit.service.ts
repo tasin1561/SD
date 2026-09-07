@@ -218,8 +218,15 @@ export class CodCreditService {
     });
 
     if (gst.greaterThan(0)) {
-      // The liability record. UNIQUE on orderId, so this is also the
-      // second idempotency gate.
+      // The per-order record of what was deducted. UNIQUE on orderId,
+      // so this is also the second idempotency gate.
+      //
+      // NOT a liability record any more (2026-09-07): the courier bills
+      // GST on the shipping alongside their charge and remits it, so
+      // there is no return of ours behind this. The row survives
+      // because "what was deducted from THIS order" is still the
+      // question asked when a seller queries their credit; `filedAt`
+      // and `filingRef` are now vestigial.
       await tx.gstWithholding.create({
         data: {
           sellerId,
@@ -233,15 +240,16 @@ export class CodCreditService {
       await this.wallet.applyEntry(tx, {
         sellerId,
         currency: Currency.INR,
-        // NOT ORDER_CHARGES. WE file this, so it is a liability we
-        // hold, and a note saying so cannot be grouped by — summing
-        // what sellers paid us in charges silently included the tax,
-        // and their own ledger called it "Order charges" (WAL-4).
+        // NOT ORDER_CHARGES, still. The reason changed but the rule
+        // did not: "what did sellers pay us in delivery charges" and
+        // "what did we deduct as tax" are different questions, and a
+        // note cannot be grouped by — folding them together silently
+        // included one inside the other (WAL-4).
         direction: WalletEntryDirection.GST_WITHHOLDING,
         amount: gst,
         linkedOrderId: orderId,
         actorType: ActorType.SYSTEM,
-        note: `GST withheld at ${gstPercent.toFixed(2)}% (we file this)`,
+        note: `Tax deducted from COD at ${gstPercent.toFixed(2)}%`,
       });
     }
 

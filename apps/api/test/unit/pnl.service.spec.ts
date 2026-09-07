@@ -11,6 +11,8 @@ function makeSut(opts: {
   shippingRevenue?: Prisma.Decimal | null;
   shipments?: Array<{ actualCourierCostInr: Prisma.Decimal | null }>;
   rtoFees?: Prisma.Decimal | null;
+  /** Tax deducted from CODs — OUR revenue since 2026-09-07, not a liability. */
+  codTax?: Prisma.Decimal | null;
   returned?: Array<{ actualRtoCostInr: Prisma.Decimal | null }>;
   fxSpread?: Prisma.Decimal | null;
   expenses?: Prisma.Decimal | null;
@@ -47,7 +49,19 @@ function makeSut(opts: {
         args.where['rtoReceivedAt'] === null ? (opts.shipments ?? []) : (opts.returned ?? []),
     },
     sellerWalletEntry: {
-      aggregate: async () => ({ _sum: { amount: opts.rtoFees ?? null }, _count: { _all: 1 } }),
+      // Keyed on DIRECTION, not answered the same way twice. Two lines
+      // read this table now, and a fake that ignored the filter fed the
+      // RTO fee into the COD-tax line as well — which is exactly the
+      // shape of double count the report exists to avoid.
+      aggregate: async (args: { where: { direction: string } }) => ({
+        _sum: {
+          amount:
+            args.where.direction === 'GST_WITHHOLDING'
+              ? (opts.codTax ?? null)
+              : (opts.rtoFees ?? null),
+        },
+        _count: { _all: 1 },
+      }),
     },
     bankEntry: {
       aggregate: async (args: { where: { type: string } }) => ({
@@ -272,5 +286,41 @@ describe('a cost already counted by its leg is not counted again', () => {
     const svc = makeSut({});
     const r = await svc.report(FROM, TO);
     expect(r.unattributedLegCosts).toBeNull();
+  });
+});
+
+describe('the tax deducted from a COD is OURS', () => {
+  it('reports it as revenue with no cost side', async () => {
+    /*
+      Reversed on 2026-09-07. It was reported as money held for the
+      government, on the reading that we file a return against it. We
+      do not: the courier bills GST on the shipping alongside their own
+      charge and remits it, so there is no separate filing of ours
+      behind this deduction.
+
+      Reporting it as a liability made the business look poorer than it
+      is AND implied an obligation that does not exist — the more
+      dangerous half, because a liability nobody can discharge sits on
+      the books forever.
+    */
+    const svc = makeSut({ codTax: D('608.64') });
+    const r = await svc.report(FROM, TO);
+    const line = r.lines.find((l) => l.key === 'cod_tax');
+    expect(line?.revenueInr).toBe('608.64');
+    expect(line?.costInr).toBe('0.00');
+    expect(line?.marginInr).toBe('608.64');
+    // Nothing is spent to collect it, and an empty cost basis says so
+    // more honestly than a zero would.
+    expect(line?.basis.cost).toHaveLength(0);
+  });
+
+  it('does NOT take the RTO fee as its figure', async () => {
+    // Two lines read seller_wallet_entries now. Answering both from the
+    // same aggregate would count one sum twice — the exact shape of
+    // double count this report exists to avoid.
+    const svc = makeSut({ rtoFees: D('200.00'), codTax: D('608.64') });
+    const r = await svc.report(FROM, TO);
+    expect(r.lines.find((l) => l.key === 'rto')?.revenueInr).toBe('200.00');
+    expect(r.lines.find((l) => l.key === 'cod_tax')?.revenueInr).toBe('608.64');
   });
 });

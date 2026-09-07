@@ -108,16 +108,17 @@ export class PnlService {
   constructor(private readonly prisma: PrismaService) {}
 
   async report(from: Date, to: Date): Promise<PnlReport> {
-    const [inbound, delivery, rto, fx, expenses, unattributed] = await Promise.all([
+    const [inbound, delivery, rto, codTax, fx, expenses, unattributed] = await Promise.all([
       this.inboundFreight(from, to),
       this.delivery(from, to),
       this.rto(from, to),
+      this.codTaxDeduction(from, to),
       this.fx(from, to),
       this.expenses(from, to),
       this.unattributedLegCosts(from, to),
     ]);
 
-    const lines = [inbound, delivery, rto, fx];
+    const lines = [inbound, delivery, rto, codTax, fx];
     const gross = lines.reduce((acc, l) => acc.add(new Prisma.Decimal(l.marginInr)), ZERO);
 
     return {
@@ -419,6 +420,56 @@ export class PnlService {
         cost: [],
       },
     };
+  }
+
+  /**
+   * The tax deducted from a COD, which is OURS.
+   *
+   * ── WHY THIS IS REVENUE AND NOT A LIABILITY (2026-09-07) ─────────────
+   * It was reported as money held for the government, on the reading
+   * that we file a return against it. We do not: the courier bills GST
+   * on the shipping alongside their own charge and remits it, so there
+   * is no separate filing of ours behind this deduction. What we keep
+   * back from a COD is income, and reporting it as a liability made the
+   * business look poorer than it is while implying a filing obligation
+   * that does not exist.
+   *
+   * It has NO cost side — nothing is spent to collect it — and an empty
+   * cost basis says that more honestly than a zero would.
+   */
+  private async codTaxDeduction(from: Date, to: Date): Promise<PnlLine> {
+    const agg = await this.prisma.client.sellerWalletEntry.aggregate({
+      where: {
+        direction: WalletEntryDirection.GST_WITHHOLDING,
+        currency: Currency.INR,
+        createdAt: { gte: from, lte: to },
+      },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+    const amount = agg._sum.amount ?? ZERO;
+    return this.line({
+      key: 'cod_tax',
+      label: 'COD tax deduction',
+      revenue: amount,
+      cost: ZERO,
+      // Fully measured by construction: the deduction IS the figure,
+      // there is no second number that could be missing.
+      priced: 1,
+      total: 1,
+      note: null,
+      basis: {
+        revenue: [
+          {
+            label: 'Deducted from COD before crediting the seller',
+            source: 'seller_wallet_entries.amount WHERE direction=GST_WITHHOLDING',
+            count: agg._count._all,
+            amountInr: amount.toFixed(2),
+          },
+        ],
+        cost: [],
+      },
+    });
   }
 
   /**

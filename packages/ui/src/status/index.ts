@@ -493,10 +493,14 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.RTO_FEE:
     case WalletEntryDirection.INSTANT_PAY_FEE:
     case WalletEntryDirection.COD_COLLECTION_FEE:
-    // Not a charge — tax held back from a COD collection, which WE
-    // file. It leaves the wallet, so it is a debit, but it is a
-    // LIABILITY rather than revenue and must never be summed with what
-    // we actually charged (WAL-4).
+    // Tax held back from a COD collection. A DEBIT — it leaves the
+    // wallet — and kept out of ORDER_CHARGES so "what did sellers pay
+    // us in charges" stays answerable without it (WAL-4).
+    //
+    // It was long described here as a LIABILITY we file. It is not:
+    // the courier bills GST on the shipping alongside their charge and
+    // remits it, so no return of ours sits behind this deduction. It is
+    // revenue, and the P&L reports it as such (2026-09-07).
     case WalletEntryDirection.GST_WITHHOLDING:
       return false;
     default: {
@@ -552,7 +556,9 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
     case WalletEntryDirection.ORDER_CHARGES_REFUND:
       return 'Cancelled order refund';
     case WalletEntryDirection.GST_WITHHOLDING:
-      return 'GST withheld';
+      // Not "GST withheld (we file this)". We do not file it, and a
+      // label that says we do is a promise to a seller we cannot keep.
+      return 'COD tax deduction';
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);

@@ -76,6 +76,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // money is neither spendable nor investable, so this never widens
   // beyond the treasury view.
   ['/expenses', 'money.treasury.view'],
+  ['/expenses/categories', 'money.treasury.view'],
   // What we owe against what we are owed. Same ledgers, same gate.
   ['/liabilities', 'money.treasury.view'],
   // Sellers asking us to act on a failed delivery. Reading the queue is

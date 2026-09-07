@@ -119,7 +119,7 @@ export class LiabilitiesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async report(): Promise<LiabilitiesReport> {
-    const [walletBalances, pendingWithdrawals, unfiledGst, outstandingFreight, courierFloat] =
+    const [walletBalances, pendingWithdrawals, outstandingFreight, courierFloat] =
       await Promise.all([
         this.prisma.client.sellerWalletBalance.findMany({
           where: { currency: Currency.INR },
@@ -130,11 +130,6 @@ export class LiabilitiesService {
             status: { in: [WithdrawalRequestStatus.PENDING, WithdrawalRequestStatus.APPROVED] },
           },
           _sum: { amountRequested: true },
-          _count: { _all: true },
-        }),
-        this.prisma.client.gstWithholding.aggregate({
-          where: { filedAt: null },
-          _sum: { gstAmountInr: true },
           _count: { _all: true },
         }),
         this.prisma.client.inboundFreightCharge.findMany({
@@ -185,14 +180,25 @@ export class LiabilitiesService {
         meaning:
           'Already inside the wallet figure above, and already asked for. This is the part due soonest.',
       },
-      {
-        key: 'unfiled_gst',
-        label: 'GST withheld, not yet filed',
-        amountInr: (unfiledGst._sum.gstAmountInr ?? ZERO).toFixed(2),
-        count: unfiledGst._count._all,
-        meaning:
-          'Collected on the government’s behalf and owed to them. It was never ours; spending it is spending a tax return.',
-      },
+      /*
+        NO GST LINE, and the reason is worth keeping.
+
+        Until 2026-09-07 the tax deducted from a COD was reported here
+        as money held for the government. It is not: the courier bills
+        GST on the shipping alongside their charge and remits it
+        themselves, so there is no separate return of ours behind this
+        deduction and nothing to hold it against.
+
+        It is OUR capital, and it is reported as revenue on the P&L
+        instead. Leaving it here made us look ₹608 poorer than we are
+        AND implied a filing obligation that does not exist — the more
+        dangerous half, because a liability nobody can discharge sits on
+        the books forever.
+
+        The `gst_withholdings` rows stay: they are the per-order record
+        of what was deducted, which is still the question asked when a
+        seller queries their credit.
+      */
     ];
 
     const due: LedgerLine[] = [

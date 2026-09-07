@@ -80,7 +80,7 @@ const SELLER_WALLET_TERMS = [
     'wallet.cod_gst_percent',
     'GST withheld on COD',
     'PERCENT',
-    'Taken out of the collected amount, not added on top. We file it.',
+    'Taken out of the collected amount, not added on top.',
   ],
   ['wallet.cod_collection_fee_percent', 'COD collection fee', 'PERCENT', ''],
   [
