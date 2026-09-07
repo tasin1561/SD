@@ -37,12 +37,44 @@ import {
   type SellerWalletRow,
 } from '@/lib/seller-wallet-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { useFxRatesList } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
 type Filter = 'all' | 'credit' | 'debt' | 'payout';
 
 /** Every direction the label helpers can actually answer for. */
 const KNOWN_DIRECTIONS = new Set<string>(Object.values(WalletEntryDirection));
+
+/**
+ * The taka figure beside the rupee one.
+ *
+ * ── WHY THIS IS NOT `<Money convert />` ──────────────────────────────
+ * The admin app mounts no `MoneyDisplayProvider`, on purpose: it is an
+ * operational console reading a canonical ledger, and turning its
+ * figures over into taka would put an operator and a seller on
+ * different numbers during the same phone call. So `convert` there is a
+ * no-op and renders rupees a second time — which is exactly what this
+ * page did.
+ *
+ * Showing BOTH is a different thing from converting: the rupee figure
+ * stays primary and present, and the taka one is an aid beside it. The
+ * rate is the posted one, and when there is no rate this renders
+ * NOTHING — a missing second figure is honest, a wrong one is not.
+ */
+function Bdt({
+  amountInr,
+  rate,
+}: {
+  readonly amountInr: string;
+  readonly rate: number | null;
+}): ReactElement | null {
+  if (rate === null || !Number.isFinite(Number(amountInr))) return null;
+  return (
+    <span className="text-text-faint text-xs">
+      ≈ <Money amount={(Number(amountInr) * rate).toFixed(2)} currency="BDT" convert={false} />
+    </span>
+  );
+}
 
 /**
  * Every seller's wallet in one place.
@@ -66,6 +98,16 @@ export function SellerWalletsIndex(): ReactElement {
   const reconcile = useReconcileSellerWallets();
   const [filter, setFilter] = useState<Filter>('all');
   const [term, setTerm] = useState('');
+  // Read unconditionally — `a && usePermission(b)` short-circuits,
+  // which skips a hook call and changes the hook ORDER between renders.
+  const canReadFx = usePermission('fx.view');
+  const fx = useFxRatesList(canReadFx);
+  const inrToBdt = ((): number | null => {
+    const direct = (fx.data ?? []).find((r) => r.fromCurrency === 'INR' && r.toCurrency === 'BDT');
+    if (direct !== undefined) return Number(direct.rate);
+    const inverse = (fx.data ?? []).find((r) => r.fromCurrency === 'BDT' && r.toCurrency === 'INR');
+    return inverse === undefined || Number(inverse.rate) === 0 ? null : 1 / Number(inverse.rate);
+  })();
 
   const rows = useMemo(() => overview.data?.rows ?? [], [overview.data]);
   const counts = useMemo(
@@ -166,6 +208,7 @@ export function SellerWalletsIndex(): ReactElement {
               footLeft={`${overview.data.totals.sellersInCredit} in credit`}
               footRight="OK"
               tone="ok"
+              inrToBdt={inrToBdt}
             />
             <MoneyTile
               label="Sellers owe us"
@@ -179,6 +222,7 @@ export function SellerWalletsIndex(): ReactElement {
               // Loud only when there is something to be loud about. A
               // permanently red tile is one nobody reads.
               tone={Number(overview.data.totals.owedBySellersInr) > 0 ? 'bad' : 'ok'}
+              inrToBdt={inrToBdt}
             />
             <MoneyTile
               label="Withdrawals held"
@@ -188,6 +232,7 @@ export function SellerWalletsIndex(): ReactElement {
               footLeft={`${counts.payout} awaiting payout`}
               footRight={counts.payout > 0 ? 'PENDING' : '—'}
               tone={counts.payout > 0 ? 'warn' : 'ok'}
+              inrToBdt={inrToBdt}
             />
             <MoneyTile
               label="Top-ups in review"
@@ -201,6 +246,7 @@ export function SellerWalletsIndex(): ReactElement {
               }
               footRight={Number(overview.data.totals.pendingTopupInr) > 0 ? 'QUEUED' : 'CLEAR'}
               tone="ok"
+              inrToBdt={inrToBdt}
             />
           </div>
 
@@ -266,7 +312,7 @@ export function SellerWalletsIndex(): ReactElement {
                     : 'No wallet matches that.'}
                 </TableEmpty>
               ) : (
-                shown.map((r) => <WalletRow key={r.sellerId} row={r} />)
+                shown.map((r) => <WalletRow key={r.sellerId} row={r} inrToBdt={inrToBdt} />)
               )}
             </TBody>
           </Table>
@@ -348,6 +394,7 @@ function MoneyTile({
   footLeft,
   footRight,
   tone,
+  inrToBdt,
 }: {
   readonly label: string;
   readonly caption: string;
@@ -356,6 +403,7 @@ function MoneyTile({
   readonly footLeft: string;
   readonly footRight: string;
   readonly tone: 'ok' | 'warn' | 'bad';
+  readonly inrToBdt: number | null;
 }): ReactElement {
   const accent =
     tone === 'bad'
@@ -382,11 +430,11 @@ function MoneyTile({
         <div className="text-2xl font-semibold tabular-nums">
           <Money amount={amountInr} currency="INR" convert={false} />
         </div>
-        {/* The BDT equivalent, because half the people reading this
-            think in taka. Rendered through Money so it is grouped the
-            Indian way or the Bangladeshi way, never a bare number. */}
-        <div className="text-text-faint text-xs">
-          ≈ <Money amount={amountInr} currency="INR" />
+        {/* The taka equivalent, because half the people reading this
+            think in it. Absent entirely when no rate is posted — a
+            missing second figure is honest, a wrong one is not. */}
+        <div>
+          <Bdt amountInr={amountInr} rate={inrToBdt} />
         </div>
         <div className="border-border mt-auto flex items-center justify-between gap-2 border-t pt-2 text-xs">
           <span className="text-text-muted">{footLeft}</span>
@@ -407,7 +455,13 @@ function initials(name: string): string {
   return (first + second).toUpperCase();
 }
 
-function WalletRow({ row }: { readonly row: SellerWalletRow }): ReactElement {
+function WalletRow({
+  row,
+  inrToBdt,
+}: {
+  readonly row: SellerWalletRow;
+  readonly inrToBdt: number | null;
+}): ReactElement {
   const balance = Number(row.balanceInr);
   const inDebt = balance < 0;
   /*
@@ -465,8 +519,8 @@ function WalletRow({ row }: { readonly row: SellerWalletRow }): ReactElement {
           convert={false}
           direction={inDebt ? 'debit' : balance > 0 ? 'credit' : 'neutral'}
         />
-        <div className="text-text-faint text-xs">
-          ≈ <Money amount={row.balanceInr} currency="INR" />
+        <div>
+          <Bdt amountInr={row.balanceInr} rate={inrToBdt} />
         </div>
       </Td>
       <Td align="right" className="text-text-muted">
