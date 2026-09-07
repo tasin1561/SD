@@ -112,6 +112,8 @@ export interface TicketEventView {
 export interface FreightChargeView {
   readonly id: string;
   readonly consignmentId: string;
+  /** WHOSE consignment — two adjacent bill numbers may be different sellers. */
+  readonly sellerCompanyName: string | null;
   readonly goodsReceiptId: string;
   readonly receiptNumber: string | null;
   readonly consignmentNumber: string | null;
@@ -369,7 +371,10 @@ export function usePayForwarder(): UseMutationResult<
   {
     freightChargeId: string;
     bankAccountId: string;
-    amountInr: string;
+    /** What left the account, in the ACCOUNT's own currency. */
+    amountPaid: string;
+    /** What it cost in INR. Required when the account is not INR. */
+    costInr?: string;
     occurredAt: string;
     reference?: string;
     note?: string;

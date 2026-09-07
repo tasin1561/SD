@@ -56,6 +56,11 @@ export function ExpenseModal({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [linked, setLinked] = useState<FreightChargeView | null>(null);
+  // Only asked for when it is genuinely a second fact: a freight bill
+  // paid out of a non-INR account. The P&L's cost side is INR, and
+  // deriving it from a posted rate would absorb the bank's charges and
+  // the rate actually achieved (TRE-5).
+  const [costInr, setCostInr] = useState('');
 
   const account = (accounts.data ?? []).find((a) => a.id === accountId);
   const category = (categories.data ?? []).find((c) => c.id === categoryId);
@@ -80,6 +85,11 @@ export function ExpenseModal({
       setError('Enter what was spent, as a positive number');
       return;
     }
+    const needsInr = linked !== null && account.currency !== 'INR';
+    if (needsInr && (costInr.trim() === '' || !Number.isFinite(Number(costInr)))) {
+      setError('Enter what this cost in INR — a consignment’s cost is reported in INR');
+      return;
+    }
     try {
       /*
         A payment ATTACHED to a consignment goes through the freight
@@ -97,7 +107,11 @@ export function ExpenseModal({
         await payForwarder.mutateAsync({
           freightChargeId: linked.id,
           bankAccountId: account.id,
-          amountInr: n.toFixed(2),
+          amountPaid: n.toFixed(2),
+          // A non-INR account needs the INR cost as a SEPARATE figure —
+          // the same number in both would be wrong by the exchange rate,
+          // and the P&L's cost side is in INR.
+          ...(account.currency === 'INR' ? {} : { costInr: Number(costInr).toFixed(2) }),
           occurredAt: new Date(occurredAt).toISOString(),
           ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
           ...(note.trim() === '' ? {} : { note: note.trim() }),
@@ -106,6 +120,7 @@ export function ExpenseModal({
         setReference('');
         setNote('');
         setLinked(null);
+        setCostInr('');
         onOpenChange(false);
         return;
       }
@@ -197,6 +212,22 @@ export function ExpenseModal({
             />
           </FormField>
         </div>
+        {linked !== null && account !== undefined && account.currency !== 'INR' && (
+          <FormField
+            label="What it cost us (₹)"
+            required
+            hint={`Paid in ${account.currency}, but a consignment's cost is reported in INR. Read this off the INR side of the statement rather than converting at a posted rate — that records the bank's charges and the rate actually achieved instead of absorbing them.`}
+          >
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={costInr}
+              onChange={(e) => setCostInr(e.target.value)}
+              placeholder="0.00"
+            />
+          </FormField>
+        )}
         <FormField label="Reference" hint="Invoice or transaction id, so it can be matched later">
           <Input value={reference} onChange={(e) => setReference(e.target.value)} maxLength={200} />
         </FormField>

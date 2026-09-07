@@ -178,23 +178,34 @@ function PayForwarderModal({
   const pay = usePayForwarder();
   const banks = usePlatformBankAccounts(usePermission('money.view'));
   const [bankAccountId, setBankAccountId] = useState('');
-  const [amountInr, setAmountInr] = useState(row.ourCostInr ?? '');
+  const [amountPaid, setAmountPaid] = useState(row.ourCostInr ?? '');
+  const [costInr, setCostInr] = useState('');
   const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const inr = (banks.data ?? []).filter((b) => b.currency === 'INR');
+  // EVERY active account, not just the INR ones. The forwarder is a
+  // Bangladeshi business and is routinely paid in BDT from a BDT
+  // account; filtering those out made the ordinary case unrecordable.
+  const accounts = (banks.data ?? []).filter((b) => b.isActive);
+  const account = accounts.find((b) => b.id === bankAccountId);
+  const crossCurrency = account !== undefined && account.currency !== 'INR';
 
   async function save(): Promise<void> {
     setError(null);
-    if (bankAccountId === '' || amountInr.trim() === '' || Number.isNaN(Number(amountInr))) {
+    if (bankAccountId === '' || amountPaid.trim() === '' || Number.isNaN(Number(amountPaid))) {
       setError('Choose the account and enter what was paid');
+      return;
+    }
+    if (crossCurrency && (costInr.trim() === '' || Number.isNaN(Number(costInr)))) {
+      setError('Enter what the payment cost in INR — the P&L is in INR');
       return;
     }
     try {
       await pay.mutateAsync({
         freightChargeId: row.id,
         bankAccountId,
-        amountInr: Number(amountInr).toFixed(2),
+        amountPaid: Number(amountPaid).toFixed(2),
+        ...(crossCurrency ? { costInr: Number(costInr).toFixed(2) } : {}),
         occurredAt: new Date(`${occurredAt}T00:00:00Z`).toISOString(),
         ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
       });
@@ -217,29 +228,31 @@ function PayForwarderModal({
         <FormField label="Paid from" required>
           <Select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
             <option value="">Choose an account…</option>
-            {inr.map((b) => (
+            {accounts.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.label} · {b.bankName}
+                {b.label} · {b.bankName} · {b.currency}
               </option>
             ))}
           </Select>
         </FormField>
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField
-            label="Amount paid (₹)"
+            label={`Amount paid${account === undefined ? '' : ` (${account.currency})`}`}
             required
             hint={
-              row.ourCostInr === null
-                ? 'This also fills in our cost for the leg'
-                : 'Our recorded cost is left as it is — a part payment does not restate the invoice'
+              crossCurrency
+                ? 'What actually left that account, in its own currency'
+                : row.ourCostInr === null
+                  ? 'This also fills in our cost for the leg'
+                  : 'Our recorded cost is left as it is — a part payment does not restate the invoice'
             }
           >
             <Input
               type="number"
               step="0.01"
               min="0"
-              value={amountInr}
-              onChange={(e) => setAmountInr(e.target.value)}
+              value={amountPaid}
+              onChange={(e) => setAmountPaid(e.target.value)}
               placeholder="e.g. 8500.00"
               autoFocus
             />
@@ -248,6 +261,22 @@ function PayForwarderModal({
             <Input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
           </FormField>
         </div>
+        {crossCurrency && (
+          <FormField
+            label="What it cost us (₹)"
+            required
+            hint="Read off the INR side of the statement, not converted at a posted rate — that way the bank's charges and the rate actually achieved are recorded rather than absorbed."
+          >
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={costInr}
+              onChange={(e) => setCostInr(e.target.value)}
+              placeholder="e.g. 6200.00"
+            />
+          </FormField>
+        )}
         <FormField label="Reference" hint="Their invoice number or the bank's transaction id">
           <Input value={reference} onChange={(e) => setReference(e.target.value)} />
         </FormField>

@@ -142,11 +142,32 @@ export class AdminTreasuryController {
     @Query('accountId') accountId?: string,
     @Query('sellerId') sellerId?: string,
     @Query('limit') limit?: string,
+    @Query('type') type?: string,
+    @Query('expenseCategoryId') expenseCategoryId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ): ReturnType<TreasuryReadService['entries']> {
+    // Validated against the enum rather than passed through: an unknown
+    // type would silently return the WHOLE ledger to a page asking for
+    // one slice of it, which reads as a bug in the numbers.
+    const parsedType =
+      type !== undefined && (Object.values(BankEntryType) as string[]).includes(type)
+        ? (type as BankEntryType)
+        : undefined;
+    if (type !== undefined && parsedType === undefined) {
+      throw new BadRequestException({
+        code: 'UNKNOWN_ENTRY_TYPE',
+        message: `No such bank entry type: ${type}`,
+      });
+    }
     return this.read.entries({
       ...(accountId === undefined ? {} : { accountId }),
       ...(sellerId === undefined ? {} : { sellerId }),
       ...(limit === undefined ? {} : { limit: Number(limit) }),
+      ...(parsedType === undefined ? {} : { type: parsedType }),
+      ...(expenseCategoryId === undefined ? {} : { expenseCategoryId }),
+      ...(from === undefined ? {} : { from: new Date(from) }),
+      ...(to === undefined ? {} : { to: new Date(to) }),
     });
   }
 

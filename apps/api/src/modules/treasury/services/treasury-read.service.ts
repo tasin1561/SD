@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { BankOwnerKind, Currency, Prisma } from '@skydrop/db';
+import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { BankLedgerService, type AccountBalance } from './bank-ledger.service';
 
@@ -203,7 +203,16 @@ export class TreasuryReadService {
     return this.ledger.holdingsForSeller(sellerId);
   }
 
-  async entries(query: { accountId?: string; sellerId?: string; limit?: number }): Promise<{
+  async entries(query: {
+    accountId?: string;
+    sellerId?: string;
+    limit?: number;
+    /** One entry TYPE, so a page can show its own ledger rather than all money. */
+    type?: BankEntryType;
+    expenseCategoryId?: string;
+    from?: Date;
+    to?: Date;
+  }): Promise<{
     items: Array<{
       id: string;
       accountLabel: string;
@@ -213,15 +222,38 @@ export class TreasuryReadService {
       ownerKind: BankOwnerKind;
       sellerName: string | null;
       categoryName: string | null;
+      categoryCode: string | null;
       reference: string | null;
       note: string | null;
       occurredAt: Date;
+      /**
+       * WHO recorded it and WHEN they did, which is a different fact
+       * from when the money moved: an entry dated Tuesday may have been
+       * typed in on Friday, and only one of those two answers "who
+       * should I ask about this line".
+       */
+      recordedByName: string | null;
+      recordedAt: Date;
+      /** The consignment this payment was attributed to, if any. */
+      inboundFreightChargeId: string | null;
     }>;
   }> {
     const rows = await this.prisma.client.bankEntry.findMany({
       where: {
         ...(query.accountId === undefined ? {} : { accountId: query.accountId }),
         ...(query.sellerId === undefined ? {} : { sellerId: query.sellerId }),
+        ...(query.type === undefined ? {} : { type: query.type }),
+        ...(query.expenseCategoryId === undefined
+          ? {}
+          : { expenseCategoryId: query.expenseCategoryId }),
+        ...(query.from === undefined && query.to === undefined
+          ? {}
+          : {
+              occurredAt: {
+                ...(query.from === undefined ? {} : { gte: query.from }),
+                ...(query.to === undefined ? {} : { lte: query.to }),
+              },
+            }),
       },
       // By id, not occurredAt: two entries of one transfer share a
       // timestamp, and a ledger that lists them in an arbitrary order
@@ -237,9 +269,12 @@ export class TreasuryReadService {
         reference: true,
         note: true,
         occurredAt: true,
+        createdAt: true,
+        inboundFreightChargeId: true,
         account: { select: { label: true } },
         seller: { select: { companyName: true } },
-        expenseCategory: { select: { name: true } },
+        expenseCategory: { select: { name: true, code: true } },
+        createdBy: { select: { emailDisplay: true } },
       },
     });
     return {
@@ -252,9 +287,17 @@ export class TreasuryReadService {
         ownerKind: r.ownerKind,
         sellerName: r.seller?.companyName ?? null,
         categoryName: r.expenseCategory?.name ?? null,
+        categoryCode: r.expenseCategory?.code ?? null,
         reference: r.reference,
         note: r.note,
         occurredAt: r.occurredAt,
+        // Null for the many entries a FLOW wrote rather than a person —
+        // a settlement landing, an attribution pair. Shown as "system"
+        // rather than blank, so "nobody" and "we did not record it" stay
+        // distinguishable.
+        recordedByName: r.createdBy?.emailDisplay ?? null,
+        recordedAt: r.createdAt,
+        inboundFreightChargeId: r.inboundFreightChargeId,
       })),
     };
   }

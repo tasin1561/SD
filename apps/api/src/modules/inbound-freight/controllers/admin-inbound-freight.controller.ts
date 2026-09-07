@@ -134,7 +134,8 @@ export class AdminInboundFreightController {
       freightChargeId,
       {
         bankAccountId: body.bankAccountId,
-        amountInr: body.amountInr,
+        amountPaid: body.amountPaid,
+        ...(body.costInr === undefined ? {} : { costInr: body.costInr }),
         occurredAt: new Date(body.occurredAt),
         reference: body.reference ?? null,
         note: body.note ?? null,

@@ -38,6 +38,9 @@ export interface FreightChargeView {
   readonly id: string;
   readonly consignmentId: string;
   readonly consignmentNumber: string | null;
+  /** WHOSE consignment. Two bills with adjacent numbers are otherwise
+   * indistinguishable, and they may belong to different sellers. */
+  readonly sellerCompanyName: string | null;
   /** The arrival this bill covers — one forwarder invoice per shipment. */
   readonly goodsReceiptId: string;
   readonly receiptNumber: string | null;
@@ -294,6 +297,7 @@ export class InboundFreightService {
         include: {
           consignment: { select: { consignmentNumber: true } },
           goodsReceipt: { select: { receiptNumber: true } },
+          seller: { select: { companyName: true } },
         },
       });
 
@@ -420,6 +424,7 @@ export class InboundFreightService {
         include: {
           consignment: { select: { consignmentNumber: true } },
           goodsReceipt: { select: { receiptNumber: true } },
+          seller: { select: { companyName: true } },
         },
       });
 
@@ -492,6 +497,7 @@ export class InboundFreightService {
       include: {
         consignment: { select: { consignmentNumber: true } },
         goodsReceipt: { select: { receiptNumber: true } },
+        seller: { select: { companyName: true } },
       },
     });
 
@@ -549,19 +555,75 @@ export class InboundFreightService {
     freightChargeId: string,
     input: {
       readonly bankAccountId: string;
-      readonly amountInr: string;
+      /**
+       * What LEFT the account, in the ACCOUNT's own currency.
+       *
+       * The forwarder is a Bangladeshi business and is routinely paid in
+       * BDT from a BDT account. TRE-2 stamps the entry with the
+       * account's currency whatever arrives, so handing over an INR
+       * figure for a BDT account would not fail — it would be
+       * relabelled, wrong by the exchange rate, with nothing in the row
+       * to show it happened.
+       */
+      readonly amountPaid: string;
+      /**
+       * What that payment COST US in INR — the reporting currency.
+       *
+       * Entered rather than derived, for the TRE-5 reason: deriving it
+       * from a rate would silently absorb every bank charge and every
+       * gap between the rate quoted and the rate achieved. Both figures
+       * come off the two statements. Required only when the account is
+       * not already INR.
+       */
+      readonly costInr?: string | null;
       readonly occurredAt: Date;
       readonly reference?: string | null;
       readonly note?: string | null;
     },
     ctx?: ClientContext,
   ): Promise<FreightChargeView> {
-    const amount = new Prisma.Decimal(input.amountInr);
+    const amount = new Prisma.Decimal(input.amountPaid);
     if (amount.lessThanOrEqualTo(0)) {
       throw new BadRequestException({
         code: 'FREIGHT_PAYMENT_NOT_POSITIVE',
         message: 'A payment to the forwarder is money going out — give a positive amount',
       });
+    }
+
+    // The account decides the currency of the entry (TRE-2), so it also
+    // decides whether an INR figure has to be supplied separately.
+    const account = await this.prisma.client.platformBankAccount.findFirst({
+      where: { id: input.bankAccountId, deletedAt: null },
+      select: { id: true, currency: true, label: true },
+    });
+    if (account === null) {
+      throw new NotFoundException({
+        code: 'BANK_ACCOUNT_NOT_FOUND',
+        message: 'No such bank account',
+      });
+    }
+
+    let costInr: Prisma.Decimal;
+    if (account.currency === Currency.INR) {
+      costInr = amount;
+    } else {
+      if (input.costInr == null || input.costInr === '') {
+        throw new BadRequestException({
+          code: 'FREIGHT_COST_INR_REQUIRED',
+          message:
+            `This account is held in ${account.currency}, and the P&L is in INR. ` +
+            'Give what the payment cost in INR as well — read off the statement rather ' +
+            'than converted at a posted rate, so bank charges and the rate actually ' +
+            'achieved are not silently absorbed.',
+        });
+      }
+      costInr = new Prisma.Decimal(input.costInr);
+      if (costInr.lessThanOrEqualTo(0)) {
+        throw new BadRequestException({
+          code: 'FREIGHT_COST_NOT_POSITIVE',
+          message: 'The INR cost of the payment must be a positive number',
+        });
+      }
     }
 
     const existing = await this.prisma.client.inboundFreightCharge.findUnique({
@@ -595,7 +657,8 @@ export class InboundFreightService {
           // Negative: the money leaves. Unlike a courier wallet recharge
           // this does NOT become another asset — it is spent.
           signedAmount: amount.negated(),
-          amountCurrency: Currency.INR,
+          // The ACCOUNT's currency, stated rather than assumed (TRE-2).
+          amountCurrency: account.currency,
           // Ours. The seller is billed for freight separately, through
           // the wallet, and attributing this to them would move their
           // held cash for a payment they did not make.
@@ -608,6 +671,7 @@ export class InboundFreightService {
           reference: input.reference ?? null,
           note:
             `Forwarder payment — ${existing.consignment.consignmentNumber}` +
+            (account.currency === Currency.INR ? '' : ` (₹${costInr.toFixed(2)} equivalent)`) +
             `${input.note == null || input.note === '' ? '' : ` — ${input.note}`}`,
         },
         tx,
@@ -615,10 +679,13 @@ export class InboundFreightService {
 
       const updated = await tx.inboundFreightCharge.update({
         where: { id: freightChargeId },
-        data: existing.ourCostInr === null ? { ourCostInr: amount } : {},
+        // Always the INR figure — `our_cost_inr` is the P&L's cost side
+        // and a BDT number in it would be wrong by the exchange rate.
+        data: existing.ourCostInr === null ? { ourCostInr: costInr } : {},
         include: {
           consignment: { select: { consignmentNumber: true } },
           goodsReceipt: { select: { receiptNumber: true } },
+          seller: { select: { companyName: true } },
         },
       });
       return { updated, bankEntryId: entry.id };
@@ -635,7 +702,9 @@ export class InboundFreightService {
       metadata: {
         bankAccountId: input.bankAccountId,
         bankEntryId: row.bankEntryId,
-        amountInr: amount.toFixed(2),
+        amountPaid: amount.toFixed(2),
+        paidCurrency: account.currency,
+        costInr: costInr.toFixed(2),
         ourCostWas: existing.ourCostInr?.toString() ?? null,
         reference: input.reference ?? null,
         ipAddress: ctx?.ipAddress ?? null,
@@ -713,6 +782,7 @@ export class InboundFreightService {
         include: {
           consignment: { select: { consignmentNumber: true } },
           goodsReceipt: { select: { receiptNumber: true } },
+          seller: { select: { companyName: true } },
         },
       });
     });
@@ -729,6 +799,7 @@ export class InboundFreightService {
       include: {
         consignment: { select: { consignmentNumber: true } },
         goodsReceipt: { select: { receiptNumber: true } },
+        seller: { select: { companyName: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -765,6 +836,7 @@ export class InboundFreightService {
       include: {
         consignment: { select: { consignmentNumber: true } },
         goodsReceipt: { select: { receiptNumber: true } },
+        seller: { select: { companyName: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -799,6 +871,7 @@ export class InboundFreightService {
       include: {
         consignment: { select: { consignmentNumber: true } };
         goodsReceipt: { select: { receiptNumber: true } };
+        seller: { select: { companyName: true } };
       };
     }>
   > {
@@ -807,6 +880,7 @@ export class InboundFreightService {
       include: {
         consignment: { select: { consignmentNumber: true } },
         goodsReceipt: { select: { receiptNumber: true } },
+        seller: { select: { companyName: true } },
       },
     });
     if (!row) {
@@ -878,6 +952,7 @@ export class InboundFreightService {
       include: {
         consignment: { select: { consignmentNumber: true } };
         goodsReceipt: { select: { receiptNumber: true } };
+        seller: { select: { companyName: true } };
       };
     }>,
   ): FreightChargeView {
@@ -885,6 +960,7 @@ export class InboundFreightService {
       id: row.id,
       consignmentId: row.consignmentId,
       consignmentNumber: row.consignment?.consignmentNumber ?? null,
+      sellerCompanyName: row.seller?.companyName ?? null,
       goodsReceiptId: row.goodsReceiptId,
       receiptNumber: row.goodsReceipt?.receiptNumber ?? null,
       amountInr: row.amountInr.toString(),

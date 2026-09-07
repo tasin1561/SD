@@ -59,6 +59,8 @@ function makeSut(
     mode?: string;
     servicePercent?: string;
     settingsThrows?: boolean;
+    /** INR by default; 'BDT' drives the cross-currency payment path. */
+    bankCurrency?: 'INR' | 'BDT';
     loaded?: AnyArgs | null;
     claimCount?: number;
   } = {},
@@ -115,6 +117,15 @@ function makeSut(
     // Resolved by CODE inside recordForwarderPayment — the caller never
     // picks the category, so one cost cannot be filed two ways.
     expenseCategory: { findUnique: jest.fn(async () => ({ id: 'cat-freight' })) },
+    // The account decides the entry's currency (TRE-2) and therefore
+    // whether a separate INR figure has to be supplied.
+    platformBankAccount: {
+      findFirst: jest.fn(async () => ({
+        id: 'ba-1',
+        currency: opts.bankCurrency ?? 'INR',
+        label: 'HDFC — COD receiving',
+      })),
+    },
     inboundFreightCharge: {
       findUnique: jest.fn(async () =>
         opts.loaded === undefined ? (opts.existing ?? null) : opts.loaded,
@@ -430,7 +441,7 @@ describe('InboundFreightService.waive', () => {
 describe('InboundFreightService.recordForwarderPayment', () => {
   const payment = {
     bankAccountId: 'ba-1',
-    amountInr: '2000.00',
+    amountPaid: '2000.00',
     occurredAt: new Date('2026-09-01T00:00:00Z'),
   };
 
@@ -481,7 +492,7 @@ describe('InboundFreightService.recordForwarderPayment', () => {
   it('refuses a zero or negative payment', async () => {
     const { svc, post } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
     await expect(
-      svc.recordForwarderPayment('st-1', 'fc-1', { ...payment, amountInr: '0' }),
+      svc.recordForwarderPayment('st-1', 'fc-1', { ...payment, amountPaid: '0' }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(post).not.toHaveBeenCalled();
   });
@@ -492,10 +503,69 @@ describe('InboundFreightService.recordForwarderPayment', () => {
     const entry = auditLog.mock.calls.at(-1)?.[0] as unknown as {
       action: string;
       severity: string;
-      metadata: { amountInr: string };
+      metadata: { amountPaid: string };
     };
     expect(entry.action).toBe('staff.inbound_freight.forwarder_paid');
     expect(entry.severity).toBe('HIGH');
-    expect(entry.metadata.amountInr).toBe('2000.00');
+    expect(entry.metadata.amountPaid).toBe('2000.00');
+  });
+});
+
+describe('paying the forwarder from a BDT account', () => {
+  const bdtPayment = {
+    bankAccountId: 'ba-1',
+    amountPaid: '2500.00',
+    occurredAt: new Date('2026-09-01T00:00:00Z'),
+  };
+
+  it('stamps the entry in the ACCOUNT’s currency, not INR', async () => {
+    // TRE-2: the entry takes the account's currency whatever arrives,
+    // so an INR figure sent to a BDT account would not fail — it would
+    // be relabelled, wrong by the exchange rate, with nothing in the
+    // row to show it happened.
+    const { svc, post } = makeSut({
+      bankCurrency: 'BDT',
+      loaded: chargeRow({ ourCostInr: null }),
+    });
+    await svc.recordForwarderPayment('st-1', 'fc-1', { ...bdtPayment, costInr: '1800.00' });
+    const call = post.mock.calls[0]?.[0] as unknown as {
+      amountCurrency: string;
+      signedAmount: Prisma.Decimal;
+    };
+    expect(call.amountCurrency).toBe('BDT');
+    expect(call.signedAmount.toFixed(2)).toBe('-2500.00');
+  });
+
+  it('records the INR cost given, NOT the BDT amount', async () => {
+    // `our_cost_inr` is the P&L's cost side. A BDT figure in it is
+    // wrong by the exchange rate and nothing downstream would notice.
+    const { svc, chargeUpdate } = makeSut({
+      bankCurrency: 'BDT',
+      loaded: chargeRow({ ourCostInr: null }),
+    });
+    await svc.recordForwarderPayment('st-1', 'fc-1', { ...bdtPayment, costInr: '1800.00' });
+    const data = chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
+    expect(data.ourCostInr?.toFixed(2)).toBe('1800.00');
+  });
+
+  it('refuses a non-INR payment with no INR cost — it will not guess a rate', async () => {
+    // TRE-5: deriving it would silently absorb every bank charge and
+    // the gap between the rate quoted and the rate achieved. Both
+    // figures come off the two statements.
+    const { svc, post } = makeSut({
+      bankCurrency: 'BDT',
+      loaded: chargeRow({ ourCostInr: null }),
+    });
+    await expect(svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('an INR account needs no second figure', async () => {
+    const { svc, chargeUpdate } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
+    await svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment);
+    const data = chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
+    expect(data.ourCostInr?.toFixed(2)).toBe('2500.00');
   });
 });

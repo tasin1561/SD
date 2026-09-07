@@ -109,11 +109,23 @@ export class PayForwarderDto {
   @IsUUID()
   readonly bankAccountId!: string;
 
-  @ApiProperty({ description: 'What we paid the forwarder, in INR', example: '2000.00' })
-  // A string, not a number: a rupee figure through JSON's float is how
+  @ApiProperty({
+    description: "What left the account, in the ACCOUNT's own currency (INR or BDT)",
+    example: '2000.00',
+  })
+  // A string, not a number: a money figure through JSON's float is how
   // 2000.10 becomes 2000.0999999999999.
   @Matches(/^\d{1,12}(\.\d{1,2})?$/, { message: 'Amount must be a number with up to 2 decimals' })
-  readonly amountInr!: string;
+  readonly amountPaid!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'What the payment cost in INR. Required when the account is not INR — read off the statement, not converted at a posted rate, so bank charges and the achieved rate are not absorbed.',
+    example: '1500.00',
+  })
+  @IsOptional()
+  @Matches(/^\d{1,12}(\.\d{1,2})?$/, { message: 'Amount must be a number with up to 2 decimals' })
+  readonly costInr?: string;
 
   @ApiProperty({ description: 'When the bank actually moved it' })
   @IsDateString()

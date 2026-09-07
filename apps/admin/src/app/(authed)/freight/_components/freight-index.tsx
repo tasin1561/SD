@@ -183,6 +183,12 @@ function FreightRow({ row }: { readonly row: FreightChargeView }): ReactElement 
         {row.receiptNumber !== null && (
           <div className="text-text-faint mt-0.5 text-xs">{row.receiptNumber}</div>
         )}
+        {/* WHOSE consignment. Two bills with adjacent numbers look
+            identical here and may belong to different sellers — which
+            matters, because the bill is charged to one of them. */}
+        {row.sellerCompanyName !== null && (
+          <div className="text-text-muted mt-0.5 text-xs">{row.sellerCompanyName}</div>
+        )}
         <div className="text-text-faint mt-0.5 text-xs">
           {new Date(row.createdAt).toLocaleDateString()}
         </div>

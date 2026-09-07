@@ -82,7 +82,9 @@ export default function AuthedError({
             at. `digest` is what appears in the server log; the message
             is empty in production builds for client errors, so both are
             shown and whichever exists is the useful one. */}
-        {!looksLikeOutage && !isStaleBuild && (error.message !== '' || error.digest !== undefined) ? (
+        {!looksLikeOutage &&
+        !isStaleBuild &&
+        (error.message !== '' || error.digest !== undefined) ? (
           <p className="text-text-faint mb-5 font-mono text-xs break-all">
             {error.message !== '' ? error.message : `digest ${error.digest ?? 'unknown'}`}
           </p>
