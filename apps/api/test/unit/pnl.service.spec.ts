@@ -25,6 +25,19 @@ function makeSut(opts: {
     inboundFreightCharge: { findMany: async () => opts.freight ?? [] },
     orderCharge: {
       aggregate: async () => ({ _sum: { amountInr: opts.shippingRevenue ?? null } }),
+      // The same revenue, split by charge type for the line's basis —
+      // "shipping revenue" is four different prices added together and
+      // only one of them is the base rate.
+      groupBy: async () =>
+        opts.shippingRevenue == null
+          ? []
+          : [
+              {
+                type: 'BASE_SHIPPING',
+                _sum: { amountInr: opts.shippingRevenue },
+                _count: { _all: 1 },
+              },
+            ],
     },
     shipment: {
       findMany: async (args: { where: Record<string, unknown> }) =>
@@ -34,7 +47,7 @@ function makeSut(opts: {
         args.where['rtoReceivedAt'] === null ? (opts.shipments ?? []) : (opts.returned ?? []),
     },
     sellerWalletEntry: {
-      aggregate: async () => ({ _sum: { amount: opts.rtoFees ?? null } }),
+      aggregate: async () => ({ _sum: { amount: opts.rtoFees ?? null }, _count: { _all: 1 } }),
     },
     bankEntry: {
       aggregate: async (args: { where: { type: string } }) => ({
@@ -42,6 +55,7 @@ function makeSut(opts: {
           signedAmount:
             args.where.type === 'FX_SPREAD' ? (opts.fxSpread ?? null) : (opts.expenses ?? null),
         },
+        _count: { _all: 1 },
       }),
       findMany: async () => opts.unattributed ?? [],
     },
@@ -219,13 +233,18 @@ describe('a cost already counted by its leg is not counted again', () => {
     let scoped: unknown;
     const client = {
       inboundFreightCharge: { findMany: async () => [] },
-      orderCharge: { aggregate: async () => ({ _sum: { amountInr: null } }) },
+      orderCharge: {
+        aggregate: async () => ({ _sum: { amountInr: null } }),
+        groupBy: async () => [],
+      },
       shipment: { findMany: async () => [] },
-      sellerWalletEntry: { aggregate: async () => ({ _sum: { amount: null } }) },
+      sellerWalletEntry: {
+        aggregate: async () => ({ _sum: { amount: null }, _count: { _all: 0 } }),
+      },
       bankEntry: {
         aggregate: async (args: { where: Record<string, unknown> }) => {
           if (args.where['type'] === 'EXPENSE') scoped = args.where['inboundFreightChargeId'];
-          return { _sum: { signedAmount: null } };
+          return { _sum: { signedAmount: null }, _count: { _all: 0 } };
         },
         findMany: async () => [],
       },

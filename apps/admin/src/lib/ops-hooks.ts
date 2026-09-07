@@ -1029,6 +1029,15 @@ export function useBankEntries(
   });
 }
 
+/** One term of a line's arithmetic, named well enough to re-run by hand. */
+export interface PnlBasisPartView {
+  readonly label: string;
+  /** `table.column`, plus any filter that changes the answer. */
+  readonly source: string;
+  readonly count: number;
+  readonly amountInr: string;
+}
+
 export interface PnlLineView {
   readonly key: string;
   readonly label: string;
@@ -1040,6 +1049,10 @@ export interface PnlLineView {
     readonly priced: number;
     readonly total: number;
     readonly note: string | null;
+  };
+  readonly basis: {
+    readonly revenue: readonly PnlBasisPartView[];
+    readonly cost: readonly PnlBasisPartView[];
   };
 }
 

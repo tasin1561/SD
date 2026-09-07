@@ -40,15 +40,15 @@ The proxy forwards each request server-to-server to
 `http://localhost:4000/*` and streams the response (including
 `Set-Cookie` headers) back to the browser/curl.
 
-| # | Request | Result |
-|---|---|---|
-| 1 | `POST /api/auth/staff/login` | 200 + `Set-Cookie: __Host-staffRefresh=…; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604799` |
-| 2 | `GET /api/auth/staff/me` (cookie only) | 200, identity returned, NO Set-Cookie on response (cookie path is read-only — M12 commit 1 invariant) |
-| 3 | `POST /api/auth/staff/refresh` (cookie only) | 200 + brand-new `Set-Cookie: __Host-staffRefresh=…` |
-| 4 | Compare cookie before vs after refresh | Rotated (`goxMSC-02XTosGSsVxSj…` → `GWG8N6gVsrkUscoYAGHt…`) |
-| 5 | `GET /api/auth/staff/me` (NEW cookie) | 200 |
-| 6 | `POST /api/auth/staff/logout` | 204 (cookie cleared on response) |
-| 7 | `GET /api/auth/staff/me` (revoked cookie) | 401 |
+| #   | Request                                      | Result                                                                                                |
+| --- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1   | `POST /api/auth/staff/login`                 | 200 + `Set-Cookie: __Host-staffRefresh=…; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=604799`  |
+| 2   | `GET /api/auth/staff/me` (cookie only)       | 200, identity returned, NO Set-Cookie on response (cookie path is read-only — M12 commit 1 invariant) |
+| 3   | `POST /api/auth/staff/refresh` (cookie only) | 200 + brand-new `Set-Cookie: __Host-staffRefresh=…`                                                   |
+| 4   | Compare cookie before vs after refresh       | Rotated (`goxMSC-02XTosGSsVxSj…` → `GWG8N6gVsrkUscoYAGHt…`)                                           |
+| 5   | `GET /api/auth/staff/me` (NEW cookie)        | 200                                                                                                   |
+| 6   | `POST /api/auth/staff/logout`                | 204 (cookie cleared on response)                                                                      |
+| 7   | `GET /api/auth/staff/me` (revoked cookie)    | 401                                                                                                   |
 
 ## Why this is the load-bearing check
 

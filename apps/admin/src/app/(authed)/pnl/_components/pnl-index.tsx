@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState, type ReactElement } from 'react';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Fragment, useMemo, useState, type ReactElement } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
 import {
   Card,
   CardBody,
@@ -20,7 +20,7 @@ import {
   Th,
   Tr,
 } from '@skydrop/ui/components';
-import { usePnl } from '@/lib/ops-hooks';
+import { usePnl, type PnlBasisPartView } from '@/lib/ops-hooks';
 
 function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -44,6 +44,9 @@ function isoDay(d: Date): string {
 export function PnlIndex(): ReactElement {
   const [from, setFrom] = useState(() => isoDay(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
   const [to, setTo] = useState(() => isoDay(new Date()));
+  // One line open at a time. Four expanded at once is a wall of numbers
+  // that reads worse than the summary it was meant to explain.
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const params = useMemo(
     () => ({
@@ -163,43 +166,137 @@ export function PnlIndex(): ReactElement {
               <TBody>
                 {pnl.data.lines.map((l) => {
                   const full = l.coverage.priced === l.coverage.total;
+                  const open = expanded === l.key;
                   return (
-                    <Tr key={l.key}>
-                      <Td>
-                        <div className="font-medium">{l.label}</div>
-                        {l.coverage.note !== null && (
-                          <div className="text-xs text-muted mt-0.5">{l.coverage.note}</div>
-                        )}
-                      </Td>
-                      <Td align="right">
-                        <Money amount={l.revenueInr} currency="INR" convert={false} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={l.costInr} currency="INR" convert={false} />
-                      </Td>
-                      <Td align="right">
-                        <Money amount={l.marginInr} currency="INR" convert={false} />
-                      </Td>
-                      <Td align="right" className="tabular-nums">
-                        {l.marginPercent === null ? '—' : `${l.marginPercent}%`}
-                      </Td>
-                      <Td>
-                        <span className="inline-flex items-center gap-1 text-xs tabular-nums">
-                          {full ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden />
-                          ) : (
-                            <AlertTriangle className="h-3.5 w-3.5 text-warning" aria-hidden />
+                    <Fragment key={l.key}>
+                      <Tr>
+                        <Td>
+                          <button
+                            type="button"
+                            className="hover:text-text-bright flex items-center gap-1.5 text-left font-medium"
+                            onClick={() => setExpanded(open ? null : l.key)}
+                            aria-expanded={open}
+                          >
+                            <ChevronRight
+                              className={`size-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+                              aria-hidden
+                            />
+                            {l.label}
+                          </button>
+                          {l.coverage.note !== null && (
+                            <div className="text-xs text-muted mt-0.5">{l.coverage.note}</div>
                           )}
-                          {l.coverage.priced}/{l.coverage.total}
-                        </span>
-                      </Td>
-                    </Tr>
+                        </Td>
+                        <Td align="right">
+                          <Money amount={l.revenueInr} currency="INR" convert={false} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={l.costInr} currency="INR" convert={false} />
+                        </Td>
+                        <Td align="right">
+                          <Money amount={l.marginInr} currency="INR" convert={false} />
+                        </Td>
+                        <Td align="right" className="tabular-nums">
+                          {l.marginPercent === null ? '—' : `${l.marginPercent}%`}
+                        </Td>
+                        <Td>
+                          <span className="inline-flex items-center gap-1 text-xs tabular-nums">
+                            {full ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden />
+                            ) : (
+                              <AlertTriangle className="h-3.5 w-3.5 text-warning" aria-hidden />
+                            )}
+                            {l.coverage.priced}/{l.coverage.total}
+                          </span>
+                        </Td>
+                      </Tr>
+                      {open && (
+                        <Tr>
+                          {/* The arithmetic, so the figure above can be
+                            re-run by hand. A total nobody can split is
+                            a total nobody can check. */}
+                          <Td colSpan={6} className="bg-surface-raised">
+                            <div className="grid gap-4 py-1 sm:grid-cols-2">
+                              <BasisColumn
+                                heading="Revenue is made of"
+                                parts={l.basis.revenue}
+                                totalInr={l.revenueInr}
+                              />
+                              <BasisColumn
+                                heading="Cost is made of"
+                                parts={l.basis.cost}
+                                totalInr={l.costInr}
+                                emptyText="Nothing — this line has no cost side."
+                              />
+                            </div>
+                          </Td>
+                        </Tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </TBody>
             </Table>
           </Section>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What one side of a line is made of.
+ *
+ * Each part names the TABLE AND COLUMN it came from, not just a figure.
+ * "₹4,005 revenue" cannot be checked against anything; "the sum of
+ * inbound_freight_charges.total_inr over 2 bills" can be re-run and
+ * compared. The two cost columns on a shipment — forward and RTO — are
+ * exactly the pair somebody would otherwise sum wrongly, which is why
+ * the filter is spelled out too.
+ */
+function BasisColumn({
+  heading,
+  parts,
+  totalInr,
+  emptyText,
+}: {
+  readonly heading: string;
+  readonly parts: readonly PnlBasisPartView[];
+  readonly totalInr: string;
+  readonly emptyText?: string;
+}): ReactElement {
+  return (
+    <div>
+      <div className="text-text-muted mb-1.5 text-xs font-medium tracking-wide uppercase">
+        {heading}
+      </div>
+      {parts.length === 0 ? (
+        <p className="text-text-faint text-xs">{emptyText ?? 'Nothing in this window.'}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {parts.map((p) => (
+            <li key={p.source} className="flex items-start justify-between gap-3 text-xs">
+              <div className="min-w-0">
+                <div className="text-text-body">{p.label}</div>
+                <div className="text-text-faint font-mono break-all">{p.source}</div>
+              </div>
+              <div className="shrink-0 text-right">
+                <Money amount={p.amountInr} currency="INR" convert={false} />
+                <div className="text-text-faint tabular-nums">
+                  {p.count} {p.count === 1 ? 'row' : 'rows'}
+                </div>
+              </div>
+            </li>
+          ))}
+          {/* Restated so the parts can be seen to add up. If they do not,
+              that is the bug this whole panel exists to expose. */}
+          {parts.length > 1 && (
+            <li className="border-border flex items-center justify-between gap-3 border-t pt-1.5 text-xs font-medium">
+              <span>Total</span>
+              <Money amount={totalInr} currency="INR" convert={false} />
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );

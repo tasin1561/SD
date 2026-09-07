@@ -20,6 +20,25 @@ const ZERO = new Prisma.Decimal(0);
 const LEG_EXPENSE_CATEGORIES = ['freight_forwarder', 'courier_charges'];
 
 /** One way the business makes (or loses) money, and how well we can see it. */
+/**
+ * One term of a line's arithmetic, named well enough to be re-run by
+ * hand.
+ *
+ * The figure alone is unauditable — "₹4,005 revenue" cannot be checked
+ * against anything without knowing which rows and which COLUMN were
+ * summed, and the two columns on a shipment (forward vs RTO cost) are
+ * exactly the pair somebody would otherwise pick wrongly. So each part
+ * carries the table and column it came from and how many rows went into
+ * it, which is enough to write the same query and get the same number.
+ */
+export interface PnlBasisPart {
+  readonly label: string;
+  /** `table.column`, and any filter that changes the answer. */
+  readonly source: string;
+  readonly count: number;
+  readonly amountInr: string;
+}
+
 export interface PnlLine {
   readonly key: string;
   readonly label: string;
@@ -40,6 +59,11 @@ export interface PnlLine {
     readonly priced: number;
     readonly total: number;
     readonly note: string | null;
+  };
+  /** What the two figures are made of, term by term. */
+  readonly basis: {
+    readonly revenue: readonly PnlBasisPart[];
+    readonly cost: readonly PnlBasisPart[];
   };
 }
 
@@ -145,6 +169,24 @@ export class PnlService {
         priced < charges.length
           ? 'Some consignments have no forwarder cost recorded, so their margin reads as pure profit. Add it on the freight bill.'
           : null,
+      basis: {
+        revenue: [
+          {
+            label: 'Freight billed to sellers',
+            source: 'inbound_freight_charges.total_inr (bill raised in window)',
+            count: charges.length,
+            amountInr: revenue.toFixed(2),
+          },
+        ],
+        cost: [
+          {
+            label: 'Forwarder invoices recorded',
+            source: 'inbound_freight_charges.our_cost_inr (NULL = not yet recorded)',
+            count: priced,
+            amountInr: cost.toFixed(2),
+          },
+        ],
+      },
     });
   }
 
@@ -185,6 +227,25 @@ export class PnlService {
     // Revenue for exactly those parcels — reached through the orders
     // they belong to, so the two sides describe the same cohort rather
     // than the same calendar window.
+    const revenueByType = await this.prisma.client.orderCharge.groupBy({
+      by: ['type'],
+      where: {
+        deletedAt: null,
+        order: { orderShipments: { some: { shipment: shipmentWindow } } },
+        type: {
+          in: [
+            'BASE_SHIPPING',
+            'COD_FEE',
+            'FUEL_SURCHARGE',
+            'REMOTE_AREA_FEE',
+            'WEIGHT_DISPUTE_FEE',
+          ],
+        },
+      },
+      _sum: { amountInr: true },
+      _count: { _all: true },
+    });
+
     const revenueAgg = await this.prisma.client.orderCharge.aggregate({
       where: {
         deletedAt: null,
@@ -221,6 +282,26 @@ export class PnlService {
         priced < shipments.length
           ? `${shipments.length - priced} parcels have no real courier cost yet — run the margin report over this window to price them.`
           : null,
+      basis: {
+        // Broken out by CHARGE TYPE, because "shipping revenue" is four
+        // different prices added together and only one of them is the
+        // base rate. A total that cannot be split cannot be checked
+        // against a rate card.
+        revenue: revenueByType.map((r) => ({
+          label: this.chargeTypeLabel(r.type),
+          source: `order_charges.amount_inr WHERE type=${r.type}`,
+          count: r._count._all,
+          amountInr: (r._sum.amountInr ?? ZERO).toFixed(2),
+        })),
+        cost: [
+          {
+            label: 'Courier cost on delivered parcels',
+            source: 'shipments.actual_courier_cost_inr (excludes returns)',
+            count: priced,
+            amountInr: cost.toFixed(2),
+          },
+        ],
+      },
     });
   }
 
@@ -245,6 +326,7 @@ export class PnlService {
         createdAt: { gte: from, lte: to },
       },
       _sum: { amount: true },
+      _count: { _all: true },
     });
     const returned = await this.prisma.client.shipment.findMany({
       where: {
@@ -275,6 +357,24 @@ export class PnlService {
         priced < returned.length
           ? `${returned.length - priced} returns have no courier cost recorded, so this margin is flattering.`
           : null,
+      basis: {
+        revenue: [
+          {
+            label: 'Return fees charged to sellers',
+            source: 'seller_wallet_entries.amount WHERE direction=RTO_FEE',
+            count: fees._count._all,
+            amountInr: (fees._sum.amount ?? ZERO).toFixed(2),
+          },
+        ],
+        cost: [
+          {
+            label: 'Courier cost to bring parcels back',
+            source: 'shipments.actual_rto_cost_inr (NOT the forward cost)',
+            count: priced,
+            amountInr: cost.toFixed(2),
+          },
+        ],
+      },
     });
   }
 
@@ -293,6 +393,7 @@ export class PnlService {
         occurredAt: { gte: from, lte: to },
       },
       _sum: { signedAmount: true },
+      _count: { _all: true },
     });
     const spread = agg._sum.signedAmount ?? ZERO;
     return {
@@ -303,6 +404,20 @@ export class PnlService {
       marginInr: spread.toFixed(2),
       marginPercent: null,
       coverage: { priced: 1, total: 1, note: null },
+      basis: {
+        revenue: [
+          {
+            label: 'Gap between the rate quoted and the rate achieved',
+            source: 'bank_entries.signed_amount WHERE type=FX_SPREAD',
+            count: agg._count._all,
+            amountInr: spread.toFixed(2),
+          },
+        ],
+        // Nothing. The spread IS the margin — there is no cost side to
+        // an arithmetic difference, and an empty list says that more
+        // honestly than a zero would.
+        cost: [],
+      },
     };
   }
 
@@ -369,6 +484,32 @@ export class PnlService {
     return { countInr: total.toFixed(2), count: rows.length };
   }
 
+  /**
+   * A charge type in the words a person uses.
+   *
+   * Deliberately NOT exhaustive over ChargeType: this is a display
+   * label for the five delivery-revenue types the query already filters
+   * to, and anything else falls back to its own name rather than being
+   * hidden. A part that vanished would make the terms stop adding up to
+   * the total beside them, which is worse than an ugly label.
+   */
+  private chargeTypeLabel(type: string): string {
+    switch (type) {
+      case 'BASE_SHIPPING':
+        return 'Base shipping';
+      case 'COD_FEE':
+        return 'COD collection fee';
+      case 'FUEL_SURCHARGE':
+        return 'Fuel surcharge';
+      case 'REMOTE_AREA_FEE':
+        return 'Remote-area fee';
+      case 'WEIGHT_DISPUTE_FEE':
+        return 'Weight dispute';
+      default:
+        return type.replaceAll('_', ' ').toLowerCase();
+    }
+  }
+
   private line(input: {
     key: string;
     label: string;
@@ -377,6 +518,7 @@ export class PnlService {
     priced: number;
     total: number;
     note: string | null;
+    basis: { revenue: readonly PnlBasisPart[]; cost: readonly PnlBasisPart[] };
   }): PnlLine {
     const margin = input.revenue.sub(input.cost);
     return {
@@ -391,6 +533,7 @@ export class PnlService {
         total: input.total,
         note: input.priced === input.total ? null : input.note,
       },
+      basis: input.basis,
     };
   }
 }

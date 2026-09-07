@@ -28,15 +28,16 @@ beyond what the boundary tests + auth verification already pin.
 
 ## Why this approach over Playwright for M12
 
-| | Playwright now | Integration + smoke (chosen) |
-|---|---|---|
-| Boundary coverage | Yes (with selector-flakes) | Yes — 7 FE-2 tests + 26 package tests |
-| Auth-loop coverage | Yes (would re-prove CP1) | Yes — CP1_VERIFICATION.md (7 steps live) |
-| CI cost | +150MB browsers + headless run | $0 — existing vitest job covers it |
-| Harness time | 2–4 hours setup + maintenance | 30 min smoke doc; refreshes with code |
-| Value when apps/seller lands | Amortized over 2 apps | Re-evaluate then; same surface ×2 makes it worth it |
+|                              | Playwright now                 | Integration + smoke (chosen)                        |
+| ---------------------------- | ------------------------------ | --------------------------------------------------- |
+| Boundary coverage            | Yes (with selector-flakes)     | Yes — 7 FE-2 tests + 26 package tests               |
+| Auth-loop coverage           | Yes (would re-prove CP1)       | Yes — CP1_VERIFICATION.md (7 steps live)            |
+| CI cost                      | +150MB browsers + headless run | $0 — existing vitest job covers it                  |
+| Harness time                 | 2–4 hours setup + maintenance  | 30 min smoke doc; refreshes with code               |
+| Value when apps/seller lands | Amortized over 2 apps          | Re-evaluate then; same surface ×2 makes it worth it |
 
 The user-approved steer:
+
 > "if Playwright setup balloons, (b) is acceptable for M12 and full
 > e2e becomes a fast-follow when apps/seller doubles the surface
 > worth covering"
@@ -124,7 +125,7 @@ Click an order from the list.
 2. Scroll to **Lifecycle actions** at the bottom. If the order is
    in a non-terminal state, **Cancel order** is enabled.
 3. Click → modal → choose a cancellation reason from the dropdown
-   + optional note → **Confirm cancel**.
+   - optional note → **Confirm cancel**.
 4. On success: page refetches; status badge updates to
    `CANCELLED_BY_ADMIN`.
 5. **FE-2 verification (matrix-server-guarded)**: try to cancel
