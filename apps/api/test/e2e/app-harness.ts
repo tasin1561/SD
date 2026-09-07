@@ -590,6 +590,10 @@ export async function resetOrderState(prisma: PrismaClient): Promise<void> {
         'order_items',
         'bulk_order_uploads',
         'orders',
+        // Shopfronts. `orders.store_id` FK-RESTRICTS them, so they go in
+        // the SAME truncate rather than after — and before the seller
+        // wipe, which they cascade from (MUST #12).
+        'seller_stores',
         'customers',
       ].join(', ') +
       ' RESTART IDENTITY CASCADE',
@@ -912,4 +916,31 @@ export async function forcePackAtBench(
     .set(staffAuth)
     .send({ reason })
     .expect(200);
+}
+
+/**
+ * The seller's default shopfront, created on demand for a test.
+ *
+ * Production creates one in the same transaction as the seller, which
+ * is what lets `orders.store_id` be NOT NULL. A test that seeds an
+ * order row DIRECTLY skips that path, so it has to ask for the store
+ * the same way the real create would.
+ *
+ * Find-or-create rather than create: several tests seed several orders
+ * for one seller, and a second call must return the first store rather
+ * than trip the one-default-per-seller partial unique.
+ */
+export async function defaultStoreFor(
+  prisma: PrismaClient,
+  sellerId: string,
+): Promise<{ id: string; name: string }> {
+  const existing = await prisma.sellerStore.findFirst({
+    where: { sellerId, isDefault: true, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  if (existing !== null) return existing;
+  return prisma.sellerStore.create({
+    data: { sellerId, name: 'Default store', isDefault: true, isActive: true },
+    select: { id: true, name: true },
+  });
 }

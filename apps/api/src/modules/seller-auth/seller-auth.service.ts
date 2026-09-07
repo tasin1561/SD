@@ -33,6 +33,7 @@ import type { SellerRegisterViaInvitationDto } from './dto/register-via-invitati
 import { provisionDefaultSellerRoles } from '../../common/auth/seller-role-provisioning';
 import { ALL_SELLER_PERMISSION_KEYS } from '../../common/auth/seller-permissions';
 import { generateSellerInitials } from './util/seller-initials';
+import { DEFAULT_STORE_NAME } from '../seller-store/services/seller-store.service';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -235,6 +236,26 @@ export class SellerAuthService {
           displayLanguage: input.displayLanguage ?? 'en',
         },
         select: { id: true, email: true, status: true },
+      });
+
+      /*
+        The company's first SHOPFRONT, in this same transaction.
+
+        This is what lets `orders.store_id` be NOT NULL: there is never
+        a moment when a seller exists with nowhere for their orders to
+        belong. Created here rather than lazily on the first order,
+        because a lazy create is a read-then-write and two concurrent
+        first orders would both find none and both make one — which the
+        one-default-per-seller partial unique would then refuse, failing
+        an order for a reason nobody could act on.
+      */
+      await tx.sellerStore.create({
+        data: {
+          sellerId: createdSeller.id,
+          name: DEFAULT_STORE_NAME,
+          isDefault: true,
+          isActive: true,
+        },
       });
 
       // The company's six starting roles, BEFORE its first login —

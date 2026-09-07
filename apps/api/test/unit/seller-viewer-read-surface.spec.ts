@@ -55,6 +55,8 @@ const OPTED_IN: Readonly<Record<string, string>> = {
     'the same order, told as a story — the stages it passed through and the courier scans. It is a strict re-presentation of what :id and :id/events already return to this role, so refusing it would render the order page half-empty for a VIEWER rather than read-only',
   'seller-nsa.controller.ts':
     'their own orders that are stuck out for delivery — a filtered view of the list this role already reads, discovering nothing new about them. Opened deliberately because noticing a stuck parcel is exactly what a read-only team member is useful for, and a page that refused them would be a link to a 403',
+  'seller-store.controller.ts':
+    'the names of their own company’s shopfronts. A VIEWER already sees which store every order they can read was placed under, so the list discloses nothing further — and the store filter sits on the order list this role exists to read, so refusing it would render that page with a filter that 403s. The WRITES on this controller carry profile.manage at the handler and are not reached by the opt-in.',
 };
 
 /** GETs that opt-in reaches, listed so a new one is a decision. */
@@ -62,6 +64,9 @@ const READABLE_GETS: Readonly<Record<string, readonly string[]>> = {
   // One GET, and it returns only this seller's own flagged orders —
   // the guard supplies the sellerId, the client never sends one.
   'seller-nsa.controller.ts': [''],
+  // The list only. Every write here is gated at the handler on
+  // profile.manage, which the class-level opt-in does not widen.
+  'seller-store.controller.ts': [''],
   'seller-order.controller.ts': [
     '',
     ':id',

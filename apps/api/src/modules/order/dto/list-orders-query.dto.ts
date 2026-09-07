@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { OrderSource, OrderStatus } from '@skydrop/db';
 import {
@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  IsUUID,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -32,6 +33,11 @@ export class ListOrdersQueryDto {
   @IsString()
   @MaxLength(120)
   search?: string;
+
+  @ApiPropertyOptional({ description: 'Narrow to one shopfront' })
+  @IsOptional()
+  @IsUUID('7')
+  storeId?: string;
 
   @ApiProperty({ required: false, description: 'ISO instant — orders placed at or after this.' })
   @IsOptional()

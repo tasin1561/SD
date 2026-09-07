@@ -59,8 +59,18 @@ export class CreateOrderItemDto {
 export class CreateOrderDto {
   @ApiProperty({
     required: false,
+    description:
+      'Which shopfront this sale came from. Omit for the seller’s default store — which is what a CSV row with no store column gets.',
+  })
+  @IsOptional()
+  @IsUUID('7')
+  storeId?: string;
+
+  @ApiProperty({
+    required: false,
     maxLength: 120,
-    description: "Seller's own order id; unique within the seller.",
+    description:
+      "Seller's own order id. Unique per STORE, not per seller: two shopfronts each running their own Shopify both emit `#1001`.",
   })
   @IsOptional()
   @IsString()

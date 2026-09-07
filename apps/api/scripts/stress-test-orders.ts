@@ -203,11 +203,23 @@ async function driveOrderForSeller(
   const codAmount = Math.round((Math.random() * 800 + 200) * 100) / 100; // ₹200-1000
   const orderNumber = `STRESS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+  // The seller's shopfront. Seeded directly like everything else here,
+  // because this script bypasses OrderService and therefore the store
+  // resolution that would normally supply it.
+  const store = await prisma.sellerStore.upsert({
+    where: { sellerId_name: { sellerId: s.id, name: 'Default store' } },
+    update: {},
+    create: { sellerId: s.id, name: 'Default store', isDefault: true, isActive: true },
+    select: { id: true, name: true },
+  });
+
   // Direct DB inserts — skip the call-centre + saga for speed.
   const order = await prisma.order.create({
     data: {
       orderNumber,
       sellerId: s.id,
+      storeId: store.id,
+      storeNameSnapshot: store.name,
       status: OrderStatus.DELIVERED, // jump to terminal; lifecycle listeners do NOT fire on direct DB writes
       source: 'MANUAL',
       paymentMode: PaymentMode.COD,

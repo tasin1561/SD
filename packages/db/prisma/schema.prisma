@@ -256,6 +256,7 @@ model Seller {
   goodsReceipts            GoodsReceipt[]
   customers                Customer[]
   orders                   Order[]
+  stores                   SellerStore[]
   bulkOrderUploads         BulkOrderUpload[]              @relation("BulkUploadSeller")
   bulkUploadsTriggered     BulkOrderUpload[]              @relation("BulkUploadUploadedBySeller")
   pricing                  SellerPricing[]
@@ -2593,6 +2594,60 @@ model StockAlertState {
 // Layer 5 — Orders & Customers (6 tables)
 // ============================================================
 
+/// A seller's shopfront.
+///
+/// ── WHAT A STORE IS, AND DELIBERATELY IS NOT ─────────────────────────
+/// A brand a seller sells under. Catalog, stock, wallet, courier
+/// accounts and every other seller-owned thing stay PER SELLER — the
+/// goods are the same goods on the same shelf, and splitting stock per
+/// store would leave one brand unable to sell while its sibling has
+/// forty units sitting idle in the same bin.
+///
+/// So a store is an attribute of an ORDER: which shopfront this sale
+/// came from. That is what makes it a small change rather than a second
+/// tenancy layer.
+model SellerStore {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId String @map("seller_id") @db.Uuid
+
+  name String
+  /// Free text the seller owns — a note to themselves about which
+  /// channel this is.
+  note String? @db.Text
+
+  /// The one pre-selected when an order is created, and the one a CSV
+  /// row falls back to when it names no store.
+  ///
+  /// Exactly one per seller, enforced by a PARTIAL UNIQUE index rather
+  /// than a check: two tabs both promoting a default would otherwise
+  /// both succeed, and order create would then have two defaults to
+  /// choose between. Declared in the migration — Prisma cannot express
+  /// a partial unique.
+  isDefault Boolean @default(false) @map("is_default")
+
+  /// Blocks NEW orders; every past one still resolves. The default
+  /// store cannot be deactivated while it is the default, or order
+  /// create has nothing to pre-select.
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  seller      Seller       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orders      Order[]
+  sellerUsers SellerUser[]
+  /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
+  /// NULL` — lives in the migration. Prisma cannot express one, so it
+  /// is invisible here and will not drift-check; it is what makes two
+  /// defaults for one seller unrepresentable rather than merely
+  /// unlikely.
+
+  @@unique([sellerId, name])
+  @@index([sellerId, isActive])
+  @@map("seller_stores")
+}
+
 model Customer {
   id                    String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
   sellerId              String            @map("seller_id") @db.Uuid
@@ -2633,10 +2688,24 @@ model Customer {
 }
 
 model Order {
-  id                      String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  orderNumber             String       @unique @map("order_number")
-  sellerId                String       @map("seller_id") @db.Uuid
-  customerId              String?      @map("customer_id") @db.Uuid
+  id          String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderNumber String  @unique @map("order_number")
+  sellerId    String  @map("seller_id") @db.Uuid
+  customerId  String? @map("customer_id") @db.Uuid
+
+  /// WHICH SHOPFRONT this sale came from.
+  ///
+  /// NOT NULL: every seller gets a default store in the same
+  /// transaction that creates them, so there has never been a moment
+  /// when an order had no store to belong to. A nullable column here
+  /// would push a null check through every reader to express something
+  /// that cannot happen.
+  storeId           String @map("store_id") @db.Uuid
+  /// The store's name AS IT WAS. ORD-6: renaming a store must not
+  /// rewrite what a past customer was told, and the live row cannot
+  /// answer what it used to be called.
+  storeNameSnapshot String @map("store_name_snapshot")
+
   sellerOrderRef          String?      @map("seller_order_ref")
   source                  OrderSource  @default(MANUAL)
   bulkUploadId            String?      @map("bulk_upload_id") @db.Uuid
@@ -2731,6 +2800,7 @@ model Order {
 
   seller                 Seller                       @relation(fields: [sellerId], references: [id])
   customer               Customer?                    @relation(fields: [customerId], references: [id])
+  store                  SellerStore                  @relation(fields: [storeId], references: [id])
   bulkUpload             BulkOrderUpload?             @relation(fields: [bulkUploadId], references: [id])
   confirmedBy            StaffUser?                   @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
   cancelledBy            StaffUser?                   @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
@@ -2757,7 +2827,14 @@ model Order {
   courierSettlementLines CourierSettlementLine[]
   packBoxes              PackBox[]
 
-  @@unique([sellerId, sellerOrderRef])
+  /// Per STORE, not per seller. Two shopfronts each running their own
+  /// Shopify will both produce order `#1001`, and under the old
+  /// seller-wide key the second one silently PATCHED the first store's
+  /// order instead of creating its own (ORD-9). That is data
+  /// corruption, not an inconvenience.
+  @@unique([sellerId, storeId, sellerOrderRef])
+  @@index([storeId])
+  @@index([sellerId, storeId, status])
   // A seller's own list, newest first — the most-hit read in the
   // product. Without placedAt in the key, Postgres walks the GLOBAL
   // newest-first index and discards every other seller's rows to find
@@ -6759,6 +6836,16 @@ model SellerUser {
   updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz
 
+  /// Scope this member to ONE store, or null for the whole company.
+  ///
+  /// Nullable and NOT YET ENFORCED anywhere. The column is here from
+  /// the first migration because adding it later is trivial while
+  /// retrofitting the PREDICATE is not: under RBAC-1 a store scope is
+  /// not a filter, it is a condition on every seller-side read, and
+  /// bolting that on later means auditing every endpoint again.
+  storeId String? @map("store_id") @db.Uuid
+
+  store                           SellerStore?                   @relation(fields: [storeId], references: [id])
   sellerRole                      SellerRoleDefinition           @relation(fields: [roleId], references: [id], onDelete: Restrict)
   seller                          Seller                         @relation(fields: [sellerId], references: [id])
   invitedBy                       SellerUser?                    @relation("SellerUserInvitedBy", fields: [invitedById], references: [id])
@@ -6784,6 +6871,7 @@ model SellerUser {
   // so without this, checking whether a role is still in use scans
   // seller_users, and three services filter on roleId besides.
   @@index([roleId])
+  @@index([storeId])
   @@map("seller_users")
 }
 

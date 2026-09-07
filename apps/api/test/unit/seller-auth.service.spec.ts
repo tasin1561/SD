@@ -116,6 +116,12 @@ interface FakeClient {
     create: jest.Mock;
     update: jest.Mock;
   };
+  /** And its first SHOPFRONT, which is what lets `orders.store_id` be
+   *  NOT NULL — there is never a moment when a seller exists with
+   *  nowhere for their orders to belong. */
+  sellerStore: {
+    create: jest.Mock;
+  };
   /** Registration provisions the company's six starting roles in the
    *  same tx, because `seller_users.role_id` is NOT NULL. */
   sellerRoleDefinition: {
@@ -247,6 +253,9 @@ function buildClient(): FakeClient {
           return row;
         },
       ),
+    },
+    sellerStore: {
+      create: jest.fn(async () => ({ id: 'store-default' })),
     },
     sellerRoleDefinition: {
       create: jest.fn(async ({ data }: { data: { key: string; isOwner?: boolean } }) => ({
@@ -740,6 +749,37 @@ describe('SellerAuthService — registerViaInvitation', () => {
     expect(result.seller.id).toBeDefined();
     expect(sut.client.tables.sellers).toHaveLength(1);
     expect(sut.client.tables.invitations[0]!.usedAt).toBeInstanceOf(Date);
+  });
+
+  it('creates a DEFAULT store alongside the company', async () => {
+    /*
+    This is what lets `orders.store_id` be NOT NULL: there is never a
+    moment when a seller exists with nowhere for their orders to
+    belong.
+
+    Created here rather than lazily on the first order, because a lazy
+    create is a read-then-write — two concurrent first orders would
+    both find none and both make one, and the one-default-per-seller
+    partial unique would refuse the second, failing an order for a
+    reason nobody could act on.
+  */
+    const sut = makeSut();
+    const { plaintext } = seedInvitation(sut);
+    await sut.svc.registerViaInvitation(
+      {
+        token: plaintext,
+        companyName: 'Brand Co',
+        contactPersonName: 'Sara K',
+        phone: '+8801712345678',
+        password: 'NewSeller-Pass!42',
+      },
+      ctx,
+    );
+    expect(sut.client.sellerStore.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isDefault: true, isActive: true }),
+      }),
+    );
   });
 });
 

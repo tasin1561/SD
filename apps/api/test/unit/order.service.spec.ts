@@ -154,6 +154,8 @@ function makeService(
   const findOpenOrdersForPhone = jest.fn(async () => opts.openOrders ?? []);
   const reputation = { findOpenOrdersForPhone };
 
+  const resolveStore = jest.fn(async () => ({ id: 'store-1', name: 'Default store' }));
+
   const assertCanPlaceOrder = jest.fn(async () => {
     if (opts.overdrawn === true) {
       throw new BadRequestException({ code: 'WALLET_OVERDRAWN', message: 'Overdrawn' });
@@ -174,6 +176,9 @@ function makeService(
     catalog as never,
     audit as never,
     stateMachine,
+    // The shopfront the order is filed under. Returns the default,
+    // which is what an order carrying no store id gets in production.
+    { resolveForOrder: resolveStore } as never,
     callQueue as never,
     orderCharges as never,
     earlyReservations as never,
@@ -183,6 +188,7 @@ function makeService(
   );
   return {
     svc,
+    resolveStore,
     findOpenOrdersForPhone,
     assertCanPlaceOrder,
     enqueueOrder,

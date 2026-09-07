@@ -3,6 +3,7 @@ import { SellerStatus, StaffRole } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
+  defaultStoreFor,
   flushTestRedis,
   resetAuthState,
   type AppHarness,
@@ -117,9 +118,12 @@ describe('cross-tenant isolation (e2e)', () => {
     // Seeded directly: the READ is what is under test, and driving the
     // HTTP create would need catalog + variant setup whose only effect
     // here would be more ways for this test to silently no-op.
+    const store = await defaultStoreFor(h.prisma, alpha.sellerId);
     const order = await h.prisma.order.create({
       data: {
         sellerId: alpha.sellerId,
+        storeId: store.id,
+        storeNameSnapshot: store.name,
         orderNumber: `SD-2026-99-${Math.floor(Math.random() * 900000 + 100000)}`,
         status: 'PENDING_CONFIRMATION',
         paymentMode: 'PREPAID',
@@ -318,10 +322,13 @@ describe('cross-tenant isolation (e2e)', () => {
   });
 
   it('cannot cancel another seller’s order', async () => {
+    const store = await defaultStoreFor(h.prisma, alpha.sellerId);
     const order = await h.prisma.order.create({
       data: {
         orderNumber: `SD-2026-99-${Date.now().toString().slice(-6)}`,
         sellerId: alpha.sellerId,
+        storeId: store.id,
+        storeNameSnapshot: store.name,
         recipientName: 'Alpha Customer',
         recipientPhoneE164: '+919876500098',
         recipientAddressLine1: 'a',

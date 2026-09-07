@@ -33,6 +33,7 @@ import { composeSellerPrefixedName, stripSellerPrefix } from '../../../common/te
 import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
 import { SellerCreditService } from '../../seller-credit/services/seller-credit.service';
+import { SellerStoreService } from '../../seller-store/services/seller-store.service';
 
 const ORDER_VIEW_INCLUDE = {
   items: {
@@ -104,6 +105,8 @@ export interface ListOrdersQuery {
   status?: OrderStatus;
   source?: OrderSource;
   search?: string;
+  /** Narrow to ONE shopfront. Omitted means every store. */
+  storeId?: string;
   /** ISO instants. Both optional — either end alone is a valid filter. */
   placedFrom?: string;
   placedTo?: string;
@@ -199,6 +202,7 @@ export class OrderService {
     private readonly catalog: CatalogReadService,
     private readonly audit: AuditLogService,
     private readonly stateMachine: OrderStateMachineService,
+    private readonly stores: SellerStoreService,
     private readonly callQueue: CallQueueService,
     private readonly orderCharges: OrderChargesService,
     private readonly earlyReservations: EarlyReservationService,
@@ -294,6 +298,12 @@ export class OrderService {
     ctx: ClientContext,
     options: CreateOrderOptions = {},
   ): Promise<OrderView> {
+    // WHICH SHOPFRONT. Resolved before the transaction opens, so a
+    // store belonging to another seller — or one somebody closed — is
+    // refused before an order number is burned. Given none, the
+    // seller's default; the CSV importer reaches this same line, which
+    // is why a row that names no store still lands somewhere.
+    const store = await this.stores.resolveForOrder(sellerId, input.storeId);
     // A seller on hold cannot start new work. Checked here rather than
     // in the controller so the CSV importer — which reaches this same
     // method with no screen in front of it — is covered by the same
@@ -381,6 +391,11 @@ export class OrderService {
             orderNumber,
             sellerId,
             customerId: customer.id,
+            storeId: store.id,
+            // ORD-6: the NAME as it was. Renaming the store later must
+            // not rewrite what a past customer was told, and the live
+            // row cannot answer what it used to be called.
+            storeNameSnapshot: store.name,
             sellerOrderRef: input.sellerOrderRef ?? null,
             source,
             status: initialStatus,
@@ -490,7 +505,10 @@ export class OrderService {
         return order;
       });
     } catch (e) {
-      // (sellerId, sellerOrderRef) is @@unique — surface a clean 409.
+      // (sellerId, storeId, sellerOrderRef) is @@unique — surface a
+      // clean 409. Per STORE since 2026-09-07: two shopfronts each
+      // running their own Shopify both emit `#1001`, and the old
+      // seller-wide key made the second silently PATCH the first.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException({
           code: 'DUPLICATE_SELLER_ORDER_REF',
@@ -994,6 +1012,10 @@ export class OrderService {
     const where: Prisma.OrderWhereInput = { sellerId, deletedAt: null };
     if (query.status) where.status = query.status;
     if (query.source) where.source = query.source;
+    // The seller supplies a store id; the guard supplies the seller, and
+    // `where.sellerId` is already set — so a store belonging to somebody
+    // else matches nothing rather than leaking a row.
+    if (query.storeId) where.storeId = query.storeId;
     if (query.search) {
       where.OR = [
         { orderNumber: { contains: query.search, mode: 'insensitive' } },
@@ -1045,6 +1067,10 @@ export class OrderService {
     if (query.sellerId) where.sellerId = query.sellerId;
     if (query.status) where.status = query.status;
     if (query.source) where.source = query.source;
+    // A store belongs to exactly one seller, so narrowing to one is
+    // already narrowing to that seller — the admin list does not need
+    // both, and supplying a mismatched pair correctly returns nothing.
+    if (query.storeId) where.storeId = query.storeId;
     if (query.search) {
       where.OR = [
         { orderNumber: { contains: query.search, mode: 'insensitive' } },
@@ -1226,9 +1252,19 @@ export class OrderService {
   async getBySellerOrderRef(
     sellerId: string,
     ref: string,
+    storeId?: string | null,
   ): Promise<{ id: string; status: OrderStatus } | null> {
+    // Scoped to the STORE when one is given. Without it, a CSV row from
+    // shopfront B carrying `#1001` matches shopfront A's order and the
+    // importer PATCHES it (ORD-9) — the collision the unique key was
+    // widened to prevent, arriving through the read instead.
     return this.prisma.client.order.findFirst({
-      where: { sellerId, sellerOrderRef: ref, deletedAt: null },
+      where: {
+        sellerId,
+        sellerOrderRef: ref,
+        deletedAt: null,
+        ...(storeId == null || storeId === '' ? {} : { storeId }),
+      },
       select: { id: true, status: true },
     });
   }

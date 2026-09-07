@@ -15,6 +15,7 @@ import { AddressValidationService } from './services/address-validation.service'
 import { SellerCreditModule } from '../seller-credit/seller-credit.module';
 import { OrderService } from './services/order.service';
 import { OrderAdminOverrideService } from './services/order-admin-override.service';
+import { SellerStoreModule } from '../seller-store/seller-store.module';
 
 /**
  * Module 6 — INTERNAL core (the Module-5 `inventory-shared` analogue).
@@ -38,6 +39,10 @@ import { OrderAdminOverrideService } from './services/order-admin-override.servi
  */
 @Module({
   imports: [
+    // Which shopfront a sale is filed under (R3 primitive — it
+    // imports neither order nor auth, so wiring it into both closes
+    // no cycle).
+    SellerStoreModule,
     CatalogReadModule,
     InventoryStockModule,
     CallQueueModule,
