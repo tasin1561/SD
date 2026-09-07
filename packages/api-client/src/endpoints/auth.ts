@@ -77,6 +77,13 @@ export interface SellerMe {
    * currency.
    */
   readonly displayFxRate: string | null;
+  /**
+   * The rate from `displayCurrency` to the OTHER currency, so every
+   * figure can be shown with its equivalent beside it. Populated in
+   * both directions — unlike `displayFxRate`, which is null when the
+   * display currency is already the canonical one.
+   */
+  readonly equivalentFxRate: string | null;
   readonly displayLanguage: string;
   readonly countryCode: string;
   readonly emailVerifiedAt: string | null;

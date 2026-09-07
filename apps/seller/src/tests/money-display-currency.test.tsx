@@ -64,3 +64,72 @@ describe('Money — display currency', () => {
     expect(screen.getByText(/1,000/)).toBeInTheDocument();
   });
 });
+
+/**
+ * The equivalent beside every figure.
+ *
+ * A BD seller reading rupees still prices in taka, so the sum was being
+ * done in their head on every screen. `equivalentRate` is deliberately a
+ * SEPARATE field from `rate`: they are non-null at different times, and
+ * the case that matters most here — display currency INR — is exactly
+ * the case where `rate` is null.
+ */
+function withEquivalent(ui: React.ReactElement, equivalentRate: string | null = '1.23') {
+  return render(
+    <MoneyDisplayProvider value={{ currency: 'INR', rate: null, equivalentRate }}>
+      {ui}
+    </MoneyDisplayProvider>,
+  );
+}
+
+describe('Money — the equivalent beside the figure', () => {
+  it('states a rupee figure in taka as well', () => {
+    withEquivalent(<Money amount="1000.00" />);
+    expect(screen.getByText(/₹1,000/)).toBeInTheDocument();
+    expect(screen.getByText(/≈৳1,230/)).toBeInTheDocument();
+  });
+
+  it('restates a taka display in rupees — the same code, the other way', () => {
+    render(
+      // Round numbers on purpose: the point of the case is the
+      // DIRECTION, and a real reciprocal (1/1.23) lands on 999.99 and
+      // makes the assertion about floating point instead.
+      <MoneyDisplayProvider value={{ currency: 'BDT', rate: '2', equivalentRate: '0.5' }}>
+        <Money amount="1000.00" />
+      </MoneyDisplayProvider>,
+    );
+    expect(screen.getByText(/৳2,000/)).toBeInTheDocument();
+    expect(screen.getByText(/≈₹1,000/)).toBeInTheDocument();
+  });
+
+  it('says nothing extra when no rate could be resolved', () => {
+    withEquivalent(<Money amount="1000.00" />, null);
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing extra at zero', () => {
+    // The restatement of nothing carries no information, and a column of
+    // "≈৳0.00" is pure noise.
+    withEquivalent(<Money amount="0" />);
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing extra beside a figure pinned to a rupee input', () => {
+    // convert={false} marks a figure that must agree with a box typed in
+    // one currency. A second number beside it invites typing THAT one —
+    // the same trap the flag exists to close.
+    withEquivalent(<Money amount="1000.00" convert={false} />);
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument();
+  });
+
+  it('carries the sign into the equivalent', () => {
+    // "−₹400.00 ≈৳492.00" reads as a debit and a credit side by side.
+    withEquivalent(<Money amount="-400" direction="debit" />);
+    expect(screen.getByText(/≈−৳492/)).toBeInTheDocument();
+  });
+
+  it('leaves admin alone — no provider, no second figure', () => {
+    render(<Money amount="1000.00" />);
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument();
+  });
+});

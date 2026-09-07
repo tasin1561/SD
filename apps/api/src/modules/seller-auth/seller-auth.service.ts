@@ -85,6 +85,8 @@ export interface SellerMe {
   approvedAt: Date | null;
   displayCurrency: Currency;
   displayFxRate: string | null;
+  /** The rate from the display currency to the other one. */
+  equivalentFxRate: string | null;
   displayLanguage: string;
   countryCode: string;
   emailVerifiedAt: Date | null;
@@ -128,6 +130,27 @@ export class SellerAuthService {
     if (display === Currency.INR) return null;
     try {
       const rate = await this.fx.getRate(Currency.INR, display);
+      return rate.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The rate from what the seller SEES to the other currency, so every
+   * figure can carry its equivalent beside it.
+   *
+   * Distinct from `displayFxRate`, which is null whenever the display
+   * currency is already INR — correct for its own job (there is nothing
+   * to convert) and useless for this one, because a seller reading
+   * rupees is exactly the person who wants the taka beside them. This
+   * is resolved in BOTH directions and the pair is fixed, so `getRate`'s
+   * inverse-reciprocation covers BDT→INR without a second stored row.
+   */
+  private async resolveEquivalentFxRate(display: Currency): Promise<string | null> {
+    const other = display === Currency.BDT ? Currency.INR : Currency.BDT;
+    try {
+      const rate = await this.fx.getRate(display, other);
       return rate.toString();
     } catch {
       return null;
@@ -1000,6 +1023,7 @@ export class SellerAuthService {
        * never renders rupees and then flips them to taka.
        */
       displayFxRate: await this.resolveDisplayFxRate(user.seller.displayCurrency),
+      equivalentFxRate: await this.resolveEquivalentFxRate(user.seller.displayCurrency),
       displayLanguage: user.seller.displayLanguage,
       countryCode: user.seller.countryCode,
       emailVerifiedAt: user.emailVerifiedAt,

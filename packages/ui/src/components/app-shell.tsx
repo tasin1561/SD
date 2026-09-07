@@ -2,7 +2,7 @@
 
 import * as Dialog from '@radix-ui/react-dialog';
 import { clsx } from 'clsx';
-import { Menu, X } from 'lucide-react';
+import { LogOut, Menu, X } from 'lucide-react';
 import { useEffect, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { ThemeToggle } from './theme-toggle';
 
@@ -225,26 +225,47 @@ function BrandBlock({
   );
 }
 
+/**
+ * Sign out.
+ *
+ * ICON ONLY in the header, WORDS in the drawer — `iconOnly` says which,
+ * and it is not a style preference. The header is a fixed strip already
+ * carrying a search box, a menu, a bell and a theme switch, and the two
+ * words were the widest thing in it. In the drawer there is a column of
+ * labelled rows and an icon alone would be the only unlabelled control
+ * on the screen.
+ *
+ * The icon form keeps `aria-label` and `title`, so it is announced and
+ * hoverable rather than being a glyph you have to recognise — the
+ * accessibility rule about icon-only buttons, which is exactly the trap
+ * a header full of icons walks into.
+ */
 function SignOutButton({
   onSignOut,
   signingOut,
+  iconOnly = false,
   className,
 }: {
   readonly onSignOut: () => void;
   readonly signingOut: boolean;
+  readonly iconOnly?: boolean;
   readonly className?: string;
 }): ReactElement {
+  const label = signingOut ? 'Signing out…' : 'Sign out';
   return (
     <button
       type="button"
       onClick={onSignOut}
       disabled={signingOut}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? label : undefined}
       className={clsx(
-        'border-border text-text-muted hover:border-border-strong hover:text-text-body inline-flex min-h-[36px] items-center rounded-[6px] border px-3 text-xs font-medium transition-colors disabled:opacity-50',
+        'border-border text-text-muted hover:border-border-strong hover:text-text-body inline-flex min-h-[36px] items-center rounded-[6px] border text-xs font-medium transition-colors disabled:opacity-50',
+        iconOnly ? 'min-w-[36px] justify-center px-0' : 'px-3',
         className,
       )}
     >
-      {signingOut ? 'Signing out…' : 'Sign out'}
+      {iconOnly ? <LogOut size={15} aria-hidden /> : label}
     </button>
   );
 }
@@ -508,7 +529,7 @@ export function AppShell({
               </Link>
             )}
             <ThemeToggle />
-            <SignOutButton onSignOut={onSignOut} signingOut={signingOut} />
+            <SignOutButton onSignOut={onSignOut} signingOut={signingOut} iconOnly />
           </div>
         </header>
 

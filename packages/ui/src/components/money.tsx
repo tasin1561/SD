@@ -28,6 +28,19 @@ export interface MoneyDisplay {
    * worse than the wrong currency.
    */
   readonly rate: string | null;
+  /**
+   * The rate from the currency being SHOWN to the other one. When set,
+   * every convertible figure carries its equivalent beside it, quietly.
+   *
+   * Separate from `rate` because they answer different questions and
+   * are non-null at different times: `rate` turns the app's figures
+   * over into the seller's currency and is null when there is nothing
+   * to turn over; this one restates whatever ends up on screen and is
+   * most wanted precisely then — a seller reading rupees is the one who
+   * needs the taka. Null keeps the single figure, on the same grounds
+   * as `rate`: a wrong second number is worse than no second number.
+   */
+  readonly equivalentRate?: string | null;
 }
 
 const MoneyDisplayContext = createContext<MoneyDisplay>({ currency: 'INR', rate: null });
@@ -137,7 +150,26 @@ export function Money({
 
   const sign = effective === 'credit' ? '+' : effective === 'debit' || negative ? '−' : '';
 
-  return (
+  /**
+   * The same money, said again in the other currency.
+   *
+   * Skipped when the caller passed `convert={false}` — that flag marks a
+   * figure pinned to an input typed in one currency, and a second number
+   * beside it invites somebody to type THAT one. Skipped at zero, where
+   * the restatement carries no information and is pure noise in a
+   * column. Skipped where a rate is unknown, per `equivalentRate`.
+   */
+  const otherCurrency: 'INR' | 'BDT' = shownCurrency === 'INR' ? 'BDT' : 'INR';
+  const equivalentRate =
+    allowConvert &&
+    display.equivalentRate !== undefined &&
+    display.equivalentRate !== null &&
+    Number.isFinite(n) &&
+    n !== 0
+      ? Number(display.equivalentRate)
+      : null;
+
+  const primary = (
     <span
       className={clsx(
         'skydrop-tabular whitespace-nowrap',
@@ -158,6 +190,28 @@ export function Money({
       {sign}
       {SYMBOL[shownCurrency]}
       {formatAmount(shown, { decimals })}
+    </span>
+  );
+
+  if (equivalentRate === null || !Number.isFinite(equivalentRate)) return primary;
+
+  return (
+    // `items-baseline` so the small figure sits on the big one's line
+    // rather than centring against it, and `flex-wrap` so a narrow table
+    // cell drops the equivalent to a second line instead of widening the
+    // column and pushing the page sideways.
+    <span className="inline-flex flex-wrap items-baseline gap-x-1">
+      {primary}
+      <span
+        className="text-text-faint skydrop-tabular text-xs whitespace-nowrap"
+        aria-label={`about ${formatAmount(Math.abs(n) * equivalentRate, { decimals })} ${otherCurrency}`}
+      >
+        <span aria-hidden>
+          ≈{sign}
+          {SYMBOL[otherCurrency]}
+          {formatAmount(Math.abs(n) * equivalentRate, { decimals })}
+        </span>
+      </span>
     </span>
   );
 }

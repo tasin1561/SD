@@ -70,6 +70,10 @@ export default async function AuthedLayout({
           value={{
             currency: identity.displayCurrency === 'BDT' ? 'BDT' : 'INR',
             rate: identity.displayFxRate,
+            // And the OTHER currency beside every figure. A BD seller
+            // reading rupees still prices in taka, and doing that sum in
+            // their head on every screen is the tax this removes.
+            equivalentRate: identity.equivalentFxRate,
           }}
         >
           <AuthedShell identity={identity}>

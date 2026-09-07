@@ -56,6 +56,7 @@ export function makeSeller(overrides: Partial<SellerMe> = {}): SellerMe {
     countryCode: 'BD',
     displayCurrency: 'INR',
     displayFxRate: null,
+    equivalentFxRate: null,
     displayLanguage: 'en',
     emailVerifiedAt: '2026-01-01T00:00:00.000Z',
     approvedAt: '2026-01-01T00:00:00.000Z',

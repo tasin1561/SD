@@ -49,6 +49,19 @@ const REQUEST_DROP = new Set([
   // handle its own client info from the original request; if needed
   // we can add an explicit forward-for chain later.
   'content-length', // Node sets this from the body automatically
+  // The BROWSER's accept-encoding, not ours.
+  //
+  // We strip `content-encoding` off the response below on the grounds
+  // that undici already decompressed it — true for gzip, deflate and
+  // br, which is everything undici negotiates for itself. It is NOT
+  // true for anything else the browser happens to advertise: forward
+  // `zstd` and a CDN will answer in zstd, undici will hand the bytes
+  // through untouched, and we then tell the browser it is plain JSON.
+  // The failure is silent and total — every response body arrives as
+  // binary noise, so the access token cannot be read out of a refresh
+  // and every authenticated call 401s with nothing in the log to say
+  // why. Dropping the header lets undici ask for what it can decode.
+  'accept-encoding',
 ]);
 
 const RESPONSE_DROP = new Set([

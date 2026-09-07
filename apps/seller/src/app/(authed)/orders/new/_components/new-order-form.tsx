@@ -4,8 +4,21 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
-import { ProductPicker, type PickedLine } from './product-picker';
-import { Button, Card, CardBody, FormField, Input, Select, useToast } from '@skydrop/ui/components';
+import { OrderedProducts, ProductCatalogue, type PickedLine } from './product-picker';
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  FormField,
+  Input,
+  Money,
+  PageHeader,
+  Select,
+  Textarea,
+  useToast,
+} from '@skydrop/ui/components';
+import { ArrowLeft, Banknote, CreditCard, MapPin, Scale, Store } from 'lucide-react';
 import { ApiError } from '@skydrop/api-client';
 import {
   useCreateOrder,
@@ -491,414 +504,663 @@ export function NewOrderForm(): ReactElement {
     }
   }
 
+  /**
+   * A card title with a short accent rule in front of it.
+   *
+   * The tinted header band alone is nearly invisible in dark, where the
+   * band and the card are within a few percent of each other; the rule
+   * is what makes a section start read as a section start in BOTH
+   * themes rather than only in light.
+   */
+  const sectionTitle = (label: string): ReactElement => (
+    <span className="inline-flex items-center gap-2">
+      <span aria-hidden className="bg-accent inline-block h-3.5 w-[3px] rounded-full" />
+      {label}
+    </span>
+  );
+
+  /** The three actions, rendered twice — at the top and on the sticky
+   *  bar. A long form whose only submit is 1,400px below the fold makes
+   *  a seller scroll past everything they have just checked. */
+  const actions = (
+    <>
+      {/* Desktop only in BOTH placements. On a phone the sticky bar is
+          the only action strip, and "Back to orders" sits at the top of
+          the page doing the same thing — a third row of buttons there
+          costs more screen than the duplicate is worth. */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="md"
+        // `max-sm:hidden`, NOT `hidden sm:inline-flex`: the Button
+        // primitive's own base classes carry `inline-flex`, and which of
+        // two unprefixed display utilities wins is decided by Tailwind's
+        // generated source order rather than by the class attribute — so
+        // the plain `hidden` lost and the button stayed visible. A
+        // variant outranks a bare utility, which settles it.
+        className="max-sm:hidden"
+        disabled={busy !== null}
+        onClick={() => router.push('/orders')}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        size="md"
+        className="whitespace-nowrap max-sm:flex-1"
+        disabled={busy !== null}
+        onClick={(e) => void go('draft', e)}
+      >
+        {busy === 'draft' ? 'Saving…' : 'Save as draft'}
+      </Button>
+      <Button
+        type="submit"
+        variant="primary"
+        size="md"
+        className="whitespace-nowrap max-sm:flex-1"
+        disabled={busy !== null}
+      >
+        {busy === 'submit' ? 'Submitting…' : 'Submit for confirmation'}
+      </Button>
+    </>
+  );
+
+  const serviceabilityChip =
+    serviceability.data?.known !== true ? null : serviceability.data.serviceable ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--status-delivered-bg)] px-2 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--status-delivered-fg)] uppercase">
+        <MapPin size={11} aria-hidden />
+        We deliver there
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--status-pending-bg)] px-2 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--status-pending-fg)] uppercase">
+        <MapPin size={11} aria-hidden />
+        May not be serviceable
+      </span>
+    );
+
   return (
-    <form className="space-y-4" onSubmit={(e) => void go('submit', e)}>
-      {/* Who they are shipping to — rendered ABOVE the form, because a
+    <form onSubmit={(e) => void go('submit', e)}>
+      <Link
+        href="/orders"
+        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-sm"
+      >
+        <ArrowLeft size={14} aria-hidden />
+        Back to orders
+      </Link>
+
+      <PageHeader
+        title="New order"
+        subtitle="Enter recipient + line details. Stock is reserved when the call centre confirms the order."
+        // Desktop only. The sticky bar carries the same three actions and
+        // is always on screen; on a phone the pair together cost about a
+        // fifth of the viewport before a single field is visible.
+        action={<div className="hidden flex-wrap items-center gap-2 sm:flex">{actions}</div>}
+      />
+
+      {/* Who they are shipping to — rendered ABOVE the columns, because a
           warning read after the address has been typed is a warning read
           too late. Renders nothing for a first-time customer. */}
       <CustomerHistoryPanel phoneE164={form.recipientPhoneE164} onUseLastDetails={useLastDetails} />
 
-      {/* Recipient */}
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">Recipient</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Full name" required hint={prefixHint(sellerInitials)}>
-              {/* The seller code is CHROME, exactly like the +91 below:
-                  it cannot be edited or deleted, and the field holds only
-                  the customer's name. The API composes the stored value,
-                  so a CSV import lands the same shape as this form. */}
-              <div className="flex items-stretch">
-                {sellerInitials !== null && sellerInitials !== '' && (
-                  <span
-                    aria-hidden
-                    className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
-                  >
-                    {sellerInitials}
-                  </span>
-                )}
-                <Input
-                  className={
-                    sellerInitials !== null && sellerInitials !== '' ? 'rounded-l-none' : undefined
-                  }
-                  value={form.recipientName}
-                  onChange={(e) => set('recipientName', e.target.value)}
-                  maxLength={160}
-                  required
-                />
-              </div>
-            </FormField>
-            <FormField
-              label="Phone"
-              required
-              hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
-            >
-              {/* The dial code is CHROME, not input: it cannot be edited
-                  or deleted, so a seller cannot clear it, type 0091, or
-                  paste a differently-formatted number into it. The field
-                  itself holds only the ten national digits. */}
-              <div className="flex items-stretch">
-                <span
-                  aria-hidden
-                  className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
-                >
-                  {IN_DIAL}
-                </span>
-                <Input
-                  className="rounded-l-none"
-                  value={toLocalDigits(form.recipientPhoneE164)}
-                  onChange={(e) => set('recipientPhoneE164', toE164(sanitiseLocal(e.target.value)))}
-                  // inputMode drives the numeric keypad on a phone; the
-                  // sanitiser is what actually enforces digits, because a
-                  // paste bypasses the keypad entirely.
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  maxLength={IN_LOCAL_LENGTH}
-                  placeholder="9812345678"
-                  aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
-                  required
-                />
-              </div>
-            </FormField>
-            <FormField
-              label="Address line 1"
-              required
-              className="col-span-2"
-              hint={ADDRESS_LINE_1_HINT}
-            >
-              <Input
-                value={form.recipientAddressLine1}
-                onChange={(e) => set('recipientAddressLine1', e.target.value)}
-                maxLength={200}
-                required
-              />
-            </FormField>
-            <FormField
-              label="Address line 2"
-              required
-              className="col-span-2"
-              hint={ADDRESS_LINE_2_HINT}
-              error={
-                linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-                  ? DUPLICATE_LINES_ERROR
-                  : undefined
-              }
-            >
-              <Input
-                value={form.recipientAddressLine2}
-                onChange={(e) => set('recipientAddressLine2', e.target.value)}
-                maxLength={200}
-                required
-              />
-            </FormField>
-            <FormField
-              label="PIN code"
-              required
-              // Advisory only. The answer can be a day stale and a
-              // seller knows their customer's area better than a lookup
-              // does — so this informs, and never blocks the submit.
-              hint={
-                serviceability.data?.known === true && !serviceability.data.serviceable
-                  ? (serviceability.data.reason ??
-                    'Our courier may not deliver here — the order can still be placed.')
-                  : undefined
-              }
-            >
-              <Input
-                value={form.recipientPostalCode}
-                onChange={(e) =>
-                  set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
-                }
-                placeholder="560001"
-                inputMode="numeric"
-                required
-              />
-            </FormField>
-          </div>
-        </CardBody>
-      </Card>
+      {/*
+        Two columns, and which half a card sits in is the point.
 
-      {/* Items */}
-      <Card>
-        <CardBody>
-          <ProductPicker
-            lines={items}
-            stockByVariant={stockByVariant}
-            onAdd={addFromCatalogue}
-            onPatch={patchItem}
-            onRemove={removeItem}
-          />
-        </CardBody>
-      </Card>
-
-      {shortLines.length > 0 && (
-        <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] rounded-[6px] border px-3 py-2.5">
-          <p className="text-critical text-sm font-medium">
-            {shortLines.length === 1
-              ? 'One product is short of stock'
-              : `${shortLines.length} products are short of stock`}
-          </p>
-          <ul className="text-text-muted mt-1 space-y-0.5 text-xs">
-            {shortLines.map((l) => (
-              <li key={l.variantId}>
-                asked for {l.want}, {l.have === 0 ? 'none available' : `only ${l.have} available`}
-              </li>
-            ))}
-          </ul>
-          <p className="text-text-muted mt-1.5 text-xs">
-            You can still place it — stock on its way in will cover it once it lands. But the call
-            centre cannot confirm an order we cannot pick, so it waits until then.
-          </p>
-          <label className="text-text-body mt-2 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={acceptShort}
-              onChange={(e) => setAcceptShort(e.target.checked)}
-              className="h-4 w-4"
+        LEFT is what the seller TYPES from what the customer said —
+        address, landmark, reference, notes. RIGHT is what the seller
+        CHOOSES and what follows from it — the catalogue, the lines, and
+        the money those lines add up to. Reading down one column is one
+        task; the old single stack interleaved them, so the collectable
+        amount sat a screen and a half below the products that decide it.
+      */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        {/* ── Left: what the customer told them ─────────────────── */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader
+              tone="accent"
+              title={sectionTitle('Recipient')}
+              action={serviceabilityChip}
             />
-            Place it anyway
-          </label>
-        </div>
-      )}
+            <CardBody>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <FormField
+                  label="Full name"
+                  required
+                  className="sm:col-span-2"
+                  hint={prefixHint(sellerInitials)}
+                >
+                  {/* The seller code is CHROME, exactly like the +91 below:
+                      it cannot be edited or deleted, and the field holds only
+                      the customer's name. The API composes the stored value,
+                      so a CSV import lands the same shape as this form. */}
+                  <div className="flex items-stretch">
+                    {sellerInitials !== null && sellerInitials !== '' && (
+                      <span
+                        aria-hidden
+                        className="border-border-strong text-text-muted bg-surface-raised inline-flex shrink-0 items-center rounded-l-[6px] border border-r-0 px-2.5 font-mono text-sm"
+                      >
+                        {sellerInitials}
+                      </span>
+                    )}
+                    <Input
+                      className={
+                        sellerInitials !== null && sellerInitials !== ''
+                          ? 'rounded-l-none'
+                          : undefined
+                      }
+                      value={form.recipientName}
+                      onChange={(e) => set('recipientName', e.target.value)}
+                      maxLength={160}
+                      required
+                    />
+                  </div>
+                </FormField>
+                <FormField
+                  label="Phone"
+                  required
+                  className="sm:col-span-2"
+                  hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
+                >
+                  {/* The dial code is CHROME, not input: it cannot be edited
+                      or deleted, so a seller cannot clear it, type 0091, or
+                      paste a differently-formatted number into it. The field
+                      itself holds only the ten national digits. */}
+                  <div className="flex items-stretch">
+                    <span
+                      aria-hidden
+                      className="border-border-strong text-text-muted bg-surface-raised inline-flex shrink-0 items-center rounded-l-[6px] border border-r-0 px-2.5 font-mono text-sm"
+                    >
+                      {IN_DIAL}
+                    </span>
+                    <Input
+                      className="rounded-l-none"
+                      value={toLocalDigits(form.recipientPhoneE164)}
+                      onChange={(e) =>
+                        set('recipientPhoneE164', toE164(sanitiseLocal(e.target.value)))
+                      }
+                      // inputMode drives the numeric keypad on a phone; the
+                      // sanitiser is what actually enforces digits, because a
+                      // paste bypasses the keypad entirely.
+                      inputMode="numeric"
+                      autoComplete="tel-national"
+                      maxLength={IN_LOCAL_LENGTH}
+                      placeholder="9812345678"
+                      aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+                      required
+                    />
+                  </div>
+                </FormField>
+                <FormField
+                  label="Address line 1"
+                  required
+                  className="sm:col-span-2"
+                  hint={ADDRESS_LINE_1_HINT}
+                >
+                  <Input
+                    value={form.recipientAddressLine1}
+                    onChange={(e) => set('recipientAddressLine1', e.target.value)}
+                    maxLength={200}
+                    required
+                  />
+                </FormField>
+                <FormField
+                  label="Address line 2 (the landmark)"
+                  required
+                  className="sm:col-span-2"
+                  hint={ADDRESS_LINE_2_HINT}
+                  error={
+                    linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
+                      ? DUPLICATE_LINES_ERROR
+                      : undefined
+                  }
+                >
+                  <Input
+                    value={form.recipientAddressLine2}
+                    onChange={(e) => set('recipientAddressLine2', e.target.value)}
+                    maxLength={200}
+                    required
+                  />
+                </FormField>
+                <FormField
+                  label="PIN code"
+                  required
+                  // Advisory only. The answer can be a day stale and a
+                  // seller knows their customer's area better than a lookup
+                  // does — so this informs, and never blocks the submit.
+                  hint={
+                    serviceability.data?.known === true && !serviceability.data.serviceable
+                      ? (serviceability.data.reason ??
+                        'Our courier may not deliver here — the order can still be placed.')
+                      : 'Delhivery routes on the PIN and works the locality out itself.'
+                  }
+                >
+                  <Input
+                    value={form.recipientPostalCode}
+                    onChange={(e) =>
+                      set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
+                    }
+                    placeholder="560001"
+                    inputMode="numeric"
+                    className="font-mono tabular-nums"
+                    required
+                  />
+                </FormField>
+              </div>
+            </CardBody>
+          </Card>
 
-      {/* Payment + physical */}
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">Payment &amp; physical</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField label="Payment mode" required>
-              <Select
-                value={form.paymentMode}
-                onChange={(e) => set('paymentMode', e.target.value as 'COD' | 'PREPAID')}
-              >
-                <option value="PREPAID">Prepaid</option>
-                <option value="COD">Cash on Delivery</option>
-              </Select>
-            </FormField>
-            <FormField
-              label="Delivery fee (INR)"
-              hint={
-                feeDefault.data === undefined
-                  ? 'Added to the collectable amount.'
-                  : `Added to the collectable amount. Pre-filled from your default of ₹${feeDefault.data.amountInr} — change it here, or change the default in Settings.`
+          <Card>
+            <CardHeader
+              tone="accent"
+              title={sectionTitle('Reference & notes')}
+              subtitle="Yours and the call agent's — none of it reaches the customer."
+            />
+            <CardBody>
+              <div className="grid grid-cols-1 gap-3">
+                {/*
+                  Always SHOWN, only sometimes a CHOICE.
+
+                  A dropdown with one option is a question nobody asked —
+                  but hiding the field entirely leaves somebody with two
+                  shopfronts in mind wondering where the setting went, and
+                  somebody with one unable to see which brand their order is
+                  filed under. One store reads as a statement with a way to
+                  add another; two or more becomes a select.
+                */}
+                <FormField
+                  label="Store"
+                  hint={
+                    openStores.length > 1
+                      ? 'Which of your shopfronts this order was placed on'
+                      : 'Every order is filed under a shopfront. Add another to sell under more than one brand.'
+                  }
+                >
+                  {openStores.length > 1 ? (
+                    <Select value={form.storeId} onChange={(e) => set('storeId', e.target.value)}>
+                      {openStores.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.name}
+                          {st.isDefault ? ' (default)' : ''}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <div className="border-border bg-surface-raised flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+                      <span className="inline-flex min-w-0 items-center gap-2">
+                        <Store size={14} aria-hidden className="text-text-muted shrink-0" />
+                        <span className="truncate">
+                          {openStores[0]?.name ?? 'Your default store'}
+                        </span>
+                      </span>
+                      <Link
+                        href="/settings/stores"
+                        className="text-text-muted hover:text-text shrink-0 text-xs underline underline-offset-2"
+                      >
+                        Manage stores
+                      </Link>
+                    </div>
+                  )}
+                </FormField>
+                <FormField
+                  label="Your reference"
+                  hint="Optional. Your own order ID — unique per store."
+                >
+                  <Input
+                    value={form.sellerOrderRef}
+                    onChange={(e) => set('sellerOrderRef', e.target.value)}
+                    maxLength={120}
+                    placeholder="ORD-2024-9981"
+                    className="font-mono"
+                  />
+                </FormField>
+                <FormField
+                  label="Notes for the call agent"
+                  hint="Read out on the confirmation call — a preferred time, a fragile item, a second number."
+                >
+                  <Textarea
+                    rows={3}
+                    value={form.sellerNotes}
+                    onChange={(e) => set('sellerNotes', e.target.value)}
+                    placeholder="Anything the call agent should know"
+                  />
+                </FormField>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* ── Right: what they are sending, and what it comes to ─── */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader
+              tone="accent"
+              title={sectionTitle('Click to add products')}
+              subtitle="Price and stock are on the row, before you choose."
+            />
+            <ProductCatalogue
+              lines={items}
+              stockByVariant={stockByVariant}
+              onAdd={addFromCatalogue}
+            />
+          </Card>
+
+          <Card>
+            <CardHeader
+              tone="accent"
+              title={sectionTitle(
+                `Ordered products (${items.length} ${items.length === 1 ? 'item' : 'items'})`,
+              )}
+              action={
+                items.length === 0 ? null : (
+                  <span className="text-text-bright font-mono text-sm tabular-nums">
+                    Subtotal <Money amount={itemsTotal} convert={false} />
+                  </span>
+                )
               }
-            >
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.deliveryFeeInr}
-                onChange={(e) => set('deliveryFeeInr', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Advance already paid (INR)" hint="Deducted from the collectable.">
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.advanceAmountInr}
-                onChange={(e) => set('advanceAmountInr', e.target.value)}
-                placeholder="0"
-              />
-            </FormField>
-            <FormField label="Discount (INR)" hint="Deducted from the collectable.">
-              <Input
-                type="number"
-                step="0.01"
-                value={form.discountInr}
-                onChange={(e) => set('discountInr', e.target.value)}
-                placeholder="0"
-              />
-            </FormField>
-            {form.paymentMode === 'COD' && (
-              <FormField
-                label="Collectable amount (INR)"
-                required
-                hint={
-                  // The arithmetic, spelled out. A number the call centre
-                  // reads to a customer should be checkable at a glance.
-                  `${itemsTotal.toLocaleString('en-IN')} of goods${
-                    num(form.deliveryFeeInr) !== 0
+            />
+            <OrderedProducts
+              lines={items}
+              stockByVariant={stockByVariant}
+              onPatch={patchItem}
+              onRemove={removeItem}
+            />
+          </Card>
+
+          {shortLines.length > 0 && (
+            <div className="rounded-[7px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-4 py-3">
+              <p className="text-critical text-sm font-medium">
+                {shortLines.length === 1
+                  ? 'One product is short of stock'
+                  : `${shortLines.length} products are short of stock`}
+              </p>
+              <ul className="text-text-muted mt-1 space-y-0.5 text-xs">
+                {shortLines.map((l) => (
+                  <li key={l.variantId}>
+                    asked for {l.want},{' '}
+                    {l.have === 0 ? 'none available' : `only ${l.have} available`}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-text-muted mt-1.5 text-xs">
+                You can still place it — stock on its way in will cover it once it lands. But the
+                call centre cannot confirm an order we cannot pick, so it waits until then.
+              </p>
+              <label className="text-text-body mt-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={acceptShort}
+                  onChange={(e) => setAcceptShort(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                Place it anyway
+              </label>
+            </div>
+          )}
+
+          <Card>
+            <CardHeader tone="accent" title={sectionTitle('Payment & physical')} />
+            <CardBody>
+              {/*
+                A segmented pair, not a dropdown. There are exactly two
+                answers, one of them is nearly always the right one, and
+                which is chosen changes what the rest of this card means
+                — a collapsed select hides the most consequential choice
+                on the form behind a click.
+              */}
+              <fieldset>
+                <legend className="text-text-muted mb-1.5 text-xs font-medium">
+                  Payment mode <span className="text-critical">*</span>
+                </legend>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { mode: 'COD' as const, label: 'Cash on delivery', Icon: Banknote },
+                      { mode: 'PREPAID' as const, label: 'Prepaid', Icon: CreditCard },
+                    ] satisfies ReadonlyArray<{
+                      mode: 'COD' | 'PREPAID';
+                      label: string;
+                      Icon: typeof Banknote;
+                    }>
+                  ).map(({ mode, label, Icon }) => {
+                    const on = form.paymentMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => set('paymentMode', mode)}
+                        className={`skydrop-hit inline-flex items-center justify-center gap-2 rounded-[5px] border px-3 py-2 text-sm font-medium transition-colors ${
+                          on
+                            ? 'border-accent bg-accent-fill text-accent-fg'
+                            : 'border-border bg-surface text-text-body hover:border-border-strong hover:text-text-bright'
+                        }`}
+                      >
+                        <Icon size={15} aria-hidden />
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <FormField
+                  label="Delivery fee (INR)"
+                  hint={
+                    feeDefault.data === undefined
+                      ? 'Added to the collectable amount.'
+                      : `Added to the collectable. Your default is ₹${feeDefault.data.amountInr}; change it in Settings.`
+                  }
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.deliveryFeeInr}
+                    onChange={(e) => set('deliveryFeeInr', e.target.value)}
+                    className="tabular-nums"
+                  />
+                </FormField>
+                <FormField label="Advance already paid (INR)" hint="Deducted from the collectable.">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.advanceAmountInr}
+                    onChange={(e) => set('advanceAmountInr', e.target.value)}
+                    placeholder="0"
+                    className="tabular-nums"
+                  />
+                </FormField>
+                <FormField label="Discount (INR)" hint="Deducted from the collectable.">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.discountInr}
+                    onChange={(e) => set('discountInr', e.target.value)}
+                    placeholder="0"
+                    className="tabular-nums"
+                  />
+                </FormField>
+                <FormField
+                  label="Declared value (INR)"
+                  hint={
+                    computedDeclaredValue > 0
+                      ? `For customs, not collection. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue.`
+                      : "The parcel's value for customs — not what is collected."
+                  }
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.declaredValueInr}
+                    onChange={(e) => set('declaredValueInr', e.target.value)}
+                    className="tabular-nums"
+                    placeholder={
+                      computedDeclaredValue > 0
+                        ? computedDeclaredValue.toLocaleString('en-IN')
+                        : 'Sum of the line values'
+                    }
+                  />
+                </FormField>
+                <FormField
+                  // The unit is the suffix on the field itself; saying
+                  // it twice reads as two different things being asked for.
+                  label="Total weight"
+                  className="sm:col-span-2"
+                  hint={
+                    computedWeight > 0
+                      ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
+                      : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
+                  }
+                >
+                  <div className="flex items-stretch">
+                    <Input
+                      type="number"
+                      min={0}
+                      className="rounded-r-none tabular-nums"
+                      value={form.totalWeightGrams}
+                      onChange={(e) => set('totalWeightGrams', e.target.value)}
+                      placeholder={
+                        computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'
+                      }
+                    />
+                    {/* A SUFFIX. The unit follows the figure when it is
+                        spoken, and a "grams" box in front of an empty
+                        field reads as a label for the wrong thing. */}
+                    <span
+                      aria-hidden
+                      className="border-border-strong text-text-muted bg-surface-raised inline-flex shrink-0 items-center gap-1.5 rounded-r-[6px] border border-l-0 px-2.5 text-xs"
+                    >
+                      <Scale size={13} />
+                      grams
+                    </span>
+                  </div>
+                </FormField>
+              </div>
+
+              {form.paymentMode === 'COD' ? (
+                /*
+                  The one figure the customer is asked for at the door,
+                  and the one the call centre reads out. It used to look
+                  exactly like the three inputs feeding it; now it is the
+                  loudest thing on the card, with its own arithmetic
+                  printed underneath so it can be checked at a glance.
+                */
+                <div className="border-accent/30 mt-4 rounded-[7px] border bg-[var(--color-accent-tint)] px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <label
+                      htmlFor="collectable-amount"
+                      className="text-text-muted text-xs font-semibold tracking-wide uppercase"
+                    >
+                      Collectable amount (INR)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-text-bright text-xl font-semibold" aria-hidden>
+                        ₹
+                      </span>
+                      <Input
+                        id="collectable-amount"
+                        type="number"
+                        min={0.01}
+                        step="0.01"
+                        className="border-accent h-11 w-40 text-right text-xl font-semibold tabular-nums ring-1 ring-[var(--color-accent-tint)]"
+                        value={
+                          collectableDraft ??
+                          (computedCollectable === 0 ? '' : String(computedCollectable))
+                        }
+                        onBlur={() => setCollectableDraft(null)}
+                        // Typing here moves the DISCOUNT, so the four numbers
+                        // still add up. A collectable that silently disagrees
+                        // with its own breakdown is worse than no breakdown.
+                        onChange={(e) => {
+                          const typed = e.target.value;
+                          setCollectableDraft(typed);
+                          const target = Number(typed);
+                          if (typed.trim() === '' || !Number.isFinite(target)) return;
+                          setForm((p) => {
+                            const before =
+                              itemsTotal + num(p.deliveryFeeInr) - num(p.advanceAmountInr);
+                            return { ...p, discountInr: String(before - target) };
+                          });
+                        }}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <p className="text-text-muted mt-2 font-mono text-xs tabular-nums">
+                    {/* The arithmetic, spelled out. A number the call centre
+                        reads to a customer should be checkable at a glance. */}
+                    {itemsTotal.toLocaleString('en-IN')} of goods
+                    {num(form.deliveryFeeInr) !== 0
                       ? ` + ${num(form.deliveryFeeInr).toLocaleString('en-IN')} delivery`
-                      : ''
-                  }${
-                    num(form.advanceAmountInr) !== 0
+                      : ''}
+                    {num(form.advanceAmountInr) !== 0
                       ? ` − ${num(form.advanceAmountInr).toLocaleString('en-IN')} advance`
-                      : ''
-                  }${
-                    // A NEGATIVE discount is a surcharge, and reads as one.
-                    // "− -40 discount" is arithmetic nobody should have to
-                    // parse to check their own total.
-                    num(form.discountInr) > 0
+                      : ''}
+                    {/* A NEGATIVE discount is a surcharge, and reads as one.
+                        "− -40 discount" is arithmetic nobody should have to
+                        parse to check their own total. */}
+                    {num(form.discountInr) > 0
                       ? ` − ${num(form.discountInr).toLocaleString('en-IN')} discount`
                       : num(form.discountInr) < 0
                         ? ` + ${Math.abs(num(form.discountInr)).toLocaleString('en-IN')} surcharge`
-                        : ''
-                  } = ${computedCollectable.toLocaleString('en-IN')}`
-                }
-              >
-                <Input
-                  type="number"
-                  min={0.01}
-                  step="0.01"
-                  // The one figure the customer is asked for at the door,
-                  // and the one the call centre reads out. It looked
-                  // exactly like the three inputs feeding it.
-                  className="border-accent text-base font-medium ring-1 ring-[var(--color-accent-tint)]"
-                  value={
-                    collectableDraft ??
-                    (computedCollectable === 0 ? '' : String(computedCollectable))
-                  }
-                  onBlur={() => setCollectableDraft(null)}
-                  // Typing here moves the DISCOUNT, so the four numbers
-                  // still add up. A collectable that silently disagrees
-                  // with its own breakdown is worse than no breakdown.
-                  onChange={(e) => {
-                    const typed = e.target.value;
-                    setCollectableDraft(typed);
-                    const target = Number(typed);
-                    if (typed.trim() === '' || !Number.isFinite(target)) return;
-                    setForm((p) => {
-                      const before = itemsTotal + num(p.deliveryFeeInr) - num(p.advanceAmountInr);
-                      return { ...p, discountInr: String(before - target) };
-                    });
-                  }}
-                  required
-                />
-              </FormField>
-            )}
-            <FormField
-              label="Declared value (INR)"
-              hint={
-                computedDeclaredValue > 0
-                  ? `The parcel's value for customs — not what is collected. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue; type a number to override it.`
-                  : "The parcel's value for customs — not what is collected."
-              }
-            >
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.declaredValueInr}
-                onChange={(e) => set('declaredValueInr', e.target.value)}
-                placeholder={
-                  computedDeclaredValue > 0
-                    ? computedDeclaredValue.toLocaleString('en-IN')
-                    : 'Defaults to sum of line item values'
-                }
-              />
-            </FormField>
-            <FormField
-              label="Total weight (grams)"
-              hint={
-                computedWeight > 0
-                  ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
-                  : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
-              }
-            >
-              <Input
-                type="number"
-                min={0}
-                value={form.totalWeightGrams}
-                onChange={(e) => set('totalWeightGrams', e.target.value)}
-                placeholder={computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'}
-              />
-            </FormField>
-          </div>
-        </CardBody>
-      </Card>
-
-      {/* Notes */}
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">Notes</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/*
-              Always SHOWN, only sometimes a CHOICE.
-
-              A dropdown with one option is a question nobody asked —
-              but hiding the field entirely leaves somebody with two
-              shopfronts in mind wondering where the setting went, and
-              somebody with one unable to see which brand their order is
-              filed under. One store reads as a statement with a way to
-              add another; two or more becomes a select.
-            */}
-            <FormField
-              label="Store"
-              hint={
-                openStores.length > 1
-                  ? 'Which of your shopfronts this order was placed on'
-                  : 'Every order is filed under a shopfront. Add another to sell under more than one brand.'
-              }
-            >
-              {openStores.length > 1 ? (
-                <Select value={form.storeId} onChange={(e) => set('storeId', e.target.value)}>
-                  {openStores.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.name}
-                      {st.isDefault ? ' (default)' : ''}
-                    </option>
-                  ))}
-                </Select>
+                        : ''}
+                    {` = ${computedCollectable.toLocaleString('en-IN')}`}
+                  </p>
+                </div>
               ) : (
-                <div className="border-border bg-surface-raised flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
-                  <span>{openStores[0]?.name ?? 'Your default store'}</span>
-                  <Link
-                    href="/settings/stores"
-                    className="text-text-muted hover:text-text text-xs underline underline-offset-2"
-                  >
-                    Manage stores
-                  </Link>
+                <div className="border-border bg-surface-raised mt-4 rounded-[7px] border px-4 py-3">
+                  <p className="text-text-body text-sm font-medium">
+                    Nothing to collect at the door
+                  </p>
+                  <p className="text-text-muted mt-1 text-xs">
+                    Prepaid — the driver hands it over and takes no money. The goods still come to{' '}
+                    <span className="font-mono tabular-nums">
+                      ₹{itemsTotal.toLocaleString('en-IN')}
+                    </span>
+                    , which is what the seller is charged against.
+                  </p>
                 </div>
               )}
-            </FormField>
-            <FormField label="Your reference">
-              <Input
-                value={form.sellerOrderRef}
-                onChange={(e) => set('sellerOrderRef', e.target.value)}
-                maxLength={120}
-                placeholder="Your own order ID (unique per store)"
-              />
-            </FormField>
-            <FormField label="Seller notes">
-              <Input
-                value={form.sellerNotes}
-                onChange={(e) => set('sellerNotes', e.target.value)}
-                placeholder="Anything the call agent should know"
-              />
-            </FormField>
-          </div>
-        </CardBody>
-      </Card>
+            </CardBody>
+          </Card>
+        </div>
+      </div>
 
       {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+        <div
+          role="alert"
+          className="text-critical mt-4 rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-2 text-xs"
+        >
           {error}
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2 pt-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="md"
-          disabled={busy !== null}
-          onClick={() => router.push('/orders')}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          disabled={busy !== null}
-          onClick={(e) => void go('draft', e)}
-        >
-          {busy === 'draft' ? 'Saving…' : 'Save as draft'}
-        </Button>
-        <Button type="submit" variant="primary" size="md" disabled={busy !== null}>
-          {busy === 'submit' ? 'Submitting…' : 'Submit for confirmation'}
-        </Button>
+      {/*
+        The sticky bar carries the totals as well as the buttons: the
+        two things a seller checks before committing are "did I get the
+        money right" and "how many lines", and both were a scroll away
+        from the button that commits them.
+      */}
+      <div className="border-border bg-surface/95 sticky bottom-0 z-10 mt-4 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t px-3 py-2 backdrop-blur sm:-mx-5 sm:px-5 sm:py-3 lg:-mx-6 lg:px-6">
+        <p className="text-text-muted text-xs">
+          {items.length === 0
+            ? 'No products yet'
+            : `${items.length} ${items.length === 1 ? 'line' : 'lines'}`}
+          {form.paymentMode === 'COD' && computedCollectable > 0 && (
+            <>
+              {' · '}
+              <span className="text-text-bright font-mono tabular-nums">
+                ₹{computedCollectable.toLocaleString('en-IN')}
+              </span>{' '}
+              to collect
+            </>
+          )}
+        </p>
+        <div className="flex items-center gap-2 max-sm:w-full">{actions}</div>
       </div>
 
       <DuplicateOrderDialog

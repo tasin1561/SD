@@ -164,7 +164,11 @@ export function MenuButton({
     <div ref={rootRef} className={clsx('relative', className)}>
       <Button
         ref={triggerRef}
-        size="md"
+        // `sm`, so the smaller type comes from the size token rather than
+        // a `text-xs` bolted on top: two bare font-size utilities are
+        // resolved by Tailwind's generated source order, and `text-sm`
+        // wins that, so the override would have done nothing.
+        size="sm"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -173,7 +177,10 @@ export function MenuButton({
           else openAt(0);
         }}
         onKeyDown={onTriggerKeyDown}
-        className="w-full justify-center lg:w-auto"
+        // Two words that must stay on one line: the header gives this a
+        // share of a fixed strip, and left to wrap it became the tallest
+        // thing in the bar.
+        className="w-full justify-center whitespace-nowrap lg:w-auto"
       >
         {label}
         <ChevronDown
