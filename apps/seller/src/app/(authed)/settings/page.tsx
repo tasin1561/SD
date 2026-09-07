@@ -9,6 +9,7 @@ import {
   ReceiptText,
   Wallet,
   BellRing,
+  Store,
 } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
 
@@ -29,6 +30,13 @@ export default function SettingsPage(): ReactElement {
       title: 'Sign-in & sessions',
       description:
         'Who this browser is signed in as, and a way to end every session for the account at once — for a device you no longer control.',
+    },
+    {
+      href: '/settings/stores',
+      icon: <Store size={20} />,
+      title: 'Stores',
+      description:
+        'The shopfronts you sell under. A store decides which brand an order belongs to — products, stock, wallet and couriers are shared across all of them.',
     },
     {
       href: '/settings/orders',

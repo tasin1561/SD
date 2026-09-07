@@ -62,6 +62,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/team', 'team.view'],
   ['/profile', 'profile.view'],
   ['/settings/stock', 'inventory.view'], // @Controller seller/stock (alert-config)
+  // Reads are orders.view so the order form's selector renders for
+  // anyone who can file one; the writes on the page carry
+  // profile.manage at the handler.
+  ['/settings/stores', 'orders.view'],
   ['/settings/orders', 'orders.view'], // @Controller seller/order-defaults
   ['/settings/api-keys', 'api_keys.manage'], // @Controller seller/api-keys
   ['/settings/webhooks', 'webhooks.manage'], // @Controller seller/webhook-endpoints

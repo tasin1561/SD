@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { ProductPicker, type PickedLine } from './product-picker';
 import { Button, Card, CardBody, FormField, Input, Select, useToast } from '@skydrop/ui/components';
@@ -13,6 +13,7 @@ import {
   useSubmitOrder,
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import { useStores } from '@/lib/store-hooks';
 import {
   ADDRESS_LINE_1_HINT,
   ADDRESS_LINE_2_HINT,
@@ -70,6 +71,8 @@ interface FormState {
   totalWeightGrams: string;
   sellerOrderRef: string;
   sellerNotes: string;
+  /** Which shopfront. Pre-filled with the default. */
+  storeId: string;
 }
 
 /**
@@ -98,16 +101,30 @@ const INITIAL: FormState = {
   totalWeightGrams: '',
   sellerOrderRef: '',
   sellerNotes: '',
+  storeId: '',
 };
 
 export function NewOrderForm(): ReactElement {
   const sellerInitials = useSellerIdentity()?.initials ?? null;
+  const stores = useStores();
+  // CLOSED stores are left out: the server refuses one by name, and a
+  // form should not offer an option it knows will be rejected.
+  const openStores = (stores.data ?? []).filter((s) => s.isActive);
+  const defaultStoreId = openStores.find((s) => s.isDefault)?.id ?? openStores[0]?.id ?? '';
   const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState<FormState>(INITIAL);
   // Asked while they type, so a bad pin is caught before they commit
   // rather than after the order exists. Cached server-side for a day.
   const serviceability = useServiceability(form.recipientPostalCode, form.paymentMode);
+  // Pre-select the default once the list arrives, and only while the
+  // field is untouched: a seller who has already picked a shopfront
+  // must not have it changed underneath them by a late response.
+  useEffect(() => {
+    if (defaultStoreId === '') return;
+    setForm((f) => (f.storeId === '' ? { ...f, storeId: defaultStoreId } : f));
+  }, [defaultStoreId]);
+
   const [items, setItems] = useState<readonly PickedLine[]>([]);
   const nextKey = useRef(1);
   const [error, setError] = useState<string | null>(null);
@@ -412,6 +429,10 @@ export function NewOrderForm(): ReactElement {
           ? { totalWeightGrams: computedWeight }
           : {}),
       ...(form.sellerOrderRef.trim() ? { sellerOrderRef: form.sellerOrderRef.trim() } : {}),
+      // Omitted rather than guessed when the list has not loaded: the
+      // server falls back to the default store, which is the same
+      // answer this form would have pre-filled.
+      ...(form.storeId === '' ? {} : { storeId: form.storeId }),
       ...(form.sellerNotes.trim() ? { sellerNotes: form.sellerNotes.trim() } : {}),
       ...(acknowledgeDuplicate ? { acknowledgeDuplicate: true } : {}),
     };
@@ -791,12 +812,27 @@ export function NewOrderForm(): ReactElement {
         <CardBody>
           <h2 className="text-text-bright text-sm font-medium mb-3">Notes</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Only when there is a choice to make. One shopfront is
+                the ordinary case, and a select with a single option is
+                a question nobody asked. */}
+            {openStores.length > 1 && (
+              <FormField label="Store" hint="Which of your shopfronts this order was placed on">
+                <Select value={form.storeId} onChange={(e) => set('storeId', e.target.value)}>
+                  {openStores.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                      {st.isDefault ? ' (default)' : ''}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            )}
             <FormField label="Your reference">
               <Input
                 value={form.sellerOrderRef}
                 onChange={(e) => set('sellerOrderRef', e.target.value)}
                 maxLength={120}
-                placeholder="Your own order ID (optional, must be unique)"
+                placeholder="Your own order ID (unique per store)"
               />
             </FormField>
             <FormField label="Seller notes">

@@ -29,6 +29,7 @@ import {
   OrderStatusBadge,
 } from '@skydrop/ui/components';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
+import { useStores } from '@/lib/store-hooks';
 
 /**
  * Seller order list — URL-driven filter state so a deep-linked filter
@@ -140,6 +141,8 @@ const RETURNING: readonly OrderStatus[] = [
 interface QueryParams {
   readonly status: OrderStatus | '';
   readonly search: string;
+  /** Which shopfront. Empty means all of them. */
+  readonly storeId: string;
   readonly range: string;
   /** `YYYY-MM-DD`, both optional — one end alone is a valid range. */
   readonly from: string;
@@ -154,6 +157,7 @@ function parseParams(sp: URLSearchParams): QueryParams {
   return {
     status: status && (STATUSES as string[]).includes(status) ? status : '',
     search: sp.get('search') ?? '',
+    storeId: sp.get('storeId') ?? '',
     range: RANGES.some((r) => r.key === (sp.get('range') ?? '')) ? (sp.get('range') ?? '') : '',
     from: /^\d{4}-\d{2}-\d{2}$/.test(sp.get('from') ?? '') ? (sp.get('from') ?? '') : '',
     to: /^\d{4}-\d{2}-\d{2}$/.test(sp.get('to') ?? '') ? (sp.get('to') ?? '') : '',
@@ -169,6 +173,9 @@ export function OrdersIndex(): ReactElement {
   const params = useMemo(() => parseParams(new URLSearchParams(sp.toString())), [sp]);
 
   const [searchInput, setSearchInput] = useState(params.search);
+  // CLOSED stores are still listed: they hold past orders, and a filter
+  // that could not reach them would make those orders unfindable.
+  const stores = useStores().data ?? [];
   const pendingCount = usePendingRows().data?.length ?? 0;
   const summary = useOrderStatusSummary();
 
@@ -197,6 +204,7 @@ export function OrdersIndex(): ReactElement {
       const nextSp = new URLSearchParams();
       if (merged.status) nextSp.set('status', merged.status);
       if (merged.search) nextSp.set('search', merged.search);
+      if (merged.storeId) nextSp.set('storeId', merged.storeId);
       if (merged.range) nextSp.set('range', merged.range);
       if (merged.range === 'custom' && merged.from) nextSp.set('from', merged.from);
       if (merged.range === 'custom' && merged.to) nextSp.set('to', merged.to);
@@ -229,13 +237,15 @@ export function OrdersIndex(): ReactElement {
   const list = useOrdersList({
     ...(params.status ? { status: params.status } : {}),
     ...(params.search ? { search: params.search } : {}),
+    ...(params.storeId ? { storeId: params.storeId } : {}),
     ...(placedFrom === undefined ? {} : { placedFrom }),
     ...(placedTo === undefined ? {} : { placedTo }),
     page: params.page,
     pageSize: params.pageSize,
   });
 
-  const filtered = params.status !== '' || params.search !== '' || params.range !== '';
+  const filtered =
+    params.status !== '' || params.search !== '' || params.range !== '' || params.storeId !== '';
 
   return (
     <div>
@@ -403,6 +413,25 @@ export function OrdersIndex(): ReactElement {
                 className="w-[150px]"
               />
             </div>
+          )}
+
+          {/* Only when there is a choice to make. One shopfront is the
+              ordinary case, and a filter with a single option is a
+              control that can only ever narrow to everything. */}
+          {stores.length > 1 && (
+            <Select
+              aria-label="Filter by store"
+              value={params.storeId}
+              onChange={(e) => updateUrl({ storeId: e.target.value, page: 1 })}
+              className="w-[180px]"
+            >
+              <option value="">All stores</option>
+              {stores.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.name}
+                </option>
+              ))}
+            </Select>
           )}
 
           <Select

@@ -50,6 +50,7 @@ import {
 } from 'lucide-react';
 import { canSeePath } from '@/lib/page-access';
 import { PermissionBoundary } from './permission-boundary';
+import { OrderOmnisearch } from './order-omnisearch';
 
 /**
  * The admin shell.
@@ -200,7 +201,15 @@ export function AuthedShell({
         // their own account — the page has no nav entry because it is
         // not a section of the product, it is about them.
         identityHref="/account"
-        headerActions={<NotificationBellContainer />}
+        headerActions={
+          <>
+            {/* Reachable from EVERY page, because the moment somebody
+                needs a parcel is rarely the moment they are on the
+                orders list. */}
+            <OrderOmnisearch />
+            <NotificationBellContainer />
+          </>
+        }
         footerNote="Phase 1A"
         pathname={pathname}
         Link={Link}
