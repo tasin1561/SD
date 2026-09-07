@@ -1,4 +1,19 @@
+'use client';
+
+/*
+  A CLIENT module now, and it has to be.
+  
+  These carry a disclosure with `useState` behind it, and a hook in a
+  module a server component imports does not fail at the hook — it fails
+  at the import, because what a server component receives from a client
+  module is a client REFERENCE rather than the function. The same trap
+  the theme init script documents. Marking the module is what puts the
+  boundary in the right place; without it any page that is still a
+  server component breaks at build, and the ones that are already
+  `'use client'` would go on working, so the failure would look random.
+*/
 import { clsx } from 'clsx';
+import { helpSubject, useHelpDisclosure } from './help-disclosure';
 import type { ReactElement, ReactNode } from 'react';
 
 /**
@@ -16,6 +31,7 @@ export function PageHeader({
   readonly action?: ReactNode;
   readonly className?: string;
 }): ReactElement {
+  const help = useHelpDisclosure(helpSubject(title, 'this page'), subtitle, { size: 'sm' });
   return (
     // Stacked on a phone: `shrink-0` on the action slot means a wide
     // action (a button group, a two-field filter) cannot give ground,
@@ -27,10 +43,11 @@ export function PageHeader({
       )}
     >
       <div className="min-w-0">
-        <h1 className="text-text-bright text-lg font-semibold tracking-tight sm:text-xl">
+        <h1 className="text-text-bright flex items-center gap-2 text-lg font-semibold tracking-tight sm:text-xl">
           {title}
+          {help.trigger}
         </h1>
-        {subtitle && <p className="text-text-muted mt-1 text-sm">{subtitle}</p>}
+        {help.panel && <p className="text-text-muted text-sm">{help.panel}</p>}
       </div>
       {action && (
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0">{action}</div>
@@ -54,15 +71,19 @@ export function Section({
   readonly children: ReactNode;
   readonly className?: string;
 }): ReactElement {
+  const help = useHelpDisclosure(helpSubject(title, 'this section'), subtitle);
   return (
     <section className={clsx('mb-6', className)}>
       {(title || action) && (
         <div className="flex items-baseline justify-between gap-4 mb-2">
           {title && (
             <div className="min-w-0">
-              <h2 className="text-text-bright text-sm font-medium tracking-tight">{title}</h2>
-              {subtitle && (
-                <p className="text-text-muted mt-0.5 text-xs leading-relaxed">{subtitle}</p>
+              <h2 className="text-text-bright flex items-center gap-1.5 text-sm font-medium tracking-tight">
+                {title}
+                {help.trigger}
+              </h2>
+              {help.panel && (
+                <p className="text-text-muted text-xs leading-relaxed">{help.panel}</p>
               )}
             </div>
           )}

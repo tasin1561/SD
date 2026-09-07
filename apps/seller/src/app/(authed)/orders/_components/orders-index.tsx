@@ -456,7 +456,19 @@ export function OrdersIndex(): ReactElement {
               size="md"
               onClick={() => {
                 setSearchInput('');
-                updateUrl({ status: '', search: '', range: '', from: '', to: '', page: 1 });
+                // `storeId` too. It counts towards `filtered`, so the
+                // button APPEARS because a store is selected and then
+                // left it selected — a Clear that does not clear the
+                // thing that summoned it.
+                updateUrl({
+                  status: '',
+                  search: '',
+                  range: '',
+                  from: '',
+                  to: '',
+                  storeId: '',
+                  page: 1,
+                });
               }}
             >
               Clear

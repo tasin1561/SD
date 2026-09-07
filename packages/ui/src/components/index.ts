@@ -24,6 +24,7 @@ export * from './notification-bell';
 export * from './open-external';
 export * from './order-journey';
 export * from './form';
+export * from './help-disclosure';
 export * from './modal';
 export * from './issue-category-line';
 export * from './menu-button';

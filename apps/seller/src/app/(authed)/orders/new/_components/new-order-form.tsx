@@ -725,15 +725,22 @@ export function NewOrderForm(): ReactElement {
                 <FormField
                   label="PIN code"
                   required
-                  // Advisory only. The answer can be a day stale and a
-                  // seller knows their customer's area better than a lookup
-                  // does — so this informs, and never blocks the submit.
-                  hint={
+                  // A WARNING, so `notice` and not `hint`: it is the one
+                  // thing on this field the seller did not ask about and
+                  // needs anyway, and folding it behind the (i) would mean
+                  // it is read after the parcel is refused rather than
+                  // before it is placed.
+                  //
+                  // Advisory all the same. The answer can be a day stale
+                  // and a seller knows their customer's area better than a
+                  // lookup does, so it informs and never blocks the submit.
+                  notice={
                     serviceability.data?.known === true && !serviceability.data.serviceable
                       ? (serviceability.data.reason ??
                         'Our courier may not deliver here — the order can still be placed.')
-                      : 'Delhivery routes on the PIN and works the locality out itself.'
+                      : undefined
                   }
+                  hint="Delhivery routes on the PIN and works the locality out itself."
                 >
                   <Input
                     value={form.recipientPostalCode}
@@ -1149,7 +1156,9 @@ export function NewOrderForm(): ReactElement {
         <p className="text-text-muted text-xs">
           {items.length === 0
             ? 'No products yet'
-            : `${items.length} ${items.length === 1 ? 'line' : 'lines'}`}
+            : // "products", not "lines" — a line is what the order model
+              // calls it and nobody outside this codebase does.
+              `${items.length} ${items.length === 1 ? 'product' : 'products'}`}
           {form.paymentMode === 'COD' && computedCollectable > 0 && (
             <>
               {' · '}

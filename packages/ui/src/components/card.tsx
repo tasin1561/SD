@@ -1,4 +1,19 @@
+'use client';
+
+/*
+  A CLIENT module now, and it has to be.
+  
+  These carry a disclosure with `useState` behind it, and a hook in a
+  module a server component imports does not fail at the hook — it fails
+  at the import, because what a server component receives from a client
+  module is a client REFERENCE rather than the function. The same trap
+  the theme init script documents. Marking the module is what puts the
+  boundary in the right place; without it any page that is still a
+  server component breaks at build, and the ones that are already
+  `'use client'` would go on working, so the failure would look random.
+*/
 import { clsx } from 'clsx';
+import { helpSubject, useHelpDisclosure } from './help-disclosure';
 import type { HTMLAttributes, ReactElement, ReactNode } from 'react';
 
 /**
@@ -43,6 +58,9 @@ export function CardHeader({
    */
   readonly tone?: 'default' | 'critical' | 'accent';
 }): ReactElement {
+  // The subtitle explains what the panel is FOR — read once, then in the
+  // way of the panel itself for ever after. Folded behind the (i).
+  const help = useHelpDisclosure(helpSubject(title, 'this section'), subtitle);
   return (
     <div
       className={clsx(
@@ -57,13 +75,14 @@ export function CardHeader({
       <div className="min-w-0">
         <div
           className={clsx(
-            'text-sm font-medium',
+            'flex items-center gap-1.5 text-sm font-medium',
             tone === 'critical' ? 'text-critical' : 'text-text-bright',
           )}
         >
           {title}
+          {help.trigger}
         </div>
-        {subtitle && <div className="text-text-muted text-xs mt-0.5">{subtitle}</div>}
+        {help.panel && <div className="text-text-muted text-xs">{help.panel}</div>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>

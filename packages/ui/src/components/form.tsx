@@ -1,4 +1,19 @@
+'use client';
+
+/*
+  A CLIENT module now, and it has to be.
+  
+  These carry a disclosure with `useState` behind it, and a hook in a
+  module a server component imports does not fail at the hook — it fails
+  at the import, because what a server component receives from a client
+  module is a client REFERENCE rather than the function. The same trap
+  the theme init script documents. Marking the module is what puts the
+  boundary in the right place; without it any page that is still a
+  server component breaks at build, and the ones that are already
+  `'use client'` would go on working, so the failure would look random.
+*/
 import { clsx } from 'clsx';
+import { helpSubject, useHelpDisclosure } from './help-disclosure';
 import {
   forwardRef,
   type InputHTMLAttributes,
@@ -15,10 +30,28 @@ import {
  * / spacing / wrapping) is the consumer's; these are atoms.
  */
 
+/**
+ * A labelled control.
+ *
+ * THREE kinds of text can sit under it and they are not the same thing:
+ *
+ *   `error`  — always shown. The submit was refused.
+ *   `notice` — always shown. Something the reader did not ask about and
+ *              needs anyway: "we may not deliver to this PIN". A warning
+ *              folded behind a click is read after the mistake.
+ *   `hint`   — folded behind the (i) beside the label. Guidance for
+ *              somebody who is unsure, which is most useful the first
+ *              few times and is clutter for ever after.
+ *
+ * The hint stays reachable even when there is an error — it used to be
+ * replaced by one, and the hint is often exactly what explains the
+ * refusal. It is collapsed anyway, so it costs no space.
+ */
 export function FormField({
   label,
   htmlFor,
   hint,
+  notice,
   error,
   required,
   children,
@@ -27,25 +60,36 @@ export function FormField({
   readonly label?: ReactNode;
   readonly htmlFor?: string;
   readonly hint?: ReactNode;
+  /** A warning. Always visible — never fold this behind the (i). */
+  readonly notice?: ReactNode;
   readonly error?: ReactNode;
   readonly required?: boolean;
   readonly children: ReactNode;
   readonly className?: string;
 }): ReactElement {
+  const help = useHelpDisclosure(helpSubject(label, 'this field'), hint);
   return (
     <div className={clsx('space-y-1', className)}>
       {label && (
-        <Label htmlFor={htmlFor}>
-          {label}
-          {required && <span className="text-critical ml-0.5">*</span>}
-        </Label>
+        // The trigger is a SIBLING of the <label>, never inside it. A
+        // <button> is a labelable element, so a label wrapping one
+        // starts describing the button instead of the field: clicking
+        // the label text would toggle the help rather than focus the
+        // input, and every `getByLabelText` in the suite resolved to the
+        // (i). Caught by seven admin tests, and it would have reached a
+        // screen reader as the field having no name.
+        <div className="flex items-center gap-1">
+          <Label htmlFor={htmlFor}>
+            {label}
+            {required && <span className="text-critical ml-0.5">*</span>}
+          </Label>
+          {help.trigger}
+        </div>
       )}
       {children}
-      {error ? (
-        <div className="text-critical text-xs">{error}</div>
-      ) : hint ? (
-        <div className="text-text-faint text-xs">{hint}</div>
-      ) : null}
+      {error ? <div className="text-critical text-xs">{error}</div> : null}
+      {notice ? <div className="text-[var(--status-pending-fg)] text-xs">{notice}</div> : null}
+      {help.panel ? <div className="text-text-faint pt-0.5 text-xs">{help.panel}</div> : null}
     </div>
   );
 }

@@ -57,7 +57,15 @@ describe('FE-2 boundary — seller status action', () => {
     // (a) UI collects: SUSPEND button → modal → reason → confirm
     await user.click(screen.getByRole('button', { name: /suspend account/i }));
     expect(await screen.findByText(/Suspend this seller\?/i)).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/Reason \(optional/i), 'Customer-complaint-driven test');
+    // `selector` because the field's (i) is ALSO named after the field
+    // — "Show help for Reason (optional…)" — so a bare label query now
+    // finds two elements. Naming the control is what this line meant
+    // anyway; a query that would happily have returned a button was
+    // only ever passing by luck.
+    await user.type(
+      screen.getByLabelText(/Reason \(optional/i, { selector: 'textarea' }),
+      'Customer-complaint-driven test',
+    );
     await user.click(screen.getByRole('button', { name: /^Suspend$/ }));
 
     // (b) The server's [code] + message render verbatim.
