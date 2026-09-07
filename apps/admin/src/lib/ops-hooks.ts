@@ -1053,6 +1053,45 @@ export function useBankEntries(
   });
 }
 
+/** One contributing record behind a P&L line. */
+export interface PnlLineItemView {
+  readonly ref: string;
+  readonly subRef: string | null;
+  readonly at: string;
+  readonly revenueInr: string | null;
+  /** Null means NOT RECORDED, which is not the same as zero. */
+  readonly costInr: string | null;
+}
+
+/**
+ * Every row behind one line.
+ *
+ * Only fetched when a line is opened: it is the long answer, and
+ * loading four of them on arrival would cost four table scans to show
+ * something nobody had asked to see.
+ */
+export function usePnlLineItems(
+  key: string | null,
+  from: string,
+  to: string,
+): UseQueryResult<{ key: string; items: readonly PnlLineItemView[]; truncated: boolean }> {
+  const client = useApiClient();
+  // Built outside the template literal: a `??` inside an interpolation
+  // is not something the route checker can resolve, and it reported the
+  // path as unmatched — a gate failing on a call it could not see is a
+  // gate people learn to skip.
+  const safeKey = key === null ? '' : key;
+  const qs = `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  return useQuery({
+    queryKey: ['admin-treasury', 'pnl-items', key, from, to],
+    enabled: key !== null,
+    queryFn: () =>
+      client.request<{ key: string; items: readonly PnlLineItemView[]; truncated: boolean }>(
+        `/api/admin/treasury/pnl/lines/${safeKey}/items${qs}`,
+      ),
+  });
+}
+
 /** One term of a line's arithmetic, named well enough to re-run by hand. */
 export interface PnlBasisPartView {
   readonly label: string;
@@ -1901,6 +1940,23 @@ export function useMarginReport(limit: number, enabled: boolean): UseQueryResult
     staleTime: 15 * 60_000,
     queryFn: () =>
       client.request<MarginReport>(`/api/admin/courier-ops/margin-report?limit=${limit}`),
+  });
+}
+
+/**
+ * The same report from costs already recorded.
+ *
+ * Fires on mount, unlike the live one: it contacts no courier, writes
+ * nothing, and reads a column we have been filling in all along. The
+ * page opening on "Not run yet" over data it already had was the bug.
+ */
+export function useStoredMarginReport(limit: number, enabled = true): UseQueryResult<MarginReport> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-margin', 'stored', limit],
+    enabled,
+    queryFn: () =>
+      client.request<MarginReport>(`/api/admin/courier-ops/margin-report/stored?limit=${limit}`),
   });
 }
 

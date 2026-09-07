@@ -18,6 +18,13 @@ export interface SellerWalletRow {
   readonly pendingWithdrawalInr: string;
   readonly pendingTopupInr: string;
   readonly updatedAt: string | null;
+  /**
+   * WHAT last moved this wallet, not only when. A date says a wallet
+   * changed; the direction says whether they were credited for a
+   * delivery or charged for a return.
+   */
+  readonly lastMovementDirection: string | null;
+  readonly lastMovementAt: string | null;
 }
 
 export interface SellerWalletTotals {

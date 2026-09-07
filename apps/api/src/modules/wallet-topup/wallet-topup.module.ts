@@ -9,6 +9,7 @@ import { SellerTopupController } from './controllers/seller-topup.controller';
 import { AdminTopupController } from './controllers/admin-topup.controller';
 import { AdminPlatformBankAccountController } from './controllers/admin-platform-bank-account.controller';
 import { TreasuryModule } from '../treasury/treasury.module';
+import { AuthCommonModule } from '../auth-common/auth-common.module';
 
 /**
  * The wallet's inbound money path.
@@ -18,7 +19,9 @@ import { TreasuryModule } from '../treasury/treasury.module';
  * after an operator has confirmed the transfer against a bank statement.
  */
 @Module({
-  imports: [SellerWalletModule, FxModule, EmailModule, TreasuryModule],
+  // AuthCommonModule for AuditLogService: every change to a bank
+  // account sellers pay into is recorded with who and when.
+  imports: [SellerWalletModule, FxModule, EmailModule, TreasuryModule, AuthCommonModule],
   controllers: [SellerTopupController, AdminTopupController, AdminPlatformBankAccountController],
   providers: [WalletTopupService, SellerJwtGuard, StaffJwtGuard],
   exports: [WalletTopupService],

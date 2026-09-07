@@ -1,5 +1,8 @@
 'use client';
 
+import Link from 'next/link';
+import { History } from 'lucide-react';
+
 import { useState, type ReactElement } from 'react';
 import {
   Button,
@@ -190,11 +193,21 @@ export function BankAccountsPanel(): ReactElement | null {
           title="Accounts offered to sellers"
           subtitle="Retiring one keeps every past top-up that names it."
           action={
-            mayManage ? (
-              <Button variant="secondary" size="sm" onClick={openNew}>
-                Add account
-              </Button>
-            ) : undefined
+            <div className="flex items-center gap-2">
+              {/* Reachable from the thing it is about, rather than only
+                  from the nav: the question "who changed this account"
+                  is asked while looking at the account. */}
+              <Link href="/bank-accounts/history">
+                <Button variant="ghost" size="sm">
+                  <History className="size-3.5" /> Change history
+                </Button>
+              </Link>
+              {mayManage ? (
+                <Button variant="secondary" size="sm" onClick={openNew}>
+                  Add account
+                </Button>
+              ) : null}
+            </div>
           }
         />
         <CardBody>

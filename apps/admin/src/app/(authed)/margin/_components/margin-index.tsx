@@ -25,7 +25,7 @@ import {
   THead,
   Tr,
 } from '@skydrop/ui/components';
-import { useMarginReport } from '@/lib/ops-hooks';
+import { useMarginReport, useStoredMarginReport } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useRouter } from 'next/navigation';
 
@@ -47,9 +47,23 @@ export function MarginIndex(): ReactElement {
   const router = useRouter();
   const [limit, setLimit] = useState(25);
   const [run, setRun] = useState(false);
-  const report = useMarginReport(limit, run);
+  const live = useMarginReport(limit, run);
+  /*
+    WHAT WE ALREADY KNOW, shown first.
+
+    Every priced parcel's cost has been persisted to
+    `shipments.actual_courier_cost_inr` all along — by this report, and
+    nightly by the wallet-ledger import — and the page still opened on
+    "Not run yet", because the only view it had was the live one. The
+    stored view contacts no courier and writes nothing, so it can load
+    on arrival; Run then has one job worth its cost, which is pricing
+    the parcels that have no figure yet.
+  */
+  const stored = useStoredMarginReport(limit);
+  const report = run ? live : stored;
 
   const data = report.data;
+  const unpriced = stored.data?.skipped.length ?? 0;
 
   return (
     <div>
@@ -73,32 +87,53 @@ export function MarginIndex(): ReactElement {
             <Button
               variant="primary"
               size="md"
-              disabled={report.isFetching}
+              disabled={live.isFetching}
               onClick={() => {
                 setRun(true);
-                void report.refetch();
+                void live.refetch();
               }}
+              title="Asks the courier what each unpriced parcel cost. One rate-limited call per shipment."
             >
               <Play size={13} aria-hidden />
-              {report.isFetching ? 'Pricing…' : 'Run'}
+              {live.isFetching
+                ? 'Pricing…'
+                : unpriced > 0
+                  ? `Price ${unpriced} unpriced`
+                  : 'Re-price live'}
             </Button>
           </div>
         }
       />
 
-      {!run ? (
-        <EmptyState
-          title="Not run yet"
-          description="Each shipment in the sample costs one live call to Delhivery against a rate-limited endpoint, so this runs only when you ask. Pick a sample size and press Run."
-        />
-      ) : report.isError ? (
+      {report.isError ? (
         <ErrorNote message={serverVerdict(report.error)} retry={() => void report.refetch()} />
       ) : report.isFetching || data === undefined ? (
         <Card>
           <SkeletonRows rows={6} cols={6} />
         </Card>
+      ) : data.rows.length === 0 ? (
+        <EmptyState
+          title="No costs recorded yet"
+          description="Nothing in this window has a courier cost against it. Pressing Run asks the courier what each parcel cost — one rate-limited call per shipment — and keeps the answers, so this page fills in from then on."
+        />
       ) : (
         <>
+          {!run && (
+            <Card className="mb-4">
+              <CardBody className="text-text-muted text-xs">
+                From costs already recorded — no courier was contacted.
+                {unpriced > 0 && (
+                  <>
+                    {' '}
+                    {unpriced} parcel{unpriced === 1 ? '' : 's'} in this window{' '}
+                    {unpriced === 1 ? 'has' : 'have'} no cost yet and{' '}
+                    {unpriced === 1 ? 'is' : 'are'} left out of the totals rather than counted as
+                    zero.
+                  </>
+                )}
+              </CardBody>
+            </Card>
+          )}
           <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Billed to sellers"

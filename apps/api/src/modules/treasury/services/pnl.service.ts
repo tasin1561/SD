@@ -536,6 +536,193 @@ export class PnlService {
   }
 
   /**
+   * EVERY ROW behind one line, so the total can be ticked off by hand.
+   *
+   * ── WHY THE TERMS WERE NOT ENOUGH ────────────────────────────────────
+   * The basis says "₹2,400.00 across 12 rows of order_charges" — which
+   * makes the figure re-runnable as a query, but not checkable against
+   * anything a person is holding. Checking means finding the parcel that
+   * looks wrong, and for that you need the twelve rows.
+   *
+   * Capped, and the cap is REPORTED rather than silently applied: a
+   * truncated list that does not say it is truncated is worse than no
+   * list, because the numbers stop adding up and nothing explains why.
+   */
+  async lineItems(
+    key: string,
+    from: Date,
+    to: Date,
+    limit = 500,
+  ): Promise<{
+    key: string;
+    items: ReadonlyArray<{
+      ref: string;
+      subRef: string | null;
+      at: string;
+      revenueInr: string | null;
+      costInr: string | null;
+    }>;
+    truncated: boolean;
+  }> {
+    const take = Math.min(Math.max(limit, 1), 1000);
+    switch (key) {
+      case 'inbound_freight': {
+        const rows = await this.prisma.client.inboundFreightCharge.findMany({
+          where: { createdAt: { gte: from, lte: to } },
+          orderBy: { createdAt: 'desc' },
+          take: take + 1,
+          select: {
+            totalInr: true,
+            ourCostInr: true,
+            createdAt: true,
+            consignment: { select: { consignmentNumber: true } },
+            seller: { select: { companyName: true } },
+          },
+        });
+        return {
+          key,
+          items: rows.slice(0, take).map((r) => ({
+            ref: r.consignment?.consignmentNumber ?? '—',
+            subRef: r.seller?.companyName ?? null,
+            at: r.createdAt.toISOString(),
+            revenueInr: r.totalInr.toFixed(2),
+            // Null, not zero. "No forwarder cost recorded" and "the
+            // forwarder charged nothing" are different facts, and only
+            // one of them means somebody still has to do something.
+            costInr: r.ourCostInr?.toFixed(2) ?? null,
+          })),
+          truncated: rows.length > take,
+        };
+      }
+
+      case 'delivery':
+      case 'rto': {
+        const isRto = key === 'rto';
+        const rows = await this.prisma.client.shipment.findMany({
+          where: {
+            deletedAt: null,
+            awbNumber: { not: null },
+            ...(isRto
+              ? { rtoReceivedAt: { gte: from, lte: to } }
+              : { createdAt: { gte: from, lte: to }, rtoReceivedAt: null }),
+          },
+          orderBy: { createdAt: 'desc' },
+          take: take + 1,
+          select: {
+            shipmentNumber: true,
+            awbNumber: true,
+            createdAt: true,
+            actualCourierCostInr: true,
+            actualRtoCostInr: true,
+            orderShipments: {
+              take: 1,
+              select: {
+                order: {
+                  select: {
+                    orderNumber: true,
+                    charges: {
+                      where: {
+                        deletedAt: null,
+                        type: {
+                          in: isRto
+                            ? ['RTO_FEE']
+                            : [
+                                'BASE_SHIPPING',
+                                'COD_FEE',
+                                'FUEL_SURCHARGE',
+                                'REMOTE_AREA_FEE',
+                                'WEIGHT_DISPUTE_FEE',
+                              ],
+                        },
+                      },
+                      select: { amountInr: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+        return {
+          key,
+          items: rows.slice(0, take).map((s) => {
+            const order = s.orderShipments[0]?.order ?? null;
+            const billed = (order?.charges ?? []).reduce((t, c) => t.add(c.amountInr), ZERO);
+            const cost = isRto ? s.actualRtoCostInr : s.actualCourierCostInr;
+            return {
+              ref: s.shipmentNumber,
+              subRef: order?.orderNumber ?? s.awbNumber,
+              at: s.createdAt.toISOString(),
+              revenueInr: billed.toFixed(2),
+              costInr: cost?.toFixed(2) ?? null,
+            };
+          }),
+          truncated: rows.length > take,
+        };
+      }
+
+      case 'cod_tax': {
+        const rows = await this.prisma.client.sellerWalletEntry.findMany({
+          where: {
+            direction: WalletEntryDirection.GST_WITHHOLDING,
+            currency: Currency.INR,
+            createdAt: { gte: from, lte: to },
+          },
+          orderBy: { id: 'desc' },
+          take: take + 1,
+          select: {
+            amount: true,
+            createdAt: true,
+            linkedOrder: { select: { orderNumber: true } },
+            seller: { select: { companyName: true } },
+          },
+        });
+        return {
+          key,
+          items: rows.slice(0, take).map((e) => ({
+            ref: e.linkedOrder?.orderNumber ?? '—',
+            subRef: e.seller?.companyName ?? null,
+            at: e.createdAt.toISOString(),
+            revenueInr: e.amount.toFixed(2),
+            costInr: null,
+          })),
+          truncated: rows.length > take,
+        };
+      }
+
+      case 'fx': {
+        const rows = await this.prisma.client.bankEntry.findMany({
+          where: { type: BankEntryType.FX_SPREAD, occurredAt: { gte: from, lte: to } },
+          orderBy: { id: 'desc' },
+          take: take + 1,
+          select: {
+            signedAmount: true,
+            occurredAt: true,
+            reference: true,
+            account: { select: { label: true } },
+          },
+        });
+        return {
+          key,
+          items: rows.slice(0, take).map((e) => ({
+            ref: e.reference ?? e.account.label,
+            subRef: e.account.label,
+            at: e.occurredAt.toISOString(),
+            // Signed, not absolute: an FX spread can go against us, and
+            // showing the magnitude would turn a loss into a gain.
+            revenueInr: e.signedAmount.toFixed(2),
+            costInr: null,
+          })),
+          truncated: rows.length > take,
+        };
+      }
+
+      default:
+        return { key, items: [], truncated: false };
+    }
+  }
+
+  /**
    * A charge type in the words a person uses.
    *
    * Deliberately NOT exhaustive over ChargeType: this is a display

@@ -112,6 +112,28 @@ export class AdminTreasuryController {
     return this.pnl.report(fromDate, toDate);
   }
 
+  @Get('pnl/lines/:key/items')
+  @ApiOperation({
+    summary:
+      'EVERY row behind one P&L line, so the total can be ticked off by hand. Capped, and the cap is reported rather than silently applied.',
+  })
+  pnlLineItems(
+    @Param('key') key: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+  ): ReturnType<PnlService['lineItems']> {
+    const toDate = to === undefined ? new Date() : new Date(to);
+    const fromDate =
+      from === undefined ? new Date(toDate.getTime() - 30 * 86_400_000) : new Date(from);
+    return this.pnl.lineItems(
+      key,
+      fromDate,
+      toDate,
+      limit === undefined ? undefined : Number(limit),
+    );
+  }
+
   @Get('liabilities')
   @ApiOperation({
     summary:

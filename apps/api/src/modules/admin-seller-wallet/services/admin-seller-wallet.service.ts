@@ -87,6 +87,16 @@ export interface SellerWalletRow {
   /** Claimed and not yet verified. NOT inside `balanceInr`. */
   readonly pendingTopupInr: string;
   readonly updatedAt: Date | null;
+  /**
+   * WHAT last moved this wallet, not only when.
+   *
+   * A date says a wallet changed; the direction says whether they were
+   * credited for a delivery or charged for a return, which is read very
+   * differently by anyone chasing a balance. Null when nothing has ever
+   * moved — which is not the same as a movement we failed to read.
+   */
+  readonly lastMovementDirection: string | null;
+  readonly lastMovementAt: Date | null;
 }
 
 export interface SellerWalletTotals {
@@ -203,6 +213,34 @@ export class AdminSellerWalletService {
       };
     });
 
+    /*
+      The LAST thing that happened to each wallet, in one query.
+
+      A date on its own says a wallet moved and not what moved it, which
+      is the difference between "they were credited for a delivery" and
+      "we took a return fee off them" — read very differently by anyone
+      chasing a balance. DISTINCT ON is the one-query form: the
+      alternative is a lookup per seller, which is fine at three sellers
+      and is the query that quietly gets slower every month.
+
+      Raw because Prisma has no DISTINCT ON. The ORDER BY must lead with
+      the same column as DISTINCT ON or Postgres refuses; `id DESC`
+      breaks the tie because ids are uuidv7 and therefore monotonic,
+      while `created_at` is fixed per transaction and shared by entries
+      written together (WAL-7).
+    */
+    const lastMovements = await this.prisma.client.$queryRaw<
+      Array<{ seller_id: string; direction: string; created_at: Date }>
+    >`
+      SELECT DISTINCT ON (seller_id) seller_id, direction::text AS direction, created_at
+      FROM seller_wallet_entries
+      WHERE currency = 'inr'
+      ORDER BY seller_id, id DESC
+    `;
+    const lastByseller = new Map(
+      lastMovements.map((m) => [m.seller_id, { direction: m.direction, at: m.created_at }]),
+    );
+
     const [withdrawals, topups] = await Promise.all([
       this.prisma.client.withdrawalRequest.groupBy({
         by: ['sellerId'],
@@ -243,6 +281,10 @@ export class AdminSellerWalletService {
         pendingWithdrawalInr: (pendingOut.get(b.sellerId) ?? ZERO).toFixed(2),
         pendingTopupInr: (pendingIn.get(b.sellerId) ?? ZERO).toFixed(2),
         updatedAt: b.updatedAt,
+        // Null for a wallet nothing has ever touched — which is not the
+        // same as one whose last movement we failed to read.
+        lastMovementDirection: lastByseller.get(b.sellerId)?.direction ?? null,
+        lastMovementAt: lastByseller.get(b.sellerId)?.at ?? null,
       };
     });
     rows.sort((a, b) => Number(a.balanceInr) - Number(b.balanceInr));

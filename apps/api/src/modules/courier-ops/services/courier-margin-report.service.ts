@@ -262,6 +262,110 @@ export class CourierMarginReportService {
    * figure we compare against is pre-tax on the same basis, and mixing
    * the two would flatter or damn the margin by 18% for no real reason.
    */
+  /**
+   * The same report, from what we ALREADY KNOW.
+   *
+   * ── WHY THIS EXISTS ──────────────────────────────────────────────────
+   * The live run costs one rate-limited Delhivery call per parcel, so
+   * the page ran only when asked — and therefore opened on "Not run
+   * yet" over data it already had. Every priced parcel's cost was being
+   * persisted to `shipments.actual_courier_cost_inr` (by this report,
+   * and nightly by the wallet-ledger import), and none of it was shown
+   * until somebody spent the calls again to re-learn it.
+   *
+   * This reads that column. No courier is contacted, nothing is
+   * written, and it can be the page's default view — the live run then
+   * has one job worth its cost: pricing the parcels that have no figure
+   * yet.
+   *
+   * `skipped` names the UNPRICED ones rather than dropping them, because
+   * "we have 11 of 12" is a different report from "we have 11", and only
+   * one of them tells you to press Run.
+   */
+  async storedReport(input: { from: Date; to: Date; limit: number }): Promise<MarginReport> {
+    const shipments = await this.prisma.client.shipment.findMany({
+      where: {
+        deletedAt: null,
+        isManualCourier: false,
+        awbNumber: { not: null },
+        createdAt: { gte: input.from, lte: input.to },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: input.limit,
+      select: {
+        id: true,
+        shipmentNumber: true,
+        awbNumber: true,
+        destPostalCode: true,
+        courierCode: true,
+        actualCourierCostInr: true,
+        actualCourierCostAt: true,
+        orderShipments: { select: { orderId: true }, take: 1 },
+      },
+    });
+
+    const rows: MarginRow[] = [];
+    const skipped: { shipmentId: string; reason: string }[] = [];
+    let totalBilled = ZERO;
+    let totalActual = ZERO;
+
+    for (const s of shipments) {
+      if (s.actualCourierCostInr === null) {
+        skipped.push({
+          shipmentId: s.id,
+          reason: 'No courier cost recorded yet — run the live report to price this one.',
+        });
+        continue;
+      }
+      const orderId = s.orderShipments[0]?.orderId ?? null;
+      const billed = orderId === null ? null : await this.billedShipping(orderId);
+      if (billed === null) {
+        skipped.push({
+          shipmentId: s.id,
+          reason: 'No shipping charges persisted for the order, so there is nothing to compare to.',
+        });
+        continue;
+      }
+
+      const actual = s.actualCourierCostInr;
+      const margin = billed.sub(actual);
+      rows.push({
+        shipmentId: s.id,
+        shipmentNumber: s.shipmentNumber,
+        awbNumber: s.awbNumber,
+        orderId,
+        // The lane is not stored — it was a property of the live quote,
+        // not of the parcel. Reported as the destination alone rather
+        // than invented, because a made-up lane label would be indexed,
+        // grouped and reported on exactly like a real one.
+        lane: s.destPostalCode,
+        billedToSellerInr: billed.toFixed(2),
+        actualCourierCostInr: actual.toFixed(2),
+        marginInr: margin.toFixed(2),
+        marginPercent: billed.isZero() ? '0.0' : margin.div(billed).mul(100).toFixed(1),
+        lossMaking: margin.lessThan(0),
+        // Both belong to the live comparison against the rate card and
+        // are not stored. Null says "not known here" — a zero would say
+        // "no drift", which is a claim we cannot make.
+        assumedCostInr: null,
+        assumptionDriftInr: null,
+      });
+      totalBilled = totalBilled.add(billed);
+      totalActual = totalActual.add(actual);
+    }
+
+    return {
+      generatedAt: new Date(),
+      sampledShipments: rows.length,
+      totalBilledInr: totalBilled.toFixed(2),
+      totalActualCostInr: totalActual.toFixed(2),
+      totalMarginInr: totalBilled.sub(totalActual).toFixed(2),
+      lossMakingCount: rows.filter((r) => r.lossMaking).length,
+      rows,
+      skipped,
+    };
+  }
+
   private async billedShipping(orderId: string): Promise<Prisma.Decimal | null> {
     const charges = await this.prisma.client.orderCharge.findMany({
       where: {

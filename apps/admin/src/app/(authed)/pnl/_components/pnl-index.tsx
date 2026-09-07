@@ -20,7 +20,7 @@ import {
   Th,
   Tr,
 } from '@skydrop/ui/components';
-import { usePnl, type PnlBasisPartView } from '@/lib/ops-hooks';
+import { usePnl, usePnlLineItems, type PnlBasisPartView } from '@/lib/ops-hooks';
 
 function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -229,6 +229,7 @@ export function PnlIndex(): ReactElement {
                                 emptyText="Nothing — this line has no cost side."
                               />
                             </div>
+                            <LineItems lineKey={l.key} from={from} to={to} />
                           </Td>
                         </Tr>
                       )}
@@ -297,6 +298,91 @@ function BasisColumn({
             </li>
           )}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Every record behind one line, listed.
+ *
+ * The terms above make the figure re-runnable as a query; this makes it
+ * checkable against what a person is actually holding. Finding the
+ * parcel that looks wrong means seeing the parcels.
+ *
+ * A missing cost shows as "not recorded", never as ₹0.00 — the two mean
+ * opposite things, and only one of them leaves somebody with work to do.
+ */
+function LineItems({
+  lineKey,
+  from,
+  to,
+}: {
+  readonly lineKey: string;
+  readonly from: string;
+  readonly to: string;
+}): ReactElement {
+  const q = usePnlLineItems(lineKey, from, to);
+
+  if (q.isLoading) return <p className="text-text-muted py-2 text-xs">Loading rows…</p>;
+  if (q.isError || q.data === undefined) {
+    return <p className="text-danger py-2 text-xs">Could not load the rows behind this line.</p>;
+  }
+  if (q.data.items.length === 0) {
+    return <p className="text-text-faint py-2 text-xs">Nothing in this window.</p>;
+  }
+
+  return (
+    <div className="border-border mt-3 border-t pt-3">
+      <div className="text-text-muted mb-1.5 text-xs font-medium tracking-wide uppercase">
+        Every row ({q.data.items.length})
+      </div>
+      <div className="max-h-80 overflow-y-auto">
+        <table className="w-full text-xs">
+          <thead className="text-text-faint sticky top-0 bg-[var(--color-surface-raised)] text-left">
+            <tr>
+              <th className="py-1 pr-2 font-medium">Reference</th>
+              <th className="py-1 pr-2 font-medium">Date</th>
+              <th className="py-1 pr-2 text-right font-medium">Revenue</th>
+              <th className="py-1 text-right font-medium">Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {q.data.items.map((it, i) => (
+              <tr key={`${it.ref}-${i}`} className="border-border/60 border-t">
+                <td className="py-1 pr-2">
+                  <span className="font-mono">{it.ref}</span>
+                  {it.subRef !== null && <div className="text-text-faint">{it.subRef}</div>}
+                </td>
+                <td className="text-text-muted py-1 pr-2 whitespace-nowrap">
+                  {new Date(it.at).toLocaleDateString('en-IN')}
+                </td>
+                <td className="py-1 pr-2 text-right">
+                  {it.revenueInr === null ? (
+                    <span className="text-text-faint">—</span>
+                  ) : (
+                    <Money amount={it.revenueInr} currency="INR" convert={false} />
+                  )}
+                </td>
+                <td className="py-1 text-right">
+                  {it.costInr === null ? (
+                    // NOT a zero. "Nobody recorded it" and "it cost
+                    // nothing" are opposite facts.
+                    <span className="text-warning">not recorded</span>
+                  ) : (
+                    <Money amount={it.costInr} currency="INR" convert={false} />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {q.data.truncated && (
+        <p className="text-warning mt-2 text-xs">
+          Only the first {q.data.items.length} rows are shown, so these will not add up to the total
+          above. Narrow the date range to see the rest.
+        </p>
       )}
     </div>
   );

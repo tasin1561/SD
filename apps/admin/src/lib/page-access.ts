@@ -63,6 +63,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/seller-wallets', 'money.view'],
   ['/topups', 'money.view'],
   ['/bank-accounts', 'money.view'],
+  ['/bank-accounts/history', 'money.view'],
   // Seeing what we hold is an ordinary finance question; recording a
   // movement is gated separately on money.treasury.manage at the API.
   ['/treasury', 'money.treasury.view'],

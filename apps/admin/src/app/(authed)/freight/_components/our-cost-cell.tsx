@@ -207,18 +207,27 @@ function PayForwarderModal({
   const account = accounts.find((b) => b.id === bankAccountId);
   const crossCurrency = account !== undefined && account.currency !== 'INR';
   const fx = useFxRatesList(canReadFx && crossCurrency);
-  // Their currency → INR. Falls back to the reciprocal of the INR→X
-  // rate, which is what the table actually stores for BDT.
+  /*
+    Quoted as ₹1 = X of theirs — the direction the FX page uses and the
+    one people here think in. It is also the direction the table stores
+    for BDT, so the ordinary case needs no reciprocal at all; the
+    fallback covers a pair stored the other way round.
+
+    The INR cost is therefore amount ÷ rate, NOT amount × rate. Getting
+    that backwards on a 1.23 rate lands in the same ballpark as the
+    right answer, which is exactly the kind of error that survives a
+    glance.
+  */
   const posted =
     account === undefined
       ? null
       : ((): string | null => {
           const direct = (fx.data ?? []).find(
-            (r) => r.fromCurrency === account.currency && r.toCurrency === 'INR',
+            (r) => r.fromCurrency === 'INR' && r.toCurrency === account.currency,
           );
           if (direct !== undefined) return Number(direct.rate).toFixed(4);
           const inverse = (fx.data ?? []).find(
-            (r) => r.fromCurrency === 'INR' && r.toCurrency === account.currency,
+            (r) => r.fromCurrency === account.currency && r.toCurrency === 'INR',
           );
           return inverse === undefined || Number(inverse.rate) === 0
             ? null
@@ -226,12 +235,15 @@ function PayForwarderModal({
         })();
 
   const effectiveRate = rateTouched || rate !== '' ? rate : (posted ?? '');
-  // What rate × amount comes to. Shown beside the INR box rather than
-  // forced into it, so a figure read off a statement is never silently
-  // overwritten by an arithmetic one.
+  // Shown beside the INR box rather than forced into it, so a figure
+  // read off a statement is never silently overwritten by an
+  // arithmetic one.
   const computed =
-    effectiveRate !== '' && amountPaid !== '' && Number.isFinite(Number(effectiveRate))
-      ? (Number(amountPaid) * Number(effectiveRate)).toFixed(2)
+    effectiveRate !== '' &&
+    amountPaid !== '' &&
+    Number.isFinite(Number(effectiveRate)) &&
+    Number(effectiveRate) > 0
+      ? (Number(amountPaid) / Number(effectiveRate)).toFixed(2)
       : null;
 
   // The INR figure follows the rate until somebody types over it. Not a
@@ -314,12 +326,12 @@ function PayForwarderModal({
         {crossCurrency && account !== undefined && (
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
-              label={`Rate (1 ${account.currency} = ₹)`}
+              label={`Rate (₹1 = ${account.currency})`}
               required
               hint={
                 posted === null
                   ? 'No posted rate found — enter the rate the bank gave you.'
-                  : `Posted rate ${posted}. Change it to the rate the bank actually gave.`
+                  : `Posted rate ₹1 = ${posted} ${account.currency}. Change it to the rate the bank actually gave.`
               }
             >
               <Input
@@ -335,7 +347,7 @@ function PayForwarderModal({
                   // computed figure had already been "touched".
                   setCostTouched(false);
                 }}
-                placeholder={posted ?? 'e.g. 0.7200'}
+                placeholder={posted ?? 'e.g. 1.2300'}
               />
             </FormField>
             <FormField
@@ -343,7 +355,7 @@ function PayForwarderModal({
               required
               hint={
                 computed !== null && shownCost !== computed
-                  ? `Rate × amount is ₹${computed} — the difference is the bank's charge, and recording it is the point.`
+                  ? `Amount ÷ rate is ₹${computed} — the difference is the bank's charge, and recording it is the point.`
                   : 'Worked out from the rate. Overwrite it with the INR figure on the statement if they differ.'
               }
             >

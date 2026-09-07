@@ -53,6 +53,22 @@ export class AdminCourierNetworkController {
     private readonly warehouses: CourierWarehouseRegistrationService,
   ) {}
 
+  @Get('margin-report/stored')
+  @RequirePermissions('courier.margin.view')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'The same margin report from costs ALREADY recorded — no courier calls, nothing written. This is what the page can open on; the live run below exists to price the parcels that have no figure yet.',
+  })
+  storedMarginReport(@Query() query: MarginReportQueryDto): Promise<MarginReport> {
+    const to = query.to === undefined ? new Date() : new Date(query.to);
+    const from =
+      query.from === undefined
+        ? new Date(to.getTime() - DEFAULT_WINDOW_DAYS * 86_400_000)
+        : new Date(query.from);
+    return this.margin.storedReport({ from, to, limit: query.limit ?? DEFAULT_LIMIT });
+  }
+
   @Get('margin-report')
   @RequirePermissions('courier.margin.view')
   @HttpCode(HttpStatus.OK)

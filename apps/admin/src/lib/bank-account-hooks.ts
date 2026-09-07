@@ -131,3 +131,40 @@ export function useRetireBankAccount(): UseMutationResult<void, Error, { id: str
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-bank-accounts'] }),
   });
 }
+
+/** One recorded change to one of our own bank accounts. */
+export interface BankAccountChangeView {
+  readonly id: string;
+  readonly action: string;
+  readonly accountId: string | null;
+  readonly at: string;
+  readonly severity: string;
+  readonly byName: string | null;
+  readonly metadata: {
+    readonly before?: Record<string, unknown> | null;
+    readonly after?: Record<string, unknown> | null;
+    readonly changed?: readonly string[];
+    readonly openingBalance?: string | null;
+  } | null;
+}
+
+/**
+ * Who changed these accounts, and to what.
+ *
+ * Read straight off `audit_logs` rather than a table of its own: the
+ * audit trail IS the history, and a second copy would be one more thing
+ * that can disagree with it.
+ */
+export function useBankAccountHistory(
+  enabled = true,
+): UseQueryResult<ReadonlyArray<BankAccountChangeView>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-bank-accounts', 'history'],
+    queryFn: () =>
+      client.request<ReadonlyArray<BankAccountChangeView>>(
+        '/api/admin/platform-bank-accounts/history',
+      ),
+    enabled,
+  });
+}
