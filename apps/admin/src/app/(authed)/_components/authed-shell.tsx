@@ -207,7 +207,10 @@ export function AuthedShell({
         // OWN slot: sharing the right-hand one squeezed the identity and
         // the sign-out button until both wrapped.
         headerCenter={<OrderOmnisearch />}
-        headerActions={<NotificationBellContainer />}
+        // The bell, and ONLY the bell, survives below `lg`: it is the
+        // one control that says something needs you, and the inbox has
+        // no other route on a phone.
+        headerAlways={<NotificationBellContainer />}
         footerNote="Phase 1A"
         pathname={pathname}
         Link={Link}

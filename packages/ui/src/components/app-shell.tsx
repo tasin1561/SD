@@ -280,6 +280,7 @@ export function AppShell({
   identitySecondary,
   identityHref,
   headerActions,
+  headerAlways,
   headerCenter,
   drawerActions,
   footerNote,
@@ -316,6 +317,17 @@ export function AppShell({
    */
   readonly identityHref?: string;
   readonly headerActions?: ReactNode;
+  /**
+   * The one action that stays in the bar on a PHONE.
+   *
+   * `headerActions` is `hidden lg:flex`, which is right for a search
+   * box and a menu — and was wrong for the notification bell, because
+   * it left the inbox unreachable below 1024px: the bell was gone, the
+   * drawer carried only Quick actions, and neither app lists
+   * Notifications in its nav. The one thing that says "something needs
+   * you" was the one thing a phone could not see.
+   */
+  readonly headerAlways?: ReactNode;
   /**
    * The one thing that belongs in the MIDDLE of the header.
    *
@@ -510,7 +522,13 @@ export function AppShell({
           {headerCenter !== undefined && (
             <div className="hidden shrink-0 justify-center lg:flex">{headerCenter}</div>
           )}
+          {/* Phone and tablet only — the desktop copy lives in the
+              action cluster below, so the two never both render. */}
+          {headerAlways !== undefined && (
+            <div className="ml-auto flex shrink-0 items-center lg:hidden">{headerAlways}</div>
+          )}
           <div className="hidden min-w-0 flex-1 basis-0 shrink-0 items-center justify-end gap-3 lg:flex">
+            {headerAlways}
             {headerActions}
             {identityHref === undefined ? (
               <div className="min-w-0 text-right leading-tight">

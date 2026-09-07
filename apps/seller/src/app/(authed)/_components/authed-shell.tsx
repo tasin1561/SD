@@ -135,12 +135,11 @@ export function AuthedShell({
         // is rarely the moment they are on the orders list. In its OWN
         // slot so it does not squeeze the identity beside it.
         headerCenter={<OrderOmnisearch />}
-        headerActions={
-          <div className="flex items-center gap-1">
-            <MenuButton label="Quick actions" items={quickActions} Link={Link} />
-            <NotificationBellContainer />
-          </div>
-        }
+        headerActions={<MenuButton label="Quick actions" items={quickActions} Link={Link} />}
+        // The bell, and ONLY the bell, survives below `lg`: it is the
+        // one control that says something needs you, and the inbox has
+        // no other route on a phone.
+        headerAlways={<NotificationBellContainer />}
         drawerActions={
           <MenuButton label="Quick actions" items={quickActions} Link={Link} placement="above" />
         }
