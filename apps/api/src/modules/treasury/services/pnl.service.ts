@@ -281,7 +281,10 @@ export class PnlService {
       total: shipments.length,
       note:
         priced < shipments.length
-          ? `${shipments.length - priced} parcels have no real courier cost yet — run the margin report over this window to price them.`
+          ? `${shipments.length - priced} parcels have no invoiced courier cost yet. The nightly ` +
+            `wallet sync fills these in once Delhivery has billed them — usually within a day or ` +
+            `two of dispatch. A parcel on a manual courier has no ledger at all and needs its ` +
+            `cost recorded by hand on the order.`
           : null,
       basis: {
         // Broken out by CHARGE TYPE, because "shipping revenue" is four

@@ -6,10 +6,17 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 /**
  * What a parcel actually cost us to move.
  *
- * The lane-margin report fills the forward figure automatically from
- * Delhivery's invoice API, but that call is rate-limited and sampled, and
- * the RETURN leg has no equivalent. This is the manual path: an operator
- * reading a courier invoice, recording what a parcel really cost.
+ * The nightly wallet sync fills both figures from Delhivery's own
+ * ledger, which is the authority on what was billed. This is the manual
+ * path for what that cannot reach: a parcel on a MANUAL courier, where
+ * there is no wallet to read, and a correction an operator is holding a
+ * paper invoice for.
+ *
+ * It was the lane-margin report that used to fill the forward figure,
+ * and that was wrong — it priced a hypothetical parcel from its
+ * dimensions through Delhivery's rate CALCULATOR and wrote the answer
+ * into the column the P&L reads as measured cost. The report is a quote
+ * now and writes nothing (2026-09-07).
  *
  * Forward and return are separate numbers, deliberately. Delhivery
  * refunds the delivery deduction when a parcel comes back and bills an
