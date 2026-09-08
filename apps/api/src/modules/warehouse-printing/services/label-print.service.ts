@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -18,6 +18,8 @@ export interface LabelSheetResult {
 }
 
 const MAX_PER_SHEET = 100;
+/** A reprint is a handful of damaged labels, not a run. */
+const MAX_REPRINT = 25;
 
 /**
  * Build the sheet, then — separately — record that it was printed.
@@ -129,6 +131,27 @@ export class LabelPrintService {
       });
     }
 
+    /*
+      COUNT THE SHEET, not the confirmation.
+
+      A label that came out of the printer exists in the building whether
+      or not anybody clicked "yes it printed" afterwards — and the
+      question this number answers is asked later, after a box turns up
+      somewhere it should not have: "could there be two of this label?".
+      Confirmation answers a different question (did the paper reach a
+      hand) and already has its own stamp.
+
+      Only the parcels that actually got a label are counted; a NOT_FOUND
+      or NO_AWB row produced no paper and must not read as though it did.
+    */
+    const printedIds = shipmentIds.filter((id) => !failed.some((f) => f.shipmentId === id));
+    if (printedIds.length > 0) {
+      await this.prisma.client.shipment.updateMany({
+        where: { id: { in: printedIds } },
+        data: { labelPrintCount: { increment: 1 } },
+      });
+    }
+
     await this.audit.log({
       actorType: ActorType.STAFF,
       actorId: staffId,
@@ -152,6 +175,108 @@ export class LabelPrintService {
       pageCount: merged.pageCount,
       failed,
     };
+  }
+
+  /**
+   * Print a label again for a parcel that has not been packed.
+   *
+   * ── WHY IT IS ITS OWN METHOD ─────────────────────────────────────────
+   * `build` could always produce a sheet for an already-printed parcel;
+   * what was missing was a way to REACH one and a record that it
+   * happened. Adding a flag to `build` would have made "how often are we
+   * reprinting" a question you answer by reading argument values, which
+   * is the same mistake `force-complete` avoids by being a separate
+   * endpoint (LBL-4). So: its own method, its own permission, its own
+   * audit action, a reason on every call.
+   *
+   * ── WHY "NOT PACKED" IS THE LINE, AND WHY IT IS SAFE ─────────────────
+   * Before the pack bench a parcel is a CLAIM, not a box. Two copies of
+   * its label are two pieces of paper, and only one box can ever be
+   * opened against it — `pack_boxes` carries a partial unique on the
+   * shipment, so a second packer is refused by the database rather than
+   * by a check somebody might remove.
+   *
+   * Once the box is SEALED the arithmetic inverts: a second label is a
+   * second box waiting to happen, one of which would be delivered to
+   * nobody. So a packed parcel is refused BY NAME here rather than
+   * silently dropped — "cannot reprint this" sends somebody hunting,
+   * where "this parcel is already packed" ends the question. And if a
+   * duplicate ever does reach a bench, SCAN-1 stops the operator who
+   * scans it and raises a HIGH issue, because by then the pile is in
+   * doubt and not only the box.
+   *
+   * The reprint does NOT re-stamp `labelPrintedAt`: that records the
+   * FIRST print, the parcel is already past that gate, and moving it
+   * would erase when the parcel actually reached the floor. The count is
+   * what records the second sheet.
+   */
+  async reprint(
+    shipmentIds: readonly string[],
+    staffId: string,
+    reason: string,
+    ctx?: ClientContext,
+  ): Promise<LabelSheetResult> {
+    if (shipmentIds.length === 0) {
+      throw new BadRequestException({
+        code: 'NO_SHIPMENTS_SELECTED',
+        message: 'Select at least one parcel to reprint',
+      });
+    }
+    if (shipmentIds.length > MAX_REPRINT) {
+      // A reprint of two hundred is a whole-run reprint wearing a hat,
+      // and that is the first-print flow, which has not been confirmed
+      // yet. Same argument as LBL-5's cap on serial reprints.
+      throw new BadRequestException({
+        code: 'TOO_MANY_REPRINTS',
+        message:
+          `A reprint covers at most ${MAX_REPRINT} parcels. More than that is a whole run — ` +
+          `if the sheet never printed, do not confirm it and print the run again instead.`,
+      });
+    }
+    if (reason.trim().length < 10) {
+      throw new BadRequestException({
+        code: 'REPRINT_REASON_TOO_SHORT',
+        message: 'Say why this is being reprinted, in at least 10 characters',
+      });
+    }
+
+    const packed = await this.prisma.client.shipment.findMany({
+      where: { id: { in: [...shipmentIds] }, packCompletedAt: { not: null } },
+      select: { id: true, shipmentNumber: true },
+    });
+    if (packed.length > 0) {
+      throw new ConflictException({
+        code: 'LABEL_REPRINT_ALREADY_PACKED',
+        message:
+          `${packed.map((p) => p.shipmentNumber).join(', ')} ${packed.length === 1 ? 'is' : 'are'} ` +
+          `already packed. A second label on a sealed box is how two parcels come to carry one ` +
+          `waybill — if the label is damaged, the box has to be opened and repacked.`,
+      });
+    }
+
+    const sheet = await this.build(shipmentIds, staffId);
+
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      actorId: staffId,
+      // Its own action, deliberately NOT a flag on the ordinary print:
+      // "how often are we reprinting labels" has to be answerable by
+      // filtering the audit log.
+      action: 'warehouse.labels.reprinted',
+      entityType: 'shipment',
+      entityId: shipmentIds[0] ?? null,
+      severity: 'HIGH',
+      metadata: {
+        shipmentIds: [...shipmentIds],
+        reason: reason.trim(),
+        failedCount: sheet.failed.length,
+        ipAddress: ctx?.ipAddress ?? null,
+        userAgent: ctx?.userAgent ?? null,
+        requestId: ctx?.requestId ?? null,
+      },
+    });
+
+    return sheet;
   }
 
   /**

@@ -3396,6 +3396,11 @@ model Shipment {
   handoverScannedAt        DateTime?        @map("handover_scanned_at") @db.Timestamptz
   handoverScannedByStaffId String?          @map("handover_scanned_by_staff_id") @db.Uuid
   labelPrintedByStaffId    String?          @map("label_printed_by_staff_id") @db.Uuid
+  /// How many label sheets have been generated carrying this parcel.
+  /// 1 is the ordinary case; anything above it means a duplicate label
+  /// may physically exist, which is the thing worth being able to ask
+  /// about after a box goes to the wrong customer.
+  labelPrintCount          Int              @default(0) @map("label_print_count")
   /// The picking batch this parcel was printed onto, if any.
   pickBatchId              String?          @map("pick_batch_id") @db.Uuid
   // R1 (revised-plan roadmap): WHICH courier account this shipment was
@@ -3547,6 +3552,12 @@ model PickBatch {
   /// Until then the batch exists but no stock is allocated to it.
   printedAt        DateTime?       @map("printed_at") @db.Timestamptz
   printedByStaffId String?         @map("printed_by_staff_id") @db.Uuid
+  /// How many times a sheet has come off the printer for this batch.
+  /// Counted at GENERATION, not at confirmation: a second sheet exists
+  /// in the building whether or not anybody confirmed it, and the
+  /// question this answers is "how many copies of this walk are out
+  /// there".
+  printCount       Int             @default(0) @map("print_count")
   createdByStaffId String?         @map("created_by_staff_id") @db.Uuid
   notes            String?         @db.Text
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz

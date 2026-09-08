@@ -31,6 +31,8 @@ export interface PickBatchView {
   readonly createdByName: string | null;
   readonly printedAtIso: string | null;
   readonly printedByName: string | null;
+  /** How many sheets have been produced for this batch. */
+  readonly printCount: number;
   readonly shipments: ReadonlyArray<{
     shipmentId: string;
     shipmentNumber: string;
@@ -48,6 +50,8 @@ export interface PickListResult {
   readonly strictMode: boolean;
   /** Lines whose stock could not be allocated. Named, never silent. */
   readonly shortfalls: ReadonlyArray<{ skuCode: string; reason: string }>;
+  /** Which print of this sheet this is — 1 the first time. */
+  readonly printCount: number;
 }
 
 const MAX_PER_BATCH = 60;
@@ -294,6 +298,19 @@ export class PickBatchService {
       lines,
     });
 
+    /*
+      COUNT THE SHEET. Same reasoning as the label counter: the paper
+      exists whether or not anybody confirms it, and two copies of a
+      walk in the building is the thing worth being able to ask about.
+      `printedAt` still records the FIRST confirmed print and is not
+      touched here.
+    */
+    const counted = await this.prisma.client.pickBatch.update({
+      where: { id: batch.id },
+      data: { printCount: { increment: 1 } },
+      select: { printCount: true },
+    });
+
     await this.audit.log({
       actorType: ActorType.STAFF,
       actorId: staffId,
@@ -305,6 +322,9 @@ export class PickBatchService {
         batchNumber: batch.batchNumber,
         lineCount: lines.length,
         shortfallCount: shortfalls.length,
+        // Which print this was. A 3 here beside a delivery that went
+        // wrong is the start of an answer.
+        printCount: counted.printCount,
       },
     });
 
@@ -316,6 +336,7 @@ export class PickBatchService {
       lineCount: lines.length,
       strictMode,
       shortfalls,
+      printCount: counted.printCount,
     };
   }
 
@@ -786,6 +807,7 @@ const PICK_BATCH_SELECT = {
   warehouseId: true,
   createdAt: true,
   printedAt: true,
+  printCount: true,
   warehouse: { select: { name: true } },
   createdBy: { select: { emailDisplay: true, email: true } },
   printedBy: { select: { emailDisplay: true, email: true } },
@@ -814,6 +836,7 @@ function toView(r: PickBatchRow): PickBatchView {
     createdByName: r.createdBy?.emailDisplay ?? r.createdBy?.email ?? null,
     printedAtIso: r.printedAt?.toISOString() ?? null,
     printedByName: r.printedBy?.emailDisplay ?? r.printedBy?.email ?? null,
+    printCount: r.printCount,
     shipments: r.shipments.map((s) => ({
       shipmentId: s.id,
       shipmentNumber: s.shipmentNumber,

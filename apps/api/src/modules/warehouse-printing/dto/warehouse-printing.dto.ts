@@ -26,6 +26,20 @@ export class ShipmentSelectionDto {
   shipmentIds!: string[];
 }
 
+export class ReprintLabelsDto {
+  @ApiProperty({ type: [String], description: 'Parcels whose label is being reprinted' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(25)
+  @IsUUID('7', { each: true })
+  shipmentIds!: string[];
+
+  @ApiProperty({ description: 'Why — a torn label, a printer jam, a lost stack' })
+  @IsString()
+  @MinLength(10)
+  reason!: string;
+}
+
 export class PickBatchQueryDto {
   @ApiPropertyOptional({ description: 'Batch number, order number or AWB' })
   @IsOptional()

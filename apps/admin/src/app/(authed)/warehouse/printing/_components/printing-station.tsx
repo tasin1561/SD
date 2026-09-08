@@ -33,10 +33,12 @@ import {
   useConfirmPickListPrinted,
   useCreatePickBatch,
   useLabelQueue,
+  useLabelReprintQueue,
   useMarkBatchPicked,
   usePickBatches,
   usePickPrintQueue,
   useProductLocations,
+  useReprintLabels,
   type LabelSheetResult,
   type PickListResult,
 } from '@/lib/ops-hooks';
@@ -46,7 +48,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { downloadPdf, printPdf } from '@/lib/print-pdf';
 import { SelectionTable } from './selection-table';
 
-type Tab = 'labels' | 'picking' | 'batches' | 'locate';
+type Tab = 'labels' | 'reprint' | 'picking' | 'batches' | 'locate';
 
 /**
  * The print-first floor.
@@ -77,6 +79,7 @@ export function PrintingStation(): ReactElement {
           {(
             [
               ['labels', 'Shipping labels'],
+              ['reprint', 'Reprint a label'],
               ['picking', 'Picking list'],
               ['batches', 'Past batches'],
               ['locate', 'Find a product'],
@@ -94,6 +97,7 @@ export function PrintingStation(): ReactElement {
       </Toolbar>
 
       {tab === 'labels' && <LabelTab />}
+      {tab === 'reprint' && <ReprintTab />}
       {tab === 'picking' && <PickingTab />}
       {tab === 'batches' && <BatchesTab />}
       {tab === 'locate' && <LocateTab />}
@@ -401,6 +405,117 @@ function PickingTab(): ReactElement {
   );
 }
 
+// ── reprint ───────────────────────────────────────────────────────────
+
+/**
+ * Print a label again for a parcel that has not been packed.
+ *
+ * A label gets torn off a carton, jams half out of the printer, or goes
+ * out with the wrong stack. Before this there was no way back to it: a
+ * printed parcel left the label queue for good.
+ *
+ * NOT PACKED is the boundary, and it is the safety argument. Up to the
+ * pack bench the parcel is a claim, not a box — two copies of its label
+ * are two pieces of paper, and only one box can ever be opened against
+ * it (`pack_boxes` holds a partial unique on the shipment). Once the box
+ * is sealed a second label is a second box waiting to happen, so a
+ * packed parcel is not on this list and the server refuses it by name.
+ *
+ * The print count sits on every row, because the question worth asking
+ * before adding another copy is how many are already out there.
+ */
+function ReprintTab(): ReactElement {
+  const queue = useLabelReprintQueue();
+  const reprint = useReprintLabels();
+  const toast = useToast();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const rows = queue.data ?? [];
+  const toggle = (id: string): void =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = (): void =>
+    setSelected((prev) =>
+      prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.shipmentId)),
+    );
+
+  async function onReprint(): Promise<void> {
+    setError(null);
+    try {
+      const sheet = await reprint.mutateAsync({ shipmentIds: [...selected], reason });
+      printPdf(sheet.pdfBase64, sheet.fileName);
+      toast.success(
+        `${sheet.shipmentCount} label${sheet.shipmentCount === 1 ? '' : 's'} reprinted`,
+      );
+      setSelected(new Set());
+      setReason('');
+    } catch (e) {
+      setError(serverVerdict(e));
+    }
+  }
+
+  return (
+    <Card>
+      <CardBody>
+        {error !== null && <ErrorNote message={error} />}
+
+        <p className="mb-3 text-xs text-text-muted">
+          Parcels whose label is printed but which have not been packed. A packed parcel is not here
+          on purpose — a second label on a sealed box is how two parcels come to carry one waybill.
+        </p>
+
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <div className="min-w-[16rem] flex-1">
+            <label htmlFor="reprint-reason" className="mb-1 block text-xs text-text-muted">
+              Why is it being reprinted?
+            </label>
+            <Input
+              id="reprint-reason"
+              value={reason}
+              placeholder="e.g. label torn off the carton in the aisle"
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          <Button
+            onClick={() => void onReprint()}
+            disabled={selected.size === 0 || reason.trim().length < 10 || reprint.isPending}
+          >
+            <Printer size={14} />{' '}
+            {reprint.isPending
+              ? 'Building…'
+              : `Reprint ${selected.size === 0 ? '' : selected.size}`}
+          </Button>
+        </div>
+
+        {queue.isLoading ? (
+          <LoadingState label="Loading printed parcels…" />
+        ) : queue.isError ? (
+          <ErrorState
+            message={queue.error?.message ?? 'Could not load the list.'}
+            retry={() => void queue.refetch()}
+          />
+        ) : (
+          <SelectionTable
+            rows={rows}
+            selected={selected}
+            onToggle={toggle}
+            onToggleAll={toggleAll}
+            showPrintCount
+            emptyTitle="Nothing to reprint"
+            emptyBody="A parcel appears here once its label is printed, and leaves once it is packed."
+          />
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
 // ── tab 3 ─────────────────────────────────────────────────────────────
 
 function BatchesTab(): ReactElement {
@@ -553,6 +668,15 @@ function BatchesTab(): ReactElement {
                           </div>
                           <div className="text-xs text-text-muted">{b.printedByName ?? '—'}</div>
                         </>
+                      )}
+                      {/* How many sheets exist, which is a different
+                          question from when the first one was confirmed:
+                          two copies of a walk in the building is the
+                          thing worth noticing. */}
+                      {b.printCount > 1 && (
+                        <div className="text-status-pending-fg text-xs tabular-nums">
+                          {b.printCount} sheets printed
+                        </div>
                       )}
                     </Td>
                     <Td>

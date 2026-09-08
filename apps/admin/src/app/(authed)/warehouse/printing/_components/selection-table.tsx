@@ -32,6 +32,7 @@ export function SelectionTable({
   onToggleAll,
   emptyTitle,
   emptyBody,
+  showPrintCount = false,
 }: {
   rows: readonly PrintQueueRow[];
   selected: ReadonlySet<string>;
@@ -39,6 +40,10 @@ export function SelectionTable({
   onToggleAll: () => void;
   emptyTitle: string;
   emptyBody: string;
+  /** Show how many label sheets have carried each parcel. Only useful
+   *  on the reprint list, where the whole question is whether a
+   *  duplicate is already out there. */
+  showPrintCount?: boolean;
 }): ReactElement {
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.shipmentId));
 
@@ -61,11 +66,12 @@ export function SelectionTable({
           <Th>Destination</Th>
           <Th>COD</Th>
           <Th>Items</Th>
+          {showPrintCount && <Th>Printed</Th>}
         </Tr>
       </THead>
       <TBody>
         {rows.length === 0 ? (
-          <TableEmpty colSpan={7}>
+          <TableEmpty colSpan={showPrintCount ? 8 : 7}>
             <div className="flex flex-col items-center gap-1.5 py-2">
               <div className="font-medium">{emptyTitle}</div>
               <div className="text-xs text-text-muted">{emptyBody}</div>
@@ -104,6 +110,16 @@ export function SelectionTable({
               </Td>
               <Td>{r.codAmountInr === null ? '—' : <Money amount={r.codAmountInr} />}</Td>
               <Td className="tabular-nums">{r.itemCount}</Td>
+              {showPrintCount && (
+                <Td className="tabular-nums">
+                  {/* Above one, a duplicate label may physically exist —
+                      which is exactly what somebody is here to weigh
+                      before adding another. */}
+                  <span className={r.labelPrintCount > 1 ? 'text-status-pending-fg' : undefined}>
+                    {r.labelPrintCount}×
+                  </span>
+                </Td>
+              )}
             </Tr>
           ))
         )}

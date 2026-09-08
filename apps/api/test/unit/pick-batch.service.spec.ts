@@ -69,6 +69,8 @@ function makeService(opts: {
       findUnique: jest.fn(async () => batchRow),
       findMany: jest.fn(async () => [batchRow]),
       updateMany: jest.fn(async () => ({ count: 1 })),
+      // buildList counts the sheet it just produced.
+      update: jest.fn(async () => ({ printCount: 1 })),
     },
     stockReservation: { findMany: jest.fn(async () => opts.reservations ?? []) },
     orderShipment: { findMany: jest.fn(async () => [{ orderId: 'o1', shipmentId: 's1' }]) },

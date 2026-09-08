@@ -21,6 +21,13 @@ export interface PrintQueueRow {
   readonly itemCount: number;
   readonly confirmedAtIso: string | null;
   readonly labelPrintedAtIso: string | null;
+  /** How many label sheets have carried this parcel. Above 1 means a
+   *  duplicate may physically exist. */
+  readonly labelPrintCount: number;
+  /** Set once the box is sealed — a parcel past this cannot be
+   *  reprinted, because a second label is a second box waiting to
+   *  happen. */
+  readonly packCompletedAtIso: string | null;
 }
 
 /**
@@ -59,10 +66,32 @@ export class PrintQueueService {
     return this.query({ labelPrinted: true, warehouseId, unbatchedOnly: true });
   }
 
+  /**
+   * Parcels whose label IS printed and which are NOT yet packed.
+   *
+   * The reprint list. A label gets torn off a carton, jams half-out of
+   * the printer, or goes out with the wrong stack — and before this
+   * there was no way back to it: a printed parcel left the label queue
+   * for good, and the only remedy was a database edit.
+   *
+   * NOT PACKED is the boundary, and it is the whole safety argument. Up
+   * to the pack bench a second copy of the label is just paper: the
+   * parcel is a claim, not a box, and only one box can ever be opened
+   * against it (`pack_boxes` holds a partial unique on the shipment).
+   * Once the box is SEALED, a second label is a second box waiting to
+   * happen — so the parcel drops off this list at exactly that moment,
+   * and `reprintLabels` refuses it by name rather than quietly omitting
+   * it.
+   */
+  async reprintable(warehouseId?: string): Promise<PrintQueueRow[]> {
+    return this.query({ labelPrinted: true, warehouseId, notPacked: true });
+  }
+
   private async query(opts: {
     labelPrinted: boolean;
     warehouseId?: string | undefined;
     unbatchedOnly?: boolean;
+    notPacked?: boolean;
   }): Promise<PrintQueueRow[]> {
     const links = await this.prisma.client.orderShipment.findMany({
       where: {
@@ -83,6 +112,7 @@ export class PrintQueueService {
           awbNumber: { not: null },
           labelPrintedAt: opts.labelPrinted ? { not: null } : null,
           ...(opts.unbatchedOnly === true ? { pickBatchId: null } : {}),
+          ...(opts.notPacked === true ? { packCompletedAt: null } : {}),
           ...(opts.warehouseId !== undefined ? { originWarehouseId: opts.warehouseId } : {}),
         },
       },
@@ -108,6 +138,8 @@ export class PrintQueueService {
             destCity: true,
             destPostalCode: true,
             labelPrintedAt: true,
+            labelPrintCount: true,
+            packCompletedAt: true,
             originWarehouseId: true,
             originWarehouse: { select: { name: true } },
           },
@@ -136,6 +168,8 @@ export class PrintQueueService {
       itemCount: l.order.items.length,
       confirmedAtIso: l.order.confirmedAt?.toISOString() ?? null,
       labelPrintedAtIso: l.shipment.labelPrintedAt?.toISOString() ?? null,
+      labelPrintCount: l.shipment.labelPrintCount,
+      packCompletedAtIso: l.shipment.packCompletedAt?.toISOString() ?? null,
     }));
   }
 }

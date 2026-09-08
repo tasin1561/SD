@@ -3461,6 +3461,10 @@ export interface PrintQueueRow {
   itemCount: number;
   confirmedAtIso: string | null;
   labelPrintedAtIso: string | null;
+  /** How many label sheets have carried this parcel. Above 1 means a
+   *  duplicate may physically exist. */
+  labelPrintCount: number;
+  packCompletedAtIso: string | null;
 }
 
 export interface LabelSheetResult {
@@ -3483,6 +3487,8 @@ export interface PickBatchView {
   createdByName: string | null;
   printedAtIso: string | null;
   printedByName: string | null;
+  /** How many sheets have been produced for this batch. */
+  printCount: number;
   shipments: Array<{
     shipmentId: string;
     shipmentNumber: string;
@@ -3499,6 +3505,8 @@ export interface PickListResult {
   lineCount: number;
   strictMode: boolean;
   shortfalls: Array<{ skuCode: string; reason: string }>;
+  /** Which print of this sheet this is — 1 the first time. */
+  printCount: number;
 }
 
 export interface ProductLocationRow {
@@ -3516,6 +3524,42 @@ export interface ProductLocationRow {
     qtyOnHand: number;
     pickable: boolean;
   }>;
+}
+
+/**
+ * Parcels whose label is printed but which are NOT yet packed.
+ *
+ * The reprint list. Deliberately excludes a packed parcel: a second
+ * label on a sealed box is how two boxes come to carry one waybill, and
+ * the server refuses one by name.
+ */
+export function useLabelReprintQueue(): UseQueryResult<PrintQueueRow[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'label-reprint-queue'],
+    queryFn: () =>
+      client.request<PrintQueueRow[]>('/api/admin/warehouse/printing/label-reprint-queue'),
+  });
+}
+
+export function useReprintLabels(): UseMutationResult<
+  LabelSheetResult,
+  Error,
+  { shipmentIds: string[]; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<LabelSheetResult>('/api/admin/warehouse/printing/labels/reprint', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      // The print count moved, and it is on the row.
+      void qc.invalidateQueries({ queryKey: ['admin', 'label-reprint-queue'] });
+    },
+  });
 }
 
 export function useLabelQueue(): UseQueryResult<PrintQueueRow[], Error> {

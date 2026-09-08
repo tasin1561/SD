@@ -34,21 +34,30 @@ export interface ManualLabelPayload {
  * an imitation of anybody's label — a sticker pretending to be Delhivery
  * on a parcel Delhivery refused is worse than no sticker at all.
  *
- * A4 with four labels to a sheet, because that is the paper a warehouse
- * office actually has and cutting four apart is faster than feeding a
- * roll printer nobody bought.
+ * ONE LABEL PER 4x6 PAGE (2026-09-09), not four to an A4 sheet.
+ *
+ * The earlier note said A4 was "the paper a warehouse office actually
+ * has" and that cutting four apart beat feeding a roll printer nobody
+ * had bought. That was a guess about the building, and the building has
+ * a 4x6 label printer — so the courier labels and ours are now the same
+ * size, and nobody cuts anything. It also removes a real hazard: four
+ * labels on one sheet means one mis-cut puts a waybill on the wrong
+ * parcel, and a shipping label is exactly the thing that must not be
+ * approximately right.
+ *
+ * The picking list stays A4. It is a document somebody reads while
+ * walking, not a sticker.
  */
 @Injectable()
 export class ManualLabelPdfService {
-  /** Four to an A4 sheet: 2 columns x 2 rows. */
-  private static readonly COLS = 2;
-  private static readonly ROWS = 2;
-  private static readonly MARGIN = 24;
+  /** 4in x 6in at 72pt/in — the standard thermal label. */
+  private static readonly PAGE: [number, number] = [288, 432];
+  private static readonly MARGIN = 12;
 
   async render(labels: readonly ManualLabelPayload[]): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
       const doc = new PDFDocument({
-        size: 'A4',
+        size: ManualLabelPdfService.PAGE,
         margin: ManualLabelPdfService.MARGIN,
         info: { Title: 'Shipping labels', Author: 'Skydrop' },
       });
@@ -70,16 +79,11 @@ export class ManualLabelPdfService {
     labels: readonly ManualLabelPayload[],
   ): void {
     const m = ManualLabelPdfService.MARGIN;
-    const perPage = ManualLabelPdfService.COLS * ManualLabelPdfService.ROWS;
-    const cellW = (doc.page.width - m * 2) / ManualLabelPdfService.COLS;
-    const cellH = (doc.page.height - m * 2) / ManualLabelPdfService.ROWS;
-
+    // One per page: the label IS the page now, so there is no grid and
+    // no cut line to get wrong.
     labels.forEach((label, i) => {
-      if (i > 0 && i % perPage === 0) doc.addPage();
-      const slot = i % perPage;
-      const x = m + (slot % ManualLabelPdfService.COLS) * cellW;
-      const y = m + Math.floor(slot / ManualLabelPdfService.COLS) * cellH;
-      this.drawLabel(doc, label, x, y, cellW - 10, cellH - 10);
+      if (i > 0) doc.addPage();
+      this.drawLabel(doc, label, m, m, doc.page.width - m * 2, doc.page.height - m * 2);
     });
   }
 

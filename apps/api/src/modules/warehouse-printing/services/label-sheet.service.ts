@@ -19,6 +19,10 @@ import { PDFDocument } from 'pdf-lib';
  * the bench, and the parcel with no label is the one that ships to
  * nobody.
  */
+/** 4in x 6in at 72pt/in — the label stock the warehouse prints on. */
+const LABEL_W = 288;
+const LABEL_H = 432;
+
 @Injectable()
 export class LabelSheetService {
   private readonly logger = new Logger(LabelSheetService.name);
@@ -34,8 +38,38 @@ export class LabelSheetService {
     for (const part of parts) {
       try {
         const src = await PDFDocument.load(part.bytes, { ignoreEncryption: true });
-        const pages = await out.copyPages(src, src.getPageIndices());
-        for (const page of pages) out.addPage(page);
+        /*
+          EVERY PAGE COMES OUT 4x6 (2026-09-09).
+
+          The sources disagree about paper: Delhivery hands back what
+          their account is configured for, Shiprocket another size, and
+          ours is drawn at 4x6. Copied through unchanged, one stack
+          contained pages of three sizes — which a label printer either
+          refuses or silently scales per page, and a barcode scaled by an
+          amount nobody chose is one that may not read.
+
+          So each source page is EMBEDDED and drawn onto a 4x6 page,
+          scaled to fit and centred. Aspect ratio is preserved: stretching
+          a label distorts its barcode, and the bars are the part that has
+          to survive.
+        */
+        for (const index of src.getPageIndices()) {
+          const embedded = await out.embedPage(src.getPage(index));
+          const page = out.addPage([LABEL_W, LABEL_H]);
+          const scale = Math.min(
+            LABEL_W / embedded.width,
+            LABEL_H / embedded.height,
+            // Never scale UP past 1: a small label blown up to fill the
+            // page prints a fuzzy barcode where the original was sharp.
+            1,
+          );
+          page.drawPage(embedded, {
+            xScale: scale,
+            yScale: scale,
+            x: (LABEL_W - embedded.width * scale) / 2,
+            y: (LABEL_H - embedded.height * scale) / 2,
+          });
+        }
       } catch (err) {
         // A courier PDF we cannot parse is the one case worth being
         // loud about: the parcel is real, its label is not in the stack,

@@ -36,6 +36,7 @@ import {
   PickBatchQueryDto,
   ProductLocationQueryDto,
   QueueQueryDto,
+  ReprintLabelsDto,
   ShipmentSelectionDto,
   SkuLabelRequestDto,
 } from '../dto/warehouse-printing.dto';
@@ -93,6 +94,30 @@ export class WarehousePrintingController {
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<LabelSheetResult> {
     return this.labels.build(body.shipmentIds, staff.id);
+  }
+
+  @Get('label-reprint-queue')
+  @ApiOperation({
+    summary:
+      'Parcels whose label IS printed but which are NOT yet packed — the reprint list. A packed parcel is deliberately absent: a second label on a sealed box is how two parcels come to carry one waybill',
+  })
+  labelReprintQueue(@Query() q: QueueQueryDto): Promise<PrintQueueRow[]> {
+    return this.queues.reprintable(q.warehouseId);
+  }
+
+  @Post('labels/reprint')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('warehouse.labels.reprint')
+  @ApiOperation({
+    summary:
+      'Rebuild the label sheet for up to 25 unpacked parcels, with a reason. Its own permission and its own HIGH audit action rather than a flag on the ordinary print, so "how often are we reprinting" is answerable by filtering. Refuses a packed parcel by name; does NOT re-stamp labelPrintedAt',
+  })
+  reprintLabels(
+    @Body() body: ReprintLabelsDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<LabelSheetResult> {
+    return this.labels.reprint(body.shipmentIds, staff.id, body.reason, ctx);
   }
 
   @Post('labels/confirm-printed')
