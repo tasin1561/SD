@@ -22,6 +22,8 @@ import { CatalogReadService } from '../../catalog-read/services/catalog-read.ser
 import { OrderReadService, type ResolvedOrder } from '../../order/services/order-read.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { AssignmentExpirationService } from './assignment-expiration.service';
+// The ONE list of "still waiting to be confirmed" (CC-2 discipline).
+import { CONFIRMATION_CALL_STATUSES } from './call-attempt.service';
 import { CallQueueReason } from '@skydrop/db';
 
 /** Effective concurrent-assignment cap when an agent has no settings
@@ -388,7 +390,24 @@ export class CallAssignmentService {
       };
     }
 
-    if (orderStatus === OrderStatus.PENDING_CONFIRMATION) {
+    /*
+      The SHARED set, not a re-test of one status.
+
+      This asked `orderStatus === PENDING_CONFIRMATION`, which is only
+      the FIRST ring. The moment an agent records Busy or No answer the
+      order moves to CALL_NO_RESPONSE and is re-queued (CC-2/CC-5) — so
+      every second and third attempt at an ordinary confirmation call
+      fell through to the line below and told the agent a parcel that
+      has never left the building is "already on its way". Seen on
+      SD-2026-26-000004 after one Busy.
+
+      `CallAttemptService` already had the right list, with the right
+      reasoning, and gates its whole confirmation machinery on it. Two
+      services deciding the same thing from different lists is the drift
+      `NON_PICKABLE_BIN_TYPES` is shared to prevent, so this imports
+      that one rather than restating it.
+    */
+    if (orderStatus !== null && CONFIRMATION_CALL_STATUSES.has(orderStatus)) {
       return {
         kind: 'CONFIRMATION',
         headline: 'Confirm this order before it ships',

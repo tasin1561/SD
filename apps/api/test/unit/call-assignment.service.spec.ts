@@ -5,6 +5,9 @@ import type { OrderReadService } from '../../src/modules/order/services/order-re
 import type { AssignmentExpirationService } from '../../src/modules/call-center/services/assignment-expiration.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import { CallQueueReason } from '@skydrop/db';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { CONFIRMATION_CALL_STATUSES } from '../../src/modules/call-center/services/call-attempt.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -489,5 +492,65 @@ describe('the issue shown beside a call', () => {
     });
     const a = await sut.svc.pullNext('agent-1');
     expect(a!.openTickets).toHaveLength(0);
+  });
+});
+
+/**
+ * Why a call exists, and the drift that made it lie.
+ *
+ * The banner asked `orderStatus === PENDING_CONFIRMATION`, which is only
+ * the FIRST ring. Record Busy or No answer and the order moves to
+ * CALL_NO_RESPONSE and is re-queued (CC-2/CC-5) — so every second and
+ * third attempt at an ordinary confirmation call fell through and told
+ * the agent that a parcel which has never left the building is "already
+ * on its way". Seen in production on SD-2026-26-000004 after one Busy.
+ *
+ * `CallAttemptService` already held the right list and gates its whole
+ * confirmation machinery on it. This pins that the two read the SAME
+ * one, the way `NON_PICKABLE_BIN_TYPES` is pinned (BIN-2) — matching by
+ * coincidence is what stops being true.
+ */
+describe('the confirmation-call statuses are shared, not restated', () => {
+  it('covers every status a confirmation call can be re-queued into', () => {
+    // A Busy or No-answer outcome lands here and re-queues; a callback
+    // request lands on CALL_RESCHEDULED; the R5b cap pauses on
+    // AWAITING_SELLER_DECISION. All of them are still "confirm this
+    // order before it ships".
+    for (const s of [
+      OrderStatus.PENDING_CONFIRMATION,
+      OrderStatus.CALL_NO_RESPONSE,
+      OrderStatus.CALL_RESCHEDULED,
+      OrderStatus.AWAITING_SELLER_DECISION,
+    ]) {
+      expect(CONFIRMATION_CALL_STATUSES.has(s)).toBe(true);
+    }
+  });
+
+  it('does NOT cover a parcel that has actually moved', () => {
+    // Saying "confirm your order" to somebody whose parcel is out for
+    // delivery tells them we have lost track of it.
+    for (const s of [
+      OrderStatus.CONFIRMED,
+      OrderStatus.DISPATCHED,
+      OrderStatus.IN_TRANSIT,
+      OrderStatus.OUT_FOR_DELIVERY,
+      OrderStatus.DELIVERY_FAILED,
+      OrderStatus.DELIVERED,
+    ]) {
+      expect(CONFIRMATION_CALL_STATUSES.has(s)).toBe(false);
+    }
+  });
+
+  it('the assignment service imports the set rather than keeping its own', () => {
+    // Structural: two services deciding the same thing from two lists
+    // is exactly how they came to disagree. A behavioural test cannot
+    // see a copy that happens to match today.
+    const src = readFileSync(
+      join(__dirname, '../../src/modules/call-center/services/call-assignment.service.ts'),
+      'utf8',
+    );
+    expect(src).toContain("import { CONFIRMATION_CALL_STATUSES } from './call-attempt.service'");
+    // …and does not rebuild one.
+    expect(src).not.toMatch(/CONFIRMATION_CALL_STATUSES[^=]*=\s*new Set/);
   });
 });

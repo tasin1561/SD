@@ -9,6 +9,11 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
 import { topicForIssue } from '../../notification-audience/services/notification-topic-catalog.service';
 
+/** Seeded in `packages/db/prisma/seed.ts`. Pinned by
+ *  `dispatch-templates-exist.spec.ts` — a code with no template behind
+ *  it fails only at send time, five retries later. */
+const SYSTEM_ALERT_TEMPLATE = 'system.alert.email';
+
 /**
  * Telling a person that something is wrong.
  *
@@ -174,6 +179,25 @@ export class SystemIssueNotifier {
         // The catalogue's own key function: a topic somebody silenced
         // on their settings page has to be the topic this looks up.
         topic: topicForIssue(input.kind),
+        /*
+          The EMAIL carrier, stated rather than left to default.
+
+          The dispatcher falls back to `templateCode ?? topic`, which
+          for a system issue meant looking up a template called
+          `system_issue.money` — and there has never been one, for any
+          kind. So every CRITICAL email died on TEMPLATE_NOT_FOUND,
+          retried five times and was abandoned: the one channel meant
+          to reach somebody who is NOT staring at the admin app failed
+          silently in exactly the case it exists for.
+
+          One generic carrier rather than a template per kind: the title
+          and body are already composed here, so per-kind templates
+          would be a dozen copies of the same two placeholders. The
+          TOPIC stays per-kind because that is what a mute is keyed on —
+          which is the whole reason the dispatcher takes them
+          separately.
+        */
+        templateCode: SYSTEM_ALERT_TEMPLATE,
         category: NotificationCategory.OPERATIONAL,
         title: critical ? `Critical: ${input.title}` : input.title,
         // The detail says what to DO — it is written at the call site,

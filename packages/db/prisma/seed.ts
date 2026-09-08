@@ -471,10 +471,10 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'courier.wallet_sync_window_days',
     category: 'courier',
     valueType: SettingValueType.INT,
-    valueInt: 45,
+    valueInt: 7,
     displayName: 'Delhivery wallet sync — days to re-read each night',
     description:
-      'How far back each nightly fetch reaches. NOT one day: a charge is re-cut weeks after the parcel moved, so a narrow window would import each parcel\u2019s first figure and never see the correction. Re-reading is cheap because the import overwrites rather than skips.',
+      'How far back each nightly fetch reaches. SEVEN, because that is what their ledger export actually returns \u2014 it was set to 45 and every export came back covering about a week, which is the mismatch the coverage alarm was raising every night. NOT one day: the import overwrites rather than skips, so re-reading a week catches a charge re-cut within that week. A charge re-cut LATER than seven days after the parcel moved is not picked up by the nightly run at all; catching one of those means exporting a wider range by hand from their Finances page and uploading it on the Delhivery screen.',
   },
   {
     key: 'ops.nsa_enabled',
@@ -2752,6 +2752,31 @@ const notificationTemplates: TemplateSeed[] = [
     subject: 'Your Skydrop password was changed',
     bodyTemplate:
       'The password on your Skydrop account ({{ email }}) was changed on {{ changed_at }}.\n\nEvery signed-in session was ended, so you will need to sign in again: {{ login_url }}\n\nIf this was not you, someone else has access to your account — and your account holds your stock and your money. Contact {{ support_email }} immediately and we will lock it.\n\nRequest origin: {{ ip_address }}',
+  },
+  {
+    /*
+      The carrier for a SYSTEM ISSUE email (NOTIF-16).
+
+      Generic on purpose, and one template rather than one per
+      `SystemIssueKind`: the notifier has already composed a title and a
+      body by the time it dispatches, so a dozen per-kind templates
+      would be a dozen copies of the same two placeholders to keep in
+      step. What stays per-kind is the TOPIC, because that is what a
+      mute and the settings page are keyed on — which is exactly the
+      split `templateCode ?? topic` exists for in the dispatcher.
+
+      It was missing entirely, so every CRITICAL system-issue email
+      failed on TEMPLATE_NOT_FOUND, retried five times and gave up. That
+      is the one channel meant to reach somebody who is NOT looking at
+      the admin app, so it failed silently in the case it exists for.
+    */
+    code: 'system.alert.email',
+    name: 'System alert',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: '{{ title }}',
+    bodyTemplate:
+      '{{ body }}\n\nOpen /system-issues to see it in full, and resolve it there once it is dealt with.\n\n— Skydrop',
   },
   {
     // The carrier for any broadcast. Deliberately generic: a broadcast

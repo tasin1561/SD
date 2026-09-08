@@ -131,7 +131,7 @@ export interface RecordAttemptResult {
  * historical fact and is still recorded (CC-1), but none of that
  * machinery may run against it.
  */
-const CONFIRMATION_CALL_STATUSES: ReadonlySet<OrderStatus> = new Set([
+export const CONFIRMATION_CALL_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.PENDING_CONFIRMATION,
   OrderStatus.CALL_NO_RESPONSE,
   OrderStatus.CALL_RESCHEDULED,

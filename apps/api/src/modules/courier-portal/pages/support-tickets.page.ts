@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Page } from 'playwright';
+import { gotoPortal } from './navigate';
 
 /** Which of their tabs a ticket is sitting in. */
 export type PortalTicketState = 'OPEN' | 'RESOLVED';
@@ -34,6 +35,16 @@ export interface PortalTicketScan {
   readonly complete: boolean;
   /** Their own stated total per tab, for the sanity check. */
   readonly statedTotals: Readonly<Record<string, number | null>>;
+  /**
+   * Why a tab could not be read, per tab.
+   *
+   * The catch below used to discard the error, so an incomplete scan
+   * was reported as `{"open":null,"resolved":null}` and 0 rows with no
+   * hint of the cause — which is a watchdog that has noticed something
+   * and cannot say what. It fired for a navigation race that took
+   * seconds to diagnose once the message was in hand.
+   */
+  readonly errors: Readonly<Record<string, string>>;
 }
 
 const TICKET_ID_RE = /\bJ\d{12,20}\b/;
@@ -106,6 +117,7 @@ export class SupportTicketsPage {
   async listOpenAndResolved(maxPages = 40): Promise<PortalTicketScan> {
     const rows: PortalTicketRow[] = [];
     const statedTotals: Record<string, number | null> = {};
+    const errors: Record<string, string> = {};
     let complete = true;
 
     for (const tab of TABS) {
@@ -119,12 +131,16 @@ export class SupportTicketsPage {
         // two.
         if (res.statedTotal !== null && res.rows.length < res.statedTotal) complete = false;
         if (!res.pagedToEnd) complete = false;
-      } catch {
+      } catch (err) {
         complete = false;
         statedTotals[tab.path] = null;
+        // KEPT, not swallowed. The alarm downstream is the only place
+        // anybody learns this happened, and "it did not finish" without
+        // a reason sends them to read logs on a droplet.
+        errors[tab.path] = err instanceof Error ? err.message : String(err);
       }
     }
-    return { rows, complete, statedTotals };
+    return { rows, complete, statedTotals, errors };
   }
 
   private async scanTab(
@@ -132,9 +148,7 @@ export class SupportTicketsPage {
     state: PortalTicketState,
     maxPages: number,
   ): Promise<{ rows: PortalTicketRow[]; statedTotal: number | null; pagedToEnd: boolean }> {
-    await this.page.goto(`${this.origin}/support/support-tickets/${path}`, {
-      waitUntil: 'domcontentloaded',
-    });
+    await gotoPortal(this.page, `${this.origin}/support/support-tickets/${path}`);
     await this.settle();
 
     const rows: PortalTicketRow[] = [];
@@ -217,9 +231,7 @@ export class SupportTicketsPage {
    * screen would attach one ticket's messages to another.
    */
   async openByTicketId(externalTicketId: string, tab: string): Promise<string | null> {
-    await this.page.goto(`${this.origin}/support/support-tickets/${tab}`, {
-      waitUntil: 'domcontentloaded',
-    });
+    await gotoPortal(this.page, `${this.origin}/support/support-tickets/${tab}`);
     await this.settle();
 
     // Their search is what makes this affordable: the ticket may be on

@@ -18,6 +18,7 @@ import {
 import { EmailQueue } from '../../email/queue/email.queue';
 import { CourierChannelSettingsService } from '../../courier-escalation/services/courier-channel-settings.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { gotoPortal } from '../pages/navigate';
 
 const JOB = 'courier-portal';
 const PORTAL_ORIGIN = 'https://one.delhivery.com';
@@ -162,7 +163,7 @@ export class PortalSessionService {
     // symptom was a missing button on the Finances page rather than
     // anything that said "not logged in". Verified against production on
     // 2026-09-01: /support stayed, /home and /finances both redirected.
-    await page.goto(`${PORTAL_ORIGIN}/home`, { waitUntil: 'domcontentloaded' });
+    await gotoPortal(page, `${PORTAL_ORIGIN}/home`);
     // Their redirect to the login page is CLIENT-SIDE: `goto` returns as
     // soon as the document loads, and the app bounces a moment later. So
     // the probe ran while the URL was still /home with no password field
@@ -305,7 +306,7 @@ export class PortalSessionService {
     //      another company's wallet, so this is a required credential.
     //   5. Continue hands off to ucp-auth.delhivery.com, a different
     //      origin, for the PASSWORD.
-    await page.goto(`${PORTAL_ORIGIN}/v2/login`, { waitUntil: 'domcontentloaded' });
+    await gotoPortal(page, `${PORTAL_ORIGIN}/v2/login`);
     // Their login page bounces a signed-in session straight to the app.
     // Belt to the braces above: if we are already authenticated there is
     // nothing to log in to, and pressing on would wait out the password

@@ -242,13 +242,23 @@ export class PortalTicketSyncService {
             detail:
               `A sweep of Delhivery's support tabs did not finish. Their stated totals were ` +
               `${JSON.stringify(scan.statedTotals)} and ${scan.rows.length} rows were read.\n\n` +
+              (Object.keys(scan.errors).length > 0
+                ? `What went wrong, per tab:\n${Object.entries(scan.errors)
+                    .map(([tab, message]) => `  ${tab}: ${message}`)
+                    .join('\n')}\n\n`
+                : '') +
               'Replies were still collected for the tickets that WERE seen. What was withheld ' +
               'is closing: a ticket missing from a half-read list looks closed, and acting on ' +
               "that would close every seller's ticket at once. A login challenge is the usual " +
               'cause — check the portal session.',
             source: 'PortalTicketSyncService',
             dedupeKey: `portal-ticket-scan-partial:${accountId ?? 'default'}`,
-            metadata: { accountId, rows: scan.rows.length, statedTotals: scan.statedTotals },
+            metadata: {
+              accountId,
+              rows: scan.rows.length,
+              statedTotals: scan.statedTotals,
+              errors: scan.errors,
+            },
           });
         }
       }

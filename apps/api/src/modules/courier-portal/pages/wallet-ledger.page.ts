@@ -1,4 +1,5 @@
 import type { Page } from 'playwright';
+import { gotoPortal } from './navigate';
 
 const FINANCES_PATH = '/finances/unified/transactions';
 
@@ -30,9 +31,7 @@ export class WalletLedgerPage {
    * compared against what was requested.
    */
   async download(from: Date, to: Date): Promise<{ bytes: Buffer; rangeApplied: boolean }> {
-    await this.page.goto(`https://one.delhivery.com${FINANCES_PATH}`, {
-      waitUntil: 'domcontentloaded',
-    });
+    await gotoPortal(this.page, `https://one.delhivery.com${FINANCES_PATH}`);
 
     const rangeApplied = await this.setDateRange(from, to);
 

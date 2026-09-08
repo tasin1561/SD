@@ -1,4 +1,5 @@
 import type { Page } from 'playwright';
+import { gotoPortal } from './navigate';
 
 export interface RaiseTicketInput {
   readonly awbNumber: string;
@@ -129,9 +130,7 @@ export class RaiseTicketModal {
       type the waybill, a suggestion appears, click it, and you are on the
       order. Confirmed end to end on 2026-09-06.
     */
-    await this.page.goto(`${this.origin}/orders/forward/delivered`, {
-      waitUntil: 'domcontentloaded',
-    });
+    await gotoPortal(this.page, `${this.origin}/orders/forward/delivered`);
     await this.settle();
 
     const header = this.page.locator('input[placeholder="Search multiple AWBs"]').first();

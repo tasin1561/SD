@@ -1,4 +1,5 @@
 import type { Page } from 'playwright';
+import { gotoPortal } from './navigate';
 
 export interface ConsigneeOnPortal {
   /** Null when the field could not be read — NOT the same as empty. */
@@ -36,9 +37,7 @@ export class ConsigneeCheckPage {
    * AWB, which is what their own search takes.
    */
   async read(awbNumber: string): Promise<ConsigneeOnPortal> {
-    await this.page.goto('https://one.delhivery.com/orders/forward', {
-      waitUntil: 'domcontentloaded',
-    });
+    await gotoPortal(this.page, 'https://one.delhivery.com/orders/forward');
 
     const search = this.page.getByPlaceholder(/search multiple awbs/i).first();
     const hasSearch = await search

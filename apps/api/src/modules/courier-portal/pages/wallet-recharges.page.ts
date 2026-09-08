@@ -1,4 +1,5 @@
 import type { Page } from 'playwright';
+import { gotoPortal } from './navigate';
 
 export interface PortalWalletBalance {
   readonly balanceInr: string;
@@ -83,7 +84,7 @@ export class WalletRechargesPage {
    * us — which is the one failure a per-row reconciliation cannot see.
    */
   async readBalance(): Promise<PortalWalletBalance | null> {
-    await this.page.goto(`${this.origin}${FINANCES}`, { waitUntil: 'domcontentloaded' });
+    await gotoPortal(this.page, `${this.origin}${FINANCES}`);
     await this.settle();
     const text = (await this.page.locator('body').innerText()).replace(/\s+/g, ' ');
 
@@ -100,7 +101,7 @@ export class WalletRechargesPage {
 
   /** Every recharge their list is showing, across every page. */
   async listRecharges(maxPages = 40): Promise<PortalRecharge[]> {
-    await this.page.goto(`${this.origin}${RECHARGES}`, { waitUntil: 'domcontentloaded' });
+    await gotoPortal(this.page, `${this.origin}${RECHARGES}`);
     await this.settle();
 
     const out: PortalRecharge[] = [];

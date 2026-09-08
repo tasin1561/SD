@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
 import { createHash } from 'node:crypto';
+import { gotoPortal } from './navigate';
 
 /** What a read of the thread gives us. */
 export interface PortalThreadMessage {
@@ -86,7 +87,7 @@ export class TicketDetailPage {
    */
   async open(detailUrl: string): Promise<void> {
     const url = detailUrl.startsWith('http') ? detailUrl : `${this.origin}${detailUrl}`;
-    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+    await gotoPortal(this.page, url);
     await this.settle();
   }
 

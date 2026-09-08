@@ -302,7 +302,7 @@ export class WalletSyncService {
       // the revision to an older one, which shows up as a margin that
       // is quietly wrong rather than as anything stopping.
       severity: SystemIssueSeverity.MEDIUM,
-      title: `Delhivery only gave ${account.label} ${coveredDays} days of ledger, not ${windowDays}`,
+      title: `Only ${coveredDays} days of ledger came back for ${account.label}, not ${windowDays}`,
       detail:
         `The nightly sync asks for ${windowDays} days so a charge re-cut weeks later gets ` +
         `re-read. The export that came back spans ${coveredDays} days ` +
