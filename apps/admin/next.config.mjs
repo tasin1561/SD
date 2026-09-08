@@ -1,4 +1,9 @@
-import { staticSecurityHeaders, allRoutes } from '../../packages/config/security-headers.mjs';
+import {
+  staticSecurityHeaders,
+  allRoutes,
+  withHeader,
+  permissionsPolicy,
+} from '../../packages/config/security-headers.mjs';
 
 /**
  * Next.js 15 config — apps/admin.
@@ -24,7 +29,15 @@ const nextConfig = {
   // is shaped the way it is — in particular why connect-src is the
   // load-bearing directive when the access token lives in JS memory.
   async headers() {
-    return allRoutes(staticSecurityHeaders);
+    // The camera is allowed for THIS origin only, and only here: the
+    // pack bench and the handover bench scan with it. The shared default
+    // is `camera=()`, which denies it to us as well — and denies it
+    // SILENTLY, with getUserMedia rejecting before the browser can ask,
+    // so it looks exactly like an operator refusing a prompt they never
+    // saw. `(self)` grants nothing; Chrome still asks.
+    return allRoutes(
+      withHeader(staticSecurityHeaders, 'Permissions-Policy', permissionsPolicy({ camera: true })),
+    );
   },
   // Do not advertise the framework.
   poweredByHeader: false,

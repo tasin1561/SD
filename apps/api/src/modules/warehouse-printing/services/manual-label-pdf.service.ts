@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 
-import { encodeCode128B, isEncodableCode128B } from '../../../common/barcode/code128';
+import { drawCode128 } from '../../../common/barcode/pdf-barcode';
 
 export interface ManualLabelPayload {
   readonly awbNumber: string;
@@ -103,34 +103,11 @@ export class ManualLabelPdfService {
     y: number,
     maxWidth: number,
   ): number {
-    if (!isEncodableCode128B(value)) return y;
-
-    let widths: number[];
-    try {
-      widths = encodeCode128B(value);
-    } catch {
-      return y;
-    }
-
-    const modules = widths.reduce((n, m) => n + m, 0);
-    // A quiet zone of 10 modules each side is what the spec asks for,
-    // and it is the part people leave out and then wonder why the
-    // scanner will not read the first digit.
-    const unit = maxWidth / (modules + 20);
     const height = 26;
-
-    let cursor = x + unit * 10;
-    let bar = true;
-    doc.save().fillColor('#000000');
-    for (const width of widths) {
-      const barWidth = width * unit;
-      if (bar) doc.rect(cursor, y, barWidth, height).fill();
-      cursor += barWidth;
-      bar = !bar;
-    }
-    doc.restore();
-
-    return y + height + 3;
+    // The drawing itself moved to common/barcode/pdf-barcode.ts when the
+    // picking sheet needed bars too (LBL-3: one encoder, and now one
+    // renderer). It returns false rather than drawing a partial symbol.
+    return drawCode128(doc, { value, x, y, width: maxWidth, height }) ? y + height + 3 : y;
   }
 
   private drawLabel(

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
+import { code128ModuleWidth, drawCode128 } from '../../../common/barcode/pdf-barcode';
 
 export interface PickListLine {
   /** One row per VARIANT, not per order — a picker walks to a shelf
@@ -179,8 +180,17 @@ export class PickListPdfService {
     const loc = left + 34;
     const qty = loc + 92;
     const sku = qty + 32;
-    const barcode = right - 108;
-    return { tick, loc, qty, sku, barcode, skuWidth: (strict ? right : barcode - 8) - sku };
+    /*
+      WIDE ENOUGH TO SCAN, which is a measured constraint and not a
+      layout preference. A Code 128 symbol for a 16-character SKU is
+      ~231 modules including quiet zones; at the old 104pt column each
+      module printed 0.45pt — 0.16mm — well under the ~0.19mm a
+      warehouse scanner needs off a laser print. It would not have
+      failed cleanly either: a too-narrow symbol reads intermittently,
+      which reads to a packer as a broken scanner.
+    */
+    const barcode = right - BARCODE_COLUMN_WIDTH;
+    return { tick, loc, qty, sku, barcode, skuWidth: (strict ? right : barcode - 10) - sku };
   }
 
   private drawRow(
@@ -217,14 +227,12 @@ export class PickListPdfService {
       line.variantName === null ? line.productName : `${line.productName} — ${line.variantName}`;
     doc.text(name, cols.sku, y + 11, { width: cols.skuWidth, ellipsis: true });
 
-    if (!strict) {
-      doc.fontSize(9).font('Courier').fillColor('#000000');
-      doc.text(line.barcode ?? '—', cols.barcode, y + 2, { width: 104, ellipsis: true });
-    }
+    if (!strict) this.drawBarcodeCell(doc, line.barcode, cols.barcode, y);
 
     // Which parcels need it — small, and only when it is short enough to
     // be useful. A line for fourteen parcels is noise on paper.
-    if (line.forShipments.length > 0 && line.forShipments.length <= 4) {
+    const hasShipmentLine = line.forShipments.length > 0 && line.forShipments.length <= 4;
+    if (hasShipmentLine) {
       doc.fontSize(6).font('Helvetica').fillColor('#666666');
       doc.text(line.forShipments.join('  '), cols.sku, y + 21, {
         width: cols.skuWidth,
@@ -232,7 +240,11 @@ export class PickListPdfService {
       });
     }
 
-    const next = y + (line.forShipments.length > 0 && line.forShipments.length <= 4 ? 34 : 28);
+    // A non-strict row is always full height: the bars plus the value
+    // printed under them need it, and a row that shrinks to fit would
+    // put the next line's location on top of this one's barcode. In
+    // strict mode there is no barcode cell, so the old height stands.
+    const next = y + (!strict || hasShipmentLine ? ROW_HEIGHT : 28);
     doc
       .moveTo(left, next - 4)
       .lineTo(right, next - 4)
@@ -241,4 +253,76 @@ export class PickListPdfService {
       .stroke();
     return next;
   }
+
+  /**
+   * The barcode cell: bars, with the value printed underneath.
+   *
+   * BOTH, always. The bars are what gets scanned and the text is what
+   * gets read aloud when a scanner is flat or a label is scuffed —
+   * omitting the text turns a five-second problem into a trip back to a
+   * screen. An unencodable value falls back to the text alone (LBL-3):
+   * one bad SKU must not cost the sheet its other forty barcodes.
+   */
+  private drawBarcodeCell(
+    doc: InstanceType<typeof PDFDocument>,
+    value: string | null,
+    x: number,
+    y: number,
+  ): void {
+    if (value === null) {
+      doc.fontSize(8).font('Courier').fillColor('#666666');
+      doc.text('—', x, y + 8, { width: BARCODE_COLUMN_WIDTH });
+      return;
+    }
+
+    /*
+      TOO DENSE IS THE SAME AS UNENCODABLE, and it fails worse.
+
+      An unusually long SKU squeezes the symbol below the module width a
+      warehouse scanner can resolve off a laser print — a 42-character
+      code lands at 0.11mm against a ~0.19mm floor. Printed anyway it
+      LOOKS like a barcode and reads about one time in four, which a
+      packer experiences as a faulty gun rather than as a sheet that
+      cannot be scanned. So past the floor we print the value alone and
+      let them type it, which is slower and works.
+    */
+    const modulePt = code128ModuleWidth(value, BARCODE_COLUMN_WIDTH);
+    const drawn =
+      modulePt !== null &&
+      modulePt >= MIN_MODULE_PT &&
+      drawCode128(doc, {
+        value,
+        x,
+        y: y + 1,
+        width: BARCODE_COLUMN_WIDTH,
+        height: BAR_HEIGHT,
+      });
+
+    doc.fontSize(6.5).font('Courier').fillColor('#000000');
+    doc.text(value, x, drawn ? y + BAR_HEIGHT + 3 : y + 8, {
+      width: BARCODE_COLUMN_WIDTH,
+      align: 'center',
+      ellipsis: true,
+    });
+  }
+
+  /**
+   * Whether a value will print narrow enough to be a problem.
+   *
+   * Exposed for the tests rather than used at render time: the answer
+   * depends on SKU length, so the useful moment to know is when somebody
+   * changes the column width, not when a picker is standing at a shelf.
+   */
+  static moduleWidthPt(value: string): number | null {
+    return code128ModuleWidth(value, BARCODE_COLUMN_WIDTH);
+  }
 }
+
+/** Points. A4 minus margins is 523pt wide; this is what is left after
+ *  the location, quantity and product columns have what they need. */
+const BARCODE_COLUMN_WIDTH = 165;
+const BAR_HEIGHT = 17;
+const ROW_HEIGHT = 34;
+/** ~0.19mm, the narrowest bar a warehouse scanner reads reliably off a
+ *  laser print. Below this we print the value and no symbol. */
+const MIN_MODULE_PT = 0.55;
