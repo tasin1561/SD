@@ -1230,10 +1230,10 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'inventory.early_reservation_ndr_action',
     category: 'ops',
     valueType: SettingValueType.STRING,
-    valueString: 'AUTO_RELEASE',
+    valueString: 'MANUAL_REVIEW',
     displayName: 'Early-Hold Action At Call Cap',
     description:
-      "What to do with an at-placement stock hold when call attempts are exhausted: 'AUTO_RELEASE' (give the stock back immediately) or 'MANUAL_REVIEW' (surface it on the seller dashboard so they choose release vs more attempts). Per-seller override.",
+      "What happens when call attempts are exhausted: 'MANUAL_REVIEW' pauses the order in AWAITING_SELLER_DECISION and asks the seller whether to keep trying, or 'AUTO_RELEASE' rejects it there and then. MANUAL_REVIEW by default since 2026-09-08 — under AUTO_RELEASE an order nobody could reach was simply dropped and the seller found out afterwards, if at all, and they are the one person who knows whether that customer is worth another ring. It costs no stock while at-placement booking is off, and an unanswered pause still expires on the TTL below, so it delays a rejection rather than preventing one. Per-seller override.",
     sellerOverridable: true,
   },
   {

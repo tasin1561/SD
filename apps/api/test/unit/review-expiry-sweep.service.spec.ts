@@ -37,6 +37,7 @@ function makeSut(
     orderStatus?: OrderStatus;
     transitionThrows?: boolean;
     releaseAlreadyInactive?: boolean;
+    orphans?: AnyArgs[];
   } = {},
 ) {
   const reviewFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
@@ -52,6 +53,8 @@ function makeSut(
     status: opts.orderStatus ?? OrderStatus.AWAITING_SELLER_DECISION,
   }));
 
+  /** The orphan pass — orders paused with no OPEN review to expire. */
+  const orderFindMany = jest.fn(async () => opts.orphans ?? []);
   const prisma = {
     client: {
       earlyReservationReview: {
@@ -59,7 +62,7 @@ function makeSut(
         updateMany: reviewUpdateMany,
       },
       stockReservation: { findMany: reservationFindMany },
-      order: { findUnique: orderFindUnique },
+      order: { findUnique: orderFindUnique, findMany: orderFindMany },
     },
   } as unknown as PrismaService;
 
@@ -182,5 +185,71 @@ describe('ReviewExpirySweepService.sweep', () => {
       where: { status: EarlyReservationReviewStatus.OPEN },
       orderBy: { createdAt: 'asc' },
     });
+  });
+});
+
+/**
+ * The pause with no review behind it.
+ *
+ * The main pass is driven entirely by `early_reservation_reviews`, so an
+ * order in AWAITING_SELLER_DECISION without one is invisible to it — and
+ * nothing else moves that status. Reachable because `handleNdrCap` runs
+ * BEFORE the transition and its failure is caught, audited and swallowed
+ * (CC-3, correctly), after which the transition parks the order anyway.
+ * SD-2026-QA-916001 has been in that state since 2026-07-29.
+ *
+ * Harmless while every seller is on AUTO_RELEASE — the cap lands on a
+ * terminal instead. Turning MANUAL_REVIEW on globally is what makes it
+ * reachable, which is why it is closed in the same change.
+ */
+describe('orders paused with no review to expire', () => {
+  it('expires one that is past its TTL', async () => {
+    const old = new Date(Date.now() - 200 * 3_600_000);
+    const { svc, transitionStatus } = makeSut({
+      reviews: [],
+      ttlHours: 72,
+      orderStatus: OrderStatus.AWAITING_SELLER_DECISION,
+      orphans: [{ id: 'order-orphan', sellerId: 'seller-1', updatedAt: old }],
+    });
+    const res = await svc.sweep();
+    expect(res.expired).toBe(1);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: 'order-orphan',
+        to: OrderStatus.REJECTED_NDR,
+        expectedFrom: OrderStatus.AWAITING_SELLER_DECISION,
+      }),
+    );
+  });
+
+  it('leaves one that is still inside its TTL', async () => {
+    // The seller has not run out of time to answer — the whole point of
+    // pausing is to give them a window.
+    const recent = new Date(Date.now() - 2 * 3_600_000);
+    const { svc, transitionStatus } = makeSut({
+      reviews: [],
+      ttlHours: 72,
+      orphans: [{ id: 'order-orphan', sellerId: 'seller-1', updatedAt: recent }],
+    });
+    const res = await svc.sweep();
+    expect(res.expired).toBe(0);
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('one bad order does not stop the rest', async () => {
+    const old = new Date(Date.now() - 200 * 3_600_000);
+    const { svc } = makeSut({
+      reviews: [],
+      ttlHours: 72,
+      transitionThrows: true,
+      orderStatus: OrderStatus.AWAITING_SELLER_DECISION,
+      orphans: [
+        { id: 'order-a', sellerId: 'seller-1', updatedAt: old },
+        { id: 'order-b', sellerId: 'seller-1', updatedAt: old },
+      ],
+    });
+    const res = await svc.sweep();
+    expect(res.failures).toBe(2);
+    expect(res.scanned).toBe(2);
   });
 });

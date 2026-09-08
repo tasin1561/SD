@@ -111,7 +111,98 @@ export class ReviewExpirySweepService {
       }
     }
 
-    return { scanned: open.length, expired, releasedReservations, failures };
+    const orphans = await this.sweepOrphans(now);
+
+    return {
+      scanned: open.length + orphans.scanned,
+      expired: expired + orphans.expired,
+      releasedReservations: releasedReservations + orphans.released,
+      failures: failures + orphans.failures,
+    };
+  }
+
+  /**
+   * Orders PAUSED with no review to expire.
+   *
+   * The pass above is driven entirely by `early_reservation_reviews`, so
+   * an order sitting in AWAITING_SELLER_DECISION without one is
+   * invisible to it — and nothing else moves that status. It is not
+   * hypothetical: `handleNdrCap` runs BEFORE the transition and its
+   * failure is caught, audited HIGH and swallowed (CC-3, correctly — the
+   * attempt must not roll back), after which the transition parks the
+   * order anyway. Review missing, order paused, nobody ever asked, no
+   * sweep watching. SD-2026-QA-916001 has been in exactly that state
+   * since 2026-07-29.
+   *
+   * Harmless while every seller is on AUTO_RELEASE, because the cap
+   * lands on the REJECTED_NDR terminal instead. Turning MANUAL_REVIEW on
+   * globally is what makes it reachable, so it is closed in the same
+   * change rather than left as a thing to discover later.
+   *
+   * Same TTL and the same landing as an expired review: this is the
+   * "nobody answered" path, arrived at by a different road.
+   */
+  private async sweepOrphans(
+    now: number,
+  ): Promise<{ scanned: number; expired: number; released: number; failures: number }> {
+    const parked = await this.prisma.client.order.findMany({
+      where: {
+        status: OrderStatus.AWAITING_SELLER_DECISION,
+        // One review per order at most (`order_id` is UNIQUE), so this
+        // is "no review at all, or one that is no longer open".
+        OR: [
+          { earlyReservationReview: { is: null } },
+          {
+            earlyReservationReview: {
+              status: { not: EarlyReservationReviewStatus.OPEN },
+            },
+          },
+        ],
+      },
+      select: { id: true, sellerId: true, updatedAt: true },
+      orderBy: { updatedAt: 'asc' },
+      take: 200,
+    });
+
+    let expired = 0;
+    let released = 0;
+    let failures = 0;
+
+    for (const order of parked) {
+      try {
+        const ttlHours = await this.ttlHoursFor(order.sellerId);
+        // `updatedAt` rather than a review's `createdAt` — there is no
+        // review, and the transition into the pause is the last thing
+        // that touched the row.
+        const ageHours = (now - order.updatedAt.getTime()) / 3_600_000;
+        if (ageHours < ttlHours) continue;
+
+        released += await this.releaseHolds(order.id);
+        await this.transitionToTerminal(order.id);
+        expired += 1;
+
+        await this.audit.log({
+          actorType: ActorType.SYSTEM,
+          sellerId: order.sellerId,
+          action: 'inventory.early_reservation.orphan_pause_expired',
+          entityType: 'order',
+          entityId: order.id,
+          // HIGHER than an ordinary expiry: an order paused with no
+          // review means the raise failed, and that is worth somebody
+          // noticing rather than being tidied away silently.
+          severity: 'HIGH',
+          metadata: { ageHours: Math.round(ageHours), ttlHours, reason: 'no open review row' },
+        });
+      } catch (err) {
+        failures += 1;
+        this.logger.warn(
+          { orderId: order.id, err: (err as Error).message },
+          'Orphaned pause expiry failed for one order — isolated, continuing',
+        );
+      }
+    }
+
+    return { scanned: parked.length, expired, released, failures };
   }
 
   private async releaseHolds(orderId: string): Promise<number> {
