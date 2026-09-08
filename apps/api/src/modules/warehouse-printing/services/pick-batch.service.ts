@@ -17,6 +17,7 @@ import { OrderWriteService } from '../../order/services/order-write.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { PickBatchNumberingService } from './pick-batch-numbering.service';
 import { PickListPdfService, type PickListLine } from './pick-list-pdf.service';
+import { scannableCodeFor } from './sku-label.service';
 
 export interface PickBatchView {
   readonly id: string;
@@ -728,7 +729,25 @@ export class PickBatchService {
         // shelf should be is the most useful thing on the sheet.
         binCode: r.bin?.code ?? 'NOT ALLOCATED',
         zoneName: r.bin?.zone?.name ?? null,
-        barcode: strictMode ? null : (r.variant?.barcode ?? null),
+        /*
+          The code that is ACTUALLY on the sticker (LBL-2).
+
+          This read `variant.barcode` alone and printed a dash whenever
+          it was null — which is every variant in production, because
+          nothing mints one. So the picker held a sheet with an empty
+          BARCODE column next to products whose labels all carry a
+          scannable code: the SKU code, which is what `scannableCodeFor`
+          falls back to and what `PackBoxService.scan` accepts.
+
+          Using the shared helper rather than repeating `?? skuCode`:
+          the sheet and the sticker disagreeing about what is printed on
+          the sticker is exactly the drift one function prevents.
+        */
+        barcode: strictMode
+          ? null
+          : r.variant === null || r.variant === undefined
+            ? null
+            : scannableCodeFor({ barcode: r.variant.barcode, skuCode: r.variant.skuCode }).value,
         forShipments: [],
         forSet: new Set(forShipment === '' ? [] : [forShipment]),
       });

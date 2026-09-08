@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardBody,
-  EmptyState,
   Input,
   Modal,
   ModalFooter,
@@ -29,6 +28,7 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { SerialScanner } from '@/components/ui/serial-scanner';
+import { PackQueueList } from './pack-queue-list';
 
 /**
  * The pack bench.
@@ -385,10 +385,9 @@ export function PackStation(): ReactElement {
           </CardBody>
         </Card>
       ) : box === null ? (
-        <EmptyState
-          title="No box open"
-          description="Scan the shipping label on a parcel to start. You can hold one box at a time — close or cancel it before starting the next."
-        />
+        // Nothing in hand — so show what is coming rather than an empty
+        // card telling the packer what they already know.
+        <PackQueueList />
       ) : (
         <>
           <Card>

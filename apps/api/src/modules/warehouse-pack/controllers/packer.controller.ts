@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -18,7 +19,11 @@ import {
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { PackQueueService, type PulledPack } from '../services/pack-queue.service';
+import {
+  type WaitingPack,
+  PackQueueService,
+  type PulledPack,
+} from '../services/pack-queue.service';
 import { PackService, type CompletePackResult } from '../services/pack.service';
 import { CompletePackDto, ForceCompletePackDto } from '../dto/complete-pack.dto';
 import {
@@ -65,6 +70,15 @@ export class PackerController {
   ): Promise<{ pack: PulledPack | null }> {
     const pack = await this.queue.pullNext(staff.id, ctx, courierCode);
     return { pack };
+  }
+
+  @Get('queue')
+  @ApiOperation({
+    summary:
+      'Everything waiting to be packed (same predicate as POST next, no claim). Optionally one courier via ?courierCode=.',
+  })
+  queueList(@Query('courierCode') courierCode?: string): Promise<{ waiting: WaitingPack[] }> {
+    return this.queue.listWaiting(courierCode).then((waiting) => ({ waiting }));
   }
 
   @Post(':shipmentId/complete')

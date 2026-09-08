@@ -65,7 +65,7 @@ function makeService(
       opts.insufficientAfter !== undefined &&
       reserve.mock.calls.length > opts.insufficientAfter
     ) {
-      throw new InsufficientStockError('Only 0 available');
+      throw new InsufficientStockError(1, 0);
     }
     if (opts.reserveThrows) throw new Error('INSUFFICIENT_STOCK');
     return { id: `r-${i.orderItemId}` };
@@ -381,7 +381,10 @@ describe('OrderAdminOverrideService.restoreReservations', () => {
     // Restoring one of these does not repair it, it DOUBLES it — the
     // same stock claimed twice, the second copy silently unavailable to
     // every other order.
-    const { svc, reserve } = makeService({ order: committed, active: [{ id: 'r1' }] });
+    const { svc, reserve } = makeService({
+      order: committed,
+      active: [{ id: 'r1', orderItemId: 'oi1', qtyReserved: 1 }],
+    });
     await expect(
       svc.restoreReservations({ orderId: 'o1', actorStaffId: 'staff-1' }),
     ).rejects.toThrow(/already holds/i);
@@ -410,7 +413,7 @@ describe('OrderAdminOverrideService.restoreReservations', () => {
     });
     const res = await svc.restoreReservations({ orderId: 'o1', actorStaffId: 'staff-1' });
     expect(res.reservedCount).toBe(0);
-    expect(res.shortfall).toMatch(/Only 0 available/);
+    expect(res.shortfall).toMatch(/only 0 available/i);
     expect(release).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledWith('r-oi1', expect.anything(), expect.anything());
   });

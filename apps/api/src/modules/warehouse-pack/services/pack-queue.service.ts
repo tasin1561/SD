@@ -65,6 +65,36 @@ export interface PulledPack {
  * user-supplied, so it's passed as a bound parameter to
  * `$queryRawUnsafe`, never string-interpolated into the SQL text.
  */
+/**
+ * What "waiting to be packed" means, written once.
+ *
+ * `pullNext` and the queue LIST must agree exactly: a bench that lists
+ * a parcel a pull would not find, or finds one the list never showed,
+ * is a packer walking to a shelf for nothing. The order-status
+ * predicate is the authority (WMS-2), not a proxy —
+ * `ShipmentProvisionService.voidForOrder` is best-effort, so a lagged
+ * void has to be excluded here rather than assumed away.
+ */
+const PACK_ELIGIBLE_SQL = `s.status = 'created'
+             AND s.pack_completed_at IS NULL
+             AND s.deleted_at IS NULL
+             AND o.deleted_at IS NULL
+             AND o.status = 'picked'`;
+
+/** One parcel on the bench's waiting list. */
+export interface WaitingPack {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly courierCode: string;
+  readonly awbNumber: string | null;
+  readonly orderNumber: string | null;
+  readonly recipientName: string | null;
+  /** Null means no label has been printed — it cannot be scanned in. */
+  readonly labelPrintedAtIso: string | null;
+  readonly pickCompletedAtIso: string | null;
+  readonly itemCount: number;
+}
+
 @Injectable()
 export class PackQueueService {
   private readonly logger = new Logger(PackQueueService.name);
@@ -74,6 +104,68 @@ export class PackQueueService {
     private readonly orders: OrderReadService,
     private readonly modes: InventoryModeService,
   ) {}
+
+  /**
+   * Everything waiting to be packed, oldest first.
+   *
+   * The bench had a scan box and nothing else, so a packer could not see
+   * what was coming — only find out one parcel at a time by scanning a
+   * label already in their hand. This is the same set `pullNext` draws
+   * from, through the same predicate, so the list and the pull can never
+   * disagree.
+   *
+   * No claim and no lock: it is a view, and locking rows to render them
+   * would block the packers actually working. `labelPrintedAt` is
+   * carried because a parcel with no label cannot be scanned in at all —
+   * that is the one thing on this list somebody has to act on before the
+   * bench can do anything with it.
+   */
+  async listWaiting(courierCode?: string, limit = 100): Promise<WaitingPack[]> {
+    const rows = await this.prisma.client.$queryRawUnsafe<
+      Array<{
+        id: string;
+        shipment_number: string;
+        courier_code: string;
+        awb_number: string | null;
+        label_printed_at: Date | null;
+        pick_completed_at: Date | null;
+        order_number: string | null;
+        recipient_name: string | null;
+        item_count: bigint;
+      }>
+    >(
+      `SELECT s.id,
+              s.shipment_number,
+              s.courier_code,
+              s.awb_number,
+              s.label_printed_at,
+              s.pick_completed_at,
+              o.order_number,
+              o.recipient_name,
+              (SELECT COUNT(*) FROM shipment_items si WHERE si.shipment_id = s.id) AS item_count
+         FROM shipments s
+         JOIN order_shipments os ON os.shipment_id = s.id
+         JOIN orders o ON o.id = os.order_id
+        WHERE ${PACK_ELIGIBLE_SQL}
+          ${courierCode === undefined ? '' : 'AND s.courier_code = $1'}
+        ORDER BY s.created_at ASC
+        LIMIT ${Math.max(1, Math.min(limit, 500))}`,
+      ...(courierCode === undefined ? [] : [courierCode]),
+    );
+
+    return rows.map((r) => ({
+      shipmentId: r.id,
+      shipmentNumber: r.shipment_number,
+      courierCode: r.courier_code,
+      awbNumber: r.awb_number,
+      orderNumber: r.order_number,
+      recipientName: r.recipient_name,
+      labelPrintedAtIso: r.label_printed_at?.toISOString() ?? null,
+      pickCompletedAtIso: r.pick_completed_at?.toISOString() ?? null,
+      // `COUNT(*)` comes back as a bigint and JSON cannot carry one.
+      itemCount: Number(r.item_count),
+    }));
+  }
 
   /** Returns the next eligible parcel (informational, no claim), or
    *  `null` (QUEUE_EMPTY). `courierCode` restricts the pull to that
@@ -93,11 +185,7 @@ export class PackQueueService {
            FROM shipments s
            JOIN order_shipments os ON os.shipment_id = s.id
            JOIN orders o ON o.id = os.order_id
-           WHERE s.status = 'created'
-             AND s.pack_completed_at IS NULL
-             AND s.deleted_at IS NULL
-             AND o.deleted_at IS NULL
-             AND o.status = 'picked'
+           WHERE ${PACK_ELIGIBLE_SQL}
              ${courierCode === undefined ? '' : 'AND s.courier_code = $1'}
            ORDER BY s.created_at ASC
            FOR UPDATE OF s SKIP LOCKED

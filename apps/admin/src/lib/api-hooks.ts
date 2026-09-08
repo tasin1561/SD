@@ -680,6 +680,44 @@ export interface PackBoxLine {
   productName: string;
   quantity: number;
 }
+/** One parcel waiting on the pack bench (`GET /warehouse/packs/queue`). */
+export interface WaitingPack {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly courierCode: string;
+  readonly awbNumber: string | null;
+  readonly orderNumber: string | null;
+  readonly recipientName: string | null;
+  readonly labelPrintedAtIso: string | null;
+  readonly pickCompletedAtIso: string | null;
+  readonly itemCount: number;
+}
+
+/**
+ * What is waiting to be packed.
+ *
+ * The bench is scan-driven, so this is a VIEW and never a claim — it
+ * answers "what is coming", which a packer previously could only learn
+ * one parcel at a time by scanning a label already in their hand. It
+ * polls because parcels arrive from the pick floor while somebody is
+ * standing here.
+ */
+export function usePackQueue(courierCode?: string): UseQueryResult<WaitingPack[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['warehouse-pack', 'queue', courierCode ?? null],
+    refetchInterval: 30_000,
+    queryFn: () =>
+      client
+        .request<{
+          waiting: WaitingPack[];
+        }>(
+          `/api/warehouse/packs/queue${courierCode === undefined ? '' : `?courierCode=${encodeURIComponent(courierCode)}`}`,
+        )
+        .then((r) => r.waiting),
+  });
+}
+
 export interface OpenPackBox {
   packBoxId: string;
   shipmentId: string;

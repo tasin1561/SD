@@ -66,12 +66,19 @@ export function BarcodeCamera({
         );
         stopRef.current = () => controls.stop();
         if (cancelled) controls.stop();
-      } catch {
-        // Permission refused, no camera, or a browser that will not do
-        // it. Say so plainly — the text field is still right there.
-        if (!cancelled) {
-          setError('Could not open the camera. Check the permission, or type the code instead.');
-        }
+      } catch (err) {
+        /*
+          SAY WHICH. "Check the permission" is the wrong instruction on a
+          desktop with no camera at all, and somebody will go and check
+          it — the failures below need different actions and reported as
+          one they get the same wrong one.
+
+          `getUserMedia` names them: NotAllowedError is a refusal,
+          NotFoundError is a machine without a camera, NotReadableError
+          is another app already holding it, and an absent
+          `mediaDevices` is a page that is not a secure context.
+        */
+        if (!cancelled) setError(cameraFailure(err));
       }
     })();
 
@@ -113,6 +120,32 @@ export function BarcodeCamera({
       </div>
     </Modal>
   );
+}
+
+/** What actually went wrong, and what to do about it. */
+function cameraFailure(err: unknown): string {
+  const name = err instanceof Error ? err.name : '';
+  const tail = ' You can type or scan the code into the field instead.';
+  if (typeof navigator === 'undefined' || navigator.mediaDevices === undefined) {
+    return 'This page is not served over https, so the browser will not give it a camera.' + tail;
+  }
+  switch (name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return (
+        'The browser blocked the camera. Allow it for this site from the icon in the address bar, ' +
+        'then try again.' +
+        tail
+      );
+    case 'NotFoundError':
+    case 'OverconstrainedError':
+      return 'No camera on this machine — nothing to open.' + tail;
+    case 'NotReadableError':
+    case 'AbortError':
+      return 'Another app is already using the camera. Close it and try again.' + tail;
+    default:
+      return 'The camera could not be opened.' + tail;
+  }
 }
 
 /** The button that opens it — hidden where there is no camera at all. */
