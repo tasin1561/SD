@@ -29,6 +29,21 @@ const HANDOVER_READY: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.PENDING_DISPATCH,
 ]);
 
+/** One parcel standing packed at the bench, waiting for a van. */
+export interface WaitingHandover {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string;
+  readonly courierCode: string;
+  readonly orderNumber: string | null;
+  readonly recipientName: string | null;
+  readonly orderStatus: OrderStatus;
+  readonly packedAtIso: string | null;
+  /** Already checked at this bench but not yet gone — a driver part-way
+   *  through loading. Kept on the list, marked, rather than removed. */
+  readonly handoverScannedAtIso: string | null;
+}
+
 export interface HandoverScanResult {
   shipmentId: string;
   shipmentNumber: string;
@@ -133,6 +148,74 @@ export class DispatchHandoffService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Everything packed and waiting for a van, oldest first.
+   *
+   * The bench had a scan box and nothing else, so "is that everything?"
+   * — the question somebody actually asks as a driver waits — could only
+   * be answered by counting boxes on the floor. The eligibility is
+   * `HANDOVER_READY`, the SAME set `recordHandoverScan` enforces, so the
+   * list cannot show a parcel the scan would refuse.
+   *
+   * A parcel already scanned this session STAYS on the list, marked,
+   * until it is actually dispatched: a half-loaded van is exactly when
+   * somebody needs to see what is left, and dropping rows as they are
+   * scanned makes the remaining pile impossible to check against.
+   *
+   * No claim, no lock — it is a view. Two people loading two vans must
+   * not block each other over a screen.
+   */
+  async listWaiting(courierCode?: string, limit = 200): Promise<WaitingHandover[]> {
+    const links = await this.prisma.client.orderShipment.findMany({
+      where: {
+        order: { status: { in: [...HANDOVER_READY] }, deletedAt: null },
+        shipment: {
+          // A parcel with no waybill has nothing to scan, and one already
+          // with the courier has gone. Neither belongs on a to-do list.
+          awbNumber: { not: null },
+          status: { not: ShipmentStatus.HANDED_TO_COURIER },
+          supersededAt: null,
+          deletedAt: null,
+          ...(courierCode === undefined ? {} : { courierCode }),
+        },
+      },
+      select: {
+        shipment: {
+          select: {
+            id: true,
+            shipmentNumber: true,
+            awbNumber: true,
+            courierCode: true,
+            packCompletedAt: true,
+            handoverScannedAt: true,
+          },
+        },
+        order: { select: { orderNumber: true, recipientName: true, status: true } },
+      },
+      orderBy: { shipment: { packCompletedAt: 'asc' } },
+      take: Math.max(1, Math.min(limit, 500)),
+    });
+
+    return links.flatMap((l) => {
+      const awb = l.shipment.awbNumber;
+      // Narrowing, not filtering: the WHERE already excluded nulls.
+      if (awb === null) return [];
+      return [
+        {
+          shipmentId: l.shipment.id,
+          shipmentNumber: l.shipment.shipmentNumber,
+          awbNumber: awb,
+          courierCode: l.shipment.courierCode,
+          orderNumber: l.order.orderNumber,
+          recipientName: l.order.recipientName,
+          orderStatus: l.order.status,
+          packedAtIso: l.shipment.packCompletedAt?.toISOString() ?? null,
+          handoverScannedAtIso: l.shipment.handoverScannedAt?.toISOString() ?? null,
+        },
+      ];
+    });
   }
 
   /**

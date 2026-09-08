@@ -7,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -23,6 +24,7 @@ import {
   DispatchHandoffService,
   type DispatchHandoffResult,
   type HandoverScanResult,
+  type WaitingHandover,
 } from '../services/dispatch-handoff.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import {
@@ -69,6 +71,17 @@ export class DispatchController {
   })
   scanBlock(@CurrentStaff() staff: AuthenticatedStaff): Promise<ScanBlockView | null> {
     return this.scanBlocks.currentBlock(staff.id);
+  }
+
+  @Get('handover-queue')
+  @ApiOperation({
+    summary:
+      'Everything packed and waiting for a van (the same HANDOVER_READY set the scan enforces, no claim). Optionally one courier via ?courierCode=. A parcel already scanned this session stays on the list, marked, until it is dispatched',
+  })
+  handoverQueue(
+    @Query('courierCode') courierCode?: string,
+  ): Promise<{ waiting: WaitingHandover[] }> {
+    return this.handoff.listWaiting(courierCode).then((waiting) => ({ waiting }));
   }
 
   @Post('handover-scan')

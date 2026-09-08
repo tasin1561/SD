@@ -3726,6 +3726,42 @@ export function useScanBlock(): UseQueryResult<ScanBlockView | null, Error> {
   });
 }
 
+/** One parcel packed and waiting for a van. */
+export interface WaitingHandover {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string;
+  readonly courierCode: string;
+  readonly orderNumber: string | null;
+  readonly recipientName: string | null;
+  readonly orderStatus: string;
+  readonly packedAtIso: string | null;
+  readonly handoverScannedAtIso: string | null;
+}
+
+/**
+ * What is still standing at the handover bench.
+ *
+ * Polls, because parcels arrive from the pack bench while a driver is
+ * being loaded, and the question this answers — "is that everything?" —
+ * is asked at exactly that moment.
+ */
+export function useHandoverQueue(courierCode?: string): UseQueryResult<WaitingHandover[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin', 'handover-queue', courierCode ?? null],
+    refetchInterval: 30_000,
+    queryFn: () =>
+      client
+        .request<{
+          waiting: WaitingHandover[];
+        }>(
+          `/api/admin/courier/handover-queue${courierCode === undefined ? '' : `?courierCode=${encodeURIComponent(courierCode)}`}`,
+        )
+        .then((r) => r.waiting),
+  });
+}
+
 export function useHandoverScan(): UseMutationResult<HandoverScanResult, Error, string> {
   const client = useApiClient();
   const qc = useQueryClient();
@@ -3740,6 +3776,10 @@ export function useHandoverScan(): UseMutationResult<HandoverScanResult, Error, 
       // manifest it belonged to.
       void qc.invalidateQueries({ queryKey: ['admin-manifests'] });
       void qc.invalidateQueries({ queryKey: ['admin-orders'] });
+      // And the parcel just left the bench's waiting list. Without this
+      // it sits there until the poll comes round, and somebody loading a
+      // van reads a stale count as parcels they have missed.
+      void qc.invalidateQueries({ queryKey: ['admin', 'handover-queue'] });
     },
     onError: () => {
       // A duplicate has just stopped this operator; the banner has to

@@ -17,6 +17,7 @@ import {
 import { useHandoverScan, useScanBlock } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
+import { HandoverQueue } from './handover-queue';
 
 /**
  * The last look at a parcel before a driver takes it.
@@ -142,6 +143,9 @@ export function HandoverBench(): ReactElement {
           </p>
         </CardBody>
       </Card>
+
+      {/* What is LEFT, not only what is done. */}
+      <HandoverQueue />
 
       {done.length > 0 && (
         <Card>
