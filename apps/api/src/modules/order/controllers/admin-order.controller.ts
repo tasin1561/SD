@@ -29,6 +29,7 @@ import {
   AdminCancelOrderDto,
   AdminListOrdersQueryDto,
   ReleaseReservationsDto,
+  RestoreReservationsDto,
 } from '../dto/admin-order.dto';
 import { ForceMutationDto } from '../dto/force-mutation.dto';
 import {
@@ -42,6 +43,7 @@ import {
   OrderAdminOverrideService,
   type ForceMutateResult,
   type ReleaseReservationsResult,
+  type RestoreReservationsResult,
 } from '../services/order-admin-override.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 
@@ -217,6 +219,27 @@ export class AdminOrderController {
       ...(body.targetStatus !== undefined ? { targetStatus: body.targetStatus } : {}),
       reason: body.reason,
       acknowledgeDataIntegrityRisk: body.acknowledgeDataIntegrityRisk,
+      actorStaffId: staff.id,
+      ctx,
+    });
+  }
+
+  @Post(':id/restore-reservations')
+  @RequirePermissions('orders.override')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Re-reserve stock for a committed order that lost its claim (repairs an expired reservation; refuses if the order already holds one)',
+  })
+  restoreReservations(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id', uuid()) id: string,
+    @Body() body: RestoreReservationsDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<RestoreReservationsResult> {
+    return this.override.restoreReservations({
+      orderId: id,
+      ...(body.reason !== undefined ? { reason: body.reason } : {}),
       actorStaffId: staff.id,
       ctx,
     });

@@ -14,7 +14,10 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
+import {
+  InsufficientStockError,
+  StockReservationService,
+} from '../../inventory-stock/services/stock-reservation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { OrderEventWriterService } from './order-event-writer.service';
 import type { ForceMutationFieldsDto } from '../dto/force-mutation.dto';
@@ -96,6 +99,36 @@ export interface ReleaseReservationsResult {
   releasedCount: number;
   released: Array<{ reservationId: string; qtyReleased: number; alreadyInactive: boolean }>;
 }
+
+export interface RestoreReservationsInput {
+  orderId: string;
+  reason?: string;
+  actorStaffId: string;
+  ctx?: ClientContext;
+}
+
+export interface RestoreReservationsResult {
+  orderId: string;
+  orderNumber: string;
+  status: OrderStatus;
+  reservedCount: number;
+  reservations: Array<{ reservationId: string; orderItemId: string; qty: number }>;
+  /** Set when stock ran out part-way; nothing is left half-reserved. */
+  shortfall: string | null;
+}
+
+/**
+ * Where an order can legitimately have lost its stock claim and still
+ * need one — the same set the TTL sweep now refuses to expire. Past
+ * PACKED the reservation has been consumed by `fulfill()` (CUR-3, Model
+ * C), so "restore" would mean re-decrementing stock that already left.
+ */
+const RESTORABLE_STATUSES: readonly OrderStatus[] = [
+  OrderStatus.CONFIRMED,
+  OrderStatus.PENDING_PICK,
+  OrderStatus.PICKED,
+  OrderStatus.PENDING_MANUAL_PLACEMENT,
+];
 
 /**
  * ORD-2 — GOD MODE. A deliberate, audited bypass of the order state
@@ -265,6 +298,155 @@ export class OrderAdminOverrideService {
    * nothing extra. Audited HIGH; an order_event records the outcome.
    * Does NOT change order status.
    */
+  /**
+   * Give a committed order its stock claim back.
+   *
+   * The mirror of `releaseReservations`, for the mess that made it
+   * necessary: until 2026-09-08 the reservation TTL sweep expired ANY
+   * ACTIVE reservation past its date, without looking at the order. An
+   * order already at CONFIRMED or beyond therefore lost its claim while
+   * staying in the queue — SD-2026-26-000003 sat in PENDING_PICK with
+   * both reservations RELEASED/EXPIRED, was pulled into a pick batch,
+   * and produced a sheet with one parcel and no lines.
+   *
+   * The sweep is fixed, so this cannot happen again; it cannot repair
+   * the orders it already happened to, and those are unpickable until
+   * somebody gives the stock back. That is what this is for.
+   *
+   * ── WHY IT IS NOT GOD MODE ───────────────────────────────────────
+   * It changes no status and bypasses no matrix. It re-runs exactly the
+   * reserve the confirm saga would have run (ORD-3), against the same
+   * service (INV-1), so conservation is arithmetic rather than trust.
+   * It carries `orders.override` all the same, because "make stock
+   * disappear from the available pool" is not an ordinary action.
+   *
+   * ── ALL OR NOTHING ───────────────────────────────────────────────
+   * A partial restore is worse than none: the sheet would print some
+   * lines and the picker would walk for a box that still cannot be
+   * filled. On a shortfall every reservation this call made is released
+   * again and the order is left exactly as it was found, with the
+   * shortfall reported so a person decides.
+   *
+   * ── REFUSES WHEN THERE IS NOTHING WRONG ──────────────────────────
+   * An order that already has ACTIVE reservations is not repaired, it
+   * is DOUBLED — the same stock claimed twice, and the second claim
+   * silently unavailable to every other order.
+   */
+  async restoreReservations(input: RestoreReservationsInput): Promise<RestoreReservationsResult> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: input.orderId, deletedAt: null },
+      select: {
+        id: true,
+        sellerId: true,
+        orderNumber: true,
+        status: true,
+        items: { select: { id: true, variantId: true, quantity: true } },
+      },
+    });
+    if (!order) throw new NotFoundException(`Order ${input.orderId} not found`);
+
+    if (!RESTORABLE_STATUSES.includes(order.status)) {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_RESTORABLE',
+        message:
+          `Order ${order.orderNumber} is ${order.status}. Stock is only restored for an order ` +
+          `still on its way to being packed (${RESTORABLE_STATUSES.join(', ')}); past that the ` +
+          'reservation was already consumed at pack and re-reserving would decrement twice.',
+      });
+    }
+
+    const active = await this.reservations.listActiveForOrder(order.id);
+    if (active.length > 0) {
+      throw new BadRequestException({
+        code: 'ORDER_ALREADY_RESERVED',
+        message:
+          `Order ${order.orderNumber} already holds ${active.length} active reservation(s). ` +
+          'Restoring would claim the same stock twice.',
+      });
+    }
+
+    const warehouseId = await this.resolveDefaultWarehouseId();
+    const made: RestoreReservationsResult['reservations'] = [];
+    let shortfall: string | null = null;
+
+    try {
+      for (const item of order.items) {
+        const r = await this.reservations.reserve({
+          sellerId: order.sellerId,
+          variantId: item.variantId,
+          warehouseId,
+          qtyToReserve: item.quantity,
+          orderId: order.id,
+          orderItemId: item.id,
+        });
+        made.push({ reservationId: r.id, orderItemId: item.id, qty: item.quantity });
+      }
+    } catch (e) {
+      if (!(e instanceof InsufficientStockError)) throw e;
+      shortfall = e.message;
+      // Undo this call's own work — see ALL OR NOTHING above.
+      for (const m of made) {
+        await this.reservations
+          .release(m.reservationId, ReservationReleaseReason.OTHER, {
+            type: ActorType.STAFF,
+            id: input.actorStaffId,
+          })
+          .catch(() => undefined);
+      }
+      made.length = 0;
+    }
+
+    const reason = input.reason?.trim() || 'Admin restored an expired stock claim';
+    await this.prisma.client.$transaction(async (tx) => {
+      await this.events.adminAction(tx, {
+        orderId: order.id,
+        action: 'admin_restore_reservations',
+        reason,
+        actorId: input.actorStaffId,
+        data: {
+          reservedCount: made.length,
+          reservations: made,
+          shortfall,
+          ipAddress: input.ctx?.ipAddress ?? null,
+          userAgent: input.ctx?.userAgent ?? null,
+          requestId: input.ctx?.requestId ?? null,
+        },
+      });
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          actorId: input.actorStaffId,
+          staffUserId: input.actorStaffId,
+          sellerId: order.sellerId,
+          action: 'order.restore_reservations',
+          entityType: 'order',
+          entityId: order.id,
+          severity: 'HIGH',
+          metadata: {
+            orderNumber: order.orderNumber,
+            status: order.status,
+            reason,
+            reservedCount: made.length,
+            shortfall,
+            ipAddress: input.ctx?.ipAddress ?? null,
+            userAgent: input.ctx?.userAgent ?? null,
+            requestId: input.ctx?.requestId ?? null,
+          },
+        },
+        tx,
+      );
+    });
+
+    return {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      reservedCount: made.length,
+      reservations: made,
+      shortfall,
+    };
+  }
+
   async releaseReservations(input: ReleaseReservationsInput): Promise<ReleaseReservationsResult> {
     const order = await this.prisma.client.order.findFirst({
       where: { id: input.orderId, deletedAt: null },

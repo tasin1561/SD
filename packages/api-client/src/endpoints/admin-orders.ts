@@ -206,3 +206,23 @@ export interface ReleaseReservationsResult {
     readonly alreadyInactive: boolean;
   }>;
 }
+
+export interface RestoreReservationsRequest {
+  readonly reason?: string;
+}
+
+/** The mirror of the release above: giving a committed order back the
+ *  stock claim an expired reservation took away. */
+export interface RestoreReservationsResult {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly status: string;
+  readonly reservedCount: number;
+  readonly reservations: ReadonlyArray<{
+    readonly reservationId: string;
+    readonly orderItemId: string;
+    readonly qty: number;
+  }>;
+  /** Set when stock ran out part-way; nothing is left half-reserved. */
+  readonly shortfall: string | null;
+}

@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@skydrop/db';
 import { OrderAdminOverrideService } from '../../src/modules/order/services/order-admin-override.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
+import { InsufficientStockError } from '../../src/modules/inventory-stock/services/stock-reservation.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -12,6 +13,8 @@ function makeService(
   opts: {
     order?: AnyArgs | null;
     reserveThrows?: boolean;
+    /** Nth reserve call onwards throws InsufficientStockError. */
+    insufficientAfter?: number;
     shipmentsMatched?: number;
     active?: Array<{ id: string; orderItemId: string; qtyReserved: number }>;
   } = {},
@@ -56,6 +59,14 @@ function makeService(
     log: jest.fn<Promise<string>, [AnyArgs, unknown?]>(async () => 'a1'),
   };
   const reserve = jest.fn(async (i: { orderItemId: string }) => {
+    // `insufficientAfter` makes the Nth line the one that runs out, so
+    // the all-or-nothing rollback has something partial to undo.
+    if (
+      opts.insufficientAfter !== undefined &&
+      reserve.mock.calls.length > opts.insufficientAfter
+    ) {
+      throw new InsufficientStockError('Only 0 available');
+    }
     if (opts.reserveThrows) throw new Error('INSUFFICIENT_STOCK');
     return { id: `r-${i.orderItemId}` };
   });
@@ -330,5 +341,77 @@ describe('forceMutate — recipient changes reach the shipment snapshot', () => 
     });
     const entry = audit.log.mock.calls[0]?.[0] as unknown as { changes: AnyArgs };
     expect(entry.changes).toMatchObject({ shipmentsSynced: 1 });
+  });
+});
+
+/**
+ * Restoring a stock claim the TTL sweep took away.
+ *
+ * Until 2026-09-08 the sweep expired ANY reservation past its date
+ * without looking at the order, so an order already at CONFIRMED or
+ * beyond lost its claim while staying in the queue. The sweep is fixed;
+ * the orders it already happened to are unpickable until somebody gives
+ * the stock back, which is what this does.
+ */
+describe('OrderAdminOverrideService.restoreReservations', () => {
+  const committed = {
+    id: 'o1',
+    sellerId: 's1',
+    orderNumber: 'SD-2026-26-000003',
+    status: OrderStatus.PENDING_PICK,
+    items: [
+      { id: 'oi1', variantId: 'v1', quantity: 1 },
+      { id: 'oi2', variantId: 'v2', quantity: 1 },
+    ],
+  };
+
+  it('re-reserves every line and audits it', async () => {
+    const { svc, reserve, audit } = makeService({ order: committed, active: [] });
+    const res = await svc.restoreReservations({ orderId: 'o1', actorStaffId: 'staff-1' });
+    expect(res.reservedCount).toBe(2);
+    expect(res.shortfall).toBeNull();
+    expect(reserve).toHaveBeenCalledTimes(2);
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'order.restore_reservations', severity: 'HIGH' }),
+      expect.anything(),
+    );
+  });
+
+  it('REFUSES an order that already holds a claim', async () => {
+    // Restoring one of these does not repair it, it DOUBLES it — the
+    // same stock claimed twice, the second copy silently unavailable to
+    // every other order.
+    const { svc, reserve } = makeService({ order: committed, active: [{ id: 'r1' }] });
+    await expect(
+      svc.restoreReservations({ orderId: 'o1', actorStaffId: 'staff-1' }),
+    ).rejects.toThrow(/already holds/i);
+    expect(reserve).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES an order that is past packing', async () => {
+    // From PACKED the reservation was consumed by fulfill() and the
+    // stock has already left; re-reserving would decrement twice.
+    const { svc } = makeService({
+      order: { ...committed, status: OrderStatus.DISPATCHED },
+      active: [],
+    });
+    await expect(
+      svc.restoreReservations({ orderId: 'o1', actorStaffId: 'staff-1' }),
+    ).rejects.toThrow(/DISPATCHED/);
+  });
+
+  it('gives back what it took when stock runs out part-way', async () => {
+    // All or nothing: a half-restored order prints some lines and sends
+    // a picker walking for a box that still cannot be filled.
+    const { svc, release } = makeService({
+      order: committed,
+      active: [],
+      insufficientAfter: 1,
+    });
+    const res = await svc.restoreReservations({ orderId: 'o1', actorStaffId: 'staff-1' });
+    expect(res.reservedCount).toBe(0);
+    expect(res.shortfall).toMatch(/Only 0 available/);
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(release).toHaveBeenCalledWith('r-oi1', expect.anything(), expect.anything());
   });
 });

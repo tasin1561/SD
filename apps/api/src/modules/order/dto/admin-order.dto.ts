@@ -46,3 +46,13 @@ export class ReleaseReservationsDto {
   @MaxLength(500)
   reason?: string;
 }
+
+/** Same shape as the release above; kept separate so the two can grow
+ *  apart without one silently inheriting the other's validation. */
+export class RestoreReservationsDto {
+  @ApiProperty({ required: false, maxLength: 500 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}

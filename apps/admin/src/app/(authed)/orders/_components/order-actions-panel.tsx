@@ -25,6 +25,7 @@ import {
 } from '@skydrop/ui/components';
 import { ForceMutationDialog } from './force-mutation-dialog';
 import { ReleaseReservationsDialog } from './release-reservations-dialog';
+import { RestoreReservationsDialog } from './restore-reservations-dialog';
 
 const TERMINAL_STATUSES: readonly OrderStatus[] = [
   OrderStatus.DELIVERED,
@@ -77,6 +78,8 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
 
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreNote, setRestoreNote] = useState<string | null>(null);
 
   const [lastOverride, setLastOverride] = useState<ForceMutationResult | null>(null);
   const [lastRelease, setLastRelease] = useState<ReleaseReservationsResult | null>(null);
@@ -201,6 +204,23 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             >
               Release reservations…
             </Button>
+            {/* The mirror. Sits beside the release because they are the
+                two halves of one question — this order's stock claim —
+                and looking for one while only the other exists is how a
+                stuck order stays stuck. */}
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setRestoreOpen(true)}
+              disabled={!canOverride}
+              title={
+                canOverride
+                  ? 'Re-reserve stock for an order that lost its claim to an expired reservation. Refused if it already holds one.'
+                  : 'Requires SUPER_ADMIN role'
+              }
+            >
+              Restore stock claim…
+            </Button>
           </div>
           {!canOverride && (
             <div className="text-text-faint text-xs">
@@ -209,6 +229,19 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
             </div>
           )}
         </div>
+
+        {restoreNote !== null && (
+          <div className="border-border bg-surface-raised text-text-body rounded-[6px] border px-3 py-2 text-xs">
+            {restoreNote}{' '}
+            <button
+              type="button"
+              className="text-text-faint hover:text-text-body underline underline-offset-2"
+              onClick={() => setRestoreNote(null)}
+            >
+              dismiss
+            </button>
+          </div>
+        )}
 
         {lastOverride && (
           <OverrideResultPanel result={lastOverride} onDismiss={() => setLastOverride(null)} />
@@ -315,6 +348,19 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
         onOpenChange={setReleaseOpen}
         orderId={order.id}
         onSuccess={(result) => setLastRelease(result)}
+      />
+
+      <RestoreReservationsDialog
+        open={restoreOpen}
+        onOpenChange={setRestoreOpen}
+        orderId={order.id}
+        onSuccess={(result) => {
+          setRestoreNote(
+            result.shortfall === null
+              ? `Reserved ${result.reservedCount} line(s) again — ${result.orderNumber} can be picked.`
+              : `Nothing reserved: ${result.shortfall}`,
+          );
+        }}
       />
     </Card>
   );

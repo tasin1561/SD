@@ -29,6 +29,8 @@ import type {
   OrderView,
   ReleaseReservationsRequest,
   ReleaseReservationsResult,
+  RestoreReservationsRequest,
+  RestoreReservationsResult,
   SellerInvitationListItem,
   SellerListResponse,
   SystemSettingFull,
@@ -393,6 +395,30 @@ export function useForceMutation(
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}
+
+/**
+ * Give a committed order back a stock claim an expired reservation took.
+ *
+ * Invalidates the stock keys as well as the order ones: this is the one
+ * order action that changes what is available to EVERY other order.
+ */
+export function useRestoreReservations(
+  orderId: string,
+): UseMutationResult<RestoreReservationsResult, Error, RestoreReservationsRequest> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<RestoreReservationsResult>(
+        `/api/admin/orders/${orderId}/restore-reservations`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-stock'] });
     },
   });
 }

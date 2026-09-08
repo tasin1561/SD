@@ -34,6 +34,8 @@ export type {
   ReserveAttemptOutcome,
   ReleaseReservationsRequest,
   ReleaseReservationsResult,
+  RestoreReservationsRequest,
+  RestoreReservationsResult,
 } from './endpoints/admin-orders';
 export type {
   CustomerDeliveryFeeView,
