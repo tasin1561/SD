@@ -537,17 +537,24 @@ export function AppShell({
           */}
           <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-3 lg:flex-1 lg:basis-0">
             {headerAlways}
-            <div className="hidden min-w-0 items-center gap-3 lg:flex">
+            {/* `shrink-0`, NOT `min-w-0`. As a min-w-0 wrapper this let
+                its own children collapse, and the identity — the one
+                thing here made of words rather than icons — was the
+                only one that could: the email rendered at 96px as
+                "q..". The cluster sizes to its content now and the
+                section label absorbs the difference, which is the
+                trade-off the comment above already sanctions. */}
+            <div className="hidden shrink-0 items-center gap-3 lg:flex">
               {headerActions}
               {identityHref === undefined ? (
-                <div className="min-w-0 text-right leading-tight">
+                <div className="min-w-0 max-w-[14rem] text-right leading-tight">
                   <div className="text-text-body truncate text-xs">{identityPrimary}</div>
                   <div className="text-text-faint truncate text-xs">{identitySecondary}</div>
                 </div>
               ) : (
                 <Link
                   href={identityHref}
-                  className="hover:bg-surface-raised min-w-0 rounded-[6px] px-2 py-1 text-right leading-tight transition-colors"
+                  className="hover:bg-surface-raised min-w-0 max-w-[14rem] rounded-[6px] px-2 py-1 text-right leading-tight transition-colors"
                   aria-current={undefined}
                   onClick={() => undefined}
                 >

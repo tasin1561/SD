@@ -1,27 +1,12 @@
 'use client';
 
 import { clsx } from 'clsx';
-import {
-  AlertTriangle,
-  Bell,
-  CheckCheck,
-  Package,
-  PackageCheck,
-  RotateCcw,
-  Truck,
-  Wallet,
-  Warehouse,
-  X,
-} from 'lucide-react';
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentType,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import { Bell, CheckCheck, X } from 'lucide-react';
+// SHARED with the full inbox page. A group that is a red triangle in
+// one surface and a blue lorry in the other teaches the reader that the
+// icon means nothing.
+import { agoLabel, humaniseTopic, notificationKindStyle } from './notification-kind';
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 
 export interface BellItem {
   readonly id: string;
@@ -71,60 +56,6 @@ export interface BellItem {
  * tab — so a tab can never be empty and the strip stays short without
  * anybody maintaining a second list of what to show.
  */
-
-/**
- * Group → how it looks. Keyed on the catalogue's group names.
- *
- * Colour comes from the shared status tokens rather than hex, so both
- * themes are one implementation (FE-6). An unknown group falls back to
- * the bell — a new group added server-side must render as something,
- * and rendering as nothing would hide the notification entirely.
- */
-const GROUP_STYLE: Record<string, { Icon: ComponentType<{ size?: number }>; tone: string }> = {
-  Couriers: { Icon: Truck, tone: 'in-transit' },
-  Shipments: { Icon: PackageCheck, tone: 'in-transit' },
-  Orders: { Icon: Package, tone: 'confirmed' },
-  Returns: { Icon: RotateCcw, tone: 'rto' },
-  Money: { Icon: Wallet, tone: 'delivered' },
-  Warehouse: { Icon: Warehouse, tone: 'pending' },
-  System: { Icon: AlertTriangle, tone: 'failed' },
-};
-const FALLBACK = { Icon: Bell, tone: 'draft' } as const;
-
-function styleFor(group: string | null): { Icon: ComponentType<{ size?: number }>; tone: string } {
-  return (group !== null ? GROUP_STYLE[group] : undefined) ?? FALLBACK;
-}
-
-/**
- * How long ago, in the words a person would use.
- *
- * Minutes and hours while it is still today, "Yesterday" while that is
- * the clearest thing to say, then a date. An absolute timestamp on a
- * row that arrived twelve minutes ago makes the reader do the
- * subtraction; a relative one on something from August makes them do
- * worse.
- */
-function ago(iso: string, now: number): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return '';
-  const mins = Math.floor((now - t) / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const d = new Date(t);
-  const days = Math.floor(hours / 24);
-  if (days === 1) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-/** `shipment.delivery_failed.seller` → `Delivery failed`, as a last resort. */
-function humaniseTopic(topic: string): string {
-  const last = topic.split('.').filter((p) => p !== 'seller' && p !== 'staff');
-  const word = last[last.length - 1] ?? topic;
-  const spaced = word.replace(/_/g, ' ');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
 
 export function NotificationBell({
   unread,
@@ -328,7 +259,7 @@ export function NotificationBell({
               <ul className="divide-border-subtle divide-y">
                 {shown.map((n) => {
                   const group = groupOf?.(n.topic) ?? null;
-                  const { Icon, tone } = styleFor(group);
+                  const { Icon, tone } = notificationKindStyle(group);
                   const chip = labelOf?.(n.topic) ?? humaniseTopic(n.topic);
                   const isUnread = n.readAt === null;
                   return (
@@ -366,7 +297,7 @@ export function NotificationBell({
                               {chip}
                             </span>
                             <span className="text-text-faint shrink-0 text-[11px] whitespace-nowrap">
-                              {ago(n.createdAt, now)}
+                              {agoLabel(n.createdAt, now)}
                             </span>
                           </div>
 

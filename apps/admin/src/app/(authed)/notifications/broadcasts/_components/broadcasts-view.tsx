@@ -120,6 +120,11 @@ const AUDIENCES: ReadonlyArray<{
   },
 ];
 
+/** "1 person", not "1 people". A count is read aloud in the head. */
+function people(n: number): string {
+  return `${n} ${n === 1 ? 'person' : 'people'}`;
+}
+
 export function BroadcastsView(): ReactElement {
   const [audienceIdx, setAudienceIdx] = useState(0);
   const [audienceValues, setAudienceValues] = useState<string[]>([]);
@@ -253,7 +258,7 @@ export function BroadcastsView(): ReactElement {
 
             {previewed !== null && (
               <span className="text-sm">
-                <strong className="tabular-nums">{previewed.recipientCount}</strong> people
+                <strong className="tabular-nums">{people(previewed.recipientCount)}</strong>
                 {previewed.sample.length > 0 && (
                   <span className="text-text-muted"> — {previewed.sample.join(', ')}…</span>
                 )}
@@ -279,7 +284,7 @@ export function BroadcastsView(): ReactElement {
                     },
                     {
                       onSuccess: (r) => {
-                        setSent(`Sent to ${r.recipientCount} people (${r.delivered} delivered).`);
+                        setSent(`Sent to ${people(r.recipientCount)} (${r.delivered} delivered).`);
                         setTitle('');
                         setBody('');
                         preview.reset();
@@ -289,7 +294,7 @@ export function BroadcastsView(): ReactElement {
                   );
                 }}
               >
-                Send to {previewed.recipientCount} people
+                Send to {people(previewed.recipientCount)}
               </Button>
               <p className="text-text-faint mt-2 text-xs">
                 This cannot be recalled. If anyone joined or left that audience since the count
