@@ -63,6 +63,12 @@ function sources(dir: string, skip: string): string[] {
  */
 const EXPECTED_UNLINKED = new Set<string>([
   '/dashboard', // the post-login landing page; the brand mark points here
+  // A redirect kept for old bookmarks — the company notification
+  // preferences merged into /notifications/settings. Its only way in is
+  // a link somebody saved months ago, which no scan of this repo can
+  // see. Deliberately unlinked: pointing at it from the hub would send
+  // people through a redirect for no reason.
+  '/settings/notifications',
 ]);
 
 describe('every seller page can be reached from another page', () => {

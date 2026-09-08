@@ -51,7 +51,7 @@ export function NotificationBellContainer(): ReactElement {
       groupOf={(topic) => byTopic.get(topic)?.group ?? null}
       labelOf={(topic) => byTopic.get(topic)?.label ?? null}
       viewAllHref="/notifications"
-      preferencesHref="/settings/notifications"
+      preferencesHref="/notifications/settings"
       Link={({ href, className, children, onClick }) => (
         // Spread rather than pass-through: under
         // exactOptionalPropertyTypes an explicit `undefined` is not the

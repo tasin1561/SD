@@ -46,7 +46,6 @@ describe('a single-purpose page takes the permission of its purpose', () => {
     ['/products/import', 'catalog.import'],
     ['/settings/api-keys', 'api_keys.manage'],
     ['/settings/webhooks', 'webhooks.manage'],
-    ['/settings/notifications', 'notifications.manage'],
   ];
 
   it.each(cases)('%s needs %s', (path, permission) => {
@@ -110,8 +109,13 @@ describe('what this actually closes, per role', () => {
     }
   });
 
-  it('finance opens notification preferences but not webhooks or API keys', () => {
-    expect(canSeePath(finance, '/settings/notifications')).toBe(true);
+  it('finance opens notification settings but not webhooks or API keys', () => {
+    // `/notifications/settings` is UNGATED on purpose: a person's own
+    // per-topic choices are self-service (NOTIF-11), and the company
+    // half inside it is gated cosmetically instead. Everyone opens the
+    // page; not everyone sees both sections.
+    expect(canSeePath(finance, '/notifications/settings')).toBe(true);
+    expect(canSeePath(viewer, '/notifications/settings')).toBe(true);
     expect(canSeePath(finance, '/settings/webhooks')).toBe(false);
     expect(canSeePath(finance, '/settings/api-keys')).toBe(false);
     // …and the hub itself still opens, so those tiles simply are not there.

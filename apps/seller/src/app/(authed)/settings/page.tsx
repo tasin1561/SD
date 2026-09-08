@@ -8,7 +8,6 @@ import {
   PackageSearch,
   ReceiptText,
   Wallet,
-  BellRing,
   Store,
 } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
@@ -75,22 +74,16 @@ export default function SettingsPage(): ReactElement {
         'Configure HTTPS endpoints to receive event POSTs from Skydrop. Each gets a unique HMAC secret.',
     },
     {
-      href: '/settings/notifications',
-      icon: <Bell size={20} />,
-      title: 'Company notification preferences',
-      description:
-        'What this COMPANY is emailed about, by category, and the quiet hours those emails respect.',
-    },
-    {
-      // The other grain, and it needs saying which is which: the tile
-      // above is what the company is emailed; this is what reaches one
-      // person's own inbox. Two tiles both called "notifications" with
-      // no distinction is how somebody changes the wrong one.
+      // ONE tile. It was two, both called notifications, distinguishable
+      // only by reading the descriptions carefully — which is how
+      // somebody changes the wrong one and believes they changed the
+      // other. Both grains now live on one page, in sections that each
+      // say whose decision they are.
       href: '/notifications/settings',
-      icon: <BellRing size={20} />,
-      title: 'Your own notifications',
+      icon: <Bell size={20} />,
+      title: 'Notification settings',
       description:
-        'What reaches YOUR inbox, topic by topic. Your choices, separate from the company’s.',
+        'What reaches YOUR inbox, topic by topic — and, if it is yours to set, what this COMPANY is emailed about.',
     },
     {
       href: '/settings/api-keys',

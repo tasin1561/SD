@@ -69,7 +69,6 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/settings/orders', 'orders.view'], // @Controller seller/order-defaults
   ['/settings/api-keys', 'api_keys.manage'], // @Controller seller/api-keys
   ['/settings/webhooks', 'webhooks.manage'], // @Controller seller/webhook-endpoints
-  ['/settings/notifications', 'notifications.manage'], // @Controller seller/notification-preferences
   ['/settings', 'profile.view'],
 ];
 
