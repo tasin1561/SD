@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Check, Download, Printer, Search } from 'lucide-react';
+import { Check, Download, Printer, Search, X } from 'lucide-react';
 import {
   Button,
   Card,
@@ -408,8 +408,44 @@ function BatchesTab(): ReactElement {
   const batches = usePickBatches(search);
   const buildList = useBuildPickList();
   const markPicked = useMarkBatchPicked();
+  const confirm = useConfirmPickListPrinted();
+  const cancel = useCancelPickBatch();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+
+  /*
+    FINISHING A DRAFT FROM HERE.
+
+    Confirming the print used to live ONLY in the modal that opens the
+    moment a sheet is built, so closing that modal — a stray click, a
+    reload, going to find the printer — stranded the batch in DRAFT with
+    no way back to it. That is not cosmetic: a batch holds its parcels
+    via `shipment.pickBatchId`, which is what takes them out of the
+    picking queue, so those parcels became invisible on the tab that
+    would otherwise offer them and could not be walked from this one.
+    The two ways out of DRAFT belong wherever a draft can be SEEN.
+  */
+  async function onConfirmPrinted(batchId: string): Promise<void> {
+    setError(null);
+    try {
+      const r = await confirm.mutateAsync(batchId);
+      toast.success(
+        `${r.batchNumber} is on the floor — ${r.transitioned} orders sent to be picked`,
+      );
+    } catch (e) {
+      setError(serverVerdict(e));
+    }
+  }
+
+  async function onAbandon(batchId: string): Promise<void> {
+    setError(null);
+    try {
+      await cancel.mutateAsync(batchId);
+      toast.success('Batch abandoned — those parcels are back in the picking queue');
+    } catch (e) {
+      setError(serverVerdict(e));
+    }
+  }
 
   async function onPicked(batchId: string): Promise<void> {
     setError(null);
@@ -529,6 +565,28 @@ function BatchesTab(): ReactElement {
                         >
                           <Printer size={14} />
                         </Button>
+                        {/* A draft has exactly two ways out, and the
+                            sheet is already reprintable beside them. */}
+                        {b.status === 'DRAFT' && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              onClick={() => void onConfirmPrinted(b.id)}
+                              disabled={confirm.isPending}
+                              aria-label={`Confirm ${b.batchNumber} printed`}
+                            >
+                              <Check size={14} /> It printed
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => void onAbandon(b.id)}
+                              disabled={cancel.isPending}
+                              aria-label={`Abandon ${b.batchNumber}`}
+                            >
+                              <X size={14} /> Abandon
+                            </Button>
+                          </>
+                        )}
                         {/* Only a printed batch can be walked, so only a
                             printed batch can come back from one. */}
                         {b.status === 'PRINTED' && (
