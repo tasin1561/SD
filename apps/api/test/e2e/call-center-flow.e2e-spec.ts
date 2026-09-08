@@ -25,7 +25,8 @@ import {
  *     attempt persists with outcome=CONFIRMED
  *  3. reschedule: CALLBACK_REQUESTED future availableAt → not pickable
  *     until time advances
- *  4. NDR cap: 3 NO_ANSWER → 3rd is REJECTED_NDR, no re-queue
+ *  4. NDR cap: 3 NO_ANSWER → REJECTED_NDR (AUTO_RELEASE) or
+ *     AWAITING_SELLER_DECISION with a review row (MANUAL_REVIEW)
  *  5. concurrent pullNext (FOR UPDATE SKIP LOCKED) through HTTP
  *  6. assignment expiration → entry back to PENDING + audit
  *  7. bulk-dequeue by seller (CONFIRMED orders untouched)
@@ -299,7 +300,33 @@ describe('Call center flow (e2e)', () => {
     });
   }
 
-  it('4. NDR cap: 3 NO_ANSWER attempts → 3rd is REJECTED_NDR, no re-queue', async () => {
+  /**
+   * Pin the policy rather than inheriting the default.
+   *
+   * `inventory.early_reservation_ndr_action` decides where the cap
+   * LANDS — REJECTED_NDR under AUTO_RELEASE, AWAITING_SELLER_DECISION
+   * under MANUAL_REVIEW (R5b). This test used to read whatever the seed
+   * happened to say, so changing that default on 2026-09-08 broke it
+   * without anything being wrong with the code under test. Both paths
+   * are real and both are worth covering; each says which it is.
+   */
+  async function setNdrPolicy(value: 'AUTO_RELEASE' | 'MANUAL_REVIEW'): Promise<void> {
+    await h.prisma.sellerSettingOverride.upsert({
+      where: {
+        sellerId_key: { sellerId, key: 'inventory.early_reservation_ndr_action' },
+      },
+      create: {
+        sellerId,
+        key: 'inventory.early_reservation_ndr_action',
+        valueType: 'STRING',
+        valueString: value,
+      },
+      update: { valueString: value },
+    });
+  }
+
+  it('4. NDR cap under AUTO_RELEASE: 3 NO_ANSWER attempts → 3rd is REJECTED_NDR, no re-queue', async () => {
+    await setNdrPolicy('AUTO_RELEASE');
     await receiveStock(10);
     const orderId = await createSubmitted(1);
 
@@ -340,6 +367,41 @@ describe('Call center flow (e2e)', () => {
         },
       }),
     ).toBe(0); // terminal — nothing re-queued
+  });
+
+  it('4b. NDR cap under MANUAL_REVIEW: the order PAUSES for the seller instead', async () => {
+    // The default since 2026-09-08. An order nobody could reach is the
+    // seller's to decide about — they know whether that customer is
+    // worth another ring — so the cap parks it rather than dropping it.
+    await setNdrPolicy('MANUAL_REVIEW');
+    await receiveStock(10);
+    const orderId = await createSubmitted(1);
+
+    for (let i = 1; i <= 2; i += 1) {
+      const p = await pullNext(staffAuth).expect(200);
+      await recordAttempt(staffAuth, p.body.assignment.assignmentId as string, {
+        outcome: CallOutcome.NO_ANSWER,
+      }).expect(200);
+      await makePickableNow(orderId);
+    }
+
+    const p3 = await pullNext(staffAuth).expect(200);
+    const r3 = await recordAttempt(staffAuth, p3.body.assignment.assignmentId as string, {
+      outcome: CallOutcome.NO_ANSWER,
+    }).expect(200);
+    expect(r3.body.hitCap).toBe(true);
+    expect(r3.body.finalOrderStatus).toBe(OrderStatus.AWAITING_SELLER_DECISION);
+    expect(r3.body.requeued).toBe(false);
+
+    const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+    expect(order.status).toBe(OrderStatus.AWAITING_SELLER_DECISION);
+
+    // And a review row exists for the seller to answer. Without one the
+    // order is invisible to the expiry sweep's main pass — the shape
+    // that stranded SD-2026-QA-916001 for six weeks.
+    const review = await h.prisma.earlyReservationReview.findUnique({ where: { orderId } });
+    expect(review).not.toBeNull();
+    expect(review?.status).toBe('OPEN');
   });
 
   it('5. concurrent pullNext (SKIP LOCKED) through HTTP: one ASSIGNED, one QUEUE_EMPTY', async () => {
