@@ -39,12 +39,53 @@ export class TicketHandlingService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** What this courier makes possible. Pure — no reads, no state. */
-  initialFor(courierCode: string | null): TicketHandling {
+  /**
+   * What this courier makes possible, AND what we are currently willing
+   * to let software do.
+   *
+   * Two different questions, deliberately answered in one place. The
+   * courier half is fixed by what has been built; the second half is
+   * `courier.ticket_automation_enabled`, an operator switch — because
+   * "a person handles these for now" is a decision somebody makes on a
+   * Tuesday afternoon about the state of the portal automation, and it
+   * has to be reversible without a deploy on either side.
+   *
+   * It used to be pure and is now a read, which is the cost of the
+   * switch existing at all. Keeping it in THIS method rather than
+   * checking the flag at the call site is the point: one reader, as with
+   * `BinPolicyService` and `WarehouseResolverService` (CNS-2). A caller
+   * that consulted the switch itself would be a second opinion about
+   * what "automated" means, and the two would drift.
+   *
+   * FAILS TO MANUAL. If the setting cannot be read we hand it to a
+   * person, because the two mistakes are not the same size: manual costs
+   * somebody's afternoon, while defaulting to AUTO during a settings
+   * outage files real tickets with a real courier under a switch
+   * somebody deliberately turned off.
+   *
+   * NOTHING IN FLIGHT MOVES. This decides the stamp at raise time only —
+   * a ticket software has already opened with the courier stays AUTO,
+   * because a conversation already under way must not change hands
+   * halfway through (which is the same reason `fallBackToManual` never
+   * runs backwards).
+   */
+  async initialFor(courierCode: string | null): Promise<TicketHandling> {
     if (courierCode === null || courierCode === '') return TicketHandling.NONE;
-    return AUTOMATED_COURIERS.includes(courierCode.toLowerCase())
-      ? TicketHandling.AUTO
-      : TicketHandling.MANUAL;
+    if (!AUTOMATED_COURIERS.includes(courierCode.toLowerCase())) return TicketHandling.MANUAL;
+    return (await this.automationEnabled()) ? TicketHandling.AUTO : TicketHandling.MANUAL;
+  }
+
+  /** The operator switch. Absent or unreadable ⇒ manual. */
+  private async automationEnabled(): Promise<boolean> {
+    try {
+      const row = await this.prisma.client.systemSetting.findUnique({
+        where: { key: 'courier.ticket_automation_enabled' },
+        select: { valueBoolean: true },
+      });
+      return row?.valueBoolean === true;
+    } catch {
+      return false;
+    }
   }
 
   /** Stamp it at raise time. */

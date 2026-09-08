@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType, BankEntryType, BankOwnerKind, Prisma } from '@skydrop/db';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { BankLedgerService } from './bank-ledger.service';
@@ -108,6 +109,51 @@ export class BankTransferService {
     const spread = input.sellerId && crossCurrency ? inn.sub(creditedToSeller) : null;
 
     return this.prisma.client.$transaction(async (tx) => {
+      /*
+        YOU CANNOT MOVE MORE OF SOMEBODY'S MONEY THAN THEY HAVE HERE.
+
+        "Whose money" is a CHOICE the operator makes on the form, not a
+        fact read off a statement, and it was previously unchecked: a
+        transfer marked as a seller's could take ₹5,000 out of an account
+        holding ₹1,200 of theirs. Nothing failed. The ledger is
+        append-only, so the account simply began reporting a NEGATIVE
+        held-for-that-seller figure — which is not a real thing, and
+        which quietly corrupts the two numbers this whole page exists to
+        state: what is ours and what we are holding. TRE-8's clamp says
+        the same in the other direction (a seller with no cash here
+        produces no entry at all), and this is that invariant enforced at
+        the only other place that attributes cash to a person.
+
+        The read is INSIDE the write's transaction and under the same
+        per-(account, owner) lock `reconcile` takes (TRE-1), because a
+        balance read outside the write it guards is not a guard at all:
+        two operators both read ₹1,200 and both move ₹1,000.
+
+        CAPITAL is deliberately NOT checked. Our own account genuinely can
+        go overdrawn, and refusing to RECORD money that really left the
+        bank would make the book disagree with the statement — which is
+        the one thing a bank book must never do. A seller's holding is
+        different: it is our arithmetic, not the bank's.
+      */
+      if (input.sellerId) {
+        const ownerKey = `${from.id}|${BankOwnerKind.SELLER}|${input.sellerId}`;
+        await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ownerKey);
+        const held = await this.ledger.ownerBalance(
+          from.id,
+          { kind: BankOwnerKind.SELLER, sellerId: input.sellerId },
+          tx,
+        );
+        if (out.gt(held)) {
+          throw new BadRequestException({
+            code: 'TRANSFER_EXCEEDS_SELLER_HOLDING',
+            message:
+              `This account holds ${held.toFixed(2)} ${from.currency} for that seller, and the ` +
+              `transfer moves ${out.toFixed(2)}. Move at most what they hold here, or record the ` +
+              `rest as ours — the difference is not theirs to send.`,
+          });
+        }
+      }
+
       const transfer = await tx.bankTransfer.create({
         data: {
           fromAccountId: from.id,

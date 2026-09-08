@@ -513,6 +513,15 @@ const systemSettings: SystemSettingSeed[] = [
       'ON (the default): scanning a parcel at the handover bench IS the handover — the order goes DISPATCHED there and then, and the manifest closes itself once its last parcel is scanned, so nobody confirms a handoff. The scan is the truest signal the system has: it happens per parcel, at the door, at the moment the box leaves, where confirming a handoff is one person asserting afterwards that forty parcels went. OFF: the scan only records that the parcel was checked, and a supervisor still confirms the handoff per manifest. Turn it off if parcels are ever scanned to check them IN rather than out.',
   },
   {
+    key: 'courier.ticket_automation_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: "Software may raise a seller's issue with the courier",
+    description:
+      "OFF (where this starts): every issue a seller raises is stamped MANUAL and waits for a person to carry it to the courier — nothing is enqueued and no portal is driven, so the ticket says plainly that it is somebody's to move rather than sitting in a queue everyone assumes software is working. ON: a Delhivery parcel's issue is raised through the portal automatically, and falls back to manual by itself if that attempt fails. Only Delhivery has ticket automation at all; a Shiprocket or manually-placed parcel is manual either way. This decides the stamp AT RAISE TIME only — turning it off does not take back a ticket software has already opened, because a conversation already under way must not change hands halfway through.",
+  },
+  {
     key: 'ops.tracking_stranded_alert_hours',
     category: 'ops',
     valueType: SettingValueType.INT,

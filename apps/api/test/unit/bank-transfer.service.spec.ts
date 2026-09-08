@@ -1,7 +1,7 @@
 import { Currency, Prisma } from '@skydrop/db';
 import { BankTransferService } from '../../src/modules/treasury/services/bank-transfer.service';
 
-function make(fromCur: Currency, toCur: Currency) {
+function make(fromCur: Currency, toCur: Currency, sellerHeld = '1000000') {
   const posted: Array<{ type: string; signedAmount: string; ownerKind: string }> = [];
   const ledger = {
     post: jest.fn(
@@ -14,6 +14,9 @@ function make(fromCur: Currency, toCur: Currency) {
         return { id: 'e' };
       },
     ),
+    // What the source account holds for that seller. Generous by
+    // default so the rate cases below stay about the rate.
+    ownerBalance: jest.fn(async () => new Prisma.Decimal(sellerHeld)),
   };
   const prisma = {
     client: {
@@ -27,7 +30,13 @@ function make(fromCur: Currency, toCur: Currency) {
       },
       bankTransfer: { create: jest.fn(async () => ({ id: 't1' })) },
       $transaction: async (fn: (tx: unknown) => unknown) =>
-        fn({ bankTransfer: { create: async () => ({ id: 't1' }) } }),
+        fn({
+          bankTransfer: { create: async () => ({ id: 't1' }) },
+          // The holding guard takes the same advisory lock reconcile
+          // does; a mocked tx has to answer it or the whole transfer
+          // fails for the wrong reason.
+          $executeRaw: async () => 1,
+        }),
     },
   };
   const svc = new BankTransferService(
@@ -111,5 +120,36 @@ describe('BankTransferService — the quoted rate is a promise', () => {
     await expect(
       svc.transfer({ ...BASE, toAccountId: 'from', amountOut: '10', amountIn: '10' }),
     ).rejects.toThrow();
+  });
+});
+
+describe("BankTransferService — you cannot move more of a seller's money than they have", () => {
+  it("refuses a transfer larger than the seller's holding in that account", async () => {
+    // "Whose money" is a CHOICE on the form, not a fact off a statement.
+    // Unchecked, this posts a negative held-for-seller figure — not a
+    // real thing, and permanent, because the ledger is append-only.
+    const { svc } = make(Currency.INR, Currency.INR, '1200');
+    await expect(
+      svc.transfer({ ...BASE, amountOut: '5000', amountIn: '5000', sellerId: 'seller-a' }),
+    ).rejects.toMatchObject({
+      response: { code: 'TRANSFER_EXCEEDS_SELLER_HOLDING' },
+    });
+  });
+
+  it('allows exactly what they hold', async () => {
+    // The boundary is inclusive: sending a seller their whole balance is
+    // the ordinary case, not an error.
+    const { svc, posted } = make(Currency.INR, Currency.INR, '1200');
+    await svc.transfer({ ...BASE, amountOut: '1200', amountIn: '1200', sellerId: 'seller-a' });
+    expect(posted).toHaveLength(2);
+  });
+
+  it('does NOT check our own money', async () => {
+    // Capital can genuinely go overdrawn, and refusing to RECORD money
+    // that really left the bank would make the book disagree with the
+    // statement — the one thing it must never do.
+    const { svc, posted } = make(Currency.INR, Currency.INR, '0');
+    await svc.transfer({ ...BASE, amountOut: '999999', amountIn: '999999' });
+    expect(posted.map((p) => p.ownerKind)).toEqual(['CAPITAL', 'CAPITAL']);
   });
 });

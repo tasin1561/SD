@@ -11,7 +11,7 @@ import {
   Select,
   Textarea,
 } from '@skydrop/ui/components';
-import { useRecordTransfer } from '@/lib/ops-hooks';
+import { useRecordTransfer, useTreasuryOverview } from '@/lib/ops-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { useFxRatesList, useSellersList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -67,6 +67,20 @@ export function TransferModal({
 
   const list = accounts.data ?? [];
   const from = list.find((a) => a.id === fromAccountId);
+
+  /*
+    Only asked for while the modal is open — the overview is a heavy
+    read and this is a hint on one field.
+  */
+  const overview = useTreasuryOverview(open);
+  const heldHere = useMemo(() => {
+    if (sellerId === '' || fromAccountId === '') return null;
+    const account = overview.data?.accounts.find((a) => a.accountId === fromAccountId);
+    if (account === undefined) return null;
+    // Absent from `bySeller` means they hold nothing here, which is the
+    // most useful thing this hint can say — not a reason to stay quiet.
+    return account.bySeller.find((b) => b.sellerId === sellerId)?.amount ?? '0.00';
+  }, [overview.data, fromAccountId, sellerId]);
   const to = list.find((a) => a.id === toAccountId);
   const crossCurrency = from !== undefined && to !== undefined && from.currency !== to.currency;
 
@@ -203,6 +217,22 @@ export function TransferModal({
         <FormField
           label="Whose money"
           hint="Leave as ours unless this is moving a seller's balance between our accounts"
+          /*
+            WHAT THEY ACTUALLY HOLD IN THE SENDING ACCOUNT.
+
+            Informational, never a gate — the server refuses an
+            over-attributed transfer with TRANSFER_EXCEEDS_SELLER_HOLDING
+            and stays the boundary (FE-2). But "whose money" is a choice
+            somebody makes from a dropdown, and choosing a seller who has
+            nothing in this account is an easy mistake to make silently.
+            Showing the figure beside the choice is how it stops being
+            silent.
+          */
+          notice={
+            heldHere === null
+              ? undefined
+              : `${from?.label ?? 'This account'} holds ${heldHere} ${from?.currency ?? ''} for them. A transfer cannot move more than that.`
+          }
         >
           <Select value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
             <option value="">Ours</option>

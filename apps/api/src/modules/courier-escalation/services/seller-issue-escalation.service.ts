@@ -120,7 +120,7 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
         succeeds: the label is about what CAN happen, and the fallback
         below is what records that it did not.
       */
-      const handling = this.handling.initialFor(parcel?.courierCode ?? null);
+      const handling = await this.handling.initialFor(parcel?.courierCode ?? null);
       await this.handling.set(input.ticketId, handling);
 
       if (handling === TicketHandling.MANUAL) {

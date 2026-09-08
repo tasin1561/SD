@@ -392,7 +392,17 @@ export class BankLedgerService {
     return { delta: delta.toFixed(2), entryId: entry.id };
   }
 
-  private async ownerBalance(
+  /**
+   * What this owner holds in this account, right now.
+   *
+   * PUBLIC so a caller can ask before it moves money — `reconcile` is no
+   * longer the only thing that needs the figure. A caller doing that
+   * MUST hold `AdvisoryLock.BANK_RECONCILE` on the same
+   * `account|kind|seller` key inside the same transaction (TRE-1): a
+   * balance read outside the write that depends on it is not a guard,
+   * because two operators both read the same figure and both proceed.
+   */
+  async ownerBalance(
     accountId: string,
     owner: OwnerRef,
     tx?: Prisma.TransactionClient,
