@@ -1,4 +1,4 @@
-import { ActorType, ReservationReleaseReason, ReservationStatus } from '@skydrop/db';
+import { ActorType, OrderStatus, ReservationReleaseReason, ReservationStatus } from '@skydrop/db';
 import { ReservationCleanupService } from '../../src/modules/inventory-stock/services/reservation-cleanup.service';
 import type { StockReservationService } from '../../src/modules/inventory-stock/services/stock-reservation.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -10,6 +10,8 @@ interface Row {
   id: string;
   status: ReservationStatus;
   expiresAt: Date | null;
+  /** The order's status. The TTL leaves a committed order alone. */
+  orderStatus?: OrderStatus;
 }
 
 function makeSut(rows: Row[], raceTerminalIds: string[] = []) {
@@ -25,7 +27,13 @@ function makeSut(rows: Row[], raceTerminalIds: string[] = []) {
             r.expiresAt.getTime() < args.where.expiresAt.lt.getTime(),
         )
         .slice(0, args.take)
-        .map((r) => ({ id: r.id })),
+        // A reservation with no order is impossible in the schema, but
+        // the sweep tolerates it; the default here is a status the TTL
+        // still expires, so existing cases keep their meaning.
+        .map((r) => ({
+          id: r.id,
+          order: { status: r.orderStatus ?? OrderStatus.DRAFT },
+        })),
   );
   const prisma = {
     client: { stockReservation: { findMany } },
@@ -68,7 +76,7 @@ describe('ReservationCleanupService.sweep', () => {
       { id: 'already', status: ReservationStatus.RELEASED, expiresAt: hoursFromNow(-5) },
     ]);
     const res = await svc.sweep(NOW);
-    expect(res).toEqual({ scanned: 2, released: 2, skipped: 0 });
+    expect(res).toEqual({ scanned: 2, released: 2, skipped: 0, keptForCommittedOrder: 0 });
     expect(release.mock.calls.map((c) => c[0]).sort()).toEqual(['past-1', 'past-2']);
     // Each released with EXPIRED + SYSTEM + the sweep's `now`.
     expect(release).toHaveBeenCalledWith(
@@ -87,13 +95,61 @@ describe('ReservationCleanupService.sweep', () => {
       ['r1'],
     );
     const res = await svc.sweep(NOW);
-    expect(res).toEqual({ scanned: 1, released: 0, skipped: 1 });
+    expect(res).toEqual({ scanned: 1, released: 0, skipped: 1, keptForCommittedOrder: 0 });
   });
 
   it('no due reservations -> zero counts', async () => {
     const { svc } = makeSut([
       { id: 'future', status: ReservationStatus.ACTIVE, expiresAt: hoursFromNow(+10) },
     ]);
-    expect(await svc.sweep(NOW)).toEqual({ scanned: 0, released: 0, skipped: 0 });
+    expect(await svc.sweep(NOW)).toEqual({
+      scanned: 0,
+      released: 0,
+      skipped: 0,
+      keptForCommittedOrder: 0,
+    });
+  });
+});
+
+/**
+ * The TTL leaves a committed order's stock alone.
+ *
+ * The sweep never looked at the order, so an order already on its way to
+ * a van had its claim released for being old. SD-2026-26-000003 sat in
+ * PENDING_PICK while both its reservations were released as EXPIRED;
+ * the warehouse then pulled it into a batch and printed a picking sheet
+ * with one parcel and zero lines.
+ */
+describe('ReservationCleanupService — a committed order keeps its stock', () => {
+  const committed = [
+    OrderStatus.CONFIRMED,
+    OrderStatus.PENDING_PICK,
+    OrderStatus.PICKED,
+    OrderStatus.PENDING_MANUAL_PLACEMENT,
+  ];
+
+  it.each(committed)('does not expire a reservation on a %s order', async (orderStatus) => {
+    const { svc, release } = makeSut([
+      { id: 'r1', status: ReservationStatus.ACTIVE, expiresAt: hoursFromNow(-2), orderStatus },
+    ]);
+    const res = await svc.sweep(NOW);
+    expect(res).toEqual({ scanned: 1, released: 0, skipped: 0, keptForCommittedOrder: 1 });
+    expect(release).not.toHaveBeenCalled();
+  });
+
+  it('still expires one whose order never got confirmed', async () => {
+    // The case the TTL exists for: stock held by an order nobody has
+    // agreed to ship.
+    const { svc, release } = makeSut([
+      {
+        id: 'r1',
+        status: ReservationStatus.ACTIVE,
+        expiresAt: hoursFromNow(-2),
+        orderStatus: OrderStatus.PENDING_CONFIRMATION,
+      },
+    ]);
+    const res = await svc.sweep(NOW);
+    expect(res.released).toBe(1);
+    expect(release).toHaveBeenCalledTimes(1);
   });
 });

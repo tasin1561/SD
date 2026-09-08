@@ -272,7 +272,10 @@ export class PickBatchService {
       }
     }
 
-    const { lines, strictMode, totalUnits } = await this.buildLines(batch.shipments, orderIds);
+    const { lines, strictMode, totalUnits, parcelsWithoutStock } = await this.buildLines(
+      batch.shipments,
+      orderIds,
+    );
     const staff = await this.prisma.client.staffUser.findUnique({
       where: { id: staffId },
       select: { emailDisplay: true, email: true },
@@ -285,6 +288,7 @@ export class PickBatchService {
       printedByName: staff?.emailDisplay ?? staff?.email ?? 'staff',
       shipmentCount: batch.shipments.length,
       totalUnits,
+      parcelsWithoutStock,
       strictMode,
       lines,
     });
@@ -649,7 +653,12 @@ export class PickBatchService {
   private async buildLines(
     shipments: ReadonlyArray<{ id: string; shipmentNumber: string }>,
     orderIds: readonly string[],
-  ): Promise<{ lines: PickListLine[]; strictMode: boolean; totalUnits: number }> {
+  ): Promise<{
+    lines: PickListLine[];
+    strictMode: boolean;
+    totalUnits: number;
+    parcelsWithoutStock: string[];
+  }> {
     const byShipment = new Map(shipments.map((s) => [s.id, s.shipmentNumber]));
 
     const reservations = await this.prisma.client.stockReservation.findMany({
@@ -730,7 +739,24 @@ export class PickBatchService {
       .sort((a, b) => a.binCode.localeCompare(b.binCode) || a.skuCode.localeCompare(b.skuCode))
       .map(({ forSet: _forSet, ...line }) => line);
 
-    return { lines, strictMode, totalUnits };
+    /*
+      Parcels that contributed no line.
+
+      A batch counts PARCELS and the sheet counts UNITS, and the two can
+      disagree: an order whose reservations were released still belongs
+      to a shipment, so it is one parcel and zero units. Reporting the
+      difference is what turns a blank sheet into a statement.
+    */
+    const withStock = new Set(
+      reservations
+        .map((r) => shipmentByOrder.get(r.orderId))
+        .filter((n): n is string => n !== undefined && n !== ''),
+    );
+    const parcelsWithoutStock = [...byShipment.values()]
+      .filter((n) => n !== '' && !withStock.has(n))
+      .sort();
+
+    return { lines, strictMode, totalUnits, parcelsWithoutStock };
   }
 }
 

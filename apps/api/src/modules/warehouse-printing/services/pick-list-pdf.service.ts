@@ -30,6 +30,16 @@ export interface PickListPayload {
   readonly totalUnits: number;
   readonly strictMode: boolean;
   readonly lines: readonly PickListLine[];
+  /**
+   * Parcels in this batch with nothing reserved to pick.
+   *
+   * Named on the sheet rather than silently omitted. A picker holding a
+   * page that says "1 parcel" above an empty table has no way to tell a
+   * printing fault from an order with no stock claimed, and the second
+   * is a real state: SD-2026-26-000003 reached a batch in PENDING_PICK
+   * after the TTL sweep had released both its reservations.
+   */
+  readonly parcelsWithoutStock: readonly string[];
 }
 
 /**
@@ -115,6 +125,40 @@ export class PickListPdfService {
         y = 40;
       }
       y = this.drawRow(doc, line, cols, y, p.strictMode, left, right);
+    }
+
+    if (p.lines.length === 0) {
+      // NEVER an empty table. A sheet with a header and no rows reads as
+      // a printer fault, and the picker's next move is to print it
+      // again — which produces the same page.
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('Nothing to pick on this sheet.', left, y + 8, { width: right - left });
+      y += 24;
+      doc.fontSize(8).font('Helvetica').fillColor('#333333');
+      doc.text(
+        'No stock is reserved against these parcels, so there is nothing to walk for. ' +
+          'This is not a printing fault — do not reprint. Take it to a supervisor: the ' +
+          'orders need their stock re-checked before they can be picked.',
+        left,
+        y,
+        { width: right - left },
+      );
+      y += 34;
+    }
+
+    if (p.parcelsWithoutStock.length > 0 && p.lines.length > 0) {
+      // Some lines printed, but not for every parcel. Worth saying at
+      // the desk rather than being discovered at the pack bench with a
+      // box that cannot be filled.
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text(
+        `${p.parcelsWithoutStock.length} parcel(s) on this batch have nothing reserved: ` +
+          `${p.parcelsWithoutStock.join(', ')}`,
+        left,
+        y + 6,
+        { width: right - left },
+      );
+      y += 22;
     }
 
     doc.fontSize(7).font('Helvetica').fillColor('#666666');
