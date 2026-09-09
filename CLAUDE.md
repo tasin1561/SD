@@ -117,10 +117,27 @@ SD/
 **`apps/workers` — the capability exists, the process does not run (verified 2026-08-05).**
 `apps/api/src/workers-main.ts` bootstraps the SAME `AppModule` with no HTTP
 listener, and `@skydrop/workers` starts it from `apps/api/dist/workers-main.js`
-(no second build). But pm2 on the droplet runs exactly four processes —
-`skydrop-api`, `skydrop-admin`, `skydrop-seller`, `skydrop-track` — so **all 17
-BullMQ workers currently run in-process inside `skydrop-api`** under SCALE-1's
-`WORKERS_ENABLED` (default true). This doc called the package a placeholder for
+(no second build). pm2 on the droplet runs FIVE processes (corrected
+2026-09-09 — this said four for months): `skydrop-api`, `skydrop-admin`,
+`skydrop-seller`, `skydrop-track` and **`skydrop-portal`**. `@skydrop/workers`
+is still not among them, so **all 17 BullMQ workers run in-process inside
+`skydrop-api`** under SCALE-1's `WORKERS_ENABLED` (default true).
+
+**`skydrop-portal` is a SEPARATE root module, and that is load-bearing.**
+`portal-worker-main.ts` boots `PortalWorkerRootModule` — deliberately NOT
+`AppModule` — because it owns a long-lived Chromium holding a decrypted courier
+login, which must not sit in the process serving customer HTTP. So
+**`CourierPortalModule` is unreachable from `AppModule`**
+(`portal-worker-isolation.spec.ts` enforces it), and the consequence bites in a
+way nothing catches: **a controller placed in `CourierPortalModule` is
+registered by nobody and answers 404.** `app-module-boots.spec.ts` compiles
+`AppModule`, so it says nothing about that graph, and CI and Deploy both go
+green. It was found by calling the endpoint on production. **An API surface over
+anything the portal owns goes in an API-side module and reaches the worker
+through its BullMQ queue** — `courier-cost-sync` is the worked example, and it
+restates the queue/job names rather than importing them, with
+`wallet-sync-queue-names.spec.ts` failing on drift (drift there has no symptom:
+the enqueue succeeds into a queue nobody listens to). This doc called the package a placeholder for
 months; it is not, and the distinction matters: **the "background work runs in a
 process that serves no HTTP" boundary is available but NOT currently in effect.**
 Any design that relies on that separation (e.g. holding a courier credential only
@@ -332,6 +349,10 @@ The schema gives you the shape; these rules give you correctness. Violating them
 
    **Failover is unchanged and still applies after a choice**: a refusal from the chosen carrier goes through CUR-14 to the alternate courier, and both refusing ends at manual placement. Screen: `/courier-decisions` behind `orders.courier_choice` — its own permission, because the people who work this queue are not necessarily the ones who cancel orders or force statuses.
 
+
+7. **CUR-18 (2026-09-09): `CourierPortalMode.OFF` is the stop, and SHADOW never was.** SHADOW prepares everything and withholds the click — which still means opening a browser, signing in and reading their tabs, so it keeps a live session against somebody else's portal and keeps failing at 3am about work nobody is waiting for. OFF opens nothing: the dispatcher, the ticket sweep and the nightly canary are all gated in `PortalQueue`'s own worker handler, which is their single entry point, so "no browser opens while OFF" is provable by reading one function rather than trusting three services to remember (**the ticket sweep in particular reads its own settings and deliberately ignores `portalMode`**, which is exactly why the stop sits above it). Checked PER JOB rather than at boot, so re-enabling takes effect on the next tick — a kill switch that needs a release is not a kill switch. A MODE and not a second boolean, because "may the portal act" already has one reader and a parallel flag is the drift CNS-2 and BIN-1 exist to prevent. **Only LIVE executes**: the dispatcher and canary computed `shadow = mode === SHADOW`, so a third mode would have fallen through to EXECUTING; they now ask `mode !== LIVE`, and a future mode is safe by default. **Production is OFF as of 2026-09-09** — Delhivery escalations are handled by hand — while `writeMode` stays AUTO, which changes nothing because `DelhiverySupportAdapterService` reports `postComment: false` / `raiseTicket: false` and every item already routes to a person.
+
+8. **The nightly cost sync is the only thing that makes margin real, and it fails SILENTLY.** `WalletSyncService` signs in to Delhivery's portal at 21:10 IST, downloads the wallet export and writes `shipments.actualCourierCostInr` / `actualRtoCostInr`. When it stops, the figures simply stop moving and nobody notices until a margin looks wrong weeks later. It raises an issue when it THROWS; the quieter failures — switched off, or succeeding while matching nothing — had no surface at all until `/cost-sync` (read `courier.accounts.view`, run `courier.accounts.manage`, because a run is a real browser session against a courier login and hammering one is how an account gets locked). **The history is `audit_logs`, not a new table**: every run already writes its whole summary there, and a second copy would eventually disagree (the M14 call, again). **Unmatched rows are normal and are shown as context, never as a warning** — the export covers every parcel on that account and most are not ours; presenting that as an error trains people to ignore the one number that would matter if the matched count ever hit zero. Coverage is TRE-6 made visible: a missing cost is UNCOVERED, never zero, and the forward count EXCLUDES returned parcels because Delhivery refunds the delivery deduction and bills an RTO fee instead.
 
 **Per-courier switches, and why every one of them is per courier.** `courier.<code>_live_writes_enabled`, `courier.<code>_api_base_url`, and `courier.<code>_auto_pickup_enabled` (CUR-10 amendment #3 — whether a packed box may ask that courier for its own pickup) are all derived from the courier code, so a third courier is a data change. **A single shared flag would mean enabling Delhivery for its first controlled parcel silently arms every Shiprocket write path**, with nobody having decided that. The NDR runner's dry-run gate follows the same rule: a run can legitimately be live for one courier and planning-only for the other, and it reports `dryRun` when ANY courier in the sweep was planning. **A new courier needs its seeded rows** — `courier-settings-coverage.spec.ts` reads the couriers off the AWB dispatcher's own switch and fails if a row is missing, because the guard fails CLOSED on an absent setting and therefore behaves perfectly while the admin page has no switch to show.
 
@@ -557,6 +578,8 @@ Canonical applications:
 3. All timestamps UTC. Display timezone is a per-user preference.
 4. Soft delete via `deletedAt` for user-facing data. Hard delete for tokens, sessions, transient/immutable rows.
 5. Audit log every sensitive action via `audit_logs` (auth, admin actions, sensitive data access). Severity scale: LOW / MEDIUM / HIGH / CRITICAL — CRITICAL reserved for god-mode and similar invariant-breach actions.
+
+6. **`audit_logs.entity_id` is a UUID column, and anything else silently loses the WHOLE ROW.** Postgres rejects the insert with P2023, `AuditLogService` swallows it by design (an audit write must never fail the operation it describes), and the action ends up with no trail while having succeeded — the only evidence one ERROR line nobody reads. It has happened twice: ten courier services passing the literal `'delhivery'`, and later three passing `input.courierCode` and a pickup-location `name`. **When the audit is about a thing that is not a row — a courier, a warehouse name — pass `entityId: null` and put the identifier in `metadata`.** `audit-entity-id-is-a-uuid.spec.ts` scans for both fingerprints (a literal string, and an expression whose last segment ends in `Code`/`Name` or is a bare `name`), and the service now diverts a non-UUID into `metadata.entityRef` rather than losing the row — the scan is the early warning, that is the backstop.
 
 **Frontend invariants (Module 12 — FE-1 through FE-6, NON-NEGOTIABLE):**
 
