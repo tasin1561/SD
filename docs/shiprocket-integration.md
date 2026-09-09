@@ -40,7 +40,92 @@ page or drops the connection, and never evaluates credentials.
 runs wherever the rest of the API runs. An egress droplet exists, and it
 is for a human driving the panel in a browser — not for our traffic.
 
-## What IS blocking: the account is not provisioned for API access
+## RESOLVED 2026-09-09 — provisioned, verified, and a real parcel booked
+
+An API user was created in the panel as `api@skydrop.online` (reachable
+since Cloudflare Email Routing went in the same day —
+`docs/email-dns.md`), with `68.183.190.55` in **Allowed IPs for PII
+Access**. Everything below was then verified against the LIVE API.
+
+```
+POST /v1/external/auth/login                 → 200, token, company_id 9842446
+GET  /v1/external/courier/serviceability/    → 200, Blue Dart ₹92.40, Ekart ₹69.36
+```
+
+**And the full booking contract, through our own adapter:**
+
+```
+awbNumber:         90658129413   (Blue Dart Air)
+courierShipmentId: 1570668107
+courierOrderId:    1574450075
+cancel:            "Shipment(s) have been cancelled"
+```
+
+The live-write switches were on only for the length of that run.
+Production is inert again: `Courier.isActive` false, base URL empty,
+live writes off — so no ordinary traffic can route to Shiprocket.
+
+### What the live run found
+
+**The failure classifier defaulted everything unrecognised to
+TRANSIENT** — the same shape Delhivery's had before CUR-13 was written,
+never applied here. Shiprocket answered `422 {"message":"Phone number is
+in invalid format"}` and we called it retryable, so BullMQ would have
+retried a call that fails identically every time: never failing over,
+never reaching manual placement, nobody told. It classifies on the
+STATUS now (4xx = they formed an opinion about this parcel; 408/429 and
+5xx = later), with word-matching kept only for errors carrying no status.
+
+**A correction worth recording:** that first 422 was TEST DATA, not an
+adapter bug. `9999999999` is a dummy Indian validators reject; the
+adapter's `+91` stripping was always right, and a plausible number
+booked first time. The two look identical from outside and only one of
+them was ours.
+
+**A pickup-location LIST endpoint exists** —
+`GET /v1/external/settings/company/pickup` returns every registered
+location (ours: `warehouse`, PIN 700128). CLAUDE.md said there was none;
+that was true of Delhivery and got generalised.
+
+**The NDR listing path was wrong.** `listNdr` called
+`/v1/external/ndr`, which 404s; the real one is `/v1/external/ndr/all`.
+`/v1/external/ndr/{awb}` is a PATTERN, which is why
+`/v1/external/ndr/list` answers "Invalid AWB". No unit test could have
+caught it: in stub mode the adapter never calls out, so the mock and the
+code agreed with each other and with nothing else.
+
+### Running a live test again — the shape matters
+
+A script that boots **AppModule hangs**: that graph drags in Redis,
+seventeen BullMQ producers and the portal browser pool, and something in
+it blocks when the process is not the real API. The first attempt sat
+there until killed — it created nothing, verified by searching the
+account afterwards.
+
+Boot a NARROW context. `CourierShiprocketModule` imports only
+`RedisModule` + `CourierSharedModule` and registers no controllers, so a
+root of `[ConfigModule, PrismaModule, AuthCommonModule,
+CourierShiprocketModule]` resolves the adapter and nothing else.
+`@Global()` on the first two means "available once imported at the
+root", NOT "available without importing" — miss them and `RedisService`
+cannot find `EnvService`.
+
+**Dry-run in stub mode first.** That is what caught a request built to
+the wrong shape (`ShiprocketAwbRequest` NESTS the recipient) before any
+live write happened.
+
+### PII is IP-gated, and it fails SOFT
+
+`customer_phone` comes back as the literal string `"Not Authorized"`
+from an IP that is not allowlisted — not an error, not null, a value
+shaped exactly like data. Verified from Dhaka. Production is
+allowlisted, so this is correct there and would silently degrade
+anywhere else: **anything reading Shiprocket's customer fields must
+treat that string as ABSENT.**
+
+---
+
+## Historical: what was blocking, as it stood on 2026-09-08
 
 Panel credentials do not authenticate against the external API. The
 timings say why:
@@ -90,10 +175,10 @@ Worth stating plainly because it changes the shape of the work: this
 integration has a dependency on a third party's cooperation, not just on
 engineering time.
 
-## Where the code already stands
+## Where the code stands
 
-Verified against production on 2026-09-08, and consistent with the notes
-above:
+Verified against production on 2026-09-08 and unchanged since, apart
+from the classifier fix above:
 
 - `courier.shiprocket_api_base_url` = `''` ⇒ **stub mode**, which is
   what CUR-15 requires while Delhivery is live: a stub may never answer
