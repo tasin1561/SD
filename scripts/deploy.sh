@@ -189,12 +189,28 @@ fi
 # If a shared package changed, restart everything; otherwise restart
 # only the apps with code changes. Fall back to all-four if we can't
 # tell.
+#
+# RESTART THROUGH THE ECOSYSTEM FILE, not by process name. `--update-env`
+# refreshes a process from the env of the pm2 CLI that invoked it; it
+# does NOT re-evaluate ecosystem.config.cjs, and that file is the thing
+# that reads ~/app/.env. So `pm2 restart skydrop-api --update-env`
+# delivers a new .env variable to nobody — the process keeps the env it
+# was originally started with, and the symptom is a feature that behaves
+# as if its secret were empty while the secret is plainly there in the
+# file. Verified on 2026-09-09: TRACKING_WEBHOOK_SECRET_SHIPROCKET was
+# appended to .env and was still ABSENT from the running process after a
+# deploy.
+#
+# Naming the config file makes pm2 re-read it (and therefore .env) and
+# apply the result; `--only` keeps the selective-restart behaviour.
+ECOSYSTEM="$ROOT/ecosystem.config.cjs"
 if [ "$PKG_TOUCHED" = true ] || [ ${#APPS_CHANGED[@]} -eq 0 ]; then
-  echo "── pm2 restart all ──"
-  pm2 restart skydrop-api skydrop-admin skydrop-seller skydrop-track skydrop-portal --update-env
+  echo "── pm2 restart all (ecosystem re-read) ──"
+  pm2 restart "$ECOSYSTEM" --update-env
 else
-  echo "── pm2 restart ${APPS_CHANGED[*]} ──"
-  pm2 restart "${APPS_CHANGED[@]}" --update-env
+  ONLY=$(IFS=,; echo "${APPS_CHANGED[*]}")
+  echo "── pm2 restart $ONLY (ecosystem re-read) ──"
+  pm2 restart "$ECOSYSTEM" --only "$ONLY" --update-env
 fi
 
 pm2 save
