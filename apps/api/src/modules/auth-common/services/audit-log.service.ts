@@ -58,6 +58,9 @@ export interface AuditLogInput {
   severity?: AuditSeverity;
 }
 
+/** `audit_logs.entity_id` is a uuid column; anything else belongs in metadata. */
+const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 @Injectable()
 export class AuditLogService {
   private readonly logger = new Logger(AuditLogService.name);
@@ -75,6 +78,39 @@ export class AuditLogService {
     try {
       const metadata = this.composeMetadata(input);
       const client = tx ?? this.prisma.client;
+      /*
+        ── A NON-UUID entityId USED TO LOSE THE WHOLE ROW ──────────────
+
+        `audit_logs.entity_id` is `@db.Uuid`. Hand it a courier code or a
+        warehouse name and Postgres rejects the INSERT (P2023), the catch
+        below swallows it, and the action is left with no audit trail at
+        all — while the action itself succeeded. Found in production on
+        2026-09-09: switching the Delhivery portal channel off recorded
+        nothing, and the only sign was one ERROR line in the process log.
+
+        The convention is `entityId: null` with the identifier in
+        metadata, and most callers follow it. This is the backstop for
+        the ones that do not: keep the row, move the value to
+        `metadata.entityRef`. A slightly less convenient audit row beats
+        no audit row, which is the whole point of the table — and losing
+        it silently on the security-relevant actions is exactly the wrong
+        way round.
+
+        Deliberately NOT throwing: an audit write has never been allowed
+        to fail the operation that scheduled it, and making this the one
+        exception would mean a bad `entityId` could roll back a real
+        state change.
+      */
+      let entityId = input.entityId ?? null;
+      let entityRef: string | null = null;
+      if (entityId !== null && !UUID.test(entityId)) {
+        entityRef = entityId;
+        entityId = null;
+        this.logger.warn(
+          { action: input.action, entityType: input.entityType, entityRef },
+          'entityId is not a UUID — recorded in metadata instead (audit_logs.entity_id is a uuid column)',
+        );
+      }
       const row = await client.auditLog.create({
         data: {
           actorType: input.actorType,
@@ -83,9 +119,15 @@ export class AuditLogService {
           sellerId: input.sellerId ?? null,
           action: input.action,
           entityType: input.entityType,
-          entityId: input.entityId ?? null,
+          entityId,
           changes: input.changes ?? Prisma.DbNull,
-          metadata: metadata ?? Prisma.DbNull,
+          metadata:
+            entityRef === null
+              ? (metadata ?? Prisma.DbNull)
+              : ({
+                  ...(typeof metadata === 'object' && metadata !== null ? metadata : {}),
+                  entityRef,
+                } as Prisma.InputJsonValue),
           // Written to the COLUMN as well as into metadata.
           //
           // The column is what makes "everything CRITICAL this month" a

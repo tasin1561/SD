@@ -265,9 +265,17 @@ export class CourierChannelSettingsService {
       actorId: input.staffId,
       action: 'courier.channel.portal_mode_changed',
       entityType: 'courier',
-      entityId: input.courierCode,
+      // A uuid column — the code goes in metadata (the convention every
+      // other courier-scoped audit row follows). Passing it here lost the
+      // whole row to a P2023, silently.
+      entityId: null,
       severity: 'HIGH',
-      metadata: { from: before.portalMode, to: input.portalMode, reason },
+      metadata: {
+        courierCode: input.courierCode,
+        from: before.portalMode,
+        to: input.portalMode,
+        reason,
+      },
     });
 
     this.logger.warn(
@@ -302,11 +310,15 @@ export class CourierChannelSettingsService {
       actorId: input.staffId,
       action: 'courier.channel.write_mode_changed',
       entityType: 'courier',
-      entityId: input.courierCode,
+      // A uuid column — the code goes in metadata (the convention every
+      // other courier-scoped audit row follows). Passing it here lost the
+      // whole row to a P2023, silently.
+      entityId: null,
       // Widening the write channel is what lets software post into a
       // customer-visible thread. HIGH, always.
       severity: 'HIGH',
       metadata: {
+        courierCode: input.courierCode,
         from: before.writeMode,
         to: input.writeMode,
         autoCategoriesBefore: before.autoCategories,

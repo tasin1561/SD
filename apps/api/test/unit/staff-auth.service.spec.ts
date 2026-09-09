@@ -11,6 +11,9 @@ import { makeTestEnv } from '../helpers/env';
 import type { EmailQueue } from '../../src/modules/email/queue/email.queue';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
+/** `audit_logs.entity_id` is `@db.Uuid`, so the fixture has to be one. */
+const STAFF_UUID = '01a07db5-5147-7fcf-8843-71883b6aef99';
+
 // ---------------------------------------------------------------------------
 // In-memory Prisma fake — just enough surface for staff-auth's tables.
 // ---------------------------------------------------------------------------
@@ -289,7 +292,7 @@ async function seedStaff(
 ): Promise<StaffRow> {
   const hash = await password.hash('CorrectHorseBattery!12');
   const row: StaffRow = {
-    id: 'staff-1',
+    id: STAFF_UUID,
     email: 'admin@skydrop.online',
     emailDisplay: 'Admin@Skydrop.Online',
     passwordHash: hash,
@@ -360,7 +363,7 @@ describe('StaffAuthService — login', () => {
       { email: '  ADMIN@Skydrop.online  ', password: 'CorrectHorseBattery!12' },
       ctx,
     );
-    expect(result.staff.id).toBe('staff-1');
+    expect(result.staff.id).toBe(STAFF_UUID);
   });
 
   it('success: issues access + refresh tokens, bumps lastLoginAt, audits success', async () => {

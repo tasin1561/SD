@@ -156,7 +156,9 @@ export class CourierWarehouseRegistrationService {
       staffUserId: staffId,
       action: `courier.warehouse.${verb}`,
       entityType: 'courier_warehouse',
-      entityId: name,
+      // A uuid column; a pickup-location NAME is not one. See the same
+      // note in CourierChannelSettingsService — this lost the row.
+      entityId: null,
       // HIGH on register: the name becomes permanent at the courier and
       // every future manifest depends on it matching.
       severity: verb === 'registered' ? 'HIGH' : 'MEDIUM',

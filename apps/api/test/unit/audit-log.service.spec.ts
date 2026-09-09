@@ -2,6 +2,9 @@ import { AuditLogService } from '../../src/modules/auth-common/services/audit-lo
 import { ActorType, Prisma } from '@skydrop/db';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
+/** `audit_logs.entity_id` is `@db.Uuid`, so the fixture has to be one. */
+const STAFF_UUID = '01a07db5-5147-7fcf-8843-71883b6aef99';
+
 interface CapturedCreate {
   data: Record<string, unknown>;
   select?: Record<string, unknown>;
@@ -33,7 +36,11 @@ describe('AuditLogService', () => {
       staffUserId: 'staff-1',
       action: 'staff.login.success',
       entityType: 'staff_user',
-      entityId: 'staff-1',
+      // A REAL uuid: `audit_logs.entity_id` is `@db.Uuid`, so a
+      // placeholder here was testing a value the column cannot hold —
+      // and the service now diverts one into metadata rather than
+      // losing the row to a P2023.
+      entityId: STAFF_UUID,
       metadata: { ipAddress: '1.2.3.4' },
     });
 
@@ -44,7 +51,7 @@ describe('AuditLogService', () => {
     expect(data['staffUserId']).toBe('staff-1');
     expect(data['action']).toBe('staff.login.success');
     expect(data['entityType']).toBe('staff_user');
-    expect(data['entityId']).toBe('staff-1');
+    expect(data['entityId']).toBe(STAFF_UUID);
     expect(data['metadata']).toEqual({ ipAddress: '1.2.3.4' });
   });
 

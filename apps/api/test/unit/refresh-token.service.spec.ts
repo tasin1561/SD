@@ -33,7 +33,11 @@ class FakeTable {
   }): Promise<{ id: string }> {
     this.seq += 1;
     const row: FakeRow = {
-      id: `row-${this.seq}`,
+      // A UUID, not `row-1`: `audit_logs.entity_id` is `@db.Uuid`, and
+      // the service now diverts a non-UUID into metadata rather than
+      // losing the whole row to a P2023. A synthetic id here was
+      // testing a value the column cannot hold.
+      id: `01a07db5-0000-7000-8000-${String(this.seq).padStart(12, '0')}`,
       userId: data[this.userField] as string,
       tokenHash: data['tokenHash'] as string,
       expiresAt: data['expiresAt'] as Date,
