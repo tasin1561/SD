@@ -1,0 +1,12 @@
+-- The courier's own ORDER id, kept apart from their parcel id.
+--
+-- Shiprocket returns both from `orders/create/adhoc`: `order_id` is the
+-- one their portal searches on and the one a human quotes, while
+-- `shipment_id` is what their label, pickup and cancel endpoints key on.
+-- We were persisting only the second and discarding the first, which
+-- left an operator holding a Skydrop shipment with no way to find the
+-- corresponding row in Shiprocket's dashboard.
+--
+-- Nullable and unbackfilled: Delhivery has a single number and legitimately
+-- leaves this empty, and no past Shiprocket order exists to fill in.
+ALTER TABLE "shipments" ADD COLUMN "courier_order_id" TEXT;

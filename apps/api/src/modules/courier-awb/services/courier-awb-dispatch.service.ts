@@ -75,6 +75,11 @@ export interface DispatchAwbResult {
   /** Their id for the parcel, where they have one. Shiprocket's label,
    *  pickup and cancel endpoints key on it rather than on the AWB. */
   readonly courierShipmentId: string | null;
+  /** Their id for the ORDER, where it differs from the parcel id.
+   *  Shiprocket's portal searches on this one, so it is what an
+   *  operator needs to find the parcel on their side. Null for a
+   *  courier that has only one number. */
+  readonly courierOrderId: string | null;
   /** TRUE means "try again later"; FALSE means "this courier will not
    *  carry it", which is what makes failover and supersede correct. */
   readonly serviceable: boolean;
@@ -137,6 +142,7 @@ export class CourierAwbDispatchService {
         ok: false,
         awbNumber: null,
         courierShipmentId: null,
+        courierOrderId: null,
         serviceable: false,
         errorCode: 'COURIER_DISABLED',
         errorMessage: `${input.courierCode} is switched off for new parcels`,
@@ -161,6 +167,7 @@ export class CourierAwbDispatchService {
           ok: false,
           awbNumber: null,
           courierShipmentId: null,
+          courierOrderId: null,
           serviceable: false,
           errorCode: 'NO_ADAPTER',
           errorMessage: `${input.courierCode} has no integration — book it by hand`,
@@ -266,6 +273,7 @@ export class CourierAwbDispatchService {
       awbNumber: r.ok ? r.awbNumber : null,
       // Delhivery's waybill IS the identifier for everything after.
       courierShipmentId: null,
+      courierOrderId: null,
       serviceable: r.ok ? true : r.serviceable,
       errorCode: r.ok ? null : (r.errorCode ?? null),
       errorMessage: r.ok ? null : (r.errorMessage ?? null),
@@ -286,6 +294,7 @@ export class CourierAwbDispatchService {
         ok: false,
         awbNumber: null,
         courierShipmentId: null,
+        courierOrderId: null,
         serviceable: false,
         errorCode: 'REVERSE_NOT_SUPPORTED',
         errorMessage:
@@ -326,6 +335,7 @@ export class CourierAwbDispatchService {
         ok: true,
         awbNumber: r.awbNumber,
         courierShipmentId: r.courierShipmentId,
+        courierOrderId: r.courierOrderId,
         serviceable: true,
         errorCode: null,
         errorMessage: null,
@@ -335,6 +345,7 @@ export class CourierAwbDispatchService {
       ok: false,
       awbNumber: null,
       courierShipmentId: null,
+      courierOrderId: null,
       // Their two failure kinds map onto the one field the saga reads.
       serviceable: r.failure === 'TRANSIENT',
       errorCode: r.failure,

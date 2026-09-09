@@ -24,6 +24,7 @@ function shipmentRow(over: AnyArgs = {}): AnyArgs {
     shipmentNumber: 'SH-2026-05-000042',
     awbNumber: null,
     courierShipmentId: null,
+    courierOrderId: null,
     courierCode: 'delhivery',
     orderShipments: [{ order: { sellerId: 'seller-1' } }],
     status: ShipmentStatus.CREATED,
@@ -121,6 +122,7 @@ function makeService(
         ok: true,
         awbNumber: 'DLVSTUB202605000042',
         courierShipmentId: 'DLVSHP202605000042',
+        courierOrderId: null,
         labelUrl: null,
       },
   );
@@ -139,6 +141,8 @@ function makeService(
             ok: true,
             awbNumber: r.awbNumber,
             courierShipmentId: r.courierShipmentId,
+            // Delhivery has one number and no separate order id.
+            courierOrderId: null,
             serviceable: true,
             errorCode: null,
             errorMessage: null,
@@ -147,6 +151,7 @@ function makeService(
             ok: false,
             awbNumber: null,
             courierShipmentId: null,
+            courierOrderId: null,
             serviceable: r.serviceable,
             errorCode: r.errorCode,
             errorMessage: r.errorMessage,
@@ -228,6 +233,9 @@ describe('AwbGenerationService.generateForShipment', () => {
         data: expect.objectContaining({
           awbNumber: 'DLVSTUB202605000042',
           courierShipmentId: 'DLVSHP202605000042',
+          // No courierOrderId asserted: Delhivery has one number, and
+          // the persist OMITS the key rather than writing null — so
+          // demanding it here would pin the opposite of the behaviour.
         }),
       }),
     );
@@ -276,6 +284,7 @@ describe('AwbGenerationService.generateForShipment', () => {
       shipment: shipmentRow({
         awbNumber: 'EXISTING-AWB',
         courierShipmentId: 'EXISTING-CS',
+        courierOrderId: null,
         awbLabels: [{ id: 'label-1' }],
       }),
     });
@@ -331,6 +340,7 @@ describe('AwbGenerationService.generateForShipment', () => {
       shipment: shipmentRow({
         awbNumber: 'DLVSTUB202605000042',
         courierShipmentId: 'DLVSHP202605000042',
+        courierOrderId: null,
         status: ShipmentStatus.AWB_GENERATED,
         awbLabels: [], // tx1 ran on the prior attempt; tx2 didn't.
       }),
@@ -375,6 +385,7 @@ describe('AwbGenerationService.generateForShipment', () => {
       shipment: shipmentRow({
         awbNumber: 'DLVSTUB202605000042',
         courierShipmentId: 'DLVSHP202605000042',
+        courierOrderId: null,
         status: ShipmentStatus.AWB_GENERATED,
         awbLabels: [],
       }),
@@ -506,6 +517,7 @@ describe('AwbGenerationService — courier failover (symmetric)', () => {
     ok: false,
     awbNumber: null,
     courierShipmentId: null,
+    courierOrderId: null,
     serviceable: false,
     errorCode: 'NON_SERVICEABLE',
     errorMessage: 'pin not served',
@@ -519,6 +531,7 @@ describe('AwbGenerationService — courier failover (symmetric)', () => {
           ok: true,
           awbNumber: 'SR1234567890',
           courierShipmentId: '887766',
+          courierOrderId: null,
           serviceable: true,
           errorCode: null,
           errorMessage: null,
@@ -552,6 +565,7 @@ describe('AwbGenerationService — courier failover (symmetric)', () => {
           ok: true,
           awbNumber: 'DLVSTUB202605000042',
           courierShipmentId: null,
+          courierOrderId: null,
           serviceable: true,
           errorCode: null,
           errorMessage: null,
@@ -595,6 +609,7 @@ describe('AwbGenerationService — courier failover (symmetric)', () => {
           ok: false,
           awbNumber: null,
           courierShipmentId: null,
+          courierOrderId: null,
           serviceable: true,
           errorCode: 'UPSTREAM_TIMEOUT',
           errorMessage: 'gateway timeout',
@@ -643,6 +658,7 @@ describe('AwbGenerationService — a stub must not answer for a live courier', (
     ok: false,
     awbNumber: null,
     courierShipmentId: null,
+    courierOrderId: null,
     serviceable: false,
     errorCode: 'NON_SERVICEABLE',
     errorMessage: 'pin not served',
@@ -658,6 +674,7 @@ describe('AwbGenerationService — a stub must not answer for a live courier', (
           ok: true,
           awbNumber: 'SR00000042',
           courierShipmentId: '900000042',
+          courierOrderId: null,
           serviceable: true,
           errorCode: null,
           errorMessage: null,
@@ -689,6 +706,7 @@ describe('AwbGenerationService — a stub must not answer for a live courier', (
           ok: true,
           awbNumber: 'SR00000042',
           courierShipmentId: '900000042',
+          courierOrderId: null,
           serviceable: true,
           errorCode: null,
           errorMessage: null,
@@ -714,6 +732,7 @@ describe('AwbGenerationService — a stub must not answer for a live courier', (
           ok: true,
           awbNumber: 'SR1234567890',
           courierShipmentId: '887766',
+          courierOrderId: null,
           serviceable: true,
           errorCode: null,
           errorMessage: null,
@@ -734,6 +753,7 @@ describe('AwbGenerationService — a manual courier is a destination, not a refu
     ok: false,
     awbNumber: null,
     courierShipmentId: null,
+    courierOrderId: null,
     serviceable: false,
     errorCode: 'NO_ADAPTER',
     errorMessage: 'manual has no integration — book it by hand',
@@ -754,6 +774,7 @@ describe('AwbGenerationService — a manual courier is a destination, not a refu
           ok: true,
           awbNumber: 'DLV99999999',
           courierShipmentId: '777',
+          courierOrderId: null,
           serviceable: true,
           errorCode: null,
           errorMessage: null,
@@ -783,6 +804,7 @@ describe('AwbGenerationService — a manual courier is a destination, not a refu
           ok: false,
           awbNumber: null,
           courierShipmentId: null,
+          courierOrderId: null,
           serviceable: false,
           errorCode: 'NON_SERVICEABLE',
           errorMessage: 'pin not served',
@@ -791,6 +813,7 @@ describe('AwbGenerationService — a manual courier is a destination, not a refu
           ok: true,
           awbNumber: 'SR00000042',
           courierShipmentId: '900000042',
+          courierOrderId: null,
           serviceable: true,
           errorCode: null,
           errorMessage: null,
@@ -830,6 +853,7 @@ describe('AwbGenerationService — a manual courier has nothing to fetch', () =>
         isManualCourier: true,
         courierCode: 'manual',
         courierShipmentId: null,
+        courierOrderId: null,
         awbLabels: [],
       }),
     });

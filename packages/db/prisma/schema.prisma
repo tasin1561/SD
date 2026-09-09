@@ -3239,6 +3239,12 @@ model Shipment {
   reverseAwbError          String?   @map("reverse_awb_error")
 
   courierShipmentId        String?          @map("courier_shipment_id")
+  /// The courier's own ORDER id, where they distinguish it from the
+  /// parcel id. Shiprocket does: `order_id` is what their portal
+  /// searches on and what a human is looking at, while `shipment_id`
+  /// keys their label, pickup and cancel calls. Delhivery has one
+  /// number and leaves this null.
+  courierOrderId           String?          @map("courier_order_id")
   serviceType              String?          @map("service_type")
   originWarehouseId        String           @map("origin_warehouse_id") @db.Uuid
   destRecipientName        String           @map("dest_recipient_name")

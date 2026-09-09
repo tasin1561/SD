@@ -503,6 +503,13 @@ export class AwbGenerationService {
           ...(dispatched.courierShipmentId === null
             ? {}
             : { courierShipmentId: dispatched.courierShipmentId }),
+          // Their ORDER id, where it differs from their parcel id.
+          // Shiprocket's portal searches on this one, so without it an
+          // operator holding one of our shipment numbers has no way to
+          // find the same parcel on the courier's side.
+          ...(dispatched.courierOrderId === null
+            ? {}
+            : { courierOrderId: dispatched.courierOrderId }),
         },
       });
       await this.audit.log(

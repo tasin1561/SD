@@ -35,6 +35,29 @@ interface CredField {
  * integration; the fields stay editable so a second courier does not
  * need a code change here.
  */
+/**
+ * What each courier's adapter actually READS out of the credential.
+ *
+ * The field NAMES are load-bearing and free-form, which is a bad
+ * combination: `ShiprocketHttpService` looks up `email` and `password`
+ * by those exact keys, and a credential saved as `apiToken` fails
+ * nowhere near here — it fails at the first booking, months later, with
+ * "credentials must carry `email` and `password`". Typing the right name
+ * is not something to leave to memory.
+ *
+ * An unlisted courier falls back to `apiToken`, which is a guess and
+ * labelled as one on the form.
+ */
+const CREDENTIAL_SHAPES: Readonly<Record<string, readonly string[]>> = {
+  delhivery: ['apiToken'],
+  shiprocket: ['email', 'password'],
+};
+
+function fieldsFor(courierCode: string): CredField[] {
+  const names = CREDENTIAL_SHAPES[courierCode.trim()] ?? ['apiToken'];
+  return names.map((name, i) => ({ key: i, name, value: '' }));
+}
+
 export function CreateCourierAccountModal({
   open,
   onOpenChange,
@@ -51,9 +74,7 @@ export function CreateCourierAccountModal({
   const [notes, setNotes] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [pickupLocationName, setPickupLocationName] = useState('');
-  const [fields, setFields] = useState<readonly CredField[]>([
-    { key: 0, name: 'apiToken', value: '' },
-  ]);
+  const [fields, setFields] = useState<readonly CredField[]>(fieldsFor('delhivery'));
   const [error, setError] = useState<string | null>(null);
 
   function reset(): void {
@@ -63,7 +84,7 @@ export function CreateCourierAccountModal({
     setNotes('');
     setIsDefault(false);
     setPickupLocationName('');
-    setFields([{ key: 0, name: 'apiToken', value: '' }]);
+    setFields(fieldsFor('delhivery'));
     setError(null);
   }
 
@@ -124,7 +145,15 @@ export function CreateCourierAccountModal({
             <Input
               id="ca-courier"
               value={courierCode}
-              onChange={(e) => setCourierCode(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                setCourierCode(next);
+                // Re-seed the field NAMES for the courier just chosen.
+                // Only when nothing has been typed yet: silently
+                // discarding a password somebody pasted would be worse
+                // than leaving them to rename a field.
+                setFields((prev) => (prev.every((f) => f.value === '') ? fieldsFor(next) : prev));
+              }}
               autoComplete="off"
             />
           </FormField>

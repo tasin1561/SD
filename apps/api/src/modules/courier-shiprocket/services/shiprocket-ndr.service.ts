@@ -164,6 +164,17 @@ export class ShiprocketNdrService {
    * NSL code, which we already store. This exists because Shiprocket's
    * eligibility is only knowable from their side, so the nightly sweep
    * asks them rather than guessing from our own tracking history.
+   *
+   * ── THE PII FIELDS DEPEND ON WHERE THIS RUNS ─────────────────────────
+   * Shiprocket's API user carries an "Allowed IPs for PII Access" list.
+   * From an IP that is not on it, `customer_phone` comes back as the
+   * literal string `"Not Authorized"` — not an error, not null, a value
+   * shaped exactly like data. Ours is allowlisted to the droplet's
+   * egress address, so this is correct in production and would silently
+   * degrade anywhere else. We do not read the customer fields here, and
+   * anything that starts to MUST treat "Not Authorized" as absent rather
+   * than as a phone number. Verified from Dhaka on 2026-09-09, where
+   * every PII field came back masked exactly this way.
    */
   async listNdr(courierAccountId: string): Promise<
     ReadonlyArray<{
@@ -175,7 +186,18 @@ export class ShiprocketNdrService {
     if (await this.http.isStubMode()) return [];
     const res = await this.http.request<{ data?: unknown }>({
       method: 'GET',
-      path: '/v1/external/ndr',
+      /*
+        `/ndr/all`, NOT `/ndr` (corrected 2026-09-09 against the LIVE
+        API, once the account could finally authenticate).
+
+        The bare path 404s. It reads like a listing route and is not one:
+        `/v1/external/ndr/{awb}` is a path PATTERN, which is why
+        `/v1/external/ndr/list` answers "Invalid AWB" rather than 404 —
+        it took "list" for a waybill. Transcribed from the docs, this was
+        wrong in a way no unit test could see, because a stub answers
+        whatever shape the test asks for.
+      */
+      path: '/v1/external/ndr/all',
       actor: { type: ActorType.SYSTEM },
       courierAccountId,
     });
