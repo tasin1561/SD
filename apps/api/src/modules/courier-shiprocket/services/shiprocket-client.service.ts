@@ -225,7 +225,39 @@ export class ShiprocketClientService {
    * never ship wastes a job, while superseding one that would have
    * shipped costs an operator a manual placement.
    */
+  /**
+   * Did they REFUSE the parcel, or ask us to come back later?
+   *
+   * CUR-13, applied to Shiprocket (2026-09-09). This defaulted every
+   * unrecognised message to TRANSIENT — the same shape Delhivery's
+   * classifier had before 2026-09-02, and wrong for the same reason: a
+   * refusal that gets the answer a timeout gets is retried forever,
+   * never fails over, and nobody is told.
+   *
+   * A live booking found it. Shiprocket answered
+   * `422 {"message":"Phone number is in invalid format"}` and we
+   * classified it TRANSIENT, so BullMQ would have retried a call that
+   * fails identically every single time.
+   *
+   * The status code is the honest signal, and it is one we already have:
+   * a 4xx is Shiprocket having FORMED AN OPINION about this parcel's
+   * data, which tomorrow's attempt will not change. 408 and 429 are the
+   * exceptions — those genuinely mean "later" — and 5xx is their
+   * problem, not the parcel's.
+   *
+   * Word-matching stays only as a fallback for the errors that carry no
+   * status (a socket timeout, a DNS failure), never as the primary test:
+   * classifying on which words an opinion used is what CUR-13 says not
+   * to do.
+   */
   private classify(message: string): 'NON_SERVICEABLE' | 'TRANSIENT' {
+    const status = /failed \((\d{3})\)/.exec(message)?.[1];
+    if (status !== undefined) {
+      const code = Number(status);
+      if (code === 408 || code === 429) return 'TRANSIENT';
+      if (code >= 400 && code < 500) return 'NON_SERVICEABLE';
+      return 'TRANSIENT';
+    }
     const m = message.toLowerCase();
     return NON_SERVICEABLE_HINTS.some((h) => m.includes(h)) ? 'NON_SERVICEABLE' : 'TRANSIENT';
   }

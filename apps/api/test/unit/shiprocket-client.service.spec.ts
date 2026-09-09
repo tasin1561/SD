@@ -219,3 +219,57 @@ describe('ShiprocketClientService.checkServiceability', () => {
     expect(r.serviceable).toBe(false);
   });
 });
+
+/**
+ * CUR-13, applied to Shiprocket (2026-09-09).
+ *
+ * The classifier defaulted every unrecognised message to TRANSIENT —
+ * exactly the shape Delhivery's had before 2026-09-02, and wrong for
+ * the same reason: a refusal handed the answer a timeout gets is
+ * retried forever, never fails over, and nobody is told.
+ *
+ * A LIVE booking found it. Shiprocket answered
+ * `422 {"message":"Phone number is in invalid format"}` and we called
+ * that TRANSIENT, so BullMQ would have retried a call that fails
+ * identically every time. No unit test could have caught it first: in
+ * stub mode the adapter never calls out.
+ */
+describe('ShiprocketClientService — a refusal is not a timeout', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- reaching a private for the classification table itself
+  const classify = (msg: string): string => (makeSut().svc as any).classify(msg);
+
+  it('a 422 validation refusal is PERMANENT, not retryable', () => {
+    expect(
+      classify(
+        'Shiprocket POST /v1/external/orders/create/adhoc failed (422): {"message":"Phone number is in invalid format"}',
+      ),
+    ).toBe('NON_SERVICEABLE');
+  });
+
+  it('every other 4xx is a refusal too — they formed an opinion about this parcel', () => {
+    for (const code of [400, 403, 404, 422]) {
+      expect(classify(`Shiprocket POST /x failed (${code}): nope`)).toBe('NON_SERVICEABLE');
+    }
+  });
+
+  it('408 and 429 genuinely mean LATER', () => {
+    // The two 4xx that are about timing rather than about the parcel.
+    for (const code of [408, 429]) {
+      expect(classify(`Shiprocket POST /x failed (${code}): slow down`)).toBe('TRANSIENT');
+    }
+  });
+
+  it('a 5xx is their problem, not the parcel’s', () => {
+    for (const code of [500, 502, 503]) {
+      expect(classify(`Shiprocket POST /x failed (${code}): boom`)).toBe('TRANSIENT');
+    }
+  });
+
+  it('an error with no status falls back to the words, not to a guess', () => {
+    // A socket timeout carries no status at all; the wording is all
+    // there is. Kept as a FALLBACK only — classifying on which words an
+    // opinion used is what CUR-13 says not to do.
+    expect(classify('fetch failed: ETIMEDOUT')).toBe('TRANSIENT');
+    expect(classify('pincode not serviceable')).toBe('NON_SERVICEABLE');
+  });
+});
