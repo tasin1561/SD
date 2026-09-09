@@ -1,17 +1,21 @@
-# Email DNS for skydrop.online — what is set up, what is not, and why
+# Email DNS for skydrop.online
 
-Verified against live DNS on 2026-09-09. Every claim here was checked
-with `dig`, not read off a dashboard — see "Reading it yourself" for the
-commands, because the Cloudflare panel gets one of these wrong.
+Verified against live DNS on 2026-09-09, after the receiving side was
+built the same day. Every claim here was checked with `dig`, not read
+off a dashboard — see "Reading it yourself", because the Cloudflare
+panel gets one of these wrong.
 
 ---
 
 ## The one-line summary
 
-**Resend covers SENDING and it is correctly configured. Nothing covers
-RECEIVING.** Mail addressed to anything `@skydrop.online` — including
-the `support@` we put in the `Reply-To` of every email we send — is
-bouncing.
+**Resend sends. Cloudflare Email Routing receives. Both are live.**
+
+Until 2026-09-09 the second half did not exist: there was no MX on the
+root at all, so every message we sent carried a `Reply-To` at a domain
+that could not take delivery, and every reply was retried for hours and
+bounced. That is fixed; the reasoning is kept below because it is the
+kind of thing that gets undone by somebody tidying DNS.
 
 ---
 
@@ -31,20 +35,47 @@ Return-Path. SPF authenticates the envelope (`send.skydrop.online`),
 DKIM authenticates the visible From (`@skydrop.online`), and DMARC will
 pass through DKIM alignment.
 
-## What is missing
+## Receiving — Cloudflare Email Routing (added 2026-09-09)
 
-### 1. No MX on the root — mail to us goes nowhere
+| Record | Name | Value |
+|---|---|---|
+| MX | root | `route1.mx.cloudflare.net` (35), `route2` (9), `route3` (62) |
+| TXT | root | `v=spf1 include:_spf.mx.cloudflare.net ~all` |
+| TXT | `cf2024-1._domainkey` | Cloudflare's DKIM, for mail it FORWARDS |
 
-There is no MX for `skydrop.online` itself. The `send.` MX does not
+Forwarding rules, both to `chwhdev@gmail.com`:
+
+- `support@skydrop.online` — the `Reply-To` on every message we send
+- `api@skydrop.online` — where Shiprocket mails the API user's password
+  (`docs/shiprocket-integration.md`)
+
+**Two DKIM keys is correct, not a mistake.** DKIM is selector-scoped:
+Resend signs with `resend`, Cloudflare signs forwarded mail with
+`cf2024-1`, and each signature names its own selector. A domain may hold
+any number. **SPF is the opposite** — two SPF records on one name is a
+permerror, which is why the root has exactly one and why nothing should
+add another. If SES ever needs to send with a ROOT envelope, MERGE the
+include into the existing record; never add a second.
+
+Verified end to end on the day: a real message through Resend to
+`support@skydrop.online` came back `last_event: delivered`, meaning
+Cloudflare's servers accepted mail for an address that had no MX behind
+it an hour earlier.
+
+## The history, kept because it explains the shape
+
+### 1. No MX on the root — mail to us went nowhere
+
+There was no MX for `skydrop.online` itself. The `send.` MX did not
 help: it is a different name and it points at a bounce collector, not a
 mailbox.
 
 With no MX, a sending server falls back to the domain's A record (RFC
 5321), which here is Cloudflare's proxy — and port 25 there is closed.
-So the mail is not rejected quickly; it is retried for hours and comes
+So the mail was not rejected quickly; it was retried for hours and came
 back as a delayed bounce.
 
-**This is live and invisible.** `apps/api/src/modules/email/sender-resolver.ts`
+**It was live and invisible.** `apps/api/src/modules/email/sender-resolver.ts`
 sets, on every message:
 
 ```
@@ -52,18 +83,12 @@ From:     Skydrop <hello@skydrop.online>            (or security@ for auth mail)
 Reply-To: Skydrop Support <support@skydrop.online>
 ```
 
-All three addresses are unreachable. A seller replying to a password
-reset, or a customer replying to a dispatch notice, is writing to
-nobody. The code is doing exactly what it intends — the domain simply
-cannot take delivery.
-
-**Fix:** Cloudflare → Email → Email Routing → enable. It adds the root
-MX itself. Then route at least:
-
-- `support@skydrop.online` → a real inbox (this is the one that matters)
-- `api@skydrop.online` → a real inbox (needed for the Shiprocket API
-  user, whose password arrives by email — see
-  `docs/shiprocket-integration.md`)
+All three addresses were unreachable. A seller replying to a password
+reset, or a customer replying to a dispatch notice, was writing to
+nobody. The code was doing exactly what it intends — the domain simply
+could not take delivery. `support@` and `api@` are routed now; the other
+two (`hello@`, `security@`) are send-only identities and still have no
+inbox, which is fine as long as `Reply-To` keeps pointing at `support@`.
 
 ### 2. No DMARC
 
@@ -77,18 +102,24 @@ against a seller. Separately, Gmail and Yahoo have required DMARC from
 bulk senders since February 2024, so its absence quietly costs inbox
 placement on the mail we do send.
 
-**Fix:** Cloudflare → Email → DMARC Management → Enable. It writes:
+**Done 2026-09-09** via Cloudflare → Email → DMARC Management → Enable,
+which wrote:
 
 ```
 _dmarc  TXT  "v=DMARC1; p=none; rua=mailto:<id>@dmarc-reports.cloudflare.net"
 ```
 
-`p=none` is deliberate and is not a half-measure: it changes nothing
+**It is still at `p=none`, which only WATCHES.** That is deliberate and
+not a half-measure: it changes nothing
 about delivery and just starts the reports, so we can confirm every
 legitimate sender passes BEFORE tightening. Going straight to
 `p=reject` on a domain nobody has measured is how you discover a
-forgotten sender by having its mail silently dropped. Tighten to
-`p=quarantine`, then `p=reject`, once the reports are clean.
+forgotten sender by having its mail silently dropped.
+
+**The remaining work is to finish this.** Once the reports show only
+Resend and Cloudflare sending as us, move to `p=quarantine` and then
+`p=reject`. Until then a forged `security@skydrop.online` is still
+deliverable — the policy is observing it, not stopping it.
 
 Cloudflare's own collector is used for `rua` so the reports do not need
 a mailbox of their own.
@@ -124,20 +155,24 @@ GUESS the name of will produce false negatives. `dig` the selector.
 
 ---
 
-## After Email Routing is on, revisit the root SPF
+## The root SPF, and why it does not mention SES
 
-Cloudflare Email Routing FORWARDS mail, and forwarded mail is re-sent
-from Cloudflare's servers using our domain — so once routing is live the
-root wants an SPF that includes them. If a root SPF is added, it should
-carry both, because SES may also be used with a root envelope:
+The root carries Cloudflare's include only:
 
 ```
-skydrop.online  TXT  "v=spf1 include:amazonses.com include:_spf.mx.cloudflare.net ~all"
+skydrop.online  TXT  "v=spf1 include:_spf.mx.cloudflare.net ~all"
 ```
 
-`~all` (softfail) rather than `-all` while DMARC is at `p=none`: a hard
-fail on a domain we have not yet measured can bin legitimate mail from a
-sender nobody remembered.
+That is correct as things stand. Our Resend mail uses
+`send.skydrop.online` as the envelope sender, so the ROOT SPF is never
+consulted for it — `send.` has its own. Adding `include:amazonses.com`
+here would authorise every SES customer to send with a root envelope,
+which is a real weakening for no gain.
+
+`~all` (softfail) rather than `-all` while DMARC sits at `p=none`: a
+hard fail on a domain we have not finished measuring can bin legitimate
+mail from a sender nobody remembered. Tighten it in step with the DMARC
+policy, not before.
 
 **Do not remove or edit the SPF on `send.skydrop.online`.** That is the
 one our actual outbound path is authenticated by.
@@ -147,17 +182,24 @@ one our actual outbound path is authenticated by.
 ## Reading it yourself
 
 ```bash
-dig +short MX  skydrop.online                      # expect: an MX, once routing is on
+dig +short MX  skydrop.online                      # 3x route*.mx.cloudflare.net
 dig +short MX  send.skydrop.online                 # SES bounce collector (leave alone)
 dig +short TXT resend._domainkey.skydrop.online    # DKIM — this is the one the panel misses
 dig +short TXT send.skydrop.online                 # SPF for the envelope
 dig +short TXT _dmarc.skydrop.online               # DMARC policy
+dig +short TXT cf2024-1._domainkey.skydrop.online  # Cloudflare's forwarding DKIM
+
+# The one that must never be more than one line:
+dig +short TXT skydrop.online | grep -c 'v=spf1'   # must be 1
 ```
 
-## What none of this changes
+## What none of this changed
 
-Resend keeps sending exactly as it does now. A root MX and a root DMARC
-record do not touch the `send.` subdomain, the DKIM key, or the From
-addresses in `sender-resolver.ts`. If we ever move the Return-Path onto
-the root, the SPF includes have to be merged rather than replaced — that
-is the one change here that could break outbound.
+Resend sends exactly as it did. The root MX, the root SPF, the second
+DKIM key and the DMARC record do not touch the `send.` subdomain, the
+`resend` DKIM key, or the From addresses in `sender-resolver.ts` — the
+delivery test above went out through that path unchanged.
+
+If we ever move the Return-Path onto the root, the SPF includes have to
+be MERGED rather than replaced. That is the one change here that could
+break outbound.
