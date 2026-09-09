@@ -10,8 +10,6 @@ import { PortalPacingService } from './services/portal-pacing.service';
 import { PortalSessionService } from './services/portal-session.service';
 import { WalletLedgerFetcherService } from './services/wallet-ledger-fetcher.service';
 import { WalletSyncService } from './services/wallet-sync.service';
-import { WalletSyncHistoryService } from './services/wallet-sync-history.service';
-import { AdminWalletSyncController } from './controllers/admin-wallet-sync.controller';
 import { WalletSyncWorker } from './queue/wallet-sync.worker';
 import { WalletLedgerModule } from '../wallet-ledger/wallet-ledger.module';
 import { PortalTaxonomyService } from './services/portal-taxonomy.service';
@@ -64,7 +62,6 @@ import { CourierWalletReconcileService } from './services/courier-wallet-reconci
     TicketHandlingModule,
     SystemIssuesModule,
   ],
-  controllers: [AdminWalletSyncController],
   providers: [
     PortalSessionService,
     PortalPacingService,
@@ -76,7 +73,6 @@ import { CourierWalletReconcileService } from './services/courier-wallet-reconci
     PortalQueue,
     WalletLedgerFetcherService,
     WalletSyncService,
-    WalletSyncHistoryService,
     WalletSyncWorker,
     ConsigneeVerifyService,
     ConsigneeVerifyWorker,

@@ -7,7 +7,7 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { WalletSyncService, type WalletSyncSummary } from '../services/wallet-sync.service';
+import { WalletSyncTriggerService } from '../services/wallet-sync-trigger.service';
 import {
   WalletSyncHistoryService,
   type WalletSyncPanel,
@@ -31,7 +31,7 @@ import {
 export class AdminWalletSyncController {
   constructor(
     private readonly history: WalletSyncHistoryService,
-    private readonly sync: WalletSyncService,
+    private readonly trigger: WalletSyncTriggerService,
     private readonly audit: AuditLogService,
   ) {}
 
@@ -53,13 +53,15 @@ export class AdminWalletSyncController {
   @ApiOperation({
     summary: 'Run the cost sync now',
     description:
-      'The same job the scheduler runs, on demand. It signs in to the courier portal, downloads the wallet export and imports it — so it is slow, and it is a real session against their site. Safe to repeat: an import that sees the same figures records them as unchanged.',
+      'Queues the same job the scheduler runs. It happens in the portal worker — the process that owns the browser — so this returns as soon as it is queued, not when it has finished; a run takes a minute or two and the result appears in the history below. Safe to repeat: an import that sees the same figures records them as unchanged.',
   })
-  async run(@CurrentStaff() staff: AuthenticatedStaff): Promise<WalletSyncSummary> {
-    // Audited BEFORE the run, not after. The run takes a minute or two
-    // of browser work and can fail halfway; "who asked for this" is
-    // exactly the question worth having on record when it does, and an
-    // audit written only on success would not answer it.
+  async run(
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ queued: boolean; jobId: string | null }> {
+    // Audited BEFORE the enqueue. The work happens in another process
+    // and can fail there; "who asked for this" is exactly the question
+    // worth having on record when it does, and an audit written only on
+    // success would never answer it.
     await this.audit.log({
       actorType: ActorType.STAFF,
       staffUserId: staff.id,
@@ -71,6 +73,6 @@ export class AdminWalletSyncController {
       severity: 'MEDIUM',
       metadata: { courierCode: 'delhivery' },
     });
-    return this.sync.sync();
+    return this.trigger.requestRun();
   }
 }

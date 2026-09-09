@@ -193,7 +193,11 @@ export function CostSyncIndex(): ReactElement {
     void (async () => {
       try {
         await run.mutateAsync();
-        toast.success('The sync finished — see the last run below.');
+        // QUEUED, not finished. The work happens in the portal worker
+        // and takes a minute or two; saying "finished" here would be a
+        // straightforward lie, and the person would refresh, see the
+        // old run, and conclude the button was broken.
+        toast.success('Queued. It runs in the portal worker — refresh in a minute or two.');
       } catch (err) {
         // FE-2: the server's verdict verbatim.
         toast.error(serverVerdict(err));
@@ -251,9 +255,10 @@ export function CostSyncIndex(): ReactElement {
               </div>
               {canRun && (
                 <p className="text-text-muted mt-2 text-xs">
-                  A run signs in to the courier’s portal and downloads the export, so it takes a
-                  minute or two. Running it twice is harmless — the second import sees the same
-                  figures and records them as unchanged.
+                  This queues the job for the portal worker, which is the process that owns the
+                  browser — so the run starts in the background and takes a minute or two. Running
+                  it twice is harmless: the second import sees the same figures and records them as
+                  unchanged.
                 </p>
               )}
             </CardBody>
