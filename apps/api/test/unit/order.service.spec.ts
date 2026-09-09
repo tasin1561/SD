@@ -54,6 +54,8 @@ function makeService(
     openOrders?: AnyArgs[];
     sellerInitials?: string | null;
     overdrawn?: boolean;
+    /** An agent holding this order right now, if a test needs one. */
+    activeCall?: { assignedAgentId: string | null; assignedAt: Date | null } | null;
   } = {},
 ) {
   const orderCreate = jest.fn(async (args: { data: AnyArgs }) => ({
@@ -138,7 +140,10 @@ function makeService(
   const stateMachine = new OrderStateMachineService();
 
   const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
-  const callQueue = { enqueueOrder };
+  // Is an agent on the phone with this customer right now? Null unless
+  // a test says otherwise — the ordinary case is nobody is.
+  const activeAssignment = jest.fn(async () => opts.activeCall ?? null);
+  const callQueue = { enqueueOrder, activeAssignment };
 
   // M15→M6 best-effort post-commit hook: tests treat as a no-op.
   const persistForOrderSystem = jest.fn(async () => ({ skipped: true, reason: 'TEST' }));
@@ -450,13 +455,53 @@ describe('OrderService.edit', () => {
     });
   });
 
-  it('rejects items/economics edits in PENDING_CONFIRMATION', async () => {
-    const { svc } = makeService({
+  it('allows items/economics edits in PENDING_CONFIRMATION', async () => {
+    // The whole order is editable until the call confirms it: nothing is
+    // committed before CONFIRMED — no reservation (ORD-10), no waybill
+    // (CUR-2b), no shipment — and under flat pricing the persisted
+    // charges do not depend on weight, COD or contents.
+    const { svc, orderUpdate } = makeService({
       existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
     });
-    await expect(svc.edit('s1', 'o1', { isUrgent: true }, ACTOR, CTX)).rejects.toMatchObject({
-      response: { code: 'EDIT_SCOPE_PENDING' },
+    await svc.edit('s1', 'o1', { isUrgent: true }, ACTOR, CTX);
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({ isUrgent: true });
+  });
+
+  it('refuses an items/economics edit while an agent is on the call', async () => {
+    // The agent is reading the contents and the amount to the customer.
+    // Changing either underneath them means the customer agrees to one
+    // order and we ship another, and neither of them would know.
+    const { svc } = makeService({
+      existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
+      activeCall: { assignedAgentId: 'agent-1', assignedAt: new Date() },
     });
+    await expect(svc.edit('s1', 'o1', { codAmountInr: 999 }, ACTOR, CTX)).rejects.toMatchObject({
+      response: { code: 'EDIT_DURING_CALL' },
+    });
+  });
+
+  it('still allows a recipient correction mid-call', async () => {
+    // An agent who has just been told the flat number is wrong wants it
+    // fixed now. It describes the same order rather than replacing it.
+    const { svc, orderUpdate } = makeService({
+      existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
+      activeCall: { assignedAgentId: 'agent-1', assignedAt: new Date() },
+    });
+    await svc.edit('s1', 'o1', { recipientAddressLine2: 'Flat 4B, not 4A' }, ACTOR, CTX);
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({
+      recipientAddressLine2: 'Flat 4B, not 4A',
+    });
+  });
+
+  it('waiting in the queue is not a call', async () => {
+    // Only an ASSIGNED entry blocks. Treating "waiting" as a call would
+    // lock a seller out for as long as the queue is deep.
+    const { svc, orderUpdate } = makeService({
+      existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
+      activeCall: null,
+    });
+    await svc.edit('s1', 'o1', { packageType: 'BOX' as never }, ACTOR, CTX);
+    expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({ packageType: 'BOX' });
   });
 
   it('re-links the customer when the recipient phone is corrected', async () => {

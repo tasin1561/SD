@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
 import {
   Button,
   Card,
@@ -14,12 +14,13 @@ import {
   Select,
   Textarea,
   useToast,
-  ProductThumb,
 } from '@skydrop/ui/components';
+import { OrderedProducts, ProductCatalogue, type PickedLine } from '@/components/product-picker';
 import { ApiError } from '@skydrop/api-client';
 import {
   useDiscardDraftOrder,
   useOrderDetail,
+  useStockList,
   useSubmitOrder,
   useUpdateOrder,
   type UpdateOrderInput,
@@ -45,17 +46,31 @@ import {
 /**
  * Edit form for a DRAFT or PENDING_CONFIRMATION order.
  *
- * Locked decisions:
- *   - Recipient + payment + physical + notes are editable. The line
- *     ITSELF is read-only — the seller cannot swap items here; for a
- *     wrong line they discard the draft and recreate. (Avoids
- *     needing a productId lookup that OrderItemView doesn't carry,
- *     and prevents the seller from accidentally rewriting an item
- *     that the call agent has already discussed with the customer.)
- *   - PENDING_CONFIRMATION orders accept only recipient + notes
- *     edits; physical/economics fields are visually disabled even
- *     though the form gathers them — the server rejects in any case
- *     and we surface FE-2 verbatim.
+ * ── THE WHOLE ORDER IS EDITABLE UNTIL THE CALL CONFIRMS IT ───────────
+ * Rewritten 2026-09-09. It previously locked the economics and the
+ * lines the moment the order left DRAFT, on two arguments that did not
+ * survive being checked:
+ *
+ *   - "the lines need a productId lookup OrderItemView doesn't carry" —
+ *     the picker set `productId` and read it nowhere, so nothing needed
+ *     one. The field is gone.
+ *   - "it prevents the seller rewriting an item the agent has already
+ *     discussed" — the real version of that concern is narrower and now
+ *     lives on the SERVER: an items or economics edit is refused while
+ *     an agent is actually holding the order (EDIT_DURING_CALL), and
+ *     allowed while it merely waits in the queue.
+ *
+ * Nothing is committed before CONFIRMED — no stock reserved (ORD-10),
+ * no waybill booked (CUR-2b), no shipment — so an edit here rewrites a
+ * row and nothing else. "Discard & recreate to swap a line" was also
+ * advice that only worked on a DRAFT: a PENDING order with a wrong
+ * product had no remedy at all short of cancelling it.
+ *
+ * The mid-call refusal is deliberately NOT mirrored client-side (FE-2):
+ * the UI cannot know a call started thirty seconds ago, and a guess
+ * would either lock a seller out of an order nobody is calling about or
+ * promise an edit the server then refuses. The verdict surfaces
+ * verbatim.
  *   - "Discard draft" is a destructive secondary action with an
  *     inline typed-confirm.
  *   - "Save changes" PATCHes. "Save + submit" PATCHes then submits
@@ -116,6 +131,64 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     // idempotent and will not stack a second one on save.
   }, [detail.data, form, sellerInitials]);
 
+  /*
+    THE LINES ARE EDITABLE NOW.
+
+    They were rendered read-only with "discard & recreate to swap" — an
+    instruction that only works on a DRAFT, so a PENDING order with a
+    wrong line had no remedy at all short of cancelling it. The API
+    accepted an items replacement the whole time; nothing offered it,
+    which is the same as it not existing.
+
+    Seeded from the order's own snapshot (ORD-6) rather than re-resolved
+    from the catalogue, so a line whose product was since renamed still
+    reads as what the customer ordered. Sending `items` REPLACES the set
+    — that is the server's contract, so the form always sends the whole
+    list rather than a diff.
+  */
+  const stock = useStockList({ page: 1, pageSize: 100 });
+  const [lines, setLines] = useState<PickedLine[] | null>(null);
+  const [nextKey, setNextKey] = useState(1);
+
+  useEffect(() => {
+    if (lines !== null || detail.data === undefined) return;
+    setLines(
+      detail.data.items.map((it, i) => ({
+        key: i,
+        variantId: it.variantId,
+        skuCode: it.skuCode,
+        productName: it.productName,
+        variantLabel: it.variantLabel,
+        imageUrl: it.imageUrl,
+        weightGrams: it.unitWeightGrams,
+        catalogueValueInr: it.unitDeclaredValueInr,
+        quantity: String(it.quantity),
+        unitPriceInr: it.unitPriceInr ?? '',
+      })),
+    );
+    setNextKey(detail.data.items.length);
+  }, [detail.data, lines]);
+
+  const stockByVariant = useMemo(() => {
+    const m = new Map<string, { available: number; inTransit: number }>();
+    for (const r of stock.data?.items ?? []) {
+      m.set(r.variantId, { available: r.qtyAvailable, inTransit: r.qtyInTransit });
+    }
+    return m;
+  }, [stock.data]);
+
+  /** Have the lines actually changed? Sending an unchanged set would
+   *  delete and re-create every row for nothing, and would put "items"
+   *  in the order's event timeline when nothing moved. */
+  const linesChanged = useMemo(() => {
+    if (lines === null || detail.data === undefined) return false;
+    const before = detail.data.items.map(
+      (i) => `${i.variantId}:${i.quantity}:${i.unitPriceInr ?? ''}`,
+    );
+    const after = lines.map((l) => `${l.variantId}:${Number(l.quantity)}:${l.unitPriceInr.trim()}`);
+    return before.join('|') !== after.join('|');
+  }, [lines, detail.data]);
+
   if (detail.isLoading || form === null) return <LoadingState label="Loading order…" />;
   if (detail.isError)
     return <ErrorState message={detail.error?.message ?? 'Failed to load order.'} />;
@@ -166,6 +239,13 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     if (form.totalWeightGrams.trim()) body.totalWeightGrams = Number(form.totalWeightGrams);
     if (form.sellerNotes !== (detail.data.sellerNotes ?? '')) {
       body.sellerNotes = form.sellerNotes;
+    }
+    if (linesChanged && lines !== null) {
+      body.items = lines.map((l) => ({
+        variantId: l.variantId,
+        quantity: Number(l.quantity),
+        ...(l.unitPriceInr.trim() ? { unitPriceInr: Number(l.unitPriceInr) } : {}),
+      }));
     }
     return body as UpdateOrderInput;
   }
@@ -255,56 +335,97 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     }
   }
 
-  const economicsLocked = !isDraft;
-  const items = detail.data.items;
+  /*
+    THE WHOLE ORDER IS EDITABLE UNTIL THE CALL CONFIRMS IT.
+
+    This was `!isDraft` — the economics went read-only the moment the
+    order entered the call queue. Nothing is committed before
+    confirmation (no stock reserved, no waybill booked, no shipment), so
+    the lock was earlier than the business needs.
+
+    The server still refuses these fields while an agent is actually on
+    the call (EDIT_DURING_CALL) and the refusal surfaces verbatim
+    (FE-2). Deliberately NOT mirrored here: the UI has no way to know a
+    call started thirty seconds ago, and a client-side guess would
+    either lock a seller out of an order nobody is calling about or
+    promise an edit the server then refuses.
+  */
 
   return (
     <form className="space-y-4" onSubmit={(e) => void onSave(e)}>
       <div className="text-text-muted text-xs">
         Editing order <span className="font-mono text-text-bright">{detail.data.orderNumber}</span>{' '}
         · status <span className="font-mono text-text-bright">{status}</span>
-        {economicsLocked && (
-          <span className="ml-2 text-pending">
-            (recipient + notes only — economics locked once submitted to call queue)
+        {isPending && (
+          <span className="text-text-muted ml-2">
+            — editable until the confirmation call is done
           </span>
         )}
       </div>
 
-      {/* Read-only lines (any swap requires discard + recreate).
-          Renders EVERY line: this block used to show only the first,
-          from when an order was single-line, so a two-product order
-          looked like a one-product order on the page you edit it from. */}
-      {items.length > 0 && (
-        <Card>
-          <CardBody>
-            <h2 className="text-text-bright text-sm font-medium mb-2">
-              {items.length === 1 ? 'Item' : `Items (${items.length})`}{' '}
-              <span className="text-text-muted text-xs ml-2">
-                (read-only — discard &amp; recreate to swap)
-              </span>
-            </h2>
-            <ul className="space-y-2">
-              {items.map((it) => (
-                <li key={it.id} className="flex items-center gap-3">
-                  <ProductThumb src={it.imageUrl} size={40} />
-                  <div className="min-w-0">
-                    <div className="text-text-body text-sm">
-                      {it.productName}
-                      {it.variantLabel && (
-                        <span className="text-text-muted"> · {it.variantLabel}</span>
-                      )}
-                    </div>
-                    <div className="text-text-faint text-xs mt-0.5 font-mono">
-                      {it.skuCode} · qty {it.quantity}
-                      {it.unitPriceInr ? ` · ₹${it.unitPriceInr}/unit` : ''}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
-      )}
+      {/* The lines — editable, because a wrong product on an order
+          nobody has confirmed yet is a correction, not a reason to
+          cancel and start again. */}
+      <Card>
+        <CardBody>
+          <h2 className="text-text-bright mb-2 text-sm font-medium">
+            Items
+            {linesChanged && (
+              <span className="text-pending ml-2 text-xs">changed — save to apply</span>
+            )}
+          </h2>
+          {lines === null ? (
+            <LoadingState label="Loading the items…" />
+          ) : (
+            <div className="space-y-3">
+              <OrderedProducts
+                lines={lines}
+                stockByVariant={stockByVariant}
+                onPatch={(key: number, patch: Partial<PickedLine>) =>
+                  setLines((prev) =>
+                    (prev ?? []).map((l) => (l.key === key ? { ...l, ...patch } : l)),
+                  )
+                }
+                onRemove={(key) => setLines((prev) => (prev ?? []).filter((l) => l.key !== key))}
+              />
+              <ProductCatalogue
+                lines={lines}
+                stockByVariant={stockByVariant}
+                onAdd={(hit) => {
+                  setLines((prev) => {
+                    const existing = (prev ?? []).find((l) => l.variantId === hit.id);
+                    // Adding something already on the order means "one
+                    // more of those", not a second line for the same SKU.
+                    if (existing !== undefined) {
+                      return (prev ?? []).map((l) =>
+                        l.variantId === hit.id
+                          ? { ...l, quantity: String(Number(l.quantity || '0') + 1) }
+                          : l,
+                      );
+                    }
+                    return [
+                      ...(prev ?? []),
+                      {
+                        key: nextKey,
+                        variantId: hit.id,
+                        skuCode: hit.skuCode,
+                        productName: hit.productName,
+                        variantLabel: hit.variantLabel,
+                        imageUrl: hit.primaryImageUrl,
+                        weightGrams: hit.effectiveWeightGrams,
+                        catalogueValueInr: hit.effectiveDeclaredValueInr,
+                        quantity: '1',
+                        unitPriceInr: hit.effectiveDeclaredValueInr ?? '',
+                      },
+                    ];
+                  });
+                  setNextKey((k) => k + 1);
+                }}
+              />
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       {/* Recipient */}
       <Card>
@@ -414,16 +535,12 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       {/* Payment + physical */}
       <Card>
         <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">
-            Payment &amp; physical
-            {economicsLocked && <span className="text-text-muted text-xs ml-2">(read-only)</span>}
-          </h2>
+          <h2 className="text-text-bright text-sm font-medium mb-3">Payment &amp; physical</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField label="Payment mode" required>
               <Select
                 value={form.paymentMode}
                 onChange={(e) => set('paymentMode', e.target.value as 'COD' | 'PREPAID')}
-                disabled={economicsLocked}
               >
                 <option value="PREPAID">Prepaid</option>
                 <option value="COD">Cash on Delivery</option>
@@ -437,7 +554,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                   step="0.01"
                   value={form.codAmountInr}
                   onChange={(e) => set('codAmountInr', e.target.value)}
-                  disabled={economicsLocked}
                   required
                 />
               </FormField>
@@ -449,7 +565,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 step="0.01"
                 value={form.declaredValueInr}
                 onChange={(e) => set('declaredValueInr', e.target.value)}
-                disabled={economicsLocked}
               />
             </FormField>
             <FormField label="Total weight (grams)">
@@ -458,7 +573,6 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 min={0}
                 value={form.totalWeightGrams}
                 onChange={(e) => set('totalWeightGrams', e.target.value)}
-                disabled={economicsLocked}
               />
             </FormField>
           </div>

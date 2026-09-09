@@ -94,6 +94,27 @@ export class CallQueueService {
    * no OPEN entry ⇒ no-op `{ dequeued: 0 }`. An ASSIGNED entry being
    * closed means an agent's in-flight pull was preempted — audited.
    */
+  /**
+   * Is an agent holding this order right now?
+   *
+   * The one READ on the queue this primitive exposes, and it exists so
+   * the order module can answer "is a call in progress" without
+   * touching `call_queue_entries` itself (MUST #17 — the queue's tables
+   * belong to the queue). Returns null when the order is merely waiting
+   * in the queue: waiting is not a call, and treating it as one would
+   * block a seller for as long as the queue is deep.
+   */
+  async activeAssignment(
+    orderId: string,
+  ): Promise<{ assignedAgentId: string | null; assignedAt: Date | null } | null> {
+    const entry = await this.prisma.client.callQueueEntry.findFirst({
+      where: { orderId, status: CallQueueStatus.ASSIGNED },
+      select: { assignedAgentId: true, assignedAt: true },
+      orderBy: { assignedAt: 'desc' },
+    });
+    return entry ?? null;
+  }
+
   async dequeueOrder(
     orderId: string,
     closureReason: QueueClosureReason,

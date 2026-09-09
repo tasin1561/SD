@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
-import { OrderedProducts, ProductCatalogue, type PickedLine } from './product-picker';
+import { OrderedProducts, ProductCatalogue, type PickedLine } from '@/components/product-picker';
 import {
   Button,
   Card,
@@ -362,7 +362,6 @@ export function NewOrderForm(): ReactElement {
       {
         key: nextKey.current++,
         variantId: hit.id,
-        productId: hit.productId,
         skuCode: hit.skuCode,
         productName: hit.productName,
         variantLabel: hit.variantLabel,

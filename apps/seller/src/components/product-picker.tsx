@@ -10,7 +10,6 @@ import { useSetVariantFavourite, useVariantSearch } from '@/lib/api-hooks';
 export interface PickedLine {
   readonly key: number;
   readonly variantId: string;
-  readonly productId: string;
   readonly skuCode: string;
   readonly productName: string;
   readonly variantLabel: string | null;
@@ -32,6 +31,15 @@ export interface StockFigure {
   readonly available: number;
   readonly inTransit: number;
 }
+
+/*
+  SHARED BY TWO ROUTES (2026-09-09): the order form and the order EDIT
+  form, which is why it moved out of `orders/new/_components`. It also
+  lost a `productId` field that was set from the search hit and read by
+  nothing — and that dead field was the stated reason the edit form
+  could not offer items at all ("a productId lookup that OrderItemView
+  doesn't carry"). It never needed one.
+*/
 
 /**
  * The catalogue — a searchable list you click to add from.

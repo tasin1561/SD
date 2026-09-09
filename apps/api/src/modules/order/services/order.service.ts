@@ -729,6 +729,34 @@ export class OrderService {
       });
     }
 
+    /*
+      THE WHOLE ORDER IS EDITABLE UNTIL THE CALL CONFIRMS IT (2026-09-09).
+
+      This used to accept only recipient corrections and notes once the
+      order reached PENDING_CONFIRMATION — items and the six economic
+      fields were refused as EDIT_SCOPE_PENDING. That was stricter than
+      the business needs: nothing is committed before confirmation. No
+      stock is reserved (ORD-10 — reservation is LATE, at CONFIRMED), no
+      waybill is booked (CUR-2b books it on entry to CONFIRMED), no
+      shipment exists (provisioned on the same edge), and under FLAT
+      pricing the persisted `order_charges` do not depend on weight, COD
+      or contents at all — the fee is per seller, and GST is a percent of
+      the fee. So an edit here rewrites a row and nothing else.
+
+      WHAT IS STILL REFUSED IS AN EDIT UNDER A LIVE CALL. An agent
+      holding this order is reading the contents and the amount to the
+      customer; changing either underneath them means the customer
+      agrees to one order and we ship a different one, and neither of
+      them would know. Waiting in the queue is NOT a call — blocking on
+      that would lock a seller out for as long as the queue is deep — so
+      the gate is an ASSIGNED entry specifically, asked of the queue
+      primitive rather than by reading its tables (MUST #17).
+
+      A recipient correction stays allowed even mid-call, unchanged: an
+      agent who has just been told the flat number is wrong wants it
+      fixed now, and it describes the same order rather than replacing
+      it.
+    */
     const economicKeys = [
       'paymentMode',
       'codAmountInr',
@@ -738,12 +766,18 @@ export class OrderService {
       'isUrgent',
     ] as const;
     const touchedEconomic = economicKeys.some((k) => input[k] !== undefined);
-    if (isPending && (input.items !== undefined || touchedEconomic)) {
-      throw new BadRequestException({
-        code: 'EDIT_SCOPE_PENDING',
-        message:
-          'A PENDING_CONFIRMATION order accepts recipient/customer corrections and notes only',
-      });
+    const touchesTheDeal = input.items !== undefined || touchedEconomic;
+    if (isPending && touchesTheDeal) {
+      const call = await this.callQueue.activeAssignment(id);
+      if (call !== null) {
+        throw new ConflictException({
+          code: 'EDIT_DURING_CALL',
+          message:
+            'An agent is confirming this order with the customer right now. The contents and the ' +
+            'amount cannot change mid-call — correct the address if you need to, or wait for the ' +
+            'call to finish and edit then.',
+        });
+      }
     }
 
     const data: Prisma.OrderUpdateInput = {};
@@ -818,9 +852,14 @@ export class OrderService {
       changed.push('internalNotes');
     }
 
-    // ── Economics / physical (DRAFT only) ──────────────────────────────
+    // ── Economics / physical (until the call confirms it) ──────────────
+    // `isDraft` was the gate here too, which is the other half of the
+    // old restriction: the guard above refused the request and this
+    // block would have silently ignored the fields anyway. Both open
+    // now — a PENDING order is not committed to anything (see the note
+    // at the top of this method).
     let effectivePaymentMode = order.paymentMode;
-    if (isDraft) {
+    {
       if (input.paymentMode !== undefined) {
         data.paymentMode = input.paymentMode;
         effectivePaymentMode = input.paymentMode;
@@ -874,7 +913,7 @@ export class OrderService {
       }
     }
 
-    // ── Lines: full replace (DRAFT only) ───────────────────────────────
+    // ── Lines: full replace (until the call confirms it) ───────────────
     let replacementLines: Awaited<ReturnType<OrderService['resolveLines']>> | null = null;
     if (input.items !== undefined) {
       replacementLines = await this.resolveLines(sellerId, input.items);
