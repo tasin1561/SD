@@ -266,6 +266,33 @@ export class CourierAwbDispatchService {
       declaredValueInr: input.declaredValueInr,
       codAmountInr: input.codAmountInr,
       itemDescription: input.itemDescription,
+      /*
+        THE BOX SIZE. Dropped here until 2026-09-09, which is how a live
+        parcel came to read `0 x 0 x 0 cm` on Delhivery's own panel.
+
+        Everything around this was already right: DispatchAwbInput
+        carries the three fields, AwbGenerationService fills them with a
+        modest default when the box was never measured, and
+        DelhiveryAwbService is ready to send shipment_length/width/height
+        — but CONDITIONALLY on each being defined. Omitting them here
+        made them undefined there, the conditional spread dropped them,
+        and nothing anywhere complained.
+
+        The comment on that default even reasons about DELHIVERY ("their
+        API requires dimensions and refuses a zero") while Shiprocket was
+        the only courier receiving it.
+
+        It costs money rather than breaking: Delhivery prices on
+        volumetric weight when it exceeds the actual, so with no
+        dimensions they either bill on weight alone or re-measure at the
+        hub and correct the invoice later — which surfaces as unexplained
+        variance in the wallet reconciliation rather than as an error.
+      */
+      lengthCm: input.lengthCm,
+      // Delhivery calls the second axis `width`, Shiprocket calls it
+      // `breadth`. Same box; the dispatcher is where that stops mattering.
+      widthCm: input.breadthCm,
+      heightCm: input.heightCm,
     };
     const r = await this.delhivery.generateAwb(req, actor, input.courierAccountId);
     return {
