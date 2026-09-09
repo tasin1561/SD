@@ -124,6 +124,14 @@ export const envSchema = z.object({
   // send back on every call (see tracking.webhook_auth_scheme.delhivery).
   // The header NAME is likewise our choice, made in that document.
   TRACKING_WEBHOOK_SECRET_DELHIVERY: z.string().optional().default(''),
+  /*
+    Shiprocket's is a STATIC TOKEN, not a signing secret. Their webhook
+    form asks for a URL, a header name and a token, and sends that token
+    verbatim on every push — the SHARED_SECRET scheme, not HMAC. Empty by
+    default, and an empty secret fails every webhook closed (TRK-1),
+    which is the right posture for a courier that is not sending any.
+  */
+  TRACKING_WEBHOOK_SECRET_SHIPROCKET: z.string().optional().default(''),
 
   // --- Module 18 — ChatWoot live chat ---------------------------------
   // Real-mode token + HMAC secret. Both optional/empty so the app

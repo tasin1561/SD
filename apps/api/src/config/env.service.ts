@@ -179,6 +179,8 @@ export class EnvService {
     switch (envVarName) {
       case 'TRACKING_WEBHOOK_SECRET_DELHIVERY':
         return this.env.TRACKING_WEBHOOK_SECRET_DELHIVERY;
+      case 'TRACKING_WEBHOOK_SECRET_SHIPROCKET':
+        return this.env.TRACKING_WEBHOOK_SECRET_SHIPROCKET;
       default:
         return '';
     }

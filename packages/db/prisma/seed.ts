@@ -722,6 +722,15 @@ const systemSettings: SystemSettingSeed[] = [
       'Delhivery does not sign webhooks; it returns the authorization we nominated in their Webhook Requirement Document. Leave as SHARED_SECRET unless Delhivery introduces signing. The credential itself lives in the env var named by tracking.webhook_secret_ref (CUR-1: secret in env, reference in the DB).',
   },
   {
+    key: 'tracking.webhook_auth_scheme.shiprocket',
+    category: 'tracking',
+    valueType: SettingValueType.STRING,
+    valueString: 'SHARED_SECRET',
+    displayName: 'Webhook Auth Scheme — Shiprocket',
+    description:
+      "Shiprocket does not sign webhooks either. Their form asks for a URL, a header NAME (their 'Auth Token Type') and a token, and sends that token verbatim on every push — a static credential, which is SHARED_SECRET. The token itself lives in the env var named by tracking.webhook_secret_ref.shiprocket (CUR-1: secret in env, reference in the DB).",
+  },
+  {
     key: 'courier.delhivery_waybill_pool_refill_enabled',
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,
@@ -901,6 +910,15 @@ const systemSettings: SystemSettingSeed[] = [
     displayName: 'Tracking Webhook Secret Env Key (Delhivery)',
     description:
       'Name of the env var that holds the HMAC secret used to authenticate inbound Delhivery tracking webhooks (CUR-1 discipline — the secret value lives in env, never the DB). Phase 1A stub mode reads a configured test secret directly; real-mode HMAC scheme is TODO(delhivery-api).',
+  },
+  {
+    key: 'tracking.webhook_secret_ref.shiprocket',
+    category: 'tracking',
+    valueType: SettingValueType.STRING,
+    valueString: 'TRACKING_WEBHOOK_SECRET_SHIPROCKET',
+    displayName: 'Tracking Webhook Secret Env Key (Shiprocket)',
+    description:
+      'Name of the env var holding the static token Shiprocket sends back on every webhook (CUR-1 — the value lives in env, never the DB). Empty until the token is generated and pasted into their Webhooks screen; an empty secret fails every webhook closed, which is the right posture for a courier that is not sending any.',
   },
   {
     key: 'tracking.public_lookup_rate_limit_per_min',

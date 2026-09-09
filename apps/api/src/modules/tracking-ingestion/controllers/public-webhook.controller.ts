@@ -65,6 +65,29 @@ interface AckResponse {
  */
 const WEBHOOK_RATE_LIMIT_PER_MIN = 3000;
 
+/**
+ * A path segment that is NOT the courier's name.
+ *
+ * Shiprocket's own webhook form refuses a URL containing "shiprocket",
+ * "kartrocket", "sr" or "kr" — so `/webhooks/shiprocket`, the obvious
+ * URL, cannot be saved on their side at all. The alias is theirs to
+ * accept and ours to resolve; `carrier-b` carries none of those strings
+ * and says what it is (the second carrier) without borrowing their
+ * brand.
+ *
+ * A MAP rather than a special case, so a third courier with its own
+ * naming rule is a line here instead of a branch in the handler.
+ * Unaliased codes pass straight through, which is every other courier.
+ */
+const WEBHOOK_PATH_ALIASES: Readonly<Record<string, string>> = {
+  'carrier-b': 'shiprocket',
+};
+
+function resolveCourierAlias(segment: string): string {
+  const lower = segment.toLowerCase();
+  return WEBHOOK_PATH_ALIASES[lower] ?? lower;
+}
+
 @ApiTags('public-tracking-webhooks')
 @ThrottleKey('ip')
 @Throttle({ default: { limit: WEBHOOK_RATE_LIMIT_PER_MIN, ttl: minutes(1) } })
@@ -85,8 +108,23 @@ export class PublicWebhookController {
     // valid); we pass parsedBody to the ingester for observability but
     // the HMAC commits to the RAW bytes only.
     @Body() parsedBody: unknown,
-    @Headers('x-skydrop-signature') signatureHeader?: string,
+    @Headers('x-skydrop-signature') skydropSignature?: string,
+    /*
+      SHIPROCKET SENDS `x-api-key`, and we do not get to choose.
+
+      Their webhook form has an "Auth Token Type" dropdown whose value is
+      the HEADER NAME; there is no HMAC and no signing — the token is a
+      static credential in a header, which is the SHARED_SECRET scheme
+      WebhookAuthService already supports.
+
+      Read as a fallback rather than a replacement: Delhivery's requirement
+      document names `x-skydrop-signature`, and a courier that starts
+      sending the wrong header should still fail closed rather than be
+      quietly accommodated.
+    */
+    @Headers('x-api-key') apiKeyHeader?: string,
   ): Promise<AckResponse> {
+    const signatureHeader = skydropSignature ?? apiKeyHeader;
     // Raw bytes (set by NestFactory rawBody:true). Fall back to an
     // empty string if missing — WebhookAuthService will then
     // fail-closed on SIGNATURE_MISMATCH (the empty body's HMAC won't
@@ -103,7 +141,7 @@ export class PublicWebhookController {
       : null;
 
     const outcome: IngestOutcome = await this.ingest.ingest({
-      courierCode: courierCode.toLowerCase(),
+      courierCode: resolveCourierAlias(courierCode),
       rawBody,
       parsedBody: parsedBodyJson,
       signatureHeader,
