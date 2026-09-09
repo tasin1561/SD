@@ -26,7 +26,7 @@ Everything below is about what WOULD work the day those switches flip.
 | Fetch label | ✅ | ✅ | Shiprocket returns a URL, Delhivery a PDF; the dispatcher hides the difference |
 | Cancel a shipment | ✅ | ✅ **verified live** | |
 | Serviceability check | ✅ | ✅ **verified live** | reactive only (CUR-5); not on the critical path |
-| Edit consignee on a live parcel | ✅ | ⚠️ partial | Shiprocket has no product-description field and refuses that BY NAME |
+| Edit consignee on a live parcel | ✅ | ⚠️ partial — consignee yes, description no | MEASURED 2026-09-09: their `update/adhoc` changes the description fine BEFORE a waybill (partial update, other fields preserved) and answers `400 "Order update not allowed"` after one. Our edit path is always post-waybill, so the description genuinely cannot change — but the consignee half is applied and the description reported as unapplied, rather than the whole edit being refused |
 | Request pickup | ✅ | ✅ | per (courier, warehouse, day), CUR-10 amendment #3 |
 | Register pickup location | ✅ | ⚠️ add only | they have no EDIT; routing an update to `addpickup` makes a SECOND location with the same name, and the name is what every manifest matches on |
 | **List** pickup locations | ❌ none | ✅ | `GET /v1/external/settings/company/pickup` — CLAUDE.md said neither had one; that was true of Delhivery and got generalised |
@@ -46,7 +46,12 @@ Everything below is about what WOULD work the day those switches flip.
 
 **Structural — Shiprocket cannot do these:**
 
-- **Edit a product description on a live parcel.** No such field.
+- **Edit a product description on a live parcel.** Not "no such field" —
+  measured: `update/adhoc` accepts it happily until a waybill exists and
+  answers `400 "Order update not allowed"` afterwards. Since a parcel we
+  would edit always has one, the effect is the same, but the reason is
+  different and the earlier wording would have sent somebody looking for
+  a field that does exist.
 - **Amend a registered pickup location.** They have add, no edit.
 - **Signature / RVP-QC documents.** They hold one document, the POD.
 

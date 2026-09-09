@@ -222,18 +222,41 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
     expect(srEdit.mock.calls[0]?.[0].courierShipmentId).toBe('99887');
   });
 
-  it('refuses a product-description change on Shiprocket rather than dropping it', async () => {
+  it('refuses a description-ONLY change on Shiprocket, without calling them', async () => {
+    // Measured 2026-09-09: their update/adhoc answers
+    // 400 "Order update not allowed" once a waybill exists, and our edit
+    // path only ever runs on a parcel that has one. Calling to be told
+    // that is a round trip to reach a known answer.
+    const { svc, srEdit } = withEdit();
+    const r = await svc.edit(
+      {
+        ...base,
+        courierCode: 'shiprocket',
+        name: undefined,
+        phone: undefined,
+        address: undefined,
+        productsDesc: 'Two widgets',
+      },
+      ACTOR,
+    );
+    expect(srEdit).not.toHaveBeenCalled();
+    expect(r.success).toBe(false);
+    expect(r.message).toContain('product description');
+  });
+
+  it('still applies the consignee half when a description rides along', async () => {
+    // The bug this replaces: refusing the WHOLE edit meant an operator
+    // correcting a wrong flat number AND tidying the description lost
+    // the flat number too — the part that would have worked.
     const { svc, srEdit } = withEdit();
     const r = await svc.edit(
       { ...base, courierCode: 'shiprocket', productsDesc: 'Two widgets' },
       ACTOR,
     );
 
-    // Sending the edit without it would report success while the one
-    // field the operator cared about was silently discarded.
-    expect(srEdit).not.toHaveBeenCalled();
-    expect(r.success).toBe(false);
-    expect(r.message).toContain('product description');
+    expect(srEdit).toHaveBeenCalledTimes(1);
+    // And it SAYS what did not land, rather than reporting a clean success.
+    expect(r.message).toContain('description was NOT');
   });
 
   it('refuses a Shiprocket edit with no parcel id, without calling them', async () => {

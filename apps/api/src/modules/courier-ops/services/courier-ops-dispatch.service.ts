@@ -126,11 +126,39 @@ export class CourierOpsDispatchService {
               'This parcel carries no Shiprocket account or parcel id, so it cannot be edited.',
           };
         }
-        if (input.productsDesc !== undefined) {
+        /*
+          THE DESCRIPTION CANNOT CHANGE, BUT THE REST STILL CAN.
+
+          Measured against the live API on 2026-09-09, because the old
+          claim came from their docs and the NDR path had already proved
+          those wrong once:
+
+            update/adhoc BEFORE an AWB  → 200, the name changes, and
+              every field we did not send is PRESERVED (they answer
+              `partially_update` and name what they refused)
+            update/adhoc AFTER an AWB   → 400 "Order update not allowed"
+
+          Our edit path only ever runs on a parcel that HAS a waybill, so
+          the refusal is real rather than assumed. What was wrong was the
+          BLAST RADIUS: this refused the entire edit whenever a
+          description was included, so an operator correcting a wrong
+          flat number AND tidying the description lost the flat number
+          too — the part that would have worked.
+
+          Now the consignee half is applied and the description is
+          reported as the one thing that did not land. That mirrors
+          Shiprocket's own `not_updated_fields` shape, which is the right
+          instinct: say precisely what did not happen instead of refusing
+          everything.
+        */
+        const consigneeChanged =
+          input.name !== undefined || input.phone !== undefined || input.address !== undefined;
+        if (input.productsDesc !== undefined && !consigneeChanged) {
           return {
             success: false,
             message:
-              'Shiprocket cannot change the product description on a live parcel. Cancel and rebook if it must change.',
+              'Shiprocket will not change a product description once a waybill exists ' +
+              '("Order update not allowed"). Cancel and rebook if it must change.',
           };
         }
         const r = await this.shiprocket.editShipment(
@@ -142,6 +170,17 @@ export class CourierOpsDispatchService {
           },
           input.courierAccountId,
         );
+        if (input.productsDesc !== undefined) {
+          // Partial: whatever the consignee edit did, plus the honest
+          // note. Reported as a FAILURE when the consignee edit itself
+          // failed, so a half-applied change never reads as done.
+          return {
+            success: r.ok,
+            message:
+              `${r.message ?? 'Consignee details updated.'} The product description was NOT ` +
+              'changed — Shiprocket refuses that once a waybill exists. Cancel and rebook if it must change.',
+          };
+        }
         return { success: r.ok, message: r.message };
       }
       case 'delhivery': {
