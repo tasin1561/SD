@@ -88,6 +88,7 @@ model StaffUser {
   manifestsHandoffConfirmed  Manifest[]                    @relation("ManifestHandoffConfirmedBy")
   shipmentLabelsPrinted      Shipment[]                    @relation("ShipmentLabelPrintedBy")
   shipmentsHandoverScanned   Shipment[]                    @relation("ShipmentHandoverScannedBy")
+  shipmentsCourierChosen     Shipment[]                    @relation("ShipmentCourierChosenBy")
   pickBatchesPrinted         PickBatch[]                   @relation("PickBatchPrintedBy")
   pickBatchesCreated         PickBatch[]                   @relation("PickBatchCreatedBy")
   remittancesCreated         Remittance[]                  @relation("RemittanceStaff")
@@ -3262,6 +3263,20 @@ model Shipment {
   lengthCm                 Decimal?         @map("length_cm") @db.Decimal(6, 2)
   widthCm                  Decimal?         @map("width_cm") @db.Decimal(6, 2)
   heightCm                 Decimal?         @map("height_cm") @db.Decimal(6, 2)
+  /// The courier options the carrier offered for THIS parcel, snapshotted
+  /// when the order confirmed. A JSON array of
+  /// `{courierCompanyId, courierName, rateInr, estimatedDays, etd}`.
+  ///
+  /// Snapshotted rather than re-fetched so every admin looking at the
+  /// decision sees the same figures, and so the page renders without a
+  /// courier round trip per parcel. Stale by construction — the fetch
+  /// time is stored beside it and shown.
+  courierOptions           Json?            @map("courier_options")
+  courierOptionsFetchedAt  DateTime?        @map("courier_options_fetched_at") @db.Timestamptz
+  /// Which option was taken, and by whom. Null while nobody has chosen.
+  chosenCourierCompanyId   Int?             @map("chosen_courier_company_id")
+  courierChosenByStaffId   String?          @map("courier_chosen_by_staff_id") @db.Uuid
+  courierChosenAt          DateTime?        @map("courier_chosen_at") @db.Timestamptz
   volumetricWeightGrams    Int?             @map("volumetric_weight_grams")
   chargeableWeightGrams    Int?             @map("chargeable_weight_grams")
   packageType              PackageType?     @map("package_type")
@@ -3431,6 +3446,7 @@ model Shipment {
   manifest             Manifest?         @relation(fields: [manifestId], references: [id])
   labelPrintedBy       StaffUser?        @relation("ShipmentLabelPrintedBy", fields: [labelPrintedByStaffId], references: [id])
   handoverScannedBy    StaffUser?        @relation("ShipmentHandoverScannedBy", fields: [handoverScannedByStaffId], references: [id])
+  courierChosenBy      StaffUser?        @relation("ShipmentCourierChosenBy", fields: [courierChosenByStaffId], references: [id])
   pickBatch            PickBatch?        @relation(fields: [pickBatchId], references: [id])
   orderShipments       OrderShipment[]
   items                ShipmentItem[]
@@ -5128,6 +5144,22 @@ enum OrderStatus {
   /// says "rejected" and is then un-rejected corrupts NDR reporting and
   /// lies about its own history while the seller is still deciding.
   AWAITING_SELLER_DECISION @map("awaiting_seller_decision")
+  /// A confirmed parcel waiting for somebody to choose its courier.
+  ///
+  /// Shiprocket offers several couriers per parcel at different rates
+  /// and speeds, and `courier.selection_policy` decides who picks. On
+  /// MANUAL that is a person, so the order pauses HERE — after the
+  /// confirmation call, before printing — rather than being booked with
+  /// whatever the courier's own ranking prefers.
+  ///
+  /// Only ever reached for Shiprocket, and only when there is more than
+  /// one option: Delhivery offers no choice, and a pause with nothing to
+  /// decide is pure delay.
+  ///
+  /// Never a black hole (the R5b lesson): a TTL sweep applies the
+  /// fallback and moves the parcel on, so an unanswered question cannot
+  /// hold stock and a customer indefinitely.
+  AWAITING_COURIER         @map("awaiting_courier")
   PENDING_PICK             @map("pending_pick")
   PICKED                   @map("picked")
   PACKED                   @map("packed")
@@ -5506,6 +5538,12 @@ enum SystemIssueKind {
   COURIER_COST_SYNC        @map("courier_cost_sync")
   COURIER_CREDENTIAL       @map("courier_credential")
   TRACKING_STALLED         @map("tracking_stalled")
+  /// A parcel was waiting for a person to pick its carrier and nobody
+  /// did, so we picked the cheapest ourselves (CUR-17). Its own kind
+  /// because the audience is the courier desk rather than engineering
+  /// or finance, and because the useful response is to decide whether
+  /// the MANUAL policy is earning its keep for that seller.
+  COURIER_DECISION         @map("courier_decision")
   INTEGRATION              @map("integration")
   /// An endpoint threw something nobody anticipated — a 5xx. Distinct
   /// from INTEGRATION, which is somebody else's system being unwell;

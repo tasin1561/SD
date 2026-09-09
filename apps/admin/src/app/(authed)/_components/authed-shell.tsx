@@ -110,6 +110,11 @@ export function AuthedShell({
         { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
         { href: '/delivery-actions', label: 'Failed deliveries', icon: <PackageX size={15} /> },
         {
+          href: '/courier-decisions',
+          label: 'Courier decisions',
+          icon: <Truck size={15} />,
+        },
+        {
           href: '/manual-placement',
           label: 'Manual placement',
           icon: <PackageSearch size={15} />,

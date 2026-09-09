@@ -259,6 +259,12 @@ export function permissionsFor(kind: SystemIssueKind): readonly string[] {
       // A parcel whose scans stopped matching its order. Whoever works
       // orders sees the consequence first.
       return [RESOLVER, 'orders.view'];
+    case SystemIssueKind.COURIER_DECISION:
+      // We chose a carrier because nobody did. Whoever works the
+      // decision queue is the person who was meant to, and the useful
+      // response — "is MANUAL earning its keep for this seller" — is
+      // theirs to make.
+      return [RESOLVER, 'orders.view'];
     case SystemIssueKind.MONEY:
       // A payment that half-happened. Whoever watches the treasury sees
       // the consequence — a request that never closed, an order never

@@ -5,14 +5,20 @@ import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { CourierShiprocketModule } from '../courier-shiprocket/courier-shiprocket.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { OrderModule } from '../order/order.module';
+import { SettingsModule } from '../settings/settings.module';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { AwbSupersedeService } from './services/awb-supersede.service';
 import { AwbGenerationService } from './services/awb-generation.service';
 import { CourierAwbDispatchService } from './services/courier-awb-dispatch.service';
+import { CourierChoiceService } from './services/courier-choice.service';
 import { AwbGenerationJobService } from './services/awb-generation-job.service';
 import { AwbGenerationQueue } from './queue/awb-generation.queue';
 import { AwbGenerationWorker } from './queue/awb-generation.worker';
+import { CourierDecisionSweepWorker } from './queue/courier-decision-sweep.worker';
 import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listener.service';
+import { CourierDecisionService } from './services/courier-decision.service';
+import { AdminCourierDecisionController } from './controllers/admin-courier-decision.controller';
+import { SystemIssuesModule } from '../system-issues/system-issues.module';
 
 /**
  * Module 9 — courier-awb: the AWB generation saga (CP2).
@@ -40,19 +46,27 @@ import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listen
     CourierShiprocketModule,
     CourierSharedModule,
     OrderModule,
+    // SET-1 — the per-seller courier-selection policy (CUR-17).
+    SettingsModule,
+    // CUR-17 — the TTL sweep says out loud that it chose for somebody.
+    SystemIssuesModule,
     SellerWalletAccrualModule,
     // The R3 dep-free bus. The order module publishes to it; this
     // module subscribes, which is what lets the AWB be generated at
     // confirmation without closing an order ↔ courier-awb cycle.
     LifecycleEventsModule,
   ],
+  controllers: [AdminCourierDecisionController],
   providers: [
     CourierAwbDispatchService,
+    CourierDecisionService,
+    CourierChoiceService,
     AwbSupersedeService,
     AwbGenerationService,
     AwbGenerationJobService,
     AwbGenerationQueue,
     AwbGenerationWorker,
+    CourierDecisionSweepWorker,
     OrderConfirmedAwbListener,
   ],
   exports: [
@@ -60,6 +74,8 @@ import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listen
     // `customer-return` books the reverse leg through it rather than
     // reaching for Delhivery directly.
     CourierAwbDispatchService,
+    CourierChoiceService,
+    CourierDecisionService,
     AwbSupersedeService,
     AwbGenerationService,
     AwbGenerationJobService,

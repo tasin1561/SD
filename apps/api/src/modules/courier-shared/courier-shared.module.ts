@@ -5,6 +5,7 @@ import { CourierAccountRoutingService } from './services/courier-account-routing
 import { CourierCredentialService } from './services/courier-credential.service';
 import { CourierMcpReaderService } from './services/courier-mcp-reader.service';
 import { NdrAttemptContextService } from './services/ndr-attempt-context.service';
+import { CourierOptionSelectionService } from './services/courier-option-selection.service';
 import { CourierSelectionService } from './services/courier-selection.service';
 import { CourierDistributionService } from './services/courier-distribution.service';
 
@@ -24,6 +25,7 @@ import { CourierDistributionService } from './services/courier-distribution.serv
  */
 @Module({
   providers: [
+    CourierOptionSelectionService,
     CourierCredentialService,
     CourierAccountRoutingService,
     CourierSelectionService,
@@ -34,6 +36,7 @@ import { CourierDistributionService } from './services/courier-distribution.serv
     CourierEnablementService,
   ],
   exports: [
+    CourierOptionSelectionService,
     CourierCredentialService,
     CourierAccountRoutingService,
     CourierSelectionService,

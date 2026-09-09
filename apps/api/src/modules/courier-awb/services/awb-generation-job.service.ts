@@ -21,10 +21,19 @@ export interface AwbJobShipmentOutcome {
    *  shipment retired + replacement created + order routed to manual
    *  placement; ERROR — an unexpected exception (state uncertain, ops
    *  investigates). */
-  result: 'GENERATED' | 'GENERATED_AWB_LABEL_PENDING' | 'SUPERSEDED' | 'ERROR';
+  result:
+    | 'GENERATED'
+    | 'GENERATED_AWB_LABEL_PENDING'
+    | 'SUPERSEDED'
+    | 'ERROR'
+    /** CUR-17 — nothing was booked; a person still has to pick the
+     *  carrier. Neither a success nor a failure, and kept apart from
+     *  both so a manifest of waiting parcels is not superseded. */
+    | 'AWAITING_COURIER_CHOICE';
   awbNumber?: string;
   newShipmentId?: string;
   error?: string;
+  optionCount?: number;
 }
 
 export interface AwbJobResult {
@@ -40,7 +49,15 @@ export interface AwbJobResult {
 export interface AwbOrderJobResult {
   orderId: string;
   shipmentId: string | null;
-  result: 'GENERATED' | 'ALREADY_HAS_AWB' | 'SUPERSEDED' | 'NO_LIVE_SHIPMENT' | 'ERROR';
+  result:
+    | 'GENERATED'
+    | 'ALREADY_HAS_AWB'
+    | 'SUPERSEDED'
+    | 'NO_LIVE_SHIPMENT'
+    | 'ERROR'
+    /** CUR-17 — paused at AWAITING_COURIER for a human's choice. */
+    | 'AWAITING_COURIER_CHOICE';
+  optionCount?: number;
   awbNumber?: string | null;
   newShipmentId?: string;
   error?: string;
@@ -162,6 +179,10 @@ export class AwbGenerationJobService {
      *  CUR-9 recovery path runs ONLY the label leg (no second
      *  Delhivery generateAwb / no double real charge). */
     let labelPendingCount = 0;
+    /** CUR-17 — parcels held for a human's carrier choice. Counted
+     *  separately from failures so the manifest flip below reads
+     *  correctly: they have not failed, they have not been booked. */
+    let awaitingChoiceCount = 0;
 
     for (const shipment of manifest.shipments) {
       const orderId = shipment.orderShipments[0]?.orderId ?? null;
@@ -205,6 +226,21 @@ export class AwbGenerationJobService {
           if (orderId !== null) {
             await this.courierFeeAccrual.tryEarlyAccrual(orderId);
           }
+          continue;
+        }
+        // CUR-17 — a MANUAL-policy parcel that reached manifest close
+        // without anybody choosing. Not a failure and not a success:
+        // leave the shipment alone and count it, so a manifest whose
+        // parcels are all waiting on a decision does not report as
+        // FAILED and get superseded out from under the operator who is
+        // about to choose.
+        if (gen.status === 'AWAITING_COURIER_CHOICE') {
+          awaitingChoiceCount += 1;
+          outcomes.push({
+            shipmentId: shipment.id,
+            result: 'AWAITING_COURIER_CHOICE',
+            optionCount: gen.optionCount,
+          });
           continue;
         }
         // gen.status === 'FAILED' — route to manual placement, supersede.
@@ -293,12 +329,20 @@ export class AwbGenerationJobService {
     // up holding nothing, and calling that a failure sends whoever
     // reads the list looking for a fault in the manifest rather than in
     // the parcel that left it.
+    //
+    // A manifest whose parcels are all WAITING ON A CHOICE is in the
+    // same position as an empty one: nothing failed, there is simply
+    // nothing to confirm yet. Marking it FAILED would send an operator
+    // looking for a fault in the manifest when the answer is that
+    // somebody has to pick a carrier (CUR-17).
     const manifestStatus =
       manifest.shipments.length === 0
         ? ManifestStatus.CLOSED
         : generatedCount > 0
           ? ManifestStatus.CONFIRMED
-          : ManifestStatus.FAILED;
+          : awaitingChoiceCount > 0 && failedCount === 0
+            ? ManifestStatus.CLOSED
+            : ManifestStatus.FAILED;
     await this.prisma.client.manifest.update({
       where: { id: manifestId },
       data: { status: manifestStatus, awbJobCompletedAt: new Date() },
@@ -315,6 +359,7 @@ export class AwbGenerationJobService {
         manifestStatus,
         generatedCount,
         failedCount,
+        awaitingChoiceCount,
         shipmentCount: manifest.shipments.length,
       },
     });
@@ -399,6 +444,31 @@ export class AwbGenerationJobService {
         return { orderId, shipmentId, result: 'GENERATED', awbNumber: gen.awbNumber };
       }
 
+      // ── CUR-17: A PERSON PICKS THE CARRIER ───────────────────────
+      //
+      // The seller's policy is MANUAL and the aggregator offered more
+      // than one carrier, so nothing was booked. The order PAUSES at
+      // AWAITING_COURIER — a state that exists precisely so this wait
+      // is visible: without it the order would sit in CONFIRMED looking
+      // exactly like every other confirmed order, and the only sign
+      // that it was waiting for anybody would be an absent waybill,
+      // which is what ATT-1's sweep exists to chase hours later.
+      //
+      // The transition is the durable fact and comes FIRST; if it
+      // fails the parcel simply stays CONFIRMED and the next run tries
+      // again — the same convergence the manual-placement route relies
+      // on. Nothing is superseded and no issue is raised: waiting for a
+      // decision is the system working.
+      if (gen.status === 'AWAITING_COURIER_CHOICE') {
+        await this.pauseForCourierChoice(orderId, shipmentId);
+        return {
+          orderId,
+          shipmentId,
+          result: 'AWAITING_COURIER_CHOICE',
+          optionCount: gen.optionCount,
+        };
+      }
+
       // FAILED. What happens next depends on WHY, and the distinction
       // matters more here than it did at manifest close.
       //
@@ -474,6 +544,37 @@ export class AwbGenerationJobService {
         { orderId, shipmentId, err: message },
         'AWB generation at confirmation failed',
       );
+      throw err;
+    }
+  }
+
+  /**
+   * CUR-17 — hold the order at AWAITING_COURIER until somebody picks.
+   *
+   * Idempotent the same way `routeOrderToManual` is: a mid-retry order
+   * that is already there is fine, and any other refusal is left to
+   * surface rather than swallowed — a parcel that could not be paused
+   * is a parcel that will be booked by the next run with the carrier's
+   * own choice, which is a decision nobody made.
+   */
+  private async pauseForCourierChoice(orderId: string, shipmentId: string): Promise<void> {
+    try {
+      await this.orderWrite.transitionStatus({
+        orderId,
+        to: OrderStatus.AWAITING_COURIER,
+        actor: { type: ActorType.SYSTEM, id: null },
+        expectedFrom: OrderStatus.CONFIRMED,
+        reason: `Waiting for a courier to be chosen for shipment ${shipmentId}`,
+      });
+    } catch (err) {
+      const code =
+        err !== null &&
+        typeof err === 'object' &&
+        'response' in err &&
+        typeof (err as { response?: unknown }).response === 'object'
+          ? ((err as { response: { code?: unknown } }).response.code ?? '')
+          : '';
+      if (code === 'STALE_ORDER_STATUS' || code === 'NOOP_TRANSITION') return;
       throw err;
     }
   }

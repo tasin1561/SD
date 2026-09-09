@@ -37,6 +37,8 @@ function consequenceFor(status: string): string | null {
     case 'CALL_RESCHEDULED':
     case 'AWAITING_SELLER_DECISION':
       return 'It leaves the call queue — nobody will phone this customer about it.';
+    case 'AWAITING_COURIER':
+      return 'No courier has been booked for it yet, and the stock held for it goes back to available straight away.';
     case 'CONFIRMED':
     case 'OUT_OF_STOCK':
       return 'The stock held for this order goes back to available straight away.';

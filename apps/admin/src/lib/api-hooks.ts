@@ -2497,3 +2497,66 @@ export function useReprintConsignmentLabels(): UseMutationResult<
     },
   });
 }
+
+// ── CUR-17: the courier decision desk ────────────────────────────────
+
+export interface CourierOptionRow {
+  courierCompanyId: number;
+  courierName: string;
+  rateInr: number;
+  estimatedDays: number | null;
+  etd: string | null;
+}
+
+export interface WaitingCourierChoice {
+  orderId: string;
+  orderNumber: string;
+  shipmentId: string;
+  shipmentNumber: string;
+  sellerId: string;
+  sellerCompanyName: string;
+  recipientName: string;
+  destCity: string;
+  destPostalCode: string;
+  totalWeightGrams: number;
+  codAmountInr: string | null;
+  waitingSince: string;
+  options: CourierOptionRow[];
+  optionsFetchedAt: string | null;
+}
+
+export function useCourierDecisionQueue(): UseQueryResult<WaitingCourierChoice[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-courier-decisions'],
+    queryFn: async () => {
+      const r = await client.request<{ parcels: WaitingCourierChoice[] }>(
+        '/api/admin/courier-decisions',
+      );
+      return r.parcels;
+    },
+  });
+}
+
+export function useChooseCourier(): UseMutationResult<
+  { orderId: string; result: string },
+  Error,
+  { shipmentId: string; courierCompanyId: number }
+> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, courierCompanyId }) =>
+      client.request<{ orderId: string; result: string }>(
+        `/api/admin/courier-decisions/shipments/${shipmentId}/choose`,
+        { method: 'POST', body: { courierCompanyId } },
+      ),
+    onSuccess: () => {
+      // Choosing BOOKS the parcel — it leaves this queue and the order
+      // moves on. Leaving either stale reads as the click not landing,
+      // which invites a second one.
+      void queryClient.invalidateQueries({ queryKey: ['admin-courier-decisions'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+    },
+  });
+}

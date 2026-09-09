@@ -88,6 +88,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // needs that permission, so gating it here hides the nav entry too —
   // rather than showing a link to a page that 403s on load.
   ['/manual-placement', 'courier.manual_placement'],
+  // CUR-17 — picking a carrier is its own permission: the people who
+  // work this queue are not necessarily the ones who cancel orders.
+  ['/courier-decisions', 'orders.courier_choice'],
   ['/warehouse/printing', 'warehouse.pick'],
   ['/warehouse/handover', 'courier.dispatch.handoff'],
   ['/remittances', 'money.view'],

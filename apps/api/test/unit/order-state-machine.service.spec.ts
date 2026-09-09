@@ -73,9 +73,9 @@ describe('OrderStateMachineService', () => {
     });
   });
 
-  it('covers all 29 OrderStatus values as graph keys', () => {
+  it('covers all 30 OrderStatus values as graph keys', () => {
     const all = Object.values(OrderStatus);
-    expect(all).toHaveLength(29);
+    expect(all).toHaveLength(30);
     for (const s of all) {
       // never throws / never undefined for a real status
       expect(Array.isArray(sm.getAllowedTransitions(s))).toBe(true);

@@ -11,6 +11,7 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CourierAccountRoutingService } from '../../courier-shared/services/courier-account-routing.service';
 import { PaymentMode, Prisma } from '@skydrop/db';
+import { CourierChoiceService } from './courier-choice.service';
 import { CourierAwbDispatchService } from './courier-awb-dispatch.service';
 import { CourierDistributionService } from '../../courier-shared/services/courier-distribution.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
@@ -49,6 +50,21 @@ export type AwbGenerationOutcome =
       status: 'ALREADY_HAS_AWB';
       shipmentId: string;
       awbNumber: string;
+    }
+  | {
+      /**
+       * CUR-17 — the seller's policy says a PERSON picks the carrier,
+       * and the aggregator offered more than one. Nothing was booked:
+       * the parcel waits in AWAITING_COURIER until somebody chooses.
+       *
+       * Deliberately NOT a FAILED with a special error code. Nothing
+       * failed, and the caller's failure handling — supersede, route to
+       * manual placement, raise an issue — is wrong for every part of
+       * this.
+       */
+      status: 'AWAITING_COURIER_CHOICE';
+      shipmentId: string;
+      optionCount: number;
     }
   | {
       status: 'FAILED';
@@ -124,6 +140,7 @@ export class AwbGenerationService {
     private readonly dispatch: CourierAwbDispatchService,
     private readonly distribution: CourierDistributionService,
     private readonly courierAccountRouting: CourierAccountRoutingService,
+    private readonly choice: CourierChoiceService,
   ) {}
 
   async generateForShipment(
@@ -163,6 +180,9 @@ export class AwbGenerationService {
         // Shiprocket wants the box; Delhivery does not ask. Selected
         // once so the dispatcher can serve either.
         originWarehouseId: true,
+        // CUR-17 — a decision already made, honoured before the policy
+        // is consulted again.
+        chosenCourierCompanyId: true,
         lengthCm: true,
         widthCm: true,
         heightCm: true,
@@ -325,7 +345,44 @@ export class AwbGenerationService {
       heightCm: Number(shipment.heightCm ?? 10),
     };
 
-    let dispatched = await this.dispatch.generate(dispatchInput, runner);
+    // ── WHICH CARRIER (CUR-17) ───────────────────────────────────────
+    //
+    // Before the booking, not after: passing a courier id is the only
+    // way to make the choice stick, because an assign call with no id
+    // lets the aggregator rank and pick regardless of what anybody was
+    // shown. Everything about this fails open — see CourierChoiceService.
+    const decision = await this.choice.decide({
+      shipmentId,
+      courierCode: shipment.courierCode,
+      courierAccountId: courierAccountId ?? '',
+      sellerId,
+      deliveryPincode: shipment.destPostalCode,
+      chosenCourierCompanyId: shipment.chosenCourierCompanyId,
+      weightGrams: shipment.totalWeightGrams,
+      isCod: shipment.codAmountInr !== null,
+    });
+
+    if (decision.kind === 'PAUSE') {
+      this.logger.log(
+        { shipmentId, options: decision.options.length, why: decision.why },
+        'holding the parcel for a courier decision',
+      );
+      return {
+        status: 'AWAITING_COURIER_CHOICE',
+        shipmentId,
+        optionCount: decision.options.length,
+      };
+    }
+
+    let dispatched = await this.dispatch.generate(
+      {
+        ...dispatchInput,
+        ...(decision.courierCompanyId !== null
+          ? { courierCompanyId: decision.courierCompanyId }
+          : {}),
+      },
+      runner,
+    );
     // Whichever courier ends up carrying it — starts as the one the
     // shipment was provisioned with and changes only on a successful
     // failover.

@@ -109,6 +109,21 @@ export class CourierOpsDispatchService {
       readonly courierCode: string;
       readonly courierAccountId: string | null;
       readonly courierShipmentId: string | null;
+      /** Shiprocket's address update keys on their ORDER id, not the
+       *  parcel id — the parcel id is refused as invalid. */
+      readonly courierOrderId?: string | null;
+      /** The destination as it stands. Their endpoint validates the
+       *  whole shipping block, so a one-line edit is merged over this. */
+      readonly currentDestination?: {
+        readonly name: string;
+        readonly addressLine1: string;
+        readonly addressLine2: string | null;
+        readonly city: string;
+        readonly stateProvince: string;
+        readonly postalCode: string;
+        readonly phoneE164: string;
+        readonly email: string | null;
+      };
       readonly awbNumber: string;
       readonly name?: string;
       readonly phone?: string;
@@ -119,11 +134,20 @@ export class CourierOpsDispatchService {
   ): Promise<OpsActionResult> {
     switch (input.courierCode) {
       case 'shiprocket': {
-        if (input.courierAccountId === null || input.courierShipmentId === null) {
+        if (
+          input.courierAccountId === null ||
+          input.courierOrderId === null ||
+          input.courierOrderId === undefined ||
+          input.currentDestination === undefined
+        ) {
+          // Named separately from the parcel id, because the ORDER id is
+          // the one their address endpoint keys on and a parcel booked
+          // before we started persisting it has none.
           return {
             success: false,
             message:
-              'This parcel carries no Shiprocket account or parcel id, so it cannot be edited.',
+              'This parcel carries no Shiprocket order id, so their address endpoint cannot ' +
+              'address it. Change it in their panel, or cancel and rebook.',
           };
         }
         /*
@@ -163,7 +187,8 @@ export class CourierOpsDispatchService {
         }
         const r = await this.shiprocket.editShipment(
           {
-            courierShipmentId: input.courierShipmentId,
+            courierOrderId: input.courierOrderId,
+            current: input.currentDestination,
             ...(input.name === undefined ? {} : { name: input.name }),
             ...(input.phone === undefined ? {} : { phone: input.phone }),
             ...(input.address === undefined ? {} : { address: input.address }),

@@ -10,7 +10,10 @@ import {
 import { type NdrAction } from '../../courier-delhivery/services/delhivery-ndr.service';
 import { CourierNdrDispatchService } from './courier-ndr-dispatch.service';
 import { CourierOpsDispatchService } from './courier-ops-dispatch.service';
-import { ShipmentCourierContextService } from './shipment-courier-context.service';
+import {
+  ShipmentCourierContextService,
+  type ShipmentCourierContext,
+} from './shipment-courier-context.service';
 import {
   courierActor,
   type CourierCredentialActor,
@@ -115,6 +118,10 @@ export class CourierShipmentActionService {
         courierCode: shipment.courierCode,
         courierAccountId: shipment.courierAccountId,
         courierShipmentId: shipment.courierShipmentId,
+        // Shiprocket's address endpoint keys on their ORDER id and
+        // validates the whole shipping block, so both go through.
+        courierOrderId: shipment.courierOrderId,
+        currentDestination: shipment.destination,
         awbNumber: shipment.awbNumber,
         ...changes,
       },
@@ -414,6 +421,11 @@ export class CourierShipmentActionService {
     courierCode: string;
     courierAccountId: string | null;
     courierShipmentId: string | null;
+    // Shiprocket's address endpoint keys on their ORDER id, and
+    // validates the whole shipping block rather than a patch — so both
+    // the id and the current destination have to travel with the edit.
+    courierOrderId: string | null;
+    destination: ShipmentCourierContext['destination'];
   }> {
     const shipment = await this.context.resolve(shipmentId);
     if (shipment.awbNumber === null) {
@@ -441,6 +453,8 @@ export class CourierShipmentActionService {
       courierCode: shipment.courierCode,
       courierAccountId: shipment.courierAccountId,
       courierShipmentId: shipment.courierShipmentId,
+      courierOrderId: shipment.courierOrderId,
+      destination: shipment.destination,
       declaredValueInr: shipment.declaredValueInr,
     };
   }

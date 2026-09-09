@@ -110,6 +110,13 @@ export const PERMISSIONS = [
     group: 'Orders',
   },
   {
+    key: 'orders.courier_choice',
+    label: 'Choose a parcel’s courier',
+    description:
+      'Pick which carrier ships a parcel that is waiting on a decision. Only ever offers carriers the aggregator actually quoted, and only before a waybill exists.',
+    group: 'Orders',
+  },
+  {
     key: 'orders.tracking.run_poll',
     label: 'Run the tracking poll now',
     description:

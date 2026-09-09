@@ -512,6 +512,56 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'ON (the default): scanning a parcel at the handover bench IS the handover — the order goes DISPATCHED there and then, and the manifest closes itself once its last parcel is scanned, so nobody confirms a handoff. The scan is the truest signal the system has: it happens per parcel, at the door, at the moment the box leaves, where confirming a handoff is one person asserting afterwards that forty parcels went. OFF: the scan only records that the parcel was checked, and a supervisor still confirms the handoff per manifest. Turn it off if parcels are ever scanned to check them IN rather than out.',
   },
+  /*
+    WHO PICKS THE COURIER, when the carrier offers a choice.
+
+    Shiprocket returns several couriers per parcel at different rates
+    and speeds. Until 2026-09-09 we sent `assign/awb` with no
+    `courier_id` and their own ranking decided — and their ranking is
+    not "cheapest": on one measured route it took Blue Dart at ₹92.40
+    over Ekart at ₹69.36. Every parcel was priced by a preference nobody
+    had expressed.
+
+    Seller-overridable, because a seller selling fragile high-value
+    goods and one selling ₹200 accessories want different answers, and
+    the freight is ultimately theirs.
+
+    Delhivery is unaffected: one courier, no choice, nothing to decide.
+  */
+  {
+    key: 'courier.selection_policy',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: 'SHIPROCKET_DEFAULT',
+    displayName: 'Who picks the courier',
+    description:
+      "SHIPROCKET_DEFAULT — let the carrier's own ranking decide (what happened before this setting existed, and the default so the deploy changes nothing). CHEAPEST — lowest rate offered. FASTEST — earliest estimated delivery. CHEAPEST_WITHIN_DAYS — lowest rate among options arriving within courier.selection_max_days, falling back to the fastest if none qualify. MANUAL — the order pauses in AWAITING_COURIER and an admin chooses on the courier-decisions screen, with a TTL so it cannot wait forever.",
+    sellerOverridable: true,
+  },
+  {
+    key: 'courier.selection_max_days',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 5,
+    displayName: 'Cheapest-within — the day limit',
+    description:
+      'Used only by CHEAPEST_WITHIN_DAYS: the slowest delivery still worth taking for a lower rate. If no option arrives within it we take the FASTEST rather than the cheapest — the point of the policy is a deadline, and missing it to save money inverts the intent.',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 30,
+  },
+  {
+    key: 'courier.selection_decision_ttl_hours',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 6,
+    displayName: 'MANUAL courier choice — hours before we choose for them',
+    description:
+      'How long a parcel may sit in AWAITING_COURIER before the sweep applies the cheapest option and moves it on, raising a HIGH system issue. A status with no exit becomes a black hole (the R5b lesson): the stock is held and the customer is waiting while a question nobody saw goes unanswered. Long enough for a working morning, short enough that a forgotten parcel still ships the same day.',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 72,
+  },
   {
     key: 'courier.ticket_automation_enabled',
     category: 'courier',

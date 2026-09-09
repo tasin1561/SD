@@ -14,7 +14,32 @@ export interface ShipmentCourierContext {
   /** Shiprocket's own parcel id — their label, pickup, cancel and POD
    *  endpoints key on it rather than on the AWB. Null for Delhivery. */
   readonly courierShipmentId: string | null;
+  /**
+   * The courier's own ORDER id, where they keep it apart from the parcel
+   * id. Shiprocket's `orders/address/update` keys on THIS — passing the
+   * parcel id gets `422 "The selected order id is invalid"`, which is
+   * how that edit had never once worked.
+   */
+  readonly courierOrderId: string | null;
   readonly isManualCourier: boolean;
+  /**
+   * The destination as the shipment snapshotted it (ORD-6).
+   *
+   * Carried because Shiprocket's address update is NOT a patch: it
+   * validates the COMPLETE shipping block and refuses a partial one
+   * (`422 "The shipping country field is required"`). So an edit of one
+   * line has to be merged over the current values, and these are them.
+   */
+  readonly destination: {
+    readonly name: string;
+    readonly addressLine1: string;
+    readonly addressLine2: string | null;
+    readonly city: string;
+    readonly stateProvince: string;
+    readonly postalCode: string;
+    readonly phoneE164: string;
+    readonly email: string | null;
+  };
   /**
    * The parcel's CURRENT NSL, as the courier last reported it.
    *
@@ -75,7 +100,14 @@ export class ShipmentCourierContextService {
         courierCode: true,
         courierAccountId: true,
         courierShipmentId: true,
+        courierOrderId: true,
         isManualCourier: true,
+        destRecipientName: true,
+        destRecipientPhoneE164: true,
+        destAddressLine1: true,
+        destAddressLine2: true,
+        destCity: true,
+        destStateProvince: true,
         courierNslCode: true,
         status: true,
         destPostalCode: true,
@@ -107,7 +139,18 @@ export class ShipmentCourierContextService {
       courierCode: shipment.courierCode,
       courierAccountId: shipment.courierAccountId,
       courierShipmentId: shipment.courierShipmentId,
+      courierOrderId: shipment.courierOrderId,
       isManualCourier: shipment.isManualCourier,
+      destination: {
+        name: shipment.destRecipientName,
+        addressLine1: shipment.destAddressLine1,
+        addressLine2: shipment.destAddressLine2,
+        city: shipment.destCity,
+        stateProvince: shipment.destStateProvince,
+        postalCode: shipment.destPostalCode,
+        phoneE164: shipment.destRecipientPhoneE164,
+        email: null,
+      },
       currentNslCode: shipment.courierNslCode,
       status: shipment.status,
       originPin,

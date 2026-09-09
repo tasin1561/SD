@@ -118,6 +118,12 @@ export function orderStatusKind(status: OrderStatus): StatusKind {
     case OrderStatus.AWAITING_SELLER_DECISION:
       return 'pending';
 
+    // Same shape: a PAUSE waiting on an admin to pick the courier, not a
+    // failure. The parcel is confirmed, its stock is held, and it moves
+    // the moment somebody chooses — or the TTL chooses for them.
+    case OrderStatus.AWAITING_COURIER:
+      return 'pending';
+
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled OrderStatus: ${String(exhaustive)}`);

@@ -12,6 +12,10 @@ import type {
 } from '../../src/modules/courier-awb/services/courier-awb-dispatch.service';
 import type { CourierAccountRoutingService } from '../../src/modules/courier-shared/services/courier-account-routing.service';
 import type { CourierDistributionService } from '../../src/modules/courier-shared/services/courier-distribution.service';
+import type {
+  ChoiceOutcome,
+  CourierChoiceService,
+} from '../../src/modules/courier-awb/services/courier-choice.service';
 import { makeTestEnv } from '../helpers/env';
 
 type AnyArgs = Record<string, unknown>;
@@ -72,6 +76,8 @@ function makeService(
     alternate?: { courierCode: string; courierAccountId: string } | null;
     /** Courier codes answering from a stub rather than themselves. */
     stubCouriers?: string[];
+    /** CUR-17 — what CourierChoiceService.decide returns. */
+    choice?: ChoiceOutcome;
   } = {},
 ) {
   const shipmentFindUnique = jest.fn(async () =>
@@ -173,6 +179,15 @@ function makeService(
   const pickAlternate = jest.fn(async () => opts.alternate ?? null);
   const distribution = { pickAlternate };
 
+  // CUR-17. Defaults to "book, and let the carrier rank" — the
+  // SHIPROCKET_DEFAULT behaviour and the one every pre-existing test in
+  // this file was written against, so a policy nobody set changes
+  // nothing here.
+  const decide = jest.fn(
+    async () => opts.choice ?? { kind: 'BOOK', courierCompanyId: null, why: 'test default' },
+  );
+  const choice = { decide };
+
   const svc = new AwbGenerationService(
     { client } as unknown as PrismaService,
     makeTestEnv(),
@@ -181,11 +196,13 @@ function makeService(
     dispatch as unknown as CourierAwbDispatchService,
     distribution as unknown as CourierDistributionService,
     courierAccountRouting as unknown as CourierAccountRoutingService,
+    choice as unknown as CourierChoiceService,
   );
   return {
     svc,
     generate,
     pickAlternate,
+    decide,
     isStubMode,
     putObject,
     txShipmentUpdate,
@@ -863,5 +880,53 @@ describe('AwbGenerationService — a manual courier has nothing to fetch', () =>
     expect(out).toMatchObject({ status: 'ALREADY_HAS_AWB', awbNumber: 'BD-4471' });
     expect(fetchLabel).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * CUR-17 — the seller's policy says a person picks the carrier.
+ *
+ * The property that matters is that NOTHING happens: no courier call,
+ * no waybill, no supersede. A pause that quietly booked anyway would be
+ * indistinguishable from the feature not existing, and a pause that
+ * superseded would retire a parcel nobody has decided about.
+ */
+describe('AwbGenerationService — waiting for a carrier to be chosen', () => {
+  it('books nothing and calls nobody', async () => {
+    const { svc, generate, txShipmentUpdate } = makeService({
+      choice: { kind: 'PAUSE', options: [], why: 'policy says a person picks' },
+    });
+
+    const out = await svc.generateForShipment('ship-1', { type: ActorType.SYSTEM });
+
+    expect(out).toMatchObject({ status: 'AWAITING_COURIER_CHOICE' });
+    expect(generate).not.toHaveBeenCalled();
+    expect(txShipmentUpdate).not.toHaveBeenCalled();
+  });
+
+  it('passes the chosen carrier to the booking when the policy picked one', async () => {
+    // Without this the aggregator ranks and picks regardless of what
+    // anybody was shown, and the policy would be decoration.
+    const { svc, generate } = makeService({
+      choice: { kind: 'BOOK', courierCompanyId: 42, why: 'cheapest' },
+    });
+
+    await svc.generateForShipment('ship-1', { type: ActorType.SYSTEM });
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({ courierCompanyId: 42 }),
+      expect.anything(),
+    );
+  });
+
+  it('sends NO courier id when the carrier is meant to rank', async () => {
+    // Naming a carrier here would override their ranking, which is the
+    // one thing SHIPROCKET_DEFAULT exists to preserve.
+    const { svc, generate } = makeService();
+
+    await svc.generateForShipment('ship-1', { type: ActorType.SYSTEM });
+
+    const arg = generate.mock.calls[0]?.[0];
+    expect(arg).not.toHaveProperty('courierCompanyId');
   });
 });

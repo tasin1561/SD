@@ -192,7 +192,7 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
     }));
     const srEdit = jest.fn<
       Promise<{ ok: boolean; message: string | null }>,
-      [{ courierShipmentId: string }, string]
+      [{ courierOrderId: string }, string]
     >(async () => ({ ok: true, message: null }));
     const svc = new CourierOpsDispatchService(
       { cancel: jest.fn(), edit: dlEdit } as unknown as DelhiveryShipmentEditService,
@@ -206,6 +206,21 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
   const base = {
     courierAccountId: 'acc-1',
     courierShipmentId: '99887',
+    // Shiprocket's address endpoint keys on their ORDER id — the parcel
+    // id is refused as invalid, which is how that edit had never worked.
+    courierOrderId: '1574853420',
+    // ...and it validates the WHOLE shipping block, so the current
+    // destination travels with the edit to merge over.
+    currentDestination: {
+      name: 'A Customer',
+      addressLine1: '1 Old Street',
+      addressLine2: 'Old landmark',
+      city: 'Bengaluru',
+      stateProvince: 'Karnataka',
+      postalCode: '560001',
+      phoneE164: '+919876543210',
+      email: null,
+    },
     awbNumber: 'AWB1',
     address: '14 MG Road, near the water tank',
   };
@@ -218,8 +233,9 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
 
     await svc.edit({ ...base, courierCode: 'shiprocket' }, ACTOR);
     expect(srEdit).toHaveBeenCalledTimes(1);
-    // Their endpoint keys on THEIR order id, not the AWB.
-    expect(srEdit.mock.calls[0]?.[0].courierShipmentId).toBe('99887');
+    // Their endpoint keys on THEIR ORDER id — not the AWB, and not the
+    // parcel id, which they refuse as invalid.
+    expect(srEdit.mock.calls[0]?.[0].courierOrderId).toBe('1574853420');
   });
 
   it('refuses a description-ONLY change on Shiprocket, without calling them', async () => {
@@ -257,12 +273,12 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
     expect(r.message).toContain('description was NOT');
   });
 
-  it('refuses a Shiprocket edit with no parcel id, without calling them', async () => {
+  it('refuses a Shiprocket edit with no ORDER id, without calling them', async () => {
+    // The ORDER id is the gate, not the parcel id: their address
+    // endpoint refuses a parcel id as invalid, so a shipment booked
+    // before we persisted the order id cannot be addressed at all.
     const { svc, srEdit } = withEdit();
-    const r = await svc.edit(
-      { ...base, courierCode: 'shiprocket', courierShipmentId: null },
-      ACTOR,
-    );
+    const r = await svc.edit({ ...base, courierCode: 'shiprocket', courierOrderId: null }, ACTOR);
     expect(srEdit).not.toHaveBeenCalled();
     expect(r.success).toBe(false);
   });

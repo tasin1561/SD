@@ -101,6 +101,10 @@ const CANCELLABLE: ReadonlySet<string> = new Set([
   'CALL_NO_RESPONSE',
   'CALL_RESCHEDULED',
   'AWAITING_SELLER_DECISION',
+  // CUR-17 — held for a carrier decision. Nothing has been booked and
+  // nothing has been picked, so this is one of the cheapest points in
+  // the whole lifecycle to change your mind.
+  'AWAITING_COURIER',
   'CONFIRMED',
   'OUT_OF_STOCK',
   'PENDING_PICK',

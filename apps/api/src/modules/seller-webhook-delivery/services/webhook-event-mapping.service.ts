@@ -66,6 +66,19 @@ export class WebhookEventMappingService {
       case OrderStatus.PENDING_MANUAL_PLACEMENT:
         return 'order.requires_manual_courier';
 
+      /*
+        AWAITING_COURIER is INTERNAL and gets no event code.
+
+        The doc above is the reason: codes are flat and stable so a
+        seller wires them once and does not re-subscribe when our
+        lifecycle gains a state. Which carrier we choose, and that we
+        paused for minutes to choose it, is our operational business —
+        broadcasting it would add an event every integration has to
+        learn to ignore.
+      */
+      case OrderStatus.AWAITING_COURIER:
+        return null;
+
       // Courier + tracking
       case OrderStatus.DISPATCHED:
         return 'shipment.dispatched';

@@ -18,6 +18,7 @@ import {
   type ShiprocketTrackingResponse,
 } from '../types/shiprocket.types';
 import { toIsoWithIst } from '../../tracking-events/services/courier-time';
+import type { CourierOption } from '../../courier-shared/services/courier-option-selection.service';
 import { CourierWriteGuardService } from '../../courier-shared/services/courier-write-guard.service';
 import { ShiprocketHttpService } from './shiprocket-http.service';
 
@@ -94,6 +95,16 @@ export class ShiprocketClientService {
   async generateAwb(
     req: ShiprocketAwbRequest,
     courierAccountId: string,
+    /**
+     * WHICH carrier to assign, when a policy already decided.
+     *
+     * Omitted, Shiprocket ranks and picks — which is correct when the
+     * seller asked for that, and only then. Passing an id makes the
+     * booking honour the option an operator was actually shown; without
+     * it a MANUAL choice would be presented, chosen, and then silently
+     * overridden at assignment by whatever their ranking preferred.
+     */
+    courierCompanyId?: number,
   ): Promise<ShiprocketAwbResult> {
     if (await this.http.isStubMode()) return this.stubAwb(req);
 
@@ -114,7 +125,10 @@ export class ShiprocketClientService {
       const assigned = await this.http.request<ShiprocketAssignAwbResponse>({
         method: 'POST',
         path: '/v1/external/courier/assign/awb',
-        body: { shipment_id: created.shipmentId },
+        body:
+          courierCompanyId === undefined
+            ? { shipment_id: created.shipmentId }
+            : { shipment_id: created.shipmentId, courier_id: courierCompanyId },
         actor: this.actor(),
         courierAccountId,
       });
@@ -331,6 +345,59 @@ export class ShiprocketClientService {
   }
 
   /**
+   * EVERY courier the carrier would accept for this parcel, not just
+   * the cheapest.
+   *
+   * `estimateLane` answers "what will this cost" and collapses the list
+   * to one number, which is right for a margin report and wrong for a
+   * choice: an operator picking a courier needs to see the ones they
+   * are not picking. Same endpoint, no collapse.
+   *
+   * A BLOCKED courier is dropped rather than shown greyed out — it is
+   * not an option, and offering it means an operator can choose
+   * something the assign call will refuse.
+   */
+  async listCourierOptions(
+    input: {
+      readonly pickupPincode: string;
+      readonly deliveryPincode: string;
+      readonly weightGrams: number;
+      readonly isCod: boolean;
+    },
+    courierAccountId: string,
+  ): Promise<{ readonly options: CourierOption[]; readonly fromLiveApi: boolean }> {
+    if (await this.http.isStubMode()) return { options: [], fromLiveApi: false };
+
+    const res = await this.http.request<ShiprocketServiceabilityResponse>({
+      method: 'GET',
+      path: '/v1/external/courier/serviceability/',
+      query: {
+        pickup_postcode: input.pickupPincode,
+        delivery_postcode: input.deliveryPincode,
+        weight: input.weightGrams / 1000,
+        cod: input.isCod ? 1 : 0,
+      },
+      actor: this.actor(),
+      courierAccountId,
+    });
+
+    const options = (res.data?.available_courier_companies ?? [])
+      .filter((c) => c.blocked !== 1)
+      .map((c) => ({
+        courierCompanyId: c.courier_company_id,
+        courierName: c.courier_name,
+        // Their `rate` is the all-in figure; the parts are the fallback
+        // for responses that omit it. A zero total is reported as zero
+        // rather than as null — free is a price, unknown is not.
+        rateInr: c.rate ?? (c.freight_charge ?? 0) + (c.cod_charges ?? 0) + (c.other_charges ?? 0),
+        estimatedDays: parseEtdDays(c),
+        etd: c.etd ?? null,
+      }));
+
+    return { options, fromLiveApi: true };
+  }
+
+  /**
    * What this lane would cost and how long it would take.
    *
    * ONE call, because that is how they package it: their serviceability
@@ -488,7 +555,20 @@ export class ShiprocketClientService {
    */
   async editShipment(
     input: {
-      readonly courierShipmentId: string;
+      /** THEIR order id. Their parcel id is refused as invalid. */
+      readonly courierOrderId: string;
+      /** The destination as it stands, to merge the changes over —
+       *  their endpoint validates the whole block, not a patch. */
+      readonly current: {
+        readonly name: string;
+        readonly addressLine1: string;
+        readonly addressLine2: string | null;
+        readonly city: string;
+        readonly stateProvince: string;
+        readonly postalCode: string;
+        readonly phoneE164: string;
+        readonly email: string | null;
+      };
       readonly name?: string;
       readonly phone?: string;
       readonly address?: string;
@@ -498,22 +578,54 @@ export class ShiprocketClientService {
     courierAccountId: string,
   ): Promise<{ ok: boolean; message: string | null }> {
     if (await this.http.isStubMode()) return { ok: true, message: 'stub' };
+    /*
+      THEIR ORDER ID, AND THE WHOLE SHIPPING BLOCK.
+
+      Measured against the live API on 2026-09-09, and this had never
+      once worked:
+
+        order_id = our courierShipmentId (their PARCEL id)
+          → 422 "The selected order id is invalid."
+        order_id = their ORDER id, partial body
+          → 422 "The shipping country field is required."
+        order_id = their ORDER id, complete block, before a waybill
+          → 202, and the change is there on the next read
+        anything at all once the parcel is READY TO SHIP
+          → 400 "you can only change address 1 or address 2 as order is
+            already in READY TO SHIP status" — misleading, because it
+            refuses an address-lines-only edit too
+
+      So: keyed on `courierOrderId` (the field that only started being
+      persisted the same day), and the caller passes the CURRENT
+      destination so the changed fields can be merged over it. This is
+      not a patch endpoint and treating it as one is what produced the
+      422.
+    */
     // Changes where a real van goes.
     await this.writeGuard.assertWritable('shiprocket', 'shipment.edit', {
-      courierShipmentId: input.courierShipmentId,
+      courierOrderId: input.courierOrderId,
     });
+    const d = input.current;
     const res = await this.http.request<{ message?: string; status?: number }>({
       method: 'POST',
       path: '/v1/external/orders/address/update',
       body: {
-        order_id: input.courierShipmentId,
-        ...(input.name === undefined ? {} : { shipping_customer_name: input.name }),
-        ...(input.phone === undefined
-          ? {}
-          : { shipping_phone: input.phone.replace(/^\+91/, '').replace(/\D/g, '').slice(-10) }),
-        ...(input.address === undefined ? {} : { shipping_address: input.address }),
-        ...(input.city === undefined ? {} : { shipping_city: input.city }),
-        ...(input.pincode === undefined ? {} : { shipping_pincode: input.pincode }),
+        order_id: input.courierOrderId,
+        shipping_customer_name: input.name ?? d.name,
+        shipping_last_name: '',
+        shipping_address: input.address ?? d.addressLine1,
+        shipping_address_2: d.addressLine2 ?? '',
+        shipping_city: input.city ?? d.city,
+        shipping_state: d.stateProvince,
+        // They require it and reject the body without it. India-only in
+        // Phase 1A, and the shipment carries no country on the snapshot.
+        shipping_country: 'India',
+        shipping_pincode: input.pincode ?? d.postalCode,
+        shipping_email: d.email ?? '',
+        shipping_phone: (input.phone ?? d.phoneE164)
+          .replace(/^\+91/, '')
+          .replace(/\D/g, '')
+          .slice(-10),
       },
       actor: this.actor(),
       courierAccountId,

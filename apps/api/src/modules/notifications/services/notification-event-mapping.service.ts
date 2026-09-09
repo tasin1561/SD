@@ -346,6 +346,22 @@ export class NotificationEventMappingService {
       case OrderStatus.PENDING_MANUAL_PLACEMENT:
         return EMPTY;
 
+      /*
+        AWAITING_COURIER — INTERNAL-ONLY, deliberately silent.
+
+        The customer has already been told their order is confirmed, and
+        which carrier we hand it to is not a fact about their order —
+        telling them "we are choosing a courier" invites a question they
+        had no reason to ask. The seller is not told either: on MANUAL
+        the choice is OURS to make, and the pause is minutes-to-hours
+        with a TTL behind it.
+
+        What DOES surface is the admin decision queue, and the system
+        issue the TTL raises if nobody acts — the people who can act.
+      */
+      case OrderStatus.AWAITING_COURIER:
+        return EMPTY;
+
       // ─── exhaustiveness guard ─────────────────────────────────────
       // A future OrderStatus addition fails to compile here until the
       // author consciously routes it.

@@ -217,9 +217,42 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     [
       { to: OrderStatus.PENDING_PICK, sideEffects: [] }, // Module 8 begins
       { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] },
+      // Shiprocket offered more than one courier and the policy says a
+      // person chooses. STOCK-NEUTRAL: the reservation was made on
+      // entry to CONFIRMED (ORD-10) and the parcel has not moved.
+      { to: OrderStatus.AWAITING_COURIER, sideEffects: [] },
       { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
       { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
       { to: OrderStatus.REJECTED, sideEffects: [RELEASE_STOCK] },
+    ],
+  ],
+
+  [
+    OrderStatus.AWAITING_COURIER,
+    [
+      /*
+        BACK TO CONFIRMED once the courier is chosen and the waybill
+        booked — not forward to PENDING_PICK.
+
+        The label queue selects on `CONFIRMED` or `PENDING_PICK`
+        (WMS-2), and printing must come first (WMS-1), so returning to
+        CONFIRMED puts the parcel exactly where an unpaused one would
+        be. Re-entering CONFIRMED cannot double-book: CUR-9's gate is
+        `shipment.awbNumber !== null`, and by this point it is set.
+
+        STOCK-NEUTRAL in both directions. The RESERVE happened on the
+        first entry to CONFIRMED and re-running it here would claim the
+        stock twice; the matrix says so by carrying no side-effects,
+        which is the only place that decision is expressed.
+      */
+      { to: OrderStatus.CONFIRMED, sideEffects: [] },
+      // Every courier refused, or the account is switched off. The
+      // parcel needs a human to place it by hand (CUR-8).
+      { to: OrderStatus.PENDING_MANUAL_PLACEMENT, sideEffects: [] },
+      // Cancelled while waiting for the decision. Nothing has been
+      // packed, so the reservation is simply given back.
+      { to: OrderStatus.CANCELLED, sideEffects: [RELEASE_STOCK] },
+      { to: OrderStatus.CANCELLED_BY_ADMIN, sideEffects: [RELEASE_STOCK] },
     ],
   ],
 

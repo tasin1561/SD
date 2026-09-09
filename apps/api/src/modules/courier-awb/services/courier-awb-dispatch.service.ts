@@ -51,6 +51,18 @@ export interface DispatchAwbInput {
    * disagree.
    */
   readonly isReverse?: boolean;
+
+  /**
+   * The carrier a policy already chose (CUR-17).
+   *
+   * Meaningful only to an AGGREGATOR — Shiprocket resells many carriers
+   * and ranks them itself; Delhivery IS the carrier and has nothing to
+   * choose. So this is optional on the dispatcher rather than a field
+   * every caller must fill: the dispatcher is the one place that knows
+   * which couriers the question even applies to, which is exactly what
+   * CUR-12 asks it to know.
+   */
+  readonly courierCompanyId?: number;
   readonly lengthCm: number;
   readonly breadthCm: number;
   readonly heightCm: number;
@@ -356,7 +368,11 @@ export class CourierAwbDispatchService {
       breadthCm: input.breadthCm,
       heightCm: input.heightCm,
     };
-    const r = await this.shiprocket.generateAwb(req, input.courierAccountId);
+    const r = await this.shiprocket.generateAwb(
+      req,
+      input.courierAccountId,
+      input.courierCompanyId,
+    );
     if (r.ok) {
       return {
         ok: true,

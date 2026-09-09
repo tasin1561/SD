@@ -72,6 +72,10 @@ const REFUNDABLE_FROM_STATES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.CALL_NO_RESPONSE,
   OrderStatus.CALL_RESCHEDULED,
   OrderStatus.AWAITING_SELLER_DECISION,
+  // CUR-17 — held for a carrier decision. No waybill exists and
+  // nothing has been picked, so this is one of the cheapest points in
+  // the lifecycle for a seller to change their mind.
+  OrderStatus.AWAITING_COURIER,
   OrderStatus.CONFIRMED,
   OrderStatus.OUT_OF_STOCK,
   OrderStatus.PENDING_PICK,

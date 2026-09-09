@@ -120,6 +120,13 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     group: 'Orders',
   },
   {
+    topic: topicForIssue(SystemIssueKind.COURIER_DECISION),
+    label: 'We picked a courier because nobody did',
+    description:
+      'A parcel waited for somebody to choose its carrier and was booked with the cheapest option instead.',
+    group: 'Couriers',
+  },
+  {
     topic: topicForIssue(SystemIssueKind.COURIER_PORTAL_LOGIN),
     label: 'Courier portal login failed',
     description: 'We could not sign in to a courier’s portal.',
