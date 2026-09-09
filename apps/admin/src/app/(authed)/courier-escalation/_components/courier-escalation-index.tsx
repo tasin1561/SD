@@ -94,6 +94,19 @@ export function CourierEscalationIndex(): ReactElement {
   const caps = channel.data?.capabilities;
   const noWriteChannel =
     caps !== undefined && caps['postComment'] === false && caps['raiseTicket'] === false;
+  /*
+    Can ANYTHING leave this queue without a person?
+
+    Two independent ways in: an API write capability, or the browser
+    channel being LIVE. Delhivery has no ticket write API at all, so
+    today the browser is the only one — and while it is OFF or SHADOW
+    the write mode is inert whatever it says.
+
+    Derived rather than stored: it is a fact about the two switches, and
+    a third setting saying the same thing is the drift CNS-2 and BIN-1
+    exist to prevent.
+  */
+  const canSendAtAll = !noWriteChannel || settings?.portalMode === 'LIVE';
 
   const copy = (text: string): void => {
     void navigator.clipboard.writeText(text).then(
@@ -186,8 +199,24 @@ export function CourierEscalationIndex(): ReactElement {
                 <div className="mt-1">
                   {settings?.effectivelyPaused === true ? (
                     <StatusBadge kind="failed" label="Paused" />
-                  ) : (
+                  ) : canSendAtAll ? (
                     <StatusBadge kind="delivered" label="Running" />
+                  ) : (
+                    /*
+                      "Running" was shown whenever the channel was not
+                      PAUSED, which says nothing about whether anything
+                      can actually be sent — and read as "automation is
+                      on" beside a MODE of AUTO. It is the display that
+                      prompted somebody to ask whether the tickets were
+                      really manual.
+
+                      Nothing can send when the courier exposes no write
+                      capability AND the browser channel is not LIVE.
+                      That is a true, checkable statement about the two
+                      switches, so the badge makes it rather than
+                      leaving it to be inferred.
+                    */
+                    <StatusBadge kind="pending" label="Nothing can send" />
                   )}
                 </div>
               </div>
@@ -200,6 +229,15 @@ export function CourierEscalationIndex(): ReactElement {
                     ? 'None — nothing is actioned unattended'
                     : settings?.autoCategories.join(', ')}
                 </div>
+                {!canSendAtAll && (settings?.autoCategories.length ?? 0) > 0 && (
+                  // The list still means something the day the browser
+                  // goes LIVE again, so it stays on screen — but read
+                  // beside a green "Running" it looked like a list of
+                  // things happening right now.
+                  <div className="text-text-muted mt-1 text-xs">
+                    Listed for when a write channel exists. None of it is acting today.
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 {!canWrite ? null : settings?.effectivelyPaused === true ? (
