@@ -92,6 +92,9 @@ function makeService(
     // swept from the order's charge rows, so an order with none is
     // billed the ₹30 return fee alone.
     { persistForOrderSystem: rtoPersistCharges } as never,
+    // The scan-time reader. Empty by default: these tests are about
+    // receiving and finalising, not about how long something waited.
+    { reachedStatusAt: async () => new Map() } as never,
   );
   return {
     svc,

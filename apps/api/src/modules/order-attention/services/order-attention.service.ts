@@ -16,6 +16,7 @@ import { SystemIssueService } from '../../system-issues/services/system-issue.se
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { AwbGenerationJobService } from '../../courier-awb/services/awb-generation-job.service';
+import { TrackingEventAppendService } from '../../tracking-events/services/tracking-event-append.service';
 
 /** Where the parcels are. The cutoff is an hour of the DELIVERY day. */
 const DELIVERY_TIMEZONE = 'Asia/Kolkata';
@@ -146,6 +147,9 @@ export class OrderAttentionService {
     private readonly awbJob: AwbGenerationJobService,
     private readonly mapping: TrackingStatusMappingService,
     private readonly orders: OrderReadService,
+    // The courier's own scan times (TRK-3) — see reachedStatusAt for why
+    // `shipments.updatedAt` cannot answer "how long has this waited".
+    private readonly trackingEvents: TrackingEventAppendService,
   ) {}
 
   /**
@@ -729,12 +733,17 @@ export class OrderAttentionService {
     const hours = await this.globalInt('ops.rto_receipt_alert_hours', 48);
     const cutoff = new Date(now.getTime() - hours * 3_600_000);
 
+    // Candidates by STATUS only — the age is decided below, from the
+    // courier's own scan. Filtering on `updatedAt` here was the
+    // original shape and was wrong for the same reason the worklist's
+    // display was: it is `@updatedAt`, so any unrelated write to the
+    // row pushes a long-waiting parcel back below the cutoff and the
+    // alert never fires. Silent, and permanent.
     const landed = await this.prisma.client.shipment.findMany({
       where: {
         deletedAt: null,
         status: ShipmentStatus.RTO_DELIVERED,
         supersededAt: null,
-        updatedAt: { lt: cutoff },
       },
       select: {
         id: true,
@@ -752,6 +761,11 @@ export class OrderAttentionService {
       },
     });
 
+    const scanAt = await this.trackingEvents.reachedStatusAt(
+      landed.map((s) => s.id),
+      [ShipmentStatus.RTO_DELIVERED],
+    );
+
     let unreceived = 0;
     for (const ship of landed) {
       const order = ship.orderShipments[0]?.order;
@@ -763,6 +777,12 @@ export class OrderAttentionService {
         continue;
       }
 
+      // No scan means the status was set by hand; the row's own
+      // timestamp is then the best thing available and is honest,
+      // because nothing else has touched it either.
+      const returnedAt = scanAt.get(ship.id) ?? ship.updatedAt;
+      if (returnedAt >= cutoff) continue;
+
       unreceived += 1;
       await this.issues.raise({
         kind: SystemIssueKind.INTEGRATION,
@@ -770,7 +790,7 @@ export class OrderAttentionService {
         title: `${order.orderNumber}: the courier returned this parcel and nobody has received it`,
         detail:
           `${ship.awbNumber ?? ship.shipmentNumber} was marked returned by the courier on ` +
-          `${ship.updatedAt.toISOString().slice(0, 16)}, and ${hours}h later it still has not ` +
+          `${returnedAt.toISOString().slice(0, 16)}, and ${hours}h later it still has not ` +
           `been received at the warehouse — so the order is stuck at ` +
           `${order.status.toLowerCase().replaceAll('_', ' ')} and the seller is being told their ` +
           'goods are still on their way back.\n\n' +
@@ -787,7 +807,7 @@ export class OrderAttentionService {
           orderNumber: order.orderNumber,
           sellerId: order.sellerId,
           orderStatus: order.status,
-          returnedAt: ship.updatedAt.toISOString(),
+          returnedAt: returnedAt.toISOString(),
         },
       });
     }

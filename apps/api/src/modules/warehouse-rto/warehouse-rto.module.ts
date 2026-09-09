@@ -15,6 +15,7 @@ import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { TicketModule } from '../ticket/ticket.module';
 import { InboundFreightModule } from '../inbound-freight/inbound-freight.module';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
+import { TrackingEventsModule } from '../tracking-events/tracking-events.module';
 
 /**
  * Module 8 warehouse-rto module — reverted to a dispatch/pack-time
@@ -44,6 +45,9 @@ import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-walle
  */
 @Module({
   imports: [
+    // M10's shared primitive — the courier's scan times, which is what
+    // "how long has this been waiting" actually means.
+    TrackingEventsModule,
     OrderChargesModule,
     OrderModule,
     InventorySharedModule,

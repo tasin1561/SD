@@ -142,6 +142,50 @@ export class TrackingEventAppendService {
    * null when no scan has been recorded yet. The orderBy is the
    * (shipmentId, eventAt DESC) index declared on the schema (TRK-3).
    */
+  /**
+   * WHEN each parcel reached the status it is currently in.
+   *
+   * ── WHY NOT `shipments.updatedAt` ────────────────────────────────
+   * That column is `@updatedAt`, so ANY write to the row resets it — a
+   * courier cost landing, an account backfill, a supersede touching a
+   * sibling field. Using it as "how long has this been sitting here"
+   * reads a parcel that has waited five days as having waited zero, and
+   * it does so silently. Measured, not hypothetical: the returns
+   * worklist shipped with it and reported 0h for a parcel that had been
+   * at the door since 4 September, which would also have kept its
+   * watchdog permanently below the alert threshold.
+   *
+   * `tracking_events.eventAt` is the courier's own scan time (TRK-3),
+   * which is the fact actually being asked about.
+   *
+   * ── ONE QUERY, NOT N ─────────────────────────────────────────────
+   * A groupBy over the whole set rather than a lookup per shipment:
+   * this is read by a worklist and by a sweep, and per-row queries
+   * against the tracking HYPERTABLE is how a page that opens instantly
+   * with three returns becomes one that times out with three hundred.
+   *
+   * A shipment with no matching scan is ABSENT from the map rather than
+   * defaulted to now: the caller knows what its own fallback should be,
+   * and inventing a timestamp here would be the same class of quiet
+   * wrongness this method exists to remove.
+   */
+  async reachedStatusAt(
+    shipmentIds: readonly string[],
+    statuses: readonly ShipmentStatus[],
+  ): Promise<Map<string, Date>> {
+    if (shipmentIds.length === 0 || statuses.length === 0) return new Map();
+    const rows = await this.prisma.client.trackingEvent.groupBy({
+      by: ['shipmentId'],
+      where: { shipmentId: { in: [...shipmentIds] }, status: { in: [...statuses] } },
+      _max: { eventAt: true },
+    });
+    const out = new Map<string, Date>();
+    for (const r of rows) {
+      if (r._max.eventAt !== null) out.set(r.shipmentId, r._max.eventAt);
+    }
+    return out;
+  }
+
   async latestForShipment(shipmentId: string): Promise<TrackingEventRow | null> {
     return this.prisma.client.trackingEvent.findFirst({
       where: { shipmentId },

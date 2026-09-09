@@ -203,6 +203,10 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       {
         isTerminalStatus: (st: never) => new OrderStateMachineService().isTerminal(st),
       } as never,
+      // Scan times. Empty by default, so the unreceived-returns sweep
+      // falls back to the row timestamp exactly as it does for a status
+      // that was set by hand.
+      { reachedStatusAt: async () => new Map<string, Date>() } as never,
     );
     return { svc, processOrder, raise, resolveByKey };
   }

@@ -10,6 +10,7 @@ import {
   SellerCapability,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { TrackingEventAppendService } from '../../tracking-events/services/tracking-event-append.service';
 import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -63,6 +64,8 @@ export class RtoReceiptService {
     private readonly units: StockUnitService,
     private readonly rtoFees: RtoFeeAccrualService,
     private readonly orderCharges: OrderChargesService,
+    // The M10 shared primitive: the courier's own scan times (TRK-3).
+    private readonly trackingEvents: TrackingEventAppendService,
   ) {}
 
   /**
@@ -422,6 +425,11 @@ export class RtoReceiptService {
       },
     });
 
+    const scanAt = await this.trackingEvents.reachedStatusAt(
+      rows.map((r) => r.id),
+      [ShipmentStatus.RTO_DELIVERED, ShipmentStatus.RTO_IN_TRANSIT, ShipmentStatus.RTO_INITIATED],
+    );
+
     const now = Date.now();
     return {
       items: rows.map((r) => {
@@ -440,15 +448,17 @@ export class RtoReceiptService {
           orderNumber: order?.orderNumber ?? null,
           orderStatus: order?.status ?? null,
           sellerName: order?.seller.companyName ?? null,
-          // The shipment's own `updatedAt` is when its status last
-          // moved, which for a parcel sitting in RTO_DELIVERED is the
-          // scan that put it there. Approximate on purpose rather than
-          // joining the tracking hypertable: this is a worklist, and
-          // turning it into a scan query would make it expensive to
-          // open for a number nobody sorts on more precisely than
-          // "hours".
-          returnedAt: r.updatedAt.toISOString(),
-          waitingHours: Math.max(0, Math.floor((now - r.updatedAt.getTime()) / 3_600_000)),
+          // The COURIER'S scan time, not `shipments.updatedAt`. That
+          // column is `@updatedAt` and any write to the row resets it,
+          // so it reported a parcel that had waited five days as 0h —
+          // which is worse than no number, because it looks precise.
+          // Falls back to the row's own timestamp only when there is no
+          // scan at all (a status set by hand).
+          returnedAt: (scanAt.get(r.id) ?? r.updatedAt).toISOString(),
+          waitingHours: Math.max(
+            0,
+            Math.floor((now - (scanAt.get(r.id) ?? r.updatedAt).getTime()) / 3_600_000),
+          ),
           itemCount: r.items.length,
         };
       }),
