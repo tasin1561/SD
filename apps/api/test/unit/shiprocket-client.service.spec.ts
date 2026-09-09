@@ -235,8 +235,11 @@ describe('ShiprocketClientService.checkServiceability', () => {
  * stub mode the adapter never calls out.
  */
 describe('ShiprocketClientService — a refusal is not a timeout', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- reaching a private for the classification table itself
-  const classify = (msg: string): string => (makeSut().svc as any).classify(msg);
+  // Reaching a private on purpose: the classification TABLE is the whole
+  // behaviour here, and routing every case through generateAwb would test
+  // the HTTP plumbing instead of the decision.
+  const classify = (msg: string): string =>
+    (makeSut().svc as unknown as { classify: (m: string) => string }).classify(msg);
 
   it('a 422 validation refusal is PERMANENT, not retryable', () => {
     expect(
