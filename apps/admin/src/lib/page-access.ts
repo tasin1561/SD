@@ -105,6 +105,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/sellers', 'sellers.view'],
   ['/stores', 'sellers.view'],
   ['/courier-accounts', 'courier.accounts.view'],
+  // Reading whether the cost sync works is a report about a courier
+  // account's money; RUNNING it needs `.manage` and is gated in the
+  // controller.
+  ['/cost-sync', 'courier.accounts.view'],
   ['/delhivery', 'courier.waybills.manage'],
   ['/courier-escalation', 'courier.ops.view'],
   ['/reports', 'reports.view'],

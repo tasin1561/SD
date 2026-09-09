@@ -4091,3 +4091,76 @@ export function useAdminSetStoreActive(): UseMutationResult<
     onSuccess: () => void qc.invalidateQueries({ queryKey: STORES_KEY }),
   });
 }
+
+// ── The nightly courier-cost sync ────────────────────────────────────
+
+export interface WalletSyncRunAccount {
+  readonly label: string;
+  readonly courierAccountId: string;
+  readonly error: string | null;
+  readonly fileBytes: number | null;
+  readonly rowsRead: number | null;
+  readonly awbsInFile: number | null;
+  readonly unknownAwbs: number | null;
+  readonly forwardWritten: number | null;
+  readonly rtoWritten: number | null;
+  readonly revised: number | null;
+  readonly unchanged: number | null;
+  readonly sumInr: string | null;
+  readonly statedTotalInr: string | null;
+  readonly totalsAgree: boolean | null;
+  readonly periodFrom: string | null;
+  readonly periodTo: string | null;
+  readonly coveredDays: number | null;
+  readonly rangeApplied: boolean | null;
+  readonly dryRun: boolean | null;
+}
+
+export interface WalletSyncRun {
+  readonly at: string;
+  readonly ok: boolean;
+  readonly skipped: string | null;
+  readonly wrote: boolean;
+  readonly windowDays: number | null;
+  readonly accounts: readonly WalletSyncRunAccount[];
+}
+
+export interface WalletSyncPanel {
+  readonly enabled: boolean;
+  readonly writesEnabled: boolean;
+  readonly windowDays: number;
+  readonly schedule: string;
+  readonly last: WalletSyncRun | null;
+  readonly history: readonly WalletSyncRun[];
+  readonly cost: {
+    readonly dispatched: number;
+    readonly withForwardCost: number;
+    readonly returned: number;
+    readonly withRtoCost: number;
+    readonly forwardTotalInr: string;
+    readonly rtoTotalInr: string;
+  };
+}
+
+export function useWalletSyncPanel(): UseQueryResult<WalletSyncPanel, Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-wallet-sync'],
+    queryFn: () => client.request<WalletSyncPanel>('/api/admin/courier-portal/wallet-sync'),
+  });
+}
+
+export function useRunWalletSync(): UseMutationResult<unknown, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<unknown>('/api/admin/courier-portal/wallet-sync/run', { method: 'POST' }),
+    onSuccess: () => {
+      // The run IS the new last-run, and it may have moved costs, so the
+      // margin figures elsewhere are stale too.
+      void queryClient.invalidateQueries({ queryKey: ['admin-wallet-sync'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-margin'] });
+    },
+  });
+}
