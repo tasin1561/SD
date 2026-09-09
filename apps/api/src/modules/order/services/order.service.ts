@@ -913,6 +913,37 @@ export class OrderService {
       }
     }
 
+    // ── The rest of the money, the reference and the shopfront ────────
+    if (input.advanceAmountInr !== undefined) {
+      data.advanceAmountInr = new Prisma.Decimal(input.advanceAmountInr);
+      changed.push('advanceAmountInr');
+    }
+    if (input.deliveryFeeInr !== undefined) {
+      data.deliveryFeeInr = new Prisma.Decimal(input.deliveryFeeInr);
+      changed.push('deliveryFeeInr');
+    }
+    if (input.discountInr !== undefined) {
+      data.discountInr = new Prisma.Decimal(input.discountInr);
+      changed.push('discountInr');
+    }
+    if (input.sellerOrderRef !== undefined) {
+      const ref = input.sellerOrderRef.trim();
+      // Empty means "no reference", not the empty string: the UNIQUE is
+      // on (seller, store, ref) and Postgres treats every NULL as
+      // distinct, so blanking two orders is fine while storing '' twice
+      // is a collision.
+      data.sellerOrderRef = ref === '' ? null : ref;
+      changed.push('sellerOrderRef');
+    }
+    if (input.storeId !== undefined) {
+      // Through the resolver, so a store belonging to another seller is
+      // a 404 and an inactive one is refused by name — the same answers
+      // create gives.
+      const store = await this.stores.resolveForOrder(sellerId, input.storeId);
+      data.store = { connect: { id: store.id } };
+      changed.push('storeId');
+    }
+
     // ── Lines: full replace (until the call confirms it) ───────────────
     let replacementLines: Awaited<ReturnType<OrderService['resolveLines']>> | null = null;
     if (input.items !== undefined) {
@@ -943,67 +974,81 @@ export class OrderService {
       });
     }
 
-    return this.prisma.client.$transaction(async (tx) => {
-      if (phoneChanged && newPhone !== undefined) {
-        const customer = await this.customers.findOrCreate(tx, {
-          sellerId,
-          phoneE164: newPhone,
-          name: input.recipientName ?? order.recipientName,
-          email: input.recipientEmail ?? order.recipientEmail,
-          altPhoneE164: input.recipientAltPhoneE164 ?? order.recipientAltPhoneE164,
+    try {
+      return await this.prisma.client.$transaction(async (tx) => {
+        if (phoneChanged && newPhone !== undefined) {
+          const customer = await this.customers.findOrCreate(tx, {
+            sellerId,
+            phoneE164: newPhone,
+            name: input.recipientName ?? order.recipientName,
+            email: input.recipientEmail ?? order.recipientEmail,
+            altPhoneE164: input.recipientAltPhoneE164 ?? order.recipientAltPhoneE164,
+          });
+          data.customer = { connect: { id: customer.id } };
+        }
+
+        if (replacementLines !== null) {
+          await tx.orderItem.deleteMany({ where: { orderId: id } });
+          data.items = {
+            create: replacementLines.map((l) => ({
+              variantId: l.variantId,
+              skuCode: l.skuCode,
+              productName: l.productName,
+              variantLabel: l.variantLabel,
+              imageUrl: l.imageUrl,
+              quantity: l.quantity,
+              unitWeightGrams: l.unitWeightGrams,
+              unitDeclaredValueInr: l.unitDeclaredValueInr,
+              unitPriceInr: l.unitPriceInr,
+            })),
+          };
+        }
+
+        const updated = await tx.order.update({
+          where: { id },
+          data,
+          include: ORDER_VIEW_INCLUDE,
         });
-        data.customer = { connect: { id: customer.id } };
-      }
-
-      if (replacementLines !== null) {
-        await tx.orderItem.deleteMany({ where: { orderId: id } });
-        data.items = {
-          create: replacementLines.map((l) => ({
-            variantId: l.variantId,
-            skuCode: l.skuCode,
-            productName: l.productName,
-            variantLabel: l.variantLabel,
-            imageUrl: l.imageUrl,
-            quantity: l.quantity,
-            unitWeightGrams: l.unitWeightGrams,
-            unitDeclaredValueInr: l.unitDeclaredValueInr,
-            unitPriceInr: l.unitPriceInr,
-          })),
-        };
-      }
-
-      const updated = await tx.order.update({
-        where: { id },
-        data,
-        include: ORDER_VIEW_INCLUDE,
-      });
-      await this.events.note(
-        tx,
-        id,
-        `Order edited (${changed.join(', ')})${phoneChanged ? '; customer re-linked' : ''}`,
-        actor,
-        true,
-      );
-      await this.audit.log(
-        {
-          actorType: actor.type,
-          actorId: actor.id ?? null,
-          sellerId,
-          action: 'order.edited',
-          entityType: 'order',
-          entityId: id,
-          metadata: {
-            orderNumber: order.orderNumber,
-            status: order.status,
-            changed,
-            phoneChanged,
-            ...this.ctxMeta(ctx),
+        await this.events.note(
+          tx,
+          id,
+          `Order edited (${changed.join(', ')})${phoneChanged ? '; customer re-linked' : ''}`,
+          actor,
+          true,
+        );
+        await this.audit.log(
+          {
+            actorType: actor.type,
+            actorId: actor.id ?? null,
+            sellerId,
+            action: 'order.edited',
+            entityType: 'order',
+            entityId: id,
+            metadata: {
+              orderNumber: order.orderNumber,
+              status: order.status,
+              changed,
+              phoneChanged,
+              ...this.ctxMeta(ctx),
+            },
           },
-        },
-        tx,
-      );
-      return updated;
-    });
+          tx,
+        );
+        return updated;
+      });
+    } catch (e) {
+      // `(sellerId, storeId, sellerOrderRef)` is UNIQUE, and an edit can
+      // now set both the ref and the store — so the same clash create
+      // guards against is reachable here. Translated to the same 409
+      // rather than left to surface as a 500 with a Prisma code in it.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException({
+          code: 'DUPLICATE_SELLER_ORDER_REF',
+          message: `Another order already uses the reference "${input.sellerOrderRef ?? ''}" in this shopfront`,
+        });
+      }
+      throw e;
+    }
   }
 
   /** Seller-scoped load (ownership + soft-delete guard). */

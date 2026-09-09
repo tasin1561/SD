@@ -26,6 +26,7 @@ import {
   type UpdateOrderInput,
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import { useStores } from '@/lib/store-hooks';
 import {
   ADDRESS_LINE_1_HINT,
   ADDRESS_LINE_2_HINT,
@@ -81,13 +82,31 @@ import {
 interface FormState {
   recipientName: string;
   recipientPhoneE164: string;
+  recipientAltPhoneE164: string;
   recipientAddressLine1: string;
   recipientAddressLine2: string;
   recipientPostalCode: string;
   paymentMode: 'COD' | 'PREPAID';
   codAmountInr: string;
+  /*
+    THE THREE FIGURES THE COLLECTABLE IS MADE OF.
+
+    The edit form asked for the COD amount but not the advance, the
+    delivery fee or the discount it is derived from — so a seller could
+    change the total and not the arithmetic behind it, and adding a
+    product left the collectable stale. The create form has always asked
+    for all four; the API accepts them on create and, since today, on
+    edit too.
+  */
+  advanceAmountInr: string;
+  deliveryFeeInr: string;
+  discountInr: string;
   declaredValueInr: string;
   totalWeightGrams: string;
+  packageType: 'STANDARD' | 'FRAGILE' | 'DOCUMENT';
+  isUrgent: boolean;
+  sellerOrderRef: string;
+  storeId: string;
   sellerNotes: string;
 }
 
@@ -115,13 +134,21 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       // strip here can never double the prefix in the database.
       recipientName: stripSellerPrefix(sellerInitials, d.recipientName),
       recipientPhoneE164: d.recipientPhoneE164,
+      recipientAltPhoneE164: d.recipientAltPhoneE164 ?? '',
       recipientAddressLine1: d.recipientAddressLine1,
       recipientAddressLine2: d.recipientAddressLine2 ?? '',
       recipientPostalCode: d.recipientPostalCode,
       paymentMode: d.paymentMode as 'COD' | 'PREPAID',
       codAmountInr: d.codAmountInr?.toString() ?? '',
+      advanceAmountInr: d.advanceAmountInr?.toString() ?? '',
+      deliveryFeeInr: d.deliveryFeeInr?.toString() ?? '',
+      discountInr: d.discountInr?.toString() ?? '',
       declaredValueInr: d.declaredValueInr?.toString() ?? '',
       totalWeightGrams: d.totalWeightGrams?.toString() ?? '',
+      packageType: (d.packageType ?? 'STANDARD') as 'STANDARD' | 'FRAGILE' | 'DOCUMENT',
+      isUrgent: d.isUrgent,
+      sellerOrderRef: d.sellerOrderRef ?? '',
+      storeId: d.storeId ?? '',
       sellerNotes: d.sellerNotes ?? '',
     });
     // sellerInitials is in the deps for correctness, though in practice
@@ -176,6 +203,35 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     }
     return m;
   }, [stock.data]);
+
+  const stores = useStores();
+  /** Only shopfronts still taking orders — plus the one this order is
+   *  already on, so a retired store does not vanish from its own
+   *  order and read as a data loss. */
+  const openStores = useMemo(
+    () => (stores.data ?? []).filter((st) => st.isActive || st.id === form?.storeId),
+    [stores.data, form?.storeId],
+  );
+
+  /**
+   * What the customer should be asked for, from the parts.
+   *
+   * The same expression the create form uses, so the two screens cannot
+   * disagree about what a collectable is.
+   */
+  const computedCollectable = useMemo(() => {
+    const num = (v: string): number => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const itemsTotal = (lines ?? []).reduce((n, l) => n + num(l.unitPriceInr) * num(l.quantity), 0);
+    return (
+      itemsTotal +
+      num(form?.deliveryFeeInr ?? '') -
+      num(form?.advanceAmountInr ?? '') -
+      num(form?.discountInr ?? '')
+    );
+  }, [lines, form?.deliveryFeeInr, form?.advanceAmountInr, form?.discountInr]);
 
   /** Have the lines actually changed? Sending an unchanged set would
    *  delete and re-create every row for nothing, and would put "items"
@@ -235,6 +291,22 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     body.recipientAddressLine2 = form.recipientAddressLine2.trim();
     if (form.paymentMode === 'COD' && form.codAmountInr.trim())
       body.codAmountInr = Number(form.codAmountInr);
+    // Sent as 0 rather than omitted when cleared: omitting a key means
+    // "leave it alone" under PATCH semantics, so a seller removing a
+    // discount would find it still there.
+    body.advanceAmountInr = Number(form.advanceAmountInr) || 0;
+    body.deliveryFeeInr = Number(form.deliveryFeeInr) || 0;
+    body.discountInr = Number(form.discountInr) || 0;
+    body.packageType = form.packageType;
+    body.isUrgent = form.isUrgent;
+    if (form.recipientAltPhoneE164.trim())
+      body.recipientAltPhoneE164 = form.recipientAltPhoneE164.trim();
+    if (form.sellerOrderRef !== (detail.data.sellerOrderRef ?? '')) {
+      body.sellerOrderRef = form.sellerOrderRef.trim();
+    }
+    if (form.storeId !== '' && form.storeId !== (detail.data.storeId ?? '')) {
+      body.storeId = form.storeId;
+    }
     if (form.declaredValueInr.trim()) body.declaredValueInr = Number(form.declaredValueInr);
     if (form.totalWeightGrams.trim()) body.totalWeightGrams = Number(form.totalWeightGrams);
     if (form.sellerNotes !== (detail.data.sellerNotes ?? '')) {
@@ -488,6 +560,34 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               </div>
             </FormField>
             <FormField
+              label="Second number"
+              hint="Tried when the first does not answer — the call centre uses it before giving up on an order."
+            >
+              <div className="flex items-stretch">
+                <span
+                  aria-hidden
+                  className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
+                >
+                  {IN_DIAL}
+                </span>
+                <Input
+                  className="rounded-l-none"
+                  value={toLocalDigits(form.recipientAltPhoneE164)}
+                  onChange={(e) =>
+                    set(
+                      'recipientAltPhoneE164',
+                      e.target.value.trim() === '' ? '' : toE164(sanitiseLocal(e.target.value)),
+                    )
+                  }
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  maxLength={IN_LOCAL_LENGTH}
+                  placeholder="optional"
+                  aria-label={`Second phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+                />
+              </div>
+            </FormField>
+            <FormField
               label="Address line 1"
               required
               className="col-span-2"
@@ -546,16 +646,71 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 <option value="COD">Cash on Delivery</option>
               </Select>
             </FormField>
+            <FormField label="Delivery fee charged to the customer (INR)">
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.deliveryFeeInr}
+                onChange={(e) => set('deliveryFeeInr', e.target.value)}
+              />
+            </FormField>
+            <FormField label="Advance already paid (INR)">
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.advanceAmountInr}
+                onChange={(e) => set('advanceAmountInr', e.target.value)}
+              />
+            </FormField>
+            <FormField label="Discount (INR)">
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.discountInr}
+                onChange={(e) => set('discountInr', e.target.value)}
+              />
+            </FormField>
             {form.paymentMode === 'COD' && (
-              <FormField label="COD amount (INR)" required>
-                <Input
-                  type="number"
-                  min={0.01}
-                  step="0.01"
-                  value={form.codAmountInr}
-                  onChange={(e) => set('codAmountInr', e.target.value)}
-                  required
-                />
+              <FormField
+                label="COD amount (INR)"
+                required
+                /*
+                  The same arithmetic the create form shows. It is a
+                  NOTICE and not an auto-write: the field holds what the
+                  order currently says, and quietly overwriting a figure
+                  a seller typed on purpose — a rounded-down total, a
+                  waived charge — is worse than telling them the parts no
+                  longer add up.
+                */
+                notice={
+                  Math.abs(computedCollectable - (Number(form.codAmountInr) || 0)) > 0.005
+                    ? `Items + delivery − advance − discount = ₹${computedCollectable.toFixed(2)}`
+                    : undefined
+                }
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0.01}
+                    step="0.01"
+                    value={form.codAmountInr}
+                    onChange={(e) => set('codAmountInr', e.target.value)}
+                    required
+                  />
+                  {Math.abs(computedCollectable - (Number(form.codAmountInr) || 0)) > 0.005 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => set('codAmountInr', computedCollectable.toFixed(2))}
+                    >
+                      Use ₹{computedCollectable.toFixed(2)}
+                    </Button>
+                  )}
+                </div>
               </FormField>
             )}
             <FormField label="Declared value (INR)">
@@ -574,6 +729,51 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 value={form.totalWeightGrams}
                 onChange={(e) => set('totalWeightGrams', e.target.value)}
               />
+            </FormField>
+            <FormField label="Package type">
+              <Select
+                value={form.packageType}
+                onChange={(e) =>
+                  set('packageType', e.target.value as 'STANDARD' | 'FRAGILE' | 'DOCUMENT')
+                }
+              >
+                <option value="STANDARD">Standard</option>
+                <option value="FRAGILE">Fragile</option>
+                <option value="DOCUMENT">Document</option>
+              </Select>
+            </FormField>
+            <FormField label="Your reference">
+              <Input
+                value={form.sellerOrderRef}
+                maxLength={100}
+                placeholder="e.g. the number your shop gave it"
+                onChange={(e) => set('sellerOrderRef', e.target.value)}
+              />
+            </FormField>
+            {openStores.length > 1 && (
+              <FormField
+                label="Store"
+                hint="Which of your shopfronts this order belongs to. Your reference has to be unique within one shopfront, not across them."
+              >
+                <Select value={form.storeId} onChange={(e) => set('storeId', e.target.value)}>
+                  {openStores.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                      {st.isDefault ? ' (default)' : ''}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            )}
+            <FormField label="Urgent">
+              <label className="text-text-body flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.isUrgent}
+                  onChange={(e) => set('isUrgent', e.target.checked)}
+                />
+                Treat this order as urgent
+              </label>
             </FormField>
           </div>
         </CardBody>

@@ -73,6 +73,8 @@ export interface OrderView {
   readonly orderNumber: string;
   readonly sellerOrderRef: string | null;
   readonly sellerId: string;
+  /** Which shopfront it came from. */
+  readonly storeId: string | null;
   readonly status: OrderStatus;
   readonly source: OrderSource;
 
@@ -92,6 +94,16 @@ export interface OrderView {
   // Money
   readonly paymentMode: PaymentMode;
   readonly codAmountInr: string | null;
+  /*
+    The three figures the collectable is made of. The API has always
+    returned them — the detail query is an `include`, so every order
+    column comes back — and this hand-written type simply did not list
+    them, which made them invisible to every screen. The edit form needs
+    all three to show the same arithmetic the create form does.
+  */
+  readonly advanceAmountInr: string | null;
+  readonly deliveryFeeInr: string | null;
+  readonly discountInr: string | null;
   readonly declaredValueInr: string | null;
 
   // Physical
