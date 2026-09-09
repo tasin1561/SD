@@ -258,6 +258,34 @@ export class PortalSessionService {
    * The password check stays: it costs nothing and catches an auth page
    * served from a URL we do not recognise.
    */
+  /**
+   * The password never appeared. Is that a failure?
+   *
+   * Named and separated because it is a DECISION with three answers,
+   * and it used to be one implicit answer: throw. That was wrong in the
+   * commonest case — see the long note at the call site — and the shape
+   * of the mistake was asserting that a STEP happened rather than
+   * asking whether the OUTCOME had been reached.
+   *
+   * Its own method so it can be tested against a URL and three element
+   * counts, rather than by faking enough of Playwright to walk the
+   * whole login script. That fake is a losing game: every branch of the
+   * flow needs another method stubbed, and the test ends up pinning the
+   * mock rather than the logic.
+   */
+  private async verdictOnMissingPassword(
+    page: Page,
+  ): Promise<'SIGNED_IN' | 'OTP' | 'CAPTCHA' | 'NOT_SIGNED_IN'> {
+    // A challenge FIRST: a captcha page carries no password field and no
+    // login form either, so asking "are we signed in" of it would answer
+    // yes and walk on into a session that does not exist.
+    const challenge = await this.detectChallenge(page);
+    if (challenge !== null) return challenge;
+    // Being anywhere on the portal that is not a login or auth surface
+    // IS signed in — the same test that decided to come here at all.
+    return (await this.looksLikeLogin(page)) ? 'NOT_SIGNED_IN' : 'SIGNED_IN';
+  }
+
   private async looksLikeLogin(page: Page): Promise<boolean> {
     if (/login|signin|ucp-auth/i.test(page.url())) return true;
     return (await page.locator('input[type="password"]').count()) > 0;
@@ -307,11 +335,22 @@ export class PortalSessionService {
     //   5. Continue hands off to ucp-auth.delhivery.com, a different
     //      origin, for the PASSWORD.
     await gotoPortal(page, `${PORTAL_ORIGIN}/v2/login`);
-    // Their login page bounces a signed-in session straight to the app.
-    // Belt to the braces above: if we are already authenticated there is
-    // nothing to log in to, and pressing on would wait out the password
-    // timeout for no reason.
-    await page.waitForTimeout(2_500);
+    /*
+      Their login page bounces a signed-in session straight to the app.
+      Belt to the braces above: if we are already authenticated there is
+      nothing to log in to, and pressing on would wait out the password
+      timeout for no reason.
+
+      WAITING ON THE URL, not on a flat sleep. The bounce is client-side
+      and its timing is theirs, so a fixed 2.5s is a bet: too short and
+      we start typing into a page that is about to be replaced — which
+      is precisely the failure this comment used to sit above. The wait
+      RETURNS EARLY on the redirect, so the common case is faster than
+      the sleep it replaces and the slow case is still caught.
+    */
+    await page
+      .waitForURL((u) => !/\/v2\/login/.test(u.href), { timeout: 8_000 })
+      .catch(() => undefined);
     if (!/\/v2\/login/.test(page.url())) {
       this.logger.log('Already signed in — the login page redirected us to the app');
       return;
@@ -387,6 +426,49 @@ export class PortalSessionService {
         self-diagnosing.
       */
       const where = page.url();
+
+      /*
+        ── ASK WHETHER WE ARE IN, NOT WHETHER THE STEPS HAPPENED ───────
+
+        A missing password field is only a failure if we are still shut
+        out. Their session re-establishes itself mid-flow: /home bounces
+        to /v2/login (so the probe correctly decides to log in), and then
+        somewhere around the email step the app recognises the stored
+        session after all and lands us on /home — signed in, with no
+        password ever asked for.
+
+        This threw on that, fifteen nights running, saying their login
+        flow had moved. It had not. The wallet sync kept working the
+        whole time, which is the fact that gave it away: both jobs share
+        one persisted `storageState`, so whichever runs first does the
+        real login and the second arrives to a warm session — the exact
+        condition this mishandled. A sweep that fails only when it is
+        second in line is not a broken login.
+
+        The lesson is the ATT-1 one, in a different subsystem: when a
+        step does not happen, re-read the thing that would still be
+        broken. Here that is "are we authenticated", and the URL answers
+        it — being anywhere on the portal that is not a login or auth
+        page IS the definition of signed in, and it is the same test
+        `looksLikeLogin` uses to decide to come here at all.
+      */
+      const verdict = await this.verdictOnMissingPassword(page);
+      if (verdict === 'SIGNED_IN') {
+        this.logger.log(
+          { url: where },
+          'No password was asked for because the session was already live — signed in',
+        );
+        return;
+      }
+      if (verdict !== 'NOT_SIGNED_IN') {
+        // A challenge INSTEAD of the password. Reported as the challenge
+        // it is rather than as a missing field: the two need completely
+        // different responses, and only one of them is a person going to
+        // the portal to answer something.
+        await this.freezeOnChallenge(verdict, page);
+        throw new PortalChallengeError(verdict);
+      }
+
       const seen = (
         await page
           .locator('body')
@@ -396,8 +478,9 @@ export class PortalSessionService {
         .replace(/\s+/g, ' ')
         .slice(0, 200);
       throw new Error(
-        `The password step never appeared. Ended on ${where} — page reads: "${seen}". ` +
-          'Their login flow has moved, or this landed on a challenge rather than the password.',
+        `The password step never appeared, and we are still not signed in. Ended on ${where} — ` +
+          `page reads: "${seen}". Their login flow has moved, or this landed on a challenge ` +
+          'rather than the password.',
       );
     }
     await passwordBox.fill(password);

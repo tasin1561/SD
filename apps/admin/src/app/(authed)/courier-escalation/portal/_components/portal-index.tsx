@@ -27,6 +27,7 @@ import {
   useCourierTaxonomy,
   useCourierChannel,
   useSetPortalMode,
+  type PortalMode,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { EscalationTabs } from '../../_components/escalation-tabs';
@@ -245,14 +246,21 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
   const canManage = usePermission('courier.accounts.manage');
   const [reason, setReason] = useState('');
   const live = current === 'LIVE';
+  const off = current === 'OFF';
 
   if (!canManage || current === null) return <></>;
 
-  const go = (portalMode: 'SHADOW' | 'LIVE', why: string): void => {
+  const go = (portalMode: PortalMode, why: string): void => {
     void (async () => {
       try {
         await setMode.mutateAsync({ portalMode, reason: why });
-        toast.success(portalMode === 'LIVE' ? 'Portal is LIVE' : 'Portal is back in SHADOW');
+        toast.success(
+          portalMode === 'LIVE'
+            ? 'Portal is LIVE'
+            : portalMode === 'OFF'
+              ? 'Portal automation is OFF — nothing will open a browser'
+              : 'Portal is back in SHADOW',
+        );
         setReason('');
       } catch (err) {
         toast.error(serverVerdict(err));
@@ -266,23 +274,45 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-text-strong text-sm font-medium">
-              Browser channel: {live ? 'LIVE — it clicks' : 'SHADOW — it withholds every click'}
+              Browser channel:{' '}
+              {live
+                ? 'LIVE — it clicks'
+                : off
+                  ? 'OFF — nothing runs at all'
+                  : 'SHADOW — it withholds every click'}
             </p>
             <p className="text-text-muted mt-0.5 text-xs">
               {live
                 ? 'Software is raising tickets on the courier’s portal in our name.'
-                : 'Everything up to the click happens and is recorded. Nothing reaches the courier.'}
+                : off
+                  ? // The distinction people get wrong: SHADOW still signs in
+                    // and reads, and can still fail at 3am about work nobody
+                    // is waiting for. OFF is the one that means stop.
+                    'No browser is opened and no session is established. Escalations are handled by hand on the courier’s own site and recorded here afterwards.'
+                  : 'Everything up to the click happens and is recorded. Nothing reaches the courier.'}
             </p>
           </div>
           {live ? (
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={setMode.isPending}
-              onClick={() => go('SHADOW', 'Stopping the browser channel from the portal page')}
-            >
-              Stop — back to SHADOW
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={setMode.isPending}
+                onClick={() => go('SHADOW', 'Stopping the browser channel from the portal page')}
+              >
+                Stop — back to SHADOW
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={setMode.isPending}
+                onClick={() =>
+                  go('OFF', 'Standing the portal automation down from the portal page')
+                }
+              >
+                Turn it OFF
+              </Button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <Input
@@ -300,6 +330,27 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
               >
                 Go LIVE
               </Button>
+              {off ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={reason.trim().length < 10 || setMode.isPending}
+                  onClick={() => go('SHADOW', reason.trim())}
+                >
+                  Back to SHADOW
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={setMode.isPending}
+                  onClick={() =>
+                    go('OFF', 'Standing the portal automation down from the portal page')
+                  }
+                >
+                  Turn it OFF
+                </Button>
+              )}
             </div>
           )}
         </div>

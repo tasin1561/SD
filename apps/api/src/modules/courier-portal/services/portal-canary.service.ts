@@ -65,7 +65,8 @@ export class PortalCanaryService {
   async run(): Promise<CanaryResult> {
     const settings = await this.settings.get();
     const mode = settings.portalMode;
-    const shadow = mode === CourierPortalMode.SHADOW;
+    // Only LIVE executes — see the same note in PortalDispatcherService.
+    const shadow = mode !== CourierPortalMode.LIVE;
     const steps: Record<string, string> = {};
 
     const awb = await this.canaryAwb();

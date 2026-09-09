@@ -1,0 +1,15 @@
+-- A third portal mode: OFF.
+--
+-- SHADOW was the closest thing to "stop", and it is not stop — it still
+-- opens a browser, signs in and reads their tabs in order to prepare
+-- work it then declines to execute. When the automation is being stood
+-- down entirely (escalations handled by hand on Delhivery's own site),
+-- every one of those steps is unwanted: each is a live session against
+-- somebody else's portal, and each is a thing that can fail at 3am
+-- about work nobody is waiting for.
+--
+-- A MODE rather than a second boolean, because "may the portal act"
+-- already has exactly one reader. A parallel `portal_automation_enabled`
+-- flag would be a second source of truth for the same question, which is
+-- the drift CNS-2 and BIN-1 exist to prevent.
+ALTER TYPE "courier_portal_mode" ADD VALUE IF NOT EXISTS 'off';

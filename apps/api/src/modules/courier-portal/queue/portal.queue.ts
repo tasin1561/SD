@@ -1,4 +1,6 @@
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
+import { CourierPortalMode } from '@skydrop/db';
+import { CourierChannelSettingsService } from '../../courier-escalation/services/courier-channel-settings.service';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Job, Queue, Worker } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
@@ -51,6 +53,7 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
     private readonly canary: PortalCanaryService,
     private readonly ticketSync: PortalTicketSyncService,
     private readonly session: PortalSessionService,
+    private readonly settings: CourierChannelSettingsService,
     private readonly workerRole: WorkerRoleService,
     private readonly issues: SystemIssueService,
   ) {}
@@ -98,6 +101,34 @@ export class PortalQueue implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker(
       PORTAL_QUEUE,
       async (job: Job): Promise<void> => {
+        /*
+          ── THE MASTER SWITCH, CHECKED IN ONE PLACE ──────────────────
+
+          OFF means nothing here opens a browser: not the dispatcher,
+          not the ticket sweep, not the nightly canary. Every one of
+          those is a live session against somebody else's portal, and
+          when the escalation work is being done by hand they are all
+          pure downside — sessions to be maintained and 3am failures to
+          be triaged about work nobody is waiting for.
+
+          Checked HERE rather than in each of the three services: this
+          is their single entry point, so "no browser opens while OFF"
+          is provable by reading one function instead of trusting three
+          to remember. The ticket sweep in particular reads its own
+          settings and deliberately ignores portalMode — correct for the
+          SHADOW distinction it was written for, and exactly why the
+          stop has to sit above it.
+
+          Checked PER JOB, not at boot: the repeatable jobs stay
+          registered and keep ticking cheaply, so turning the automation
+          back on is a settings change that takes effect on the next
+          tick — no deploy, no restart. A kill switch that needs a
+          release is not a kill switch.
+        */
+        if ((await this.settings.get()).portalMode === CourierPortalMode.OFF) {
+          this.logger.debug({ job: job.name }, 'Portal automation is OFF — skipping');
+          return;
+        }
         if (job.name === JOB_PORTAL_DISPATCH) {
           await this.dispatcher.runCycle();
           return;

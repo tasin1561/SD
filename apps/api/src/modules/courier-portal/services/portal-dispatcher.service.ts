@@ -77,7 +77,12 @@ export class PortalDispatcherService {
   async runCycle(): Promise<PortalCycleSummary> {
     const settings = await this.settings.get();
     const mode = settings.portalMode;
-    const shadow = mode === CourierPortalMode.SHADOW;
+    // ONLY LIVE EXECUTES. Written as "anything that is not LIVE holds
+    // back" rather than "SHADOW holds back", because the two read the
+    // same until a third mode exists and then differ in the worst
+    // possible direction: OFF would have fallen through to executing.
+    // A new mode is now safe by default and has to be opted into.
+    const shadow = mode !== CourierPortalMode.LIVE;
 
     const base = {
       mode,

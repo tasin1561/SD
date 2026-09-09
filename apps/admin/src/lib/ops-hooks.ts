@@ -2214,7 +2214,7 @@ export interface CourierChannelView {
     readonly courierCode: string;
     readonly writeMode: 'MANUAL' | 'SUPERVISED' | 'AUTO';
     /** The browser tier's own switch — separate from writeMode by design. */
-    readonly portalMode: 'SHADOW' | 'LIVE';
+    readonly portalMode: PortalMode;
     readonly autoCategories: readonly string[];
     readonly pausedUntil: string | null;
     readonly pauseReason: string | null;
@@ -2382,10 +2382,20 @@ export function usePauseCourierChannel(): UseMutationResult<
  * all, so the only way to stop a browser acting in your name was a
  * database console. A kill switch you cannot reach is not one.
  */
+/**
+ * The three states of the browser channel.
+ *
+ * OFF is not a louder SHADOW: SHADOW still signs in and reads in order
+ * to prepare work it then withholds, so it keeps a live session against
+ * somebody else's portal and keeps failing at 3am about work nobody is
+ * waiting for. OFF opens nothing.
+ */
+export type PortalMode = 'OFF' | 'SHADOW' | 'LIVE';
+
 export function useSetPortalMode(): UseMutationResult<
   CourierChannelView['settings'],
   Error,
-  { portalMode: 'SHADOW' | 'LIVE'; reason: string }
+  { portalMode: PortalMode; reason: string }
 > {
   const client = useApiClient();
   const qc = useQueryClient();

@@ -2184,6 +2184,17 @@ model CourierModeChallenge {
 /// only way to find out whether browser automation understands the portal
 /// before it touches a ticket a customer can see.
 enum CourierPortalMode {
+  /// Nothing runs. No browser is opened, no session is established, no
+  /// tab is read — the escalation work is done by hand on Delhivery's
+  /// own site and recorded here afterwards.
+  ///
+  /// Distinct from SHADOW, which still logs in and reads in order to
+  /// prepare work it then declines to execute. OFF is the switch for
+  /// "we are not automating this at all right now", and the reason it
+  /// is a MODE rather than a second boolean is that "may the portal
+  /// act" already has one reader; a parallel flag is exactly the drift
+  /// CNS-2 and BIN-1 exist to prevent.
+  OFF    @map("off")
   /// Prepares and logs everything, executes nothing. The default.
   SHADOW @map("shadow")
   /// Executes.
