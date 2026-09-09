@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   CardBody,
-  Section,
   TBody,
   THead,
   Table,
@@ -39,7 +38,7 @@ export function OpenReturns({
   const open = useOpenRtoShipments();
 
   return (
-    <Section title="Waiting on somebody">
+    <>
       {open.isLoading ? (
         <Card>
           <CardBody>
@@ -108,6 +107,6 @@ export function OpenReturns({
           </TBody>
         </Table>
       )}
-    </Section>
+    </>
   );
 }

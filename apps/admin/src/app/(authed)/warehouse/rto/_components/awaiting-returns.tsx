@@ -3,20 +3,8 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { PackageCheck, Truck } from 'lucide-react';
-import {
-  Card,
-  CardBody,
-  Section,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
-import { useAwaitingRtoReceipt, type AwaitingRtoRow } from '@/lib/api-hooks';
+import { StatusBadge, TBody, THead, Table, TableEmpty, Td, Th, Tr } from '@skydrop/ui/components';
+import type { AwaitingRtoRow } from '@/lib/api-hooks';
 
 /**
  * Returns that have not reached this bench yet — in two stages.
@@ -78,17 +66,21 @@ function Row({
   onPick,
 }: {
   readonly row: AwaitingRtoRow;
-  readonly onPick: (awb: string) => void;
+  readonly onPick?: (awb: string) => void;
 }): ReactElement {
   return (
     <Tr>
       <Td>
         <button
           type="button"
-          onClick={() => row.awbNumber !== null && onPick(row.awbNumber)}
-          disabled={row.awbNumber === null}
+          onClick={() => onPick !== undefined && row.awbNumber !== null && onPick(row.awbNumber)}
+          disabled={onPick === undefined || row.awbNumber === null}
           className="hover:text-accent text-left font-mono text-xs disabled:cursor-default disabled:hover:text-inherit"
-          title={row.awbNumber === null ? undefined : 'Load this AWB into the receive box'}
+          title={
+            onPick === undefined || row.awbNumber === null
+              ? undefined
+              : 'Load this AWB into the receive box'
+          }
         >
           {row.awbNumber ?? row.shipmentNumber}
         </button>
@@ -116,72 +108,43 @@ function Row({
   );
 }
 
-export function AwaitingReturns({
+export function AtOurDoorList({
+  rows,
   onPick,
 }: {
-  /** Fills the receive box below — the person reading this list is the
-   *  one who will scan the parcel, so retyping the AWB is pure friction. */
+  readonly rows: readonly AwaitingRtoRow[];
+  /** Fills the receive box AND moves to the Receive tab — the person
+   *  reading this list is the one who will scan the parcel, and a click
+   *  that quietly filled a field on another tab would look like nothing
+   *  happened. */
   readonly onPick: (awb: string) => void;
 }): ReactElement {
-  const q = useAwaitingRtoReceipt();
-  const items = q.data?.items ?? [];
-  const atDoor = items.filter((r) => r.stage === 'RETURNED');
-  const coming = items.filter((r) => r.stage === 'ON_THE_WAY');
-
-  if (q.isLoading) {
-    return (
-      <Section title="Returns not yet on the bench">
-        <Card>
-          <CardBody>
-            <p className="text-text-muted text-sm">Reading what the couriers are sending back…</p>
-          </CardBody>
-        </Card>
-      </Section>
-    );
-  }
-
-  if (q.isError) {
-    return (
-      <Section title="Returns not yet on the bench">
-        <Card>
-          <CardBody>
-            <p className="text-text-muted text-sm">
-              Could not read inbound returns. The station below still works if you have an AWB.
-            </p>
-          </CardBody>
-        </Card>
-      </Section>
-    );
-  }
-
   return (
-    <>
-      <Section
-        title="At our door — receive these"
-        subtitle="The courier has handed these back and nobody has received them here yet. Receiving one is what starts its inspection; nothing does it automatically, on purpose."
-      >
-        <ReturnsTable
-          rows={atDoor}
-          onPick={onPick}
-          emptyIcon={<PackageCheck size={20} className="text-text-muted" />}
-          emptyTitle="Nothing waiting to be received"
-          emptyHint="Every parcel a courier has marked returned has been received here."
-        />
-      </Section>
+    <ReturnsTable
+      rows={rows}
+      onPick={onPick}
+      emptyIcon={<PackageCheck size={20} className="text-text-muted" />}
+      emptyTitle="Nothing waiting to be received"
+      emptyHint="Every parcel a courier has marked returned has been received here."
+    />
+  );
+}
 
-      <Section
-        title="Still with the courier"
-        subtitle="On their way back. Nothing to do yet — this is here so the bench knows what is coming, and so a return that has been travelling for weeks is visible somewhere."
-      >
-        <ReturnsTable
-          rows={coming}
-          onPick={onPick}
-          emptyIcon={<Truck size={20} className="text-text-muted" />}
-          emptyTitle="No returns in transit"
-          emptyHint="Nothing is currently on its way back to the warehouse."
-        />
-      </Section>
-    </>
+export function StillWithCourierList({
+  rows,
+}: {
+  readonly rows: readonly AwaitingRtoRow[];
+}): ReactElement {
+  return (
+    <ReturnsTable
+      rows={rows}
+      // Nothing to click: the courier still has these, so there is no
+      // parcel to receive and a clickable AWB would promise an action
+      // that cannot be taken yet.
+      emptyIcon={<Truck size={20} className="text-text-muted" />}
+      emptyTitle="No returns in transit"
+      emptyHint="Nothing is currently on its way back to the warehouse."
+    />
   );
 }
 
@@ -193,7 +156,7 @@ function ReturnsTable({
   emptyHint,
 }: {
   readonly rows: readonly AwaitingRtoRow[];
-  readonly onPick: (awb: string) => void;
+  readonly onPick?: (awb: string) => void;
   readonly emptyIcon: ReactElement;
   readonly emptyTitle: string;
   readonly emptyHint: string;
@@ -219,7 +182,9 @@ function ReturnsTable({
             </div>
           </TableEmpty>
         ) : (
-          rows.map((r) => <Row key={r.shipmentId} row={r} onPick={onPick} />)
+          rows.map((r) => (
+            <Row key={r.shipmentId} row={r} {...(onPick === undefined ? {} : { onPick })} />
+          ))
         )}
       </TBody>
     </Table>

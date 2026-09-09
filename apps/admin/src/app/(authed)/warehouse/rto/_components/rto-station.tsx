@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useCallback, useMemo, useState, type ReactElement } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Button,
   Card,
@@ -15,12 +16,16 @@ import { ApiError } from '@skydrop/api-client';
 import { PutawayPanel } from './putaway-panel';
 import type { RtoItemCondition, RtoDisposition } from '@skydrop/db';
 import { OpenReturns } from './open-returns';
-import { AwaitingReturns } from './awaiting-returns';
+import { AtOurDoorList, StillWithCourierList } from './awaiting-returns';
+import { RtoTabPanel, RtoTabs, type RtoTab } from './rto-tabs';
+import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import {
   useReceiveRto,
   useInspectRtoItem,
   useFinalizeRto,
   useRtoShipmentDetail,
+  useAwaitingRtoReceipt,
+  useOpenRtoShipments,
 } from '@/lib/api-hooks';
 
 /**
@@ -36,11 +41,65 @@ import {
  *
  * FE-2 verdict surfacing on every server error.
  */
+const TAB_VALUES: readonly RtoTab[] = ['door', 'transit', 'bench', 'receive'];
+
 export function RtoStation(): ReactElement {
   const toast = useToast();
+  const router = useRouter();
+  const params = useSearchParams();
   const [awb, setAwb] = useState('');
   const [shipmentId, setShipmentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [camera, setCamera] = useState(false);
+
+  /*
+    The tab lives in the URL.
+
+    Refreshing after receiving a parcel should not throw somebody back to
+    the first tab, and "look at this one" is a link somebody sends. An
+    unknown or absent value falls back to `door` rather than erroring —
+    a mistyped query string should show the page, not break it.
+  */
+  const tab: RtoTab = TAB_VALUES.includes(params.get('tab') as RtoTab)
+    ? (params.get('tab') as RtoTab)
+    : 'door';
+  const go = useCallback(
+    (next: RtoTab) => {
+      const q = new URLSearchParams(params.toString());
+      q.set('tab', next);
+      // `scroll: false` — switching tabs is not navigating to a new
+      // page, and jumping to the top loses the row somebody was reading.
+      router.replace(`?${q.toString()}`, { scroll: false });
+    },
+    [params, router],
+  );
+
+  // Both lists are fetched HERE rather than inside their panels: the
+  // counts belong on the tabs, and a count that only loads once you open
+  // the tab is a count that cannot tell you to open it.
+  const awaiting = useAwaitingRtoReceipt();
+  const open = useOpenRtoShipments();
+  const rows = useMemo(() => awaiting.data?.items ?? [], [awaiting.data]);
+  const atDoor = useMemo(() => rows.filter((r) => r.stage === 'RETURNED'), [rows]);
+  const inTransit = useMemo(() => rows.filter((r) => r.stage === 'ON_THE_WAY'), [rows]);
+
+  /** A row click loads the parcel AND moves to the station — otherwise
+   *  it fills a field on a tab you cannot see and looks like nothing
+   *  happened. */
+  const pickAwb = useCallback(
+    (scanned: string) => {
+      setAwb(scanned);
+      go('receive');
+    },
+    [go],
+  );
+  const pickShipment = useCallback(
+    (id: string) => {
+      setShipmentId(id);
+      go('receive');
+    },
+    [go],
+  );
 
   const receive = useReceiveRto();
   const detail = useRtoShipmentDetail(shipmentId);
@@ -94,15 +153,35 @@ export function RtoStation(): ReactElement {
 
   return (
     <>
-      {/* The bench, above the single-parcel workflow: a supervisor
-          scanning this list is the same person who will work it. */}
-      {/* Inbound FIRST: a parcel nobody has received is the one nobody
-          knows about, and the list below is of returns already on the
-          bench. Reading order matches the order the work happens in. */}
-      <AwaitingReturns onPick={setAwb} />
+      <RtoTabs
+        active={tab}
+        onChange={go}
+        counts={{
+          door: atDoor.length,
+          transit: inTransit.length,
+          bench: open.data?.items.length ?? 0,
+        }}
+      />
 
-      <OpenReturns onPick={setShipmentId} />
-      <div className="space-y-4">
+      {tab === 'door' && (
+        <RtoTabPanel subtitle="The courier has handed these back and nobody has received them here yet. Receiving one is what starts its inspection — nothing does it automatically, on purpose. Click a parcel to load it into the station.">
+          <AtOurDoorList rows={atDoor} onPick={pickAwb} />
+        </RtoTabPanel>
+      )}
+
+      {tab === 'transit' && (
+        <RtoTabPanel subtitle="On their way back. Nothing to do yet — this is here so the bench knows what is coming, and so a return that has been travelling for weeks is visible somewhere.">
+          <StillWithCourierList rows={inTransit} />
+        </RtoTabPanel>
+      )}
+
+      {tab === 'bench' && (
+        <RtoTabPanel subtitle="Received here and not yet finalised. Two things hold a return up and they need different answers: items nobody has inspected, and items somebody looked at and could not decide about.">
+          <OpenReturns onPick={pickShipment} />
+        </RtoTabPanel>
+      )}
+
+      <div className={tab === 'receive' ? 'space-y-4' : 'hidden'}>
         <Card>
           <CardBody>
             <h2 className="text-text-bright text-sm font-medium mb-3">Receive</h2>
@@ -115,6 +194,10 @@ export function RtoStation(): ReactElement {
                   disabled={receive.isPending}
                 />
               </FormField>
+              {/* The label on a returned parcel is the same barcode the
+                  courier printed, so the bench should not have to read
+                  thirteen digits off a battered box and type them. */}
+              <CameraScanButton onClick={() => setCamera(true)} />
               <Button
                 variant="primary"
                 size="md"
@@ -203,6 +286,23 @@ export function RtoStation(): ReactElement {
           nothing in hold, so it appears exactly when there is work. */}
         {shipmentId !== null && <PutawayPanel shipmentId={shipmentId} />}
       </div>
+
+      {/* Mounted outside the tab panel so a scan started here survives
+          the tab switch that follows it. */}
+      <BarcodeCamera
+        open={camera}
+        onClose={() => setCamera(false)}
+        onScan={(scanned) => {
+          setCamera(false);
+          // Straight into the field rather than receiving on the spot:
+          // receiving is what drives the order to RTO_RECEIVED and
+          // starts the inspection, so it stays a deliberate click. A
+          // misread digit that silently received the wrong parcel is a
+          // worse trade than one extra press.
+          setAwb(scanned);
+        }}
+        title="Scan the return label"
+      />
     </>
   );
 }
