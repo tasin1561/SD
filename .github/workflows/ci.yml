@@ -248,7 +248,30 @@ jobs:
       # what prod's DO Managed Postgres 18 + Timescale add-on
       # provides).
       postgres:
-        image: timescale/timescaledb-ha:pg18
+        # PINNED, by version AND digest.
+        #
+        # `pg18` is a FLOATING tag. On 2026-09-09 it was republished at
+        # 16:35 UTC — TimescaleDB 2.29.2 → 2.30.0 — and CI went red six
+        # minutes later on a commit that touched none of the affected
+        # code: every hypertable query filtering on an enum started
+        # failing with `cannot cast type cstring to
+        # public.stock_movement_type`, taking out pack, cancel and the
+        # whole stock-conservation suite. The run 21 minutes earlier, on
+        # the same code, was green.
+        #
+        # This is the SECOND time this tag has done this to us — the
+        # first was a ~14h red spell when the image stopped provisioning
+        # a default `postgres` role. That one was worked around without
+        # pinning, so it happened again.
+        #
+        # The digest is what makes it immutable: a version tag is
+        # conventionally stable but is still a mutable pointer, and this
+        # exact failure is what a mutable pointer buys.
+        #
+        # To move: pick the new tag, put its digest here, and run the
+        # e2e suite BEFORE merging — the upgrade is then a deliberate
+        # change with its own evidence, which is the whole point.
+        image: timescale/timescaledb-ha:pg18.6-ts2.29.2@sha256:fd37d32e2431cd18c183a31053518593bab15db182132defafdd2395791a53c1
         env:
           POSTGRES_USER: skydrop
           POSTGRES_PASSWORD: skydrop
@@ -398,7 +421,30 @@ jobs:
 
     services:
       postgres:
-        image: timescale/timescaledb-ha:pg18
+        # PINNED, by version AND digest.
+        #
+        # `pg18` is a FLOATING tag. On 2026-09-09 it was republished at
+        # 16:35 UTC — TimescaleDB 2.29.2 → 2.30.0 — and CI went red six
+        # minutes later on a commit that touched none of the affected
+        # code: every hypertable query filtering on an enum started
+        # failing with `cannot cast type cstring to
+        # public.stock_movement_type`, taking out pack, cancel and the
+        # whole stock-conservation suite. The run 21 minutes earlier, on
+        # the same code, was green.
+        #
+        # This is the SECOND time this tag has done this to us — the
+        # first was a ~14h red spell when the image stopped provisioning
+        # a default `postgres` role. That one was worked around without
+        # pinning, so it happened again.
+        #
+        # The digest is what makes it immutable: a version tag is
+        # conventionally stable but is still a mutable pointer, and this
+        # exact failure is what a mutable pointer buys.
+        #
+        # To move: pick the new tag, put its digest here, and run the
+        # e2e suite BEFORE merging — the upgrade is then a deliberate
+        # change with its own evidence, which is the whole point.
+        image: timescale/timescaledb-ha:pg18.6-ts2.29.2@sha256:fd37d32e2431cd18c183a31053518593bab15db182132defafdd2395791a53c1
         env:
           POSTGRES_USER: skydrop
           POSTGRES_PASSWORD: skydrop

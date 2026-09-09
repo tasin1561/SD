@@ -1,7 +1,7 @@
 'use client';
 
-import type { ReactElement } from 'react';
-import { Check } from 'lucide-react';
+import { useState, type ReactElement } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { Card, CardBody, CardHeader } from './card';
 
 export type MilestoneOwner = 'SKYDROP' | 'COURIER';
@@ -217,10 +217,20 @@ export function JourneyLadder({
 export function ParcelFacts({
   parcel,
   allParcelsHref,
+  trackingUrlBase,
 }: {
   readonly parcel: JourneyParcelView;
   /** Where "all parcels" lives, when the host app has such a page. */
   readonly allParcelsHref?: string;
+  /**
+   * Origin of the PUBLIC tracking site, e.g. `https://track.skydrop.online`.
+   *
+   * Passed in rather than hardcoded here: this component is shared, and
+   * the two apps that render it are built separately with their own
+   * environment. A constant baked into the package would be one more
+   * place to change on the day the domain moves.
+   */
+  readonly trackingUrlBase?: string;
 }): ReactElement {
   const declared = parcel.declaredWeightGrams;
   const charged = parcel.chargeableWeightGrams;
@@ -326,6 +336,9 @@ export function ParcelFacts({
           </a>
         )}
       </div>
+      {trackingUrlBase !== undefined && parcel.awbNumber !== null && (
+        <CustomerTrackingLink url={`${trackingUrlBase.replace(/\/+$/, '')}/${parcel.awbNumber}`} />
+      )}
       <dl className="flex flex-col gap-2.5">
         {rows.map((r) => (
           <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-2">
@@ -340,6 +353,63 @@ export function ParcelFacts({
         ))}
       </dl>
     </>
+  );
+}
+
+/**
+ * The link a seller sends their customer.
+ *
+ * ── WHY COPY AND NOT JUST A LINK ─────────────────────────────────────
+ * The seller is not going to READ this page — they are going to paste
+ * the address into WhatsApp. An anchor makes them select text that sits
+ * inside a card, and on a phone that is a fiddly drag. The button is the
+ * actual job; the link is there so they can check where it goes first.
+ *
+ * It shows the customer-safe page (TRK-8): no internal ids, no other
+ * orders, no recipient details beyond the destination city — which is
+ * what makes it safe to hand out at all.
+ */
+function CustomerTrackingLink({ url }: { readonly url: string }): ReactElement {
+  const [copied, setCopied] = useState(false);
+
+  const copy = (): void => {
+    void navigator.clipboard.writeText(url).then(
+      () => {
+        setCopied(true);
+        // Long enough to be seen, short enough that the button is ready
+        // again before they wonder whether it worked.
+        setTimeout(() => setCopied(false), 2000);
+      },
+      // A clipboard refusal (an insecure context, a browser that asks)
+      // must not look like nothing happened: the address is on screen
+      // and selectable, so the link itself is the fallback.
+      () => setCopied(false),
+    );
+  };
+
+  return (
+    <div className="border-border mb-3 border-b pb-3">
+      <div className="text-text-muted mb-1 text-xs">Share with the customer</div>
+      <div className="flex items-center gap-2">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent min-w-0 flex-1 truncate font-mono text-xs hover:underline"
+        >
+          {url}
+        </a>
+        <button
+          type="button"
+          onClick={copy}
+          className="border-border hover:border-accent inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs"
+          aria-label="Copy the customer tracking link"
+        >
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -496,12 +566,14 @@ export function OrderJourneyPanels({
   entries,
   showCourierCodes = false,
   allParcelsHref,
+  trackingUrlBase,
 }: {
   readonly milestones: readonly JourneyMilestoneView[];
   readonly parcels: readonly JourneyParcelView[];
   readonly entries: readonly JourneyEntryView[];
   readonly showCourierCodes?: boolean;
   readonly allParcelsHref?: string;
+  readonly trackingUrlBase?: string;
 }): ReactElement {
   const parcel = parcels[parcels.length - 1] ?? null;
   return (
@@ -527,6 +599,7 @@ export function OrderJourneyPanels({
               <ParcelFacts
                 parcel={parcel}
                 {...(allParcelsHref === undefined ? {} : { allParcelsHref })}
+                {...(trackingUrlBase === undefined ? {} : { trackingUrlBase })}
               />
             </CardBody>
           </Card>

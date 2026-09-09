@@ -57,6 +57,10 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 import { ConsigneePanel } from '../[id]/_components/consignee-panel';
 
+/** The public tracking site. Env-driven so a domain change is a deploy
+ *  variable rather than a code edit. */
+const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.online';
+
 /**
  * Seller order detail. Two fetches: the order body (with items) and
  * the seller-visible lifecycle timeline (server filters to
@@ -660,6 +664,9 @@ function OrderJourneySection({ orderId }: { readonly orderId: string }): ReactEl
       parcels={journey.data.parcels}
       entries={journey.data.timeline}
       allParcelsHref="/tracking"
+      // The customer-safe page (TRK-8), so a seller can hand it to the
+      // person waiting for the parcel without exposing anything else.
+      trackingUrlBase={TRACK_URL}
     />
   );
 }
