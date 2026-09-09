@@ -228,15 +228,13 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
     // path only ever runs on a parcel that has one. Calling to be told
     // that is a round trip to reach a known answer.
     const { svc, srEdit } = withEdit();
+    // Built by OMITTING the consignee key rather than setting it to
+    // undefined: `exactOptionalPropertyTypes` treats an explicit
+    // undefined as a value, and "absent" is what this case is about.
+    // `base` carries only `address`, so that is the one to drop.
+    const { address: _a, ...withoutConsignee } = base;
     const r = await svc.edit(
-      {
-        ...base,
-        courierCode: 'shiprocket',
-        name: undefined,
-        phone: undefined,
-        address: undefined,
-        productsDesc: 'Two widgets',
-      },
+      { ...withoutConsignee, courierCode: 'shiprocket', productsDesc: 'Two widgets' },
       ACTOR,
     );
     expect(srEdit).not.toHaveBeenCalled();
