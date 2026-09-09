@@ -495,6 +495,15 @@ const systemSettings: SystemSettingSeed[] = [
       'A seller asks for a parcel back and the courier accepts, then no return scan ever arrives. After this many hours the order is raised on the system issues board, because the seller believes their goods are on the way back and nothing else in the system notices they are not.',
   },
   {
+    key: 'ops.rto_receipt_alert_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 48,
+    displayName: 'Returned by the courier but never received — hours before we flag it',
+    description:
+      'The mirror of the setting above. The courier marks a parcel returned, and then nobody receives it at the warehouse — so the order stays in RTO in transit and the seller is told their goods are still travelling. The wait itself is correct: a return becomes received only when a person confirms it at the bench, because that is what starts the restock or write-off. What this catches is nobody being told there is a parcel waiting.',
+  },
+  {
     key: 'ops.handover_scan_required',
     category: 'ops',
     valueType: SettingValueType.BOOLEAN,

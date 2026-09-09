@@ -2365,6 +2365,32 @@ export function useOpenRtoShipments(): UseQueryResult<{ items: OpenRtoRow[] }> {
   });
 }
 
+export interface AwaitingRtoRow {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string | null;
+  readonly courierCode: string;
+  readonly stage: 'RETURNED' | 'ON_THE_WAY';
+  readonly shipmentStatus: string;
+  readonly orderId: string | null;
+  readonly orderNumber: string | null;
+  readonly orderStatus: string | null;
+  readonly sellerName: string | null;
+  readonly returnedAt: string | null;
+  readonly waitingHours: number;
+  readonly itemCount: number;
+}
+
+/** Returns not yet received here — at our door, and still travelling. */
+export function useAwaitingRtoReceipt(): UseQueryResult<{ items: AwaitingRtoRow[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['warehouse-rto', 'awaiting-receipt'],
+    queryFn: () =>
+      client.request<{ items: AwaitingRtoRow[] }>('/api/warehouse/rto/awaiting-receipt'),
+  });
+}
+
 /**
  * Decrypt and return a seller's full bank account number.
  *

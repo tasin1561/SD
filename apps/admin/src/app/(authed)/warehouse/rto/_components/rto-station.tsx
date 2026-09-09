@@ -15,6 +15,7 @@ import { ApiError } from '@skydrop/api-client';
 import { PutawayPanel } from './putaway-panel';
 import type { RtoItemCondition, RtoDisposition } from '@skydrop/db';
 import { OpenReturns } from './open-returns';
+import { AwaitingReturns } from './awaiting-returns';
 import {
   useReceiveRto,
   useInspectRtoItem,
@@ -95,6 +96,11 @@ export function RtoStation(): ReactElement {
     <>
       {/* The bench, above the single-parcel workflow: a supervisor
           scanning this list is the same person who will work it. */}
+      {/* Inbound FIRST: a parcel nobody has received is the one nobody
+          knows about, and the list below is of returns already on the
+          bench. Reading order matches the order the work happens in. */}
+      <AwaitingReturns onPick={setAwb} />
+
       <OpenReturns onPick={setShipmentId} />
       <div className="space-y-4">
         <Card>

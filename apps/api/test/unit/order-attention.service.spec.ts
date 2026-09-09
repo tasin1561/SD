@@ -104,6 +104,8 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     afterRetry?: { awbNumber: string | null; supersededAt: Date | null };
     /** What the order's status is AFTER the retry ran. */
     orderAfter?: string;
+    /** Rows for the unreceived-returns sweep (RTO_DELIVERED, unreceived). */
+    unreceived?: unknown[];
     /** Parcels for the stranded-tracking check: what the courier says
      *  vs what the order says. */
     stranded?: Array<{
@@ -177,6 +179,10 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       },
       shipment: {
         findUnique: jest.fn(async () => opts.afterRetry ?? { awbNumber: null, supersededAt: null }),
+        // The unreceived-returns sweep. Empty by default: these cases
+        // are about the AWB watchdog, and a return sitting unreceived is
+        // a different fact with its own tests.
+        findMany: jest.fn(async () => opts.unreceived ?? []),
       },
       orderDeliveryActionRequest: { findMany: jest.fn(async () => []) },
     };

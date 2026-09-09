@@ -322,6 +322,139 @@ export class RtoReceiptService {
    * interesting one — an operator declined to guess, and until somebody
    * decides those goods are neither sellable nor written off.
    */
+  /**
+   * The courier says these came back. Nobody has received them.
+   *
+   * ── THE GAP THIS CLOSES ──────────────────────────────────────────
+   * TRK-6 is deliberate: an `RTO_DELIVERED` scan is INFORMATIONAL and
+   * does NOT move the order, because a webhook driving `RTO_RECEIVED`
+   * would let a spoofed or malformed scan trigger the
+   * conservation-critical restock/write-off chain with nobody having
+   * seen the goods. Only a person at the bench can say a parcel is
+   * back.
+   *
+   * The cost of that rule was invisibility. `listOpen` selects
+   * `rtoReceivedAt: { not: null }` — returns already received and
+   * waiting to be finalised — so a parcel the courier had handed back
+   * and nobody had received appeared on NO screen and triggered no
+   * alert. SD-TEST-524086 sat like that for five days: shipment
+   * RTO_DELIVERED, order RTO_IN_TRANSIT, seller told it was still on
+   * its way. It was found by a person noticing an order looked wrong,
+   * which is the same way TRK-10's gap was found.
+   *
+   * ── TWO STAGES, ONE QUERY ────────────────────────────────────────
+   * `RETURNED` is the courier saying the return leg is finished: these
+   * are AT OUR DOOR and somebody must receive them. `ON_THE_WAY` is
+   * `RTO_INITIATED` / `RTO_IN_TRANSIT` — still with the courier, and
+   * nothing to do yet, but knowing what is coming is the difference
+   * between a bench that is expecting six parcels and one that is
+   * surprised by them.
+   *
+   * Deliberately ONE query with a stage on each row rather than two
+   * endpoints: the rule for which statuses mean what is the thing worth
+   * having in a single place, and two callers would eventually disagree
+   * about where `RTO_INITIATED` belongs.
+   *
+   * `LOST` and `DAMAGED` are in neither. Nothing is coming back, and
+   * putting them in a receiving queue asks somebody to scan a parcel
+   * that does not exist.
+   */
+  async listAwaitingReceipt(): Promise<{
+    items: Array<{
+      shipmentId: string;
+      shipmentNumber: string;
+      awbNumber: string | null;
+      courierCode: string;
+      /** RETURNED — at our door, receive it. ON_THE_WAY — still moving. */
+      stage: 'RETURNED' | 'ON_THE_WAY';
+      /** The courier's own word for where it is, so a bench can tell a
+       *  parcel that has only just turned around from one nearly here. */
+      shipmentStatus: string;
+      orderId: string | null;
+      orderNumber: string | null;
+      orderStatus: string | null;
+      sellerName: string | null;
+      /** When the courier's last scan landed — the clock that matters. */
+      returnedAt: string | null;
+      waitingHours: number;
+      itemCount: number;
+    }>;
+  }> {
+    const rows = await this.prisma.client.shipment.findMany({
+      where: {
+        deletedAt: null,
+        status: {
+          in: [
+            ShipmentStatus.RTO_DELIVERED,
+            ShipmentStatus.RTO_IN_TRANSIT,
+            ShipmentStatus.RTO_INITIATED,
+          ],
+        },
+        rtoReceivedAt: null,
+        // A retired shipment is not a parcel anybody can receive: the
+        // replacement carries the story now (CUR-7).
+        supersededAt: null,
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: 200,
+      select: {
+        id: true,
+        shipmentNumber: true,
+        awbNumber: true,
+        courierCode: true,
+        status: true,
+        updatedAt: true,
+        items: { select: { id: true } },
+        orderShipments: {
+          orderBy: { shipmentSequence: 'asc' },
+          take: 1,
+          select: {
+            order: {
+              select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                seller: { select: { companyName: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const now = Date.now();
+    return {
+      items: rows.map((r) => {
+        const order = r.orderShipments[0]?.order ?? null;
+        return {
+          shipmentId: r.id,
+          shipmentNumber: r.shipmentNumber,
+          awbNumber: r.awbNumber,
+          courierCode: r.courierCode,
+          stage:
+            r.status === ShipmentStatus.RTO_DELIVERED
+              ? ('RETURNED' as const)
+              : ('ON_THE_WAY' as const),
+          shipmentStatus: r.status,
+          orderId: order?.id ?? null,
+          orderNumber: order?.orderNumber ?? null,
+          orderStatus: order?.status ?? null,
+          sellerName: order?.seller.companyName ?? null,
+          // The shipment's own `updatedAt` is when its status last
+          // moved, which for a parcel sitting in RTO_DELIVERED is the
+          // scan that put it there. Approximate on purpose rather than
+          // joining the tracking hypertable: this is a worklist, and
+          // turning it into a scan query would make it expensive to
+          // open for a number nobody sorts on more precisely than
+          // "hours".
+          returnedAt: r.updatedAt.toISOString(),
+          waitingHours: Math.max(0, Math.floor((now - r.updatedAt.getTime()) / 3_600_000)),
+          itemCount: r.items.length,
+        };
+      }),
+    };
+  }
+
   async listOpen(warehouseId?: string): Promise<{
     items: Array<{
       shipmentId: string;

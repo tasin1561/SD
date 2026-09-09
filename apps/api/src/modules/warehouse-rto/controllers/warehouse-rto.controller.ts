@@ -66,6 +66,16 @@ export class WarehouseRtoController {
     return this.receipt.listOpen(warehouseId);
   }
 
+  @Get('awaiting-receipt')
+  @ApiOperation({
+    summary: 'Returns not yet received here — at the door, and still coming',
+    description:
+      'Each row carries a stage: RETURNED means the courier has handed it back and somebody must receive it (a return only becomes RTO_RECEIVED when a person confirms it at the bench — TRK-6 — so until then nothing else knows it exists); ON_THE_WAY means the courier still has it. Oldest first: nothing here escalates on its own.',
+  })
+  awaitingReceipt(): ReturnType<RtoReceiptService['listAwaitingReceipt']> {
+    return this.receipt.listAwaitingReceipt();
+  }
+
   @Get('shipments/:shipmentId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

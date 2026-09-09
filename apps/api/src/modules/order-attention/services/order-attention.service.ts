@@ -99,6 +99,8 @@ export interface NsaSweepSummary {
   /** Parcels whose courier scans cannot move the order — the model has
    *  no route from where the order is to where the courier says it is. */
   readonly strandedTracking: number;
+  /** Returns the courier handed back that nobody has received. */
+  readonly unreceivedReturns: number;
 }
 
 /**
@@ -208,6 +210,7 @@ export class OrderAttentionService {
       stalledReturns: 0,
       awbless: 0,
       strandedTracking: 0,
+      unreceivedReturns: 0,
     };
 
     // Runs even when the NSA half is switched off, and before the
@@ -223,6 +226,10 @@ export class OrderAttentionService {
     // Also unconditional: a parcel whose scans cannot move its order is
     // silently misreporting to a seller, whatever the NSA switch says.
     summary.strandedTracking = await this.checkStrandedTracking(now);
+
+    // Also unconditional: a return sitting at our own door, unreceived,
+    // is a seller being told their goods are still travelling.
+    summary.unreceivedReturns = await this.checkUnreceivedReturns(now);
 
     if (!enabled) return summary;
 
@@ -697,6 +704,94 @@ export class OrderAttentionService {
       });
     }
     return stalled;
+  }
+
+  /**
+   * The courier handed it back and nobody received it.
+   *
+   * The mirror image of `checkStalledReturns`, which watches for a
+   * return that never STARTED. This watches for one that finished and
+   * then stopped: the parcel is at our door, the order still says
+   * RTO_IN_TRANSIT, and the seller is being told their goods are on
+   * their way back.
+   *
+   * TRK-6 makes the wait correct — only a person at the bench may say a
+   * parcel is physically back, because a webhook driving RTO_RECEIVED
+   * would let a bad scan trigger the restock/write-off chain with
+   * nobody having seen the goods. What was missing is anybody being
+   * TOLD. SD-TEST-524086 sat this way for five days and was found by a
+   * person noticing an order looked wrong.
+   *
+   * Clears itself the moment the parcel is received, so a warehouse
+   * working through the queue is not also tidying up after it.
+   */
+  private async checkUnreceivedReturns(now: Date): Promise<number> {
+    const hours = await this.globalInt('ops.rto_receipt_alert_hours', 48);
+    const cutoff = new Date(now.getTime() - hours * 3_600_000);
+
+    const landed = await this.prisma.client.shipment.findMany({
+      where: {
+        deletedAt: null,
+        status: ShipmentStatus.RTO_DELIVERED,
+        supersededAt: null,
+        updatedAt: { lt: cutoff },
+      },
+      select: {
+        id: true,
+        shipmentNumber: true,
+        awbNumber: true,
+        rtoReceivedAt: true,
+        updatedAt: true,
+        orderShipments: {
+          orderBy: { shipmentSequence: 'asc' },
+          take: 1,
+          select: {
+            order: { select: { id: true, orderNumber: true, status: true, sellerId: true } },
+          },
+        },
+      },
+    });
+
+    let unreceived = 0;
+    for (const ship of landed) {
+      const order = ship.orderShipments[0]?.order;
+      if (order === undefined) continue;
+      const key = `rto-unreceived:${ship.id}`;
+
+      if (ship.rtoReceivedAt !== null) {
+        await this.issues.resolveByKey(key, 'The return was received at the warehouse.');
+        continue;
+      }
+
+      unreceived += 1;
+      await this.issues.raise({
+        kind: SystemIssueKind.INTEGRATION,
+        severity: SystemIssueSeverity.HIGH,
+        title: `${order.orderNumber}: the courier returned this parcel and nobody has received it`,
+        detail:
+          `${ship.awbNumber ?? ship.shipmentNumber} was marked returned by the courier on ` +
+          `${ship.updatedAt.toISOString().slice(0, 16)}, and ${hours}h later it still has not ` +
+          `been received at the warehouse — so the order is stuck at ` +
+          `${order.status.toLowerCase().replaceAll('_', ' ')} and the seller is being told their ` +
+          'goods are still on their way back.\n\n' +
+          'Nothing moves this on its own: a return becomes RTO_RECEIVED only when somebody ' +
+          'receives it at the bench, deliberately, because that is what starts the restock or ' +
+          'write-off. Receive it on the RTO station — or, if it never physically arrived, chase ' +
+          'the courier, because their scan says it did.',
+        source: 'OrderAttentionService',
+        dedupeKey: key,
+        metadata: {
+          shipmentId: ship.id,
+          awbNumber: ship.awbNumber,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          sellerId: order.sellerId,
+          orderStatus: order.status,
+          returnedAt: ship.updatedAt.toISOString(),
+        },
+      });
+    }
+    return unreceived;
   }
 
   private async clearMoved(): Promise<number> {
