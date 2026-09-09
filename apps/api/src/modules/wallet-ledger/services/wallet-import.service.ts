@@ -4,6 +4,19 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { LedgerFormatError, parseWalletLedger, type LedgerCharge } from './wallet-ledger-parser';
 
+/**
+ * How many written costs are listed by NAME on the result.
+ *
+ * The list travels inside an audit row's JSON, and `audit_logs` is one
+ * of the largest tables we keep — an unbounded list would let a single
+ * enormous import bloat it. A hundred is far above any real run here
+ * (the busiest so far wrote sixteen) and small enough that the row
+ * stays a row. Past it, the COUNT is still exact and
+ * `writesTruncated` says how many were left out; the list is a
+ * convenience, never the source of truth.
+ */
+const WRITE_DETAIL_CAP = 100;
+
 export interface WalletImportResult {
   readonly rowsRead: number;
   readonly rowsSkipped: number;
@@ -24,6 +37,34 @@ export interface WalletImportResult {
   readonly periodFrom: string | null;
   readonly periodTo: string | null;
   readonly dryRun: boolean;
+  /**
+   * WHICH parcels this import wrote a cost against.
+   *
+   * The counts alone answer "did it work" and not "what did it do to my
+   * orders", which is the question anybody actually has when a run says
+   * it wrote sixteen. Carried on the result because the result is what
+   * the audit row already records — no new table, and therefore no
+   * second copy of a fact to drift.
+   *
+   * CAPPED (see WRITE_DETAIL_CAP): this ends up inside an audit row's
+   * JSON, and an unbounded list would let one enormous import bloat the
+   * largest table we keep. `writesTruncated` says how many were left
+   * out rather than pretending the list is complete.
+   */
+  readonly writes: readonly WalletImportWrite[];
+  readonly writesTruncated: number;
+}
+
+export interface WalletImportWrite {
+  readonly awbNumber: string;
+  /** Null when the parcel is not linked to an order — rare, but the
+   *  shipment is the thing the courier charged for either way. */
+  readonly orderNumber: string | null;
+  readonly leg: 'forward' | 'rto';
+  readonly amountInr: string;
+  /** True when a figure already existed and MOVED. The normal case on a
+   *  later export, and worth telling apart from a first reading. */
+  readonly revised: boolean;
 }
 
 /**
@@ -137,6 +178,13 @@ export class WalletImportService {
         actualCourierCostInr: true,
         actualRtoCostInr: true,
         courierAccountId: true,
+        // So a written cost can be reported against the order somebody
+        // would recognise, rather than only against a waybill.
+        orderShipments: {
+          orderBy: { shipmentSequence: 'asc' },
+          take: 1,
+          select: { order: { select: { orderNumber: true } } },
+        },
       },
     });
     const byAwb = new Map(shipments.map((s) => [s.awbNumber ?? '', s]));
@@ -145,6 +193,8 @@ export class WalletImportService {
     let rtoWritten = 0;
     let unchanged = 0;
     let revised = 0;
+    const writes: WalletImportWrite[] = [];
+    let writesTruncated = 0;
 
     const apply = async (charge: LedgerCharge, leg: 'forward' | 'rto'): Promise<void> => {
       const ship = byAwb.get(charge.awbNumber);
@@ -155,9 +205,27 @@ export class WalletImportService {
         unchanged += 1;
         return;
       }
-      if (current !== null) revised += 1;
+      const wasRevised = current !== null;
+      if (wasRevised) revised += 1;
       if (leg === 'forward') forwardWritten += 1;
       else rtoWritten += 1;
+
+      // Recorded BEFORE the dry-run return: a dry run's whole purpose is
+      // to show what it WOULD change, and a list that emptied itself in
+      // the mode meant for previewing would be useless exactly where it
+      // is most wanted.
+      if (writes.length < WRITE_DETAIL_CAP) {
+        writes.push({
+          awbNumber: charge.awbNumber,
+          orderNumber: ship.orderShipments[0]?.order.orderNumber ?? null,
+          leg,
+          amountInr: next.toString(),
+          revised: wasRevised,
+        });
+      } else {
+        writesTruncated += 1;
+      }
+
       if (dryRun) return;
 
       // Repair the attribution while we are here: the ledger this was
@@ -195,6 +263,8 @@ export class WalletImportService {
       periodFrom: parsed.periodFrom?.toISOString() ?? null,
       periodTo: parsed.periodTo?.toISOString() ?? null,
       dryRun,
+      writes,
+      writesTruncated,
     };
 
     if (!dryRun) {

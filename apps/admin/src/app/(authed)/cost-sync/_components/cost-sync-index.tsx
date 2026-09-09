@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { AlertTriangle, CheckCircle2, PauseCircle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronRight, PauseCircle, RefreshCw } from 'lucide-react';
 import {
   Button,
   Card,
@@ -27,6 +27,7 @@ import {
   useWalletSyncPanel,
   type WalletSyncRun,
   type WalletSyncRunAccount,
+  type WalletSyncWrite,
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -153,6 +154,15 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
         />
         <Fact label="Revised" value={String(a.revised ?? 0)} />
       </div>
+      {a.writes.length > 0 && (
+        // Shown here as well as in the history, because this is the card
+        // somebody reads first — sending them to a table row to find out
+        // what the run they are looking at actually did would be a
+        // strange piece of hide-and-seek.
+        <div className="border-border mt-2 border-t pt-2">
+          <WrittenParcels writes={a.writes} truncated={a.writesTruncated} />
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
         {a.sumInr !== null && (
           <span className="text-text-muted">
@@ -177,6 +187,121 @@ function Fact({ label, value }: { readonly label: string; readonly value: string
     <div>
       <div className="text-text-muted">{label}</div>
       <div className="tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * One run, and — when it wrote anything — WHICH parcels.
+ *
+ * The count answers "did it work". It does not answer "what did it do
+ * to my orders", which is the question somebody actually has when a row
+ * says it wrote sixteen. So the count is a disclosure control rather
+ * than a number to be taken on trust.
+ *
+ * Collapsed by default: on a normal day every run writes a handful and
+ * nobody needs the list, and thirteen expanded runs would bury the
+ * shape of the history — which is what this table is for.
+ */
+function HistoryRow({ run }: { readonly run: WalletSyncRun }): ReactElement {
+  const [open, setOpen] = useState(false);
+  const written = run.accounts.reduce(
+    (n, a) => n + (a.forwardWritten ?? 0) + (a.rtoWritten ?? 0),
+    0,
+  );
+  const total = run.accounts.find((a) => a.sumInr !== null)?.sumInr ?? null;
+  const writes = run.accounts.flatMap((a) => a.writes);
+  const truncated = run.accounts.reduce((n, a) => n + a.writesTruncated, 0);
+  // A run from before the detail was recorded is NOT a run that wrote
+  // nothing, and conflating them would make the older half of this
+  // table quietly lie. Only the count is known there, and it says so.
+  const detailUnavailable = written > 0 && writes.length === 0;
+
+  return (
+    <>
+      <Tr>
+        <Td>{fmtWhen(run.at)}</Td>
+        <Td>
+          <StatusBadge kind={runTone(run)} label={runLabel(run)} />
+        </Td>
+        <Td className="tabular-nums">{run.windowDays === null ? '—' : `${run.windowDays}d`}</Td>
+        <Td>
+          {written === 0 ? (
+            <span className="tabular-nums">0</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className="hover:text-accent inline-flex items-center gap-1 tabular-nums"
+            >
+              <ChevronRight
+                size={13}
+                className={open ? 'rotate-90 transition-transform' : 'transition-transform'}
+                aria-hidden
+              />
+              {written}
+            </button>
+          )}
+        </Td>
+        <Td>{total === null ? '—' : <Money amount={total} />}</Td>
+      </Tr>
+      {open && (
+        <Tr>
+          <Td colSpan={5}>
+            {detailUnavailable ? (
+              <p className="text-text-muted py-1 text-xs">
+                This run predates us recording which parcels were written, so only the count is
+                known. Runs from here on list them.
+              </p>
+            ) : (
+              <WrittenParcels writes={writes} truncated={truncated} />
+            )}
+          </Td>
+        </Tr>
+      )}
+    </>
+  );
+}
+
+function WrittenParcels({
+  writes,
+  truncated,
+}: {
+  readonly writes: readonly WalletSyncWrite[];
+  readonly truncated: number;
+}): ReactElement {
+  return (
+    <div className="py-1">
+      <div className="flex flex-col gap-1">
+        {writes.map((w) => (
+          <div
+            key={`${w.leg}:${w.awbNumber}`}
+            className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs"
+          >
+            {/* The order number first — it is what somebody recognises.
+                The AWB is what the courier charged against, so both are
+                here and the AWB is the one that pastes into search. */}
+            <span className="font-medium">{w.orderNumber ?? 'No order linked'}</span>
+            <span className="text-text-muted tabular-nums">{w.awbNumber}</span>
+            <span className="tabular-nums">
+              <Money amount={w.amountInr} />
+            </span>
+            {w.leg === 'rto' && <StatusBadge kind="rto" label="return leg" />}
+            {w.revised && (
+              // A figure that MOVED is the normal case on a later export
+              // and a different fact from a first reading — worth telling
+              // apart when a margin changes under somebody.
+              <StatusBadge kind="pending" label="revised" />
+            )}
+          </div>
+        ))}
+      </div>
+      {truncated > 0 && (
+        <p className="text-text-muted mt-1.5 text-xs">
+          …and {truncated} more, not listed. The count above is exact.
+        </p>
+      )}
     </div>
   );
 }
@@ -319,26 +444,7 @@ export function CostSyncIndex(): ReactElement {
                       </div>
                     </TableEmpty>
                   ) : (
-                    d.history.map((r) => {
-                      const written = r.accounts.reduce(
-                        (n, a) => n + (a.forwardWritten ?? 0) + (a.rtoWritten ?? 0),
-                        0,
-                      );
-                      const total = r.accounts.find((a) => a.sumInr !== null)?.sumInr ?? null;
-                      return (
-                        <Tr key={r.at}>
-                          <Td>{fmtWhen(r.at)}</Td>
-                          <Td>
-                            <StatusBadge kind={runTone(r)} label={runLabel(r)} />
-                          </Td>
-                          <Td className="tabular-nums">
-                            {r.windowDays === null ? '—' : `${r.windowDays}d`}
-                          </Td>
-                          <Td className="tabular-nums">{written}</Td>
-                          <Td>{total === null ? '—' : <Money amount={total} />}</Td>
-                        </Tr>
-                      );
-                    })
+                    d.history.map((r) => <HistoryRow key={r.at} run={r} />)
                   )}
                 </TBody>
               </Table>

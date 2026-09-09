@@ -4114,6 +4114,16 @@ export interface WalletSyncRunAccount {
   readonly coveredDays: number | null;
   readonly rangeApplied: boolean | null;
   readonly dryRun: boolean | null;
+  readonly writes: readonly WalletSyncWrite[];
+  readonly writesTruncated: number;
+}
+
+export interface WalletSyncWrite {
+  readonly awbNumber: string;
+  readonly orderNumber: string | null;
+  readonly leg: string;
+  readonly amountInr: string;
+  readonly revised: boolean;
 }
 
 export interface WalletSyncRun {

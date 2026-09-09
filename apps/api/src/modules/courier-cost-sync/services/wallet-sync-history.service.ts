@@ -33,6 +33,25 @@ export interface WalletSyncRunAccount {
   readonly rangeApplied: boolean | null;
   /** True when it parsed the real file and wrote nothing. */
   readonly dryRun: boolean | null;
+  /**
+   * The parcels this run wrote a cost against, by name.
+   *
+   * EMPTY on runs from before this was recorded, which is not the same
+   * as "wrote nothing" — the count says what happened and the list is
+   * simply missing. The panel distinguishes the two rather than showing
+   * an empty list under a count of sixteen.
+   */
+  readonly writes: readonly WalletSyncWrite[];
+  /** How many were written but not listed, past the cap. */
+  readonly writesTruncated: number;
+}
+
+export interface WalletSyncWrite {
+  readonly awbNumber: string;
+  readonly orderNumber: string | null;
+  readonly leg: string;
+  readonly amountInr: string;
+  readonly revised: boolean;
 }
 
 export interface WalletSyncRun {
@@ -223,5 +242,25 @@ function toAccount(raw: unknown): WalletSyncRunAccount {
     periodFrom: str(res, 'periodFrom'),
     periodTo: str(res, 'periodTo'),
     dryRun: bool(res, 'dryRun'),
+    writes: toWrites(res['writes']),
+    writesTruncated: num(res, 'writesTruncated') ?? 0,
   };
+}
+
+function toWrites(raw: unknown): WalletSyncWrite[] {
+  if (!Array.isArray(raw)) return [];
+  const out: WalletSyncWrite[] = [];
+  for (const item of raw) {
+    if (item === null || typeof item !== 'object') continue;
+    const w = item as Record<string, unknown>;
+    if (typeof w['awbNumber'] !== 'string') continue;
+    out.push({
+      awbNumber: w['awbNumber'],
+      orderNumber: typeof w['orderNumber'] === 'string' ? w['orderNumber'] : null,
+      leg: typeof w['leg'] === 'string' ? w['leg'] : 'forward',
+      amountInr: typeof w['amountInr'] === 'string' ? w['amountInr'] : '0',
+      revised: w['revised'] === true,
+    });
+  }
+  return out;
 }
