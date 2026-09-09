@@ -585,7 +585,21 @@ export function OrderJourneyPanels({
         as a panel that failed to load rather than one with nothing to
         show. Worse since the seller order page put this in a column.
       */}
-      <div className={parcel === null ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-[1fr_1fr]'}>
+      {/*
+        `minmax(0,1fr)`, not `1fr`. A grid track's default minimum is
+        min-content, so `1fr` is only "equal halves" while both sides can
+        fit — a long unbreakable string on one side widens ITS column and
+        squeezes the other. That happened the moment the parcel card
+        gained the customer tracking URL: a mono `https://…/38061110523961`
+        has no break points, so Parcel grew and Order tracker shrank.
+        Allowing the tracks to shrink below their content is also what
+        lets the `truncate` on that link actually engage.
+      */}
+      <div
+        className={
+          parcel === null ? 'grid gap-4' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'
+        }
+      >
         <Card>
           <CardHeader title="Order tracker" />
           <CardBody>
