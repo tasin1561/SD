@@ -166,7 +166,8 @@ async function createOne(awb, sellerId, variant, warehouseId) {
           },
         },
       },
-      select: { id: true, orderNumber: true },
+      // The order item comes back so the shipment can snapshot it below.
+      select: { id: true, orderNumber: true, items: { select: { id: true } } },
     });
 
     const shipment = await tx.shipment.create({
@@ -188,6 +189,34 @@ async function createOne(awb, sellerId, variant, warehouseId) {
         // CREATED: that is the pick/pack queue's marker (WMS-2), and
         // these must never appear on a picker's screen.
         status: 'HANDED_TO_COURIER',
+        /*
+          THE PARCEL'S OWN LINES, snapshotted (ORD-6).
+
+          Omitted originally, and it made every seeded parcel untestable
+          past the point of arrival: a return with no shipment_items has
+          nothing to inspect, so RTO receive worked and inspect and
+          finalize had no rows — a restock or write-off decision cannot
+          be made about zero lines. It showed up as "ITEMS 0" on the RTO
+          bench.
+
+          Mirrors what ShipmentProvisionService writes for a real parcel,
+          because the whole value of a seeded order is that it behaves
+          like one. This script bypasses that service deliberately — it
+          is writing a parcel already in flight, which the real path
+          cannot produce — so the shape has to be copied, and this is
+          the cost of that shortcut.
+        */
+        items: {
+          create: {
+            orderItemId: order.items[0].id,
+            quantity: 1,
+            skuCode: variant.skuCode,
+            productName: variant.product.name,
+            unitPriceInr: '999.00',
+            unitDeclaredValueInr: '999.00',
+            unitWeightGrams: 250,
+          },
+        },
       },
       select: { id: true },
     });
