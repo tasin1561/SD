@@ -102,24 +102,71 @@ against a seller. Separately, Gmail and Yahoo have required DMARC from
 bulk senders since February 2024, so its absence quietly costs inbox
 placement on the mail we do send.
 
-**Done 2026-09-09** via Cloudflare → Email → DMARC Management → Enable,
-which wrote:
+**Done 2026-09-09**, and then moved to ENFORCEMENT the same day. The
+record now reads:
+
+```
+_dmarc  TXT  "v=DMARC1; p=quarantine; sp=reject; rua=mailto:<id>@dmarc-reports.cloudflare.net; fo=1"
+```
+
+Cloudflare's wizard originally wrote:
 
 ```
 _dmarc  TXT  "v=DMARC1; p=none; rua=mailto:<id>@dmarc-reports.cloudflare.net"
 ```
 
-**It is still at `p=none`, which only WATCHES.** That is deliberate and
-not a half-measure: it changes nothing
+`p=none` was the starting point for about an hour. It is deliberate and
+not a half-measure as a FIRST step: it changes nothing
 about delivery and just starts the reports, so we can confirm every
 legitimate sender passes BEFORE tightening. Going straight to
 `p=reject` on a domain nobody has measured is how you discover a
 forgotten sender by having its mail silently dropped.
 
-**The remaining work is to finish this.** Once the reports show only
-Resend and Cloudflare sending as us, move to `p=quarantine` and then
-`p=reject`. Until then a forged `security@skydrop.online` is still
-deliverable — the policy is observing it, not stopping it.
+### Why we did not wait weeks
+
+The usual advice — observe for weeks before enforcing — exists for
+organisations that cannot say what sends as them. We can, and did:
+
+- **One sender.** `resend.service.ts` is the only file that calls a mail
+  API. No SMTP, no nodemailer, no second provider. The other
+  `@skydrop.online` strings in the code are Swagger examples.
+- **Aligned by construction.** Resend's verified domain is the ROOT
+  (`skydrop.online`), so DKIM signs `d=skydrop.online` and aligns with
+  our `From` under strict alignment, never mind relaxed.
+- **Verified after the change.** A message from
+  `security@skydrop.online` — the address most worth forging — was sent
+  through the real Resend path under `p=quarantine` and came back
+  `last_event: delivered`.
+
+So the interval is ONE REPORT CYCLE, not weeks.
+
+### The three choices in that record
+
+**`p=quarantine` before `p=reject`.** Quarantine is real enforcement: a
+forged reset lands in spam rather than the inbox. It was preferred for
+the first few days over reject because of the one thing that cannot be
+verified from inside the codebase — whether a human has configured
+Gmail's "Send mail as" for `hello@` or `support@skydrop.online`. That
+mail carries no DKIM of ours. Under quarantine it goes to spam and is
+recoverable; under reject it is destroyed and nobody is told.
+
+**`sp=reject` immediately.** No subdomain has ever sent mail with a
+`From` header, so subdomains can be locked hard at once even while the
+root sits at quarantine. It closes the easiest forgery route at zero
+risk.
+
+**Alignment left RELAXED** — no `adkim=s`/`aspf=s`. Strict looks tighter
+and is worse here: the envelope sender is `send.skydrop.online`, so
+strict SPF alignment would fail and DKIM would become the only path to a
+pass. A forwarder that alters a body would then take the mail out
+entirely. Relaxed keeps SPF and DKIM as two independent ways to pass.
+
+### THE REMAINING STEP
+
+Move `p=quarantine` → `p=reject` once one report cycle (Email → DMARC
+Management) shows only Resend and Cloudflare. That is a one-word edit to
+the record above. Until then a forged `security@skydrop.online` reaches
+the spam folder rather than being refused outright.
 
 Cloudflare's own collector is used for `rua` so the reports do not need
 a mailbox of their own.

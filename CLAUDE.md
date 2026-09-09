@@ -107,7 +107,7 @@ SD/
 │   ├── phase-1a-debt.md   # explicit Phase 1A deferrals tracked here
 │   ├── delhivery-integration.md        # verified wire contract (2026-07-27)
 │   ├── shiprocket-integration.md       # access, account state, what blocks go-live (2026-09-08)
-│   ├── email-dns.md                    # Resend sends, Cloudflare receives; DMARC still p=none (2026-09-09)
+│   ├── email-dns.md                    # Resend sends, Cloudflare receives, DMARC at quarantine (2026-09-09)
 │   ├── delhivery-go-live-test.md       # the first-real-write procedure (NOT yet run)
 │   └── skydrop-courier-escalation-brief.md  # courier escalation spec + verification findings
 └── CLAUDE.md              # this file
