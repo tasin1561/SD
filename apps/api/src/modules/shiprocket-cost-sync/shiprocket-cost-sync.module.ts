@@ -6,6 +6,7 @@ import { ShiprocketCostSyncService } from './services/shiprocket-cost-sync.servi
 import { ShiprocketCostPanelService } from './services/shiprocket-cost-panel.service';
 import { ShiprocketCostSyncQueue } from './queue/shiprocket-cost-sync.queue';
 import { ShiprocketCostSyncWorker } from './queue/shiprocket-cost-sync.worker';
+import { ShiprocketPortalTriggerService } from './services/shiprocket-portal-trigger.service';
 
 /**
  * What Shiprocket charged us, read from their API (the Delhivery sync's
@@ -20,6 +21,7 @@ import { ShiprocketCostSyncWorker } from './queue/shiprocket-cost-sync.worker';
     ShiprocketCostPanelService,
     ShiprocketCostSyncQueue,
     ShiprocketCostSyncWorker,
+    ShiprocketPortalTriggerService,
   ],
 })
 export class ShiprocketCostSyncModule {}

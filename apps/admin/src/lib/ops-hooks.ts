@@ -4252,6 +4252,18 @@ export interface ShiprocketCostPanelView {
   readonly last: ShiprocketCostRunView | null;
   readonly history: readonly ShiprocketCostRunView[];
   readonly parcels: readonly ShiprocketParcelCostView[];
+  /** The portal worker's last look at Shiprocket's panel. */
+  readonly portalProbe: {
+    readonly at: string;
+    readonly accounts: ReadonlyArray<{
+      readonly courierAccountId: string;
+      readonly label: string;
+      readonly outcome: string;
+      readonly detail: string | null;
+      readonly artifactDir: string | null;
+      readonly pages: ReadonlyArray<{ readonly tab: string; readonly landedOnLogin: boolean }>;
+    }>;
+  } | null;
 }
 
 export function useShiprocketCostPanel(): UseQueryResult<ShiprocketCostPanelView, Error> {
@@ -4271,6 +4283,20 @@ export function useRunShiprocketCost(): UseMutationResult<unknown, Error, void> 
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-shiprocket-cost'] });
       void queryClient.invalidateQueries({ queryKey: ['admin-margin'] });
+    },
+  });
+}
+
+export function useRunShiprocketPortalProbe(): UseMutationResult<unknown, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<unknown>('/api/admin/courier-cost/shiprocket/portal-probe', {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-shiprocket-cost'] });
     },
   });
 }

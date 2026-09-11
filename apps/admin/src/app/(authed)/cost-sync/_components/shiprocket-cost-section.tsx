@@ -21,6 +21,7 @@ import {
 } from '@skydrop/ui/components';
 import {
   useRunShiprocketCost,
+  useRunShiprocketPortalProbe,
   useShiprocketCostPanel,
   type ShiprocketCostRunView,
 } from '@/lib/ops-hooks';
@@ -60,6 +61,23 @@ function runLabel(run: ShiprocketCostRunView): string {
 export function ShiprocketCostSection(): ReactElement {
   const panel = useShiprocketCostPanel();
   const run = useRunShiprocketCost();
+  const probe = useRunShiprocketPortalProbe();
+  const [probing, setProbing] = useState(false);
+  const goProbe = (): void => {
+    setProbing(true);
+    void (async () => {
+      try {
+        await probe.mutateAsync();
+        toast.success(
+          'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
+        );
+      } catch (err) {
+        toast.error(serverVerdict(err));
+      } finally {
+        setProbing(false);
+      }
+    })();
+  };
   const canRun = usePermission('courier.accounts.manage');
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -162,6 +180,44 @@ export function ShiprocketCostSection(): ReactElement {
               hint={d.last === null ? 'It has not run yet.' : fmtWhen(d.last.at)}
             />
           </div>
+
+          <Card className="mb-4">
+            <CardBody>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-medium">Shiprocket website</h3>
+                  <p className="text-text-muted mt-0.5 text-xs">
+                    Their passbook, ledger and recharges have no API, so these are read from
+                    app.shiprocket.in through the Bangalore tunnel. A sign-in challenge stops it
+                    until someone resolves the issue — it never retries on its own.
+                  </p>
+                </div>
+                {canRun && (
+                  <Button variant="secondary" size="sm" disabled={probing} onClick={goProbe}>
+                    <RefreshCw size={14} className={probing ? 'animate-spin' : undefined} />
+                    {probing ? 'Queuing…' : 'Check website access'}
+                  </Button>
+                )}
+              </div>
+              {d.portalProbe === null ? (
+                <p className="text-text-muted mt-3 text-xs">Never checked.</p>
+              ) : (
+                <ul className="mt-3 space-y-1 text-xs">
+                  {d.portalProbe.accounts.map((a) => (
+                    <li key={a.courierAccountId}>
+                      <span className="font-medium">{a.label}</span> · {a.outcome}
+                      {a.pages.length > 0 &&
+                        ` · ${a.pages
+                          .map((p) => `${p.tab}${p.landedOnLogin ? ' (bounced to login)' : ''}`)
+                          .join(', ')}`}
+                      {a.detail !== null && <span className="text-text-muted"> — {a.detail}</span>}
+                    </li>
+                  ))}
+                  <li className="text-text-muted">Checked {fmtWhen(d.portalProbe.at)}</li>
+                </ul>
+              )}
+            </CardBody>
+          </Card>
 
           <Card>
             <CardBody>

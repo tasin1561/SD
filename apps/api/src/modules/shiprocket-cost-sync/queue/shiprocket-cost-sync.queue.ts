@@ -4,7 +4,8 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 
 export const SHIPROCKET_COST_QUEUE = 'shiprocket-cost-sync';
 export const JOB_SHIPROCKET_COST = 'sync-shiprocket-cost';
-/** Nightly, after the Delhivery sync (21:10) has finished with its own run. */
+/** Nightly at 21:40 IST — well clear of the Delhivery sync, which runs at
+ *  02:40 IST (21:10 UTC). */
 export const SHIPROCKET_COST_CRON = '40 21 * * *';
 export const SHIPROCKET_COST_TZ = 'Asia/Kolkata';
 

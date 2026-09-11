@@ -486,6 +486,15 @@ const systemSettings: SystemSettingSeed[] = [
       'Each night (21:40 IST) read every one of our Shiprocket parcels\u2019 charges from their API, plus the wallet balance. It needs no browser — Shiprocket answers per order — so it runs in the API, not the portal worker. It skips itself, and says so, while Shiprocket is in stub mode.',
   },
   {
+    key: 'courier.shiprocket_portal_proxy',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: 'socks5://127.0.0.1:1081',
+    displayName: 'Shiprocket panel — browser proxy',
+    description:
+      'Where the Shiprocket panel browser connects through. Their panel is India-only, so this is the self-restarting SSH tunnel to the Bangalore droplet (shiprocket-egress-tunnel.service on the app server). EMPTY stops the panel automation outright — it never connects directly.',
+  },
+  {
     key: 'courier.shiprocket_cost_sync_writes_enabled',
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,

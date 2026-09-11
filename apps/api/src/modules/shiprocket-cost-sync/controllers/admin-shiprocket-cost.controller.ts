@@ -11,6 +11,7 @@ import {
   type ShiprocketCostPanel,
 } from '../services/shiprocket-cost-panel.service';
 import { ShiprocketCostSyncQueue } from '../queue/shiprocket-cost-sync.queue';
+import { ShiprocketPortalTriggerService } from '../services/shiprocket-portal-trigger.service';
 
 /**
  * Shiprocket's side of /cost-sync.
@@ -28,6 +29,7 @@ export class AdminShiprocketCostController {
     private readonly panelService: ShiprocketCostPanelService,
     private readonly queue: ShiprocketCostSyncQueue,
     private readonly audit: AuditLogService,
+    private readonly portal: ShiprocketPortalTriggerService,
   ) {}
 
   @Get()
@@ -63,5 +65,29 @@ export class AdminShiprocketCostController {
       metadata: { courierCode: 'shiprocket' },
     });
     return this.queue.requestRun();
+  }
+
+  @Post('portal-probe')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('courier.accounts.manage')
+  @ApiOperation({
+    summary:
+      'Sign in to Shiprocket’s panel (through the Bangalore tunnel) and save what the Passbook, Ledger and Recharge History pages show. Queued; reads only.',
+  })
+  async portalProbe(
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ queued: boolean; jobId: string | null }> {
+    // A real sign-in to a courier's panel: who asked belongs on record.
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staff.id,
+      actorId: staff.id,
+      action: 'courier.shiprocket_portal.probe_requested',
+      entityType: 'courier',
+      entityId: null,
+      severity: 'MEDIUM',
+      metadata: { courierCode: 'shiprocket' },
+    });
+    return this.portal.requestProbe();
   }
 }

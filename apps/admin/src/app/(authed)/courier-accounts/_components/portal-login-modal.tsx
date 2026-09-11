@@ -36,12 +36,16 @@ import { serverVerdict } from '@/lib/server-verdict';
 export function PortalLoginModal({
   accountId,
   accountLabel,
+  courierCode,
   onClose,
 }: {
   readonly accountId: string;
   readonly accountLabel: string;
+  /** Delhivery asks which company to sign in as; Shiprocket does not. */
+  readonly courierCode: string;
   readonly onClose: () => void;
 }): ReactElement {
+  const needsCompany = courierCode === 'delhivery';
   const merge = useMergeCredentialFields();
   const toast = useToast();
   const [username, setUsername] = useState('');
@@ -49,7 +53,8 @@ export function PortalLoginModal({
   const [company, setCompany] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const incomplete = username.trim() === '' || password.trim() === '' || company.trim() === '';
+  const incomplete =
+    username.trim() === '' || password.trim() === '' || (needsCompany && company.trim() === '');
 
   async function save(): Promise<void> {
     setError(null);
@@ -59,7 +64,7 @@ export function PortalLoginModal({
         credentialFields: {
           portalUsername: username.trim(),
           portalPassword: password,
-          portalCompany: company.trim(),
+          ...(needsCompany ? { portalCompany: company.trim() } : {}),
         },
       });
       toast.success(
@@ -80,9 +85,21 @@ export function PortalLoginModal({
         if (!o) onClose();
       }}
       title={`Portal login — ${accountLabel}`}
-      description="Delhivery has no billing API, so the nightly cost sync signs into their panel. Stored encrypted; never shown again."
+      description={
+        needsCompany
+          ? 'Delhivery has no billing API, so the nightly cost sync signs into their panel. Stored encrypted; never shown again.'
+          : 'Shiprocket has no API for its passbook, ledger or recharges, so the automation signs into app.shiprocket.in through the Bangalore tunnel. Stored encrypted; never shown again.'
+      }
     >
-      <FormField label="Email" required hint="The address you use at one.delhivery.com.">
+      <FormField
+        label="Email"
+        required
+        hint={
+          needsCompany
+            ? 'The address you use at one.delhivery.com.'
+            : 'The address you use at app.shiprocket.in — the website login, not the API user.'
+        }
+      >
         <Input
           type="email"
           value={username}
@@ -98,13 +115,15 @@ export function PortalLoginModal({
           autoComplete="new-password"
         />
       </FormField>
-      <FormField
-        label="Company"
-        required
-        hint="Exactly as it appears in their login dropdown — e.g. MS EXPORTS. One login reaches several companies and each has its own wallet, so this decides which one is read."
-      >
-        <Input value={company} onChange={(e) => setCompany(e.target.value)} />
-      </FormField>
+      {needsCompany && (
+        <FormField
+          label="Company"
+          required
+          hint="Exactly as it appears in their login dropdown — e.g. MS EXPORTS. One login reaches several companies and each has its own wallet, so this decides which one is read."
+        >
+          <Input value={company} onChange={(e) => setCompany(e.target.value)} />
+        </FormField>
+      )}
 
       <p className="text-text-muted text-xs">
         The API token on this account is left exactly as it is — this adds to the credential rather

@@ -143,7 +143,8 @@ export class WalletSyncHistoryService {
       // from the constant: a panel that computed "next run" would be
       // wrong the moment the process was not running, which is exactly
       // the case somebody opens this page to investigate.
-      schedule: 'Every night at 21:10 IST',
+      // 21:10 UTC. It said 21:10 IST for weeks; the cron has no tz.
+      schedule: 'Every night at 02:40 IST',
       last: history[0] ?? null,
       history,
       cost,

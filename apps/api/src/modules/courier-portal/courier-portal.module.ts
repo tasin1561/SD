@@ -20,6 +20,9 @@ import { TicketModule } from '../ticket/ticket.module';
 import { TicketHandlingModule } from '../ticket-handling/ticket-handling.module';
 import { SystemIssuesModule } from '../system-issues/system-issues.module';
 import { CourierWalletReconcileService } from './services/courier-wallet-reconcile.service';
+import { ShiprocketPortalSessionService } from './services/shiprocket-portal-session.service';
+import { ShiprocketPortalProbeService } from './services/shiprocket-portal-probe.service';
+import { ShiprocketPortalWorker } from './queue/shiprocket-portal.worker';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -76,6 +79,10 @@ import { CourierWalletReconcileService } from './services/courier-wallet-reconci
     WalletSyncWorker,
     ConsigneeVerifyService,
     ConsigneeVerifyWorker,
+    // Shiprocket's panel: its own browser, out through the Bangalore tunnel.
+    ShiprocketPortalSessionService,
+    ShiprocketPortalProbeService,
+    ShiprocketPortalWorker,
   ],
   // The SESSION only. Logging into the portal is the expensive, fragile,
   // credential-bearing half, and there is no reason for a second module

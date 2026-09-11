@@ -197,7 +197,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
               charged means signing into their panel. Offered only where
               there is a credential to add to — a manual courier holds
               none. */}
-          {account.courierCode === 'delhivery' && (
+          {(account.courierCode === 'delhivery' || account.courierCode === 'shiprocket') && (
             <Button variant="ghost" size="sm" onClick={() => setPortalLogin(true)}>
               Portal login
             </Button>
@@ -223,6 +223,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
           <PortalLoginModal
             accountId={account.id}
             accountLabel={account.label}
+            courierCode={account.courierCode}
             onClose={() => setPortalLogin(false)}
           />
         )}

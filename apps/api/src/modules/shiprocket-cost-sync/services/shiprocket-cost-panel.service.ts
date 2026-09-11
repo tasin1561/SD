@@ -33,6 +33,20 @@ export interface ShiprocketParcelCostView {
   readonly readings: number;
 }
 
+/** The portal worker's last look at the panel. Restated here, not
+ *  imported: the API must not reach into the portal module. */
+export interface ShiprocketPortalProbeView {
+  readonly at: string;
+  readonly accounts: ReadonlyArray<{
+    readonly courierAccountId: string;
+    readonly label: string;
+    readonly outcome: string;
+    readonly detail: string | null;
+    readonly artifactDir: string | null;
+    readonly pages: ReadonlyArray<{ readonly tab: string; readonly landedOnLogin: boolean }>;
+  }>;
+}
+
 export interface ShiprocketCostPanel {
   readonly enabled: boolean;
   readonly writesEnabled: boolean;
@@ -47,6 +61,7 @@ export interface ShiprocketCostPanel {
   readonly last: ShiprocketCostRunView | null;
   readonly history: readonly ShiprocketCostRunView[];
   readonly parcels: readonly ShiprocketParcelCostView[];
+  readonly portalProbe: ShiprocketPortalProbeView | null;
 }
 
 /** What the /cost-sync page shows for Shiprocket. Reads only. */
@@ -133,7 +148,24 @@ export class ShiprocketCostPanelService {
       });
     }
 
+    const probeRow = await this.prisma.client.auditLog.findFirst({
+      where: { action: 'courier.shiprocket_portal.probed' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true, metadata: true },
+    });
+    const pm = (probeRow?.metadata ?? {}) as Record<string, unknown>;
+    const portalProbe: ShiprocketPortalProbeView | null =
+      probeRow === null
+        ? null
+        : {
+            at: probeRow.createdAt.toISOString(),
+            accounts: Array.isArray(pm['accounts'])
+              ? (pm['accounts'] as ShiprocketPortalProbeView['accounts'])
+              : [],
+          };
+
     return {
+      portalProbe,
       enabled: flag(SETTING_SR_COST_ENABLED),
       writesEnabled: flag(SETTING_SR_COST_WRITES),
       stubMode,
