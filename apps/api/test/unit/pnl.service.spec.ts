@@ -12,39 +12,74 @@ let adjustmentWhere: Record<string, unknown> | undefined;
 let excludedWhere: Record<string, unknown> | undefined;
 /** The filter the OPERATING-expenses aggregate was called with, last time. */
 let expensesWhere: Record<string, unknown> | undefined;
+/** The filter of the delivery-fee refunds query, last time. */
+let refundWhere: Record<string, unknown> | undefined;
+/** The filter of the bank-reconciliation query, last time. */
+let reconciliationWhere: Record<string, unknown> | undefined;
+
+type Grouped = { kind: string; _sum: { amountInr: Prisma.Decimal }; _count: { _all: number } };
 
 function makeSut(opts: {
-  freight?: Array<{ totalInr: Prisma.Decimal; ourCostInr: Prisma.Decimal | null }>;
+  freight?: Array<{
+    totalInr: Prisma.Decimal;
+    ourCostInr: Prisma.Decimal | null;
+    status?: string;
+    amountSettledInr?: Prisma.Decimal;
+  }>;
   /** Grouped adjustment rows, as the ledger would return them. */
-  courierAdjustments?: Array<{
-    kind: string;
-    _sum: { amountInr: Prisma.Decimal };
-    _count: { _all: number };
-  }>;
+  courierAdjustments?: Grouped[];
   /** Adjustments dated before the cutover, as the second query returns them. */
-  preCutoverAdjustments?: Array<{
-    kind: string;
-    _sum: { amountInr: Prisma.Decimal };
-    _count: { _all: number };
-  }>;
+  preCutoverAdjustments?: Grouped[];
   /** `pnl.courier_adjustments_from`; absent = the setting is cleared. */
   cutover?: Date | null;
+  /** Delivery-cohort order charges (parcels NOT received back). */
   shippingRevenue?: Prisma.Decimal | null;
   shipments?: Array<{
     actualCourierCostInr: Prisma.Decimal | null;
     actualRtoCostInr?: Prisma.Decimal | null;
   }>;
+  /** Returns-cohort order charges: the delivery fee AND the return fee of parcels received back. */
   rtoFees?: Prisma.Decimal | null;
   /** Tax deducted from CODs — OUR revenue since 2026-09-07, not a liability. */
   codTax?: Prisma.Decimal | null;
+  /** Delivery fees refunded on cancelled orders still in the delivery cohort. */
+  refunds?: Prisma.Decimal | null;
+  /** Damage / loss refunds paid to sellers. */
+  damage?: Prisma.Decimal | null;
+  /** Instant Pay / COD collection fees, grouped by direction. */
+  codServiceFees?: Array<{ direction: string; amount: Prisma.Decimal }>;
   returned?: Array<{
     actualRtoCostInr: Prisma.Decimal | null;
     actualCourierCostInr?: Prisma.Decimal | null;
   }>;
+  /** FX spread, in rupees (one entry). */
   fxSpread?: Prisma.Decimal | null;
+  /** FX spread entries in full — currency and the transfer behind each. */
+  fxEntries?: Array<{
+    signedAmount: Prisma.Decimal;
+    currency: string;
+    occurredAt: Date;
+    transfer: {
+      amountOut: Prisma.Decimal;
+      currencyOut: string;
+      amountIn: Prisma.Decimal;
+      currencyIn: string;
+    } | null;
+  }>;
+  /** INR operating expenses, summed (posted negative). */
   expenses?: Prisma.Decimal | null;
+  /** Operating expenses in another currency, one row each. */
+  foreignExpenses?: Array<{ signedAmount: Prisma.Decimal; currency: string; occurredAt: Date }>;
+  /** A rate row, as fx_rate_history / fx_rates would return it. */
+  rate?: { fromCurrency: string; rate: Prisma.Decimal } | null;
   /** Early-COD fees booked against payouts (EXPENSE entries WITH a settlement). */
   codFees?: Prisma.Decimal | null;
+  /** Courier PARCEL transactions in the window, grouped by waybill. */
+  parcelTxns?: Array<{ awbNumber: string; kind: string; amount: Prisma.Decimal }>;
+  /** Waybills that belong to a live Skydrop shipment. */
+  liveAwbs?: string[];
+  reconciliation?: Array<{ signedAmount: Prisma.Decimal; currency: string; occurredAt: Date }>;
+  investments?: Array<{ placedInr: Prisma.Decimal; returnedInr: Prisma.Decimal }>;
   /**
    * EXPENSE entries filed under a leg category with no consignment
    * behind them — reported rather than moved, because we cannot know
@@ -54,18 +89,43 @@ function makeSut(opts: {
 }) {
   adjustmentWhere = undefined;
   excludedWhere = undefined;
+  expensesWhere = undefined;
+  refundWhere = undefined;
+  reconciliationWhere = undefined;
+  const cohort = (where: Record<string, unknown>): 'delivery' | 'returns' => {
+    const shipment = (
+      ((where['order'] as Record<string, unknown>)['orderShipments'] as Record<string, unknown>)[
+        'some'
+      ] as Record<string, unknown>
+    )['shipment'] as Record<string, unknown>;
+    return shipment['rtoReceivedAt'] === null ? 'delivery' : 'returns';
+  };
+  const chargeSum = (where: Record<string, unknown>): Prisma.Decimal | null =>
+    cohort(where) === 'delivery' ? (opts.shippingRevenue ?? null) : (opts.rtoFees ?? null);
   const client = {
     systemSetting: {
       findUnique: async () => (opts.cutover == null ? null : { valueDate: opts.cutover }),
     },
-    inboundFreightCharge: { findMany: async () => opts.freight ?? [] },
-    // Courier account adjustments — reconciliations and credit notes
-    // the courier applied to the wallet rather than to a parcel. Empty
-    // unless a test says otherwise: they have their own describe block.
-    // Two queries now: the counted window (lte) and, when a cutover cuts
-    // into it, what was left out (lt).
+    inboundFreightCharge: {
+      findMany: async () =>
+        (opts.freight ?? []).map((f) => ({
+          status: 'PENDING',
+          amountSettledInr: D('0'),
+          ...f,
+        })),
+    },
+    // Courier ledger reads: account adjustments (counted window with lte,
+    // and what a cutover left out with lt), and PARCEL charges grouped by
+    // waybill for the no-Skydrop-parcel line.
     courierWalletTransaction: {
       groupBy: async (args: { where: Record<string, unknown> }) => {
+        if (args.where['category'] === 'PARCEL') {
+          return (opts.parcelTxns ?? []).map((t) => ({
+            awbNumber: t.awbNumber,
+            kind: t.kind,
+            _sum: { amountInr: t.amount },
+          }));
+        }
         const window = args.where['occurredAt'] as Record<string, unknown>;
         if ('lt' in window) {
           excludedWhere = args.where;
@@ -77,50 +137,70 @@ function makeSut(opts: {
     },
 
     orderCharge: {
-      aggregate: async () => ({ _sum: { amountInr: opts.shippingRevenue ?? null } }),
-      // The same revenue, split by charge type for the line's basis —
-      // "shipping revenue" is four different prices added together and
-      // only one of them is the base rate.
-      groupBy: async () =>
-        opts.shippingRevenue == null
+      aggregate: async (args: { where: Record<string, unknown> }) => ({
+        _sum: { amountInr: chargeSum(args.where) },
+      }),
+      // The same revenue, split by charge type for the line's basis.
+      groupBy: async (args: { where: Record<string, unknown> }) => {
+        const sum = chargeSum(args.where);
+        return sum == null
           ? []
           : [
               {
-                type: 'BASE_SHIPPING',
-                _sum: { amountInr: opts.shippingRevenue },
+                type: cohort(args.where) === 'delivery' ? 'BASE_SHIPPING' : 'RTO_FEE',
+                _sum: { amountInr: sum },
                 _count: { _all: 1 },
               },
-            ],
+            ];
+      },
     },
     shipment: {
-      findMany: async (args: { where: Record<string, unknown> }) =>
-        // BOTH queries mention rtoReceivedAt now — the delivery line
-        // filters it to null to exclude returns, the returns line uses a
-        // date range. The VALUE is the discriminator, not the key.
-        args.where['rtoReceivedAt'] === null ? (opts.shipments ?? []) : (opts.returned ?? []),
+      findMany: async (args: { where: Record<string, unknown> }) => {
+        // The no-Skydrop-parcel line asks which waybills are live parcels.
+        if (args.where['awbNumber'] !== undefined && typeof args.where['awbNumber'] === 'object') {
+          const inList = (args.where['awbNumber'] as { in?: string[] }).in;
+          if (inList !== undefined) {
+            return (opts.liveAwbs ?? [])
+              .filter((a) => inList.includes(a))
+              .map((a) => ({ awbNumber: a }));
+          }
+        }
+        // BOTH cohort queries mention rtoReceivedAt — the delivery line
+        // filters it to null, the returns line uses a date range.
+        return args.where['rtoReceivedAt'] === null
+          ? (opts.shipments ?? [])
+          : (opts.returned ?? []);
+      },
     },
     sellerWalletEntry: {
-      // Keyed on DIRECTION, not answered the same way twice. Two lines
-      // read this table now, and a fake that ignored the filter fed the
-      // RTO fee into the COD-tax line as well — which is exactly the
-      // shape of double count the report exists to avoid.
-      aggregate: async (args: { where: { direction: string } }) => ({
-        _sum: {
-          amount:
-            args.where.direction === 'GST_WITHHOLDING'
-              ? (opts.codTax ?? null)
-              : (opts.rtoFees ?? null),
-        },
-        _count: { _all: 1 },
-      }),
+      // Keyed on DIRECTION, never answered the same way twice: several
+      // lines read this table, and a fake that ignored the filter would
+      // feed one line's money into another — the double count the report
+      // exists to avoid.
+      aggregate: async (args: { where: Record<string, unknown> }) => {
+        const dir = args.where['direction'];
+        if (dir === 'ORDER_CHARGES_REFUND') refundWhere = args.where;
+        const amount =
+          dir === 'GST_WITHHOLDING'
+            ? (opts.codTax ?? null)
+            : dir === 'ORDER_CHARGES_REFUND'
+              ? (opts.refunds ?? null)
+              : dir === 'SCRAP_REFUND'
+                ? (opts.damage ?? null)
+                : null;
+        return { _sum: { amount }, _count: { _all: amount === null ? 0 : 1 } };
+      },
+      groupBy: async () =>
+        (opts.codServiceFees ?? []).map((f) => ({
+          direction: f.direction,
+          _sum: { amount: f.amount },
+          _count: { _all: 1 },
+        })),
     },
     bankEntry: {
-      // Three readers: FX, the COD-fee line (EXPENSE linked to a
-      // settlement) and operating expenses (EXPENSE linked to nothing).
+      // Operating expenses in rupees (EXPENSE linked to nothing), and the
+      // COD-fee line (EXPENSE linked to a settlement).
       aggregate: async (args: { where: Record<string, unknown> }) => {
-        if (args.where['type'] === 'FX_SPREAD') {
-          return { _sum: { signedAmount: opts.fxSpread ?? null }, _count: { _all: 1 } };
-        }
         if (args.where['settlementId'] !== null && args.where['settlementId'] !== undefined) {
           return {
             _sum: { signedAmount: opts.codFees ?? null },
@@ -130,8 +210,39 @@ function makeSut(opts: {
         expensesWhere = args.where;
         return { _sum: { signedAmount: opts.expenses ?? null }, _count: { _all: 1 } };
       },
-      findMany: async () => opts.unattributed ?? [],
+      findMany: async (args: { where: Record<string, unknown> }) => {
+        const type = args.where['type'];
+        if (type === 'FX_SPREAD') {
+          if (opts.fxEntries !== undefined) return opts.fxEntries;
+          return opts.fxSpread == null
+            ? []
+            : [
+                {
+                  signedAmount: opts.fxSpread,
+                  currency: 'INR',
+                  occurredAt: FROM,
+                  transfer: null,
+                },
+              ];
+        }
+        if (type === 'RECONCILIATION_ADJUSTMENT') {
+          reconciliationWhere = args.where;
+          return opts.reconciliation ?? [];
+        }
+        if (args.where['expenseCategory'] !== undefined) {
+          return (opts.unattributed ?? []).map((u) => ({
+            currency: 'INR',
+            occurredAt: FROM,
+            ...u,
+          }));
+        }
+        // Operating expenses in another currency.
+        return opts.foreignExpenses ?? [];
+      },
     },
+    investment: { findMany: async () => opts.investments ?? [] },
+    fxRateHistory: { findFirst: async () => opts.rate ?? null },
+    fxRate: { findFirst: async () => null },
   };
   return new PnlService({ client } as unknown as PrismaService);
 }
@@ -337,7 +448,9 @@ describe('a cost already counted by its leg is not counted again', () => {
       shipment: { findMany: async () => [] },
       sellerWalletEntry: {
         aggregate: async () => ({ _sum: { amount: null }, _count: { _all: 0 } }),
+        groupBy: async () => [],
       },
+      investment: { findMany: async () => [] },
       bankEntry: {
         aggregate: async (args: { where: Record<string, unknown> }) => {
           // The operating-expenses query: EXPENSE linked to no settlement
@@ -592,5 +705,129 @@ describe('courier COD fees', () => {
     const line = r.lines.find((l) => l.key === 'courier_cod_fees');
     expect(line?.costInr).toBe('0.00');
     expect(r.complete).toBe(true);
+  });
+});
+
+/**
+ * Every rupee the business earns or spends, on some line — measured on
+ * production 2026-09-11: the Returns line showed ₹30 of revenue against a
+ * parcel's whole round trip, Instant Pay fees and damage refunds were on
+ * no line at all, and taka amounts were added as rupees.
+ */
+describe('the P&L counts what it used to miss', () => {
+  const line = (r: Awaited<ReturnType<PnlService['report']>>, key: string) =>
+    r.lines.find((l) => l.key === key);
+
+  it('a returned parcel earns its delivery fee AND its return fee', async () => {
+    // ₹200 delivery + ₹30 return, both charge lines on the returned order.
+    const svc = makeSut({ rtoFees: D('230'), returned: [{ actualRtoCostInr: D('151.91') }] });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'rto')).toMatchObject({ revenueInr: '230.00', costInr: '151.91' });
+  });
+
+  it('takes a refunded delivery fee back off delivery revenue', async () => {
+    const svc = makeSut({ shippingRevenue: D('600'), refunds: D('200') });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'delivery')?.revenueInr).toBe('400.00');
+    // Only refunds on orders IN the delivery cohort.
+    expect(refundWhere).toMatchObject({
+      direction: 'ORDER_CHARGES_REFUND',
+      linkedOrder: { orderShipments: { some: { shipment: { rtoReceivedAt: null } } } },
+    });
+  });
+
+  it('a waived freight bill earns only what was charged before the waiver', async () => {
+    const svc = makeSut({
+      freight: [
+        { totalInr: D('1000'), ourCostInr: D('600') },
+        { totalInr: D('800'), ourCostInr: D('500'), status: 'WAIVED', amountSettledInr: D('300') },
+      ],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'inbound_freight')).toMatchObject({ revenueInr: '1300.00', costInr: '1100.00' });
+  });
+
+  it('counts Instant Pay and COD collection fees as revenue', async () => {
+    const svc = makeSut({
+      codServiceFees: [
+        { direction: 'INSTANT_PAY_FEE', amount: D('82.60') },
+        { direction: 'COD_COLLECTION_FEE', amount: D('10.00') },
+      ],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'cod_service_fees')).toMatchObject({ revenueInr: '92.60', costInr: '0.00' });
+  });
+
+  it('counts what we paid sellers for damaged or lost goods as a cost', async () => {
+    const svc = makeSut({ damage: D('1250') });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'damage_refunds')).toMatchObject({ costInr: '1250.00', marginInr: '-1250.00' });
+  });
+
+  it('counts courier charges on a waybill that is no live Skydrop parcel — and only those', async () => {
+    const svc = makeSut({
+      parcelTxns: [
+        { awbNumber: 'OURS', kind: 'DEBIT', amount: D('90.36') }, // already on its parcel
+        { awbNumber: 'VOIDED', kind: 'DEBIT', amount: D('48.36') },
+        { awbNumber: 'VOIDED', kind: 'CREDIT', amount: D('10.00') },
+      ],
+      liveAwbs: ['OURS'],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'courier_unmatched')).toMatchObject({ costInr: '38.36' });
+    expect(line(r, 'courier_unmatched')?.coverage).toMatchObject({ priced: 1, total: 1 });
+  });
+
+  it('puts a taka FX spread in rupees at its own transfer’s rate', async () => {
+    // ₹10,000 sent, ৳13,200 received: a taka is 10000/13200 of a rupee.
+    const svc = makeSut({
+      fxEntries: [
+        {
+          signedAmount: D('132'),
+          currency: 'BDT',
+          occurredAt: FROM,
+          transfer: {
+            amountOut: D('10000'),
+            currencyOut: 'INR',
+            amountIn: D('13200'),
+            currencyIn: 'BDT',
+          },
+        },
+      ],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'fx')?.revenueInr).toBe('100.00');
+  });
+
+  it('puts a taka expense in rupees at the rate that day — and leaves one out, loudly, when there is none', async () => {
+    const withRate = makeSut({
+      expenses: D('-500'),
+      foreignExpenses: [{ signedAmount: D('-1320'), currency: 'BDT', occurredAt: FROM }],
+      rate: { fromCurrency: 'INR', rate: D('1.32') }, // 1 INR = 1.32 BDT
+    });
+    const a = await withRate.report(FROM, TO);
+    expect(a.operatingExpensesInr).toBe('1500.00');
+    expect(a.warnings).toEqual([]);
+
+    const noRate = makeSut({
+      expenses: D('-500'),
+      foreignExpenses: [{ signedAmount: D('-1320'), currency: 'BDT', occurredAt: FROM }],
+      rate: null,
+    });
+    const b = await noRate.report(FROM, TO);
+    expect(b.operatingExpensesInr).toBe('500.00');
+    expect(b.complete).toBe(false);
+    expect(b.warnings[0]).toMatch(/no exchange rate/);
+  });
+
+  it('counts OUR bank reconciliation differences and investment income', async () => {
+    const svc = makeSut({
+      reconciliation: [{ signedAmount: D('-35.40'), currency: 'INR', occurredAt: FROM }],
+      investments: [{ placedInr: D('100000'), returnedInr: D('101500') }],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'bank_reconciliation')?.revenueInr).toBe('-35.40');
+    expect(reconciliationWhere).toMatchObject({ ownerKind: 'CAPITAL' });
+    expect(line(r, 'investment_income')?.revenueInr).toBe('1500.00');
   });
 });

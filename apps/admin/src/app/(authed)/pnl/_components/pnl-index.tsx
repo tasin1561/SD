@@ -129,6 +129,21 @@ export function PnlIndex(): ReactElement {
             </Card>
           )}
 
+          {(pnl.data.warnings ?? []).length > 0 && (
+            <Card>
+              <CardBody>
+                <div className="flex gap-2 text-sm text-warning">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
+                  <ul className="space-y-1">
+                    {(pnl.data.warnings ?? []).map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
           {!pnl.data.complete && (
             <Card>
               <CardBody>

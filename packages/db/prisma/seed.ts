@@ -519,9 +519,9 @@ const systemSettings: SystemSettingSeed[] = [
     valueType: SettingValueType.DATE,
     // 1 Oct 2026, 00:00 IST.
     valueDate: new Date('2026-09-30T18:30:00.000Z'),
-    displayName: 'P&L — count courier account adjustments from',
+    displayName: 'P&L — count courier account-level money from',
     description:
-      'The first day every parcel on the Delhivery and Shiprocket accounts goes through Skydrop. Before it the same accounts carried parcels shipped OUTSIDE Skydrop, whose cost and revenue are not in the P&L, so their account adjustments (lost-shipment credits, insurance refunds, reconciliations) are left out too — the line says how many and their net. Clear it to count every adjustment.',
+      'The first day every parcel on the Delhivery and Shiprocket accounts goes through Skydrop. Before it the same accounts carried parcels shipped OUTSIDE Skydrop, whose cost and revenue are not in the P&L, so their account adjustments (lost-shipment credits, insurance refunds, reconciliations) are left out too — the line says how many and their net — and so are courier charges on waybills that are no Skydrop parcel. Clear it to count everything.',
   },
   {
     key: 'courier.shiprocket_invoice_check_enabled',

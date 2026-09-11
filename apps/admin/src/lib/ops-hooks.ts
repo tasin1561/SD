@@ -1222,6 +1222,8 @@ export interface PnlReportView {
   readonly operatingExpensesInr: string;
   readonly netInr: string;
   readonly complete: boolean;
+  /** What the report had to leave out, in words (e.g. an expense with no rate to rupees). */
+  readonly warnings?: readonly string[];
   /**
    * Leg costs recorded as plain operating expenses, with no consignment
    * behind them. Null when there are none.
