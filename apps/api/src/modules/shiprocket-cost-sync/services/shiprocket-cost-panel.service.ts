@@ -67,6 +67,23 @@ export interface ShiprocketWalletRunView {
   readonly accounts: ReadonlyArray<Record<string, unknown>>;
 }
 
+/**
+ * The portal worker's nightly invoice check, from its audit rows — names
+ * restated from `ShiprocketInvoiceCheckService`, pinned by the same spec.
+ */
+export const ACTION_SR_INVOICES_OK = 'courier.shiprocket_invoices.checked';
+export const ACTION_SR_INVOICES_FAILED = 'courier.shiprocket_invoices.check_failed';
+
+export interface ShiprocketInvoiceRunView {
+  readonly at: string;
+  readonly ok: boolean;
+  readonly trigger: string | null;
+  readonly skipped: string | null;
+  readonly windowDays: number | null;
+  /** Per account, as the worker recorded it: each invoice's result and the uninvoiced totals. */
+  readonly accounts: ReadonlyArray<Record<string, unknown>>;
+}
+
 export interface ShiprocketCostPanel {
   readonly enabled: boolean;
   readonly writesEnabled: boolean;
@@ -84,6 +101,8 @@ export interface ShiprocketCostPanel {
   readonly portalProbe: ShiprocketPortalProbeView | null;
   /** The nightly wallet sync: newest first. */
   readonly walletSyncs: readonly ShiprocketWalletRunView[];
+  /** The nightly invoice check: newest first. */
+  readonly invoiceChecks: readonly ShiprocketInvoiceRunView[];
 }
 
 /** What the /cost-sync page shows for Shiprocket. Reads only. */
@@ -210,8 +229,32 @@ export class ShiprocketCostPanelService {
       };
     });
 
+    const invoiceRows = await this.prisma.client.auditLog.findMany({
+      where: { action: { in: [ACTION_SR_INVOICES_OK, ACTION_SR_INVOICES_FAILED] } },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: { action: true, createdAt: true, metadata: true },
+    });
+    const invoiceChecks: ShiprocketInvoiceRunView[] = invoiceRows.map((r) => {
+      const m = (r.metadata !== null && typeof r.metadata === 'object' ? r.metadata : {}) as Record<
+        string,
+        unknown
+      >;
+      return {
+        at: r.createdAt.toISOString(),
+        ok: r.action === ACTION_SR_INVOICES_OK,
+        trigger: typeof m['trigger'] === 'string' ? m['trigger'] : null,
+        skipped: typeof m['skipped'] === 'string' ? m['skipped'] : null,
+        windowDays: typeof m['windowDays'] === 'number' ? m['windowDays'] : null,
+        accounts: Array.isArray(m['accounts'])
+          ? (m['accounts'] as Array<Record<string, unknown>>)
+          : [],
+      };
+    });
+
     return {
       walletSyncs,
+      invoiceChecks,
       portalProbe,
       enabled: flag(SETTING_SR_COST_ENABLED),
       writesEnabled: flag(SETTING_SR_WALLET_WRITES),

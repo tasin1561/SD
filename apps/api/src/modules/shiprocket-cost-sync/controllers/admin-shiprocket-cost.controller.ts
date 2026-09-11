@@ -114,4 +114,28 @@ export class AdminShiprocketCostController {
     });
     return this.portal.requestWalletSync();
   }
+
+  @Post('invoice-check')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('courier.accounts.manage')
+  @ApiOperation({
+    summary:
+      'Check Shiprocket’s invoices now: sign in through the Bangalore tunnel, read the Invoices page and each Freight and VAS invoice’s itemized file, and compare every line with what the wallet charged. Reads only. Queued.',
+  })
+  async invoiceCheck(
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ queued: boolean; jobId: string | null }> {
+    // A real sign-in to a courier's panel: who asked belongs on record.
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staff.id,
+      actorId: staff.id,
+      action: 'courier.shiprocket_invoices.check_requested',
+      entityType: 'courier',
+      entityId: null,
+      severity: 'MEDIUM',
+      metadata: { courierCode: 'shiprocket' },
+    });
+    return this.portal.requestInvoiceCheck();
+  }
 }

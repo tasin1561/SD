@@ -13,6 +13,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 export const SHIPROCKET_PORTAL_QUEUE = 'shiprocket-portal';
 export const JOB_SHIPROCKET_PORTAL_PROBE = 'probe-shiprocket-portal';
 export const JOB_SHIPROCKET_WALLET_SYNC = 'sync-shiprocket-wallet';
+export const JOB_SHIPROCKET_INVOICE_CHECK = 'check-shiprocket-invoices';
 
 @Injectable()
 export class ShiprocketPortalTriggerService {
@@ -26,6 +27,11 @@ export class ShiprocketPortalTriggerService {
   /** The nightly wallet sync, now. Queued: about three minutes of reading. */
   requestWalletSync(): Promise<{ readonly queued: boolean; readonly jobId: string | null }> {
     return this.enqueue(JOB_SHIPROCKET_WALLET_SYNC);
+  }
+
+  /** The nightly invoice check, now. Queued: a sign-in, the list and each itemized file. */
+  requestInvoiceCheck(): Promise<{ readonly queued: boolean; readonly jobId: string | null }> {
+    return this.enqueue(JOB_SHIPROCKET_INVOICE_CHECK);
   }
 
   private async enqueue(

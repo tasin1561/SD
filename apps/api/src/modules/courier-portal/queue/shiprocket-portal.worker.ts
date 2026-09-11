@@ -5,6 +5,7 @@ import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { ShiprocketPortalProbeService } from '../services/shiprocket-portal-probe.service';
 import { ShiprocketWalletSyncService } from '../services/shiprocket-wallet-sync.service';
+import { ShiprocketInvoiceCheckService } from '../services/shiprocket-invoice-check.service';
 
 /**
  * Restated in `shiprocket-cost-sync/services/shiprocket-portal-trigger.service.ts`
@@ -16,6 +17,7 @@ import { ShiprocketWalletSyncService } from '../services/shiprocket-wallet-sync.
 export const SHIPROCKET_PORTAL_QUEUE = 'shiprocket-portal';
 export const JOB_SHIPROCKET_PORTAL_PROBE = 'probe-shiprocket-portal';
 export const JOB_SHIPROCKET_WALLET_SYNC = 'sync-shiprocket-wallet';
+export const JOB_SHIPROCKET_INVOICE_CHECK = 'check-shiprocket-invoices';
 
 /**
  * 03:50 IST — after the day's charges have posted, and clear of the
@@ -24,6 +26,13 @@ export const JOB_SHIPROCKET_WALLET_SYNC = 'sync-shiprocket-wallet';
  */
 export const SHIPROCKET_WALLET_CRON = '50 3 * * *';
 export const SHIPROCKET_WALLET_TZ = 'Asia/Kolkata';
+/**
+ * 04:30 IST — after the wallet sync (03:50) has stored the night's
+ * movements, because the invoice check compares against OUR ledger.
+ * Nightly, not monthly: invoices arrive several times a month, and a
+ * discrepancy can only be disputed within 15 days of its invoice.
+ */
+export const SHIPROCKET_INVOICE_CRON = '30 4 * * *';
 
 @Injectable()
 export class ShiprocketPortalWorker implements OnModuleInit, OnModuleDestroy {
@@ -35,6 +44,7 @@ export class ShiprocketPortalWorker implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly probe: ShiprocketPortalProbeService,
     private readonly wallet: ShiprocketWalletSyncService,
+    private readonly invoices: ShiprocketInvoiceCheckService,
     private readonly workerRole: WorkerRoleService,
     private readonly issues: SystemIssueService,
   ) {}
@@ -58,6 +68,18 @@ export class ShiprocketPortalWorker implements OnModuleInit, OnModuleDestroy {
         removeOnFail: { age: 30 * 24 * 60 * 60, count: 60 },
       },
     );
+    // The nightly invoice check: reads only, ONE attempt for the same reason.
+    await this.queue.add(
+      JOB_SHIPROCKET_INVOICE_CHECK,
+      { manual: false },
+      {
+        repeat: { pattern: SHIPROCKET_INVOICE_CRON, tz: SHIPROCKET_WALLET_TZ },
+        jobId: 'shiprocket-invoice-check-cron',
+        attempts: 1,
+        removeOnComplete: { age: 14 * 24 * 60 * 60, count: 30 },
+        removeOnFail: { age: 30 * 24 * 60 * 60, count: 60 },
+      },
+    );
 
     this.worker = new Worker(
       SHIPROCKET_PORTAL_QUEUE,
@@ -69,6 +91,10 @@ export class ShiprocketPortalWorker implements OnModuleInit, OnModuleDestroy {
         }
         if (job.name === JOB_SHIPROCKET_WALLET_SYNC) {
           await this.wallet.sync(trigger);
+          return;
+        }
+        if (job.name === JOB_SHIPROCKET_INVOICE_CHECK) {
+          await this.invoices.check(trigger);
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown shiprocket-portal job; ignoring');

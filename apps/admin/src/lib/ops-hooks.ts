@@ -4330,6 +4330,72 @@ export interface ShiprocketCostPanelView {
   } | null;
   /** The nightly wallet sync, newest first. */
   readonly walletSyncs: readonly ShiprocketWalletRunView[];
+  /** The nightly invoice check, newest first. */
+  readonly invoiceChecks: readonly ShiprocketInvoiceRunView[];
+}
+
+/** One Shiprocket invoice, compared line by line with what the wallet charged. */
+export interface ShiprocketInvoiceRowView {
+  readonly invoiceId: string;
+  readonly serviceType: string;
+  readonly invoiceDate: string;
+  readonly totalInr: string;
+  readonly itemizedInr: string | null;
+  readonly lines: number;
+  readonly totalsAgree: boolean | null;
+  readonly status: 'MATCHES' | 'DIFFERS' | 'NOT_ITEMIZED' | 'UNREADABLE';
+  readonly differences: ReadonlyArray<{
+    readonly service: string;
+    readonly orderId: string;
+    readonly billedInr: string;
+    readonly walletInr: string;
+  }>;
+  readonly differenceCount: number;
+  readonly differenceInr: string;
+  readonly beforeRecords: number;
+  readonly unknownServices: readonly string[];
+  readonly disputeBy: string;
+  readonly disputeOpen: boolean;
+  readonly problem: string | null;
+}
+
+export interface ShiprocketInvoiceAccountView {
+  readonly courierAccountId: string;
+  readonly label: string;
+  /** CHECKED, SKIPPED, CHALLENGE, NO_LOGIN or FAILED. */
+  readonly outcome: string;
+  readonly detail: string | null;
+  readonly invoicesRead: number;
+  readonly result: {
+    readonly rows: readonly ShiprocketInvoiceRowView[];
+    readonly vasUninvoiced: {
+      readonly count: number;
+      readonly inr: string;
+      readonly items: ReadonlyArray<{
+        readonly service: string;
+        readonly orderId: string;
+        readonly chargedInr: string;
+        readonly invoicedInr: string;
+        readonly lastChargedAt: string;
+      }>;
+    };
+    readonly freightUninvoiced: {
+      readonly orders: number;
+      readonly inr: string;
+      readonly staleCount: number;
+      readonly staleInr: string;
+    };
+    readonly ledgerStart: string | null;
+  } | null;
+}
+
+export interface ShiprocketInvoiceRunView {
+  readonly at: string;
+  readonly ok: boolean;
+  readonly trigger: string | null;
+  readonly skipped: string | null;
+  readonly windowDays: number | null;
+  readonly accounts: readonly ShiprocketInvoiceAccountView[];
 }
 
 export function useShiprocketCostPanel(): UseQueryResult<ShiprocketCostPanelView, Error> {
@@ -4363,6 +4429,24 @@ export function useRunShiprocketWalletSync(): UseMutationResult<unknown, Error, 
   return useMutation({
     mutationFn: () =>
       client.request<unknown>('/api/admin/courier-cost/shiprocket/wallet-sync', {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-shiprocket-cost'] });
+    },
+  });
+}
+
+/**
+ * Check Shiprocket's invoices against the wallet now: a real sign-in
+ * through the Bangalore tunnel that reads only. Queued.
+ */
+export function useRunShiprocketInvoiceCheck(): UseMutationResult<unknown, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<unknown>('/api/admin/courier-cost/shiprocket/invoice-check', {
         method: 'POST',
       }),
     onSuccess: () => {

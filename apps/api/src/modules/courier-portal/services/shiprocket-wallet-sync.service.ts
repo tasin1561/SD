@@ -11,9 +11,8 @@ import { ShiprocketWalletPage } from '../pages/shiprocket-wallet.page';
 import { CourierWalletReconcileService } from './courier-wallet-reconcile.service';
 import { raiseLedgerFindings } from './ledger-findings';
 import { shiprocketDate } from './shiprocket-portal-probe.service';
+import { raiseShiprocketOpenFailure } from './shiprocket-portal-failures';
 import {
-  ShiprocketPortalChallengeError,
-  ShiprocketPortalCredentialsMissingError,
   ShiprocketPortalSessionService,
   type ShiprocketPortalHandle,
 } from './shiprocket-portal-session.service';
@@ -191,7 +190,18 @@ export class ShiprocketWalletSyncService {
     try {
       handle = await this.session.open(account.id, `wallet-${now.getTime()}`);
     } catch (err) {
-      return this.onOpenFailure(account, challengeKey, err);
+      // Shared with the invoice check, so both raise the SAME issues.
+      const f = await raiseShiprocketOpenFailure(this.issues, {
+        source: 'ShiprocketWalletSyncService',
+        account,
+        err,
+        failureKey: `shiprocket-wallet-sync:${account.id}`,
+      });
+      return blank(
+        account,
+        f.outcome,
+        f.outcome === 'FAILED' ? f.message.slice(0, 300) : f.message,
+      );
     }
 
     const from = shiprocketDate(new Date(now.getTime() - windowDays * 86_400_000));
@@ -385,52 +395,6 @@ export class ShiprocketWalletSyncService {
     const rechargeRows = await read((p) => p.readTab('recharge-history', from, to));
     const ledgerRows = await read((p) => p.readTab('ledger', from, to));
     return { passbookRows, usable, rechargeRows, ledgerRows };
-  }
-
-  private async onOpenFailure(
-    account: { id: string; label: string },
-    challengeKey: string,
-    err: unknown,
-  ): Promise<ShiprocketWalletAccountResult> {
-    if (err instanceof ShiprocketPortalChallengeError) {
-      await this.issues.raise({
-        kind: SystemIssueKind.COURIER_PORTAL_CHALLENGE,
-        severity: SystemIssueSeverity.HIGH,
-        title: `Shiprocket panel asked ${account.label} for a ${err.challenge} — automation stopped`,
-        detail:
-          `Signing in to app.shiprocket.in stopped at a ${err.challenge} challenge (${err.url}). ` +
-          'Nothing will try again until this issue is resolved. Sign in once by hand from a ' +
-          'browser using the Bangalore tunnel, then resolve this issue.' +
-          (err.artifactPath === null ? '' : ` Screenshot on the server: ${err.artifactPath}`),
-        source: 'ShiprocketWalletSyncService',
-        dedupeKey: challengeKey,
-        metadata: { courierAccountId: account.id, challenge: err.challenge, url: err.url },
-      });
-      return blank(account, 'CHALLENGE', err.message);
-    }
-    if (err instanceof ShiprocketPortalCredentialsMissingError) {
-      await this.issues.raise({
-        kind: SystemIssueKind.COURIER_CREDENTIAL,
-        severity: SystemIssueSeverity.MEDIUM,
-        title: `${account.label} has no Shiprocket website login stored`,
-        detail: err.message,
-        source: 'ShiprocketWalletSyncService',
-        dedupeKey: `shiprocket-portal-login:${account.id}`,
-        metadata: { courierAccountId: account.id },
-      });
-      return blank(account, 'NO_LOGIN', err.message);
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    await this.issues.raise({
-      kind: SystemIssueKind.COURIER_COST_SYNC,
-      severity: SystemIssueSeverity.MEDIUM,
-      title: `Could not sign in to ${account.label}'s Shiprocket panel`,
-      detail: `${message.slice(0, 400)}\n\nThe tunnel (shiprocket-egress-tunnel.service) and the login are the usual causes.`,
-      source: 'ShiprocketWalletSyncService',
-      dedupeKey: `shiprocket-wallet-sync:${account.id}`,
-      metadata: { courierAccountId: account.id, error: message.slice(0, 500) },
-    });
-    return blank(account, 'FAILED', message.slice(0, 300));
   }
 
   private async finish(summary: ShiprocketWalletSyncSummary): Promise<ShiprocketWalletSyncSummary> {

@@ -39,6 +39,7 @@ its tracking webhooks are now arriving authenticated.
 | Wallet sync — real parcel cost | ✅ live — transaction ledger, 90 days nightly | ✅ built 11 Sep — passbook read off their panel, 90 days nightly (COST-2) | Delhivery: 23,343 transactions stored, 0 duplicates; all 22 AWB parcels costed as the net of their debits and credits (COST-1). Shiprocket: first 90-day read 7,138 movements, balance chain unbroken end to end; netted through the same importer; the API sync now only CHECKS their final bill against it |
 | Courier expenses in the P&L | ✅ live — 37 adjustments, −₹1,268.76 net | ✅ built 11 Sep — 22 adjustments in 90 days | "Courier account adjustments", dated by transaction (IST). Shiprocket's are lost-shipment credit notes, invoice and subscription credits, the ShipSure premium and refund; recharges are kept OUT |
 | Wallet reconcile (recharges) | ✅ live | ✅ built 11 Sep — Recharge History, matched on the bank reference | Delhivery: 11 recharges seen: 7 (₹1,15,000) **not yet recorded on our side**, 4 (₹80,000) not applicable. Shiprocket: 27 in 90 days, 9 of them failed top-ups (not applicable by construction) |
+| Courier invoices checked against the wallet | ❌ not built | ✅ built 11 Sep — nightly (04:30 IST), every Freight and VAS invoice's itemized file compared line by line | Shiprocket, 90 days: every itemized file adds up to its invoice; freight agrees with the wallet on every parcel seen from the start (per ORDER — a swapped waybill splits one parcel across two); 59 July WhatsApp charges (₹348.10) were taken from the wallet and never invoiced. An invoice that disagrees is HIGH while their 15-day dispute window is open |
 | COD remittance file → payout allocation | ✅ CSV ("remittance transactions export") | ✅ their `.xls` (AWB + CRF sheets), built 11 Sep | Both matched on waybill in "Record a courier payout". Shiprocket's file is refused when its parcels do not add up to the CRF's "COD Available"; deductions are reported per remittance, never split per parcel. Verified against real CRF 13449838: 10 parcels, ₹15,700, UTR IN22625415423299 |
 | Portal ticket sync | ⏸ OFF | ❌ | `courier_portal_runs` is EMPTY — never ran in production |
 | Portal session / canary | ⏸ OFF | ❌ | same; `courier.portal_canary_awb` is empty. (The wallet sync signs in separately and runs nightly) |
@@ -70,6 +71,9 @@ its tracking webhooks are now arriving authenticated.
    passbook is read nightly off their panel through the Bangalore tunnel
    and netted exactly as Delhivery's ledger is. A parcel with no movement
    yet still shows as UNCOVERED in the P&L (TRE-6), never guessed.
+6. **Delhivery's invoices are not checked against its wallet.**
+   Shiprocket's are, nightly; on Shiprocket that check found VAS charges
+   taken and never invoiced, so the same gap may exist unseen here.
 
 ## What is Delhivery-only for a REASON, versus merely not built
 

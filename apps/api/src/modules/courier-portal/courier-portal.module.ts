@@ -24,6 +24,7 @@ import { ShiprocketPortalSessionService } from './services/shiprocket-portal-ses
 import { ShiprocketPortalProbeService } from './services/shiprocket-portal-probe.service';
 import { ShiprocketPortalWorker } from './queue/shiprocket-portal.worker';
 import { ShiprocketWalletSyncService } from './services/shiprocket-wallet-sync.service';
+import { ShiprocketInvoiceCheckService } from './services/shiprocket-invoice-check.service';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -84,6 +85,7 @@ import { ShiprocketWalletSyncService } from './services/shiprocket-wallet-sync.s
     ShiprocketPortalSessionService,
     ShiprocketPortalProbeService,
     ShiprocketWalletSyncService,
+    ShiprocketInvoiceCheckService,
     ShiprocketPortalWorker,
   ],
   // The SESSION only. Logging into the portal is the expensive, fragile,

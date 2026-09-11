@@ -150,13 +150,15 @@ describe('the API and the portal worker agree on the queue', () => {
   const worker = src('courier-portal/queue/shiprocket-portal.worker.ts');
   const trigger = src('shiprocket-cost-sync/services/shiprocket-portal-trigger.service.ts');
 
-  it.each(['SHIPROCKET_PORTAL_QUEUE', 'JOB_SHIPROCKET_PORTAL_PROBE', 'JOB_SHIPROCKET_WALLET_SYNC'])(
-    '%s',
-    (name) => {
-      expect(pick(worker, name)).toBeDefined();
-      expect(pick(trigger, name)).toBe(pick(worker, name));
-    },
-  );
+  it.each([
+    'SHIPROCKET_PORTAL_QUEUE',
+    'JOB_SHIPROCKET_PORTAL_PROBE',
+    'JOB_SHIPROCKET_WALLET_SYNC',
+    'JOB_SHIPROCKET_INVOICE_CHECK',
+  ])('%s', (name) => {
+    expect(pick(worker, name)).toBeDefined();
+    expect(pick(trigger, name)).toBe(pick(worker, name));
+  });
 
   // The /cost-sync page reads the wallet sync's history by these names.
   // Drift has no symptom but a card that says "has not run yet" forever.
@@ -165,5 +167,11 @@ describe('the API and the portal worker agree on the queue', () => {
   it.each(['ACTION_SR_WALLET_OK', 'ACTION_SR_WALLET_FAILED'])('%s', (name) => {
     expect(pick(sync, name)).toBeDefined();
     expect(pick(panel, name)).toBe(pick(sync, name));
+  });
+
+  const invoiceCheck = src('courier-portal/services/shiprocket-invoice-check.service.ts');
+  it.each(['ACTION_SR_INVOICES_OK', 'ACTION_SR_INVOICES_FAILED'])('%s', (name) => {
+    expect(pick(invoiceCheck, name)).toBeDefined();
+    expect(pick(panel, name)).toBe(pick(invoiceCheck, name));
   });
 });

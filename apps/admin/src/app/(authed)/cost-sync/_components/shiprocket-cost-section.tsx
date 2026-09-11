@@ -21,10 +21,14 @@ import {
 } from '@skydrop/ui/components';
 import {
   useRunShiprocketCost,
+  useRunShiprocketInvoiceCheck,
   useRunShiprocketPortalProbe,
   useRunShiprocketWalletSync,
   useShiprocketCostPanel,
   type ShiprocketCostRunView,
+  type ShiprocketInvoiceAccountView,
+  type ShiprocketInvoiceRowView,
+  type ShiprocketInvoiceRunView,
   type ShiprocketWalletAccountView,
   type ShiprocketWalletRunView,
 } from '@/lib/ops-hooks';
@@ -56,7 +60,127 @@ function walletLabel(run: ShiprocketWalletRunView): string {
   return run.wrote ? 'Worked' : 'Worked (not recording)';
 }
 
+function invoiceRunLabel(run: ShiprocketInvoiceRunView): string {
+  if (run.skipped === 'DISABLED') return 'Switched off';
+  if (run.skipped === 'NO_ACCOUNTS') return 'No Shiprocket account';
+  if (!run.ok) return 'Failed';
+  if (run.accounts.some((a) => a.outcome !== 'CHECKED')) return 'Partly failed';
+  const differing = run.accounts.reduce(
+    (n, a) => n + (a.result?.rows.filter((r) => r.status === 'DIFFERS').length ?? 0),
+    0,
+  );
+  return differing === 0 ? 'every invoice matches the wallet' : `${differing} invoice(s) disagree`;
+}
+
+/** One invoice's verdict, in words. */
+function InvoiceResult({ r }: { readonly r: ShiprocketInvoiceRowView }): ReactElement {
+  if (r.status === 'MATCHES') {
+    return <span className="text-status-delivered">Matches the wallet</span>;
+  }
+  if (r.status === 'NOT_ITEMIZED') {
+    return <span className="text-text-muted">No itemized file to check</span>;
+  }
+  if (r.status === 'UNREADABLE') {
+    return (
+      <span className="text-status-failed">
+        Could not be read{r.problem !== null && ` — ${r.problem}`}
+      </span>
+    );
+  }
+  const parts: string[] = [];
+  if (r.totalsAgree === false) parts.push(`its file adds up to ₹${r.itemizedInr ?? '?'}`);
+  if (r.differenceCount > 0) {
+    parts.push(`${r.differenceCount} order(s) billed differently (net ₹${r.differenceInr})`);
+  }
+  if (r.unknownServices.length > 0) parts.push(`unknown service: ${r.unknownServices.join(', ')}`);
+  return <span className="text-status-failed">{parts.join(' · ')}</span>;
+}
+
+/** One account's invoices: a line each, then what no invoice has billed. */
+function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }): ReactElement {
+  const res = a.result;
+  const rows =
+    res === null ? [] : [...res.rows].sort((x, y) => y.invoiceDate.localeCompare(x.invoiceDate));
+  return (
+    <div className="mt-3 space-y-2 text-xs">
+      <div>
+        <span className="font-medium">{a.label}</span> ·{' '}
+        {a.outcome === 'CHECKED'
+          ? `${a.invoicesRead} invoice(s) read`
+          : (OUTCOME_WORDS[a.outcome] ?? a.outcome)}
+        {a.detail !== null && <span className="text-text-muted"> — {a.detail}</span>}
+      </div>
+      {res !== null && (
+        <>
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Invoice</Th>
+                <Th>Type</Th>
+                <Th>Date</Th>
+                <Th>Amount</Th>
+                <Th>Against the wallet</Th>
+                <Th>Dispute by</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {rows.length === 0 ? (
+                <TableEmpty colSpan={6}>No invoices in the window.</TableEmpty>
+              ) : (
+                rows.map((r) => (
+                  <Tr key={r.invoiceId}>
+                    <Td>
+                      <span className="font-mono">{r.invoiceId}</span>
+                    </Td>
+                    <Td>{r.serviceType}</Td>
+                    <Td>{r.invoiceDate}</Td>
+                    <Td>
+                      <Money amount={r.totalInr} />
+                    </Td>
+                    <Td>
+                      <InvoiceResult r={r} />
+                      {r.beforeRecords > 0 && (
+                        <span className="text-text-muted block">
+                          {r.beforeRecords} line(s) older than our records, not compared
+                        </span>
+                      )}
+                    </Td>
+                    <Td>
+                      {r.status === 'DIFFERS' && r.disputeOpen ? (
+                        <span className="text-status-failed font-medium">{r.disputeBy}</span>
+                      ) : (
+                        <span className="text-text-muted">{r.disputeBy}</span>
+                      )}
+                    </Td>
+                  </Tr>
+                ))
+              )}
+            </TBody>
+          </Table>
+          <p className="text-text-muted">
+            VAS charged but never invoiced:{' '}
+            {res.vasUninvoiced.count === 0 ? (
+              'none'
+            ) : (
+              <>
+                {res.vasUninvoiced.count}, <Money amount={res.vasUninvoiced.inr} /> — named on
+                /system-issues
+              </>
+            )}{' '}
+            · Freight not invoiced yet: {res.freightUninvoiced.orders.toLocaleString('en-IN')}{' '}
+            order(s), <Money amount={res.freightUninvoiced.inr} /> — normal until a parcel&rsquo;s
+            charges finalise
+            {res.freightUninvoiced.staleCount > 0 &&
+              `; ${res.freightUninvoiced.staleCount} charged over 60 days ago`}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 const OUTCOME_WORDS: Readonly<Record<string, string>> = {
+  CHECKED: 'checked',
   READ: 'read',
   REFUSED: 'refused — their balances did not add up, nothing stored',
   SKIPPED: 'skipped — a sign-in challenge is open',
@@ -121,16 +245,18 @@ export function ShiprocketCostSection(): ReactElement {
   const run = useRunShiprocketCost();
   const wallet = useRunShiprocketWalletSync();
   const probe = useRunShiprocketPortalProbe();
+  const invoices = useRunShiprocketInvoiceCheck();
   const canRun = usePermission('courier.accounts.manage');
   const toast = useToast();
-  const [busy, setBusy] = useState<'bills' | 'wallet' | 'probe' | null>(null);
+  const [busy, setBusy] = useState<'bills' | 'wallet' | 'probe' | 'invoices' | null>(null);
 
-  const queue = (which: 'bills' | 'wallet' | 'probe', done: string): void => {
+  const queue = (which: 'bills' | 'wallet' | 'probe' | 'invoices', done: string): void => {
     setBusy(which);
     void (async () => {
       try {
         if (which === 'bills') await run.mutateAsync();
         else if (which === 'wallet') await wallet.mutateAsync();
+        else if (which === 'invoices') await invoices.mutateAsync();
         else await probe.mutateAsync();
         toast.success(done);
       } catch (err) {
@@ -143,6 +269,7 @@ export function ShiprocketCostSection(): ReactElement {
 
   const d = panel.data;
   const lastWallet = d?.walletSyncs[0] ?? null;
+  const lastInvoices = d?.invoiceChecks[0] ?? null;
   const lastBills = d?.last ?? null;
   const disagree = lastBills?.accounts.reduce((n, a) => n + a.ledgerDisagrees, 0) ?? 0;
   const recorded =
@@ -212,6 +339,64 @@ export function ShiprocketCostSection(): ReactElement {
                     {lastWallet.windowDays !== null && ` · last ${lastWallet.windowDays} days`}
                   </li>
                 </ul>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card className="mb-4">
+            <CardBody>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-text-strong flex items-center gap-2 text-sm font-medium">
+                    {lastInvoices !== null &&
+                    lastInvoices.ok &&
+                    invoiceRunLabel(lastInvoices) === 'every invoice matches the wallet' ? (
+                      <CheckCircle2 size={15} className="text-status-delivered" />
+                    ) : (
+                      <PauseCircle size={15} className="text-status-failed" />
+                    )}
+                    Invoice check —{' '}
+                    {lastInvoices === null ? 'has not run yet' : invoiceRunLabel(lastInvoices)}
+                  </p>
+                  <p className="text-text-muted mt-0.5 text-xs">
+                    Every night at 04:30 IST · each Freight and VAS invoice&rsquo;s itemized file,
+                    compared line by line with what their wallet charged. Shiprocket settles a
+                    discrepancy only if it is raised within 15 days of the invoice, so a
+                    disagreement inside that window is raised as HIGH.
+                  </p>
+                </div>
+                {canRun && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      queue(
+                        'invoices',
+                        'Queued. It signs in and opens each invoice — refresh in three minutes.',
+                      )
+                    }
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={busy === 'invoices' ? 'animate-spin' : undefined}
+                    />
+                    {busy === 'invoices' ? 'Queuing…' : 'Check invoices now'}
+                  </Button>
+                )}
+              </div>
+              {lastInvoices !== null && (
+                <>
+                  {lastInvoices.accounts.map((a) => (
+                    <InvoiceAccountBlock key={a.courierAccountId} a={a} />
+                  ))}
+                  <p className="text-text-muted mt-2 text-xs">
+                    {lastInvoices.trigger === 'MANUAL' ? 'Run by hand' : 'Nightly run'} ·{' '}
+                    {fmtWhen(lastInvoices.at)}
+                    {lastInvoices.windowDays !== null &&
+                      ` · invoices from the last ${lastInvoices.windowDays} days`}
+                  </p>
+                </>
               )}
             </CardBody>
           </Card>

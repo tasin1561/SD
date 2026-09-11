@@ -513,6 +513,24 @@ const systemSettings: SystemSettingSeed[] = [
       'How far back each night’s Passbook read reaches. Ninety, like Delhivery: re-reading costs nothing because each movement is stored once and recognised when seen again, and a wide window is what lets a movement that later VANISHES from their passbook be noticed. About 70 pages of 100 rows, three minutes.',
   },
   {
+    key: 'courier.shiprocket_invoice_check_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Shiprocket invoice check — run nightly',
+    description:
+      'Each night (04:30 IST, after the wallet sync) read the Invoices page of the Shiprocket panel and every Freight and VAS invoice’s itemized file, and compare each line with what their wallet charged, from our stored passbook. Names an invoice that bills an order more than the wallet charged it, a file that does not add up to its invoice, and VAS charges no invoice has billed. Reads only; changes no cost. Nightly because Shiprocket settles a discrepancy only if it is raised within 15 days of the invoice date.',
+  },
+  {
+    key: 'courier.shiprocket_invoice_check_window_days',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 120,
+    displayName: 'Shiprocket invoice check — days of invoices to read',
+    description:
+      'How far back the list of invoices reaches. Wide on purpose: a VAS charge is called uninvoiced only once a LATER monthly invoice has also passed it by, and a parcel is billed a month or two after it is booked, so the check needs the invoices on both sides of a charge.',
+  },
+  {
     key: 'courier.shiprocket_wallet_low_balance_inr',
     category: 'courier',
     valueType: SettingValueType.DECIMAL,

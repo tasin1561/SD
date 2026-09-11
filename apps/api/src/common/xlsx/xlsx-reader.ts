@@ -82,6 +82,19 @@ function read(buf: Buffer, e: ZipEntry): Buffer {
   throw new XlsxError(`unsupported compression method ${e.method} for ${e.name}`);
 }
 
+/**
+ * Every file in a zip, by name — for a download that is a zip of CSVs
+ * rather than a workbook (Shiprocket's itemized VAS invoice). Same
+ * central-directory reading as the workbook path, so the same refusals.
+ */
+export function readZipFiles(buf: Buffer): Map<string, Buffer> {
+  const out = new Map<string, Buffer>();
+  for (const [name, e] of entries(buf)) {
+    if (!name.endsWith('/')) out.set(name, read(buf, e));
+  }
+  return out;
+}
+
 /** `AB12` → 27. Column letters are base-26 with no zero. */
 function columnIndex(ref: string): number {
   let n = 0;
