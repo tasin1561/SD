@@ -22,8 +22,11 @@ import {
 import {
   useRunShiprocketCost,
   useRunShiprocketPortalProbe,
+  useRunShiprocketWalletSync,
   useShiprocketCostPanel,
   type ShiprocketCostRunView,
+  type ShiprocketWalletAccountView,
+  type ShiprocketWalletRunView,
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -36,69 +39,115 @@ function fmtWhen(iso: string): string {
   });
 }
 
-function runLabel(run: ShiprocketCostRunView): string {
+function billCheckLabel(run: ShiprocketCostRunView): string {
   if (!run.ok) return 'Failed';
   if (run.skipped === 'DISABLED') return 'Switched off';
   if (run.skipped === 'STUB_MODE') return 'Skipped — Shiprocket is in stub mode';
   if (run.skipped === 'NO_ACCOUNTS') return 'No Shiprocket account with a login';
   if (run.accounts.some((a) => a.error !== null)) return 'Partly failed';
+  return 'Worked';
+}
+
+function walletLabel(run: ShiprocketWalletRunView): string {
+  if (run.skipped === 'DISABLED') return 'Switched off';
+  if (run.skipped === 'NO_ACCOUNTS') return 'No Shiprocket account';
+  if (!run.ok) return 'Failed';
+  if (run.accounts.some((a) => a.outcome !== 'READ')) return 'Partly failed';
   return run.wrote ? 'Worked' : 'Worked (not recording)';
+}
+
+const OUTCOME_WORDS: Readonly<Record<string, string>> = {
+  READ: 'read',
+  REFUSED: 'refused — their balances did not add up, nothing stored',
+  SKIPPED: 'skipped — a sign-in challenge is open',
+  CHALLENGE: 'stopped at a sign-in challenge',
+  NO_LOGIN: 'no website login stored',
+  FAILED: 'failed',
+};
+
+/** One account's night, in the words somebody checking it would use. */
+function WalletAccountLine({ a }: { readonly a: ShiprocketWalletAccountView }): ReactElement {
+  const i = a.import;
+  const written = i === null ? 0 : i.forwardWritten + i.rtoWritten;
+  return (
+    <li className="space-y-0.5">
+      <div>
+        <span className="font-medium">{a.label}</span> · {OUTCOME_WORDS[a.outcome] ?? a.outcome}
+        {a.detail !== null && <span className="text-text-muted"> — {a.detail}</span>}
+      </div>
+      {a.outcome === 'READ' && i !== null && (
+        <div className="text-text-muted">
+          {a.passbookRows.toLocaleString('en-IN')} movements read, balances add up ·{' '}
+          {i.txnsNew.toLocaleString('en-IN')} new, {i.txnsAlreadyHeld.toLocaleString('en-IN')}{' '}
+          already held · {i.dryRun ? 'would write' : 'wrote'} {written} parcel cost(s)
+          {i.revised > 0 && ` (${i.revised} revised)`} · {i.adjustments} account adjustment(s), net{' '}
+          <Money amount={i.adjustmentsNetInr} />
+          {i.txnsMissing > 0 && ` · ${i.txnsMissing} vanished from their passbook`}
+          {i.txnsMutated > 0 && ` · ${i.txnsMutated} changed`}
+          {i.incompleteHistory > 0 && ` · ${i.incompleteHistory} parcel(s) net below zero`}
+        </div>
+      )}
+      {a.recharges !== null && (
+        <div className="text-text-muted">
+          Recharges: {a.recharges.matched} of {a.recharges.seen} matched to our bank book
+          {a.recharges.unrecorded > 0 && `, ${a.recharges.unrecorded} not in our books`}
+          {a.recharges.amountMismatched > 0 &&
+            `, ${a.recharges.amountMismatched} with a different amount`}
+        </div>
+      )}
+      {a.ledger !== null && (
+        <div className="text-text-muted">
+          Ledger: {a.ledger.checked - a.ledger.uncovered.length} of {a.ledger.checked} credits found
+          in the passbook
+          {a.ledger.uncovered.length > 0 && ' — the rest are named on /system-issues'} ·{' '}
+          {a.ledger.documents} invoice(s), already counted through the passbook
+        </div>
+      )}
+    </li>
+  );
 }
 
 /**
  * Shiprocket's costs, beside Delhivery's.
  *
- * Two figures per parcel, kept apart on purpose. "Charged so far" is
- * rebuilt from Shiprocket's breakdown and is an estimate — it missed
- * their final figure on one sampled parcel in twenty-two. "Final" is
- * Shiprocket's own billed amount and is the only one ever recorded as a
- * parcel's cost, so it is the only one the P&L sees.
- *
- * The wallet's unexplained movement is shown, never booked: the account
- * also carries parcels booked on Shiprocket's website, plus recharges and
- * credits, and without their ledger none of that can be attributed.
+ * The WALLET SYNC is the one that records: their passbook read nightly off
+ * app.shiprocket.in, every movement stored once, each parcel's cost netted
+ * from them exactly as Delhivery's are. The API run beneath it only
+ * CHECKS — it reads each order's final bill and names any that disagrees
+ * with what the wallet charged. Two writers would take turns.
  */
 export function ShiprocketCostSection(): ReactElement {
   const panel = useShiprocketCostPanel();
   const run = useRunShiprocketCost();
+  const wallet = useRunShiprocketWalletSync();
   const probe = useRunShiprocketPortalProbe();
-  const [probing, setProbing] = useState(false);
-  const goProbe = (): void => {
-    setProbing(true);
-    void (async () => {
-      try {
-        await probe.mutateAsync();
-        toast.success(
-          'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
-        );
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      } finally {
-        setProbing(false);
-      }
-    })();
-  };
   const canRun = usePermission('courier.accounts.manage');
   const toast = useToast();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'bills' | 'wallet' | 'probe' | null>(null);
 
-  const go = (): void => {
-    setBusy(true);
+  const queue = (which: 'bills' | 'wallet' | 'probe', done: string): void => {
+    setBusy(which);
     void (async () => {
       try {
-        await run.mutateAsync();
-        toast.success('Queued. It reads every Shiprocket parcel — refresh in a minute.');
+        if (which === 'bills') await run.mutateAsync();
+        else if (which === 'wallet') await wallet.mutateAsync();
+        else await probe.mutateAsync();
+        toast.success(done);
       } catch (err) {
         toast.error(serverVerdict(err));
       } finally {
-        setBusy(false);
+        setBusy(null);
       }
     })();
   };
 
   const d = panel.data;
-  const acct = d?.last?.accounts[0];
-  const finals = d?.parcels.filter((p) => p.billedInr !== null).length ?? 0;
+  const lastWallet = d?.walletSyncs[0] ?? null;
+  const lastBills = d?.last ?? null;
+  const disagree = lastBills?.accounts.reduce((n, a) => n + a.ledgerDisagrees, 0) ?? 0;
+  const recorded =
+    d?.parcels.filter((p) => p.recordedForwardInr !== null || p.recordedRtoInr !== null).length ??
+    0;
 
   return (
     <div className="mt-8">
@@ -117,30 +166,53 @@ export function ShiprocketCostSection(): ReactElement {
               <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-text-strong flex items-center gap-2 text-sm font-medium">
-                    {d.enabled && !d.stubMode ? (
+                    {lastWallet !== null && lastWallet.ok && d.writesEnabled ? (
                       <CheckCircle2 size={15} className="text-status-delivered" />
                     ) : (
                       <PauseCircle size={15} className="text-status-failed" />
                     )}
-                    {d.stubMode
-                      ? 'Not running — Shiprocket is in stub mode (no API address set)'
-                      : !d.enabled
-                        ? 'Switched off — no Shiprocket costs are being read'
-                        : d.writesEnabled
-                          ? 'On — reading charges and recording final costs'
-                          : 'On, but not recording — it reads and reports, and writes nothing'}
+                    Wallet sync —{' '}
+                    {lastWallet === null ? 'has not run yet' : walletLabel(lastWallet)}
                   </p>
                   <p className="text-text-muted mt-0.5 text-xs">
-                    {d.schedule} · read from Shiprocket&rsquo;s API, one order at a time
+                    Every night at 03:50 IST · their Passbook, Recharge History and Ledger, read
+                    from app.shiprocket.in through Bangalore. Each movement is stored once and each
+                    parcel&rsquo;s cost netted from them, the way Delhivery&rsquo;s are.
+                    {!d.writesEnabled && ' Not recording: it reads and reports only.'}
                   </p>
                 </div>
                 {canRun && (
-                  <Button variant="secondary" size="sm" disabled={busy} onClick={go}>
-                    <RefreshCw size={14} className={busy ? 'animate-spin' : undefined} />
-                    {busy ? 'Running…' : 'Run it now'}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      queue(
+                        'wallet',
+                        'Queued. It signs in and reads about 70 pages — refresh in five minutes.',
+                      )
+                    }
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={busy === 'wallet' ? 'animate-spin' : undefined}
+                    />
+                    {busy === 'wallet' ? 'Queuing…' : 'Run wallet sync now'}
                   </Button>
                 )}
               </div>
+              {lastWallet !== null && (
+                <ul className="mt-3 space-y-2 text-xs">
+                  {lastWallet.accounts.map((a) => (
+                    <WalletAccountLine key={a.courierAccountId} a={a} />
+                  ))}
+                  <li className="text-text-muted">
+                    {lastWallet.trigger === 'MANUAL' ? 'Run by hand' : 'Nightly run'} ·{' '}
+                    {fmtWhen(lastWallet.at)}
+                    {lastWallet.windowDays !== null && ` · last ${lastWallet.windowDays} days`}
+                  </li>
+                </ul>
+              )}
             </CardBody>
           </Card>
 
@@ -157,27 +229,22 @@ export function ShiprocketCostSection(): ReactElement {
               }
             />
             <Stat
-              label="Unexplained movement"
-              value={
-                acct?.unexplainedInr === null || acct === undefined ? (
-                  '—'
-                ) : (
-                  <Money amount={acct.unexplainedInr} />
-                )
-              }
-              hint="The change in balance our own parcels do not explain: parcels booked on Shiprocket's website, recharges, credits and disputes. Reported, never booked as an expense."
+              label="Parcels with a recorded cost"
+              value={`${recorded} / ${d.parcels.length}`}
+              tone={d.parcels.length === 0 || recorded === d.parcels.length ? 'good' : 'warn'}
+              hint="Netted from their passbook. A parcel with no movement yet is uncovered, not free."
             />
             <Stat
-              label="Parcels with a final cost"
-              value={`${finals} / ${d.parcels.length}`}
-              tone={d.parcels.length === 0 || finals === d.parcels.length ? 'good' : 'warn'}
-              hint="Shiprocket fills in its final billed amount weeks after delivery. Until then the parcel's cost is uncovered, not zero."
+              label="Final bills that disagree"
+              value={lastBills === null ? '—' : String(disagree)}
+              tone={lastBills === null ? 'neutral' : disagree === 0 ? 'good' : 'bad'}
+              hint="Their final billed amount against what their wallet charged for the same parcel. The wallet figure is what the P&L uses."
             />
             <Stat
-              label="Last run"
-              value={d.last === null ? 'Never' : runLabel(d.last)}
-              tone={d.last === null || !d.last.ok ? 'bad' : 'good'}
-              hint={d.last === null ? 'It has not run yet.' : fmtWhen(d.last.at)}
+              label="Last bill check"
+              value={lastBills === null ? 'Never' : billCheckLabel(lastBills)}
+              tone={lastBills === null || !lastBills.ok ? 'bad' : 'good'}
+              hint={lastBills === null ? 'It has not run yet.' : fmtWhen(lastBills.at)}
             />
           </div>
 
@@ -185,17 +252,75 @@ export function ShiprocketCostSection(): ReactElement {
             <CardBody>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-medium">Shiprocket website</h3>
+                  <p className="text-text-strong flex items-center gap-2 text-sm font-medium">
+                    {d.enabled && !d.stubMode ? (
+                      <CheckCircle2 size={15} className="text-status-delivered" />
+                    ) : (
+                      <PauseCircle size={15} className="text-status-failed" />
+                    )}
+                    Final-bill check —{' '}
+                    {d.stubMode
+                      ? 'not running, Shiprocket is in stub mode'
+                      : !d.enabled
+                        ? 'switched off'
+                        : 'on'}
+                  </p>
                   <p className="text-text-muted mt-0.5 text-xs">
-                    Their passbook, ledger and recharges have no API, so these are read from
-                    app.shiprocket.in through the Bangalore tunnel. A sign-in challenge stops it
-                    until someone resolves the issue — it never retries on its own.
+                    {d.schedule} · reads each order&rsquo;s charges from Shiprocket&rsquo;s API and
+                    checks their final bill against the wallet. It records nothing as a cost.
                   </p>
                 </div>
                 {canRun && (
-                  <Button variant="secondary" size="sm" disabled={probing} onClick={goProbe}>
-                    <RefreshCw size={14} className={probing ? 'animate-spin' : undefined} />
-                    {probing ? 'Queuing…' : 'Check website access'}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      queue(
+                        'bills',
+                        'Queued. It reads every Shiprocket parcel — refresh in a minute.',
+                      )
+                    }
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={busy === 'bills' ? 'animate-spin' : undefined}
+                    />
+                    {busy === 'bills' ? 'Queuing…' : 'Check bills now'}
+                  </Button>
+                )}
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card className="mb-4">
+            <CardBody>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-medium">Shiprocket website access</h3>
+                  <p className="text-text-muted mt-0.5 text-xs">
+                    Signs in and saves what the three wallet pages show, without storing anything. A
+                    sign-in challenge stops every website run until someone resolves the issue — it
+                    never retries on its own.
+                  </p>
+                </div>
+                {canRun && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      queue(
+                        'probe',
+                        'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
+                      )
+                    }
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={busy === 'probe' ? 'animate-spin' : undefined}
+                    />
+                    {busy === 'probe' ? 'Queuing…' : 'Check website access'}
                   </Button>
                 )}
               </div>
@@ -229,8 +354,8 @@ export function ShiprocketCostSection(): ReactElement {
                     <Th>AWB</Th>
                     <Th>Their status</Th>
                     <Th>Charged so far (estimate)</Th>
-                    <Th>Final (billed)</Th>
-                    <Th>Recorded cost</Th>
+                    <Th>Final bill</Th>
+                    <Th>Recorded cost (wallet)</Th>
                     <Th>Last read</Th>
                   </Tr>
                 </THead>
@@ -249,8 +374,11 @@ export function ShiprocketCostSection(): ReactElement {
                       const fwd =
                         p.recordedForwardInr === null ? null : Number(p.recordedForwardInr);
                       const rto = p.recordedRtoInr === null ? null : Number(p.recordedRtoInr);
-                      const recorded =
-                        fwd === null && rto === null ? null : (fwd ?? 0) + (rto ?? 0);
+                      const cost = fwd === null && rto === null ? null : (fwd ?? 0) + (rto ?? 0);
+                      const differs =
+                        cost !== null &&
+                        p.billedInr !== null &&
+                        Math.abs(cost - Number(p.billedInr)) > 0.004;
                       return (
                         <Tr key={p.shipmentId}>
                           <Td>{p.orderNumber ?? '—'}</Td>
@@ -269,10 +397,17 @@ export function ShiprocketCostSection(): ReactElement {
                             )}
                           </Td>
                           <Td>
-                            {recorded === null ? (
+                            {cost === null ? (
                               <span className="text-text-muted text-xs">uncovered</span>
                             ) : (
-                              <Money amount={recorded.toFixed(2)} />
+                              <>
+                                <Money amount={cost.toFixed(2)} />
+                                {differs && (
+                                  <span className="text-status-failed block text-xs">
+                                    differs from their bill
+                                  </span>
+                                )}
+                              </>
                             )}
                           </Td>
                           <Td>

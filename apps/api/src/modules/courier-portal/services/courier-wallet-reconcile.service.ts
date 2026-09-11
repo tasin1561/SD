@@ -9,7 +9,11 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { PortalSessionService } from './portal-session.service';
-import { WalletRechargesPage } from '../pages/wallet-recharges.page';
+import {
+  WalletRechargesPage,
+  type PortalRecharge,
+  type PortalWalletBalance,
+} from '../pages/wallet-recharges.page';
 
 export interface WalletReconcileResult {
   readonly accounts: number;
@@ -22,8 +26,15 @@ export interface WalletReconcileResult {
   readonly lowBalance: number;
 }
 
-const LOW_BALANCE_KEY = 'courier.delhivery_wallet_low_balance_inr';
+/** Per courier, like every other courier switch: one floor would suit neither. */
+const lowBalanceKey = (courierCode: string): string =>
+  `courier.${courierCode}_wallet_low_balance_inr`;
 const DEFAULT_LOW_BALANCE = '10000';
+const COURIER_NAMES: Readonly<Record<string, string>> = {
+  delhivery: 'Delhivery',
+  shiprocket: 'Shiprocket',
+};
+const courierName = (code: string): string => COURIER_NAMES[code] ?? code;
 /**
  * How far the page's stated window debit may sit from the export's sum
  * before it means something.
@@ -116,6 +127,7 @@ export class CourierWalletReconcileService {
     for (const account of accounts) {
       try {
         const one = await this.reconcileAccount(
+          courierCode,
           account.id,
           account.label,
           exportSums?.get(account.id),
@@ -159,12 +171,14 @@ export class CourierWalletReconcileService {
       and nothing on their side matches it" is exactly the finding that
       must not depend on the portal being reachable.
     */
-    result.paidButNeverArrived = await this.findPaidButNeverArrived();
+    result.paidButNeverArrived = await this.checkPaidButNeverArrived();
 
     return result;
   }
 
+  /** Delhivery's recharges, read off their panel by the shared session. */
   private async reconcileAccount(
+    courierCode: string,
     accountId: string,
     label: string,
     exportSumInr?: string,
@@ -174,7 +188,39 @@ export class CourierWalletReconcileService {
     try {
       const balance = await portal.readBalance();
       const recharges = await portal.listRecharges();
+      return await this.reconcileRecharges(
+        courierCode,
+        accountId,
+        label,
+        recharges,
+        balance,
+        exportSumInr,
+      );
+    } finally {
+      await page.close().catch(() => undefined);
+    }
+  }
 
+  /**
+   * Record one account's recharges as READ, match each to our bank book,
+   * and check the balance.
+   *
+   * Public because reading is courier-specific and matching is not:
+   * Delhivery's rows come from their Finances page above, Shiprocket's
+   * from their Recharge History, and both must be matched by the same
+   * rules — their id as the dedup key, a failed top-up excused only when
+   * they say so explicitly, a resolution never overwritten by a sweep.
+   * `balance` is null when the caller has recorded the balance itself.
+   */
+  async reconcileRecharges(
+    courierCode: string,
+    accountId: string,
+    label: string,
+    recharges: readonly PortalRecharge[],
+    balance: PortalWalletBalance | null,
+    exportSumInr?: string,
+  ): Promise<Omit<WalletReconcileResult, 'accounts' | 'paidButNeverArrived'>> {
+    {
       let newlySeen = 0;
       let matched = 0;
       let unrecorded = 0;
@@ -222,7 +268,14 @@ export class CourierWalletReconcileService {
           select: { id: true, bankEntryId: true, matchState: true, amountInr: true },
         });
 
-        const state = await this.matchOne(row.id, accountId, r, row.bankEntryId, row.matchState);
+        const state = await this.matchOne(
+          courierCode,
+          row.id,
+          accountId,
+          r,
+          row.bankEntryId,
+          row.matchState,
+        );
         if (state === CourierRechargeMatch.MATCHED) matched += 1;
         else if (state === CourierRechargeMatch.AMOUNT_MISMATCH) amountMismatched += 1;
         else if (state === CourierRechargeMatch.UNRECORDED) unrecorded += 1;
@@ -239,7 +292,7 @@ export class CourierWalletReconcileService {
       */
       let lowBalance = 0;
       try {
-        lowBalance = await this.checkBalance(accountId, label, balance, exportSumInr);
+        lowBalance = await this.checkBalance(courierCode, accountId, label, balance, exportSumInr);
       } catch (err) {
         this.logger.error(
           { accountId, err: err instanceof Error ? err.message : String(err) },
@@ -255,8 +308,6 @@ export class CourierWalletReconcileService {
         amountMismatched,
         lowBalance,
       };
-    } finally {
-      await page.close().catch(() => undefined);
     }
   }
 
@@ -268,6 +319,7 @@ export class CourierWalletReconcileService {
    * re-checked for the amounts agreeing.
    */
   private async matchOne(
+    courierCode: string,
     rechargeId: string,
     accountId: string,
     r: {
@@ -337,7 +389,7 @@ export class CourierWalletReconcileService {
         severity: SystemIssueSeverity.HIGH,
         title: `A courier wallet recharge of ₹${r.amountInr} is not in our books`,
         detail:
-          `Delhivery recorded a recharge (${r.externalTxnId}` +
+          `${courierName(courierCode)} recorded a recharge (${r.externalTxnId}` +
           `${r.bankTxnRef === null ? '' : `, bank ref ${r.bankTxnRef}`}) that no bank entry of ` +
           `ours accounts for.\n\n` +
           'Every rupee in their wallet is supposed to have left one of our accounts, so this is ' +
@@ -374,7 +426,8 @@ export class CourierWalletReconcileService {
         severity: SystemIssueSeverity.CRITICAL,
         title: `A courier recharge and our bank entry disagree by ₹${ours.minus(theirs).abs().toFixed(2)}`,
         detail:
-          `Our books say ₹${ours.toFixed(2)} left the bank; Delhivery says ₹${theirs.toFixed(2)} ` +
+          `Our books say ₹${ours.toFixed(2)} left the bank; ${courierName(courierCode)} says ` +
+          `₹${theirs.toFixed(2)} ` +
           `arrived (${r.externalTxnId}, bank ref ${r.bankTxnRef ?? '—'}).\n\n` +
           'Money went somewhere between the account and the wallet. Check the bank statement ' +
           'against their recharge before anything else is recorded on this account.',
@@ -399,7 +452,7 @@ export class CourierWalletReconcileService {
    * and an alert that fires on every same-day recharge is one people
    * learn to dismiss.
    */
-  private async findPaidButNeverArrived(): Promise<number> {
+  async checkPaidButNeverArrived(): Promise<number> {
     const settled = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const orphans = await this.prisma.client.bankEntry.findMany({
       where: {
@@ -437,6 +490,7 @@ export class CourierWalletReconcileService {
 
   /** Store the snapshot, warn if it is running out, check it adds up. */
   private async checkBalance(
+    courierCode: string,
     accountId: string,
     label: string,
     balance: {
@@ -467,7 +521,7 @@ export class CourierWalletReconcileService {
     // SettingsResolverService's per-seller override has nothing to
     // resolve against here.
     const row = await this.prisma.client.systemSetting.findUnique({
-      where: { key: LOW_BALANCE_KEY },
+      where: { key: lowBalanceKey(courierCode) },
       select: { valueDecimal: true },
     });
     const floor = new Prisma.Decimal(row?.valueDecimal?.toString() ?? DEFAULT_LOW_BALANCE);

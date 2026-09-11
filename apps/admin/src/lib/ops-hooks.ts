@@ -4191,13 +4191,12 @@ export function useRunWalletSync(): UseMutationResult<unknown, Error, void> {
 
 // ── Shiprocket cost sync ─────────────────────────────────────────────
 
-export interface ShiprocketCostWriteView {
+/** A final bill that disagrees with the cost the wallet ledger recorded. */
+export interface ShiprocketBillCheckView {
   readonly awbNumber: string;
   readonly orderNumber: string | null;
-  readonly leg: 'forward' | 'rto';
-  readonly amountInr: string;
-  readonly revised: boolean;
-  readonly previousInr: string | null;
+  readonly billedInr: string;
+  readonly ledgerInr: string;
 }
 
 export interface ShiprocketCostAccountResultView {
@@ -4216,13 +4215,11 @@ export interface ShiprocketCostAccountResultView {
   readonly failed: number;
   readonly finalCount: number;
   readonly provisionalOnly: number;
-  readonly forwardWritten: number;
-  readonly rtoWritten: number;
-  readonly revised: number;
-  readonly unchanged: number;
-  readonly dryRun: boolean;
-  readonly writes: readonly ShiprocketCostWriteView[];
-  readonly writesTruncated: number;
+  /** Final bills equal to the wallet ledger's cost / different / not costed yet. */
+  readonly ledgerAgrees: number;
+  readonly ledgerDisagrees: number;
+  readonly ledgerUncovered: number;
+  readonly disagreements: readonly ShiprocketBillCheckView[];
 }
 
 export interface ShiprocketCostRunView {
@@ -4230,7 +4227,6 @@ export interface ShiprocketCostRunView {
   readonly ok: boolean;
   readonly trigger: string | null;
   readonly skipped: string | null;
-  readonly wrote: boolean;
   readonly error: string | null;
   readonly accounts: readonly ShiprocketCostAccountResultView[];
 }
@@ -4242,7 +4238,7 @@ export interface ShiprocketParcelCostView {
   readonly theirStatus: string;
   /** Rebuilt from their breakdown — an estimate, shown only. */
   readonly provisionalInr: string | null;
-  /** Their FINAL figure; the only one recorded as a cost. */
+  /** Their FINAL figure — checked against the wallet ledger, never recorded. */
   readonly billedInr: string | null;
   readonly recordedForwardInr: string | null;
   readonly recordedRtoInr: string | null;
@@ -4250,8 +4246,64 @@ export interface ShiprocketParcelCostView {
   readonly readings: number;
 }
 
+/** One account's night, as the wallet sync recorded it. */
+export interface ShiprocketWalletAccountView {
+  readonly courierAccountId: string;
+  readonly label: string;
+  /** READ, REFUSED (the balance chain broke), SKIPPED, CHALLENGE, NO_LOGIN or FAILED. */
+  readonly outcome: string;
+  readonly detail: string | null;
+  readonly passbookRows: number;
+  readonly chainBreaks: number;
+  readonly usableBalanceInr: string | null;
+  readonly newestBalanceInr: string | null;
+  readonly import: {
+    readonly txnsNew: number;
+    readonly txnsAlreadyHeld: number;
+    readonly txnsMutated: number;
+    readonly txnsMissing: number;
+    readonly forwardWritten: number;
+    readonly rtoWritten: number;
+    readonly revised: number;
+    readonly unknownAwbs: number;
+    readonly adjustments: number;
+    readonly adjustmentsNetInr: string;
+    readonly incompleteHistory: number;
+    readonly dryRun: boolean;
+  } | null;
+  readonly recharges: {
+    readonly seen: number;
+    readonly newlySeen: number;
+    readonly matched: number;
+    readonly unrecorded: number;
+    readonly amountMismatched: number;
+    readonly lowBalance: number;
+  } | null;
+  readonly ledger: {
+    readonly checked: number;
+    readonly uncovered: ReadonlyArray<{
+      readonly date: string;
+      readonly particulars: string;
+      readonly amountInr: string;
+      readonly description: string;
+    }>;
+    readonly documents: number;
+  } | null;
+}
+
+export interface ShiprocketWalletRunView {
+  readonly at: string;
+  readonly ok: boolean;
+  readonly trigger: string | null;
+  readonly skipped: string | null;
+  readonly wrote: boolean;
+  readonly windowDays: number | null;
+  readonly accounts: readonly ShiprocketWalletAccountView[];
+}
+
 export interface ShiprocketCostPanelView {
   readonly enabled: boolean;
+  /** Whether the WALLET sync writes costs — the only thing that does. */
   readonly writesEnabled: boolean;
   readonly stubMode: boolean;
   readonly schedule: string;
@@ -4276,6 +4328,8 @@ export interface ShiprocketCostPanelView {
       readonly pages: ReadonlyArray<{ readonly tab: string; readonly landedOnLogin: boolean }>;
     }>;
   } | null;
+  /** The nightly wallet sync, newest first. */
+  readonly walletSyncs: readonly ShiprocketWalletRunView[];
 }
 
 export function useShiprocketCostPanel(): UseQueryResult<ShiprocketCostPanelView, Error> {
@@ -4295,6 +4349,24 @@ export function useRunShiprocketCost(): UseMutationResult<unknown, Error, void> 
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-shiprocket-cost'] });
       void queryClient.invalidateQueries({ queryKey: ['admin-margin'] });
+    },
+  });
+}
+
+/**
+ * Run the Shiprocket wallet sync now: a real sign-in through the Bangalore
+ * tunnel that reads their passbook and writes parcel costs. Queued.
+ */
+export function useRunShiprocketWalletSync(): UseMutationResult<unknown, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<unknown>('/api/admin/courier-cost/shiprocket/wallet-sync', {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-shiprocket-cost'] });
     },
   });
 }

@@ -6,8 +6,9 @@ import type { SystemIssueService } from '../../src/modules/system-issues/service
 import type { ShiprocketHttpService } from '../../src/modules/courier-shiprocket/services/shiprocket-http.service';
 
 /**
- * The nightly Shiprocket cost sync. Only THEIR final billed amount ever
- * becomes a parcel's cost; everything else is recorded and reported.
+ * The nightly Shiprocket API sync. It reads each parcel's charges and
+ * CHECKS their final bill against the cost the wallet ledger recorded —
+ * the passbook sync is the only thing that writes a Shiprocket cost.
  */
 type Ship = {
   id: string;
@@ -19,7 +20,6 @@ type Ship = {
 
 function makeSut(opts: {
   enabled?: boolean;
-  writes?: boolean;
   stub?: boolean;
   balance?: string;
   previousBalance?: string | null;
@@ -34,11 +34,7 @@ function makeSut(opts: {
   const held = { ...(opts.heldReadings ?? {}) };
   const client = {
     systemSetting: {
-      findUnique: async ({ where }: { where: { key: string } }) => ({
-        valueBoolean: where.key.endsWith('writes_enabled')
-          ? (opts.writes ?? true)
-          : (opts.enabled ?? true),
-      }),
+      findUnique: async () => ({ valueBoolean: opts.enabled ?? true }),
     },
     courierAccount: { findMany: async () => [{ id: 'acct-sr', label: 'Shiprocket - primary' }] },
     courierWalletBalance: {
@@ -57,6 +53,7 @@ function makeSut(opts: {
           ...s,
           orderShipments: [{ order: { orderNumber: `SD-${s.id}` } }],
         })),
+      // Present so a regression that writes a cost is caught, not crashed.
       update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
         updates.push({ id: where.id, data });
         return {};
@@ -120,9 +117,11 @@ describe('ShiprocketCostSyncService', () => {
     expect((await makeSut({ stub: true }).svc.sync('SCHEDULE')).skipped).toBe('STUB_MODE');
   });
 
-  it('stamps ONLY their final figure — a returned parcel whole on the return column', async () => {
+  it('never writes a cost — the wallet ledger is the only writer', async () => {
+    // A returned parcel the ledger costed whole on the return column, and
+    // a parcel Shiprocket has not billed yet.
     const s = makeSut({
-      shipments: [ship('back'), ship('unbilled')],
+      shipments: [ship('back', '0', '163.40'), ship('unbilled')],
       orders: {
         'SR-back': srOrder('RTO DELIVERED', {
           cod_charges: 47,
@@ -140,19 +139,21 @@ describe('ShiprocketCostSyncService', () => {
 
     const run = await s.svc.sync('MANUAL');
 
-    const back = s.updates.filter((u) => u.id === 'back');
-    expect(back.map((u) => Object.keys(u.data)[0])).toEqual([
-      'actualCourierCostInr',
-      'actualRtoCostInr',
-    ]);
-    expect(String(back[0]?.data['actualCourierCostInr'])).toBe('0');
-    expect(String(back[1]?.data['actualRtoCostInr'])).toBe('163.4');
-    // The estimate is recorded on the reading and NEVER stamped.
-    expect(s.updates.filter((u) => u.id === 'unbilled')).toHaveLength(0);
-    expect(run.accounts[0]).toMatchObject({ finalCount: 1, provisionalOnly: 1, readingsStored: 2 });
+    expect(s.updates).toHaveLength(0);
+    expect(run.accounts[0]).toMatchObject({
+      finalCount: 1,
+      provisionalOnly: 1,
+      readingsStored: 2,
+      ledgerAgrees: 1,
+      ledgerDisagrees: 0,
+    });
+    expect(s.issues.resolveByKey).toHaveBeenCalledWith(
+      'shiprocket-bill-vs-ledger:acct-sr',
+      expect.any(String),
+    );
   });
 
-  it('records what a revised figure used to be', async () => {
+  it('names a final bill that disagrees with the wallet ledger, and says so', async () => {
     const s = makeSut({
       shipments: [ship('p', '90.00')],
       orders: {
@@ -160,11 +161,29 @@ describe('ShiprocketCostSyncService', () => {
       },
     });
     const run = await s.svc.sync('MANUAL');
-    expect(run.accounts[0]?.writes[0]).toMatchObject({
-      revised: true,
-      previousInr: '90',
-      amountInr: '94',
+    expect(run.accounts[0]).toMatchObject({ ledgerDisagrees: 1 });
+    expect(run.accounts[0]?.disagreements[0]).toMatchObject({
+      awbNumber: 'AWB',
+      orderNumber: 'SD-p',
+      billedInr: '94.00',
+      ledgerInr: '90.00',
     });
+    expect(s.issues.raise).toHaveBeenCalledWith(
+      expect.objectContaining({ dedupeKey: 'shiprocket-bill-vs-ledger:acct-sr' }),
+    );
+    expect(s.updates).toHaveLength(0);
+  });
+
+  it('a final bill the ledger has not costed yet is uncovered, not a disagreement', async () => {
+    const s = makeSut({
+      shipments: [ship('q')],
+      orders: {
+        'SR-q': srOrder('DELIVERED', { freight_charges: '94.00', billing_amount: '94.00' }),
+      },
+    });
+    const run = await s.svc.sync('MANUAL');
+    expect(run.accounts[0]).toMatchObject({ ledgerUncovered: 1, ledgerDisagrees: 0 });
+    expect(s.issues.raise).not.toHaveBeenCalled();
   });
 
   it('stores a reading only when something changed', async () => {
@@ -177,31 +196,16 @@ describe('ShiprocketCostSyncService', () => {
     expect(s.readings).toHaveLength(1);
   });
 
-  it('with writes off it reads, stores and reports — and stamps nothing', async () => {
-    const s = makeSut({
-      writes: false,
-      shipments: [ship('p')],
-      orders: {
-        'SR-p': srOrder('DELIVERED', { freight_charges: '94.00', billing_amount: '94.00' }),
-      },
-    });
-    const run = await s.svc.sync('MANUAL');
-    expect(s.updates).toHaveLength(0);
-    expect(s.readings).toHaveLength(1);
-    expect(run.accounts[0]).toMatchObject({ dryRun: true, forwardWritten: 1 });
-  });
-
   it('one order that will not load does not stop the others', async () => {
     const s = makeSut({
-      shipments: [ship('bad'), ship('good')],
+      shipments: [ship('bad'), ship('good', '94.00')],
       failOn: 'SR-bad',
       orders: {
         'SR-good': srOrder('DELIVERED', { freight_charges: '94.00', billing_amount: '94.00' }),
       },
     });
     const run = await s.svc.sync('SCHEDULE');
-    expect(run.accounts[0]).toMatchObject({ failed: 1, finalCount: 1 });
-    expect(s.updates.some((u) => u.id === 'good')).toBe(true);
+    expect(run.accounts[0]).toMatchObject({ failed: 1, finalCount: 1, ledgerAgrees: 1 });
   });
 
   it('snapshots the wallet and reports what our parcels do not explain', async () => {

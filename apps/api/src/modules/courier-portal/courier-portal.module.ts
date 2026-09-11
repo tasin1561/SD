@@ -23,6 +23,7 @@ import { CourierWalletReconcileService } from './services/courier-wallet-reconci
 import { ShiprocketPortalSessionService } from './services/shiprocket-portal-session.service';
 import { ShiprocketPortalProbeService } from './services/shiprocket-portal-probe.service';
 import { ShiprocketPortalWorker } from './queue/shiprocket-portal.worker';
+import { ShiprocketWalletSyncService } from './services/shiprocket-wallet-sync.service';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -82,6 +83,7 @@ import { ShiprocketPortalWorker } from './queue/shiprocket-portal.worker';
     // Shiprocket's panel: its own browser, out through the Bangalore tunnel.
     ShiprocketPortalSessionService,
     ShiprocketPortalProbeService,
+    ShiprocketWalletSyncService,
     ShiprocketPortalWorker,
   ],
   // The SESSION only. Logging into the portal is the expensive, fragile,

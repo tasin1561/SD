@@ -28,16 +28,14 @@ const API = resolve(__dirname, '../..');
  */
 const ALLOWED = [
   // The invoice. Reads the courier's own ledger and writes what they
-  // actually charged.
+  // actually charged — Delhivery's export and Shiprocket's passbook alike.
+  // (The Shiprocket API sync used to write their final `billing_amount`
+  // here too; since their passbook became readable it CHECKS that figure
+  // against the ledger instead, so a parcel has one cost, not two
+  // writers taking turns.)
   'wallet-import.service.ts',
   // A person typing a figure off an invoice, deliberately and audited.
   'shipment-cost.service.ts',
-  // Shiprocket's invoice. Their wallet ledger is not readable by API, so
-  // this reads each order's FINAL `billing_amount` — their own billed
-  // figure, already net of reversals — and writes nothing else. The
-  // provisional figure it also computes is an estimate and is kept on the
-  // reading, never written here.
-  'shiprocket-cost-sync.service.ts',
 ];
 
 describe('the invoiced courier cost has one automated writer', () => {

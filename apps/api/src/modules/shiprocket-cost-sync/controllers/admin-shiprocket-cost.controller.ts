@@ -90,4 +90,28 @@ export class AdminShiprocketCostController {
     });
     return this.portal.requestProbe();
   }
+
+  @Post('wallet-sync')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('courier.accounts.manage')
+  @ApiOperation({
+    summary:
+      'Run the Shiprocket wallet sync now: sign in through the Bangalore tunnel, read the Passbook, Recharge History and Ledger, store each movement once and net each parcel’s cost. Queued.',
+  })
+  async walletSync(
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ queued: boolean; jobId: string | null }> {
+    // A real sign-in that can write costs: who asked belongs on record.
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staff.id,
+      actorId: staff.id,
+      action: 'courier.shiprocket_wallet.sync_requested',
+      entityType: 'courier',
+      entityId: null,
+      severity: 'MEDIUM',
+      metadata: { courierCode: 'shiprocket' },
+    });
+    return this.portal.requestWalletSync();
+  }
 }

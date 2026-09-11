@@ -5,16 +5,17 @@ import {
   ACTION_SHIPROCKET_COST_FAILED,
   ACTION_SHIPROCKET_COST_OK,
   SETTING_SR_COST_ENABLED,
-  SETTING_SR_COST_WRITES,
   type ShiprocketCostAccountResult,
 } from './shiprocket-cost-sync.service';
+
+/** Restated: the wallet sync (portal worker) is the only writer of a cost. */
+const SETTING_SR_WALLET_WRITES = 'courier.shiprocket_wallet_sync_writes_enabled';
 
 export interface ShiprocketCostRunView {
   readonly at: string;
   readonly ok: boolean;
   readonly trigger: string | null;
   readonly skipped: string | null;
-  readonly wrote: boolean;
   readonly error: string | null;
   readonly accounts: readonly ShiprocketCostAccountResult[];
 }
@@ -47,6 +48,25 @@ export interface ShiprocketPortalProbeView {
   }>;
 }
 
+/**
+ * The portal worker's nightly wallet sync, from its audit rows. The action
+ * names are RESTATED from `ShiprocketWalletSyncService` — the API must not
+ * import the portal module — and `shiprocket-portal.spec.ts` pins them.
+ */
+export const ACTION_SR_WALLET_OK = 'courier.shiprocket_wallet.synced';
+export const ACTION_SR_WALLET_FAILED = 'courier.shiprocket_wallet.sync_failed';
+
+export interface ShiprocketWalletRunView {
+  readonly at: string;
+  readonly ok: boolean;
+  readonly trigger: string | null;
+  readonly skipped: string | null;
+  readonly wrote: boolean;
+  readonly windowDays: number | null;
+  /** Per account, as the worker recorded it (outcome, counts, ledger check). */
+  readonly accounts: ReadonlyArray<Record<string, unknown>>;
+}
+
 export interface ShiprocketCostPanel {
   readonly enabled: boolean;
   readonly writesEnabled: boolean;
@@ -62,6 +82,8 @@ export interface ShiprocketCostPanel {
   readonly history: readonly ShiprocketCostRunView[];
   readonly parcels: readonly ShiprocketParcelCostView[];
   readonly portalProbe: ShiprocketPortalProbeView | null;
+  /** The nightly wallet sync: newest first. */
+  readonly walletSyncs: readonly ShiprocketWalletRunView[];
 }
 
 /** What the /cost-sync page shows for Shiprocket. Reads only. */
@@ -75,7 +97,7 @@ export class ShiprocketCostPanelService {
   async panel(limit = 20): Promise<ShiprocketCostPanel> {
     const [settings, stubMode, runs, accounts] = await Promise.all([
       this.prisma.client.systemSetting.findMany({
-        where: { key: { in: [SETTING_SR_COST_ENABLED, SETTING_SR_COST_WRITES] } },
+        where: { key: { in: [SETTING_SR_COST_ENABLED, SETTING_SR_WALLET_WRITES] } },
         select: { key: true, valueBoolean: true },
       }),
       this.http.isStubMode(),
@@ -164,10 +186,35 @@ export class ShiprocketCostPanelService {
               : [],
           };
 
+    const walletRows = await this.prisma.client.auditLog.findMany({
+      where: { action: { in: [ACTION_SR_WALLET_OK, ACTION_SR_WALLET_FAILED] } },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { action: true, createdAt: true, metadata: true },
+    });
+    const walletSyncs: ShiprocketWalletRunView[] = walletRows.map((r) => {
+      const m = (r.metadata !== null && typeof r.metadata === 'object' ? r.metadata : {}) as Record<
+        string,
+        unknown
+      >;
+      return {
+        at: r.createdAt.toISOString(),
+        ok: r.action === ACTION_SR_WALLET_OK,
+        trigger: typeof m['trigger'] === 'string' ? m['trigger'] : null,
+        skipped: typeof m['skipped'] === 'string' ? m['skipped'] : null,
+        wrote: m['wrote'] === true,
+        windowDays: typeof m['windowDays'] === 'number' ? m['windowDays'] : null,
+        accounts: Array.isArray(m['accounts'])
+          ? (m['accounts'] as Array<Record<string, unknown>>)
+          : [],
+      };
+    });
+
     return {
+      walletSyncs,
       portalProbe,
       enabled: flag(SETTING_SR_COST_ENABLED),
-      writesEnabled: flag(SETTING_SR_COST_WRITES),
+      writesEnabled: flag(SETTING_SR_WALLET_WRITES),
       stubMode,
       schedule: 'Every night at 21:40 IST',
       balances,
@@ -187,7 +234,6 @@ function toRun(action: string, at: Date, raw: unknown): ShiprocketCostRunView {
     ok: action === ACTION_SHIPROCKET_COST_OK,
     trigger: typeof m['trigger'] === 'string' ? m['trigger'] : null,
     skipped: typeof m['skipped'] === 'string' ? m['skipped'] : null,
-    wrote: m['wrote'] === true,
     error: typeof m['error'] === 'string' ? m['error'] : null,
     accounts: Array.isArray(m['accounts']) ? (m['accounts'] as ShiprocketCostAccountResult[]) : [],
   };

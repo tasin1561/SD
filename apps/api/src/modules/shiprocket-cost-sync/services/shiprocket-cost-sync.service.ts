@@ -10,7 +10,6 @@ import { amount, readingFromOrder } from './shiprocket-cost-reading';
 export const ACTION_SHIPROCKET_COST_OK = 'courier.shiprocket_cost.synced';
 export const ACTION_SHIPROCKET_COST_FAILED = 'courier.shiprocket_cost.sync_failed';
 export const SETTING_SR_COST_ENABLED = 'courier.shiprocket_cost_sync_enabled';
-export const SETTING_SR_COST_WRITES = 'courier.shiprocket_cost_sync_writes_enabled';
 
 /** How far back parcels are re-read. Their billing is finalised late —
  *  weeks after delivery — and a weight dispute can move it later still. */
@@ -18,13 +17,14 @@ const LOOKBACK_DAYS = 180;
 /** Written parcels listed by name on the run, as the Delhivery run does. */
 const WRITE_DETAIL_CAP = 100;
 
-export interface ShiprocketCostWrite {
+/** A final bill that disagrees with what the passbook ledger recorded. */
+export interface ShiprocketBillCheck {
   readonly awbNumber: string;
   readonly orderNumber: string | null;
-  readonly leg: 'forward' | 'rto';
-  readonly amountInr: string;
-  readonly revised: boolean;
-  readonly previousInr: string | null;
+  /** Their final `billing_amount`. */
+  readonly billedInr: string;
+  /** Forward + return, as the wallet ledger costed the parcel. */
+  readonly ledgerInr: string;
 }
 
 export interface ShiprocketCostAccountResult {
@@ -50,30 +50,31 @@ export interface ShiprocketCostAccountResult {
   readonly failed: number;
   readonly finalCount: number;
   readonly provisionalOnly: number;
-  readonly forwardWritten: number;
-  readonly rtoWritten: number;
-  readonly revised: number;
-  readonly unchanged: number;
-  readonly dryRun: boolean;
-  readonly writes: readonly ShiprocketCostWrite[];
-  readonly writesTruncated: number;
+  /** Final bills that equal the cost the passbook ledger recorded. */
+  readonly ledgerAgrees: number;
+  /** Final bills that DIFFER from it — each one named below. */
+  readonly ledgerDisagrees: number;
+  /** Final bills for a parcel the ledger has not costed yet. */
+  readonly ledgerUncovered: number;
+  readonly disagreements: readonly ShiprocketBillCheck[];
 }
 
 export interface ShiprocketCostRun {
   readonly skipped: 'DISABLED' | 'STUB_MODE' | 'NO_ACCOUNTS' | null;
-  readonly wrote: boolean;
   readonly accounts: readonly ShiprocketCostAccountResult[];
 }
 
 /**
  * What Shiprocket charged for our parcels, read nightly from their API.
  *
- * ── THE SAME RULES AS DELHIVERY, FROM A DIFFERENT SOURCE ─────────────
- * Only Shiprocket's FINAL `billing_amount` is ever stamped as a parcel's
- * cost, and it is stamped the way COST-1 stamps a returned parcel: its
- * whole cost on the return column and ₹0 forward, so the two columns add
- * up to what it cost and every P&L line reads them added (TRE-6). The
- * provisional figure is kept on each reading and shown, never stamped.
+ * ── IT CHECKS; IT DOES NOT WRITE ─────────────────────────────────────
+ * A parcel's cost has ONE writer: the wallet ledger — their passbook, read
+ * nightly by the portal worker and netted the COST-1 way. This reads each
+ * order's FINAL `billing_amount`, their own figure, and compares it with
+ * what the ledger recorded, naming any parcel where the two disagree. It
+ * used to write that figure itself; two writers would take turns
+ * overwriting each other and record a "revision" every night. The
+ * provisional figure is kept on each reading and shown, never booked.
  *
  * ── EACH PARCEL ALONE ────────────────────────────────────────────────
  * One order that will not load must not cost the rest their reading —
@@ -128,7 +129,6 @@ export class ShiprocketCostSyncService {
         courierCode: 'shiprocket',
         trigger,
         skipped: result.skipped,
-        wrote: result.wrote,
         accounts: result.accounts.map((a) => ({ ...a })),
       },
     });
@@ -136,12 +136,9 @@ export class ShiprocketCostSyncService {
   }
 
   private async run(runId: string): Promise<ShiprocketCostRun> {
-    const [enabled, writes] = await Promise.all([
-      this.flag(SETTING_SR_COST_ENABLED),
-      this.flag(SETTING_SR_COST_WRITES),
-    ]);
-    if (!enabled) return { skipped: 'DISABLED', wrote: false, accounts: [] };
-    if (await this.http.isStubMode()) return { skipped: 'STUB_MODE', wrote: false, accounts: [] };
+    const enabled = await this.flag(SETTING_SR_COST_ENABLED);
+    if (!enabled) return { skipped: 'DISABLED', accounts: [] };
+    if (await this.http.isStubMode()) return { skipped: 'STUB_MODE', accounts: [] };
 
     const accounts = await this.prisma.client.courierAccount.findMany({
       where: {
@@ -153,12 +150,12 @@ export class ShiprocketCostSyncService {
       select: { id: true, label: true },
       orderBy: { createdAt: 'asc' },
     });
-    if (accounts.length === 0) return { skipped: 'NO_ACCOUNTS', wrote: false, accounts: [] };
+    if (accounts.length === 0) return { skipped: 'NO_ACCOUNTS', accounts: [] };
 
     const results: ShiprocketCostAccountResult[] = [];
     for (const account of accounts) {
       try {
-        results.push(await this.syncAccount(account, writes, runId));
+        results.push(await this.syncAccount(account, runId));
         await this.issues.resolveByKey(
           `shiprocket-cost-sync:${account.id}`,
           'The Shiprocket cost sync completed on its own.',
@@ -181,15 +178,14 @@ export class ShiprocketCostSyncService {
           dedupeKey: `shiprocket-cost-sync:${account.id}`,
           metadata: { courierAccountId: account.id, label: account.label },
         });
-        results.push(this.failedResult(account, message, writes));
+        results.push(this.failedResult(account, message));
       }
     }
-    return { skipped: null, wrote: writes, accounts: results };
+    return { skipped: null, accounts: results };
   }
 
   private async syncAccount(
     account: { id: string; label: string },
-    writes: boolean,
     runId: string,
   ): Promise<ShiprocketCostAccountResult> {
     const actor = courierActor.runner('shiprocket-cost-sync', runId);
@@ -244,13 +240,11 @@ export class ShiprocketCostSyncService {
     let failed = 0;
     let finalCount = 0;
     let provisionalOnly = 0;
-    let forwardWritten = 0;
-    let rtoWritten = 0;
-    let revised = 0;
-    let unchanged = 0;
+    let ledgerAgrees = 0;
+    let ledgerDisagrees = 0;
+    let ledgerUncovered = 0;
     let chargeChangePaise = 0;
-    const writesList: ShiprocketCostWrite[] = [];
-    let writesTruncated = 0;
+    const disagreements: ShiprocketBillCheck[] = [];
 
     for (const s of shipments) {
       const courierOrderId = s.courierOrderId ?? '';
@@ -317,48 +311,64 @@ export class ShiprocketCostSyncService {
       }
       finalCount += 1;
 
-      // Their final figure, stamped the COST-1 way: a returned parcel's
-      // whole cost on the return column and ₹0 forward.
+      // Their final figure is CHECKED against what the passbook ledger
+      // recorded — never written. One cost per parcel, from one writer.
       const billed = new Prisma.Decimal(reading.billedInr);
-      const targets: Array<{ leg: 'forward' | 'rto'; next: Prisma.Decimal }> = reading.returned
-        ? [
-            { leg: 'forward', next: new Prisma.Decimal(0) },
-            { leg: 'rto', next: billed },
-          ]
-        : [{ leg: 'forward', next: billed }];
-
-      for (const t of targets) {
-        const current = t.leg === 'forward' ? s.actualCourierCostInr : s.actualRtoCostInr;
-        if (current !== null && current.equals(t.next)) {
-          unchanged += 1;
-          continue;
-        }
-        const wasRevised = current !== null;
-        if (wasRevised) revised += 1;
-        if (t.leg === 'forward') forwardWritten += 1;
-        else rtoWritten += 1;
-        if (writesList.length < WRITE_DETAIL_CAP) {
-          writesList.push({
-            awbNumber: reading.awbNumber ?? s.awbNumber ?? courierOrderId,
-            orderNumber: s.orderShipments[0]?.order.orderNumber ?? null,
-            leg: t.leg,
-            amountInr: t.next.toString(),
-            revised: wasRevised,
-            previousInr: current === null ? null : current.toString(),
-          });
-        } else {
-          writesTruncated += 1;
-        }
-        if (!writes) continue;
-        const at = new Date();
-        await this.prisma.client.shipment.update({
-          where: { id: s.id },
-          data:
-            t.leg === 'forward'
-              ? { actualCourierCostInr: t.next, actualCourierCostAt: at }
-              : { actualRtoCostInr: t.next, actualRtoCostAt: at },
+      if (s.actualCourierCostInr === null && s.actualRtoCostInr === null) {
+        ledgerUncovered += 1;
+        continue;
+      }
+      const recorded = (s.actualCourierCostInr ?? new Prisma.Decimal(0)).add(
+        s.actualRtoCostInr ?? new Prisma.Decimal(0),
+      );
+      if (recorded.equals(billed)) {
+        ledgerAgrees += 1;
+        continue;
+      }
+      ledgerDisagrees += 1;
+      if (disagreements.length < WRITE_DETAIL_CAP) {
+        disagreements.push({
+          awbNumber: reading.awbNumber ?? s.awbNumber ?? courierOrderId,
+          orderNumber: s.orderShipments[0]?.order.orderNumber ?? null,
+          billedInr: billed.toFixed(2),
+          ledgerInr: recorded.toFixed(2),
         });
       }
+    }
+
+    /*
+      THEIR BILL AND THEIR WALLET DISAGREE.
+
+      Their final figure should equal the net of what their wallet
+      charged for the parcel. When it does not, one of the two is wrong
+      and it is money either way — so it is named, not averaged. The
+      ledger's figure stands in the P&L: it is what actually left.
+    */
+    const checkKey = `shiprocket-bill-vs-ledger:${account.id}`;
+    if (ledgerDisagrees > 0) {
+      await this.issues.raise({
+        kind: SystemIssueKind.MONEY,
+        severity: SystemIssueSeverity.MEDIUM,
+        title: `${ledgerDisagrees} Shiprocket final bill(s) disagree with the wallet ledger`,
+        detail:
+          'Shiprocket billed these parcels a different total from what their own wallet ' +
+          'charged us for them. The wallet figure is what the P&L uses.\n\n' +
+          disagreements
+            .slice(0, 10)
+            .map(
+              (d) =>
+                `${d.awbNumber} · ${d.orderNumber ?? '—'} · billed ₹${d.billedInr}, wallet ₹${d.ledgerInr}`,
+            )
+            .join('\n'),
+        source: 'ShiprocketCostSyncService',
+        dedupeKey: checkKey,
+        metadata: {
+          courierAccountId: account.id,
+          disagreements: disagreements.slice(0, 25).map((d) => ({ ...d })),
+        },
+      });
+    } else {
+      await this.issues.resolveByKey(checkKey, 'Every final bill matches the wallet ledger again.');
     }
 
     const prevBal = previous === null ? null : Number(previous.balanceInr);
@@ -382,20 +392,16 @@ export class ShiprocketCostSyncService {
       failed,
       finalCount,
       provisionalOnly,
-      forwardWritten,
-      rtoWritten,
-      revised,
-      unchanged,
-      dryRun: !writes,
-      writes: writesList,
-      writesTruncated,
+      ledgerAgrees,
+      ledgerDisagrees,
+      ledgerUncovered,
+      disagreements,
     };
   }
 
   private failedResult(
     account: { id: string; label: string },
     message: string,
-    writes: boolean,
   ): ShiprocketCostAccountResult {
     return {
       label: account.label,
@@ -412,13 +418,10 @@ export class ShiprocketCostSyncService {
       failed: 0,
       finalCount: 0,
       provisionalOnly: 0,
-      forwardWritten: 0,
-      rtoWritten: 0,
-      revised: 0,
-      unchanged: 0,
-      dryRun: !writes,
-      writes: [],
-      writesTruncated: 0,
+      ledgerAgrees: 0,
+      ledgerDisagrees: 0,
+      ledgerUncovered: 0,
+      disagreements: [],
     };
   }
 

@@ -159,6 +159,28 @@ export interface MissingTxn {
   readonly occurredAt: string;
 }
 
+/** One courier account's wallet transactions, however they were read. */
+export interface LedgerImport {
+  readonly courierCode: string;
+  readonly courierAccountId: string;
+  readonly txns: readonly LedgerTxn[];
+  /** The span the read actually covers — what "missing" is judged within. */
+  readonly periodFrom: Date | null;
+  readonly periodTo: Date | null;
+  readonly rowsRead: number;
+  readonly rowsSkipped: number;
+  /** Σ debits read. */
+  readonly sumInr: string;
+  /** A total the SOURCE states for the same rows, when it states one. */
+  readonly statedTotalInr: string | null;
+  /** Whether the source's own integrity check held; null when it has none. */
+  readonly totalsAgree: boolean | null;
+  readonly impliedClosingInr: string | null;
+  readonly dryRun: boolean;
+  /** Null when the nightly sync ran it (see importDelhiveryWallet). */
+  readonly staffId: string | null;
+}
+
 /**
  * What Delhivery actually charged us, read off their wallet export.
  *
@@ -295,23 +317,85 @@ export class WalletImportService {
       meaning anything on both.
     */
     const courierAccountId = opts.courierAccountId ?? (await this.defaultAccountId());
-    const stored = await this.storeTransactions(parsed.txns, courierAccountId, dryRun);
+
+    /*
+      ── THE FILE'S OWN ARITHMETIC ─────────────────────────────────────
+
+      opening + recharges + refunds − deductions = the closing balance
+      their wallet shows. Every row of the export is on one side of that
+      identity, so a truncated or edited file breaks it — the strongest
+      integrity check this file offers. Computed and reported rather than
+      enforced: refusing an import over arithmetic would stop costs
+      landing for a reason nobody can act on at 3am.
+    */
+    const summary = parsed.summary;
+    const impliedClosingInr =
+      summary.openingBalanceInr !== null &&
+      summary.totalRechargesInr !== null &&
+      summary.totalRefundsInr !== null &&
+      summary.totalDeductionsInr !== null
+        ? new Prisma.Decimal(summary.openingBalanceInr)
+            .add(summary.totalRechargesInr)
+            .add(summary.totalRefundsInr)
+            .sub(summary.totalDeductionsInr)
+            .toFixed(2)
+        : null;
+
+    return this.importTransactions({
+      courierCode: 'delhivery',
+      courierAccountId,
+      txns: parsed.txns,
+      periodFrom: parsed.periodFrom,
+      periodTo: parsed.periodTo,
+      rowsRead: parsed.rowsRead,
+      rowsSkipped: parsed.rowsSkipped,
+      sumInr: parsed.sumInr,
+      statedTotalInr: parsed.statedTotalInr,
+      totalsAgree,
+      impliedClosingInr,
+      dryRun,
+      staffId,
+    });
+  }
+
+  /**
+   * Store, reconcile, net and stamp a courier's wallet transactions —
+   * the whole of COST-1, for ANY courier whose wallet can be read as a
+   * list of transactions.
+   *
+   * Delhivery's export arrives as a file (above); Shiprocket's passbook
+   * is read off their panel. Both end here, so the rules are written once:
+   * insert what is new and never rewrite what is held, report a changed
+   * or vanished transaction instead of applying it, net each parcel from
+   * OUR stored ledger rather than from the window just read, never stamp
+   * a negative net, and record before→after on every cost that moves.
+   *
+   * The account and the courier both SCOPE it. A waybill is unique only
+   * within a courier — an Xpressbees number routed through Shiprocket has
+   * the same fourteen-digit shape as a Delhivery one — so netting across
+   * accounts, or matching a shipment of another courier, would move
+   * money between two parcels that merely share a number.
+   */
+  async importTransactions(input: LedgerImport): Promise<WalletImportResult> {
+    const { courierAccountId, dryRun } = input;
+    const stored = await this.storeTransactions(input.txns, courierAccountId, dryRun);
     // BEFORE netting, so a row their ledger has dropped stops counting in
     // the same run that notices it.
     const missing = await this.reconcileWindow(
       courierAccountId,
-      parsed.txns,
-      parsed.periodFrom,
-      parsed.periodTo,
+      input.txns,
+      input.periodFrom,
+      input.periodTo,
       dryRun,
     );
 
-    const awbs = new Set(
-      parsed.txns.map((t) => t.awbNumber).filter((a): a is string => a !== null),
-    );
+    const awbs = new Set(input.txns.map((t) => t.awbNumber).filter((a): a is string => a !== null));
     const shipments = await this.prisma.client.shipment.findMany({
       where: {
         awbNumber: { in: [...awbs] },
+        // The courier that carried it (CUR-14 rewrites this on failover).
+        // A waybill is only unique within a courier.
+        courierCode: input.courierCode,
         // This account's parcels — OR ones with no account recorded.
         //
         // An AWB is globally unique at Delhivery, so a waybill in THIS
@@ -373,7 +457,9 @@ export class WalletImportService {
       including them would put a settlement for fraud into the price of
       moving one box.
     */
-    const netByAwb = dryRun ? this.netFromFile(parsed.txns) : await this.netFromLedger([...awbs]);
+    const netByAwb = dryRun
+      ? this.netFromFile(input.txns)
+      : await this.netFromLedger(courierAccountId, [...awbs]);
 
     let forwardWritten = 0;
     let rtoWritten = 0;
@@ -450,36 +536,9 @@ export class WalletImportService {
       }
     }
 
-    /*
-      ── THE FILE'S OWN ARITHMETIC ─────────────────────────────────────
-
-      opening + recharges + refunds − deductions = the closing balance
-      their wallet shows. Every row of the export is on one side of that
-      identity, so a truncated or edited file breaks it — which is the
-      strongest integrity check available here, far stronger than the
-      per-sheet total it sits beside.
-
-      Computed and reported rather than enforced: it is the reconcile's
-      job to decide what a mismatch means, and refusing an import over
-      arithmetic would stop costs landing for a reason nobody can act on
-      at 3am.
-    */
-    const sm = parsed.summary;
-    const impliedClosing =
-      sm.openingBalanceInr !== null &&
-      sm.totalRechargesInr !== null &&
-      sm.totalRefundsInr !== null &&
-      sm.totalDeductionsInr !== null
-        ? new Prisma.Decimal(sm.openingBalanceInr)
-            .add(sm.totalRechargesInr)
-            .add(sm.totalRefundsInr)
-            .sub(sm.totalDeductionsInr)
-            .toFixed(2)
-        : null;
-
     // Ledger-level entries, kept apart from every parcel. Netted the
     // same way: a debit costs us, a credit gives back.
-    const adjustmentTxns = parsed.txns.filter((t) => t.category === 'ADJUSTMENT');
+    const adjustmentTxns = input.txns.filter((t) => t.category === 'ADJUSTMENT');
     let adjustmentsNet = new Prisma.Decimal(0);
     for (const t of adjustmentTxns) {
       adjustmentsNet =
@@ -489,19 +548,19 @@ export class WalletImportService {
     const unknownAwbs = [...awbs].filter((a) => !byAwb.has(a)).length;
 
     const result: WalletImportResult = {
-      rowsRead: parsed.rowsRead,
-      rowsSkipped: parsed.rowsSkipped,
+      rowsRead: input.rowsRead,
+      rowsSkipped: input.rowsSkipped,
       awbsInFile: awbs.size,
       forwardWritten,
       rtoWritten,
       unchanged,
       revised,
       unknownAwbs,
-      sumInr: parsed.sumInr,
-      statedTotalInr: parsed.statedTotalInr,
-      totalsAgree,
-      periodFrom: parsed.periodFrom?.toISOString() ?? null,
-      periodTo: parsed.periodTo?.toISOString() ?? null,
+      sumInr: input.sumInr,
+      statedTotalInr: input.statedTotalInr,
+      totalsAgree: input.totalsAgree,
+      periodFrom: input.periodFrom?.toISOString() ?? null,
+      periodTo: input.periodTo?.toISOString() ?? null,
       dryRun,
       writes,
       writesTruncated,
@@ -511,7 +570,7 @@ export class WalletImportService {
       mutated: stored.mutated.slice(0, WRITE_DETAIL_CAP),
       adjustments: adjustmentTxns.length,
       adjustmentsNetInr: adjustmentsNet.toFixed(2),
-      impliedClosingInr: impliedClosing,
+      impliedClosingInr: input.impliedClosingInr,
       txnsMissing: missing.length,
       missing: missing.slice(0, WRITE_DETAIL_CAP),
       incompleteHistory: incomplete.length,
@@ -520,8 +579,8 @@ export class WalletImportService {
 
     if (!dryRun) {
       await this.audit.log({
-        actorType: staffId === null ? ActorType.SYSTEM : ActorType.STAFF,
-        actorId: staffId,
+        actorType: input.staffId === null ? ActorType.SYSTEM : ActorType.STAFF,
+        actorId: input.staffId,
         action: 'courier.wallet_ledger.imported',
         entityType: 'courier',
         // NULL, not 'delhivery'. `audit_logs.entity_id` is a UUID
@@ -533,10 +592,13 @@ export class WalletImportService {
         // MEDIUM: it writes the cost side of the P&L, and a revision
         // changes a figure somebody may already have reported on.
         severity: 'MEDIUM',
-        metadata: { courierCode: 'delhivery', ...result },
+        metadata: { courierCode: input.courierCode, ...result },
       });
     }
-    this.logger.log({ ...result }, 'Delhivery wallet ledger imported');
+    this.logger.log(
+      { courierCode: input.courierCode, ...result },
+      'Courier wallet ledger imported',
+    );
     return result;
   }
 
@@ -715,7 +777,10 @@ export class WalletImportService {
    * its own report line (see the P&L); letting one through here would
    * put a fraud settlement into the price of moving one box.
    */
-  private async netFromLedger(awbs: readonly string[]): Promise<Map<string, ParcelNet>> {
+  private async netFromLedger(
+    courierAccountId: string,
+    awbs: readonly string[],
+  ): Promise<Map<string, ParcelNet>> {
     const out = new Map<string, ParcelNet>();
     if (awbs.length === 0) return out;
 
@@ -723,6 +788,8 @@ export class WalletImportService {
       const rows = await this.prisma.client.courierWalletTransaction.groupBy({
         by: ['awbNumber', 'leg', 'kind'],
         where: {
+          // One account's ledger: a waybill is unique only within a courier.
+          courierAccountId,
           awbNumber: { in: awbs.slice(i, i + AWB_CHUNK) },
           category: CourierWalletTxnCategory.PARCEL,
           // A row their ledger has since dropped no longer moves money:

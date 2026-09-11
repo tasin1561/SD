@@ -12,17 +12,29 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
  */
 export const SHIPROCKET_PORTAL_QUEUE = 'shiprocket-portal';
 export const JOB_SHIPROCKET_PORTAL_PROBE = 'probe-shiprocket-portal';
+export const JOB_SHIPROCKET_WALLET_SYNC = 'sync-shiprocket-wallet';
 
 @Injectable()
 export class ShiprocketPortalTriggerService {
   constructor(private readonly redis: RedisService) {}
 
   /** Queued, not finished: a sign-in and three pages take a minute or two. */
-  async requestProbe(): Promise<{ readonly queued: boolean; readonly jobId: string | null }> {
+  requestProbe(): Promise<{ readonly queued: boolean; readonly jobId: string | null }> {
+    return this.enqueue(JOB_SHIPROCKET_PORTAL_PROBE);
+  }
+
+  /** The nightly wallet sync, now. Queued: about three minutes of reading. */
+  requestWalletSync(): Promise<{ readonly queued: boolean; readonly jobId: string | null }> {
+    return this.enqueue(JOB_SHIPROCKET_WALLET_SYNC);
+  }
+
+  private async enqueue(
+    jobName: string,
+  ): Promise<{ readonly queued: boolean; readonly jobId: string | null }> {
     const queue = new Queue(SHIPROCKET_PORTAL_QUEUE, { connection: this.redis.createConnection() });
     try {
       const job = await queue.add(
-        JOB_SHIPROCKET_PORTAL_PROBE,
+        jobName,
         { manual: true },
         {
           // ONE attempt: a retry loop against a courier's login page is how

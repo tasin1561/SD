@@ -486,6 +486,42 @@ const systemSettings: SystemSettingSeed[] = [
       'Each night (21:40 IST) read every one of our Shiprocket parcels\u2019 charges from their API, plus the wallet balance. It needs no browser — Shiprocket answers per order — so it runs in the API, not the portal worker. It skips itself, and says so, while Shiprocket is in stub mode.',
   },
   {
+    key: 'courier.shiprocket_wallet_sync_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Shiprocket wallet sync — run nightly',
+    description:
+      'Each night (03:50 IST) sign in to the Shiprocket panel through the Bangalore tunnel and read the Passbook (every wallet movement), the Recharge History and the Ledger. Stores each movement once, nets each parcel’s cost from them the way Delhivery’s are (COST-1), matches recharges to our bank book, and checks the Ledger’s credits against the Passbook.',
+  },
+  {
+    key: 'courier.shiprocket_wallet_sync_writes_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Shiprocket wallet sync — write the costs',
+    description:
+      'Let the nightly sync store what it read and WRITE each parcel’s cost. While OFF it reads everything and reports what it would change, writing nothing. It is the ONLY writer of a Shiprocket parcel’s cost: the API cost sync checks their final bill against it instead of writing a second figure.',
+  },
+  {
+    key: 'courier.shiprocket_wallet_sync_window_days',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 90,
+    displayName: 'Shiprocket wallet sync — days to re-read each night',
+    description:
+      'How far back each night’s Passbook read reaches. Ninety, like Delhivery: re-reading costs nothing because each movement is stored once and recognised when seen again, and a wide window is what lets a movement that later VANISHES from their passbook be noticed. About 70 pages of 100 rows, three minutes.',
+  },
+  {
+    key: 'courier.shiprocket_wallet_low_balance_inr',
+    category: 'courier',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '1000.00',
+    displayName: 'Shiprocket wallet — warn below this balance',
+    description:
+      'Their wallet is prepaid: at zero they stop assigning couriers and bookings fail. Lower than Delhivery’s floor because this wallet runs smaller and is topped up in ₹5,000–15,000 steps.',
+  },
+  {
     key: 'courier.shiprocket_portal_proxy',
     category: 'courier',
     valueType: SettingValueType.STRING,
@@ -493,15 +529,6 @@ const systemSettings: SystemSettingSeed[] = [
     displayName: 'Shiprocket panel — browser proxy',
     description:
       'Where the Shiprocket panel browser connects through. Their panel is India-only, so this is the self-restarting SSH tunnel to the Bangalore droplet (shiprocket-egress-tunnel.service on the app server). EMPTY stops the panel automation outright — it never connects directly.',
-  },
-  {
-    key: 'courier.shiprocket_cost_sync_writes_enabled',
-    category: 'courier',
-    valueType: SettingValueType.BOOLEAN,
-    valueBoolean: true,
-    displayName: 'Shiprocket cost sync — write the costs',
-    description:
-      'Let the nightly sync stamp a parcel\u2019s real cost. It only ever stamps Shiprocket\u2019s own FINAL billed amount, never the provisional figure. While OFF it still stores every reading and reports what it would change, so a changed response surfaces as a report rather than as wrong money in the P&L.',
   },
   {
     key: 'ops.nsa_enabled',

@@ -48,6 +48,7 @@ interface Ctx {
   bankFindMany: jest.Mock;
   rechargeUpdate: jest.Mock;
   resolveByKey: jest.Mock;
+  settingFind: jest.Mock;
 }
 
 function make(opts: { accounts?: number; ourEntryInr?: string } = {}): Ctx {
@@ -66,6 +67,7 @@ function make(opts: { accounts?: number; ourEntryInr?: string } = {}): Ctx {
     signedAmount: new Prisma.Decimal(opts.ourEntryInr ?? '-20000.00'),
   }));
   const rechargeUpdate = jest.fn(async () => ({}));
+  const settingFind = jest.fn(async (_a: unknown) => null);
 
   const prisma = {
     client: {
@@ -89,7 +91,7 @@ function make(opts: { accounts?: number; ourEntryInr?: string } = {}): Ctx {
       },
       bankEntry: { findFirst: bankFindFirst, findMany: bankFindMany, findUnique: bankFindUnique },
       courierWalletBalance: { create: jest.fn(async () => ({})) },
-      systemSetting: { findUnique: jest.fn(async () => null) },
+      systemSetting: { findUnique: settingFind },
     },
   };
 
@@ -102,7 +104,7 @@ function make(opts: { accounts?: number; ourEntryInr?: string } = {}): Ctx {
       resolveByKey,
     } as never,
   );
-  return { svc, raise, bankFindFirst, bankFindMany, rechargeUpdate, resolveByKey };
+  return { svc, raise, bankFindFirst, bankFindMany, rechargeUpdate, resolveByKey, settingFind };
 }
 
 const RECHARGE = {
@@ -378,5 +380,36 @@ describe('a late failure does not erase what already succeeded', () => {
         ),
       ),
     ).toHaveLength(0);
+  });
+});
+
+describe('the same matching for Shiprocket, fed rows it read itself', () => {
+  it('names the courier that recorded it, and reads THAT courier’s low-balance floor', async () => {
+    // Shiprocket's recharges come off their Recharge History, read by the
+    // Shiprocket session — the matching must be the same, and must not
+    // tell a person Delhivery recorded something it did not.
+    const ctx = make();
+    await ctx.svc.reconcileRecharges('shiprocket', 'ca-sr', 'Shiprocket - primary', [RECHARGE], {
+      balanceInr: '900.00',
+      totalCreditInr: null,
+      totalDebitInr: null,
+    });
+    const unrecorded = ctx.raise.mock.calls.find((c) =>
+      String((c[0] as { dedupeKey: string }).dedupeKey).startsWith('courier-recharge-unrecorded'),
+    )?.[0] as { detail: string; dedupeKey: string };
+    expect(unrecorded.detail).toMatch(/^Shiprocket recorded a recharge/);
+    expect(unrecorded.dedupeKey).toBe('courier-recharge-unrecorded:ca-sr:MRC1');
+    expect(ctx.settingFind).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { key: 'courier.shiprocket_wallet_low_balance_inr' } }),
+    );
+  });
+
+  it('keeps Delhivery on its own floor', async () => {
+    const ctx = make();
+    Portal.recharges = [];
+    await ctx.svc.reconcile();
+    expect(ctx.settingFind).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { key: 'courier.delhivery_wallet_low_balance_inr' } }),
+    );
   });
 });

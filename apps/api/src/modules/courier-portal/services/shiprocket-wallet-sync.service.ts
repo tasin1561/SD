@@ -1,0 +1,475 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ActorType, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import {
+  WalletImportService,
+  type WalletImportResult,
+} from '../../wallet-ledger/services/wallet-import.service';
+import { ShiprocketWalletPage } from '../pages/shiprocket-wallet.page';
+import { CourierWalletReconcileService } from './courier-wallet-reconcile.service';
+import { raiseLedgerFindings } from './ledger-findings';
+import { shiprocketDate } from './shiprocket-portal-probe.service';
+import {
+  ShiprocketPortalChallengeError,
+  ShiprocketPortalCredentialsMissingError,
+  ShiprocketPortalSessionService,
+  type ShiprocketPortalHandle,
+} from './shiprocket-portal-session.service';
+import {
+  ledgerCoverage,
+  parseLedgerRows,
+  parsePassbook,
+  parseRechargeHistory,
+  type LedgerCoverage,
+} from './shiprocket-wallet-rows';
+
+export const ACTION_SR_WALLET_OK = 'courier.shiprocket_wallet.synced';
+export const ACTION_SR_WALLET_FAILED = 'courier.shiprocket_wallet.sync_failed';
+export const SETTING_SR_WALLET_ENABLED = 'courier.shiprocket_wallet_sync_enabled';
+export const SETTING_SR_WALLET_WRITES = 'courier.shiprocket_wallet_sync_writes_enabled';
+export const SETTING_SR_WALLET_WINDOW = 'courier.shiprocket_wallet_sync_window_days';
+
+export type ShiprocketWalletOutcome =
+  | 'READ'
+  | 'REFUSED'
+  | 'SKIPPED'
+  | 'CHALLENGE'
+  | 'NO_LOGIN'
+  | 'FAILED';
+
+export interface ShiprocketWalletAccountResult {
+  readonly courierAccountId: string;
+  readonly label: string;
+  readonly outcome: ShiprocketWalletOutcome;
+  readonly detail: string | null;
+  readonly passbookRows: number;
+  readonly chainBreaks: number;
+  /** Their "Current Usable Balance" tile, and the newest passbook row's balance. */
+  readonly usableBalanceInr: string | null;
+  readonly newestBalanceInr: string | null;
+  readonly import: WalletImportResult | null;
+  readonly recharges: {
+    readonly seen: number;
+    readonly newlySeen: number;
+    readonly matched: number;
+    readonly unrecorded: number;
+    readonly amountMismatched: number;
+    readonly lowBalance: number;
+  } | null;
+  readonly ledger: LedgerCoverage | null;
+}
+
+export interface ShiprocketWalletSyncSummary {
+  readonly ranAt: string;
+  readonly trigger: 'SCHEDULE' | 'MANUAL';
+  readonly skipped: 'DISABLED' | 'NO_ACCOUNTS' | null;
+  readonly wrote: boolean;
+  readonly windowDays: number;
+  readonly accounts: readonly ShiprocketWalletAccountResult[];
+}
+
+const blank = (
+  account: { id: string; label: string },
+  outcome: ShiprocketWalletOutcome,
+  detail: string | null,
+): ShiprocketWalletAccountResult => ({
+  courierAccountId: account.id,
+  label: account.label,
+  outcome,
+  detail,
+  passbookRows: 0,
+  chainBreaks: 0,
+  usableBalanceInr: null,
+  newestBalanceInr: null,
+  import: null,
+  recharges: null,
+  ledger: null,
+});
+
+/**
+ * Shiprocket's wallet, read nightly off their panel — the Delhivery wallet
+ * sync, for the courier that has no statement API.
+ *
+ * ── WHY THEIR PANEL ──────────────────────────────────────────────────
+ * Their statement API answers with nothing (measured across every
+ * filter). Their Passbook lists every wallet movement with the balance
+ * after it; their Recharge History lists every top-up with the bank's
+ * reference. Both exist only in the panel, which is India-only — hence
+ * the Bangalore tunnel the session goes out through.
+ *
+ * ── ONE SOURCE OF COST ───────────────────────────────────────────────
+ * The passbook is netted through the SAME importer as Delhivery's file
+ * (COST-1): stored once, netted per parcel from our own ledger, never a
+ * negative cost, before→after on every change. It is the only writer of
+ * a Shiprocket parcel's cost; the API sync's final `billing_amount` is
+ * checked against it rather than written beside it.
+ *
+ * ── A BROKEN CHAIN IMPORTS NOTHING ───────────────────────────────────
+ * Every passbook row's balance is the one before plus its amount. On 90
+ * days of real rows that held for all 7,138. So a break means a row was
+ * dropped or misread between two we did read — and a ledger with a hole
+ * in it would net some parcel too low without anything to show it. The
+ * night is REFUSED instead: nothing stored, a person told. Tomorrow's
+ * read tries again.
+ *
+ * ── A CHALLENGE STOPS EVERY BROWSER RUN ──────────────────────────────
+ * The same issue key as the website probe, so an OTP or captcha raised
+ * by either stops both until a person clears it.
+ */
+@Injectable()
+export class ShiprocketWalletSyncService {
+  private readonly logger = new Logger(ShiprocketWalletSyncService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly session: ShiprocketPortalSessionService,
+    private readonly importer: WalletImportService,
+    private readonly reconcile: CourierWalletReconcileService,
+    private readonly audit: AuditLogService,
+    private readonly issues: SystemIssueService,
+  ) {}
+
+  async sync(
+    trigger: 'SCHEDULE' | 'MANUAL',
+    now: Date = new Date(),
+  ): Promise<ShiprocketWalletSyncSummary> {
+    const [enabled, writes, windowDays] = await Promise.all([
+      this.flag(SETTING_SR_WALLET_ENABLED),
+      this.flag(SETTING_SR_WALLET_WRITES),
+      this.int(SETTING_SR_WALLET_WINDOW, 90),
+    ]);
+    const base = { ranAt: now.toISOString(), trigger, wrote: writes, windowDays };
+    if (!enabled) {
+      return this.finish({ ...base, skipped: 'DISABLED', wrote: false, accounts: [] });
+    }
+
+    const accounts = await this.prisma.client.courierAccount.findMany({
+      where: { courier: { code: 'shiprocket' }, isActive: true, deletedAt: null },
+      select: { id: true, label: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (accounts.length === 0) {
+      return this.finish({ ...base, skipped: 'NO_ACCOUNTS', accounts: [] });
+    }
+
+    const results: ShiprocketWalletAccountResult[] = [];
+    for (const account of accounts) {
+      // One account failing must not cost the others their night.
+      results.push(await this.syncAccount(account, now, windowDays, writes));
+    }
+
+    // "Money left our bank and never reached a wallet" is one question
+    // about OUR book, asked once — and not while only reporting.
+    if (writes) {
+      try {
+        await this.reconcile.checkPaidButNeverArrived();
+      } catch (err) {
+        this.logger.error({ err: String(err) }, 'Paid-but-never-arrived check failed');
+      }
+    }
+    return this.finish({ ...base, skipped: null, accounts: results });
+  }
+
+  private async syncAccount(
+    account: { id: string; label: string },
+    now: Date,
+    windowDays: number,
+    writes: boolean,
+  ): Promise<ShiprocketWalletAccountResult> {
+    const challengeKey = `shiprocket-portal-challenge:${account.id}`;
+    const open = await this.prisma.client.systemIssue.findFirst({
+      where: { dedupeKey: challengeKey, resolvedAt: null },
+      select: { id: true },
+    });
+    if (open !== null) {
+      return blank(account, 'SKIPPED', 'A sign-in challenge is still open for this account.');
+    }
+
+    let handle: ShiprocketPortalHandle;
+    try {
+      handle = await this.session.open(account.id, `wallet-${now.getTime()}`);
+    } catch (err) {
+      return this.onOpenFailure(account, challengeKey, err);
+    }
+
+    const from = shiprocketDate(new Date(now.getTime() - windowDays * 86_400_000));
+    const to = shiprocketDate(now);
+    try {
+      const { passbookRows, usable, rechargeRows, ledgerRows } = await this.readWallet(
+        handle,
+        from,
+        to,
+      );
+
+      const pb = parsePassbook(passbookRows);
+      const chainKey = `shiprocket-wallet-chain:${account.id}`;
+      if (pb.chainBreaks.length > 0) {
+        await this.issues.raise({
+          kind: SystemIssueKind.MONEY,
+          severity: SystemIssueSeverity.HIGH,
+          title: `${account.label}'s passbook does not add up — nothing imported`,
+          detail:
+            `Each passbook row's balance should be the one before it plus its amount. At ` +
+            `${pb.chainBreaks.length} point(s) it is not, so a movement was dropped or misread ` +
+            'between two rows we did read. Importing a ledger with a hole in it would net some ' +
+            "parcel too low with nothing to show it, so tonight's read was not stored.\n\n" +
+            pb.chainBreaks
+              .slice(0, 10)
+              .map(
+                (b) =>
+                  `${b.at} · ${b.description} · expected ₹${b.expectedInr}, shown ₹${b.foundInr}`,
+              )
+              .join('\n') +
+            '\n\nIt retries tomorrow. If this repeats, their page has changed.',
+          source: 'ShiprocketWalletSyncService',
+          dedupeKey: chainKey,
+          metadata: {
+            courierAccountId: account.id,
+            breaks: pb.chainBreaks.slice(0, 25).map((b) => ({ ...b })),
+          },
+        });
+        return {
+          ...blank(account, 'REFUSED', `${pb.chainBreaks.length} balance-chain break(s)`),
+          passbookRows: pb.rowsRead,
+          chainBreaks: pb.chainBreaks.length,
+          usableBalanceInr: usable,
+          newestBalanceInr: pb.newestBalanceInr,
+        };
+      }
+      await this.issues.resolveByKey(chainKey, 'The passbook adds up again.');
+
+      const imported = await this.importer.importTransactions({
+        courierCode: 'shiprocket',
+        courierAccountId: account.id,
+        txns: pb.txns,
+        periodFrom: pb.periodFrom,
+        periodTo: pb.periodTo,
+        rowsRead: pb.rowsRead,
+        rowsSkipped: 0,
+        sumInr: pb.debitsInr,
+        statedTotalInr: null,
+        // The chain held across every row read, or we would not be here.
+        totalsAgree: true,
+        impliedClosingInr: pb.newestBalanceInr,
+        dryRun: !writes,
+        staffId: null,
+      });
+      await raiseLedgerFindings(this.issues, {
+        courierName: 'Shiprocket',
+        source: 'ShiprocketWalletSyncService',
+        account,
+        result: imported,
+      });
+
+      const recharges = parseRechargeHistory(rechargeRows, pb.recharges);
+      const matched = writes
+        ? await this.reconcile.reconcileRecharges(
+            'shiprocket',
+            account.id,
+            account.label,
+            recharges,
+            {
+              balanceInr: usable ?? pb.newestBalanceInr ?? '0.00',
+              totalCreditInr: null,
+              totalDebitInr: null,
+            },
+          )
+        : null;
+
+      const ledger = ledgerCoverage(parseLedgerRows(ledgerRows), pb);
+      const ledgerKey = `shiprocket-ledger-uncovered:${account.id}`;
+      if (ledger.uncovered.length > 0) {
+        await this.issues.raise({
+          kind: SystemIssueKind.MONEY,
+          severity: SystemIssueSeverity.MEDIUM,
+          title: `${ledger.uncovered.length} credit(s) in ${account.label}'s Shiprocket ledger never reached the wallet`,
+          detail:
+            'Their Ledger (the accounting view) lists these credits, and no Passbook movement ' +
+            'of the same amount appears within a few days. The Passbook is what we book, so ' +
+            'these are NOT in our figures; ask Shiprocket where they went.\n\n' +
+            ledger.uncovered
+              .slice(0, 10)
+              .map((u) => `${u.date} · ${u.particulars} · ₹${u.amountInr} · ${u.description}`)
+              .join('\n'),
+          source: 'ShiprocketWalletSyncService',
+          dedupeKey: ledgerKey,
+          metadata: {
+            courierAccountId: account.id,
+            uncovered: ledger.uncovered.slice(0, 25).map((u) => ({ ...u })),
+          },
+        });
+      } else {
+        await this.issues.resolveByKey(ledgerKey, 'Every ledger credit is in the passbook again.');
+      }
+
+      await this.issues.resolveByKey(
+        `shiprocket-wallet-sync:${account.id}`,
+        'The Shiprocket wallet sync completed on its own.',
+      );
+      return {
+        courierAccountId: account.id,
+        label: account.label,
+        outcome: 'READ',
+        detail: null,
+        passbookRows: pb.rowsRead,
+        chainBreaks: 0,
+        usableBalanceInr: usable,
+        newestBalanceInr: pb.newestBalanceInr,
+        import: imported,
+        recharges:
+          matched === null
+            ? null
+            : {
+                seen: matched.rechargesSeen,
+                newlySeen: matched.newlySeen,
+                matched: matched.matched,
+                unrecorded: matched.unrecorded,
+                amountMismatched: matched.amountMismatched,
+                lowBalance: matched.lowBalance,
+              },
+        ledger,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        { courierAccountId: account.id, err: message },
+        'Shiprocket wallet sync failed',
+      );
+      await this.issues.raise({
+        kind: SystemIssueKind.COURIER_COST_SYNC,
+        severity: SystemIssueSeverity.MEDIUM,
+        title: `Could not read ${account.label}'s Shiprocket wallet`,
+        detail:
+          `The nightly Shiprocket wallet sync failed: ${message.slice(0, 400)}\n\n` +
+          'Their parcel costs are not updating and read as uncovered in the P&L — not as ' +
+          'free. It retries tonight; if it keeps failing their panel has probably changed.',
+        source: 'ShiprocketWalletSyncService',
+        dedupeKey: `shiprocket-wallet-sync:${account.id}`,
+        metadata: { courierAccountId: account.id, error: message.slice(0, 500) },
+      });
+      return blank(account, 'FAILED', message.slice(0, 300));
+    } finally {
+      await handle.close().catch(() => undefined);
+    }
+  }
+
+  /**
+   * The three tabs, each in a FRESH tab: a tab their router has redirected
+   * can stop painting for good (see the session service). Its own method
+   * so the rest of the night can be tested without a browser.
+   */
+  protected async readWallet(
+    handle: ShiprocketPortalHandle,
+    from: string,
+    to: string,
+  ): Promise<{
+    passbookRows: string[][];
+    usable: string | null;
+    rechargeRows: string[][];
+    ledgerRows: string[][];
+  }> {
+    const read = async <T>(fn: (p: ShiprocketWalletPage) => Promise<T>): Promise<T> => {
+      const page = await handle.newPage();
+      try {
+        return await fn(new ShiprocketWalletPage(page));
+      } finally {
+        await page.close().catch(() => undefined);
+      }
+    };
+    const { passbookRows, usable } = await read(async (p) => ({
+      passbookRows: await p.readTab('passbook', from, to),
+      usable: await p.readUsableBalance(),
+    }));
+    const rechargeRows = await read((p) => p.readTab('recharge-history', from, to));
+    const ledgerRows = await read((p) => p.readTab('ledger', from, to));
+    return { passbookRows, usable, rechargeRows, ledgerRows };
+  }
+
+  private async onOpenFailure(
+    account: { id: string; label: string },
+    challengeKey: string,
+    err: unknown,
+  ): Promise<ShiprocketWalletAccountResult> {
+    if (err instanceof ShiprocketPortalChallengeError) {
+      await this.issues.raise({
+        kind: SystemIssueKind.COURIER_PORTAL_CHALLENGE,
+        severity: SystemIssueSeverity.HIGH,
+        title: `Shiprocket panel asked ${account.label} for a ${err.challenge} — automation stopped`,
+        detail:
+          `Signing in to app.shiprocket.in stopped at a ${err.challenge} challenge (${err.url}). ` +
+          'Nothing will try again until this issue is resolved. Sign in once by hand from a ' +
+          'browser using the Bangalore tunnel, then resolve this issue.' +
+          (err.artifactPath === null ? '' : ` Screenshot on the server: ${err.artifactPath}`),
+        source: 'ShiprocketWalletSyncService',
+        dedupeKey: challengeKey,
+        metadata: { courierAccountId: account.id, challenge: err.challenge, url: err.url },
+      });
+      return blank(account, 'CHALLENGE', err.message);
+    }
+    if (err instanceof ShiprocketPortalCredentialsMissingError) {
+      await this.issues.raise({
+        kind: SystemIssueKind.COURIER_CREDENTIAL,
+        severity: SystemIssueSeverity.MEDIUM,
+        title: `${account.label} has no Shiprocket website login stored`,
+        detail: err.message,
+        source: 'ShiprocketWalletSyncService',
+        dedupeKey: `shiprocket-portal-login:${account.id}`,
+        metadata: { courierAccountId: account.id },
+      });
+      return blank(account, 'NO_LOGIN', err.message);
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    await this.issues.raise({
+      kind: SystemIssueKind.COURIER_COST_SYNC,
+      severity: SystemIssueSeverity.MEDIUM,
+      title: `Could not sign in to ${account.label}'s Shiprocket panel`,
+      detail: `${message.slice(0, 400)}\n\nThe tunnel (shiprocket-egress-tunnel.service) and the login are the usual causes.`,
+      source: 'ShiprocketWalletSyncService',
+      dedupeKey: `shiprocket-wallet-sync:${account.id}`,
+      metadata: { courierAccountId: account.id, error: message.slice(0, 500) },
+    });
+    return blank(account, 'FAILED', message.slice(0, 300));
+  }
+
+  private async finish(summary: ShiprocketWalletSyncSummary): Promise<ShiprocketWalletSyncSummary> {
+    const failed = summary.accounts.filter((a) => a.outcome !== 'READ').length;
+    const allFailed = summary.accounts.length > 0 && failed === summary.accounts.length;
+    await this.audit.log({
+      actorType: ActorType.SYSTEM,
+      actorId: null,
+      action: allFailed ? ACTION_SR_WALLET_FAILED : ACTION_SR_WALLET_OK,
+      entityType: 'courier',
+      // A UUID column; the courier code goes in metadata.
+      entityId: null,
+      severity: failed > 0 ? 'HIGH' : summary.wrote ? 'MEDIUM' : 'LOW',
+      metadata: {
+        courierCode: 'shiprocket',
+        ...summary,
+        accounts: summary.accounts.map((a) => ({ ...a })),
+      },
+    });
+    this.logger.log(
+      { accounts: summary.accounts.length, failed, wrote: summary.wrote, skipped: summary.skipped },
+      'Shiprocket wallet sync done',
+    );
+    return summary;
+  }
+
+  private async flag(key: string): Promise<boolean> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key },
+      select: { valueBoolean: true },
+    });
+    return row?.valueBoolean === true;
+  }
+
+  private async int(key: string, fallback: number): Promise<number> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key },
+      select: { valueInt: true },
+    });
+    return row?.valueInt ?? fallback;
+  }
+}

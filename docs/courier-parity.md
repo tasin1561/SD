@@ -36,9 +36,9 @@ its tracking webhooks are now arriving authenticated.
 | List pickup locations | ❌ none | ✅ | |
 | POD / documents | ✅ four | ⚠️ one (POD only) | a signature or RVP-QC request is refused by name |
 | Support tickets | ⚠️ **manual only** | ❌ all capabilities false | Delhivery channel `write_mode` = MANUAL, `portal_mode` = OFF (CUR-18), `ticket_automation_enabled` = false; 1 escalation (2 Sep), 0 messages |
-| Wallet sync — real parcel cost | ✅ live — transaction ledger, 90 days nightly | ❌ Delhivery-only | 23,343 transactions stored, 0 duplicates; all 22 AWB parcels costed as the net of their debits and credits (COST-1); `wallet-sync.service.ts` is hardcoded to `delhivery` |
-| Courier expenses in the P&L | ✅ live — 37 adjustments, −₹1,268.76 net | ❌ | "Courier account adjustments", dated by transaction (IST), matching the file to the paisa |
-| Wallet reconcile (recharges) | ✅ live | ❌ | 11 recharges seen: 7 (₹1,15,000) **not yet recorded on our side**, 4 (₹80,000) not applicable |
+| Wallet sync — real parcel cost | ✅ live — transaction ledger, 90 days nightly | ✅ built 11 Sep — passbook read off their panel, 90 days nightly (COST-2) | Delhivery: 23,343 transactions stored, 0 duplicates; all 22 AWB parcels costed as the net of their debits and credits (COST-1). Shiprocket: first 90-day read 7,138 movements, balance chain unbroken end to end; netted through the same importer; the API sync now only CHECKS their final bill against it |
+| Courier expenses in the P&L | ✅ live — 37 adjustments, −₹1,268.76 net | ✅ built 11 Sep — 22 adjustments in 90 days | "Courier account adjustments", dated by transaction (IST). Shiprocket's are lost-shipment credit notes, invoice and subscription credits, the ShipSure premium and refund; recharges are kept OUT |
+| Wallet reconcile (recharges) | ✅ live | ✅ built 11 Sep — Recharge History, matched on the bank reference | Delhivery: 11 recharges seen: 7 (₹1,15,000) **not yet recorded on our side**, 4 (₹80,000) not applicable. Shiprocket: 27 in 90 days, 9 of them failed top-ups (not applicable by construction) |
 | COD remittance file → payout allocation | ✅ CSV ("remittance transactions export") | ✅ their `.xls` (AWB + CRF sheets), built 11 Sep | Both matched on waybill in "Record a courier payout". Shiprocket's file is refused when its parcels do not add up to the CRF's "COD Available"; deductions are reported per remittance, never split per parcel. Verified against real CRF 13449838: 10 parcels, ₹15,700, UTR IN22625415423299 |
 | Portal ticket sync | ⏸ OFF | ❌ | `courier_portal_runs` is EMPTY — never ran in production |
 | Portal session / canary | ⏸ OFF | ❌ | same; `courier.portal_canary_awb` is empty. (The wallet sync signs in separately and runs nightly) |
@@ -66,9 +66,10 @@ its tracking webhooks are now arriving authenticated.
 3. **7 wallet recharges (₹1,15,000) are unrecorded** in our bank book.
 4. **Delhivery has never sent a webhook** — tracking depends entirely on
    the poll.
-5. **Shiprocket has no real-cost source.** Unchanged: if it were switched
-   on, its parcels would show as UNCOVERED in the P&L (TRE-6) rather than
-   guessed.
+5. ~~Shiprocket has no real-cost source.~~ **Closed 11 Sep (COST-2):** its
+   passbook is read nightly off their panel through the Bangalore tunnel
+   and netted exactly as Delhivery's ledger is. A parcel with no movement
+   yet still shows as UNCOVERED in the P&L (TRE-6), never guessed.
 
 ## What is Delhivery-only for a REASON, versus merely not built
 
@@ -89,9 +90,9 @@ refusing it.
 
 **Not built, and expensive:**
 
-- **Wallet sync, wallet reconcile, portal ticket sync, canary** for
-  Shiprocket. All four are Playwright driving Delhivery's *panel*,
-  hardcoded to `'delhivery'`. Shiprocket's panel is geo-restricted
-  (`docs/shiprocket-integration.md`), so any equivalent must run from
-  India — and their API may cover some of it without a browser. Check the
-  API first.
+- **Portal ticket sync and canary** for Shiprocket. Both are Playwright
+  driving Delhivery's *panel*. The wallet sync and recharge reconcile
+  were in this list until 11 Sep: their API's statement endpoint returns
+  nothing, so they now run against Shiprocket's panel from India through
+  the Bangalore tunnel (`ShiprocketWalletSyncService`, COST-2), and the
+  recharge matching is shared with Delhivery's.
