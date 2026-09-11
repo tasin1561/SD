@@ -53,6 +53,9 @@ function makeSut(
       reference: data['reference'],
       amountInr: data['amountInr'],
       allocatedInr: data['allocatedInr'],
+      earlyCodFeeInr: data['earlyCodFeeInr'] ?? D('0'),
+      freightDeductedInr: data['freightDeductedInr'] ?? D('0'),
+      rtoReversalInr: data['rtoReversalInr'] ?? D('0'),
       receivedAt: data['receivedAt'],
       note: data['note'] ?? null,
       createdAt: new Date('2026-07-20T00:00:00.000Z'),
@@ -75,6 +78,8 @@ function makeSut(
       findMany: jest.fn(async () => []),
     },
     order: { findMany: orderFindMany },
+    // The early-COD fee's category, found or created on first use.
+    expenseCategory: { upsert: jest.fn(async () => ({ id: 'cat-cod-fee' })) },
   };
   // The shortfall circuit breaker reads its threshold from settings.
   const client2 = {
@@ -412,6 +417,101 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     expect(posts.filter((p) => ownerKind(p) === 'CAPITAL')).toHaveLength(0);
   });
 
+  it('grosses up an early-COD fee and books it as an expense — the account moves by exactly what landed', async () => {
+    // Shiprocket collected ₹1,000, kept ₹90 as its early-COD fee and paid
+    // ₹910. The fee is a real cost the wallet never sees; it must reach
+    // /expenses and the P&L, and the bank must still read ₹910.
+    const sut = makeSut({ orders });
+    const view = await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '910.00',
+      deductions: { earlyCodFeeInr: '90.00' },
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    const expense = posts.filter((p) => p['type'] === 'EXPENSE');
+    expect(expense).toHaveLength(1);
+    expect(expense[0]).toMatchObject({
+      settlementId: 'stl-1',
+      expenseCategoryId: 'cat-cod-fee',
+      owner: { kind: 'CAPITAL' },
+    });
+    expect(String(expense[0]?.['signedAmount'])).toBe('-90');
+    // Sellers held what they were credited; nothing absorbed by capital.
+    expect(
+      posts.filter((p) => p['type'] === 'COURIER_SETTLEMENT' && ownerKind(p) === 'CAPITAL'),
+    ).toHaveLength(0);
+    const net = posts.reduce((t, p) => t.add(p['signedAmount'] as Prisma.Decimal), D('0'));
+    expect(net.toString()).toBe('910');
+
+    expect(sut.created[0]?.['earlyCodFeeInr']).toEqual(D('90.00'));
+    expect(view).toMatchObject({ keptBackInr: '90', unallocatedInr: '0' });
+    // Explained: landed + kept back = the COD it covers.
+    expect(sut.auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'wallet.courier_settlement.recorded', severity: 'MEDIUM' }),
+      expect.anything(),
+    );
+  });
+
+  it('records freight kept back and explains the payout — but does not cost it', async () => {
+    // Whether freight taken from COD is a cost depends on whether the
+    // wallet debited it too; booking it here could count it twice.
+    const sut = makeSut({ orders });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '950.00',
+      deductions: { freightInr: '50.00' },
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    expect(posts.filter((p) => p['type'] === 'EXPENSE')).toHaveLength(0);
+    const capital = posts.filter((p) => ownerKind(p) === 'CAPITAL');
+    expect(String(capital[0]?.['signedAmount'])).toBe('-50');
+    expect(String(capital[0]?.['note'])).toMatch(/freight from COD ₹50\.00/);
+    expect(sut.auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'MEDIUM' }),
+      expect.anything(),
+    );
+  });
+
+  it('is still HIGH when landed + kept back does not reach what it covers', async () => {
+    const sut = makeSut({ orders });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '900.00',
+      deductions: { earlyCodFeeInr: '50.00' },
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    expect(sut.auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'HIGH',
+        metadata: expect.objectContaining({ unallocatedInr: '-50', earlyCodFeeInr: '50' }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('refuses a negative deduction', async () => {
+    const sut = makeSut({ orders });
+    await expect(
+      sut.svc.record(STAFF, {
+        ...BASE,
+        deductions: { earlyCodFeeInr: '-5' },
+        lines: [{ orderId: 'o-1', settledInr: '600.00' }],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_AMOUNT_INVALID' } });
+  });
+
   it('refuses to record a payout with no bank account behind it', async () => {
     // Refused, not skipped. A settlement whose cash was never recorded
     // reads on the coverage page as money we hold and do not.
@@ -447,6 +547,8 @@ describe('CourierSettlementService.allocateMore', () => {
     opts: {
       amount?: string;
       allocated?: string;
+      /** Early-COD fee the courier kept back from this payout. */
+      fee?: string;
       existingOrders?: string[];
       orders?: Array<{ id: string; sellerId: string; codAmountInr: Prisma.Decimal | null }>;
     } = {},
@@ -463,6 +565,9 @@ describe('CourierSettlementService.allocateMore', () => {
           reference: 'DLV-PAYOUT-0001',
           amountInr: D(opts.amount ?? '1000.00'),
           allocatedInr: D(opts.allocated ?? '600.00'),
+          earlyCodFeeInr: D(opts.fee ?? '0'),
+          freightDeductedInr: D('0'),
+          rtoReversalInr: D('0'),
           receivedAt: new Date('2026-07-20T10:00:00.000Z'),
           courierAccount: {
             id: ACCOUNT,
@@ -513,6 +618,20 @@ describe('CourierSettlementService.allocateMore', () => {
         lines: [{ orderId: 'o-2', settledInr: '500.00' }],
       }),
     ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_OVER_ALLOCATED' } });
+  });
+
+  it('counts what the courier kept back as covered — the ceiling is the COD, not the cash', async () => {
+    // ₹910 landed with a ₹90 fee kept back: the payout covers ₹1,000 of
+    // COD, so ₹400 more can be allocated on top of the ₹600.
+    const { svc, createMany } = makeAllocSut({
+      amount: '910.00',
+      fee: '90.00',
+      allocated: '600.00',
+    });
+    await svc.allocateMore('staff-1', SETTLEMENT, {
+      lines: [{ orderId: 'o-2', settledInr: '400.00' }],
+    });
+    expect(createMany).toHaveBeenCalled();
   });
 
   it('allows exactly the remainder', async () => {

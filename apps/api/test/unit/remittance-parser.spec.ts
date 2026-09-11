@@ -223,6 +223,9 @@ describe('Shiprocket remittance parsing', () => {
       remittedInr: '15700.00',
       codInr: '15700.00',
       deductedInr: '0.00',
+      earlyCodFeeInr: '0.00',
+      freightInr: '0.00',
+      rtoReversalInr: '0.00',
     });
   });
 

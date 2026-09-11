@@ -10,6 +10,8 @@ const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
 let adjustmentWhere: Record<string, unknown> | undefined;
 /** The filter of the query that measures what the cutover left out, if it ran. */
 let excludedWhere: Record<string, unknown> | undefined;
+/** The filter the OPERATING-expenses aggregate was called with, last time. */
+let expensesWhere: Record<string, unknown> | undefined;
 
 function makeSut(opts: {
   freight?: Array<{ totalInr: Prisma.Decimal; ourCostInr: Prisma.Decimal | null }>;
@@ -41,6 +43,8 @@ function makeSut(opts: {
   }>;
   fxSpread?: Prisma.Decimal | null;
   expenses?: Prisma.Decimal | null;
+  /** Early-COD fees booked against payouts (EXPENSE entries WITH a settlement). */
+  codFees?: Prisma.Decimal | null;
   /**
    * EXPENSE entries filed under a leg category with no consignment
    * behind them — reported rather than moved, because we cannot know
@@ -111,13 +115,21 @@ function makeSut(opts: {
       }),
     },
     bankEntry: {
-      aggregate: async (args: { where: { type: string } }) => ({
-        _sum: {
-          signedAmount:
-            args.where.type === 'FX_SPREAD' ? (opts.fxSpread ?? null) : (opts.expenses ?? null),
-        },
-        _count: { _all: 1 },
-      }),
+      // Three readers: FX, the COD-fee line (EXPENSE linked to a
+      // settlement) and operating expenses (EXPENSE linked to nothing).
+      aggregate: async (args: { where: Record<string, unknown> }) => {
+        if (args.where['type'] === 'FX_SPREAD') {
+          return { _sum: { signedAmount: opts.fxSpread ?? null }, _count: { _all: 1 } };
+        }
+        if (args.where['settlementId'] !== null && args.where['settlementId'] !== undefined) {
+          return {
+            _sum: { signedAmount: opts.codFees ?? null },
+            _count: { _all: opts.codFees == null ? 0 : 1 },
+          };
+        }
+        expensesWhere = args.where;
+        return { _sum: { signedAmount: opts.expenses ?? null }, _count: { _all: 1 } };
+      },
       findMany: async () => opts.unattributed ?? [],
     },
   };
@@ -328,7 +340,11 @@ describe('a cost already counted by its leg is not counted again', () => {
       },
       bankEntry: {
         aggregate: async (args: { where: Record<string, unknown> }) => {
-          if (args.where['type'] === 'EXPENSE') scoped = args.where['inboundFreightChargeId'];
+          // The operating-expenses query: EXPENSE linked to no settlement
+          // (a settlement-linked one is the COD-fee line's).
+          if (args.where['type'] === 'EXPENSE' && args.where['settlementId'] === null) {
+            scoped = args.where['inboundFreightChargeId'];
+          }
           return { _sum: { signedAmount: null }, _count: { _all: 0 } };
         },
         findMany: async () => [],
@@ -544,5 +560,37 @@ describe('courier account adjustments — only from the cutover', () => {
     await svc.report(FROM, TO);
     expect(adjustmentWhere).toMatchObject({ occurredAt: { gte: FROM, lte: TO } });
     expect(excludedWhere).toBeUndefined();
+  });
+});
+
+/**
+ * A courier's early-COD fee never passes through its wallet — it is
+ * taken out of the COD payout and invoiced separately — so the wallet
+ * sync cannot see it. Recording the payout books it as an EXPENSE entry
+ * linked to the settlement; the P&L counts it on its own line, and only
+ * there.
+ */
+describe('courier COD fees', () => {
+  it('are their own cost line, and NOT also an operating expense', async () => {
+    const svc = makeSut({ codFees: D('-90'), expenses: D('-325') });
+    const r = await svc.report(FROM, TO);
+    const line = r.lines.find((l) => l.key === 'courier_cod_fees');
+
+    expect(line?.costInr).toBe('90.00');
+    expect(line?.revenueInr).toBe('0.00');
+    expect(line?.coverage).toMatchObject({ priced: 1, total: 1 });
+    // The operating-expenses query leaves settlement-linked entries out.
+    expect(expensesWhere).toMatchObject({ type: 'EXPENSE', settlementId: null });
+    expect(r.operatingExpensesInr).toBe('325.00');
+    expect(r.grossMarginInr).toBe('-90.00');
+    expect(r.netInr).toBe('-415.00');
+  });
+
+  it('is zero and complete when no payout carried a fee', async () => {
+    const svc = makeSut({});
+    const r = await svc.report(FROM, TO);
+    const line = r.lines.find((l) => l.key === 'courier_cod_fees');
+    expect(line?.costInr).toBe('0.00');
+    expect(r.complete).toBe(true);
   });
 });

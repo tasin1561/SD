@@ -35,6 +35,12 @@ export interface RemittanceFileSummary {
   readonly codInr: string;
   /** What the courier kept back (freight, early-COD fee, RTO reversal). */
   readonly deductedInr: string;
+  /** Of that: the early-COD / remittance fee — a cost. */
+  readonly earlyCodFeeInr: string;
+  /** Of that: freight taken out of the COD. */
+  readonly freightInr: string;
+  /** Of that: COD clawed back for parcels that later returned. */
+  readonly rtoReversalInr: string;
 }
 
 export interface RemittanceParseResult {
@@ -235,6 +241,9 @@ export class ShiprocketRemittanceParser implements RemittanceParser {
     let remitted = new Prisma.Decimal(0);
     let cod = new Prisma.Decimal(0);
     let deducted = new Prisma.Decimal(0);
+    let earlyTotal = new Prisma.Decimal(0);
+    let freightTotal = new Prisma.Decimal(0);
+    let rtoTotal = new Prisma.Decimal(0);
     const references: string[] = [];
     const seen = new Set<string>();
 
@@ -299,6 +308,9 @@ export class ShiprocketRemittanceParser implements RemittanceParser {
       remitted = remitted.add(amount);
       cod = cod.add(available);
       deducted = deducted.add(kept);
+      earlyTotal = earlyTotal.add(early);
+      freightTotal = freightTotal.add(freight);
+      rtoTotal = rtoTotal.add(rto);
     }
 
     const orphans = [...byCrf.keys()].filter((c) => !seen.has(c));
@@ -323,6 +335,9 @@ export class ShiprocketRemittanceParser implements RemittanceParser {
         remittedInr: remitted.toFixed(2),
         codInr: cod.toFixed(2),
         deductedInr: deducted.toFixed(2),
+        earlyCodFeeInr: earlyTotal.toFixed(2),
+        freightInr: freightTotal.toFixed(2),
+        rtoReversalInr: rtoTotal.toFixed(2),
       },
       warnings,
     };

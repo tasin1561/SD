@@ -150,7 +150,12 @@ export interface SettlementView {
   readonly reference: string;
   readonly amountInr: string;
   readonly allocatedInr: string;
-  /** amount − allocated. Non-zero ⇒ the withdrawal isn't fully explained. */
+  /** What the courier kept back from the payout, by kind and in total. */
+  readonly earlyCodFeeInr: string;
+  readonly freightDeductedInr: string;
+  readonly rtoReversalInr: string;
+  readonly keptBackInr: string;
+  /** amount + kept back − allocated. Non-zero ⇒ the payout isn't fully explained. */
   readonly unallocatedInr: string;
   readonly receivedAt: string;
   readonly note: string | null;
@@ -572,6 +577,8 @@ export function useRecordSettlement(): UseMutationResult<
     amountInr: string;
     receivedAt: string;
     lines: ReadonlyArray<{ orderId: string; settledInr: string }>;
+    /** What the courier kept back — the early-COD fee is booked as an expense. */
+    deductions?: { earlyCodFeeInr?: string; freightInr?: string; rtoReversalInr?: string };
     note?: string;
   }
 > {
@@ -608,6 +615,10 @@ export interface RemittanceFileSummary {
   readonly remittedInr: string;
   readonly codInr: string;
   readonly deductedInr: string;
+  /** Of what was kept back: the early-COD fee (a cost), freight, and RTO reversals. */
+  readonly earlyCodFeeInr: string;
+  readonly freightInr: string;
+  readonly rtoReversalInr: string;
 }
 
 export interface RemittancePreview {

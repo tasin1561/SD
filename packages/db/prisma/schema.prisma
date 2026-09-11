@@ -2531,6 +2531,14 @@ model CourierSettlement {
   /// Sum of this settlement's allocated lines. Kept alongside amountInr
   /// so an under- or over-allocated withdrawal is visible without a join.
   allocatedInr      Decimal  @default(0) @map("allocated_inr") @db.Decimal(14, 2)
+  /// What the courier KEPT BACK from the COD it collected before paying
+  /// us, as its remittance file states it. `amountInr` + these = the COD
+  /// this payout covers. The early-COD fee is a cost and is booked as an
+  /// EXPENSE bank entry linked to this settlement (so it reaches /expenses
+  /// and the P&L); freight and RTO reversals are recorded, not costed.
+  earlyCodFeeInr     Decimal @default(0) @map("early_cod_fee_inr") @db.Decimal(14, 2)
+  freightDeductedInr Decimal @default(0) @map("freight_deducted_inr") @db.Decimal(14, 2)
+  rtoReversalInr     Decimal @default(0) @map("rto_reversal_inr") @db.Decimal(14, 2)
   receivedAt        DateTime @map("received_at") @db.Timestamptz
   recordedByStaffId String?  @map("recorded_by_staff_id") @db.Uuid
   note              String?  @db.Text

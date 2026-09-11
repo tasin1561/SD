@@ -72,6 +72,13 @@ export function RecordSettlementModal({
   const [lines, setLines] = useState<readonly DraftLine[]>([
     { key: 0, orderId: '', settledInr: '' },
   ]);
+  /**
+   * What the courier kept back before paying, from its own file. The
+   * early-COD fee is a real cost the wallet never sees — it is booked as
+   * an expense when the payout is recorded; freight and RTO reversals are
+   * recorded so the payout explains itself, not costed.
+   */
+  const [kept, setKept] = useState<KeptBack>(NO_KEPT_BACK);
   const [error, setError] = useState<string | null>(null);
   const preview = usePreviewRemittance();
   const [skipped, setSkipped] = useState<readonly RemittanceRow[]>([]);
@@ -110,6 +117,18 @@ export function RecordSettlementModal({
         fileName: file.name,
       });
       setFileNotes({ summary: out.summary, warnings: out.warnings });
+      // Unlike the amount, these ARE filled from the file: the bank
+      // statement shows only the net, so the courier's own breakdown is
+      // the only source of what it kept, and the operator can still edit.
+      setKept(
+        out.summary === null
+          ? NO_KEPT_BACK
+          : {
+              earlyCodFeeInr: nonZero(out.summary.earlyCodFeeInr),
+              freightInr: nonZero(out.summary.freightInr),
+              rtoReversalInr: nonZero(out.summary.rtoReversalInr),
+            },
+      );
       const usable = out.rows.filter((r) => r.problem === null && r.orderId !== null);
       setLines(
         usable.map((r, i) => ({
@@ -135,7 +154,13 @@ export function RecordSettlementModal({
     [lines],
   );
   const received = Number(amountInr) || 0;
-  const remainder = received - allocated;
+  const keptTotal =
+    (Number(kept.earlyCodFeeInr) || 0) +
+    (Number(kept.freightInr) || 0) +
+    (Number(kept.rtoReversalInr) || 0);
+  // What landed plus what the courier kept should be exactly the COD of
+  // the orders it covers.
+  const remainder = received + keptTotal - allocated;
 
   function reset(): void {
     setCourierAccountId('');
@@ -144,6 +169,7 @@ export function RecordSettlementModal({
     setReceivedAt(todayIso());
     setNote('');
     setLines([{ key: 0, orderId: '', settledInr: '' }]);
+    setKept(NO_KEPT_BACK);
     setError(null);
     setSkipped([]);
     setFileNotes(null);
@@ -167,6 +193,19 @@ export function RecordSettlementModal({
           orderId: l.orderId.trim(),
           settledInr: l.settledInr.trim(),
         })),
+        ...(keptTotal > 0
+          ? {
+              deductions: {
+                ...(kept.earlyCodFeeInr.trim() === ''
+                  ? {}
+                  : { earlyCodFeeInr: kept.earlyCodFeeInr.trim() }),
+                ...(kept.freightInr.trim() === '' ? {} : { freightInr: kept.freightInr.trim() }),
+                ...(kept.rtoReversalInr.trim() === ''
+                  ? {}
+                  : { rtoReversalInr: kept.rtoReversalInr.trim() }),
+              },
+            }
+          : {}),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
       toast.success('Payout recorded.');
@@ -365,10 +404,64 @@ export function RecordSettlementModal({
             ))}
           </div>
 
+          {/* What the courier kept back before paying. */}
+          <div className="border-border mt-3 border-t pt-3">
+            <h3 className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
+              Kept back by the courier
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <FormField
+                label="Early-COD fee"
+                htmlFor="settle-kept-fee"
+                hint="Booked as an expense (Courier COD fees)."
+              >
+                <Input
+                  id="settle-kept-fee"
+                  inputMode="decimal"
+                  value={kept.earlyCodFeeInr}
+                  onChange={(e) => setKept((k) => ({ ...k, earlyCodFeeInr: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </FormField>
+              <FormField
+                label="Freight from COD"
+                htmlFor="settle-kept-freight"
+                hint="Recorded, not costed."
+              >
+                <Input
+                  id="settle-kept-freight"
+                  inputMode="decimal"
+                  value={kept.freightInr}
+                  onChange={(e) => setKept((k) => ({ ...k, freightInr: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </FormField>
+              <FormField
+                label="RTO reversal"
+                htmlFor="settle-kept-rto"
+                hint="Recorded, not costed."
+              >
+                <Input
+                  id="settle-kept-rto"
+                  inputMode="decimal"
+                  value={kept.rtoReversalInr}
+                  onChange={(e) => setKept((k) => ({ ...k, rtoReversalInr: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </FormField>
+            </div>
+          </div>
+
           {/* The reconciliation line. Reads as arithmetic, on purpose. */}
           <div className="border-border mt-3 flex items-center justify-between border-t pt-2 text-xs">
             <span className="text-text-muted">
               Allocated <Money amount={allocated} /> of <Money amount={received} /> received
+              {keptTotal > 0 && (
+                <>
+                  {' '}
+                  + <Money amount={keptTotal} /> kept back
+                </>
+              )}
             </span>
             {Math.abs(remainder) < 0.005 ? (
               <span className="text-[var(--status-delivered-fg)]">Fully allocated</span>
@@ -418,4 +511,17 @@ export function RecordSettlementModal({
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+interface KeptBack {
+  readonly earlyCodFeeInr: string;
+  readonly freightInr: string;
+  readonly rtoReversalInr: string;
+}
+
+const NO_KEPT_BACK: KeptBack = { earlyCodFeeInr: '', freightInr: '', rtoReversalInr: '' };
+
+/** A file's "0.00" reads as blank, so an untouched field stays empty. */
+function nonZero(v: string): string {
+  return Number(v) === 0 ? '' : v;
 }

@@ -32,8 +32,21 @@ export interface RecordSettlementInput {
   readonly amountInr: string;
   readonly receivedAt: string;
   readonly lines: readonly SettlementLineInput[];
+  /** What the courier kept back from the COD before paying — from its remittance file. */
+  readonly deductions?: {
+    readonly earlyCodFeeInr?: string | null;
+    readonly freightInr?: string | null;
+    readonly rtoReversalInr?: string | null;
+  } | null;
   readonly note?: string | null;
 }
+
+/**
+ * The expense category an early-COD fee is booked under. Created on first
+ * use (and seeded), so recording a payout never depends on somebody
+ * having set up a category first.
+ */
+export const COD_FEE_EXPENSE_CATEGORY = 'courier_cod_fees';
 
 export interface SettlementLineView {
   readonly orderId: string;
@@ -50,7 +63,16 @@ export interface SettlementView {
   readonly reference: string;
   readonly amountInr: string;
   readonly allocatedInr: string;
-  /** amount − allocated. Non-zero ⇒ the payout isn't fully explained. */
+  /** What the courier kept back, by kind, and in total. */
+  readonly earlyCodFeeInr: string;
+  readonly freightDeductedInr: string;
+  readonly rtoReversalInr: string;
+  readonly keptBackInr: string;
+  /**
+   * amount + kept back − allocated. Non-zero ⇒ the payout isn't fully
+   * explained: what landed plus what the courier says it kept should be
+   * exactly the COD of the orders it covers.
+   */
   readonly unallocatedInr: string;
   readonly receivedAt: Date;
   readonly note: string | null;
@@ -131,6 +153,13 @@ export class CourierSettlementService {
     ctx?: ClientContext,
   ): Promise<SettlementView> {
     const amount = this.parseMoney(input.amountInr, 'amountInr');
+    // What the courier kept back. Blank means none.
+    const deduction = (v: string | null | undefined, label: string): Prisma.Decimal =>
+      v === undefined || v === null || v.trim() === '' ? ZERO : this.parseMoney(v, label);
+    const earlyCodFee = deduction(input.deductions?.earlyCodFeeInr, 'early-COD fee');
+    const freightKept = deduction(input.deductions?.freightInr, 'freight kept back');
+    const rtoKept = deduction(input.deductions?.rtoReversalInr, 'RTO reversal kept back');
+    const keptBack = earlyCodFee.add(freightKept).add(rtoKept);
     const receivedAt = new Date(input.receivedAt);
     if (Number.isNaN(receivedAt.getTime())) {
       throw new BadRequestException({
@@ -277,6 +306,9 @@ export class CourierSettlementService {
           reference,
           amountInr: amount,
           allocatedInr: allocated,
+          earlyCodFeeInr: earlyCodFee,
+          freightDeductedInr: freightKept,
+          rtoReversalInr: rtoKept,
           receivedAt,
           recordedByStaffId: staffId,
           note: input.note ?? null,
@@ -366,7 +398,21 @@ export class CourierSettlementService {
           tx,
         );
       }
-      const toCapital = amount.sub(attributed);
+      //
+      // An early-COD fee is GROSSED UP: the courier collected that money
+      // for us and spent it on its own fee, so the book shows it arriving
+      // with the rest and then leaving as a categorised EXPENSE. The two
+      // net to exactly what the statement shows, and the fee reaches
+      // /expenses and the P&L as the cost it is — rather than a hole in
+      // capital labelled "shortfall" that no report ever counts.
+      //
+      // Freight and RTO reversals kept back are NOT grossed up: whether
+      // either is a cost depends on what the courier's wallet already
+      // shows (freight debited there too would be counted twice), so they
+      // stay against capital, named, for a person to judge.
+      const gross = amount.add(earlyCodFee);
+      const toCapital = gross.sub(attributed);
+      const otherKept = freightKept.add(rtoKept);
       if (!toCapital.isZero()) {
         await this.bank.post(
           {
@@ -380,12 +426,44 @@ export class CourierSettlementService {
             settlementId: row.id,
             staffId,
             note: toCapital.isNegative()
-              ? `Shortfall absorbed on ${reference}`
+              ? otherKept.gt(0)
+                ? `Kept back by the courier on ${reference}: freight from COD ₹${freightKept.toFixed(2)}, ` +
+                  `RTO reversal ₹${rtoKept.toFixed(2)} — not booked as a cost; check against the courier wallet`
+                : `Shortfall absorbed on ${reference}`
               : `Ours from ${reference} — instant-pay reimbursement or unallocated`,
           },
           tx,
         );
       }
+      if (earlyCodFee.gt(0)) {
+        const category = await tx.expenseCategory.upsert({
+          where: { code: COD_FEE_EXPENSE_CATEGORY },
+          update: {},
+          create: {
+            code: COD_FEE_EXPENSE_CATEGORY,
+            name: 'Courier COD fees',
+            hint: 'Early-COD fees a courier kept back from a COD payout. Booked automatically when the payout is recorded — do not file these by hand, or the P&L counts them twice.',
+          },
+          select: { id: true },
+        });
+        await this.bank.post(
+          {
+            accountId: receivingAccount.id,
+            type: BankEntryType.EXPENSE,
+            signedAmount: earlyCodFee.negated(),
+            amountCurrency: Currency.INR,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: receivedAt,
+            reference,
+            settlementId: row.id,
+            expenseCategoryId: category.id,
+            staffId,
+            note: `Early-COD fee the courier kept back from payout ${reference}`,
+          },
+          tx,
+        );
+      }
+      const unexplained = amount.add(keptBack).sub(allocated);
 
       await this.audit.log(
         {
@@ -395,15 +473,19 @@ export class CourierSettlementService {
           entityType: 'courier_settlement',
           entityId: row.id,
           // MEDIUM normally; HIGH when the payout does not add up, because
-          // an unexplained difference between what landed in the bank and
-          // what we attributed is exactly what this ledger exists to catch.
-          severity: amount.eq(allocated) ? 'MEDIUM' : 'HIGH',
+          // an unexplained difference between what landed in the bank (plus
+          // what the courier says it kept) and what we attributed is
+          // exactly what this ledger exists to catch.
+          severity: unexplained.isZero() ? 'MEDIUM' : 'HIGH',
           metadata: {
             courierAccountId: input.courierAccountId,
             reference,
             amountInr: amount.toString(),
             allocatedInr: allocated.toString(),
-            unallocatedInr: amount.sub(allocated).toString(),
+            unallocatedInr: unexplained.toString(),
+            earlyCodFeeInr: earlyCodFee.toString(),
+            freightDeductedInr: freightKept.toString(),
+            rtoReversalInr: rtoKept.toString(),
             orderCount: lineData.length,
             ipAddress: ctx?.ipAddress ?? null,
             userAgent: ctx?.userAgent ?? null,
@@ -513,6 +595,9 @@ export class CourierSettlementService {
         reference: true,
         amountInr: true,
         allocatedInr: true,
+        earlyCodFeeInr: true,
+        freightDeductedInr: true,
+        rtoReversalInr: true,
         receivedAt: true,
         courierAccount: {
           select: {
@@ -578,11 +663,12 @@ export class CourierSettlementService {
       };
     });
 
-    // The ceiling is the cash that actually arrived. Allocating past it
-    // would hold sellers more money than the courier sent, which is the
-    // one thing this operation must not be able to do — it would read
-    // on the coverage page as money we hold and do not.
-    const remaining = settlement.amountInr.sub(settlement.allocatedInr);
+    // The ceiling is the COD this payout covers: the cash that actually
+    // arrived plus what the courier says it kept back. Allocating past it
+    // would hold sellers more money than the courier collected for them,
+    // which is the one thing this operation must not be able to do — it
+    // would read on the coverage page as money we hold and do not.
+    const remaining = settlement.amountInr.add(keptBackOf(settlement)).sub(settlement.allocatedInr);
     if (adding.gt(remaining)) {
       throw new BadRequestException({
         code: 'SETTLEMENT_OVER_ALLOCATED',
@@ -857,7 +943,11 @@ export class CourierSettlementService {
       reference: row.reference,
       amountInr: row.amountInr.toString(),
       allocatedInr: row.allocatedInr.toString(),
-      unallocatedInr: row.amountInr.sub(row.allocatedInr).toString(),
+      earlyCodFeeInr: row.earlyCodFeeInr.toString(),
+      freightDeductedInr: row.freightDeductedInr.toString(),
+      rtoReversalInr: row.rtoReversalInr.toString(),
+      keptBackInr: keptBackOf(row).toString(),
+      unallocatedInr: row.amountInr.add(keptBackOf(row)).sub(row.allocatedInr).toString(),
       receivedAt: row.receivedAt,
       note: row.note,
       lines: row.lines.map((l) => ({
@@ -870,4 +960,13 @@ export class CourierSettlementService {
       createdAt: row.createdAt,
     };
   }
+}
+
+/** Everything the courier kept back from a payout, whatever the kind. */
+function keptBackOf(row: {
+  earlyCodFeeInr: Prisma.Decimal;
+  freightDeductedInr: Prisma.Decimal;
+  rtoReversalInr: Prisma.Decimal;
+}): Prisma.Decimal {
+  return row.earlyCodFeeInr.add(row.freightDeductedInr).add(row.rtoReversalInr);
 }

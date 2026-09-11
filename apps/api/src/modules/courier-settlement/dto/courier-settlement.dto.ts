@@ -33,6 +33,29 @@ export class SettlementLineDto {
   readonly note?: string;
 }
 
+/** What the courier kept back from the COD before paying — from its remittance file. */
+export class SettlementDeductionsDto {
+  @ApiPropertyOptional({
+    description:
+      'Early-COD / remittance fee the courier kept (decimal string). Booked as an expense.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  readonly earlyCodFeeInr?: string;
+
+  @ApiPropertyOptional({ description: 'Freight the courier took out of the COD (decimal string).' })
+  @IsOptional()
+  @IsNumberString()
+  readonly freightInr?: string;
+
+  @ApiPropertyOptional({
+    description: 'COD clawed back for a parcel that later returned (decimal string).',
+  })
+  @IsOptional()
+  @IsNumberString()
+  readonly rtoReversalInr?: string;
+}
+
 export class RecordSettlementDto {
   @ApiProperty()
   @IsUUID('7')
@@ -61,6 +84,16 @@ export class RecordSettlementDto {
   @ValidateNested({ each: true })
   @Type(() => SettlementLineDto)
   readonly lines!: SettlementLineDto[];
+
+  @ApiPropertyOptional({
+    type: SettlementDeductionsDto,
+    description:
+      'What the courier kept back before paying. Amount received + these = the COD the payout covers, so a payout that states them is fully explained rather than short.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SettlementDeductionsDto)
+  readonly deductions?: SettlementDeductionsDto;
 
   @ApiPropertyOptional()
   @IsOptional()

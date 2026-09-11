@@ -124,7 +124,7 @@ export class PnlService {
   constructor(private readonly prisma: PrismaService) {}
 
   async report(from: Date, to: Date): Promise<PnlReport> {
-    const [inbound, delivery, rto, codTax, fx, courierAdj, expenses, unattributed] =
+    const [inbound, delivery, rto, codTax, fx, courierAdj, codFees, expenses, unattributed] =
       await Promise.all([
         this.inboundFreight(from, to),
         this.delivery(from, to),
@@ -132,11 +132,12 @@ export class PnlService {
         this.codTaxDeduction(from, to),
         this.fx(from, to),
         this.courierAdjustments(from, to),
+        this.courierCodFees(from, to),
         this.expenses(from, to),
         this.unattributedLegCosts(from, to),
       ]);
 
-    const lines = [inbound, delivery, rto, codTax, fx, courierAdj];
+    const lines = [inbound, delivery, rto, codTax, fx, courierAdj, codFees];
     const gross = lines.reduce((acc, l) => acc.add(new Prisma.Decimal(l.marginInr)), ZERO);
 
     return {
@@ -586,6 +587,54 @@ export class PnlService {
       : { ...line, coverage: { ...line.coverage, note: cutoverNote } };
   }
 
+  /**
+   * What a courier KEPT from a COD payout as its fee (early COD).
+   *
+   * It never passes through the courier's wallet, so the wallet sync
+   * cannot see it: Shiprocket takes it out of the remittance and invoices
+   * it separately ("COD Remittance Fee"). Recording the payout books it as
+   * an EXPENSE bank entry linked to the settlement — that is what puts it
+   * on /expenses — and this line counts exactly those entries. Operating
+   * expenses leave them out, or the same fee would come off gross AND off
+   * net.
+   *
+   * Fully measured: each is the figure the courier's own file states.
+   */
+  private async courierCodFees(from: Date, to: Date): Promise<PnlLine> {
+    const agg = await this.prisma.client.bankEntry.aggregate({
+      where: {
+        type: BankEntryType.EXPENSE,
+        settlementId: { not: null },
+        occurredAt: { gte: from, lte: to },
+      },
+      _sum: { signedAmount: true },
+      _count: { _all: true },
+    });
+    // Posted negative (money leaving); a cost is its magnitude.
+    const cost = (agg._sum.signedAmount ?? ZERO).abs();
+    const count = agg._count._all;
+    return this.line({
+      key: 'courier_cod_fees',
+      label: 'Courier COD fees',
+      revenue: ZERO,
+      cost,
+      priced: count,
+      total: count,
+      note: null,
+      basis: {
+        revenue: [],
+        cost: [
+          {
+            label: 'Early-COD fees kept back from COD payouts',
+            source: 'bank_entries.signed_amount WHERE type=EXPENSE AND settlement_id IS NOT NULL',
+            count,
+            amountInr: cost.toFixed(2),
+          },
+        ],
+      },
+    });
+  }
+
   /** The cutover date, or null when the setting is cleared (count every adjustment). */
   private async adjustmentsCutover(): Promise<Date | null> {
     const row = await this.prisma.client.systemSetting.findUnique({
@@ -673,6 +722,9 @@ export class PnlService {
         type: BankEntryType.EXPENSE,
         occurredAt: { gte: from, lte: to },
         inboundFreightChargeId: null,
+        // A courier's COD fee is its own line (courierCodFees); counted
+        // here too it would come off gross and off net.
+        settlementId: null,
       },
       _sum: { signedAmount: true },
     });
@@ -699,6 +751,7 @@ export class PnlService {
         type: BankEntryType.EXPENSE,
         occurredAt: { gte: from, lte: to },
         inboundFreightChargeId: null,
+        settlementId: null,
         expenseCategory: { code: { in: LEG_EXPENSE_CATEGORIES } },
       },
       select: { signedAmount: true },
@@ -891,6 +944,35 @@ export class PnlService {
             // showing the magnitude would turn a loss into a gain.
             revenueInr: e.signedAmount.toFixed(2),
             costInr: null,
+          })),
+          truncated: rows.length > take,
+        };
+      }
+
+      case 'courier_cod_fees': {
+        const rows = await this.prisma.client.bankEntry.findMany({
+          where: {
+            type: BankEntryType.EXPENSE,
+            settlementId: { not: null },
+            occurredAt: { gte: from, lte: to },
+          },
+          orderBy: { id: 'desc' },
+          take: take + 1,
+          select: {
+            signedAmount: true,
+            occurredAt: true,
+            reference: true,
+            account: { select: { label: true } },
+          },
+        });
+        return {
+          key,
+          items: rows.slice(0, take).map((e) => ({
+            ref: e.reference ?? '—',
+            subRef: e.account.label,
+            at: e.occurredAt.toISOString(),
+            revenueInr: null,
+            costInr: e.signedAmount.abs().toFixed(2),
           })),
           truncated: rows.length > take,
         };
