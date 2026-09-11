@@ -6,6 +6,9 @@ import { ShipmentCostService } from '../../src/modules/treasury/services/shipmen
 
 const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
 
+/** The filter the courier-adjustments query was called with, last time. */
+let adjustmentWhere: Record<string, unknown> | undefined;
+
 function makeSut(opts: {
   freight?: Array<{ totalInr: Prisma.Decimal; ourCostInr: Prisma.Decimal | null }>;
   /** Grouped adjustment rows, as the ledger would return them. */
@@ -41,7 +44,10 @@ function makeSut(opts: {
     // the courier applied to the wallet rather than to a parcel. Empty
     // unless a test says otherwise: they have their own describe block.
     courierWalletTransaction: {
-      groupBy: async () => opts.courierAdjustments ?? [],
+      groupBy: async (args: { where: Record<string, unknown> }) => {
+        adjustmentWhere = args.where;
+        return opts.courierAdjustments ?? [];
+      },
     },
 
     orderCharge: {
@@ -416,5 +422,38 @@ describe('PnlService — courier account adjustments', () => {
     const line = out.lines.find((l) => l.key === 'courier_adjustments');
     expect(line?.costInr).toBe('0.00');
     expect(line?.coverage.note).toBeNull();
+  });
+});
+
+/**
+ * Courier expenses are counted on the day they happened, once, and only
+ * while they still move money.
+ */
+describe('courier account adjustments — what the P&L counts', () => {
+  it('counts by the TRANSACTION date, successful only, and never a dropped one', async () => {
+    const svc = makeSut({});
+    await svc.report(FROM, TO);
+
+    expect(adjustmentWhere).toMatchObject({
+      occurredAt: { gte: FROM, lte: TO },
+      status: 'success',
+      // Kept as evidence when their ledger drops it — but it no longer
+      // moves money, so it must not move the P&L either.
+      missingFromExportAt: null,
+    });
+  });
+
+  it('counts debits and credits separately, and nets them', async () => {
+    const svc = makeSut({
+      courierAdjustments: [
+        { kind: 'DEBIT', _sum: { amountInr: D('58.83') }, _count: { _all: 1 } },
+        { kind: 'CREDIT', _sum: { amountInr: D('1290') }, _count: { _all: 2 } },
+      ],
+    });
+    const r = await svc.report(FROM, TO);
+    const line = r.lines.find((l) => l.key === 'courier_adjustments');
+
+    expect(line?.costInr).toBe('-1231.17');
+    expect(line?.basis.cost.map((b) => b.count)).toEqual([1, 2]);
   });
 });

@@ -21,10 +21,7 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { usePnl, usePnlLineItems, type PnlBasisPartView } from '@/lib/ops-hooks';
-
-function isoDay(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+import { istDay, istDayRange } from '@/lib/ist-day';
 
 /**
  * Where the money is actually made.
@@ -42,21 +39,16 @@ function isoDay(d: Date): string {
  * loss-making lane stays invisible for a quarter.
  */
 export function PnlIndex(): ReactElement {
-  const [from, setFrom] = useState(() => isoDay(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
-  const [to, setTo] = useState(() => isoDay(new Date()));
+  const [from, setFrom] = useState(() => istDay(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
+  const [to, setTo] = useState(() => istDay(new Date()));
   // One line open at a time. Four expanded at once is a wall of numbers
   // that reads worse than the summary it was meant to explain.
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const params = useMemo(
-    () => ({
-      from: new Date(`${from}T00:00:00.000Z`).toISOString(),
-      // Inclusive of the closing day — a window ending "today" that
-      // stopped at midnight would silently omit today's trading.
-      to: new Date(`${to}T23:59:59.999Z`).toISOString(),
-    }),
-    [from, to],
-  );
+  // IST days, inclusive of the closing day (see ist-day.ts). The SAME
+  // range feeds the line totals and their drilldown, so the rows under a
+  // total are always the rows that made it.
+  const params = useMemo(() => istDayRange(from, to), [from, to]);
   const pnl = usePnl(params);
 
   return (
@@ -229,7 +221,7 @@ export function PnlIndex(): ReactElement {
                                 emptyText="Nothing — this line has no cost side."
                               />
                             </div>
-                            <LineItems lineKey={l.key} from={from} to={to} />
+                            <LineItems lineKey={l.key} from={params.from} to={params.to} />
                           </Td>
                         </Tr>
                       )}

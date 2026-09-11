@@ -483,26 +483,33 @@ export class PnlService {
         // `success` only. A failed line is a row about something that
         // did not happen.
         status: 'success',
+        // A transaction their ledger has since DROPPED is kept as evidence
+        // but moves no money: the later export still balances to the live
+        // wallet without it. Parcel costs already exclude it; so must this.
+        missingFromExportAt: null,
       },
       _sum: { amountInr: true },
       _count: { _all: true },
     });
 
     let cost = ZERO;
-    let count = 0;
     let debited = ZERO;
     let credited = ZERO;
+    let debitCount = 0;
+    let creditCount = 0;
     for (const r of rows) {
       const amt = r._sum.amountInr ?? ZERO;
-      count += r._count._all;
       if (r.kind === CourierWalletTxnKind.DEBIT) {
         debited = debited.add(amt);
+        debitCount += r._count._all;
         cost = cost.add(amt);
       } else {
         credited = credited.add(amt);
+        creditCount += r._count._all;
         cost = cost.sub(amt);
       }
     }
+    const count = debitCount + creditCount;
 
     return this.line({
       key: 'courier_adjustments',
@@ -524,13 +531,13 @@ export class PnlService {
           {
             label: 'Debited by the courier',
             source: "courier_wallet_transactions WHERE category='adjustment' AND kind='debit'",
-            count,
+            count: debitCount,
             amountInr: debited.toFixed(2),
           },
           {
             label: 'Credited back',
             source: "courier_wallet_transactions WHERE category='adjustment' AND kind='credit'",
-            count,
+            count: creditCount,
             amountInr: credited.negated().toFixed(2),
           },
         ],

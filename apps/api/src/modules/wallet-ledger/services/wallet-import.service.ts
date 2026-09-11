@@ -227,12 +227,37 @@ export class WalletImportService {
       throw err;
     }
 
-    const totalsAgree =
+    const deductionsAgree =
       parsed.statedTotalInr === null
         ? null
         : Math.abs(Number(parsed.sumInr) - Number(parsed.statedTotalInr)) < 0.05;
+    // Refunds are checked the same way. Only deductions used to be, so a
+    // credit the parse dropped — a refund, a credit note, a courier
+    // expense given back — went missing with the totals still "agreeing".
+    const statedRefunds = parsed.statedRefundsInr ?? null;
+    const refundsAgree =
+      statedRefunds === null
+        ? null
+        : Math.abs(Number(parsed.refundsInr ?? '0') - Number(statedRefunds)) < 0.05;
+    const totalsAgree =
+      deductionsAgree === false || refundsAgree === false
+        ? false
+        : deductionsAgree === null && refundsAgree === null
+          ? null
+          : true;
 
-    if (totalsAgree === false && opts.force !== true) {
+    if (refundsAgree === false && opts.force !== true) {
+      throw new BadRequestException({
+        code: 'LEDGER_REFUNDS_DISAGREE',
+        message:
+          `The refund rows add up to ₹${parsed.refundsInr} but the file's own Summary says ` +
+          `₹${statedRefunds}. A credit was mis-read or is missing, and a missing credit ` +
+          `overstates what we spent. Re-download the export, or pass force if you know ` +
+          `this is a partial file.`,
+      });
+    }
+
+    if (deductionsAgree === false && opts.force !== true) {
       throw new BadRequestException({
         code: 'LEDGER_TOTALS_DISAGREE',
         message:

@@ -33,6 +33,10 @@ export interface ParsedLedger {
   readonly summary: LedgerSummary;
   readonly rowsRead: number;
   readonly rowsSkipped: number;
+  /** Σ successful CREDITS — checked against the Summary's refunds total,
+   *  as `sumInr` is against its deductions total. */
+  readonly refundsInr: string;
+  readonly statedRefundsInr: string | null;
   /** Net of the parsed rows: debits minus credits. */
   readonly netInr: string;
   /** Debits only — what the page's window "Total Debit" should equal. */
@@ -223,39 +227,58 @@ function readTxnSheet(
   }
   const col = (r: string[], k: keyof typeof COLUMNS): string => r[at.get(COLUMNS[k]) ?? -1] ?? '';
 
-  for (const row of rows.slice(1)) {
-    if (row.length === 0) continue;
+  for (let i = 1; i < rows.length; i += 1) {
+    const row = rows[i];
+    if (row === undefined || row.every((c) => c.trim() === '')) continue;
     const amountInr = money(col(row, 'amount'));
     const occurredAt = parseIst(col(row, 'chargedAt'));
     const txnId = col(row, 'txnId').trim();
     const status = col(row, 'status').trim();
 
     // The DIRECTION is taken from the row, not from which sheet it was
-    // in. They agree today; if they ever stop, the row's own word is
-    // the one that decides whether money came in or went out.
+    // in. They agree today; if they ever stop, the file contradicts
+    // itself and is refused below.
     const stated = norm(col(row, 'type'));
     const rowKind: 'DEBIT' | 'CREDIT' | null =
       stated === 'debit' ? 'DEBIT' : stated === 'credit' ? 'CREDIT' : null;
 
     // Only `success` is money. A failed or pending line is a row about
-    // something that did not happen.
-    const isSuccess = norm(status) === 'success';
+    // something that did not happen, and skipping it loses nothing.
+    if (norm(status) !== 'success') {
+      counters.skipped += 1;
+      continue;
+    }
 
+    /*
+      A SUCCESSFUL ROW WE CANNOT READ IS REFUSED, NEVER SKIPPED.
+
+      It used to be counted as "skipped" and the import carried on — so a
+      real charge or credit with a blank id or an unreadable date simply
+      went missing, and the only trace was a number nobody reads. Money
+      that moved must either be recorded or stop the import; there is no
+      third option that is honest.
+    */
     if (
       amountInr === null ||
       occurredAt === null ||
       txnId === '' ||
       rowKind === null ||
-      !isSuccess
+      rowKind !== kind
     ) {
-      counters.skipped += 1;
-      continue;
-    }
-    if (rowKind !== kind) {
-      // A credit sitting in the deductions sheet, or the reverse. Kept
-      // on its own word — see above — and counted so it is not silent.
-      counters.skipped += 1;
-      continue;
+      throw new LedgerFormatError(
+        `Row ${i + 1} of the ${sheet} sheet is marked successful but ${
+          amountInr === null
+            ? 'has no readable amount'
+            : occurredAt === null
+              ? 'has no readable date'
+              : txnId === ''
+                ? 'has no transaction id'
+                : rowKind === null
+                  ? 'is neither a debit nor a credit'
+                  : `is a ${rowKind.toLowerCase()} filed under ${sheet}`
+        }. Skipping it would drop real money without a trace, so the file is refused — ` +
+          're-download the export.',
+      );
     }
 
     counters.read += 1;
@@ -361,6 +384,8 @@ export function parseWalletLedger(file: Buffer): ParsedLedger {
     netInr: (debits - credits).toFixed(2),
     sumInr: debits.toFixed(2),
     statedTotalInr: summary.totalDeductionsInr,
+    refundsInr: credits.toFixed(2),
+    statedRefundsInr: summary.totalRefundsInr,
     periodFrom: counters.from,
     periodTo: counters.to,
   };
