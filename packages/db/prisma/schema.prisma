@@ -7536,6 +7536,14 @@ enum BankEntryType {
   /// because "what have we put into Delhivery this month" has to be
   /// answerable without reading notes.
   COURIER_WALLET_RECHARGE   @map("courier_wallet_recharge")
+  /// The owner putting money INTO the business after the account was
+  /// opened — capital introduced. Equity, never income: before it existed
+  /// the only way to record one was a reconciliation, which the P&L reads
+  /// as money we did not know we had, so an injection read as profit.
+  OWNER_CONTRIBUTION        @map("owner_contribution")
+  /// The owner taking money OUT of the business — a drawing. Equity, never
+  /// an expense, for the same reason in the other direction.
+  OWNER_DRAWING             @map("owner_drawing")
 
   @@map("bank_entry_type")
 }

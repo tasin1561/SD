@@ -69,7 +69,11 @@ interface FindManyArgs {
   };
 }
 
-function makeSut(file: parser.LedgerTxn[], table: HeldRow[]) {
+function makeSut(
+  file: parser.LedgerTxn[],
+  table: HeldRow[],
+  ships: Array<Record<string, unknown>> = [],
+) {
   (parser.parseWalletLedger as jest.Mock).mockReturnValue({
     txns: file,
     summary: {
@@ -107,6 +111,7 @@ function makeSut(file: parser.LedgerTxn[], table: HeldRow[]) {
     }),
   );
   const groupBy = jest.fn(async (_args: { where: Record<string, unknown> }) => []);
+  const shipUpdate = jest.fn(async (_args: { where: { id: string }; data: unknown }) => ({}));
   const client = {
     courierWalletTransaction: {
       findMany,
@@ -114,13 +119,13 @@ function makeSut(file: parser.LedgerTxn[], table: HeldRow[]) {
       groupBy,
       createMany: jest.fn(async () => ({ count: 0 })),
     },
-    shipment: { findMany: async () => [], update: jest.fn() },
+    shipment: { findMany: async () => ships, update: shipUpdate },
   };
   const svc = new WalletImportService(
     { client } as unknown as PrismaService,
     { log: jest.fn(async () => 'a1') } as unknown as AuditLogService,
   );
-  return { svc, updateMany, groupBy };
+  return { svc, updateMany, groupBy, shipUpdate };
 }
 
 const FILE = Buffer.from('parser is mocked');
@@ -207,6 +212,37 @@ describe('a transaction the export no longer contains', () => {
 
     expect(r.txnsMissing).toBe(1);
     expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('a parcel whose EVERY transaction vanished has its cost cleared to unknown', async () => {
+    // DL2's only debit is gone from a file whose span covers it, and the
+    // file no longer names DL2 at all. Left alone, its ₹40 stood with
+    // nothing behind it; it is cleared to null (uncovered), never ₹0.
+    const { svc, shipUpdate } = makeSut(
+      [txn('MTX-KEPT')],
+      [
+        held('MTX-KEPT', new Date('2026-09-05T10:00:00Z')),
+        held('MTX-GONE', new Date('2026-09-07T10:00:00Z'), { awbNumber: 'DL2' }),
+      ],
+      [
+        {
+          id: 'ship-2',
+          awbNumber: 'DL2',
+          actualCourierCostInr: new Prisma.Decimal('40.00'),
+          actualRtoCostInr: null,
+          courierAccountId: ACCT,
+          orderShipments: [],
+        },
+      ],
+    );
+
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: ACCT });
+
+    expect(r.costsCleared).toBe(1);
+    expect(shipUpdate).toHaveBeenCalledWith({
+      where: { id: 'ship-2' },
+      data: { actualCourierCostInr: null, actualRtoCostInr: null },
+    });
   });
 
   it('the cost is netted WITHOUT stamped rows', async () => {

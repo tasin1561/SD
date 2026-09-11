@@ -24,6 +24,7 @@ import {
 } from '@skydrop/ui/components';
 import { useBankEntries, useTreasuryOverview } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { OwnerMoneyModal } from './owner-money-modal';
 import { ReconcileModal } from './reconcile-modal';
 import { TransferModal } from './transfer-modal';
 
@@ -69,6 +70,11 @@ export function TreasuryIndex(): ReactElement {
     currency: 'INR' | 'BDT';
     capital: string;
     bySeller: ReadonlyArray<{ sellerId: string; companyName: string; amount: string }>;
+  } | null>(null);
+  const [ownerMoney, setOwnerMoney] = useState<{
+    id: string;
+    label: string;
+    currency: 'INR' | 'BDT';
   } | null>(null);
   const [openAccount, setOpenAccount] = useState<string | null>(null);
   const entries = useBankEntries({ limit: 50 }, true);
@@ -259,21 +265,36 @@ export function TreasuryIndex(): ReactElement {
                       </Td>
                       <Td align="right">
                         {canManage ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setReconciling({
-                                id: a.accountId,
-                                label: a.label,
-                                currency: a.currency,
-                                capital: a.capital,
-                                bySeller: a.bySeller,
-                              })
-                            }
-                          >
-                            Reconcile
-                          </Button>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setOwnerMoney({
+                                  id: a.accountId,
+                                  label: a.label,
+                                  currency: a.currency,
+                                })
+                              }
+                            >
+                              Owner money
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setReconciling({
+                                  id: a.accountId,
+                                  label: a.label,
+                                  currency: a.currency,
+                                  capital: a.capital,
+                                  bySeller: a.bySeller,
+                                })
+                              }
+                            >
+                              Reconcile
+                            </Button>
+                          </div>
                         ) : (
                           <span className="text-text-faint">—</span>
                         )}
@@ -370,6 +391,12 @@ export function TreasuryIndex(): ReactElement {
       )}
 
       <TransferModal open={transferring} onOpenChange={setTransferring} />
+      <OwnerMoneyModal
+        accountId={ownerMoney?.id ?? null}
+        accountLabel={ownerMoney?.label ?? ''}
+        currency={ownerMoney?.currency ?? 'INR'}
+        onClose={() => setOwnerMoney(null)}
+      />
       <ReconcileModal
         accountId={reconciling?.id ?? null}
         accountLabel={reconciling?.label ?? ''}

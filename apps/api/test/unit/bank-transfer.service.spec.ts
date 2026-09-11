@@ -32,6 +32,8 @@ function make(fromCur: Currency, toCur: Currency, sellerHeld = '1000000') {
       $transaction: async (fn: (tx: unknown) => unknown) =>
         fn({
           bankTransfer: { create: async () => ({ id: 't1' }) },
+          // The bank-charges category a short same-currency transfer files under.
+          expenseCategory: { upsert: async () => ({ id: 'cat-bank' }) },
           // The holding guard takes the same advisory lock reconcile
           // does; a mocked tx has to answer it or the whole transfer
           // fails for the wrong reason.
@@ -108,11 +110,40 @@ describe('BankTransferService — the quoted rate is a promise', () => {
     ]);
   });
 
-  it('refuses a same-currency transfer that loses money on the way', async () => {
+  it('books what a same-currency transfer lost on the way as OUR bank charge', async () => {
+    // ₹300 left, ₹295 arrived. The ₹5 used to be refused ("record it as an
+    // expense") and was then forgotten — on no line while the account total
+    // quietly dropped. It is booked here, as an expense of ours.
+    const { svc, posted } = make(Currency.INR, Currency.INR);
+    const r = await svc.transfer({ ...BASE, amountOut: '300', amountIn: '295' });
+    expect(r.bankCharge).toBe('5.00');
+    expect(posted).toEqual([
+      { type: 'TRANSFER_OUT', signedAmount: '-300.00', ownerKind: 'CAPITAL' },
+      { type: 'TRANSFER_IN', signedAmount: '300.00', ownerKind: 'CAPITAL' },
+      { type: 'EXPENSE', signedAmount: '-5.00', ownerKind: 'CAPITAL' },
+    ]);
+    // The receiving account moves by exactly what arrived.
+    const arrived = posted
+      .slice(1)
+      .reduce((t, p) => t.add(new Prisma.Decimal(p.signedAmount)), new Prisma.Decimal(0));
+    expect(arrived.toFixed(2)).toBe('295.00');
+  });
+
+  it("a seller's same-currency move keeps their whole holding — the charge is ours", async () => {
+    const { svc, posted } = make(Currency.INR, Currency.INR);
+    await svc.transfer({ ...BASE, amountOut: '300', amountIn: '295', sellerId: 'seller-a' });
+    expect(posted).toEqual([
+      { type: 'TRANSFER_OUT', signedAmount: '-300.00', ownerKind: 'SELLER' },
+      { type: 'TRANSFER_IN', signedAmount: '300.00', ownerKind: 'SELLER' },
+      { type: 'EXPENSE', signedAmount: '-5.00', ownerKind: 'CAPITAL' },
+    ]);
+  });
+
+  it('refuses a same-currency transfer where MORE arrived than left', async () => {
     const { svc } = make(Currency.INR, Currency.INR);
-    // A bank fee is an EXPENSE with a name, not a quiet shortfall hidden
-    // inside a transfer.
-    await expect(svc.transfer({ ...BASE, amountOut: '300', amountIn: '295' })).rejects.toThrow();
+    await expect(
+      svc.transfer({ ...BASE, amountOut: '300', amountIn: '305' }),
+    ).rejects.toMatchObject({ response: { code: 'TRANSFER_AMOUNT_MISMATCH' } });
   });
 
   it('refuses a transfer to the same account', async () => {

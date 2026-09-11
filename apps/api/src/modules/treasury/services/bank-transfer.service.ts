@@ -5,6 +5,11 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { BankLedgerService } from './bank-ledger.service';
 
+/** The expense category a same-currency transfer's bank charge is filed under. */
+export const BANK_CHARGES_CATEGORY = 'bank_charges';
+
+const ZERO = new Prisma.Decimal(0);
+
 export interface TransferInput {
   readonly fromAccountId: string;
   readonly toAccountId: string;
@@ -28,6 +33,8 @@ export interface TransferResult {
   readonly achievedRate: string | null;
   /** Positive: we kept it. Negative: we covered it from capital. */
   readonly fxSpread: string | null;
+  /** What the bank kept on a same-currency move, booked as our expense. */
+  readonly bankCharge: string | null;
   readonly creditedToSeller: string;
 }
 
@@ -85,27 +92,46 @@ export class BankTransferService {
     ]);
 
     const crossCurrency = from.currency !== to.currency;
-    if (!crossCurrency && !out.equals(inn)) {
-      // Same currency and different amounts means something was lost,
-      // and a bank fee is an EXPENSE with a name — not a quiet shortfall
-      // inside a transfer.
+    // Same currency: more arriving than left is not a fee, it is a mistake
+    // on the form, and is refused.
+    if (!crossCurrency && inn.gt(out)) {
       throw new BadRequestException({
         code: 'TRANSFER_AMOUNT_MISMATCH',
         message:
-          'Same-currency transfers must send and receive the same amount. Record a fee as an expense.',
+          'More arrived than was sent in the same currency. Check both statements — a bank ' +
+          'charge makes the received amount SMALLER, never larger.',
       });
     }
+    // Same currency, less arriving: the difference is what the bank charged
+    // to move it. It used to be refused ("record the fee as an expense"),
+    // which left the fee to be remembered by hand — and forgotten, it is on
+    // no line at all while the account total quietly drops. It is booked
+    // here instead, as an EXPENSE in `bank_charges`, OURS.
+    //
+    // The owner is credited everything that LEFT, not what arrived. That is
+    // TRE-5's rule in its same-currency form: a seller's money moved in
+    // full, and what the bank took for moving it is our cost of doing so —
+    // shrinking their holding by a fee they never agreed to would make the
+    // bank book disagree with their wallet. Across a currency the fee is
+    // inside the achieved rate: for a seller the quote settles it (the
+    // FX_SPREAD below), and for our own money it is part of the exchange,
+    // not a separate cost we can see.
+    const bankCharge = crossCurrency ? ZERO : out.sub(inn);
 
     const achieved = out.isZero() ? null : inn.div(out).toDecimalPlaces(6);
     const owner = input.sellerId
       ? { kind: BankOwnerKind.SELLER, sellerId: input.sellerId }
       : { kind: BankOwnerKind.CAPITAL };
 
-    // What the seller is owed on the far side. At the quoted rate when
-    // there is one; otherwise everything that arrived.
+    // What the owner is credited on the far side: at the quoted rate when a
+    // seller was quoted one; across a currency otherwise, everything that
+    // arrived; in the same currency, everything that left.
     const quoted = input.quotedRate ? new Prisma.Decimal(input.quotedRate) : null;
-    const creditedToSeller =
-      input.sellerId && crossCurrency && quoted ? out.mul(quoted).toDecimalPlaces(2) : inn;
+    const creditedToSeller = !crossCurrency
+      ? out
+      : input.sellerId && quoted
+        ? out.mul(quoted).toDecimalPlaces(2)
+        : inn;
     const spread = input.sellerId && crossCurrency ? inn.sub(creditedToSeller) : null;
 
     return this.prisma.client.$transaction(async (tx) => {
@@ -228,6 +254,34 @@ export class BankTransferService {
         );
       }
 
+      if (bankCharge.gt(0)) {
+        const category = await tx.expenseCategory.upsert({
+          where: { code: BANK_CHARGES_CATEGORY },
+          update: {},
+          create: {
+            code: BANK_CHARGES_CATEGORY,
+            name: 'Bank charges',
+            hint: 'What a bank took to move money between our accounts. Booked automatically when a transfer arrives short — do not file these by hand, or the P&L counts them twice.',
+          },
+          select: { id: true },
+        });
+        await this.ledger.post(
+          {
+            accountId: to.id,
+            type: BankEntryType.EXPENSE,
+            signedAmount: bankCharge.neg(),
+            amountCurrency: to.currency,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: input.movedAt,
+            transferId: transfer.id,
+            expenseCategoryId: category.id,
+            note: `Bank charge on a transfer from ${from.label}: ${out.toFixed(2)} sent, ${inn.toFixed(2)} arrived`,
+            staffId: input.staffId,
+          },
+          tx,
+        );
+      }
+
       await this.audit.log(
         {
           actorType: ActorType.STAFF,
@@ -244,6 +298,7 @@ export class BankTransferService {
             quotedRate: quoted?.toString() ?? null,
             achievedRate: achieved?.toString() ?? null,
             fxSpread: spread?.toFixed(2) ?? null,
+            bankCharge: bankCharge.gt(0) ? bankCharge.toFixed(2) : null,
             sellerId: input.sellerId ?? null,
           },
         },
@@ -254,6 +309,7 @@ export class BankTransferService {
         transferId: transfer.id,
         achievedRate: achieved?.toString() ?? null,
         fxSpread: spread?.toFixed(2) ?? null,
+        bankCharge: bankCharge.gt(0) ? bankCharge.toFixed(2) : null,
         creditedToSeller: creditedToSeller.toFixed(2),
       };
     });

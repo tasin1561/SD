@@ -1452,6 +1452,31 @@ export function useReconcileAccount(): UseMutationResult<
   });
 }
 
+/** Money the owner put into the business or took out — equity, on no P&L line. */
+export function useRecordOwnerMoney(): UseMutationResult<
+  { id: string },
+  Error,
+  {
+    accountId: string;
+    direction: 'IN' | 'OUT';
+    amount: string;
+    occurredAt: string;
+    reason: string;
+    reference?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ accountId, ...body }) =>
+      client.request<{ id: string }>(`/api/admin/treasury/accounts/${accountId}/owner-money`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
+}
+
 export interface SellerHoldingView {
   readonly accountId: string;
   /**

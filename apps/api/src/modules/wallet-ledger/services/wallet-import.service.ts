@@ -35,6 +35,12 @@ export interface WalletImportResult {
   readonly rowsRead: number;
   readonly rowsSkipped: number;
   readonly awbsInFile: number;
+  /**
+   * Our parcels whose every stored transaction has vanished from their
+   * ledger — their cost was cleared to unknown, since nothing supports
+   * the old figure any more.
+   */
+  readonly costsCleared: number;
   /** Shipments whose forward cost we wrote or changed. */
   readonly forwardWritten: number;
   readonly rtoWritten: number;
@@ -389,7 +395,16 @@ export class WalletImportService {
       dryRun,
     );
 
-    const awbs = new Set(input.txns.map((t) => t.awbNumber).filter((a): a is string => a !== null));
+    const fileAwbs = new Set(
+      input.txns.map((t) => t.awbNumber).filter((a): a is string => a !== null),
+    );
+    // A waybill a row VANISHED from is re-netted too, even when the file no
+    // longer names it: its cost was netted with that row in it, and left
+    // alone it would keep a figure our ledger no longer supports.
+    const vanishedAwbs = new Set(
+      missing.map((m) => m.awbNumber).filter((a): a is string => a !== null),
+    );
+    const awbs = new Set([...fileAwbs, ...vanishedAwbs]);
     const shipments = await this.prisma.client.shipment.findMany({
       where: {
         awbNumber: { in: [...awbs] },
@@ -536,6 +551,25 @@ export class WalletImportService {
       }
     }
 
+    // A parcel whose EVERY stored transaction has since vanished from
+    // their ledger has no net left at all, so the loop above never reaches
+    // it — and its old cost stood, a figure nothing supports any more. It
+    // is CLEARED to unknown (null, never ₹0: nobody knows what it cost),
+    // which puts it back on its line as uncovered rather than as priced.
+    let costsCleared = 0;
+    for (const awbNumber of vanishedAwbs) {
+      if (netByAwb.has(awbNumber)) continue;
+      const ship = byAwb.get(awbNumber);
+      if (ship === undefined) continue;
+      if (ship.actualCourierCostInr === null && ship.actualRtoCostInr === null) continue;
+      costsCleared += 1;
+      if (dryRun) continue;
+      await this.prisma.client.shipment.update({
+        where: { id: ship.id },
+        data: { actualCourierCostInr: null, actualRtoCostInr: null },
+      });
+    }
+
     // Ledger-level entries, kept apart from every parcel. Netted the
     // same way: a debit costs us, a credit gives back.
     const adjustmentTxns = input.txns.filter((t) => t.category === 'ADJUSTMENT');
@@ -545,12 +579,13 @@ export class WalletImportService {
         t.kind === 'DEBIT' ? adjustmentsNet.add(t.amountInr) : adjustmentsNet.sub(t.amountInr);
     }
 
-    const unknownAwbs = [...awbs].filter((a) => !byAwb.has(a)).length;
+    const unknownAwbs = [...fileAwbs].filter((a) => !byAwb.has(a)).length;
 
     const result: WalletImportResult = {
       rowsRead: input.rowsRead,
       rowsSkipped: input.rowsSkipped,
-      awbsInFile: awbs.size,
+      awbsInFile: fileAwbs.size,
+      costsCleared,
       forwardWritten,
       rtoWritten,
       unchanged,
