@@ -243,6 +243,41 @@ describe('CourierWalletReconcileService', () => {
     )?.[0] as { severity: string; metadata: Record<string, string> } | undefined;
   }
 
+  it('a FAILED top-up is not a hole in our books', async () => {
+    /*
+      Their page marks each recharge Success or Failed, and this never
+      read it: a failed attempt — where no money left any account of
+      ours — was raised HIGH as "not in our books", asking somebody to
+      record which account paid for it. Four of eleven open money issues
+      were that, and acting on one would have written a bank entry with
+      no statement line behind it, which is the single thing the bank
+      ledger must never contain.
+    */
+    const ctx = make();
+    Portal.recharges = [{ ...RECHARGE, status: 'Failed' }];
+    await ctx.svc.reconcile();
+
+    expect(
+      ctx.raise.mock.calls.filter((c) =>
+        String((c[0] as { dedupeKey: string }).dedupeKey).startsWith('courier-recharge-unrecorded'),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('an UNRECOGNISED status still asks, rather than going quiet', async () => {
+    // The safe direction for an unknown is to raise: a silent skip is
+    // how a real gap disappears the day they reword a label.
+    const ctx = make();
+    Portal.recharges = [{ ...RECHARGE, status: 'Pending settlement' }];
+    await ctx.svc.reconcile();
+
+    expect(
+      ctx.raise.mock.calls.filter((c) =>
+        String((c[0] as { dedupeKey: string }).dedupeKey).startsWith('courier-recharge-unrecorded'),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('raises when the export sums BELOW what their page says was charged', async () => {
     const ctx = make();
     Portal.recharges = [];

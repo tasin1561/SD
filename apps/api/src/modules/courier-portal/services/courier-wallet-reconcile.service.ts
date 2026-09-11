@@ -270,11 +270,45 @@ export class CourierWalletReconcileService {
   private async matchOne(
     rechargeId: string,
     accountId: string,
-    r: { bankTxnRef: string | null; amountInr: string; externalTxnId: string },
+    r: {
+      bankTxnRef: string | null;
+      amountInr: string;
+      externalTxnId: string;
+      status: string;
+    },
     bankEntryId: string | null,
     current: CourierRechargeMatch,
   ): Promise<CourierRechargeMatch> {
     if (current === CourierRechargeMatch.RESOLVED) return current;
+
+    /*
+      A FAILED TOP-UP HAS NOTHING TO MATCH.
+
+      Their page marks a recharge Success or Failed. This never read it,
+      so a failed attempt — where no money left any account of ours —
+      was raised HIGH as "not in our books", asking somebody to record
+      which of our accounts paid for it. Four of eleven open money
+      issues were exactly that, and acting on one would have written a
+      bank entry with no statement line behind it: the single thing the
+      bank ledger must never contain (TRE-1).
+
+      Only an EXPLICIT failure is excused. An unrecognised status still
+      goes through matching and still raises, because the safe direction
+      for an unknown is to ask rather than to skip — a silent skip is
+      how a real gap would disappear the day they reword a label.
+    */
+    if (/fail/i.test(r.status)) {
+      await this.prisma.client.courierWalletRecharge.update({
+        where: { id: rechargeId },
+        data: { matchState: CourierRechargeMatch.NOT_APPLICABLE },
+      });
+      // Clear any issue an earlier run raised before this was understood.
+      await this.issues.resolveByKey(
+        `courier-recharge-unrecorded:${accountId}:${r.externalTxnId}`,
+        'The courier’s own record says this top-up failed, so no money left our bank.',
+      );
+      return CourierRechargeMatch.NOT_APPLICABLE;
+    }
 
     let linkedId = bankEntryId;
     if (linkedId === null && r.bankTxnRef !== null) {

@@ -7315,6 +7315,13 @@ enum CourierRechargeMatch {
   AMOUNT_MISMATCH @map("amount_mismatch")
   /// A person looked and said what it was. Carries who and why.
   RESOLVED        @map("resolved")
+  /// The courier's own row says the top-up FAILED, so no money ever left
+  /// our bank and there is nothing to match it to. Distinct from
+  /// MATCHED (which claims a bank entry exists) and from UNRECORDED
+  /// (which asks somebody to go and find one) — asking for a bank entry
+  /// against a payment that never happened invites a false row into the
+  /// book, which is the one thing the bank ledger must never contain.
+  NOT_APPLICABLE  @map("not_applicable")
 
   @@map("courier_recharge_match")
 }
