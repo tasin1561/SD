@@ -287,8 +287,9 @@ describe('Treasury (e2e)', () => {
       expect(bdt?.total).toBe('1250.00');
     });
 
-    it('refuses a same-currency transfer that loses money on the way', async () => {
-      // A bank fee is an expense with a name, not a quiet shortfall.
+    it('books what a same-currency transfer loses on the way as a bank charge', async () => {
+      // A bank fee is an expense with a name, not a quiet shortfall — and
+      // not a refusal that leaves the real transfer unrecorded.
       const second = await h.prisma.platformBankAccount.create({
         data: {
           label: 'INR-Second',
@@ -309,7 +310,17 @@ describe('Treasury (e2e)', () => {
           amountIn: '295',
           movedAt: new Date().toISOString(),
         })
-        .expect(400);
+        .expect(200);
+      const charge = await h.prisma.bankEntry.findFirst({
+        where: {
+          type: BankEntryType.EXPENSE,
+          accountId: second.id,
+          expenseCategory: { code: 'bank_charges' },
+        },
+        select: { signedAmount: true, ownerKind: true },
+      });
+      expect(charge?.signedAmount.toFixed(2)).toBe('-5.00');
+      expect(charge?.ownerKind).toBe('CAPITAL');
     });
   });
 

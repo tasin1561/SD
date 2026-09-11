@@ -364,23 +364,34 @@ export class WalletService {
   async recomputeCacheAfterCommit(
     sellerId: string,
     currency: Currency,
-    lastEntryId: string,
+    /** Why the refresh ran — for the log only. */
+    reason: string,
   ): Promise<void> {
     try {
-      const balance = await this.latestRunningBalance(this.prisma.client, sellerId, currency);
+      // The entry id is read off the ledger, never taken from the caller:
+      // every caller passed a label here ('post-topup-accept', …) into a
+      // UUID column, so this refresh failed silently after every money
+      // flow for as long as it existed.
+      const last = await this.prisma.client.sellerWalletEntry.findFirst({
+        where: { sellerId, currency },
+        orderBy: { id: 'desc' },
+        select: { id: true, runningBalanceAfter: true },
+      });
+      if (last === null) return;
+      const balance = last.runningBalanceAfter;
       await this.prisma.client.sellerWalletBalance.upsert({
         where: { sellerId_currency: { sellerId, currency } },
         create: {
           sellerId,
           currency,
           balance,
-          lastEntryId,
+          lastEntryId: last.id,
         },
-        update: { balance, lastEntryId },
+        update: { balance, lastEntryId: last.id },
       });
     } catch (e) {
       this.logger.error(
-        { sellerId, currency, err: (e as Error).message },
+        { sellerId, currency, reason, err: (e as Error).message },
         'Wallet balance cache recompute failed; cache lag possible',
       );
     }
