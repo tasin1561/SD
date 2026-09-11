@@ -602,6 +602,14 @@ export interface RemittanceRow {
   readonly alreadySettled: boolean;
 }
 
+export interface RemittanceFileSummary {
+  /** The payout reference(s) the file names — the UTR(s). */
+  readonly references: readonly string[];
+  readonly remittedInr: string;
+  readonly codInr: string;
+  readonly deductedInr: string;
+}
+
 export interface RemittancePreview {
   readonly rows: readonly RemittanceRow[];
   readonly matchedCount: number;
@@ -609,6 +617,9 @@ export interface RemittancePreview {
   readonly alreadySettledCount: number;
   readonly allocatableInr: string;
   readonly fileTotalInr: string;
+  /** What the file says about the payout as a whole, when its format states it. */
+  readonly summary: RemittanceFileSummary | null;
+  readonly warnings: readonly string[];
 }
 
 /**
@@ -622,7 +633,8 @@ export interface RemittancePreview {
 export function usePreviewRemittance(): UseMutationResult<
   RemittancePreview,
   Error,
-  { courierCode: string; csvText: string }
+  /** The file exactly as downloaded, base64 — the server recognises .csv, .xls or .xlsx. */
+  { courierCode: string; fileBase64: string; fileName: string }
 > {
   const client = useApiClient();
   return useMutation({

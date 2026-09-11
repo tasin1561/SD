@@ -18,6 +18,7 @@ import {
   useCourierAccounts,
   usePreviewRemittance,
   useRecordSettlement,
+  type RemittancePreview,
   type RemittanceRow,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -26,6 +27,16 @@ interface DraftLine {
   readonly key: number;
   readonly orderId: string;
   readonly settledInr: string;
+}
+
+/** A file's bytes as base64, in chunks so a large file does not overflow the call stack. */
+async function toBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
 }
 
 /**
@@ -64,6 +75,10 @@ export function RecordSettlementModal({
   const [error, setError] = useState<string | null>(null);
   const preview = usePreviewRemittance();
   const [skipped, setSkipped] = useState<readonly RemittanceRow[]>([]);
+  const [fileNotes, setFileNotes] = useState<Pick<
+    RemittancePreview,
+    'summary' | 'warnings'
+  > | null>(null);
 
   /**
    * Read the courier's own remittance export instead of retyping it.
@@ -84,9 +99,17 @@ export function RecordSettlementModal({
       setError('Choose the courier account first — the file is read in its own format.');
       return;
     }
+    setFileNotes(null);
     try {
-      const csvText = await file.text();
-      const out = await preview.mutateAsync({ courierCode: courier, csvText });
+      // Sent exactly as downloaded: Shiprocket's export is a binary .xls,
+      // which reading as text would corrupt. The server recognises the
+      // format from the bytes.
+      const out = await preview.mutateAsync({
+        courierCode: courier,
+        fileBase64: await toBase64(file),
+        fileName: file.name,
+      });
+      setFileNotes({ summary: out.summary, warnings: out.warnings });
       const usable = out.rows.filter((r) => r.problem === null && r.orderId !== null);
       setLines(
         usable.map((r, i) => ({
@@ -122,6 +145,8 @@ export function RecordSettlementModal({
     setNote('');
     setLines([{ key: 0, orderId: '', settledInr: '' }]);
     setError(null);
+    setSkipped([]);
+    setFileNotes(null);
   }
 
   function updateLine(key: number, patch: Partial<DraftLine>): void {
@@ -249,7 +274,7 @@ export function RecordSettlementModal({
             </span>
             <input
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,text/csv,.xls,application/vnd.ms-excel,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="sr-only"
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -258,6 +283,32 @@ export function RecordSettlementModal({
               }}
             />
           </label>
+
+          {fileNotes !== null && (fileNotes.summary !== null || fileNotes.warnings.length > 0) && (
+            <div className="border-border mb-3 rounded-[10px] border p-2 text-xs">
+              {fileNotes.summary !== null && (
+                // Shown, never filled in: the file is the courier's claim,
+                // the bank statement is the fact, and the operator types
+                // the reference and amount from the latter.
+                <div className="text-text-body">
+                  The file says: UTR{' '}
+                  <span className="font-mono">
+                    {fileNotes.summary.references.join(', ') || '—'}
+                  </span>{' '}
+                  · collected <Money amount={fileNotes.summary.codInr} /> · kept back{' '}
+                  <Money amount={fileNotes.summary.deductedInr} /> · remitted{' '}
+                  <Money amount={fileNotes.summary.remittedInr} />
+                </div>
+              )}
+              {fileNotes.warnings.length > 0 && (
+                <ul className="text-text-muted mt-1 list-disc space-y-0.5 pl-4">
+                  {fileNotes.warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {skipped.length > 0 && (
             <div className="border-border mb-3 rounded-[10px] border p-2 text-xs">

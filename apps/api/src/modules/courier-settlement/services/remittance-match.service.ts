@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { RemittanceParserRegistry } from './remittance-parser.service';
+import { RemittanceParserRegistry, type RemittanceFileSummary } from './remittance-parser.service';
 
 export interface MatchedRemittanceRow {
   readonly line: number;
@@ -31,6 +31,10 @@ export interface RemittancePreview {
   readonly allocatableInr: string;
   /** Sum of every line in the file, including the ones we cannot place. */
   readonly fileTotalInr: string;
+  /** What the file says about the payout as a whole, when its format states it. */
+  readonly summary: RemittanceFileSummary | null;
+  /** Said to the operator before anything is recorded. */
+  readonly warnings: readonly string[];
 }
 
 /**
@@ -53,8 +57,10 @@ export class RemittanceMatchService {
     private readonly parsers: RemittanceParserRegistry,
   ) {}
 
-  async preview(courierCode: string, csvText: string): Promise<RemittancePreview> {
-    const parsed = this.parsers.parse(courierCode, csvText);
+  /** `input` is CSV text, or the uploaded file's bytes (.csv, .xls or .xlsx). */
+  async preview(courierCode: string, input: string | Buffer): Promise<RemittancePreview> {
+    const file = this.parsers.parse(courierCode, input);
+    const parsed = file.rows;
     const awbs = parsed.map((r) => r.awbNumber);
 
     const shipments = await this.prisma.client.shipment.findMany({
@@ -104,6 +110,7 @@ export class RemittanceMatchService {
       let problem: string | null = null;
       if (amount === null) problem = `'${r.settledInr}' is not an amount`;
       else if (amount.lte(0)) problem = 'Nothing payable on this line';
+      else if (r.flag !== null) problem = r.flag;
       else if (ship === null) problem = 'No shipment with this waybill';
       else if (order === null) problem = 'Waybill found, but it is not attached to an order';
 
@@ -135,6 +142,8 @@ export class RemittanceMatchService {
       alreadySettledCount: rows.filter((r) => r.alreadySettled).length,
       allocatableInr: allocatable.toFixed(2),
       fileTotalInr: fileTotal.toFixed(2),
+      summary: file.summary,
+      warnings: file.warnings,
     };
   }
 

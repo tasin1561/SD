@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -93,7 +94,17 @@ export class AdminCourierSettlementController {
       'recorded, rather than leaving the difference to be found later in the float report.',
   })
   previewRemittance(@Body() body: PreviewRemittanceDto): Promise<RemittancePreview> {
-    return this.remittance.preview(body.courierCode, body.csvText);
+    // Exactly one: two copies of a file could disagree, and none is a
+    // request to match nothing.
+    if ((body.csvText === undefined) === (body.fileBase64 === undefined)) {
+      throw new BadRequestException({
+        code: 'REMITTANCE_NO_FILE',
+        message: 'Send the remittance file once — as csvText or as fileBase64.',
+      });
+    }
+    const input =
+      body.fileBase64 !== undefined ? Buffer.from(body.fileBase64, 'base64') : (body.csvText ?? '');
+    return this.remittance.preview(body.courierCode, input);
   }
 
   @Post(':settlementId/allocate')

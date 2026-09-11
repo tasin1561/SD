@@ -5,8 +5,10 @@ import { RemittanceMatchService } from '../../src/modules/courier-settlement/ser
 import {
   DelhiveryRemittanceParser,
   RemittanceParserRegistry,
+  ShiprocketRemittanceParser,
 } from '../../src/modules/courier-settlement/services/remittance-parser.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
+import { buildXls } from '../helpers/xls-builder';
 
 const CSV = readFileSync(join(__dirname, '../fixtures/delhivery-remittance.csv'), 'utf8');
 const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
@@ -46,8 +48,80 @@ function makeSut(opts: {
   } as unknown as PrismaService;
   return new RemittanceMatchService(
     prisma,
-    new RemittanceParserRegistry(new DelhiveryRemittanceParser()),
+    new RemittanceParserRegistry(new DelhiveryRemittanceParser(), new ShiprocketRemittanceParser()),
   );
+}
+
+/** Two parcels; the second adjusted by Shiprocket in a column never seen filled. */
+function shiprocketFile(): Buffer {
+  const awbHeader = [
+    'CRF ID',
+    'AWB',
+    'Delivered Date',
+    'Shipped Date',
+    'Order Id',
+    'Courier',
+    'Order Value',
+    'Channel Name',
+    'Remittance Date',
+    'UTR',
+    'total_adjusted_amt',
+    'Linked CRF Ids',
+  ];
+  const crfHeader = [
+    'Date',
+    'CRF ID',
+    'COD Available',
+    'Freight Charges from COD',
+    'Early COD Charges',
+    'RTO Reversal Amount',
+    'Remittance Amount',
+    'Remittance Method',
+    'UTR',
+    'Adjusted Amount',
+    'Status',
+    'remarks',
+  ];
+  const parcel = (awb: string | number, value: number, adjusted: number | null) => [
+    13449838,
+    awb,
+    '',
+    '',
+    1,
+    'Xpressbees Surface',
+    value,
+    'CUSTOM',
+    '',
+    'IN22625415423299',
+    adjusted,
+    null,
+  ];
+  return buildXls([
+    {
+      name: 'AWB level report',
+      rows: [awbHeader, parcel(14112364794902, 1500, null), parcel('SF3771704958KR', 1600, -40)],
+    },
+    {
+      name: 'CRF level report',
+      rows: [
+        crfHeader,
+        [
+          '',
+          13449838,
+          3100,
+          0,
+          0,
+          0,
+          3100,
+          'Prepaid',
+          'IN22625415423299',
+          null,
+          'Remittance success',
+          '',
+        ],
+      ],
+    },
+  ]);
 }
 
 describe('RemittanceMatchService.preview', () => {
@@ -101,6 +175,29 @@ describe('RemittanceMatchService.preview', () => {
     expect(row?.expectedInr).toBe('1500.00');
     expect(row?.settledInr).toBe('1000.00');
     expect(row?.sellerName).toBe('QA Test Traders');
+  });
+
+  it("matches Shiprocket's .xls on the waybill, including one Excel stored as a number", async () => {
+    const svc = makeSut({
+      known: [{ awb: '14112364794902', orderId: 'o-9', orderNumber: 'SD-9', cod: '1500.00' }],
+    });
+    const out = await svc.preview('shiprocket', shiprocketFile());
+    const row = out.rows.find((r) => r.awbNumber === '14112364794902');
+    expect(row).toMatchObject({ orderId: 'o-9', settledInr: '1500.00', problem: null });
+    expect(out.summary).toMatchObject({ references: ['IN22625415423299'], remittedInr: '3100.00' });
+    expect(out.warnings).toEqual([]);
+  });
+
+  it('keeps a parcel Shiprocket adjusted out of the allocation, saying why', async () => {
+    // Even when we KNOW the waybill: the file says something about its
+    // amount we cannot read, so a person decides.
+    const svc = makeSut({
+      known: [{ awb: 'SF3771704958KR', orderId: 'o-8', orderNumber: 'SD-8', cod: '1600.00' }],
+    });
+    const out = await svc.preview('shiprocket', shiprocketFile());
+    const row = out.rows.find((r) => r.awbNumber === 'SF3771704958KR');
+    expect(row?.problem).toMatch(/allocate it by hand/);
+    expect(out.allocatableInr).toBe('0.00');
   });
 
   it('writes nothing — it is a question, not a decision', async () => {

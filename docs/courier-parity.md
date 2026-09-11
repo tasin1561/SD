@@ -39,6 +39,7 @@ its tracking webhooks are now arriving authenticated.
 | Wallet sync — real parcel cost | ✅ live — transaction ledger, 90 days nightly | ❌ Delhivery-only | 23,343 transactions stored, 0 duplicates; all 22 AWB parcels costed as the net of their debits and credits (COST-1); `wallet-sync.service.ts` is hardcoded to `delhivery` |
 | Courier expenses in the P&L | ✅ live — 37 adjustments, −₹1,268.76 net | ❌ | "Courier account adjustments", dated by transaction (IST), matching the file to the paisa |
 | Wallet reconcile (recharges) | ✅ live | ❌ | 11 recharges seen: 7 (₹1,15,000) **not yet recorded on our side**, 4 (₹80,000) not applicable |
+| COD remittance file → payout allocation | ✅ CSV ("remittance transactions export") | ✅ their `.xls` (AWB + CRF sheets), built 11 Sep | Both matched on waybill in "Record a courier payout". Shiprocket's file is refused when its parcels do not add up to the CRF's "COD Available"; deductions are reported per remittance, never split per parcel. Verified against real CRF 13449838: 10 parcels, ₹15,700, UTR IN22625415423299 |
 | Portal ticket sync | ⏸ OFF | ❌ | `courier_portal_runs` is EMPTY — never ran in production |
 | Portal session / canary | ⏸ OFF | ❌ | same; `courier.portal_canary_awb` is empty. (The wallet sync signs in separately and runs nightly) |
 | Waybill pool | ⚠️ refill OFF — 1 waybill held | n/a — AWB issued at assign | `delhivery_waybill_pool_refill_enabled` = false; each booking gets its AWB directly |

@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBase64,
   IsDateString,
   IsInt,
   IsNumberString,
@@ -89,14 +90,32 @@ export class PreviewRemittanceDto {
   @MaxLength(40)
   readonly courierCode!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
-      'The remittance file, as text. Read-only: this endpoint matches waybills to orders and ' +
-      'moves no money, so an operator can see what will and will not allocate before recording.',
+      'The remittance file, as CSV text. Read-only: this endpoint matches waybills to orders and ' +
+      'moves no money, so an operator can see what will and will not allocate before recording. ' +
+      'Send this OR fileBase64, not both.',
   })
+  @IsOptional()
   @IsString()
   @MaxLength(5_000_000)
-  readonly csvText!: string;
+  readonly csvText?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "The courier's file exactly as downloaded, base64-encoded — .csv, .xls (Shiprocket) or " +
+      '.xlsx; the format is recognised from its bytes. Send this OR csvText, not both.',
+  })
+  @IsOptional()
+  @IsBase64()
+  @MaxLength(8_000_000)
+  readonly fileBase64?: string;
+
+  @ApiPropertyOptional({ description: 'The file name, for messages only.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  readonly fileName?: string;
 }
 
 export class ReconciliationQueryDto {

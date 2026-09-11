@@ -8,6 +8,7 @@ import { RemittanceMatchService } from './services/remittance-match.service';
 import {
   DelhiveryRemittanceParser,
   RemittanceParserRegistry,
+  ShiprocketRemittanceParser,
 } from './services/remittance-parser.service';
 import { AdminCourierSettlementController } from './controllers/admin-courier-settlement.controller';
 import { TreasuryModule } from '../treasury/treasury.module';
@@ -38,6 +39,7 @@ import { TreasuryModule } from '../treasury/treasury.module';
     RemittanceMatchService,
     RemittanceParserRegistry,
     DelhiveryRemittanceParser,
+    ShiprocketRemittanceParser,
     StaffJwtGuard,
   ],
   exports: [CourierSettlementService],
