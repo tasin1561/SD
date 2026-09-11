@@ -1,46 +1,73 @@
 # Delhivery vs Shiprocket — what actually works, per capability
 
-Audited 2026-09-09 by reading the dispatchers (which are the per-courier
-switchboard, CUR-12) and the production database, not by reading older
-docs. Every "✅ live" below was exercised against the real API.
+Re-audited **2026-09-11** against the PRODUCTION database and the live
+settings (deployed commit `401411b1`), replacing the 2026-09-09 audit.
+"Built" and "working in production" are kept apart on purpose: several
+capabilities that read ✅ in the last audit have never once run for real.
 
 ---
 
 ## The one thing to read first
 
-**Delhivery is carrying real parcels. Shiprocket is not carrying
-anything.** Its account is provisioned and its booking contract is
-proven — a real AWB was issued and cancelled on 2026-09-09 — but
-`Courier.isActive` is FALSE, the base URL is empty and live writes are
-off, so under CUR-16 no new parcel can route to it.
-
-Everything below is about what WOULD work the day those switches flip.
+**Delhivery carries every real parcel: 22 with a real AWB, on 39
+shipments.** Shiprocket carries none — `Courier.isActive` is false, its
+base URL is empty and live writes are off (CUR-16) — though its account
+and login are stored, its booking contract was proven on 2026-09-09, and
+its tracking webhooks are now arriving authenticated.
 
 ## Capability matrix
 
-| Capability | Delhivery | Shiprocket | Notes |
+| Capability | Delhivery | Shiprocket | Production evidence (2026-09-11) |
 |---|---|---|---|
-| Book AWB at order confirmation | ✅ live, 11+ real AWBs | ✅ contract proven, intake off | Shiprocket takes TWO calls (create order, then assign); Delhivery one |
-| Store courier's parcel id | ✅ `courierShipmentId` | ✅ `courierShipmentId` | |
-| Store courier's ORDER id | n/a — one number | ✅ `courierOrderId` | added 2026-09-09; their portal searches on it |
-| Fetch label | ✅ | ✅ | Shiprocket returns a URL, Delhivery a PDF; the dispatcher hides the difference |
-| Cancel a shipment | ✅ | ✅ **verified live** | |
-| Serviceability check | ✅ | ✅ **verified live** | reactive only (CUR-5); not on the critical path |
-| Edit consignee on a live parcel | ✅ | ⚠️ partial — consignee yes, description no | MEASURED 2026-09-09: their `update/adhoc` changes the description fine BEFORE a waybill (partial update, other fields preserved) and answers `400 "Order update not allowed"` after one. Our edit path is always post-waybill, so the description genuinely cannot change — but the consignee half is applied and the description reported as unapplied, rather than the whole edit being refused |
-| Request pickup | ✅ | ✅ | per (courier, warehouse, day), CUR-10 amendment #3 |
-| Register pickup location | ✅ | ⚠️ add only | they have no EDIT; routing an update to `addpickup` makes a SECOND location with the same name, and the name is what every manifest matches on |
-| **List** pickup locations | ❌ none | ✅ | `GET /v1/external/settings/company/pickup` — CLAUDE.md said neither had one; that was true of Delhivery and got generalised |
-| NDR re-attempt | ✅ async, UPL-polled | ✅ **synchronous** | Shiprocket's reply IS the outcome; leaving it SUBMITTED sent it to a poller that read the missing handle as "the submit produced nothing" |
-| NDR list ("who is in NDR") | n/a — read off the NSL scan code | ✅ `/v1/external/ndr/all` | path was wrong until 2026-09-09; the bare `/ndr` 404s |
-| Tracking — **poll** | ✅ registered | ✅ registered | both in `COURIER_TRACKING_SOURCES` |
-| Tracking — **webhook** | ✅ HMAC | ❌ **NONE** | `TRACKING_WEBHOOK_SECRET_DELHIVERY` is the only secret in the env schema, so a Shiprocket webhook fails closed at 401 |
-| POD / documents | ✅ four documents | ⚠️ one | they hold only the POD; a signature or RVP-QC request is refused by name rather than answered with the POD |
-| Support tickets (raise/thread/comment) | ✅ via the portal | ❌ all capabilities FALSE | `ShiprocketSupportAdapterService` declares every flag false and throws `CourierCapabilityUnsupportedError` — deliberately, so AUTO mode cannot claim an item and dispatch it into a method that throws |
-| Wallet sync (real invoiced cost) | ✅ portal automation | ❌ | `wallet-sync.service.ts` is hardcoded `courier: { code: 'delhivery' }` |
-| Wallet reconcile | ✅ | ❌ | `reconcile(courierCode = 'delhivery')` |
-| Portal ticket sync | ✅ | ❌ | `sync(courierCode = 'delhivery')` |
-| Portal session / canary | ✅ | ❌ | Playwright drives Delhivery's panel only |
-| Waybill pool pre-fetch | ✅ | n/a | Shiprocket issues the AWB at assign time; there is no pool to keep full |
+| Book AWB at order confirmation | ✅ live — 22 real AWBs | ✅ proven 9 Sep, intake OFF | 39 Delhivery shipments, 22 with an AWB; 0 on Shiprocket; 2 by manual placement. Shiprocket takes two calls (create, assign), Delhivery one |
+| Choose the carrier (aggregator) | n/a — Delhivery is the carrier | ✅ built — policy `SHIPROCKET_DEFAULT` | `courier.selection_policy` = SHIPROCKET_DEFAULT (Shiprocket ranks). Never exercised: intake is off (CUR-17) |
+| Store courier's parcel id | ✅ | ✅ | |
+| Store courier's ORDER id | n/a — one number | ✅ `courierOrderId` | |
+| Fetch and store label | ⚠️ PDF — **only 2 of 22 stored** | ✅ URL (unexercised) | `awb_labels` holds 2 of 22 Delhivery AWBs; the 20 missing span 27 Aug–7 Sep, so this is a live gap, not history (CUR-6) |
+| Cancel a shipment | ✅ | ✅ verified live 9 Sep | |
+| Serviceability check | ✅ | ✅ verified live | reactive only (CUR-5) |
+| Request pickup | ⚠️ built, auto ON — **never raised** | ✅ built (unexercised) | `courier_pickup_requests` is EMPTY although `delhivery_auto_pickup_enabled` = true: every van so far was arranged outside the system |
+| Tracking — poll | ✅ live — 582 scans | ✅ registered, nothing of ours to poll | every Delhivery status in production came from the poll (plus 3 entered by hand) |
+| Tracking — webhook | ⚠️ built, secret set — **Delhivery has never sent one** | ✅ **receiving** — 493 authenticated | Delhivery: 0 webhooks ever (they provision from our requirement document). Shiprocket: 493, all signature-valid; 489 `NO_MATCHING_SHIPMENT` (none of ours ride Shiprocket), 4 `PARSE_FAILED` |
+| NDR re-attempt | ✅ built, operator-only | ✅ synchronous (unexercised) | `ndr_action_requests` is EMPTY; `ndr_runner_enabled` = false, auto categories `[]` |
+| NDR list | n/a — read off the NSL scan | ✅ `/v1/external/ndr/all` | |
+| Edit consignee on a live parcel | ✅ | ⚠️ consignee yes, description no | their `update/adhoc` refuses a description change once a waybill exists |
+| Register pickup location | ✅ | ⚠️ add only, no edit | |
+| List pickup locations | ❌ none | ✅ | |
+| POD / documents | ✅ four | ⚠️ one (POD only) | a signature or RVP-QC request is refused by name |
+| Support tickets | ⚠️ **manual only** | ❌ all capabilities false | Delhivery channel `write_mode` = MANUAL, `portal_mode` = OFF (CUR-18), `ticket_automation_enabled` = false; 1 escalation (2 Sep), 0 messages |
+| Wallet sync — real parcel cost | ✅ live — transaction ledger, 90 days nightly | ❌ Delhivery-only | 23,343 transactions stored, 0 duplicates; all 22 AWB parcels costed as the net of their debits and credits (COST-1); `wallet-sync.service.ts` is hardcoded to `delhivery` |
+| Courier expenses in the P&L | ✅ live — 37 adjustments, −₹1,268.76 net | ❌ | "Courier account adjustments", dated by transaction (IST), matching the file to the paisa |
+| Wallet reconcile (recharges) | ✅ live | ❌ | 11 recharges seen: 7 (₹1,15,000) **not yet recorded on our side**, 4 (₹80,000) not applicable |
+| Portal ticket sync | ⏸ OFF | ❌ | `courier_portal_runs` is EMPTY — never ran in production |
+| Portal session / canary | ⏸ OFF | ❌ | same; `courier.portal_canary_awb` is empty. (The wallet sync signs in separately and runs nightly) |
+| Waybill pool | ⚠️ refill OFF — 1 waybill held | n/a — AWB issued at assign | `delhivery_waybill_pool_refill_enabled` = false; each booking gets its AWB directly |
+
+## What changed since 2026-09-09
+
+- **Shiprocket webhooks work.** `TRACKING_WEBHOOK_SECRET_SHIPROCKET` is set
+  and the scheme is seeded, so they are authenticated and stored — the
+  last audit's "401s" is gone. They are ignored only because no parcel
+  of ours travels on Shiprocket.
+- **Real cost is a ledger, not a latest debit** (COST-1): every Delhivery
+  wallet transaction is stored once by its id, 90 days are re-read
+  nightly, and a parcel's cost is its net.
+- **Portal automation is OFF and Delhivery support is manual** (CUR-18).
+- **Carrier choice exists** for Shiprocket (CUR-17), on its default.
+
+## Gaps production shows, most urgent first
+
+1. **Labels: 20 of 22 Delhivery AWBs have no stored label.** Recent, so
+   the label leg is failing now, not historically.
+2. **Pickups have never been requested through the system**, with the
+   automatic switch on. Either nothing reached the trigger or it is not
+   firing.
+3. **7 wallet recharges (₹1,15,000) are unrecorded** in our bank book.
+4. **Delhivery has never sent a webhook** — tracking depends entirely on
+   the poll.
+5. **Shiprocket has no real-cost source.** Unchanged: if it were switched
+   on, its parcels would show as UNCOVERED in the P&L (TRE-6) rather than
+   guessed.
 
 ## What is Delhivery-only for a REASON, versus merely not built
 
@@ -59,35 +86,11 @@ Those three are refused BY NAME rather than silently degraded, which is
 the rule: answering an RVP-QC request with a POD would be worse than
 refusing it.
 
-**Not built, and cheap-ish to build:**
-
-- **Inbound tracking webhooks.** Needs a
-  `TRACKING_WEBHOOK_SECRET_SHIPROCKET` env var, a seeded
-  `tracking.webhook_secret_ref.shiprocket`, and Shiprocket's own webhook
-  configuration pointed at us. Until then Shiprocket tracking is
-  POLL-ONLY, which is slower but not broken.
-- **Support tickets.** Their API has a ticket surface; our adapter
-  declares every capability false. Doing it means implementing the
-  interface, not changing anything upstream (CUR-12).
-
 **Not built, and expensive:**
 
-- **Wallet sync, wallet reconcile, portal ticket sync, canary.** All four
-  are Playwright driving Delhivery's *panel*, hardcoded to `'delhivery'`.
-  Shiprocket's panel is geo-restricted (`docs/shiprocket-integration.md`),
-  so any equivalent must run ON the India droplet, not tunnelled — and
-  their API may cover some of it without a browser at all. Worth checking
-  the API first.
-
-## The consequence worth stating
-
-If Shiprocket were switched on today, a parcel routed to it would be
-booked, labelled, picked up, tracked (by polling), cancellable, and its
-NDR re-attempts would work. What it would NOT have is a **real cost
-figure**: the wallet sync that gives Delhivery its actual invoiced cost
-per parcel is Delhivery-only, so the P&L's measured-cost coverage
-(TRE-6) would report those orders as uncovered rather than guess.
-
-That is the honest gap to close before volume moves, and TRE-6 already
-reports it rather than defaulting to zero — so it fails loudly, which is
-the right shape.
+- **Wallet sync, wallet reconcile, portal ticket sync, canary** for
+  Shiprocket. All four are Playwright driving Delhivery's *panel*,
+  hardcoded to `'delhivery'`. Shiprocket's panel is geo-restricted
+  (`docs/shiprocket-integration.md`), so any equivalent must run from
+  India — and their API may cover some of it without a browser. Check the
+  API first.
