@@ -88,6 +88,26 @@ export class OwnerMoneyDto {
   @IsOptional() @IsString() @Length(1, 200) reference?: string;
 }
 
+export class ReclassifySellerCashDto {
+  @ApiProperty({ description: 'The seller whose cash is being relabelled' })
+  @IsUUID('7')
+  sellerId!: string;
+  @ApiProperty({
+    enum: ['TO_CAPITAL', 'TO_SELLER'],
+    description:
+      "TO_CAPITAL: cash recorded as the seller's is really ours. TO_SELLER: the reverse.",
+  })
+  @IsIn(['TO_CAPITAL', 'TO_SELLER'])
+  direction!: 'TO_CAPITAL' | 'TO_SELLER';
+  @ApiProperty({ description: "How much, in the account's own currency (positive)" })
+  @IsNumberString()
+  amount!: string;
+  @ApiProperty({ description: 'Why the attribution was wrong — kept with the entries' })
+  @IsString()
+  @Length(10, 2000)
+  reason!: string;
+}
+
 export class CreateExpenseCategoryDto {
   @IsString() @Length(2, 60) @IsNotEmpty() code!: string;
   @IsString() @Length(2, 120) @IsNotEmpty() name!: string;

@@ -3,6 +3,7 @@ import { OrderStatus, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import { OrderChargesAccrualService } from './order-charges-accrual.service';
+import { RtoFeeAccrualService } from './rto-fee-accrual.service';
 
 /** Orders whose journey is over and whose carriage was therefore owed. */
 const BILLABLE_TERMINALS: readonly OrderStatus[] = [
@@ -10,9 +11,17 @@ const BILLABLE_TERMINALS: readonly OrderStatus[] = [
   OrderStatus.RTO_RESTOCKED,
 ];
 
+/** Orders whose return has been received — the point a return fee is owed. */
+const RETURN_TERMINALS: readonly OrderStatus[] = [
+  OrderStatus.RTO_RECEIVED,
+  OrderStatus.RTO_RESTOCKED,
+];
+
 export interface BillingBackfillReport {
   readonly examined: number;
   readonly billed: number;
+  /** Received returns whose RTO / customer-return fee was never taken, now charged. */
+  readonly returnFeesCharged: number;
   readonly skipped: number;
   readonly failed: number;
   readonly totalInr: string;
@@ -50,6 +59,7 @@ export class ChargesBillingBackfillService {
     private readonly prisma: PrismaService,
     private readonly charges: OrderChargesService,
     private readonly accrual: OrderChargesAccrualService,
+    private readonly rtoFees: RtoFeeAccrualService,
   ) {}
 
   async run(opts: { dryRun: boolean; limit: number }): Promise<BillingBackfillReport> {
@@ -86,6 +96,7 @@ export class ChargesBillingBackfillService {
     const report = {
       examined: candidates.length,
       billed: 0,
+      returnFeesCharged: 0,
       skipped: 0,
       failed: 0,
       totalInr: '0.00',
@@ -130,6 +141,67 @@ export class ChargesBillingBackfillService {
       }
     }
 
+    // ── Return fees never taken ──────────────────────────────────────
+    //
+    // A return is charged when the parcel is RECEIVED (`chargeOnReceive`,
+    // hooked into the receive step). An order that reached a received
+    // state without passing through it — a god-mode move, or a receive
+    // older than the fee — owes it and was never asked. The live path
+    // and its own gate (a prior RTO_FEE / CUSTOMER_RETURN_FEE entry), so
+    // a second run charges nobody twice.
+    const returns = await this.prisma.client.order.findMany({
+      where: {
+        deletedAt: null,
+        status: { in: [...RETURN_TERMINALS] },
+        walletEntries: {
+          none: {
+            direction: {
+              in: [WalletEntryDirection.RTO_FEE, WalletEntryDirection.CUSTOMER_RETURN_FEE],
+            },
+          },
+        },
+      },
+      select: { id: true, orderNumber: true, status: true, sellerId: true },
+      orderBy: { createdAt: 'asc' },
+      take: opts.limit,
+    });
+    const feeCharged: string[] = [];
+    for (const o of returns) {
+      if (opts.dryRun) {
+        report.orders.push({
+          orderNumber: o.orderNumber,
+          status: o.status,
+          outcome: 'WOULD_CHARGE_RETURN_FEE',
+        });
+        continue;
+      }
+      try {
+        const res = await this.prisma.client.$transaction((tx) =>
+          this.rtoFees.chargeOnReceive(tx, o.id, o.sellerId),
+        );
+        if (res.rtoFeeInr !== null) {
+          report.returnFeesCharged += 1;
+          feeCharged.push(o.id);
+          report.orders.push({
+            orderNumber: o.orderNumber,
+            status: o.status,
+            outcome: 'RETURN_FEE_CHARGED',
+          });
+        } else {
+          report.orders.push({
+            orderNumber: o.orderNumber,
+            status: o.status,
+            outcome: 'NO_RETURN_FEE',
+          });
+        }
+      } catch (err) {
+        report.failed += 1;
+        const msg = err instanceof Error ? err.message : 'FAILED';
+        report.orders.push({ orderNumber: o.orderNumber, status: o.status, outcome: msg });
+        this.logger.warn({ orderId: o.id, err: msg }, 'Return fee sweep failed for one order');
+      }
+    }
+
     // Read back what actually moved rather than trusting the loop: the
     // debit is the wallet's number, not ours.
     if (!opts.dryRun && report.billed > 0) {
@@ -141,6 +213,18 @@ export class ChargesBillingBackfillService {
         _sum: { amount: true },
       });
       total = Number(moved._sum?.amount ?? 0);
+    }
+    if (!opts.dryRun && feeCharged.length > 0) {
+      const fees = await this.prisma.client.sellerWalletEntry.aggregate({
+        where: {
+          direction: {
+            in: [WalletEntryDirection.RTO_FEE, WalletEntryDirection.CUSTOMER_RETURN_FEE],
+          },
+          linkedOrderId: { in: feeCharged },
+        },
+        _sum: { amount: true },
+      });
+      total += Number(fees._sum?.amount ?? 0);
     }
     report.totalInr = total.toFixed(2);
     return report;

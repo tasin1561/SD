@@ -4,8 +4,13 @@ type AnyArgs = Record<string, unknown>;
 
 type Candidate = { id: string; orderNumber: string; status: string; sellerId: string };
 
-function makeService(candidates: Candidate[]) {
-  const findMany = jest.fn<Promise<Candidate[]>, [AnyArgs]>(async () => candidates);
+function makeService(candidates: Candidate[], returns: Candidate[] = []) {
+  // Two queries: the unbilled orders, and received returns with no return
+  // fee (told apart by the fee directions in their filter).
+  const findMany = jest.fn<Promise<Candidate[]>, [AnyArgs]>(async (args) =>
+    JSON.stringify(args).includes('RTO_FEE') ? returns : candidates,
+  );
+  const chargeOnReceive = jest.fn(async () => ({ deliveryFeeSwept: false, rtoFeeInr: '30.00' }));
   const debitIfNeeded = jest.fn(async () => true);
   const persistForOrderSystem = jest.fn(async () => ({ chargeCount: 2 }));
   const svc = Object.create(
@@ -26,15 +31,51 @@ function makeService(candidates: Candidate[]) {
     },
     charges: { persistForOrderSystem },
     accrual: { debitIfNeeded },
+    rtoFees: { chargeOnReceive },
     logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
   });
-  return { svc, findMany, debitIfNeeded, persistForOrderSystem };
+  return { svc, findMany, debitIfNeeded, persistForOrderSystem, chargeOnReceive };
 }
 
 const CANDIDATES: Candidate[] = [
   { id: 'o1', orderNumber: 'SD-1', status: 'DELIVERED', sellerId: 's1' },
   { id: 'o2', orderNumber: 'SD-2', status: 'RTO_RESTOCKED', sellerId: 's1' },
 ];
+
+describe('ChargesBillingBackfillService.run — return fees never taken', () => {
+  const RETURNS: Candidate[] = [
+    { id: 'r1', orderNumber: 'SD-R1', status: 'RTO_RESTOCKED', sellerId: 's1' },
+  ];
+
+  it('looks only at received returns with no RTO or customer-return fee', async () => {
+    const { svc, findMany } = makeService([], RETURNS);
+    await svc.run({ dryRun: true, limit: 100 });
+    const where = (findMany.mock.calls[1]?.[0] as AnyArgs).where as AnyArgs;
+    expect(where['status']).toEqual({ in: ['RTO_RECEIVED', 'RTO_RESTOCKED'] });
+    expect(where['walletEntries']).toEqual({
+      none: { direction: { in: ['RTO_FEE', 'CUSTOMER_RETURN_FEE'] } },
+    });
+  });
+
+  it('a dry run lists them and charges nothing', async () => {
+    const { svc, chargeOnReceive } = makeService([], RETURNS);
+    const report = await svc.run({ dryRun: true, limit: 100 });
+    expect(chargeOnReceive).not.toHaveBeenCalled();
+    expect(report.orders).toContainEqual({
+      orderNumber: 'SD-R1',
+      status: 'RTO_RESTOCKED',
+      outcome: 'WOULD_CHARGE_RETURN_FEE',
+    });
+  });
+
+  it('charges through the live receive path, once per order', async () => {
+    const { svc, chargeOnReceive } = makeService([], RETURNS);
+    const report = await svc.run({ dryRun: false, limit: 100 });
+    expect(chargeOnReceive).toHaveBeenCalledTimes(1);
+    expect(chargeOnReceive).toHaveBeenCalledWith(expect.anything(), 'r1', 's1');
+    expect(report.returnFeesCharged).toBe(1);
+  });
+});
 
 describe('ChargesBillingBackfillService.run', () => {
   it('leaves scheduled accruals alone — not-yet-due is not unbilled', async () => {

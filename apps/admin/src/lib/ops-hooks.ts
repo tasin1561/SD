@@ -1477,6 +1477,30 @@ export function useRecordOwnerMoney(): UseMutationResult<
   });
 }
 
+/** Relabel cash in one account between a seller and our capital — a zero-sum correction. */
+export function useReclassifySellerCash(): UseMutationResult<
+  { entryIds: readonly string[] },
+  Error,
+  {
+    accountId: string;
+    sellerId: string;
+    direction: 'TO_CAPITAL' | 'TO_SELLER';
+    amount: string;
+    reason: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ accountId, ...body }) =>
+      client.request<{ entryIds: readonly string[] }>(
+        `/api/admin/treasury/accounts/${accountId}/reclassify-seller-cash`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
+}
+
 export interface SellerHoldingView {
   readonly accountId: string;
   /**

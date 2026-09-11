@@ -475,6 +475,113 @@ export class BankLedgerService {
   }
 
   /**
+   * Correct WHOSE the cash in one account is — between a seller and our
+   * capital — without moving any of it.
+   *
+   * For an attribution the bank book got wrong: a charge that was never
+   * reclassified, a debt repaid from cash that stayed "held for the
+   * seller". A zero-sum PAIR (TRE-8), so the account total — the figure
+   * the statement proves — cannot move. A reconciliation is the wrong
+   * instrument: it posts ONE owner's difference, which does change the
+   * total. Never more than the giving side actually holds in that
+   * account: this relabels cash, it cannot invent any.
+   */
+  async reclassifySellerCash(input: {
+    accountId: string;
+    sellerId: string;
+    direction: 'TO_CAPITAL' | 'TO_SELLER';
+    amount: Prisma.Decimal | string;
+    reason: string;
+    staffId: string;
+  }): Promise<{ entryIds: string[] }> {
+    if (input.reason.trim().length < 10) {
+      throw new BadRequestException({
+        code: 'BANK_REASON_TOO_SHORT',
+        message: 'Say why the attribution was wrong — at least 10 characters',
+      });
+    }
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.lessThanOrEqualTo(0)) {
+      throw new BadRequestException({
+        code: 'RECLASSIFY_AMOUNT_INVALID',
+        message: 'Give the amount as a positive figure; the direction says which way it goes',
+      });
+    }
+    const seller: OwnerRef = { kind: BankOwnerKind.SELLER, sellerId: input.sellerId };
+    const capital: OwnerRef = { kind: BankOwnerKind.CAPITAL };
+    const giver = input.direction === 'TO_CAPITAL' ? seller : capital;
+    const taker = input.direction === 'TO_CAPITAL' ? capital : seller;
+
+    const result = await this.prisma.client.$transaction(async (tx) => {
+      // Reads a balance and writes from it: both owners' reconcile locks,
+      // in a fixed order so two corrections cannot wait on each other.
+      const keys = [seller, capital]
+        .map((o) => `${input.accountId}|${o.kind}|${o.sellerId ?? ''}`)
+        .sort();
+      for (const k of keys) await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, k);
+
+      const account = await tx.platformBankAccount.findFirst({
+        where: { id: input.accountId, deletedAt: null },
+        select: { currency: true, label: true },
+      });
+      if (!account) {
+        throw new NotFoundException({
+          code: 'BANK_ACCOUNT_NOT_FOUND',
+          message: 'No such bank account',
+        });
+      }
+      const exists = await tx.seller.findUnique({
+        where: { id: input.sellerId },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller' });
+      }
+      const held = await this.ownerBalance(input.accountId, giver, tx);
+      if (held.lessThan(amount)) {
+        throw new BadRequestException({
+          code: 'RECLASSIFY_EXCEEDS_HELD',
+          message:
+            `${input.direction === 'TO_CAPITAL' ? 'The seller' : 'Our capital'} holds only ` +
+            `${held.toFixed(2)} ${account.currency} in ${account.label} — a correction cannot move more than is there.`,
+        });
+      }
+      const base = {
+        accountId: input.accountId,
+        type: BankEntryType.RECLASSIFICATION,
+        amountCurrency: account.currency,
+        occurredAt: new Date(),
+        note: input.reason.trim(),
+        staffId: input.staffId,
+      } as const;
+      const out = await this.post({ ...base, signedAmount: amount.neg(), owner: giver }, tx);
+      const inn = await this.post({ ...base, signedAmount: amount, owner: taker }, tx);
+      return { entryIds: [out.id, inn.id], held, account };
+    });
+
+    await this.audit.log({
+      actorType: 'STAFF',
+      staffUserId: input.staffId,
+      action: 'staff.bank_account.seller_cash_reclassified',
+      entityType: 'platform_bank_account',
+      entityId: input.accountId,
+      // Changes what the bank book says a seller is owed in cash.
+      severity: 'HIGH',
+      metadata: {
+        account: result.account.label,
+        sellerId: input.sellerId,
+        direction: input.direction,
+        amount: amount.toFixed(2),
+        currency: result.account.currency,
+        giverHeldBefore: result.held.toFixed(2),
+        reason: input.reason.trim(),
+        entryIds: result.entryIds,
+      },
+    });
+    return { entryIds: result.entryIds };
+  }
+
+  /**
    * What this owner holds in this account, right now.
    *
    * PUBLIC so a caller can ask before it moves money — `reconcile` is no

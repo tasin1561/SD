@@ -27,6 +27,7 @@ import {
   CreateExpenseCategoryDto,
   CreateInvestmentDto,
   OwnerMoneyDto,
+  ReclassifySellerCashDto,
   ReconcileAccountDto,
   RecordEntryDto,
   RecordInvestmentReturnDto,
@@ -304,6 +305,28 @@ export class AdminTreasuryController {
       occurredAt: new Date(body.occurredAt),
       reason: body.reason,
       ...(body.reference === undefined ? {} : { reference: body.reference }),
+      staffId: staff.id,
+    });
+  }
+
+  @Post('accounts/:accountId/reclassify-seller-cash')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('money.treasury.manage')
+  @ApiOperation({
+    summary:
+      "Correct whose the cash in one account is — a seller's or ours — as a zero-sum pair. The account total never moves.",
+  })
+  reclassifySellerCash(
+    @Param('accountId', new ParseUUIDPipe({ version: '7' })) accountId: string,
+    @Body() body: ReclassifySellerCashDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<BankLedgerService['reclassifySellerCash']> {
+    return this.ledger.reclassifySellerCash({
+      accountId,
+      sellerId: body.sellerId,
+      direction: body.direction,
+      amount: body.amount,
+      reason: body.reason,
       staffId: staff.id,
     });
   }

@@ -30,6 +30,7 @@ import { isWalletCredit, walletDirectionLabel } from '@skydrop/ui/status';
 import type { WalletEntryDirection } from '@skydrop/db';
 import { useSellerHoldings } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { MoveSellerCashModal, type HoldingRef } from './move-seller-cash-modal';
 
 /**
  * One seller's wallet, from our side — the same three views they have,
@@ -44,6 +45,9 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
   // rather than left to 403, so somebody without it sees a page that
   // works instead of one that looks broken.
   const canReadTreasury = usePermission('money.treasury.view');
+  // Cosmetic (FE-2): the server refuses a correction without it regardless.
+  const canManageTreasury = usePermission('money.treasury.manage');
+  const [moving, setMoving] = useState<HoldingRef | null>(null);
   const detail = useSellerWalletDetail(sellerId);
   const entries = useSellerWalletEntries(sellerId);
   const topups = useSellerWalletTopups(sellerId);
@@ -129,8 +133,17 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
                   <dt className="text-text-muted text-sm">
                     {h.label} · {h.currency}
                   </dt>
-                  <dd className="text-sm">
+                  <dd className="flex items-center gap-3 text-sm">
                     <Money amount={h.amount} currency={h.currency} convert={false} />
+                    {canManageTreasury && (
+                      <button
+                        type="button"
+                        className="text-accent text-xs hover:underline"
+                        onClick={() => setMoving(h)}
+                      >
+                        Correct
+                      </button>
+                    )}
                   </dd>
                 </div>
               ))}
@@ -138,6 +151,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           )}
         </CardBody>
       </Card>
+      <MoveSellerCashModal sellerId={sellerId} holding={moving} onClose={() => setMoving(null)} />
 
       {Number(d.minimumBalanceInr) > 0 && (
         <p className="text-text-muted text-xs">
