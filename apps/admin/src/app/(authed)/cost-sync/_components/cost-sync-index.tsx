@@ -31,6 +31,7 @@ import {
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { ShiprocketCostSection } from './shiprocket-cost-section';
 
 /**
  * Is the nightly courier-cost sync actually working?
@@ -463,6 +464,11 @@ export function CostSyncIndex(): ReactElement {
           </Card>
         </>
       )}
+
+      {/* Its own data and its own loading state: Shiprocket is read
+          from their API by a different job, and a Delhivery panel that
+          fails to load must not hide it. */}
+      <ShiprocketCostSection />
     </Section>
   );
 }

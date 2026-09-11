@@ -57,6 +57,7 @@ import { CourierEscalationModule } from './modules/courier-escalation/courier-es
 import { CourierNdrRunnerModule } from './modules/courier-ndr-runner/courier-ndr-runner.module';
 import { CourierOpsModule } from './modules/courier-ops/courier-ops.module';
 import { CourierCostSyncModule } from './modules/courier-cost-sync/courier-cost-sync.module';
+import { ShiprocketCostSyncModule } from './modules/shiprocket-cost-sync/shiprocket-cost-sync.module';
 import { CourierAccountAdminModule } from './modules/courier-account-admin/courier-account-admin.module';
 import { CourierSettlementModule } from './modules/courier-settlement/courier-settlement.module';
 import { TrackingIngestionModule } from './modules/tracking-ingestion/tracking-ingestion.module';
@@ -191,6 +192,7 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     CourierManualPlacementModule,
     CourierOpsModule,
     CourierCostSyncModule,
+    ShiprocketCostSyncModule,
     CourierNdrRunnerModule,
     CourierEscalationModule,
     CourierAccountAdminModule,

@@ -460,6 +460,9 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // but it references courier_accounts, so it must be cleared here or
         // one suite's transactions leak into the next suite's netting.
         'courier_wallet_transactions',
+        // Shiprocket cost readings: a leaf referencing shipments and
+        // courier_accounts (RESTRICT) — cleared here for the same reason.
+        'courier_cost_readings',
         'courier_wallet_recharges',
         'courier_wallet_balances',
         'bank_entries',

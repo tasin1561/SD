@@ -32,6 +32,12 @@ const ALLOWED = [
   'wallet-import.service.ts',
   // A person typing a figure off an invoice, deliberately and audited.
   'shipment-cost.service.ts',
+  // Shiprocket's invoice. Their wallet ledger is not readable by API, so
+  // this reads each order's FINAL `billing_amount` — their own billed
+  // figure, already net of reversals — and writes nothing else. The
+  // provisional figure it also computes is an estimate and is kept on the
+  // reading, never written here.
+  'shiprocket-cost-sync.service.ts',
 ];
 
 describe('the invoiced courier cost has one automated writer', () => {

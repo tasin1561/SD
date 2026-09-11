@@ -477,6 +477,24 @@ const systemSettings: SystemSettingSeed[] = [
       'How far back each nightly fetch reaches. NINETY: their Finances page offers a Last 90 Days range and returns all of it, and re-reading it costs nothing now that transactions are stored by THEIR id — the overlap is recognised and skipped rather than re-applied. It was seven, which was a real constraint back when the import overwrote a parcel\u2019s cost with the latest debit it happened to see; a charge re-cut later than seven days after the parcel moved was then never picked up at all. Ninety days is as far back as their picker goes, so a correction made any time within that window now lands on its own.',
   },
   {
+    key: 'courier.shiprocket_cost_sync_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Shiprocket cost sync — run nightly',
+    description:
+      'Each night (21:40 IST) read every one of our Shiprocket parcels\u2019 charges from their API, plus the wallet balance. It needs no browser — Shiprocket answers per order — so it runs in the API, not the portal worker. It skips itself, and says so, while Shiprocket is in stub mode.',
+  },
+  {
+    key: 'courier.shiprocket_cost_sync_writes_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Shiprocket cost sync — write the costs',
+    description:
+      'Let the nightly sync stamp a parcel\u2019s real cost. It only ever stamps Shiprocket\u2019s own FINAL billed amount, never the provisional figure. While OFF it still stores every reading and reports what it would change, so a changed response surfaces as a report rather than as wrong money in the P&L.',
+  },
+  {
     key: 'ops.nsa_enabled',
     category: 'ops',
     valueType: SettingValueType.BOOLEAN,

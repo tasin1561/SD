@@ -4176,3 +4176,101 @@ export function useRunWalletSync(): UseMutationResult<unknown, Error, void> {
     },
   });
 }
+
+// ── Shiprocket cost sync ─────────────────────────────────────────────
+
+export interface ShiprocketCostWriteView {
+  readonly awbNumber: string;
+  readonly orderNumber: string | null;
+  readonly leg: 'forward' | 'rto';
+  readonly amountInr: string;
+  readonly revised: boolean;
+  readonly previousInr: string | null;
+}
+
+export interface ShiprocketCostAccountResultView {
+  readonly label: string;
+  readonly courierAccountId: string;
+  readonly error: string | null;
+  readonly balanceInr: string | null;
+  readonly previousBalanceInr: string | null;
+  readonly balanceChangeInr: string | null;
+  readonly parcelChargeChangeInr: string;
+  /** Balance movement our own parcels do not explain. Reported, never booked. */
+  readonly unexplainedInr: string | null;
+  readonly parcelsRead: number;
+  readonly readingsStored: number;
+  readonly unreadable: number;
+  readonly failed: number;
+  readonly finalCount: number;
+  readonly provisionalOnly: number;
+  readonly forwardWritten: number;
+  readonly rtoWritten: number;
+  readonly revised: number;
+  readonly unchanged: number;
+  readonly dryRun: boolean;
+  readonly writes: readonly ShiprocketCostWriteView[];
+  readonly writesTruncated: number;
+}
+
+export interface ShiprocketCostRunView {
+  readonly at: string;
+  readonly ok: boolean;
+  readonly trigger: string | null;
+  readonly skipped: string | null;
+  readonly wrote: boolean;
+  readonly error: string | null;
+  readonly accounts: readonly ShiprocketCostAccountResultView[];
+}
+
+export interface ShiprocketParcelCostView {
+  readonly shipmentId: string;
+  readonly orderNumber: string | null;
+  readonly awbNumber: string | null;
+  readonly theirStatus: string;
+  /** Rebuilt from their breakdown — an estimate, shown only. */
+  readonly provisionalInr: string | null;
+  /** Their FINAL figure; the only one recorded as a cost. */
+  readonly billedInr: string | null;
+  readonly recordedForwardInr: string | null;
+  readonly recordedRtoInr: string | null;
+  readonly readAt: string;
+  readonly readings: number;
+}
+
+export interface ShiprocketCostPanelView {
+  readonly enabled: boolean;
+  readonly writesEnabled: boolean;
+  readonly stubMode: boolean;
+  readonly schedule: string;
+  readonly balances: ReadonlyArray<{
+    readonly courierAccountId: string;
+    readonly label: string;
+    readonly balanceInr: string;
+    readonly capturedAt: string;
+  }>;
+  readonly last: ShiprocketCostRunView | null;
+  readonly history: readonly ShiprocketCostRunView[];
+  readonly parcels: readonly ShiprocketParcelCostView[];
+}
+
+export function useShiprocketCostPanel(): UseQueryResult<ShiprocketCostPanelView, Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-shiprocket-cost'],
+    queryFn: () => client.request<ShiprocketCostPanelView>('/api/admin/courier-cost/shiprocket'),
+  });
+}
+
+export function useRunShiprocketCost(): UseMutationResult<unknown, Error, void> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.request<unknown>('/api/admin/courier-cost/shiprocket/run', { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-shiprocket-cost'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-margin'] });
+    },
+  });
+}

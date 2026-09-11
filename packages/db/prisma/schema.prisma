@@ -3475,6 +3475,8 @@ model Shipment {
   ndrActionRequests      NdrActionRequest[]
   deliveryActionRequests OrderDeliveryActionRequest[]
   shipmentAddressChanges ShipmentAddressChange[]
+  /// What the courier said this parcel cost, each time that changed.
+  costReadings           CourierCostReading[]
 
   @@index([courierCode, status])
   @@index([status, createdAt])
@@ -4036,6 +4038,7 @@ model CourierAccount {
   walletRecharges    CourierWalletRecharge[]
   walletBalances     CourierWalletBalance[]
   walletTransactions CourierWalletTransaction[]
+  costReadings       CourierCostReading[]
 
   @@index([courierId, environment])
   @@index([isActive])
@@ -7375,6 +7378,59 @@ model CourierWalletTransaction {
   @@index([category, occurredAt])
   @@index([courierAccountId, occurredAt])
   @@map("courier_wallet_transactions")
+}
+
+/// One reading of what a courier says a parcel cost — stored whenever it
+/// CHANGES, never overwritten.
+///
+/// ── WHY READINGS, AND NOT A LEDGER ───────────────────────────────────
+/// Delhivery hands us every wallet transaction, so a parcel's cost is the
+/// net of its debits and credits (COST-1). Shiprocket's statement API
+/// answers with no transactions at all (measured 2026-09-11 across every
+/// filter), so the ledger is unavailable. What it DOES give is each
+/// order's current charge breakdown and, once they finalise billing, a
+/// `billing_amount` that already nets their reversals. That is a figure,
+/// not a history — so the history is kept here: a weight dispute that
+/// moves a charge leaves its before and after both on record.
+///
+/// ── FINAL VERSUS PROVISIONAL ─────────────────────────────────────────
+/// `billedInr` is THEIR final figure and the only one ever stamped onto a
+/// shipment as its real cost. `provisionalInr` is what has been debited
+/// so far, rebuilt from the breakdown the way their passbook works; it
+/// matched their final figure on 21 of 22 sampled parcels, which is why
+/// it is shown but never put into the P&L (TRE-6: an estimate is not a
+/// cost).
+model CourierCostReading {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierAccountId String   @map("courier_account_id") @db.Uuid
+  shipmentId       String   @map("shipment_id") @db.Uuid
+  courierCode      String   @map("courier_code")
+  /// Their order id — the key their order-detail endpoint is read by.
+  courierOrderId   String   @map("courier_order_id")
+  awbNumber        String?  @map("awb_number")
+  theirStatus      String   @map("their_status")
+  /// Their FINAL figure. Null until they bill it.
+  billedInr        Decimal? @map("billed_inr") @db.Decimal(12, 2)
+  /// Debited so far, rebuilt from the breakdown. Display only.
+  provisionalInr   Decimal? @map("provisional_inr") @db.Decimal(12, 2)
+  forwardInr       Decimal? @map("forward_inr") @db.Decimal(12, 2)
+  codChargeInr     Decimal? @map("cod_charge_inr") @db.Decimal(12, 2)
+  rtoInr           Decimal? @map("rto_inr") @db.Decimal(12, 2)
+  appliedWeightKg  Decimal? @map("applied_weight_kg") @db.Decimal(10, 3)
+  chargedWeightKg  Decimal? @map("charged_weight_kg") @db.Decimal(10, 3)
+  /// The parcel came back: its whole cost belongs on the return column.
+  returned         Boolean
+  /// Every figure above, joined — a reading identical to the last one is
+  /// not stored again.
+  fingerprint      String
+  readAt           DateTime @default(now()) @map("read_at") @db.Timestamptz
+
+  courierAccount CourierAccount @relation(fields: [courierAccountId], references: [id])
+  shipment       Shipment       @relation(fields: [shipmentId], references: [id])
+
+  @@index([shipmentId, readAt])
+  @@index([courierAccountId, readAt])
+  @@map("courier_cost_readings")
 }
 
 enum CourierWalletTxnKind {
