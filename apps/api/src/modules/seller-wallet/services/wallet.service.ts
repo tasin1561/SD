@@ -91,6 +91,9 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryDirection> = new Set([
   // shipped. Omitting it here would charge the seller a SECOND time for
   // a parcel that never moved.
   WalletEntryDirection.ORDER_CHARGES_REFUND,
+  // The tax and fee deducted from a COD the courier has since reversed,
+  // given back. Omitting it here would take them from the seller TWICE.
+  WalletEntryDirection.COD_DEDUCTION_REFUND,
 ]);
 
 function isCredit(d: WalletEntryDirection): boolean {

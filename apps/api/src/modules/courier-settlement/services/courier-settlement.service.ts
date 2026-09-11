@@ -38,8 +38,29 @@ export interface RecordSettlementInput {
     readonly earlyCodFeeInr?: string | null;
     readonly freightInr?: string | null;
     readonly rtoReversalInr?: string | null;
+    /** The orders an RTO reversal takes COD back for — required when there is one. */
+    readonly rtoReversals?: ReadonlyArray<{ orderId: string; amountInr: string }> | null;
   } | null;
   readonly note?: string | null;
+}
+
+/**
+ * How much further short of an order's COD its payments stand after a
+ * payout line than before it. The first line for an order recognises the
+ * whole gap; a later line that makes some of it up recognises a NEGATIVE
+ * amount — a recovery — so an order paid in two parts nets to nothing.
+ */
+export function recognisedShortfall(
+  expected: Prisma.Decimal,
+  priorSettled: Prisma.Decimal | null,
+  settled: Prisma.Decimal,
+): Prisma.Decimal {
+  const gap = (paid: Prisma.Decimal): Prisma.Decimal => {
+    const g = expected.sub(paid);
+    return g.gt(0) ? g : ZERO;
+  };
+  const after = gap((priorSettled ?? ZERO).add(settled));
+  return priorSettled === null ? after : after.sub(gap(priorSettled));
 }
 
 /**
@@ -159,7 +180,40 @@ export class CourierSettlementService {
       v === undefined || v === null || v.trim() === '' ? ZERO : this.parseMoney(v, label);
     const earlyCodFee = deduction(input.deductions?.earlyCodFeeInr, 'early-COD fee');
     const freightKept = deduction(input.deductions?.freightInr, 'freight kept back');
-    const rtoKept = deduction(input.deductions?.rtoReversalInr, 'RTO reversal kept back');
+    // An RTO reversal takes back COD a seller was credited, so it must NAME
+    // the orders: each is reversed exactly (the seller debited back, our
+    // deductions returned). A total with no orders cannot be booked
+    // accurately and is refused rather than absorbed.
+    const rtoReversals = (input.deductions?.rtoReversals ?? []).map((r) => ({
+      orderId: r.orderId,
+      amount: this.parseMoney(r.amountInr, `RTO reversal for order ${r.orderId}`),
+    }));
+    const rtoNamed = rtoReversals.reduce((t, r) => t.add(r.amount), ZERO);
+    const rtoStated = deduction(input.deductions?.rtoReversalInr, 'RTO reversal kept back');
+    if (rtoStated.gt(0) && rtoReversals.length === 0) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_RTO_REVERSAL_ORDERS_REQUIRED',
+        message:
+          'An RTO reversal takes back COD a seller was credited — name the order(s) it reverses ' +
+          '(their file flags them) so each can be taken back exactly.',
+      });
+    }
+    if (rtoReversals.length > 0 && rtoStated.gt(0) && !rtoStated.equals(rtoNamed)) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_RTO_REVERSAL_TOTAL_MISMATCH',
+        message: `The RTO reversal is ₹${rtoStated.toFixed(2)} but the orders named add up to ₹${rtoNamed.toFixed(2)}.`,
+      });
+    }
+    const dupReversal = rtoReversals
+      .map((r) => r.orderId)
+      .filter((id, i, all) => all.indexOf(id) !== i);
+    if (dupReversal.length > 0) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_ORDER_REPEATED',
+        message: `Order(s) reversed twice in one payout: ${[...new Set(dupReversal)].join(', ')}`,
+      });
+    }
+    const rtoKept = rtoNamed;
     const keptBack = earlyCodFee.add(freightKept).add(rtoKept);
     const receivedAt = new Date(input.receivedAt);
     if (Number.isNaN(receivedAt.getTime())) {
@@ -246,15 +300,25 @@ export class CourierSettlementService {
       shortfall: string;
     }> = [];
 
+    // What each order had already been paid on earlier payouts, so this
+    // line recognises only the CHANGE in its shortfall.
+    const priorSettled = await this.priorSettledByOrder(input.lines.map((l) => l.orderId));
+
     let allocated = ZERO;
     const creditedBySeller = new Map<string, Prisma.Decimal>();
     const lineData = input.lines.map((line) => {
       const settled = this.parseMoney(line.settledInr, `line ${line.orderId}`);
       allocated = allocated.add(settled);
+      const expected = byId.get(line.orderId)?.codAmountInr ?? ZERO;
       return {
         orderId: line.orderId,
-        expectedInr: byId.get(line.orderId)?.codAmountInr ?? ZERO,
+        expectedInr: expected,
         settledInr: settled,
+        shortfallInr: recognisedShortfall(
+          expected,
+          priorSettled.get(line.orderId) ?? null,
+          settled,
+        ),
         note: line.note ?? null,
       };
     });
@@ -336,16 +400,32 @@ export class CourierSettlementService {
       // circuit breaker below is what stops us quietly funding a
       // systematic shortfall rather than an occasional error.
       for (const line of lineData) {
+        // Every COD we credited or fronted (settlement or Instant Pay) and
+        // the courier did not pay in full is ours to absorb (WAL-6).
+        if (line.shortfallInr.gt(0)) {
+          shortfalls.push({
+            orderId: line.orderId,
+            expected: line.expectedInr.toString(),
+            settled: line.settledInr.toString(),
+            shortfall: line.shortfallInr.toString(),
+          });
+        }
         const order = sellerByOrder.find((o) => o.id === line.orderId);
         if (!order) continue;
         const mode = await this.codCredit.resolveMode(order.sellerId);
         if (mode !== 'SETTLEMENT') continue; // already paid at delivery
-        await this.codCredit.creditForOrder(tx, {
+        const credit = await this.codCredit.creditForOrder(tx, {
           orderId: order.id,
           sellerId: order.sellerId,
           grossInr: line.expectedInr,
           mode,
         });
+        // Held for the seller ONLY when this payout is what credited them.
+        // An order already credited on an earlier payout (the rest of a
+        // part-payment) was held for them then; counting it again held
+        // them the COD twice. That cash repays what we fronted, so it is
+        // capital's.
+        if (!credit.credited) continue;
         creditedSellers.add(order.sellerId);
         // What the bank now holds ON THEIR BEHALF is what we credited
         // them, not what the courier remitted — the difference is
@@ -354,16 +434,41 @@ export class CourierSettlementService {
           order.sellerId,
           (creditedBySeller.get(order.sellerId) ?? ZERO).add(line.expectedInr),
         );
+      }
 
-        const shortfall = line.expectedInr.sub(line.settledInr);
-        if (shortfall.gt(0)) {
-          shortfalls.push({
-            orderId: order.id,
-            expected: line.expectedInr.toString(),
-            settled: line.settledInr.toString(),
-            shortfall: shortfall.toString(),
+      // ── RTO reversals ────────────────────────────────────────────
+      //
+      // COD the courier paid us earlier for a parcel that then came back,
+      // taken out of this payout. The seller was never really paid by that
+      // customer, so their credit is taken back and our deductions on it
+      // returned — exactly, per order. The cash leaving is theirs as far
+      // as they still hold any with us; beyond that it is ours, and their
+      // wallet shows what they now owe.
+      const clawbacks: Array<{ sellerId: string | null; amount: Prisma.Decimal }> = [];
+      for (const r of rtoReversals) {
+        const order = await tx.order.findUnique({
+          where: { id: r.orderId },
+          select: { id: true, sellerId: true },
+        });
+        if (order === null) {
+          throw new NotFoundException({
+            code: 'SETTLEMENT_ORDER_NOT_FOUND',
+            message: `The order an RTO reversal names (${r.orderId}) does not exist`,
           });
         }
+        const res = await this.codCredit.reverseForOrder(tx, {
+          orderId: order.id,
+          sellerId: order.sellerId,
+          amountInr: r.amount,
+          note: `COD reversed by the courier on payout ${reference}`,
+        });
+        if (res.reason === 'ALREADY_REVERSED') {
+          throw new ConflictException({
+            code: 'SETTLEMENT_RTO_ALREADY_REVERSED',
+            message: `This order's COD was already reversed on an earlier payout (${r.orderId}).`,
+          });
+        }
+        clawbacks.push({ sellerId: res.reversed ? order.sellerId : null, amount: r.amount });
       }
 
       // ── The cash ─────────────────────────────────────────────────
@@ -414,9 +519,8 @@ export class CourierSettlementService {
       // posted out as a courier-wallet recharge — the same entry a bank
       // transfer into the wallet makes — with its recharge record, so the
       // "paid but never arrived" check sees where it went.
-      const gross = amount.add(earlyCodFee).add(freightKept);
+      const gross = amount.add(earlyCodFee).add(freightKept).add(rtoKept);
       const toCapital = gross.sub(attributed);
-      const otherKept = rtoKept;
       if (!toCapital.isZero()) {
         await this.bank.post(
           {
@@ -430,13 +534,65 @@ export class CourierSettlementService {
             settlementId: row.id,
             staffId,
             note: toCapital.isNegative()
-              ? otherKept.gt(0)
-                ? `RTO reversal ₹${rtoKept.toFixed(2)} kept back by the courier on ${reference}`
-                : `Shortfall absorbed on ${reference}`
+              ? `Shortfall absorbed on ${reference}`
               : `Ours from ${reference} — instant-pay reimbursement or unallocated`,
           },
           tx,
         );
+      }
+      // The reversed COD leaving again, grossed up above like the rest.
+      for (const c of clawbacks) {
+        let fromSeller = ZERO;
+        if (c.sellerId !== null) {
+          const held = await tx.bankEntry.aggregate({
+            where: {
+              accountId: receivingAccount.id,
+              ownerKind: BankOwnerKind.SELLER,
+              sellerId: c.sellerId,
+            },
+            _sum: { signedAmount: true },
+          });
+          const h = held._sum.signedAmount ?? ZERO;
+          fromSeller = h.gt(0) ? (h.lt(c.amount) ? h : c.amount) : ZERO;
+        }
+        if (fromSeller.gt(0) && c.sellerId !== null) {
+          await this.bank.post(
+            {
+              accountId: receivingAccount.id,
+              type: BankEntryType.COURIER_SETTLEMENT,
+              signedAmount: fromSeller.negated(),
+              amountCurrency: Currency.INR,
+              owner: { kind: BankOwnerKind.SELLER, sellerId: c.sellerId },
+              occurredAt: receivedAt,
+              reference,
+              settlementId: row.id,
+              staffId,
+              note: `COD reversed by the courier on ${reference}`,
+            },
+            tx,
+          );
+        }
+        const fromCapital = c.amount.sub(fromSeller);
+        if (fromCapital.gt(0)) {
+          await this.bank.post(
+            {
+              accountId: receivingAccount.id,
+              type: BankEntryType.COURIER_SETTLEMENT,
+              signedAmount: fromCapital.negated(),
+              amountCurrency: Currency.INR,
+              owner: { kind: BankOwnerKind.CAPITAL },
+              occurredAt: receivedAt,
+              reference,
+              settlementId: row.id,
+              staffId,
+              note:
+                c.sellerId === null
+                  ? `COD reversed by the courier on ${reference} — an order never credited`
+                  : `COD reversed by the courier on ${reference} — beyond what the seller holds; their wallet owes it`,
+            },
+            tx,
+          );
+        }
       }
       if (earlyCodFee.gt(0)) {
         const category = await tx.expenseCategory.upsert({
@@ -522,6 +678,10 @@ export class CourierSettlementService {
             earlyCodFeeInr: earlyCodFee.toString(),
             freightDeductedInr: freightKept.toString(),
             rtoReversalInr: rtoKept.toString(),
+            rtoReversals: rtoReversals.map((r) => ({
+              orderId: r.orderId,
+              amountInr: r.amount.toString(),
+            })),
             orderCount: lineData.length,
             ipAddress: ctx?.ipAddress ?? null,
             userAgent: ctx?.userAgent ?? null,
@@ -687,14 +847,21 @@ export class CourierSettlementService {
       });
     }
 
+    const priorSettled = await this.priorSettledByOrder(input.lines.map((l) => l.orderId));
     let adding = ZERO;
     const lineData = input.lines.map((line) => {
       const settled = this.parseMoney(line.settledInr, `line ${line.orderId}`);
       adding = adding.add(settled);
+      const expected = byId.get(line.orderId)?.codAmountInr ?? ZERO;
       return {
         orderId: line.orderId,
-        expectedInr: byId.get(line.orderId)?.codAmountInr ?? ZERO,
+        expectedInr: expected,
         settledInr: settled,
+        shortfallInr: recognisedShortfall(
+          expected,
+          priorSettled.get(line.orderId) ?? null,
+          settled,
+        ),
         note: line.note ?? null,
       };
     });
@@ -746,12 +913,15 @@ export class CourierSettlementService {
         if (!order) continue;
         const mode = await this.codCredit.resolveMode(order.sellerId);
         if (mode !== 'SETTLEMENT') continue; // already paid at delivery
-        await this.codCredit.creditForOrder(tx, {
+        const credit = await this.codCredit.creditForOrder(tx, {
           orderId: order.id,
           sellerId: order.sellerId,
           grossInr: line.expectedInr,
           mode,
         });
+        // Only what THIS allocation credited moves to the seller; an order
+        // credited earlier was held for them then.
+        if (!credit.credited) continue;
         creditedBySeller.set(
           order.sellerId,
           (creditedBySeller.get(order.sellerId) ?? ZERO).add(line.expectedInr),
@@ -948,6 +1118,19 @@ export class CourierSettlementService {
   }
 
   // ── internal ──────────────────────────────────────────────────────
+
+  /** What each order has been paid on payouts recorded so far. Absent = never on one. */
+  private async priorSettledByOrder(
+    orderIds: readonly string[],
+  ): Promise<Map<string, Prisma.Decimal>> {
+    if (orderIds.length === 0) return new Map();
+    const rows = await this.prisma.client.courierSettlementLine.groupBy({
+      by: ['orderId'],
+      where: { orderId: { in: [...orderIds] } },
+      _sum: { settledInr: true },
+    });
+    return new Map(rows.map((r) => [r.orderId, r._sum.settledInr ?? ZERO]));
+  }
 
   private parseMoney(raw: string, label: string): Prisma.Decimal {
     let value: Prisma.Decimal;

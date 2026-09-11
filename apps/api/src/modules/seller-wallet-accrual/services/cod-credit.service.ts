@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ActorType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
@@ -285,6 +285,103 @@ export class CodCreditService {
       collectionFeeInr: collectionFee.toFixed(2),
       instantFeeInr: instantFee.toFixed(2),
       netCreditedInr: postGst.minus(collectionFee).minus(instantFee).toFixed(2),
+    };
+  }
+
+  /**
+   * Take back a COD credit the courier has REVERSED — a parcel it had
+   * paid out on turned into a return, and it clawed the money back out of
+   * a later payout. The seller never really got paid by that customer, so
+   * they must not keep the credit; and what we deducted from it (the tax
+   * and the COD / Instant Pay fee) was never earned, so it goes back.
+   *
+   * Exactly the credit, never a guess: the amount must be the COD that was
+   * credited, or it is refused — a part-reversal has no defined split
+   * between the COD and its deductions. Composes into the caller's
+   * transaction; idempotent on an existing COD_REVERSAL for the order.
+   */
+  async reverseForOrder(
+    tx: Prisma.TransactionClient,
+    input: { orderId: string; sellerId: string; amountInr: Prisma.Decimal; note: string },
+  ): Promise<{
+    readonly reversed: boolean;
+    readonly reason?: 'NEVER_CREDITED' | 'ALREADY_REVERSED';
+    readonly grossInr: string;
+    readonly returnedInr: string;
+  }> {
+    const { orderId, sellerId, amountInr, note } = input;
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+
+    const done = await tx.sellerWalletEntry.findFirst({
+      where: { linkedOrderId: orderId, direction: WalletEntryDirection.COD_REVERSAL },
+      select: { id: true },
+    });
+    if (done) {
+      return { reversed: false, reason: 'ALREADY_REVERSED', grossInr: '0.00', returnedInr: '0.00' };
+    }
+    const credit = await tx.sellerWalletEntry.findFirst({
+      where: { linkedOrderId: orderId, direction: WalletEntryDirection.COD_COLLECTION },
+      select: { id: true, amount: true },
+    });
+    if (credit === null) {
+      return { reversed: false, reason: 'NEVER_CREDITED', grossInr: '0.00', returnedInr: '0.00' };
+    }
+    if (!credit.amount.equals(amountInr)) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_RTO_REVERSAL_AMOUNT_MISMATCH',
+        message:
+          `The courier reversed ₹${amountInr.toFixed(2)} but the COD credited for this order was ` +
+          `₹${credit.amount.toFixed(2)}. Only a whole reversal can be taken back exactly — check ` +
+          'the remittance file.',
+      });
+    }
+
+    await this.wallet.applyEntry(tx, {
+      sellerId,
+      currency: Currency.INR,
+      direction: WalletEntryDirection.COD_REVERSAL,
+      amount: credit.amount,
+      linkedOrderId: orderId,
+      linkedEntryId: credit.id,
+      actorType: ActorType.SYSTEM,
+      note,
+    });
+
+    // Each deduction taken from that COD, given back as its own entry
+    // pointing at the one it returns — so the P&L can take each off the
+    // line that counted it.
+    const deductions = await tx.sellerWalletEntry.findMany({
+      where: {
+        linkedOrderId: orderId,
+        direction: {
+          in: [
+            WalletEntryDirection.GST_WITHHOLDING,
+            WalletEntryDirection.COD_COLLECTION_FEE,
+            WalletEntryDirection.INSTANT_PAY_FEE,
+          ],
+        },
+      },
+      select: { id: true, amount: true, direction: true },
+    });
+    let returned = new Prisma.Decimal(0);
+    for (const d of deductions) {
+      if (d.amount.lessThanOrEqualTo(0)) continue;
+      await this.wallet.applyEntry(tx, {
+        sellerId,
+        currency: Currency.INR,
+        direction: WalletEntryDirection.COD_DEDUCTION_REFUND,
+        amount: d.amount,
+        linkedOrderId: orderId,
+        linkedEntryId: d.id,
+        actorType: ActorType.SYSTEM,
+        note: `Returned: ${d.direction.toLowerCase().replace(/_/g, ' ')} on a reversed COD`,
+      });
+      returned = returned.add(d.amount);
+    }
+    return {
+      reversed: true,
+      grossInr: credit.amount.toFixed(2),
+      returnedInr: returned.toFixed(2),
     };
   }
 

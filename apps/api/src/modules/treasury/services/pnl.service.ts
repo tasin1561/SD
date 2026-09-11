@@ -182,6 +182,7 @@ export class PnlService {
       courierAdj,
       unmatched,
       codFees,
+      codShort,
       damage,
       reconciliation,
       investment,
@@ -197,6 +198,7 @@ export class PnlService {
       this.courierAdjustments(from, to),
       this.unmatchedCourierCharges(from, to),
       this.courierCodFees(from, to),
+      this.codShortfall(from, to),
       this.damageRefunds(from, to),
       this.bankReconciliation(from, to, rates),
       this.investmentIncome(from, to),
@@ -214,6 +216,7 @@ export class PnlService {
       courierAdj,
       unmatched,
       codFees,
+      codShort,
       damage,
       reconciliation,
       investment,
@@ -814,7 +817,13 @@ export class PnlService {
       _sum: { amount: true },
       _count: { _all: true },
     });
-    const amount = agg._sum.amount ?? ZERO;
+    // Tax withheld on a COD the courier later reversed is given back to
+    // the seller — it was never earned, so it comes off this line.
+    const returned = await this.deductionsReturned(from, to, [
+      WalletEntryDirection.GST_WITHHOLDING,
+    ]);
+    const withheld = agg._sum.amount ?? ZERO;
+    const amount = withheld.sub(returned.amount);
     return this.line({
       key: 'cod_tax',
       label: 'COD tax deduction',
@@ -831,8 +840,19 @@ export class PnlService {
             label: 'Deducted from COD before crediting the seller',
             source: 'seller_wallet_entries.amount WHERE direction=GST_WITHHOLDING',
             count: agg._count._all,
-            amountInr: amount.toFixed(2),
+            amountInr: withheld.toFixed(2),
           },
+          ...(returned.count > 0
+            ? [
+                {
+                  label: 'Returned on CODs the courier reversed',
+                  source:
+                    'seller_wallet_entries.amount WHERE direction=COD_DEDUCTION_REFUND AND linked to GST_WITHHOLDING',
+                  count: returned.count,
+                  amountInr: returned.amount.negated().toFixed(2),
+                },
+              ]
+            : []),
         ],
         cost: [],
       },
@@ -952,7 +972,11 @@ export class PnlService {
       _sum: { amount: true },
       _count: { _all: true },
     });
-    const revenue = rows.reduce((t, r) => t.add(r._sum.amount ?? ZERO), ZERO);
+    const returned = await this.deductionsReturned(from, to, [
+      WalletEntryDirection.INSTANT_PAY_FEE,
+      WalletEntryDirection.COD_COLLECTION_FEE,
+    ]);
+    const revenue = rows.reduce((t, r) => t.add(r._sum.amount ?? ZERO), ZERO).sub(returned.amount);
     return this.line({
       key: 'cod_service_fees',
       label: 'COD handling fees',
@@ -962,16 +986,108 @@ export class PnlService {
       total: 1,
       note: null,
       basis: {
-        revenue: rows.map((r) => ({
-          label:
-            r.direction === WalletEntryDirection.INSTANT_PAY_FEE
-              ? 'Instant Pay fees'
-              : 'COD collection fees',
-          source: `seller_wallet_entries.amount WHERE direction=${r.direction}`,
-          count: r._count._all,
-          amountInr: (r._sum.amount ?? ZERO).toFixed(2),
-        })),
+        revenue: [
+          ...rows.map((r) => ({
+            label:
+              r.direction === WalletEntryDirection.INSTANT_PAY_FEE
+                ? 'Instant Pay fees'
+                : 'COD collection fees',
+            source: `seller_wallet_entries.amount WHERE direction=${r.direction}`,
+            count: r._count._all,
+            amountInr: (r._sum.amount ?? ZERO).toFixed(2),
+          })),
+          ...(returned.count > 0
+            ? [
+                {
+                  label: 'Returned on CODs the courier reversed',
+                  source:
+                    'seller_wallet_entries.amount WHERE direction=COD_DEDUCTION_REFUND AND linked to a fee',
+                  count: returned.count,
+                  amountInr: returned.amount.negated().toFixed(2),
+                },
+              ]
+            : []),
+        ],
         cost: [],
+      },
+    });
+  }
+
+  /**
+   * Deductions given back to sellers because the courier reversed the COD
+   * they were taken from — only those returning one of `directions`, read
+   * off the deduction each refund names (`linkedEntryId`).
+   */
+  private async deductionsReturned(
+    from: Date,
+    to: Date,
+    directions: WalletEntryDirection[],
+  ): Promise<{ amount: Prisma.Decimal; count: number }> {
+    const agg = await this.prisma.client.sellerWalletEntry.aggregate({
+      where: {
+        direction: WalletEntryDirection.COD_DEDUCTION_REFUND,
+        currency: Currency.INR,
+        createdAt: { gte: from, lte: to },
+        linkedEntry: { direction: { in: directions } },
+      },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+    return { amount: agg._sum.amount ?? ZERO, count: agg._count._all };
+  }
+
+  /**
+   * COD the courier never paid us on parcels whose sellers we credited in
+   * full (WAL-6) — ours to absorb, so a cost. Recognised per payout line
+   * as the CHANGE in the order's shortfall, so a later payout that makes
+   * it up comes back off as a recovery and a two-part payment nets to
+   * nothing. Dated by when the payout landed.
+   */
+  private async codShortfall(from: Date, to: Date): Promise<PnlLine> {
+    const [short, recovered] = await Promise.all([
+      this.prisma.client.courierSettlementLine.aggregate({
+        where: { shortfallInr: { gt: 0 }, settlement: { receivedAt: { gte: from, lte: to } } },
+        _sum: { shortfallInr: true },
+        _count: { _all: true },
+      }),
+      this.prisma.client.courierSettlementLine.aggregate({
+        where: { shortfallInr: { lt: 0 }, settlement: { receivedAt: { gte: from, lte: to } } },
+        _sum: { shortfallInr: true },
+        _count: { _all: true },
+      }),
+    ]);
+    const shortSum = short._sum.shortfallInr ?? ZERO;
+    const recoveredSum = recovered._sum.shortfallInr ?? ZERO;
+    const cost = shortSum.add(recoveredSum);
+    const count = short._count._all + recovered._count._all;
+    return this.line({
+      key: 'cod_shortfall',
+      label: 'COD short-payments absorbed',
+      revenue: ZERO,
+      cost,
+      priced: count,
+      total: count,
+      note: null,
+      basis: {
+        revenue: [],
+        cost: [
+          {
+            label: 'Paid short of the COD we credited the seller',
+            source: 'courier_settlement_lines.shortfall_inr WHERE > 0',
+            count: short._count._all,
+            amountInr: shortSum.toFixed(2),
+          },
+          ...(recovered._count._all > 0
+            ? [
+                {
+                  label: 'Made up on a later payout',
+                  source: 'courier_settlement_lines.shortfall_inr WHERE < 0',
+                  count: recovered._count._all,
+                  amountInr: recoveredSum.toFixed(2),
+                },
+              ]
+            : []),
+        ],
       },
     });
   }
@@ -1104,18 +1220,46 @@ export class PnlService {
         ownerKind: BankOwnerKind.CAPITAL,
         occurredAt: { gte: from, lte: to },
       },
-      select: { signedAmount: true, currency: true, occurredAt: true },
+      select: { id: true, accountId: true, signedAmount: true, currency: true, occurredAt: true },
     });
     let total = ZERO;
+    let counted = 0;
     let unconverted = 0;
+    let opening = ZERO;
+    let openingCount = 0;
     for (const r of rows) {
+      // The account's FIRST entry is its OPENING balance: money the
+      // business already had when the book started — capital put in, not
+      // earned. `reconcile()` is the only way to post one, so "nothing
+      // earlier on this account" identifies it structurally.
+      const earlier = await this.prisma.client.bankEntry.findFirst({
+        where: { accountId: r.accountId, id: { lt: r.id } },
+        select: { id: true },
+      });
       const rate = await this.inrPerUnit(r.currency, r.occurredAt, rates);
+      if (earlier === null) {
+        openingCount += 1;
+        if (rate !== null) opening = opening.add(r.signedAmount.mul(rate).toDecimalPlaces(2));
+        continue;
+      }
       if (rate === null) {
         unconverted += 1;
         continue;
       }
       total = total.add(r.signedAmount.mul(rate).toDecimalPlaces(2));
+      counted += 1;
     }
+    const notes = [
+      ...(openingCount > 0
+        ? [
+            `${openingCount} opening balance(s) (₹${opening.toFixed(2)}) are capital put in, ` +
+              'not earned, and are not counted.',
+          ]
+        : []),
+      ...(unconverted > 0
+        ? [`${unconverted} correction(s) had no rate to rupees and are not counted.`]
+        : []),
+    ];
     return {
       key: 'bank_reconciliation',
       label: 'Bank reconciliation differences',
@@ -1124,20 +1268,18 @@ export class PnlService {
       marginInr: total.toFixed(2),
       marginPercent: null,
       coverage: {
-        priced: rows.length - unconverted,
-        total: rows.length,
-        note:
-          unconverted === 0
-            ? null
-            : `${unconverted} correction(s) had no rate to rupees and are not counted.`,
+        // An opening balance is outside the line, not unmeasured in it.
+        priced: counted,
+        total: counted + unconverted,
+        note: notes.length === 0 ? null : notes.join(' '),
       },
       basis: {
         revenue: [
           {
             label: 'Corrections against a bank statement (charges, interest, unexplained)',
             source:
-              "bank_entries.signed_amount WHERE type=RECONCILIATION_ADJUSTMENT AND owner='capital'",
-            count: rows.length - unconverted,
+              "bank_entries.signed_amount WHERE type=RECONCILIATION_ADJUSTMENT AND owner='capital' AND not the account's first entry",
+            count: counted,
             amountInr: total.toFixed(2),
           },
         ],
@@ -1432,6 +1574,34 @@ export class PnlService {
             at: e.createdAt.toISOString(),
             revenueInr: isDamage ? null : e.amount.toFixed(2),
             costInr: isDamage ? e.amount.toFixed(2) : null,
+          })),
+          truncated: rows.length > take,
+        };
+      }
+
+      case 'cod_shortfall': {
+        const rows = await this.prisma.client.courierSettlementLine.findMany({
+          where: {
+            shortfallInr: { not: 0 },
+            settlement: { receivedAt: { gte: from, lte: to } },
+          },
+          orderBy: { id: 'desc' },
+          take: take + 1,
+          select: {
+            shortfallInr: true,
+            order: { select: { orderNumber: true } },
+            settlement: { select: { reference: true, receivedAt: true } },
+          },
+        });
+        return {
+          key,
+          items: rows.slice(0, take).map((l) => ({
+            ref: l.order.orderNumber,
+            subRef: l.settlement.reference,
+            at: l.settlement.receivedAt.toISOString(),
+            revenueInr: null,
+            // Signed: a recovery shows as a negative cost.
+            costInr: l.shortfallInr.toFixed(2),
           })),
           truncated: rows.length > take,
         };

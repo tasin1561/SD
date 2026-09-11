@@ -78,7 +78,14 @@ function makeSut(opts: {
   parcelTxns?: Array<{ awbNumber: string; kind: string; amount: Prisma.Decimal }>;
   /** Waybills that belong to a live Skydrop shipment. */
   liveAwbs?: string[];
-  reconciliation?: Array<{ signedAmount: Prisma.Decimal; currency: string; occurredAt: Date }>;
+  reconciliation?: Array<{
+    id?: string;
+    signedAmount: Prisma.Decimal;
+    currency: string;
+    occurredAt: Date;
+  }>;
+  /** Reconciliation entries that are their account's FIRST entry (opening balances). */
+  openingIds?: string[];
   investments?: Array<{ placedInr: Prisma.Decimal; returnedInr: Prisma.Decimal }>;
   /**
    * EXPENSE entries filed under a leg category with no consignment
@@ -86,6 +93,11 @@ function makeSut(opts: {
    * which consignment they were for.
    */
   unattributed?: Array<{ signedAmount: Prisma.Decimal }>;
+  /** Shortfalls recognised on payout lines (negative = a recovery). */
+  shortfalls?: Prisma.Decimal[];
+  /** Deductions returned on reversed CODs: the tax, and the fees. */
+  taxReturned?: Prisma.Decimal | null;
+  feesReturned?: Prisma.Decimal | null;
 }) {
   adjustmentWhere = undefined;
   excludedWhere = undefined;
@@ -180,6 +192,15 @@ function makeSut(opts: {
       aggregate: async (args: { where: Record<string, unknown> }) => {
         const dir = args.where['direction'];
         if (dir === 'ORDER_CHARGES_REFUND') refundWhere = args.where;
+        if (dir === 'COD_DEDUCTION_REFUND') {
+          const linked = (
+            (args.where['linkedEntry'] as Record<string, unknown>)['direction'] as { in: string[] }
+          ).in;
+          const amt = linked.includes('GST_WITHHOLDING')
+            ? (opts.taxReturned ?? null)
+            : (opts.feesReturned ?? null);
+          return { _sum: { amount: amt }, _count: { _all: amt === null ? 0 : 1 } };
+        }
         const amount =
           dir === 'GST_WITHHOLDING'
             ? (opts.codTax ?? null)
@@ -227,7 +248,11 @@ function makeSut(opts: {
         }
         if (type === 'RECONCILIATION_ADJUSTMENT') {
           reconciliationWhere = args.where;
-          return opts.reconciliation ?? [];
+          return (opts.reconciliation ?? []).map((r, i) => ({
+            id: `rec-${i}`,
+            accountId: 'acct-1',
+            ...r,
+          }));
         }
         if (args.where['expenseCategory'] !== undefined) {
           return (opts.unattributed ?? []).map((u) => ({
@@ -238,6 +263,20 @@ function makeSut(opts: {
         }
         // Operating expenses in another currency.
         return opts.foreignExpenses ?? [];
+      },
+      // Is there an earlier entry on this account? None ⇒ an opening balance.
+      findFirst: async (args: { where: { id: { lt: string } } }) =>
+        (opts.openingIds ?? []).includes(args.where.id.lt) ? null : { id: 'earlier' },
+    },
+    // Payout lines' recognised shortfalls, split by sign as the line asks.
+    courierSettlementLine: {
+      aggregate: async (args: { where: Record<string, unknown> }) => {
+        const positive = 'gt' in (args.where['shortfallInr'] as Record<string, unknown>);
+        const rows = (opts.shortfalls ?? []).filter((s) => (positive ? s.gt(0) : s.lt(0)));
+        return {
+          _sum: { shortfallInr: rows.length === 0 ? null : rows.reduce((t, s) => t.add(s)) },
+          _count: { _all: rows.length },
+        };
       },
     },
     investment: { findMany: async () => opts.investments ?? [] },
@@ -367,6 +406,31 @@ describe('PnlService', () => {
   });
 });
 
+describe('COD the courier short-paid or reversed', () => {
+  it('a short-payment we absorbed is a cost, and a later recovery comes back off it', async () => {
+    const svc = makeSut({ shortfalls: [D('50'), D('30'), D('-20')] });
+    const r = await svc.report(FROM, TO);
+    const line = r.lines.find((l) => l.key === 'cod_shortfall');
+    expect(line).toMatchObject({ revenueInr: '0.00', costInr: '60.00' });
+    expect(r.grossMarginInr).toBe('-60.00');
+  });
+
+  it('tax withheld on a COD the courier reversed is not revenue', async () => {
+    const svc = makeSut({ codTax: D('152.54'), taxReturned: D('152.54') });
+    const r = await svc.report(FROM, TO);
+    expect(r.lines.find((l) => l.key === 'cod_tax')?.revenueInr).toBe('0.00');
+  });
+
+  it('a fee taken on a reversed COD comes off the COD handling fees', async () => {
+    const svc = makeSut({
+      codServiceFees: [{ direction: 'INSTANT_PAY_FEE', amount: D('50.00') }],
+      feesReturned: D('21.19'),
+    });
+    const r = await svc.report(FROM, TO);
+    expect(r.lines.find((l) => l.key === 'cod_service_fees')?.revenueInr).toBe('28.81');
+  });
+});
+
 describe('ShipmentCostService', () => {
   function makeSut(existing: {
     actualCourierCostInr: Prisma.Decimal | null;
@@ -449,6 +513,9 @@ describe('a cost already counted by its leg is not counted again', () => {
       sellerWalletEntry: {
         aggregate: async () => ({ _sum: { amount: null }, _count: { _all: 0 } }),
         groupBy: async () => [],
+      },
+      courierSettlementLine: {
+        aggregate: async () => ({ _sum: { shortfallInr: null }, _count: { _all: 0 } }),
       },
       investment: { findMany: async () => [] },
       bankEntry: {
@@ -829,5 +896,23 @@ describe('the P&L counts what it used to miss', () => {
     expect(line(r, 'bank_reconciliation')?.revenueInr).toBe('-35.40');
     expect(reconciliationWhere).toMatchObject({ ownerKind: 'CAPITAL' });
     expect(line(r, 'investment_income')?.revenueInr).toBe('1500.00');
+  });
+
+  it('an account’s OPENING balance is capital put in, not income — and it says so', async () => {
+    // Production shipped with a ৳100,000 "Initial Balance" read as
+    // ₹81,300.81 of profit.
+    const svc = makeSut({
+      reconciliation: [
+        { id: 'open', signedAmount: D('100000'), currency: 'INR', occurredAt: FROM },
+        { id: 'later', signedAmount: D('-12.00'), currency: 'INR', occurredAt: FROM },
+      ],
+      openingIds: ['open'],
+    });
+    const r = await svc.report(FROM, TO);
+    const recon = line(r, 'bank_reconciliation');
+    expect(recon?.revenueInr).toBe('-12.00');
+    expect(recon?.coverage).toMatchObject({ priced: 1, total: 1 });
+    expect(recon?.coverage.note).toContain('opening balance');
+    expect(r.netInr).toBe('-12.00');
   });
 });

@@ -2521,29 +2521,29 @@ enum CourierWaybillStatus {
 /// Corrections are made by recording an adjusting settlement, not by
 /// editing a past one.
 model CourierSettlement {
-  id                String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  courierAccountId  String   @map("courier_account_id") @db.Uuid
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierAccountId   String   @map("courier_account_id") @db.Uuid
   /// The courier's own withdrawal/UTR reference. UNIQUE per account — the
   /// idempotency gate against recording the same bank credit twice.
-  reference         String
+  reference          String
   /// What actually landed in the bank, INR.
-  amountInr         Decimal  @map("amount_inr") @db.Decimal(14, 2)
+  amountInr          Decimal  @map("amount_inr") @db.Decimal(14, 2)
   /// Sum of this settlement's allocated lines. Kept alongside amountInr
   /// so an under- or over-allocated withdrawal is visible without a join.
-  allocatedInr      Decimal  @default(0) @map("allocated_inr") @db.Decimal(14, 2)
+  allocatedInr       Decimal  @default(0) @map("allocated_inr") @db.Decimal(14, 2)
   /// What the courier KEPT BACK from the COD it collected before paying
   /// us, as its remittance file states it. `amountInr` + these = the COD
   /// this payout covers. The early-COD fee is a cost and is booked as an
   /// EXPENSE bank entry linked to this settlement (so it reaches /expenses
   /// and the P&L); freight and RTO reversals are recorded, not costed.
-  earlyCodFeeInr     Decimal @default(0) @map("early_cod_fee_inr") @db.Decimal(14, 2)
-  freightDeductedInr Decimal @default(0) @map("freight_deducted_inr") @db.Decimal(14, 2)
-  rtoReversalInr     Decimal @default(0) @map("rto_reversal_inr") @db.Decimal(14, 2)
-  receivedAt        DateTime @map("received_at") @db.Timestamptz
-  recordedByStaffId String?  @map("recorded_by_staff_id") @db.Uuid
-  note              String?  @db.Text
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  earlyCodFeeInr     Decimal  @default(0) @map("early_cod_fee_inr") @db.Decimal(14, 2)
+  freightDeductedInr Decimal  @default(0) @map("freight_deducted_inr") @db.Decimal(14, 2)
+  rtoReversalInr     Decimal  @default(0) @map("rto_reversal_inr") @db.Decimal(14, 2)
+  receivedAt         DateTime @map("received_at") @db.Timestamptz
+  recordedByStaffId  String?  @map("recorded_by_staff_id") @db.Uuid
+  note               String?  @db.Text
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   courierAccount CourierAccount          @relation(fields: [courierAccountId], references: [id])
   recordedBy     StaffUser?              @relation("CourierSettlementRecordedBy", fields: [recordedByStaffId], references: [id])
@@ -2569,6 +2569,12 @@ model CourierSettlementLine {
   expectedInr  Decimal  @map("expected_inr") @db.Decimal(12, 2)
   /// What this withdrawal actually attributed to it.
   settledInr   Decimal  @map("settled_inr") @db.Decimal(12, 2)
+  /// The COD shortfall this line RECOGNISED: how much further short of
+  /// the order's COD its cumulative payments stand after this line than
+  /// before it. Positive when a payout short-pays (we credited the seller
+  /// in full and absorb it, WAL-6); negative when a later payout makes up
+  /// an earlier shortfall. The P&L's "COD short-payments" line sums it.
+  shortfallInr Decimal  @default(0) @map("shortfall_inr") @db.Decimal(12, 2)
   note         String?  @db.Text
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -6048,7 +6054,18 @@ enum WalletEntryDirection {
   // what sellers paid us in charges silently included tax we merely
   // hold for the government, and the seller's own ledger called a tax
   // line "Order charges".
-  GST_WITHHOLDING @map("gst_withholding")
+  GST_WITHHOLDING      @map("gst_withholding")
+  /// A COD credit taken back because the courier reversed the COD — a
+  /// parcel it had paid out on turned into a return, and it clawed the
+  /// money back out of a later payout. A DEBIT of the gross COD, the
+  /// mirror of COD_COLLECTION. ABSENT from CREDIT_DIRECTIONS (WAL-1).
+  COD_REVERSAL         @map("cod_reversal")
+  /// What we deducted from a COD that has since been reversed — the tax
+  /// and the COD / Instant Pay fee — given back, one entry per deduction,
+  /// `linkedEntryId` naming the deduction it returns. A CREDIT:
+  /// REGISTERED in CREDIT_DIRECTIONS and in `isWalletCredit` (WAL-1). The
+  /// P&L takes it back off the line that counted the deduction.
+  COD_DEDUCTION_REFUND @map("cod_deduction_refund")
 
   @@map("wallet_entry_direction")
 }

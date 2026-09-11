@@ -578,7 +578,13 @@ export function useRecordSettlement(): UseMutationResult<
     receivedAt: string;
     lines: ReadonlyArray<{ orderId: string; settledInr: string }>;
     /** What the courier kept back — the early-COD fee is booked as an expense. */
-    deductions?: { earlyCodFeeInr?: string; freightInr?: string; rtoReversalInr?: string };
+    deductions?: {
+      earlyCodFeeInr?: string;
+      freightInr?: string;
+      rtoReversalInr?: string;
+      /** The orders an RTO reversal takes COD back for — required with one. */
+      rtoReversals?: ReadonlyArray<{ orderId: string; amountInr: string }>;
+    };
     note?: string;
   }
 > {

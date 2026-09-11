@@ -77,17 +77,25 @@ export class SellerCashAttributionService {
       case WalletEntryDirection.GST_WITHHOLDING:
         return 'TO_CAPITAL';
 
-      // Giving it back. The cash was ours; now it is theirs again.
+      // Giving it back. The cash was ours; now it is theirs again. The
+      // tax and fee on a reversed COD (COD_DEDUCTION_REFUND) go back the
+      // same way: the cash the charge made ours returns to the seller,
+      // whose COD it was taken from.
       case WalletEntryDirection.ORDER_CHARGES_REFUND:
       case WalletEntryDirection.SCRAP_REFUND:
+      case WalletEntryDirection.COD_DEDUCTION_REFUND:
         return 'TO_SELLER';
 
       // Real cash crossing the bank, posted by the flow that moved it.
-      // Reclassifying here as well would double-count the movement.
+      // Reclassifying here as well would double-count the movement. The
+      // courier taking a COD back out of a payout (COD_REVERSAL) is the
+      // same: the settlement posts that cash leaving, exactly as it
+      // posted it arriving.
       case WalletEntryDirection.TOPUP:
       case WalletEntryDirection.COD_COLLECTION:
       case WalletEntryDirection.REMITTANCE_OUT:
       case WalletEntryDirection.REMITTANCE_FX:
+      case WalletEntryDirection.COD_REVERSAL:
         return 'NONE';
 
       // An operator correcting a wallet. Whether any cash is implicated

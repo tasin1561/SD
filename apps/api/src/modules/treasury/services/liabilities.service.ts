@@ -25,6 +25,8 @@ const DEBT_CAUSES = [
   WalletEntryDirection.INSTANT_PAY_FEE,
   WalletEntryDirection.COD_COLLECTION_FEE,
   WalletEntryDirection.ADJUSTMENT_DEBIT,
+  // A COD the courier took back: the credit it had funded is gone.
+  WalletEntryDirection.COD_REVERSAL,
 ] as const;
 
 /**
@@ -39,6 +41,7 @@ const DEBT_PAYMENTS = [
   WalletEntryDirection.ORDER_CHARGES_REFUND,
   WalletEntryDirection.SCRAP_REFUND,
   WalletEntryDirection.ADJUSTMENT_CREDIT,
+  WalletEntryDirection.COD_DEDUCTION_REFUND,
 ] as const;
 
 export interface LedgerLine {

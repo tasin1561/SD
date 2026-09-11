@@ -74,11 +74,13 @@ export function RecordSettlementModal({
   ]);
   /**
    * What the courier kept back before paying, from its own file. The
-   * early-COD fee is a real cost the wallet never sees — it is booked as
-   * an expense when the payout is recorded; freight and RTO reversals are
-   * recorded so the payout explains itself, not costed.
+   * early-COD fee is booked as an expense; freight taken from COD is a
+   * wallet top-up (it pays for parcels the wallet ledger already costs);
+   * an RTO reversal takes back COD a seller was credited, so it must name
+   * the orders — each seller is debited back exactly.
    */
   const [kept, setKept] = useState<KeptBack>(NO_KEPT_BACK);
+  const [reversals, setReversals] = useState<readonly DraftLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const preview = usePreviewRemittance();
   const [skipped, setSkipped] = useState<readonly RemittanceRow[]>([]);
@@ -154,10 +156,15 @@ export function RecordSettlementModal({
     [lines],
   );
   const received = Number(amountInr) || 0;
+  const namedReversals = reversals.filter(
+    (r) => r.orderId.trim() !== '' && r.settledInr.trim() !== '',
+  );
+  const reversedTotal = namedReversals.reduce((sum, r) => sum + (Number(r.settledInr) || 0), 0);
   const keptTotal =
     (Number(kept.earlyCodFeeInr) || 0) +
     (Number(kept.freightInr) || 0) +
-    (Number(kept.rtoReversalInr) || 0);
+    // The orders named are what is booked; the file's figure is a check.
+    (namedReversals.length > 0 ? reversedTotal : Number(kept.rtoReversalInr) || 0);
   // What landed plus what the courier kept should be exactly the COD of
   // the orders it covers.
   const remainder = received + keptTotal - allocated;
@@ -170,6 +177,7 @@ export function RecordSettlementModal({
     setNote('');
     setLines([{ key: 0, orderId: '', settledInr: '' }]);
     setKept(NO_KEPT_BACK);
+    setReversals([]);
     setError(null);
     setSkipped([]);
     setFileNotes(null);
@@ -203,6 +211,14 @@ export function RecordSettlementModal({
                 ...(kept.rtoReversalInr.trim() === ''
                   ? {}
                   : { rtoReversalInr: kept.rtoReversalInr.trim() }),
+                ...(namedReversals.length === 0
+                  ? {}
+                  : {
+                      rtoReversals: namedReversals.map((r) => ({
+                        orderId: r.orderId.trim(),
+                        amountInr: r.settledInr.trim(),
+                      })),
+                    }),
               },
             }
           : {}),
@@ -426,7 +442,7 @@ export function RecordSettlementModal({
               <FormField
                 label="Freight from COD"
                 htmlFor="settle-kept-freight"
-                hint="Recorded, not costed."
+                hint="Booked as a courier wallet top-up."
               >
                 <Input
                   id="settle-kept-freight"
@@ -439,7 +455,7 @@ export function RecordSettlementModal({
               <FormField
                 label="RTO reversal"
                 htmlFor="settle-kept-rto"
-                hint="Recorded, not costed."
+                hint="The file's total — name the orders below."
               >
                 <Input
                   id="settle-kept-rto"
@@ -449,6 +465,76 @@ export function RecordSettlementModal({
                   placeholder="0.00"
                 />
               </FormField>
+            </div>
+
+            {/* Each reversed order: its seller's COD credit is taken back
+                and our tax and fee on it returned, so it must be exact. */}
+            <div className="mt-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-text-muted text-xs">
+                  Orders whose COD was reversed
+                  {namedReversals.length > 0 && (
+                    <>
+                      {' '}
+                      · <Money amount={reversedTotal} />
+                    </>
+                  )}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setReversals((prev) => [
+                      ...prev,
+                      { key: (prev.at(-1)?.key ?? 0) + 1, orderId: '', settledInr: '' },
+                    ])
+                  }
+                >
+                  <Plus size={13} aria-hidden /> Add reversed order
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {reversals.map((r) => (
+                  <div key={r.key} className="flex items-center gap-2">
+                    <Input
+                      aria-label="Reversed order ID"
+                      value={r.orderId}
+                      onChange={(e) =>
+                        setReversals((prev) =>
+                          prev.map((x) =>
+                            x.key === r.key ? { ...x, orderId: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      placeholder="Order ID"
+                      autoComplete="off"
+                      className="flex-1"
+                    />
+                    <Input
+                      aria-label="COD reversed for this order"
+                      inputMode="decimal"
+                      value={r.settledInr}
+                      onChange={(e) =>
+                        setReversals((prev) =>
+                          prev.map((x) =>
+                            x.key === r.key ? { ...x, settledInr: e.target.value } : x,
+                          ),
+                        )
+                      }
+                      placeholder="0.00"
+                      className="w-32 text-right"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove this reversed order"
+                      onClick={() => setReversals((prev) => prev.filter((x) => x.key !== r.key))}
+                      className="text-text-faint hover:text-[var(--color-critical)] shrink-0 rounded-[4px] p-1.5 transition-colors"
+                    >
+                      <Trash2 size={14} aria-hidden />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

@@ -487,6 +487,8 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.SCRAP_REFUND:
     case WalletEntryDirection.TOPUP:
     case WalletEntryDirection.ORDER_CHARGES_REFUND:
+    // The tax and fee on a COD the courier reversed, given back.
+    case WalletEntryDirection.COD_DEDUCTION_REFUND:
       return true;
     // Everything we charge for. REMITTANCE_OUT is money leaving to the
     // seller's bank, so it is a debit against the wallet even though
@@ -508,6 +510,8 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     // remits it, so no return of ours sits behind this deduction. It is
     // revenue, and the P&L reports it as such (2026-09-07).
     case WalletEntryDirection.GST_WITHHOLDING:
+    // A COD credit taken back because the courier reversed the COD.
+    case WalletEntryDirection.COD_REVERSAL:
       return false;
     default: {
       const exhaustive: never = direction;
@@ -565,6 +569,11 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
       // Not "GST withheld (we file this)". We do not file it, and a
       // label that says we do is a promise to a seller we cannot keep.
       return 'COD tax deduction';
+    // The courier took back the COD for a parcel that turned into a return.
+    case WalletEntryDirection.COD_REVERSAL:
+      return 'COD reversed by courier';
+    case WalletEntryDirection.COD_DEDUCTION_REFUND:
+      return 'Deduction returned on a reversed COD';
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);

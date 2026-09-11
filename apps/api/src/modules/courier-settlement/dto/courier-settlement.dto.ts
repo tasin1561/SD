@@ -33,8 +33,31 @@ export class SettlementLineDto {
   readonly note?: string;
 }
 
+/** One order whose earlier-paid COD the courier took back in this payout. */
+export class RtoReversalDto {
+  @ApiProperty({ description: 'UUID v7 of the order whose COD was reversed' })
+  @IsUUID('7')
+  readonly orderId!: string;
+
+  @ApiProperty({ description: 'INR taken back for it (decimal string) — its whole COD' })
+  @IsNumberString()
+  readonly amountInr!: string;
+}
+
 /** What the courier kept back from the COD before paying — from its remittance file. */
 export class SettlementDeductionsDto {
+  @ApiPropertyOptional({
+    type: [RtoReversalDto],
+    description:
+      'The orders an RTO reversal takes COD back for. Required when there is an RTO reversal: the seller credited for each is debited back and our deductions returned, so it must be exact.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => RtoReversalDto)
+  readonly rtoReversals?: RtoReversalDto[];
+
   @ApiPropertyOptional({
     description:
       'Early-COD / remittance fee the courier kept (decimal string). Booked as an expense.',
