@@ -7,6 +7,8 @@ import { OrderChargesAccrualService } from './order-charges-accrual.service';
 import { CodCreditService } from './cod-credit.service';
 import { InboundFreightAmortisationService } from '../../inbound-freight/services/inbound-freight-amortisation.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
  * R2b (revised-plan roadmap) — the actual COD-credit + charges-debit
@@ -35,6 +37,7 @@ export class AccrualExecutionService {
     private readonly codCredit: CodCreditService,
     private readonly orderCharges: OrderChargesService,
     private readonly issues: SystemIssueService,
+    private readonly attribution: SellerCashAttributionService,
   ) {}
 
   async executeAccrual(orderId: string): Promise<void> {
@@ -125,10 +128,26 @@ export class AccrualExecutionService {
       if (order.paymentMode === PaymentMode.COD) {
         const mode = await this.codCredit.resolveMode(order.sellerId);
         if (mode === 'INSTANT_PAY') {
+          const gross = order.codAmountInr ?? new Prisma.Decimal(0);
+          // We pay this COD before the courier does, so the cash behind
+          // the credit is OURS, fronted: held for the seller now (less any
+          // part that repays what they owe — TRE-8), BEFORE the credit so
+          // its tax and fee find it. When the courier's payout lands it is
+          // capital's, repaying the front.
+          await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
+          if (gross.greaterThan(0) && !(await this.codCredit.isCredited(tx, order.id))) {
+            const split = await this.attribution.debtSplit(tx, order.sellerId, gross);
+            await this.attribution.front(tx, {
+              sellerId: order.sellerId,
+              amount: split.toSeller,
+              accountId: await this.payoutAccountFor(tx, order.id),
+              reference: order.id,
+            });
+          }
           const result = await this.codCredit.creditForOrder(tx, {
             orderId: order.id,
             sellerId: order.sellerId,
-            grossInr: order.codAmountInr ?? new Prisma.Decimal(0),
+            grossInr: gross,
             mode,
           });
           if (result.credited) {
@@ -162,5 +181,38 @@ export class AccrualExecutionService {
       Currency.INR,
       'post-commit-accrual',
     );
+  }
+
+  /**
+   * The rupee account the courier carrying this order pays its COD into —
+   * where a front is held, so the payout later lands beside it. Null when
+   * there is none usable; the attribution service then picks one.
+   */
+  private async payoutAccountFor(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<string | null> {
+    const shipment = await tx.shipment.findFirst({
+      where: {
+        orderShipments: { some: { orderId } },
+        awbNumber: { not: null },
+        supersededAt: null,
+        deletedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        courierAccount: {
+          select: {
+            payoutBankAccount: {
+              select: { id: true, currency: true, isActive: true, deletedAt: true },
+            },
+          },
+        },
+      },
+    });
+    const a = shipment?.courierAccount?.payoutBankAccount ?? null;
+    return a !== null && a.currency === Currency.INR && a.isActive && a.deletedAt === null
+      ? a.id
+      : null;
   }
 }

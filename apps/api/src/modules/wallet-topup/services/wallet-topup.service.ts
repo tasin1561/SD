@@ -24,6 +24,7 @@ import { FxRateService } from '../../fx/services/fx-rate.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
+import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
 
 /**
  * Putting money INTO the wallet.
@@ -108,6 +109,7 @@ export class WalletTopupService {
     private readonly fx: FxRateService,
     private readonly email: EmailQueue,
     private readonly bank: BankLedgerService,
+    private readonly attribution: SellerCashAttributionService,
   ) {}
 
   private readonly logger = new Logger(WalletTopupService.name);
@@ -423,6 +425,11 @@ export class WalletTopupService {
                 })
               ).amount,
             );
+      // Read against the balance BEFORE this credit: the part of it that
+      // repays what the seller owed is ours (TRE-8).
+      const split = credited.greaterThan(0)
+        ? await this.attribution.debtSplit(tx, existing.sellerId, credited)
+        : null;
       const entry = await this.wallet.applyEntry(tx, {
         sellerId: existing.sellerId,
         currency: Currency.INR,
@@ -462,6 +469,23 @@ export class WalletTopupService {
         },
         tx,
       );
+      // Charges taken while the seller held nothing wrote no bank entry —
+      // the debt was a receivable — and this cash is what settles it. That
+      // part is ours, moved in the account and currency it landed in (a
+      // taka top-up repays in taka, in proportion to the rupee credit).
+      if (split !== null && split.toCapital.greaterThan(0)) {
+        const repaid =
+          existing.currency === Currency.INR
+            ? split.toCapital
+            : existing.amount.mul(split.toCapital).div(credited).toDecimalPlaces(2);
+        await this.attribution.repayDebt(tx, {
+          sellerId: existing.sellerId,
+          accountId: existing.bankAccountId,
+          currency: existing.currency,
+          amount: repaid,
+          reference: entry.id,
+        });
+      }
 
       return tx.walletTopupRequest.update({
         where: { id: topupId },

@@ -1,0 +1,339 @@
+import { Currency, Prisma } from '@skydrop/db';
+import { CourierSettlementService } from '../../src/modules/courier-settlement/services/courier-settlement.service';
+import { CodCreditService } from '../../src/modules/seller-wallet-accrual/services/cod-credit.service';
+import { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
+
+/**
+ * TRE-4 / TRE-8, end to end in memory: after every payout, the cash the
+ * bank book holds for a seller equals what their wallet says they are owed
+ * — max(0, balance) — and the account moves by exactly what landed.
+ *
+ * The REAL CodCreditService and SellerCashAttributionService run here, over
+ * an in-memory wallet and bank book; only Prisma is faked. This is the
+ * test that caught the tax on a settled COD never becoming ours: the
+ * credit ran before the seller's cash was posted, so the attribution found
+ * nothing to take and the seller was held the gross.
+ */
+
+const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
+const ZERO = D('0');
+const CREDITS = new Set(['COD_COLLECTION', 'COD_DEDUCTION_REFUND', 'TOPUP']);
+
+interface WalletRow {
+  id: string;
+  sellerId: string;
+  currency: string;
+  direction: string;
+  amount: Prisma.Decimal;
+  runningBalanceAfter: Prisma.Decimal;
+  linkedOrderId: string | null;
+  linkedEntryId: string | null;
+}
+interface BankRow {
+  accountId: string;
+  ownerKind: string;
+  sellerId: string | null;
+  signedAmount: Prisma.Decimal;
+}
+
+function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>) {
+  const wallet: WalletRow[] = [];
+  const bank: BankRow[] = [];
+  const lines: Array<{
+    orderId: string;
+    settledInr: Prisma.Decimal;
+    shortfallInr: Prisma.Decimal;
+  }> = [];
+  let seq = 0;
+  const nextId = (): string => `id-${String((seq += 1)).padStart(6, '0')}`;
+
+  const dirMatch = (direction: unknown, d: string): boolean =>
+    direction === undefined ||
+    (typeof direction === 'string'
+      ? direction === d
+      : ((direction as { in: string[] }).in ?? []).includes(d));
+  const walletWhere = (w: Record<string, unknown>) => (r: WalletRow) =>
+    (w['linkedOrderId'] === undefined || r.linkedOrderId === w['linkedOrderId']) &&
+    (w['sellerId'] === undefined || r.sellerId === w['sellerId']) &&
+    (w['currency'] === undefined || r.currency === w['currency']) &&
+    dirMatch(w['direction'], r.direction);
+
+  const ledger = {
+    post: jest.fn(
+      async (input: {
+        accountId: string;
+        signedAmount: Prisma.Decimal;
+        owner: { kind: string; sellerId?: string };
+      }) => {
+        bank.push({
+          accountId: input.accountId,
+          ownerKind: input.owner.kind,
+          sellerId: input.owner.sellerId ?? null,
+          signedAmount: input.signedAmount,
+        });
+        return { id: nextId() };
+      },
+    ),
+  };
+  const attribution = new SellerCashAttributionService(ledger as never);
+
+  const tx: Record<string, unknown> = {
+    $executeRaw: jest.fn(async () => 1),
+    sellerWalletEntry: {
+      findFirst: jest.fn(async (a: { where: Record<string, unknown> }) => {
+        const found = wallet.filter(walletWhere(a.where));
+        return found.length === 0 ? null : found[found.length - 1];
+      }),
+      findMany: jest.fn(
+        async (a: { where: Record<string, unknown>; orderBy?: { id: 'desc' | 'asc' } }) => {
+          const found = wallet.filter(walletWhere(a.where));
+          return a.orderBy?.id === 'desc' ? [...found].reverse() : found;
+        },
+      ),
+      count: jest.fn(
+        async (a: { where: Record<string, unknown> }) => wallet.filter(walletWhere(a.where)).length,
+      ),
+    },
+    gstWithholding: { upsert: jest.fn(async () => ({})) },
+    bankEntry: {
+      groupBy: jest.fn(async (a: { where: { sellerId: string } }) => {
+        const by = new Map<string, Prisma.Decimal>();
+        for (const b of bank) {
+          if (b.ownerKind !== 'SELLER' || b.sellerId !== a.where.sellerId) continue;
+          by.set(b.accountId, (by.get(b.accountId) ?? ZERO).add(b.signedAmount));
+        }
+        return [...by].map(([accountId, s]) => ({ accountId, _sum: { signedAmount: s } }));
+      }),
+    },
+    platformBankAccount: { findFirst: jest.fn(async () => ({ id: 'hdfc' })) },
+    courierSettlementLine: {
+      groupBy: jest.fn(async (a: { where: { orderId: { in: string[] } } }) => {
+        const by = new Map<string, { settled: Prisma.Decimal; short: Prisma.Decimal }>();
+        for (const l of lines) {
+          if (!a.where.orderId.in.includes(l.orderId)) continue;
+          const cur = by.get(l.orderId) ?? { settled: ZERO, short: ZERO };
+          by.set(l.orderId, {
+            settled: cur.settled.add(l.settledInr),
+            short: cur.short.add(l.shortfallInr),
+          });
+        }
+        return [...by].map(([orderId, v]) => ({
+          orderId,
+          _sum: { settledInr: v.settled, shortfallInr: v.short },
+        }));
+      }),
+    },
+    courierSettlement: {
+      findUnique: jest.fn(async () => null),
+      create: jest.fn(async (a: { data: Record<string, unknown> }) => {
+        const created = ((a.data['lines'] as { create: typeof lines }).create ?? []).map((l) => ({
+          ...l,
+        }));
+        lines.push(...created);
+        return {
+          id: nextId(),
+          ...a.data,
+          earlyCodFeeInr: ZERO,
+          freightDeductedInr: ZERO,
+          rtoReversalInr: a.data['rtoReversalInr'] ?? ZERO,
+          createdAt: new Date(),
+          lines: created.map((l) => ({ ...l, expectedInr: ZERO, order: { orderNumber: 'x' } })),
+        };
+      }),
+    },
+    courierAccount: {
+      findFirst: jest.fn(async () => ({
+        id: 'acct-1',
+        courier: { code: 'delhivery' },
+        payoutBankAccount: { id: 'hdfc', currency: 'INR', isActive: true, deletedAt: null },
+      })),
+    },
+    order: {
+      findMany: jest.fn(async (a: { where: { id: { in: string[] } } }) =>
+        orders
+          .filter((o) => a.where.id.in.includes(o.id))
+          .map((o) => ({
+            id: o.id,
+            orderNumber: o.id,
+            codAmountInr: D(o.cod),
+            sellerId: o.sellerId,
+          })),
+      ),
+    },
+    shipment: { findMany: jest.fn(async () => []) },
+    systemSetting: { findUnique: jest.fn(async () => ({ valueDecimal: '100' })) },
+  };
+  tx['$transaction'] = async (fn: (t: unknown) => unknown) => fn(tx);
+
+  const walletService = {
+    applyEntry: jest.fn(
+      async (
+        _t: unknown,
+        input: {
+          sellerId: string;
+          currency: Currency;
+          direction: string;
+          amount: Prisma.Decimal;
+          linkedOrderId?: string;
+          linkedEntryId?: string;
+        },
+      ) => {
+        const last = wallet.filter((r) => r.sellerId === input.sellerId).at(-1);
+        const before = last?.runningBalanceAfter ?? ZERO;
+        const signed = CREDITS.has(input.direction) ? input.amount : input.amount.neg();
+        const row: WalletRow = {
+          id: nextId(),
+          sellerId: input.sellerId,
+          currency: input.currency,
+          direction: input.direction,
+          amount: input.amount,
+          runningBalanceAfter: before.add(signed),
+          linkedOrderId: input.linkedOrderId ?? null,
+          linkedEntryId: input.linkedEntryId ?? null,
+        };
+        wallet.push(row);
+        // As the real WalletService does, inside the same transaction.
+        await attribution.apply(tx as never, {
+          sellerId: input.sellerId,
+          currency: input.currency,
+          direction: input.direction as never,
+          amount: input.amount,
+          walletEntryId: row.id,
+        });
+        return { id: row.id, runningBalanceAfter: row.runningBalanceAfter };
+      },
+    ),
+    recomputeCacheAfterCommit: jest.fn(async () => undefined),
+  };
+  const settings = {
+    resolve: jest.fn(async (_s: string, key: string) => ({
+      value: key.includes('gst') ? '18.00' : key.includes('fee') ? '0.00' : 'SETTLEMENT',
+    })),
+  };
+  const codCredit = new CodCreditService(settings as never, walletService as never);
+  const svc = new CourierSettlementService(
+    { client: tx } as never,
+    { log: jest.fn(async () => 'a1') } as never,
+    codCredit,
+    walletService as never,
+    ledger as never,
+    attribution,
+  );
+
+  /** A charge taken while the seller held nothing: a receivable, no bank entry. */
+  const owe = async (sellerId: string, amount: string): Promise<void> => {
+    await walletService.applyEntry(null, {
+      sellerId,
+      currency: Currency.INR,
+      direction: 'ORDER_CHARGES',
+      amount: D(amount),
+    });
+  };
+  const held = (sellerId: string): string =>
+    bank
+      .filter((b) => b.ownerKind === 'SELLER' && b.sellerId === sellerId)
+      .reduce((t, b) => t.add(b.signedAmount), ZERO)
+      .toFixed(2);
+  const owed = (sellerId: string): string => {
+    const bal = wallet.filter((r) => r.sellerId === sellerId).at(-1)?.runningBalanceAfter ?? ZERO;
+    return (bal.lessThan(0) ? ZERO : bal).toFixed(2);
+  };
+  const accountTotal = (): string => bank.reduce((t, b) => t.add(b.signedAmount), ZERO).toFixed(2);
+  let n = 0;
+  const pay = async (
+    amountInr: string,
+    paid: Array<[string, string]>,
+    reversals: Array<[string, string]> = [],
+  ): Promise<void> => {
+    n += 1;
+    await svc.record('staff-1', {
+      courierAccountId: 'acct-1',
+      reference: `PAYOUT-${n}`,
+      amountInr,
+      receivedAt: '2026-09-01T10:00:00.000Z',
+      lines: paid.map(([orderId, settledInr]) => ({ orderId, settledInr })),
+      ...(reversals.length === 0
+        ? {}
+        : {
+            deductions: {
+              rtoReversals: reversals.map(([orderId, amt]) => ({ orderId, amountInr: amt })),
+            },
+          }),
+    });
+  };
+  return { pay, owe, held, owed, accountTotal };
+}
+
+describe('the bank book holds each seller exactly what their wallet owes them', () => {
+  it('a seller in credit: held the COD less the tax on it', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    // Credited 1000, tax 152.54 withheld: owed 847.46, and the tax is ours.
+    expect(w.owed('s')).toBe('847.46');
+    expect(w.held('s')).toBe('847.46');
+    expect(w.accountTotal()).toBe('1000.00');
+  });
+
+  it('a seller in debt by less than the COD: the debt is repaid first', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.owe('s', '300');
+    await w.pay('1000', [['a', '1000']]);
+    expect(w.owed('s')).toBe('547.46');
+    expect(w.held('s')).toBe('547.46');
+    expect(w.accountTotal()).toBe('1000.00');
+  });
+
+  it('a seller in debt by more than the COD: nothing is held for them', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.owe('s', '1500');
+    await w.pay('1000', [['a', '1000']]);
+    expect(w.owed('s')).toBe('0.00');
+    expect(w.held('s')).toBe('0.00');
+  });
+
+  it('when the tax is more than the COD left after the debt, nothing is held', async () => {
+    // Owes 900: 100 of the 1000 is theirs, then 152.54 of tax takes that
+    // and leaves them 52.54 in debt.
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.owe('s', '900');
+    await w.pay('1000', [['a', '1000']]);
+    expect(w.owed('s')).toBe('0.00');
+    expect(w.held('s')).toBe('0.00');
+  });
+
+  it('a part-payment then the rest: held once, for the credit the first payout made', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('600', [['a', '600']]);
+    await w.pay('400', [['a', '400']]);
+    expect(w.owed('s')).toBe('847.46');
+    expect(w.held('s')).toBe('847.46');
+    expect(w.accountTotal()).toBe('1000.00');
+  });
+
+  it('a COD reversed on a later payout is taken back, tax returned, and the books still agree', async () => {
+    const w = makeWorld([
+      { id: 'a', sellerId: 's', cod: '1000' },
+      { id: 'b', sellerId: 's', cod: '2000' },
+    ]);
+    await w.pay('1000', [['a', '1000']]);
+    // Payout 2 pays for b (2000) and claws back a's 1000: 1000 lands.
+    await w.pay('1000', [['b', '2000']], [['a', '1000']]);
+    // 847.46 + (2000 − 305.08) − 1000 + 152.54 = 1694.92.
+    expect(w.owed('s')).toBe('1694.92');
+    expect(w.held('s')).toBe('1694.92');
+    expect(w.accountTotal()).toBe('2000.00');
+  });
+
+  it('a reversed COD paid again later is credited again', async () => {
+    const w = makeWorld([
+      { id: 'a', sellerId: 's', cod: '1000' },
+      { id: 'b', sellerId: 's', cod: '2000' },
+    ]);
+    await w.pay('1000', [['a', '1000']]);
+    await w.pay('1000', [['b', '2000']], [['a', '1000']]);
+    await w.pay('1000', [['a', '1000']]);
+    expect(w.owed('s')).toBe('2542.38'); // 1694.92 + 847.46
+    expect(w.held('s')).toBe('2542.38');
+    expect(w.accountTotal()).toBe('3000.00');
+  });
+});

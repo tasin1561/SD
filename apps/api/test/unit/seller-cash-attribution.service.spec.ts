@@ -13,9 +13,16 @@ interface Created {
 function makeTx(opts: {
   held?: Array<{ accountId: string; amount: Prisma.Decimal }>;
   anyAccount?: string | null;
+  /** The seller's wallet balance before the cash arrives; absent = no entries. */
+  balance?: Prisma.Decimal;
 }) {
   const created: Created[] = [];
   const tx = {
+    $executeRaw: jest.fn(async () => 1),
+    sellerWalletEntry: {
+      findFirst: async () =>
+        opts.balance === undefined ? null : { runningBalanceAfter: opts.balance },
+    },
     bankEntry: {
       groupBy: async () =>
         (opts.held ?? []).map((h) => ({
@@ -163,6 +170,67 @@ describe('SellerCashAttributionService', () => {
       const created = await run({ held: [{ accountId: 'acc-1', amount: D('9000') }] }, d, '500');
       expect(created).toHaveLength(0);
     }
+  });
+
+  it.each([
+    ['in credit', '500', '0', '1000'],
+    ['with no wallet entries', null, '0', '1000'],
+    ['in debt by less than the cash', '-300', '300', '700'],
+    ['in debt by more than the cash', '-1500', '1000', '0'],
+  ])(
+    'splits ₹1,000 arriving for a seller %s into debt repaid and theirs',
+    async (_label, balance, toCapital, toSeller) => {
+      const { tx, created } = makeTx(balance === null ? {} : { balance: D(balance) });
+      const svc = new SellerCashAttributionService(makeLedger(created) as never);
+      const split = await svc.debtSplit(tx as never, 's1', D('1000'));
+      expect(split.toCapital.toString()).toBe(toCapital);
+      expect(split.toSeller.toString()).toBe(toSeller);
+      // Under the wallet lock — the balance cannot move underneath it.
+      expect(tx.$executeRaw).toHaveBeenCalled();
+    },
+  );
+
+  it('fronts cash from capital to the seller as a zero-sum pair', async () => {
+    const { tx, created } = makeTx({});
+    const svc = new SellerCashAttributionService(makeLedger(created) as never);
+    await svc.front(tx as never, {
+      sellerId: 's1',
+      amount: D('847.46'),
+      accountId: 'acc-cod',
+      reference: 'order-1',
+    });
+    expect(created.map((c) => [c.ownerKind, c.signedAmount.toString()])).toEqual([
+      ['SELLER', '847.46'],
+      ['CAPITAL', '-847.46'],
+    ]);
+  });
+
+  it('fronts nothing when there is nothing to front', async () => {
+    const { tx, created } = makeTx({});
+    const svc = new SellerCashAttributionService(makeLedger(created) as never);
+    await svc.front(tx as never, {
+      sellerId: 's1',
+      amount: D('0'),
+      accountId: null,
+      reference: 'order-1',
+    });
+    expect(created).toHaveLength(0);
+  });
+
+  it('moves cash that repays a debt to capital, in the account it landed in', async () => {
+    const { tx, created } = makeTx({});
+    const svc = new SellerCashAttributionService(makeLedger(created) as never);
+    await svc.repayDebt(tx as never, {
+      sellerId: 's1',
+      accountId: 'acc-bdt',
+      currency: Currency.BDT,
+      amount: D('2500'),
+      reference: 'we-1',
+    });
+    expect(created.map((c) => [c.ownerKind, c.signedAmount.toString()])).toEqual([
+      ['SELLER', '-2500'],
+      ['CAPITAL', '2500'],
+    ]);
   });
 
   it('takes the cash from the account holding most of it', async () => {

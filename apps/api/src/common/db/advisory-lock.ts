@@ -43,6 +43,15 @@ export const AdvisoryLock = {
    * doubling is permanent.
    */
   BANK_RECONCILE: 0x04252,
+  /**
+   * 'SS' — recording a courier payout line against one order.
+   *
+   * A line's shortfall is the CHANGE in how far short the order's
+   * payments stand, read from the lines before it. Two payouts for the
+   * same order recorded at once would each read "no earlier line" and
+   * each recognise the whole gap.
+   */
+  SETTLEMENT_ORDER: 0x05353,
 } as const;
 
 /**

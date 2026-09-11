@@ -37,6 +37,8 @@ function makeSut(opts: {
   instantFeePercent?: string;
   collectionFeePercent?: string;
   alreadyCredited?: boolean;
+  /** The earlier credit was reversed by the courier — the order may be credited again. */
+  reversed?: boolean;
 }) {
   const entries: Entry[] = [];
   const withholdings: Array<Record<string, unknown>> = [];
@@ -47,13 +49,23 @@ function makeSut(opts: {
     // against a concurrent one, and a fake with no $executeRaw would let
     // an unlocked version pass this suite.
     $executeRaw: lockTaken,
+    // Credited iff more credits than reversals: a reversed COD may be
+    // credited again when the courier pays it on a later payout.
     sellerWalletEntry: {
-      findFirst: jest.fn(async () => (opts.alreadyCredited ? { id: 'existing' } : null)),
+      count: jest.fn(async ({ where }: { where: { direction: string } }) =>
+        where.direction === 'COD_COLLECTION'
+          ? opts.alreadyCredited || opts.reversed
+            ? 1
+            : 0
+          : opts.reversed
+            ? 1
+            : 0,
+      ),
     },
     gstWithholding: {
-      create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
-        withholdings.push(data);
-        return data;
+      upsert: jest.fn(async ({ create }: { create: Record<string, unknown> }) => {
+        withholdings.push(create);
+        return create;
       }),
     },
   } as unknown as Prisma.TransactionClient;
@@ -187,6 +199,21 @@ describe('CodCreditService — SETTLEMENT mode', () => {
     });
     expect(r.credited).toBe(false);
     expect(entries).toHaveLength(0);
+  });
+
+  it('credits again after the courier reversed the earlier credit', async () => {
+    // The courier reversed the COD by mistake and paid it on a later
+    // payout. Gating on "any credit exists" would leave the seller unpaid
+    // for good while their cash sat in capital.
+    const { svc, tx, entries } = makeSut({ reversed: true });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1000'),
+      mode: 'SETTLEMENT',
+    });
+    expect(r.credited).toBe(true);
+    expect(amountOf(entries, 'COD_COLLECTION')).toBe('1000.00');
   });
 
   it('writes nothing for a zero COD amount', async () => {

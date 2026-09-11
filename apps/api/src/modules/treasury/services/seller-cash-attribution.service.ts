@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BankEntryType, BankOwnerKind, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { BankLedgerService } from './bank-ledger.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -162,6 +163,97 @@ export class SellerCashAttributionService {
       fromSeller: input.amount.neg(),
       walletEntryId: input.walletEntryId,
       note: 'Refunded — cash theirs again',
+    });
+  }
+
+  /** What this seller holds in `currency` across every live account, and where most of it is. */
+  async sellerHeld(
+    tx: TxClient,
+    sellerId: string,
+    currency: Currency,
+  ): Promise<{ total: Prisma.Decimal; accountId: string | null }> {
+    return this.heldBySeller(tx, sellerId, currency);
+  }
+
+  /**
+   * How much of cash arriving for a seller REPAYS what they owe us.
+   *
+   * A charge taken while a seller held nothing wrote no bank entry — the
+   * debt was a receivable (TRE-8). When their cash later arrives (a COD
+   * payout, a top-up), the part of it that settles that debt is ours: it
+   * repays the receivable. Posting all of it as theirs held them money
+   * their wallet does not show. Read against the balance BEFORE the
+   * credit this cash backs, under the wallet lock (re-entrant within the
+   * transaction) so no concurrent write can move it underneath.
+   */
+  async debtSplit(
+    tx: TxClient,
+    sellerId: string,
+    amount: Prisma.Decimal,
+  ): Promise<{ toCapital: Prisma.Decimal; toSeller: Prisma.Decimal }> {
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+    const last = await tx.sellerWalletEntry.findFirst({
+      where: { sellerId, currency: Currency.INR },
+      orderBy: { id: 'desc' },
+      select: { runningBalanceAfter: true },
+    });
+    const balance = last?.runningBalanceAfter ?? ZERO;
+    const debt = balance.lessThan(0) ? balance.neg() : ZERO;
+    const toCapital = debt.lessThan(amount) ? debt : amount;
+    return { toCapital, toSeller: amount.sub(toCapital) };
+  }
+
+  /**
+   * Hold a seller cash that has not arrived yet, out of OUR money — the
+   * COD paid under Instant Pay before the courier settles. A zero-sum pair
+   * (capital → seller), so the account total does not move, posted BEFORE
+   * the credit so its tax and fee find cash to take. The payout later
+   * lands as capital's, repaying the front.
+   */
+  async front(
+    tx: TxClient,
+    input: {
+      sellerId: string;
+      amount: Prisma.Decimal;
+      accountId: string | null;
+      reference: string;
+    },
+  ): Promise<void> {
+    if (input.amount.lessThanOrEqualTo(0)) return;
+    const accountId = input.accountId ?? (await this.anyAccount(tx, Currency.INR));
+    if (accountId === null) return;
+    await this.pair(tx, {
+      accountId,
+      currency: Currency.INR,
+      sellerId: input.sellerId,
+      fromSeller: input.amount.neg(),
+      walletEntryId: input.reference,
+      note: 'Fronted from our money until the courier pays',
+    });
+  }
+
+  /**
+   * Cash that arrived as the seller's but repays what they owed: ours.
+   * A zero-sum pair in the account, and the currency, it landed in.
+   */
+  async repayDebt(
+    tx: TxClient,
+    input: {
+      sellerId: string;
+      accountId: string;
+      currency: Currency;
+      amount: Prisma.Decimal;
+      reference: string;
+    },
+  ): Promise<void> {
+    if (input.amount.lessThanOrEqualTo(0)) return;
+    await this.pair(tx, {
+      accountId: input.accountId,
+      currency: input.currency,
+      sellerId: input.sellerId,
+      fromSeller: input.amount,
+      walletEntryId: input.reference,
+      note: 'Repays what the seller owed — cash now ours',
     });
   }
 

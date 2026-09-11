@@ -8,6 +8,7 @@ import {
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
+import type { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -20,18 +21,29 @@ function makeSut(
   opts: {
     account?: AnyArgs | null;
     duplicate?: AnyArgs | null;
-    orders?: Array<{ id: string; orderNumber: string; codAmountInr: Prisma.Decimal | null }>;
+    orders?: Array<{
+      id: string;
+      orderNumber: string;
+      codAmountInr: Prisma.Decimal | null;
+      sellerId?: string;
+    }>;
     delivered?: AnyArgs[];
     shortfallThreshold?: string;
     receivingAccount?: null;
-    /** Orders creditForOrder reports as NOT credited by this payout (already were). */
+    /** Orders already credited (on an earlier payout). */
     alreadyCredited?: string[];
-    /** What each order was paid on earlier payouts. */
+    /** What each order was paid on earlier payouts, net. */
     priorSettled?: Record<string, string>;
+    /** The shortfall already recognised on each order by earlier lines. */
+    priorRecognised?: Record<string, string>;
     /** What reverseForOrder answers for a reversed order. */
     reverse?: { reversed: boolean; reason?: string };
-    /** Cash the reversed order's seller holds in the receiving account. */
+    /** Cash the reversed order's seller holds with us, across accounts. */
     sellerHeld?: string;
+    /** What each seller owes us before this payout (a positive number). */
+    debt?: Record<string, string>;
+    /** Waybill-bearing shipments of the payout's orders. */
+    shipments?: AnyArgs[];
   } = {},
 ) {
   // ONE lookup: the courier exists, and this is where its cash lands.
@@ -78,11 +90,15 @@ function makeSut(
     const where = (args['where'] ?? {}) as AnyArgs;
     // The reconciliation query filters on status; the record path filters on id.
     if (where['status'] === OrderStatus.DELIVERED) return opts.delivered ?? [];
-    return opts.orders ?? [];
+    const ids = (where['id'] as { in?: string[] } | undefined)?.in;
+    return (opts.orders ?? []).filter((o) => ids === undefined || ids.includes(o.id));
   });
 
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
+    // The per-order and wallet advisory locks.
+    $executeRaw: jest.fn(async () => 1),
+    shipment: { findMany: jest.fn(async () => opts.shipments ?? []) },
     courierAccount: { findFirst: accountFindFirst },
     courierSettlement: {
       findUnique: settlementFindUnique,
@@ -97,18 +113,17 @@ function makeSut(
         sellerId: 's-rto',
       })),
     },
-    // What each order was paid on EARLIER payouts.
+    // What each order was paid, and what was recognised, on EARLIER payouts.
     courierSettlementLine: {
       groupBy: jest.fn(async () =>
         Object.entries(opts.priorSettled ?? {}).map(([orderId, v]) => ({
           orderId,
-          _sum: { settledInr: D(v) },
+          _sum: {
+            settledInr: D(v),
+            shortfallInr: D(opts.priorRecognised?.[orderId] ?? '0'),
+          },
         })),
       ),
-    },
-    // What a reversed order's seller holds in the receiving account.
-    bankEntry: {
-      aggregate: jest.fn(async () => ({ _sum: { signedAmount: D(opts.sellerHeld ?? '0') } })),
     },
     // The early-COD fee's category, found or created on first use.
     expenseCategory: { upsert: jest.fn(async () => ({ id: 'cat-cod-fee' })) },
@@ -140,6 +155,9 @@ function makeSut(
   }));
   const codCredit = {
     resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+    isCredited: jest.fn(async (_tx: unknown, orderId: string) =>
+      (opts.alreadyCredited ?? []).includes(orderId),
+    ),
     creditForOrder,
     reverseForOrder,
   } as unknown as CodCreditService;
@@ -154,8 +172,25 @@ function makeSut(
   }));
   const bank = { post: bankPost } as unknown as BankLedgerService;
 
+  // The debt a seller's incoming cash repays, consumed as it is repaid.
+  // The real split is pinned in seller-cash-attribution.service.spec and
+  // end to end in settlement-bank-invariant.spec.
+  const debt = new Map(Object.entries(opts.debt ?? {}).map(([k, v]) => [k, D(v)]));
+  const attribution = {
+    sellerHeld: jest.fn(async () => ({
+      total: D(opts.sellerHeld ?? '0'),
+      accountId: 'bank-inr-1',
+    })),
+    debtSplit: jest.fn(async (_tx: unknown, sellerId: string, amount: Prisma.Decimal) => {
+      const owed = debt.get(sellerId) ?? D('0');
+      const toCapital = owed.lt(amount) ? owed : amount;
+      debt.set(sellerId, owed.sub(toCapital));
+      return { toCapital, toSeller: amount.sub(toCapital) };
+    }),
+  } as unknown as SellerCashAttributionService;
+
   return {
-    svc: new CourierSettlementService(prisma, audit, codCredit, wallet, bank),
+    svc: new CourierSettlementService(prisma, audit, codCredit, wallet, bank, attribution),
     creditForOrder,
     reverseForOrder,
     bankPost,
@@ -325,17 +360,46 @@ describe('CourierSettlementService.record', () => {
 });
 
 describe('recognisedShortfall', () => {
+  const rs = (
+    expected: string,
+    priorPaid: string,
+    priorRecognised: string,
+    settled: string,
+    reversal = false,
+  ): string =>
+    recognisedShortfall({
+      expected: D(expected),
+      priorPaid: D(priorPaid),
+      priorRecognised: D(priorRecognised),
+      settled: D(settled),
+      reversal,
+    }).toString();
+
   it('the first line for an order recognises its whole gap', () => {
-    expect(recognisedShortfall(D('600'), null, D('550')).toString()).toBe('50');
+    expect(rs('600', '0', '0', '550')).toBe('50');
   });
   it('a line that makes a gap up recognises a recovery', () => {
-    expect(recognisedShortfall(D('600'), D('550'), D('50')).toString()).toBe('-50');
+    expect(rs('600', '550', '50', '50')).toBe('-50');
   });
   it('overpayment is never a negative shortfall on a first line', () => {
-    expect(recognisedShortfall(D('600'), null, D('700')).toString()).toBe('0');
+    expect(rs('600', '0', '0', '700')).toBe('0');
   });
   it('a second payment on an order already paid in full recognises nothing', () => {
-    expect(recognisedShortfall(D('600'), D('600'), D('20')).toString()).toBe('0');
+    expect(rs('600', '600', '0', '20')).toBe('0');
+  });
+  it('a reversal of a short-paid order recovers what was absorbed', () => {
+    // Paid 550 of 600 (50 absorbed), then the courier takes the 550 back:
+    // the seller's credit is reversed too, so nothing is lost any more.
+    expect(rs('600', '550', '50', '-550', true)).toBe('-50');
+  });
+  it('a re-payment after a reversal starts afresh', () => {
+    // Paid, reversed (recognised back to 0, paid net 0), now paid 500 of 600.
+    expect(rs('600', '0', '0', '500')).toBe('100');
+  });
+  it('across an order’s lines the recognised amounts sum to the true gap', () => {
+    const first = rs('600', '0', '0', '300'); // 300
+    const second = rs('600', '300', first, '200'); // 100 − 300 = −200
+    expect(D(first).add(D(second)).toString()).toBe('100');
   });
 });
 
@@ -423,6 +487,11 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     { id: 'o-1', orderNumber: 'SD-2026-07-000001', codAmountInr: D('600.00') },
     { id: 'o-2', orderNumber: 'SD-2026-07-000002', codAmountInr: D('400.00') },
   ];
+  // An order paid out on an earlier payout, now reversed.
+  const withReversed = [
+    ...orders,
+    { id: 'o-9', orderNumber: 'SD-2026-07-000009', codAmountInr: D('300.00'), sellerId: 's-rto' },
+  ];
 
   it('holds each seller what we CREDITED them, not what the courier remitted', async () => {
     // The courier pays 950 against 1000 of orders. The sellers are still
@@ -443,8 +512,8 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     const seller = posts.filter((p) => ownerKind(p) === 'SELLER');
     const capital = posts.filter((p) => ownerKind(p) === 'CAPITAL');
 
-    expect(seller).toHaveLength(1); // both orders belong to one seller
-    expect(String(seller[0]?.['signedAmount'])).toBe('1000');
+    // One entry per order credited, posted before its credit.
+    expect(seller.map((p) => String(p['signedAmount']))).toEqual(['600', '400']);
     expect(capital).toHaveLength(1);
     expect(String(capital[0]?.['signedAmount'])).toBe('-50');
   });
@@ -610,7 +679,11 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
   it('takes a reversed COD back from the seller who holds it — the account moves by what landed', async () => {
     // ₹1,000 of COD collected, ₹300 clawed back for an order paid out
     // earlier that then returned: ₹700 lands.
-    const sut = makeSut({ orders, sellerHeld: '5000' });
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '300.00' },
+      sellerHeld: '5000',
+    });
     await sut.svc.record(STAFF, {
       ...BASE,
       amountInr: '700.00',
@@ -636,10 +709,23 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     const net = posts.reduce((t, p) => t.add(p['signedAmount'] as Prisma.Decimal), D('0'));
     expect(net.toString()).toBe('700');
     expect(sut.created[0]?.['rtoReversalInr']).toEqual(D('300.00'));
+    // The reversal is a NEGATIVE line, so the payout is explained in full.
+    expect(sut.created[0]?.['allocatedInr']).toEqual(D('700.00'));
+    const lines = (sut.created[0]!['lines'] as AnyArgs)['create'] as AnyArgs[];
+    const rev = lines.find((l) => l['orderId'] === 'o-9');
+    expect(String(rev?.['settledInr'])).toBe('-300');
+    expect(sut.auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'wallet.courier_settlement.recorded', severity: 'MEDIUM' }),
+      expect.anything(),
+    );
   });
 
   it('beyond what the seller holds, a reversal leaves capital — their wallet shows the debt', async () => {
-    const sut = makeSut({ orders, sellerHeld: '250' });
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '300.00' },
+      sellerHeld: '250',
+    });
     await sut.svc.record(STAFF, {
       ...BASE,
       amountInr: '700.00',
@@ -658,7 +744,11 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
   });
 
   it('a reversal of an order never credited comes out of capital', async () => {
-    const sut = makeSut({ orders, reverse: { reversed: false, reason: 'NEVER_CREDITED' } });
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '300.00' },
+      reverse: { reversed: false, reason: 'NEVER_CREDITED' },
+    });
     await sut.svc.record(STAFF, {
       ...BASE,
       amountInr: '700.00',
@@ -703,7 +793,11 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
   });
 
   it('refuses to reverse the same COD twice', async () => {
-    const sut = makeSut({ orders, reverse: { reversed: false, reason: 'ALREADY_REVERSED' } });
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '300.00' },
+      reverse: { reversed: false, reason: 'ALREADY_REVERSED' },
+    });
     await expect(
       sut.svc.record(STAFF, {
         ...BASE,
@@ -720,7 +814,11 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
   it('records each line’s shortfall as the CHANGE — a later top-up is a recovery', async () => {
     // o-1 was paid ₹550 of ₹600 before (₹50 short, recognised then).
     // This payout brings the last ₹50: the line recognises −₹50.
-    const sut = makeSut({ orders, priorSettled: { 'o-1': '550.00' } });
+    const sut = makeSut({
+      orders,
+      priorSettled: { 'o-1': '550.00' },
+      priorRecognised: { 'o-1': '50.00' },
+    });
     await sut.svc.record(STAFF, {
       ...BASE,
       amountInr: '350.00',
@@ -733,6 +831,176 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     const byOrder = new Map(created.map((l) => [l['orderId'], String(l['shortfallInr'])]));
     expect(byOrder.get('o-1')).toBe('-50');
     expect(byOrder.get('o-2')).toBe('100');
+  });
+
+  it('refuses a reversal of an order no recorded payout paid', async () => {
+    const sut = makeSut({ orders: withReversed });
+    await expect(
+      sut.svc.record(STAFF, {
+        ...BASE,
+        amountInr: '700.00',
+        deductions: { rtoReversals: [{ orderId: 'o-9', amountInr: '300.00' }] },
+        lines: [
+          { orderId: 'o-1', settledInr: '600.00' },
+          { orderId: 'o-2', settledInr: '400.00' },
+        ],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_RTO_REVERSAL_NOT_PAID' } });
+  });
+
+  it('refuses a reversal that is not exactly what the courier paid on the order', async () => {
+    const sut = makeSut({ orders: withReversed, priorSettled: { 'o-9': '300.00' } });
+    await expect(
+      sut.svc.record(STAFF, {
+        ...BASE,
+        amountInr: '750.00',
+        deductions: { rtoReversals: [{ orderId: 'o-9', amountInr: '250.00' }] },
+        lines: [
+          { orderId: 'o-1', settledInr: '600.00' },
+          { orderId: 'o-2', settledInr: '400.00' },
+        ],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_RTO_REVERSAL_AMOUNT_MISMATCH' } });
+  });
+
+  it('a reversal of a SHORT-PAID order is booked at what was paid, and recovers the absorbed gap', async () => {
+    // o-9 (COD 300) was paid 250 — 50 absorbed as a short-payment. The
+    // courier now takes the 250 back. The seller's whole ₹300 credit goes,
+    // so the ₹50 loss no longer exists: the line recognises −50.
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '250.00' },
+      priorRecognised: { 'o-9': '50.00' },
+      sellerHeld: '5000',
+    });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '750.00',
+      deductions: { rtoReversals: [{ orderId: 'o-9', amountInr: '250.00' }] },
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    const lines = (sut.created[0]!['lines'] as AnyArgs)['create'] as AnyArgs[];
+    const rev = lines.find((l) => l['orderId'] === 'o-9');
+    expect(String(rev?.['settledInr'])).toBe('-250');
+    expect(String(rev?.['shortfallInr'])).toBe('-50');
+  });
+
+  it('refuses an order that is both paid and reversed in one payout', async () => {
+    const sut = makeSut({ orders: withReversed, priorSettled: { 'o-1': '600.00' } });
+    await expect(
+      sut.svc.record(STAFF, {
+        ...BASE,
+        amountInr: '400.00',
+        deductions: { rtoReversals: [{ orderId: 'o-1', amountInr: '600.00' }] },
+        lines: [
+          { orderId: 'o-1', settledInr: '600.00' },
+          { orderId: 'o-2', settledInr: '400.00' },
+        ],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_ORDER_REPEATED' } });
+  });
+
+  it('a seller in debt has it repaid from the COD — only the rest is held for them', async () => {
+    // The seller owes ₹700 (charges taken while they held nothing). Of
+    // ₹1,000 of their COD arriving, ₹700 settles that debt and is ours;
+    // ₹300 is theirs.
+    const sut = makeSut({
+      orders: orders.map((o) => ({ ...o, sellerId: 's-1' })),
+      debt: { 's-1': '700' },
+    });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    expect(
+      posts.filter((p) => ownerKind(p) === 'SELLER').map((p) => String(p['signedAmount'])),
+    ).toEqual(['300']);
+    expect(
+      posts.filter((p) => ownerKind(p) === 'CAPITAL').map((p) => String(p['signedAmount'])),
+    ).toEqual(['700']);
+    // Seller cash is posted BEFORE the credit, so the credit's tax and fee
+    // find it (the order the fix depends on). o-1's COD all went to the
+    // debt, so the one seller post is o-2's — ahead of o-2's credit.
+    const o2Credit = sut.creditForOrder.mock.invocationCallOrder[1] ?? 0;
+    const o2Post = sut.bankPost.mock.invocationCallOrder[0] ?? Infinity;
+    expect(o2Post).toBeLessThan(o2Credit);
+  });
+
+  it('refuses an order a different courier account carried', async () => {
+    const sut = makeSut({
+      orders,
+      shipments: [
+        {
+          courierAccountId: 'acct-shiprocket',
+          courierCode: 'shiprocket',
+          orderShipments: [{ orderId: 'o-1' }],
+        },
+      ],
+    });
+    await expect(
+      sut.svc.record(STAFF, {
+        ...BASE,
+        lines: [
+          { orderId: 'o-1', settledInr: '600.00' },
+          { orderId: 'o-2', settledInr: '400.00' },
+        ],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_ORDER_OTHER_COURIER' } });
+  });
+
+  it('accepts an order this account carried, even after a failover off another', async () => {
+    const sut = makeSut({
+      orders,
+      shipments: [
+        {
+          courierAccountId: 'acct-other',
+          courierCode: 'delhivery',
+          orderShipments: [{ orderId: 'o-1' }],
+        },
+        {
+          courierAccountId: ACCOUNT,
+          courierCode: 'delhivery',
+          orderShipments: [{ orderId: 'o-1' }],
+        },
+      ],
+    });
+    await expect(
+      sut.svc.record(STAFF, {
+        ...BASE,
+        lines: [
+          { orderId: 'o-1', settledInr: '600.00' },
+          { orderId: 'o-2', settledInr: '400.00' },
+        ],
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('measures the shortfall alert against the WHOLE payout, not the short lines', async () => {
+    // ₹50 short on ₹1,000 is 5%. Over the short line alone it read 8.3%,
+    // and a 6% threshold called it a CRITICAL breach.
+    const sut = makeSut({ orders, shortfallThreshold: '6.00' });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '950.00',
+      lines: [
+        { orderId: 'o-1', settledInr: '550.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    expect(sut.auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'wallet.courier_settlement.shortfall',
+        severity: 'MEDIUM',
+        metadata: expect.objectContaining({ shortfallPercent: '5.00' }),
+      }),
+    );
   });
 
   it('refuses to record a payout with no bank account behind it', async () => {
@@ -794,6 +1062,7 @@ describe('CourierSettlementService.allocateMore', () => {
           receivedAt: new Date('2026-07-20T10:00:00.000Z'),
           courierAccount: {
             id: ACCOUNT,
+            courier: { code: 'delhivery' },
             payoutBankAccount: {
               id: 'bank-inr-1',
               currency: 'INR',
@@ -812,6 +1081,8 @@ describe('CourierSettlementService.allocateMore', () => {
           async () => opts.orders ?? [{ id: 'o-2', sellerId: 's-1', codAmountInr: D('400.00') }],
         ),
       },
+      shipment: { findMany: jest.fn(async () => []) },
+      $executeRaw: jest.fn(async () => 1),
       $transaction: async (fn: (tx: unknown) => unknown) => fn(client),
     } as AnyArgs;
     const prisma = { client } as unknown as PrismaService;
@@ -820,10 +1091,17 @@ describe('CourierSettlementService.allocateMore', () => {
       { log: jest.fn(async () => 'a1') } as unknown as AuditLogService,
       {
         resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+        isCredited: jest.fn(async () => false),
         creditForOrder: jest.fn(async () => ({ credited: true })),
       } as unknown as CodCreditService,
       { recomputeCacheAfterCommit: jest.fn(async () => undefined) } as unknown as WalletService,
       { post: bankPost } as unknown as BankLedgerService,
+      {
+        debtSplit: jest.fn(async (_tx: unknown, _s: string, amount: Prisma.Decimal) => ({
+          toCapital: D('0'),
+          toSeller: amount,
+        })),
+      } as unknown as SellerCashAttributionService,
     );
     // getById reads back through the same client; stub it out — the
     // return shape is pinned by record()'s own tests.

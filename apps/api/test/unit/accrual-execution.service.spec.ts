@@ -94,6 +94,8 @@ function makeService(
     // And when that fails it says so on the board, rather than only in
     // a log line that already knew the consequence.
     { raise: raiseIssue } as never,
+    // Instant Pay fronts; these fixtures are all SETTLEMENT.
+    { debtSplit: jest.fn(), front: jest.fn() } as never,
   );
   return {
     svc,
@@ -251,6 +253,7 @@ describe('AccrualExecutionService.executeAccrual', () => {
       // none would be billed nothing, silently.
       { persistForOrderSystem } as never,
       { raise: raiseIssue } as never,
+      { debtSplit: jest.fn(), front: jest.fn() } as never,
     );
 
     await svc.executeAccrual('order-1');
@@ -258,6 +261,104 @@ describe('AccrualExecutionService.executeAccrual', () => {
     // One ORDER_CHARGES debit, never twice. COD is not credited at
     // delivery on the default SETTLEMENT mode.
     expect(applyEntry).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Instant Pay credits the seller at delivery, before the courier pays us.
+ * The cash behind that credit is OURS, fronted — so it is held for the
+ * seller from capital, BEFORE the credit, so the credit's tax and fee find
+ * cash to take back. Without it the seller's credit had nothing behind it
+ * and the deductions were taken from whatever else they held.
+ */
+describe('AccrualExecutionService — Instant Pay fronts the COD', () => {
+  function makeInstant(opts: { credited?: boolean; debtRepaid?: string } = {}) {
+    const tx = {
+      $executeRaw: jest.fn(async () => 1),
+      sellerWalletEntry: { findFirst: jest.fn(async () => null) },
+      orderCharge: { findMany: jest.fn(async () => []) },
+      shipment: {
+        findFirst: jest.fn(async () => ({
+          courierAccount: {
+            payoutBankAccount: { id: 'hdfc', currency: 'INR', isActive: true, deletedAt: null },
+          },
+        })),
+      },
+    };
+    const client = {
+      order: {
+        findUnique: jest.fn(async () => ({
+          id: 'order-1',
+          sellerId: 'seller-1',
+          paymentMode: PaymentMode.COD,
+          codAmountInr: new Prisma.Decimal('1000'),
+        })),
+      },
+      $transaction: jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)),
+    };
+    const wallet = {
+      applyEntry: jest.fn(async () => ({ id: 'e', runningBalanceAfter: new Prisma.Decimal(0) })),
+      recomputeCacheAfterCommit: jest.fn(async () => undefined),
+    };
+    const creditForOrder = jest.fn(async () => ({ credited: true }));
+    const codCredit = {
+      resolveMode: jest.fn(async () => 'INSTANT_PAY' as const),
+      isCredited: jest.fn(async () => opts.credited ?? false),
+      creditForOrder,
+    };
+    const repaid = new Prisma.Decimal(opts.debtRepaid ?? '0');
+    const front = jest.fn(async () => undefined);
+    const attribution = {
+      debtSplit: jest.fn(async (_t: unknown, _s: string, amount: Prisma.Decimal) => ({
+        toCapital: repaid,
+        toSeller: amount.sub(repaid),
+      })),
+      front,
+    };
+    const svc = new AccrualExecutionService(
+      { client } as unknown as PrismaService,
+      wallet as unknown as WalletService,
+      new OrderChargesAccrualService(wallet as unknown as WalletService),
+      {
+        debitForDeliveredOrder: jest.fn(async () => ({
+          amountInr: '0',
+          unitsCharged: 0,
+          alreadyCharged: false,
+        })),
+      } as unknown as InboundFreightAmortisationService,
+      codCredit as unknown as CodCreditService,
+      { persistForOrderSystem } as never,
+      { raise: raiseIssue } as never,
+      attribution as never,
+    );
+    return { svc, front, creditForOrder };
+  }
+
+  it('holds the COD for the seller from our money, BEFORE the credit, in the courier’s account', async () => {
+    const { svc, front, creditForOrder } = makeInstant();
+    await svc.executeAccrual('order-1');
+    expect(front).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sellerId: 'seller-1', accountId: 'hdfc', reference: 'order-1' }),
+    );
+    const call = front.mock.calls[0] as unknown as [unknown, { amount: Prisma.Decimal }];
+    expect(call[1].amount.toString()).toBe('1000');
+    expect(front.mock.invocationCallOrder[0] ?? Infinity).toBeLessThan(
+      creditForOrder.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('fronts only what is not repaying a debt', async () => {
+    const { svc, front } = makeInstant({ debtRepaid: '400' });
+    await svc.executeAccrual('order-1');
+    const call = front.mock.calls[0] as unknown as [unknown, { amount: Prisma.Decimal }];
+    expect(call[1].amount.toString()).toBe('600');
+  });
+
+  it('fronts nothing for an order already credited', async () => {
+    const { svc, front } = makeInstant({ credited: true });
+    await svc.executeAccrual('order-1');
+    expect(front).not.toHaveBeenCalled();
   });
 });
 

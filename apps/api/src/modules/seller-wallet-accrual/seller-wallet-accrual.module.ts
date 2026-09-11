@@ -22,6 +22,9 @@ import { PendingAccrualSweepService } from './services/pending-accrual-sweep.ser
 import { PricingModule } from '../pricing/pricing.module';
 import { InboundFreightModule } from '../inbound-freight/inbound-freight.module';
 import { SystemIssuesModule } from '../system-issues/system-issues.module';
+// Instant Pay fronts the COD from our money, as a bank-book pair. No
+// cycle: treasury imports prisma and auth-common only.
+import { TreasuryModule } from '../treasury/treasury.module';
 
 /**
  * Phase 1B M22 — COD accrual on DELIVERED.
@@ -64,6 +67,7 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     // An order credited without being billed is revenue lost silently,
     // one order at a time — it now says so on the board (MONEY).
     SystemIssuesModule,
+    TreasuryModule,
   ],
   controllers: [AdminChargesBillingController],
   providers: [
