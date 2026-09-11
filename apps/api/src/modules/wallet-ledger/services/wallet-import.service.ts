@@ -1,8 +1,14 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { ActorType, Prisma } from '@skydrop/db';
+import {
+  ActorType,
+  CourierWalletTxnCategory,
+  CourierWalletTxnKind,
+  CredentialEnvironment,
+  Prisma,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { LedgerFormatError, parseWalletLedger, type LedgerCharge } from './wallet-ledger-parser';
+import { LedgerFormatError, parseWalletLedger, type LedgerTxn } from './wallet-ledger-parser';
 
 /**
  * How many written costs are listed by NAME on the result.
@@ -16,6 +22,13 @@ import { LedgerFormatError, parseWalletLedger, type LedgerCharge } from './walle
  * convenience, never the source of truth.
  */
 const WRITE_DETAIL_CAP = 100;
+
+/** Rows per insert. Large enough that 23,000 transactions is a handful
+ *  of round trips, small enough to stay well under Postgres's parameter
+ *  limit with fourteen columns apiece. */
+const TXN_CHUNK = 500;
+/** AWBs per grouped read, for the same reason. */
+const AWB_CHUNK = 1000;
 
 export interface WalletImportResult {
   readonly rowsRead: number;
@@ -53,6 +66,28 @@ export interface WalletImportResult {
    */
   readonly writes: readonly WalletImportWrite[];
   readonly writesTruncated: number;
+  /** Transactions this import added to our ledger. */
+  readonly txnsNew: number;
+  /** Transactions in the file we already held — the overlap a 90-day
+   *  window re-reads every night, and the reason the window can be wide
+   *  at no cost. */
+  readonly txnsAlreadyHeld: number;
+  /**
+   * Transactions that came back CHANGED — a different amount, direction
+   * or waybill than we recorded.
+   *
+   * Should always be zero: they correct a charge by adding a reversal,
+   * not by editing history. A non-zero here means our copy and theirs
+   * disagree about a past fact, and it is reported rather than applied.
+   */
+  readonly txnsMutated: number;
+  /** Ledger-level entries in the file — reconciliations, settlements,
+   *  credit notes. Not a parcel's cost; their own P&L line. */
+  readonly adjustments: number;
+  readonly adjustmentsNetInr: string;
+  /** The file's own arithmetic: opening + recharges + refunds − deductions.
+   *  Null when the Summary sheet is absent. */
+  readonly impliedClosingInr: string | null;
 }
 
 export interface WalletImportWrite {
@@ -151,7 +186,38 @@ export class WalletImportService {
       });
     }
 
-    const awbs = new Set([...parsed.forward.keys(), ...parsed.rto.keys()]);
+    /*
+      ── STEP 1: THE LEDGER, STORED ────────────────────────────────────
+
+      Their txn id is the identity, unique per account, so this inserts
+      what is new and leaves everything else alone. A transaction is a
+      historical fact: once recorded it must never change, and a row
+      that comes back with a DIFFERENT amount is not an update — it is
+      either their bug or something worse, so it is COUNTED and reported
+      rather than applied.
+    */
+    /*
+      WHICH ACCOUNT THIS LEDGER IS.
+
+      Required, and resolved rather than assumed. Every transaction is
+      stored under an account, and the cost is then netted from what the
+      TABLE holds — so an import with no account stored nothing and
+      netted a ledger that did not contain the file, silently writing
+      costs from whatever was already there. That was the manual
+      upload's shape: the controller never passed one.
+
+      The default active Delhivery account is used when the caller does
+      not say, mirroring CourierAccountRoutingService's default lookup,
+      and the import is REFUSED when there is none. Guessing would file
+      one company's ledger under another's, and "not ours" would stop
+      meaning anything on both.
+    */
+    const courierAccountId = opts.courierAccountId ?? (await this.defaultAccountId());
+    const stored = await this.storeTransactions(parsed.txns, courierAccountId, dryRun);
+
+    const awbs = new Set(
+      parsed.txns.map((t) => t.awbNumber).filter((a): a is string => a !== null),
+    );
     const shipments = await this.prisma.client.shipment.findMany({
       where: {
         awbNumber: { in: [...awbs] },
@@ -168,9 +234,7 @@ export class WalletImportService {
         // BACKFILLED below — the courier's own ledger is the authority
         // on whose account carried a parcel, which is what CACC-1 wants
         // recorded.
-        ...(opts.courierAccountId === undefined
-          ? {}
-          : { OR: [{ courierAccountId: opts.courierAccountId }, { courierAccountId: null }] }),
+        OR: [{ courierAccountId }, { courierAccountId: null }],
       },
       select: {
         id: true,
@@ -178,8 +242,6 @@ export class WalletImportService {
         actualCourierCostInr: true,
         actualRtoCostInr: true,
         courierAccountId: true,
-        // So a written cost can be reported against the order somebody
-        // would recognise, rather than only against a waybill.
         orderShipments: {
           orderBy: { shipmentSequence: 'asc' },
           take: 1,
@@ -189,6 +251,28 @@ export class WalletImportService {
     });
     const byAwb = new Map(shipments.map((s) => [s.awbNumber ?? '', s]));
 
+    /*
+      ── STEP 2: THE COST, NETTED FROM OUR OWN LEDGER ──────────────────
+
+      `Σ debits − Σ credits` per parcel per leg, read back from the
+      TABLE rather than computed from this file.
+
+      That distinction is the whole point of storing them. The nightly
+      export is a WINDOW: a parcel charged in June and credited today
+      appears in today's file with the credit alone, and netting the
+      file would report its cost as NEGATIVE the refund. Netting our own
+      ledger — which holds both — gives the truth.
+
+      ADJUSTMENTS are excluded here even when they name an AWB. A
+      monthly reconciliation or a fraud credit note is an account-level
+      cost, and 36 of the 37 on the 90-day sample carried a waybill, so
+      including them would put a settlement for fraud into the price of
+      moving one box.
+    */
+    const netByAwbLeg = dryRun
+      ? this.netFromFile(parsed.txns)
+      : await this.netFromLedger([...awbs]);
+
     let forwardWritten = 0;
     let rtoWritten = 0;
     let unchanged = 0;
@@ -196,11 +280,15 @@ export class WalletImportService {
     const writes: WalletImportWrite[] = [];
     let writesTruncated = 0;
 
-    const apply = async (charge: LedgerCharge, leg: 'forward' | 'rto'): Promise<void> => {
-      const ship = byAwb.get(charge.awbNumber);
+    const apply = async (
+      awbNumber: string,
+      leg: 'forward' | 'rto',
+      next: Prisma.Decimal,
+      chargedAt: Date,
+    ): Promise<void> => {
+      const ship = byAwb.get(awbNumber);
       if (ship === undefined) return;
       const current = leg === 'forward' ? ship.actualCourierCostInr : ship.actualRtoCostInr;
-      const next = new Prisma.Decimal(charge.amountInr);
       if (current !== null && current.equals(next)) {
         unchanged += 1;
         return;
@@ -216,7 +304,7 @@ export class WalletImportService {
       // is most wanted.
       if (writes.length < WRITE_DETAIL_CAP) {
         writes.push({
-          awbNumber: charge.awbNumber,
+          awbNumber,
           orderNumber: ship.orderShipments[0]?.order.orderNumber ?? null,
           leg,
           amountInr: next.toString(),
@@ -230,21 +318,58 @@ export class WalletImportService {
 
       // Repair the attribution while we are here: the ledger this was
       // read from IS the account that carried it.
-      const attribute =
-        opts.courierAccountId !== undefined && ship.courierAccountId === null
-          ? { courierAccountId: opts.courierAccountId }
-          : {};
+      const attribute = ship.courierAccountId === null ? { courierAccountId } : {};
       await this.prisma.client.shipment.update({
         where: { id: ship.id },
         data:
           leg === 'forward'
-            ? { actualCourierCostInr: next, actualCourierCostAt: charge.chargedAt, ...attribute }
-            : { actualRtoCostInr: next, actualRtoCostAt: charge.chargedAt, ...attribute },
+            ? { actualCourierCostInr: next, actualCourierCostAt: chargedAt, ...attribute }
+            : { actualRtoCostInr: next, actualRtoCostAt: chargedAt, ...attribute },
       });
     };
 
-    for (const charge of parsed.forward.values()) await apply(charge, 'forward');
-    for (const charge of parsed.rto.values()) await apply(charge, 'rto');
+    for (const [key, net] of netByAwbLeg) {
+      const sep = key.lastIndexOf('|');
+      const awbNumber = key.slice(0, sep);
+      const leg = key.slice(sep + 1) === 'RTO' ? 'rto' : 'forward';
+      await apply(awbNumber, leg, net.amount, net.latestAt);
+    }
+
+    /*
+      ── THE FILE'S OWN ARITHMETIC ─────────────────────────────────────
+
+      opening + recharges + refunds − deductions = the closing balance
+      their wallet shows. Every row of the export is on one side of that
+      identity, so a truncated or edited file breaks it — which is the
+      strongest integrity check available here, far stronger than the
+      per-sheet total it sits beside.
+
+      Computed and reported rather than enforced: it is the reconcile's
+      job to decide what a mismatch means, and refusing an import over
+      arithmetic would stop costs landing for a reason nobody can act on
+      at 3am.
+    */
+    const sm = parsed.summary;
+    const impliedClosing =
+      sm.openingBalanceInr !== null &&
+      sm.totalRechargesInr !== null &&
+      sm.totalRefundsInr !== null &&
+      sm.totalDeductionsInr !== null
+        ? new Prisma.Decimal(sm.openingBalanceInr)
+            .add(sm.totalRechargesInr)
+            .add(sm.totalRefundsInr)
+            .sub(sm.totalDeductionsInr)
+            .toFixed(2)
+        : null;
+
+    // Ledger-level entries, kept apart from every parcel. Netted the
+    // same way: a debit costs us, a credit gives back.
+    const adjustmentTxns = parsed.txns.filter((t) => t.category === 'ADJUSTMENT');
+    let adjustmentsNet = new Prisma.Decimal(0);
+    for (const t of adjustmentTxns) {
+      adjustmentsNet =
+        t.kind === 'DEBIT' ? adjustmentsNet.add(t.amountInr) : adjustmentsNet.sub(t.amountInr);
+    }
 
     const unknownAwbs = [...awbs].filter((a) => !byAwb.has(a)).length;
 
@@ -265,6 +390,12 @@ export class WalletImportService {
       dryRun,
       writes,
       writesTruncated,
+      txnsNew: stored.created,
+      txnsAlreadyHeld: stored.existing,
+      txnsMutated: stored.mutated.length,
+      adjustments: adjustmentTxns.length,
+      adjustmentsNetInr: adjustmentsNet.toFixed(2),
+      impliedClosingInr: impliedClosing,
     };
 
     if (!dryRun) {
@@ -287,5 +418,155 @@ export class WalletImportService {
     }
     this.logger.log({ ...result }, 'Delhivery wallet ledger imported');
     return result;
+  }
+
+  /** The default active production Delhivery account — the same lookup
+   *  CourierAccountRoutingService falls back to. Refuses rather than
+   *  guessing when there is none. */
+  private async defaultAccountId(): Promise<string> {
+    const acct = await this.prisma.client.courierAccount.findFirst({
+      where: {
+        courier: { code: 'delhivery' },
+        environment: CredentialEnvironment.PRODUCTION,
+        isDefault: true,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (acct === null) {
+      throw new BadRequestException({
+        code: 'NO_DEFAULT_COURIER_ACCOUNT',
+        message:
+          'No default active Delhivery account to file this ledger under. Say which account ' +
+          'the export belongs to, or mark one as the default on /courier-accounts.',
+      });
+    }
+    return acct.id;
+  }
+
+  /**
+   * Insert what is new; never rewrite what is there.
+   *
+   * Their txn id is unique per account, so a re-import of an overlapping
+   * window is a no-op for everything already held. `createMany` with
+   * `skipDuplicates` does that in one round trip per chunk rather than
+   * 23,276 of them.
+   *
+   * The MUTATION CHECK is separate and deliberate: a transaction whose
+   * amount, direction or waybill has changed since we recorded it is
+   * not a correction to apply, it is a statement that our copy and
+   * theirs disagree about a past fact. Delhivery corrects a charge by
+   * adding a reversal, not by editing history, so this should never
+   * fire — which is exactly why it is worth watching.
+   */
+  private async storeTransactions(
+    txns: readonly LedgerTxn[],
+    courierAccountId: string,
+    dryRun: boolean,
+  ): Promise<{ created: number; existing: number; mutated: LedgerTxn[] }> {
+    if (txns.length === 0) return { created: 0, existing: 0, mutated: [] };
+
+    const byId = new Map(txns.map((t) => [t.txnId, t]));
+    const held = await this.prisma.client.courierWalletTransaction.findMany({
+      where: { courierAccountId, txnId: { in: [...byId.keys()] } },
+      select: { txnId: true, amountInr: true, kind: true, awbNumber: true },
+    });
+
+    const mutated: LedgerTxn[] = [];
+    for (const h of held) {
+      const t = byId.get(h.txnId);
+      if (t === undefined) continue;
+      const changed =
+        !h.amountInr.equals(new Prisma.Decimal(t.amountInr)) ||
+        h.kind !== t.kind ||
+        (h.awbNumber ?? null) !== t.awbNumber;
+      if (changed) mutated.push(t);
+    }
+
+    const fresh = txns.filter((t) => !held.some((h) => h.txnId === t.txnId));
+    if (!dryRun && fresh.length > 0) {
+      for (let i = 0; i < fresh.length; i += TXN_CHUNK) {
+        await this.prisma.client.courierWalletTransaction.createMany({
+          data: fresh.slice(i, i + TXN_CHUNK).map((t) => ({
+            courierAccountId,
+            txnId: t.txnId,
+            awbNumber: t.awbNumber,
+            kind: t.kind,
+            category: t.category,
+            leg: t.leg,
+            amountInr: new Prisma.Decimal(t.amountInr),
+            occurredAt: t.occurredAt,
+            status: t.status,
+            shipmentStatus: t.shipmentStatus,
+            ...(t.detail === null ? {} : { detail: t.detail as Prisma.InputJsonValue }),
+          })),
+          // Belt to the unique index's braces: two imports racing on the
+          // same window must not fail, they must agree.
+          skipDuplicates: true,
+        });
+      }
+    }
+    return { created: fresh.length, existing: held.length, mutated };
+  }
+
+  /**
+   * `Σ debits − Σ credits` per parcel per leg, from OUR ledger.
+   *
+   * Grouped in the database rather than loaded and summed here: the
+   * table holds every transaction ever seen, and a parcel's history can
+   * span months even though each file covers ninety days.
+   *
+   * Only PARCEL rows. An adjustment is an account-level cost and has
+   * its own report line (see the P&L); letting one through here would
+   * put a fraud settlement into the price of moving one box.
+   */
+  private async netFromLedger(
+    awbs: readonly string[],
+  ): Promise<Map<string, { amount: Prisma.Decimal; latestAt: Date }>> {
+    const out = new Map<string, { amount: Prisma.Decimal; latestAt: Date }>();
+    if (awbs.length === 0) return out;
+
+    for (let i = 0; i < awbs.length; i += AWB_CHUNK) {
+      const rows = await this.prisma.client.courierWalletTransaction.groupBy({
+        by: ['awbNumber', 'leg', 'kind'],
+        where: {
+          awbNumber: { in: awbs.slice(i, i + AWB_CHUNK) },
+          category: CourierWalletTxnCategory.PARCEL,
+        },
+        _sum: { amountInr: true },
+        _max: { occurredAt: true },
+      });
+      for (const r of rows) {
+        if (r.awbNumber === null) continue;
+        const key = `${r.awbNumber}|${r.leg}`;
+        const held = out.get(key) ?? { amount: new Prisma.Decimal(0), latestAt: new Date(0) };
+        const amt = r._sum.amountInr ?? new Prisma.Decimal(0);
+        held.amount =
+          r.kind === CourierWalletTxnKind.DEBIT ? held.amount.add(amt) : held.amount.sub(amt);
+        const at = r._max.occurredAt;
+        if (at !== null && at > held.latestAt) held.latestAt = at;
+        out.set(key, held);
+      }
+    }
+    return out;
+  }
+
+  /** The same arithmetic over the FILE, for a dry run — which must not
+   *  read back rows it has deliberately not written. */
+  private netFromFile(
+    txns: readonly LedgerTxn[],
+  ): Map<string, { amount: Prisma.Decimal; latestAt: Date }> {
+    const out = new Map<string, { amount: Prisma.Decimal; latestAt: Date }>();
+    for (const t of txns) {
+      if (t.awbNumber === null || t.category !== 'PARCEL') continue;
+      const key = `${t.awbNumber}|${t.leg}`;
+      const held = out.get(key) ?? { amount: new Prisma.Decimal(0), latestAt: new Date(0) };
+      const amt = new Prisma.Decimal(t.amountInr);
+      held.amount = t.kind === 'DEBIT' ? held.amount.add(amt) : held.amount.sub(amt);
+      if (t.occurredAt > held.latestAt) held.latestAt = t.occurredAt;
+      out.set(key, held);
+    }
+    return out;
   }
 }

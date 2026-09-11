@@ -65,7 +65,6 @@ export class WalletLedgerPage {
    * warning rather than as costs that quietly stop updating.
    */
   private async setDateRange(from: Date, to: Date): Promise<boolean> {
-    const iso = (d: Date): string => d.toISOString().slice(0, 10);
     const trigger = this.page.getByText(/date range/i).first();
     const found = await trigger
       .waitFor({ state: 'visible', timeout: 5_000 })
@@ -75,6 +74,59 @@ export class WalletLedgerPage {
 
     try {
       await trigger.click();
+      // The panel animates in; its buttons are not hittable immediately.
+      await this.page.waitForTimeout(700);
+
+      /*
+        ── THE PRESET, NOT THE CALENDAR ──────────────────────────────
+
+        Their picker is a list of named ranges — Today, Yesterday, This
+        Week, … Last 90 Days, Custom — beside a month grid, and then a
+        Done button. It has no `input[type="date"]` anywhere, which is
+        why the old code below never applied anything: it looked for two
+        date inputs, found none, and returned false. Every export came
+        back at their default width while `rangeApplied: false` recorded
+        the fact nightly and nobody read it.
+
+        Clicking the named preset is also far more robust than driving a
+        calendar to two arbitrary dates: one click, no month paging, and
+        no chance of landing on the wrong year.
+
+        Ninety days is as far back as the list goes, which is why the
+        window setting is ninety and not more.
+      */
+      const preset = this.page.getByText(/^last 90 days$/i).first();
+      const hasPreset = await preset
+        .waitFor({ state: 'visible', timeout: 4_000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (hasPreset) {
+        await preset.click();
+        // Done COMMITS the choice. Without it the panel closes on the
+        // next outside click and the range reverts — the export then
+        // looks like it was asked for and silently was not.
+        await this.page
+          .getByRole('button', { name: /^done$/i })
+          .first()
+          .click()
+          .catch(() => undefined);
+        // Their table re-queries on commit; downloading mid-refresh
+        // gets the previous range.
+        await this.page.waitForTimeout(1_500);
+        return true;
+      }
+
+      /*
+        FALLBACK: a pair of date inputs.
+
+        Kept for the day they change the control back, or for an account
+        whose panel differs. Not the primary path any more, and it is
+        allowed to fail quietly — the export still downloads at their
+        default width, which is a narrower window rather than a wrong
+        one, and the caller is told through `rangeApplied`.
+      */
+      const iso = (d: Date): string => d.toISOString().slice(0, 10);
       const inputs = this.page.locator('input[type="date"]');
       if ((await inputs.count()) >= 2) {
         await inputs.nth(0).fill(iso(from));
@@ -84,6 +136,7 @@ export class WalletLedgerPage {
           .first()
           .click()
           .catch(() => undefined);
+        await this.page.waitForTimeout(1_500);
         return true;
       }
       return false;

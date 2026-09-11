@@ -27,9 +27,10 @@ export class AdminWalletImportController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Import a Delhivery wallet export and record what each parcel really cost. Takes the ' +
-      'LATEST successful debit per AWB per leg — costs are re-cut weeks later, so this is ' +
-      're-runnable and overwrites what it wrote before.',
+      'Import a Delhivery wallet export: store every transaction under its own id, then set ' +
+      'each parcel’s cost to its debits minus its credits across EVERYTHING stored for it, ' +
+      'not just this file. Re-runnable — a transaction already held is recognised and ' +
+      'skipped, so overlapping exports cannot double-count.',
   })
   async importDelhivery(
     @Body() body: ImportWalletLedgerDto,
@@ -39,6 +40,7 @@ export class AdminWalletImportController {
     return this.svc.importDelhiveryWallet(file, staff.id, {
       ...(body.dryRun === undefined ? {} : { dryRun: body.dryRun }),
       ...(body.force === undefined ? {} : { force: body.force }),
+      ...(body.courierAccountId === undefined ? {} : { courierAccountId: body.courierAccountId }),
     });
   }
 }

@@ -4033,8 +4033,9 @@ model CourierAccount {
   // Exactly one DEFAULT active account per (courier_id, environment) —
   // partial unique index courier_accounts_default_uq
   // (WHERE is_default AND deleted_at IS NULL), migration-managed.
-  walletRecharges CourierWalletRecharge[]
-  walletBalances  CourierWalletBalance[]
+  walletRecharges    CourierWalletRecharge[]
+  walletBalances     CourierWalletBalance[]
+  walletTransactions CourierWalletTransaction[]
 
   @@index([courierId, environment])
   @@index([isActive])
@@ -7303,6 +7304,97 @@ model CourierWalletBalance {
 
   @@index([courierAccountId, capturedAt])
   @@map("courier_wallet_balances")
+}
+
+/// One line of a courier's wallet ledger, exactly as they stated it.
+///
+/// ── WHY EVERY TRANSACTION, AND NOT A COST PER PARCEL ─────────────────
+/// The import used to keep only the LATEST successful debit per AWB and
+/// write it as that parcel's cost. Delhivery charges, reverses and
+/// re-charges the same waybill, so on 90 days of real data that was
+/// wrong for 705 of 11,389 parcels — ALWAYS overstating, by ₹67,614
+/// against a true total of ₹775,577. The clearest cases are parcels
+/// charged and then fully reversed: net zero, recorded as full freight.
+///
+/// A parcel's cost is `Σ debits − Σ credits`, which can only be computed
+/// from the rows themselves. So the rows are what we keep.
+///
+/// APPEND-ONLY by construction: `txnId` is THEIR id and is unique per
+/// account, so a re-import inserts what is new and touches nothing else.
+/// A transaction that comes back with a DIFFERENT amount is not an
+/// update — it is either their bug or something worse, and it is raised
+/// rather than applied.
+model CourierWalletTransaction {
+  id               String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  courierAccountId String                   @map("courier_account_id") @db.Uuid
+  /// Their transaction id (`MTX…`). Unique per account — the identity
+  /// the whole import rests on.
+  txnId            String                   @map("txn_id")
+  /// Null only for a ledger-level entry that names no parcel, such as a
+  /// settlement credit note. 1 row in 23,276 on the 90-day sample.
+  awbNumber        String?                  @map("awb_number")
+  kind             CourierWalletTxnKind
+  category         CourierWalletTxnCategory
+  /// FORWARD or RTO, from the shipment status on the row. Kept apart
+  /// because Delhivery refunds the delivery leg and bills the return
+  /// separately, and folding them charges the same carriage twice
+  /// (TRE-6).
+  leg              CourierWalletTxnLeg
+  amountInr        Decimal                  @map("amount_inr") @db.Decimal(12, 2)
+  /// When THEY charged it, in their own clock (IST, stored as UTC).
+  occurredAt       DateTime                 @map("occurred_at") @db.Timestamptz
+  /// Their word, verbatim: `success`, and anything else they invent. A
+  /// non-success row is not money and is stored rather than dropped, so
+  /// it can be seen.
+  status           String
+  /// The parcel's status AT THE MOMENT OF THE CHARGE — "Delivered",
+  /// "RTO", or the free text that marks an adjustment.
+  shipmentStatus   String?                  @map("shipment_status")
+  /// Their `Description` blob, kept whole. It carries the zone, the
+  /// chargeable weight they billed on, the COD amount and, for an
+  /// adjustment, the credit note it came from. This is the evidence a
+  /// dispute is argued from.
+  detail           Json?
+  /// Which import first saw it, and when we last saw it in a file.
+  firstSeenAt      DateTime                 @default(now()) @map("first_seen_at") @db.Timestamptz
+  lastSeenAt       DateTime                 @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  courierAccount CourierAccount @relation(fields: [courierAccountId], references: [id])
+
+  @@unique([courierAccountId, txnId])
+  /// The cost query: every transaction for one parcel.
+  @@index([awbNumber])
+  /// The P&L query: adjustments in a period.
+  @@index([category, occurredAt])
+  @@index([courierAccountId, occurredAt])
+  @@map("courier_wallet_transactions")
+}
+
+enum CourierWalletTxnKind {
+  DEBIT  @map("debit")
+  CREDIT @map("credit")
+
+  @@map("courier_wallet_txn_kind")
+}
+
+enum CourierWalletTxnCategory {
+  /// Carriage for a parcel: what the delivery or the return cost.
+  PARCEL     @map("parcel")
+  /// A ledger-level correction — a monthly reconciliation, a lost-
+  /// shipment settlement, a fraud credit note. Some carry an AWB and
+  /// some do not; either way they are an account-level cost rather than
+  /// a price for moving one box, and folding a fraud credit note into a
+  /// parcel would quietly make that parcel look profitable.
+  ADJUSTMENT @map("adjustment")
+
+  @@map("courier_wallet_txn_category")
+}
+
+enum CourierWalletTxnLeg {
+  FORWARD @map("forward")
+  RTO     @map("rto")
+
+  @@map("courier_wallet_txn_leg")
 }
 
 enum CourierRechargeMatch {

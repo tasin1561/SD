@@ -1,26 +1,41 @@
 import { readSheet, XlsxError } from '../../../common/xlsx/xlsx-reader';
 
-/** What a courier actually charged for one parcel leg. */
-export interface LedgerCharge {
-  readonly awbNumber: string;
-  readonly amountInr: string;
-  /** The courier's own transaction id — our evidence, kept on the audit row. */
+/** ONE line of their ledger, as they stated it. */
+export interface LedgerTxn {
+  /** Their id — the identity every later decision rests on. */
   readonly txnId: string;
-  readonly chargedAt: Date;
-  /** Their shipment status ON THE ROW, which is what decides the leg. */
+  /** Absent only on a ledger-level entry that names no parcel. */
+  readonly awbNumber: string | null;
+  readonly kind: 'DEBIT' | 'CREDIT';
+  readonly category: 'PARCEL' | 'ADJUSTMENT';
+  readonly leg: 'FORWARD' | 'RTO';
+  readonly amountInr: string;
+  readonly occurredAt: Date;
+  /** Their word, verbatim. Only `success` is money. */
+  readonly status: string;
   readonly shipmentStatus: string;
-  /** True when this row is the RETURN leg rather than the delivery. */
-  readonly isRto: boolean;
+  /** Their Description blob, parsed when it is JSON. The evidence. */
+  readonly detail: Record<string, unknown> | null;
+}
+
+/** What the file says about itself. The identity below is what makes a
+ *  truncated or edited export detectable. */
+export interface LedgerSummary {
+  readonly totalDeductionsInr: string | null;
+  readonly totalRefundsInr: string | null;
+  readonly totalRechargesInr: string | null;
+  readonly openingBalanceInr: string | null;
 }
 
 export interface ParsedLedger {
-  /** The LATEST successful debit per AWB per leg. See `latestPerAwb`. */
-  readonly forward: ReadonlyMap<string, LedgerCharge>;
-  readonly rto: ReadonlyMap<string, LedgerCharge>;
-  /** Everything parsed, for the totals check and for reporting. */
+  /** EVERY successful transaction, both directions. */
+  readonly txns: readonly LedgerTxn[];
+  readonly summary: LedgerSummary;
   readonly rowsRead: number;
   readonly rowsSkipped: number;
-  /** Summed debits, and what the file itself says the total should be. */
+  /** Net of the parsed rows: debits minus credits. */
+  readonly netInr: string;
+  /** Debits only — what the page's window "Total Debit" should equal. */
   readonly sumInr: string;
   readonly statedTotalInr: string | null;
   readonly periodFrom: Date | null;
@@ -29,8 +44,44 @@ export interface ParsedLedger {
 
 export class LedgerFormatError extends Error {}
 
-const SHEET_DEBITS = 'AWB Deductions';
+/*
+  `Deductions` and `Refunds`, NOT the `AWB …` variants beside them.
+
+  Their export carries both, and the AWB-prefixed sheets are the same
+  rows minus anything that names no parcel: on the 90-day sample
+  `Refunds` had 6,307 rows and `AWB Refunds` 6,306, the missing one
+  being a ₹1,290 lost-shipment credit note. Reading the narrower sheet
+  silently drops exactly the ledger-level entries that must not be
+  dropped, and leaves the file unable to reconcile against its own
+  stated totals.
+*/
+const SHEET_DEBITS = 'Deductions';
+const SHEET_CREDITS = 'Refunds';
 const SHEET_SUMMARY = 'Summary';
+
+/**
+ * Their parcel vocabulary. Anything else in the shipment-status column
+ * is a ledger-level entry rather than carriage for a box.
+ *
+ * Used only as a CROSS-CHECK: the real marker is `stage`/`code` in the
+ * description (see `classify`). On 23,276 rows the two agreed exactly,
+ * which is why both are kept — one of them noticing something the other
+ * does not is a signal worth having.
+ */
+const PARCEL_STATUSES = new Set([
+  'manifested',
+  'in transit',
+  'delivered',
+  'rto',
+  'not picked',
+  'pending',
+  'lost',
+  'open',
+  'canceled',
+  'cancelled',
+  'dto',
+  '',
+]);
 
 /** Header labels, matched case- and space-insensitively so a cosmetic
  *  change in their export does not break the import silently. */
@@ -42,6 +93,7 @@ const COLUMNS = {
   type: 'type',
   status: 'status',
   shipmentStatus: 'shipment status',
+  description: 'description',
 } as const;
 
 function norm(s: string): string {
@@ -100,10 +152,55 @@ function money(raw: string): string | null {
  * Reading it would have imported costs twenty times too high on exactly
  * the parcels that already lost money. The `Miles` column is the amount.
  */
-export function parseWalletLedger(file: Buffer): ParsedLedger {
+/**
+ * Which bucket a row belongs in.
+ *
+ * A monthly reconciliation, a lost-shipment settlement or a fraud credit
+ * note is an ACCOUNT-level cost, not the price of moving one box — and
+ * 36 of the 37 on the 90-day sample carried an AWB, so "has a waybill"
+ * is not the test. Folding a fraud credit note into a parcel would
+ * quietly make that parcel look profitable.
+ *
+ * Their own marker is the test: an adjustment carries `stage` or `code`
+ * in the description, which no carriage row does. The status column is
+ * checked too and the two agreed on every one of 23,276 rows; when they
+ * ever disagree, the row is treated as an ADJUSTMENT, because a
+ * misfiled adjustment is visible on its own report line while a
+ * misfiled parcel cost silently moves a margin.
+ */
+function classify(
+  shipmentStatus: string,
+  detail: Record<string, unknown> | null,
+): 'PARCEL' | 'ADJUSTMENT' {
+  const marked = detail !== null && ('stage' in detail || 'code' in detail);
+  const unknownStatus = !PARCEL_STATUSES.has(norm(shipmentStatus));
+  return marked || unknownStatus ? 'ADJUSTMENT' : 'PARCEL';
+}
+
+/** Their Description column is JSON on every row that has one. A row
+ *  that is not parseable keeps null rather than failing the import —
+ *  the money is in the Miles column, not in here. */
+function parseDetail(raw: string): Record<string, unknown> | null {
+  const t = raw.trim();
+  if (t === '' || !t.startsWith('{')) return null;
+  try {
+    const v: unknown = JSON.parse(t);
+    return v !== null && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readTxnSheet(
+  file: Buffer,
+  sheet: string,
+  kind: 'DEBIT' | 'CREDIT',
+  out: LedgerTxn[],
+  counters: { read: number; skipped: number; from: Date | null; to: Date | null },
+): void {
   let rows: string[][];
   try {
-    rows = readSheet(file, SHEET_DEBITS);
+    rows = readSheet(file, sheet);
   } catch (err) {
     if (err instanceof XlsxError) {
       throw new LedgerFormatError(
@@ -114,82 +211,157 @@ export function parseWalletLedger(file: Buffer): ParsedLedger {
   }
 
   const header = rows[0];
-  if (header === undefined) throw new LedgerFormatError('The deductions sheet is empty.');
+  if (header === undefined) throw new LedgerFormatError(`The ${sheet} sheet is empty.`);
   const at = new Map<string, number>();
   header.forEach((h, i) => at.set(norm(h), i));
   for (const label of Object.values(COLUMNS)) {
     if (!at.has(label)) {
       throw new LedgerFormatError(
-        `The deductions sheet has no "${label}" column — it has: ${header.join(', ')}`,
+        `The ${sheet} sheet has no "${label}" column — it has: ${header.join(', ')}`,
       );
     }
   }
   const col = (r: string[], k: keyof typeof COLUMNS): string => r[at.get(COLUMNS[k]) ?? -1] ?? '';
 
-  const forward = new Map<string, LedgerCharge>();
-  const rto = new Map<string, LedgerCharge>();
-  let sum = 0;
-  let read = 0;
-  let skipped = 0;
-  let from: Date | null = null;
-  let to: Date | null = null;
-
   for (const row of rows.slice(1)) {
     if (row.length === 0) continue;
-    const awbNumber = col(row, 'awb').trim();
     const amountInr = money(col(row, 'amount'));
-    const chargedAt = parseIst(col(row, 'chargedAt'));
-    // Only successful debits are money that left. A failed or pending
-    // row is not a charge, and a credit belongs to the refund sheet.
-    const isDebit = norm(col(row, 'type')) === 'debit';
-    const isSuccess = norm(col(row, 'status')) === 'success';
+    const occurredAt = parseIst(col(row, 'chargedAt'));
+    const txnId = col(row, 'txnId').trim();
+    const status = col(row, 'status').trim();
 
-    if (awbNumber === '' || amountInr === null || chargedAt === null || !isDebit || !isSuccess) {
-      skipped += 1;
+    // The DIRECTION is taken from the row, not from which sheet it was
+    // in. They agree today; if they ever stop, the row's own word is
+    // the one that decides whether money came in or went out.
+    const stated = norm(col(row, 'type'));
+    const rowKind: 'DEBIT' | 'CREDIT' | null =
+      stated === 'debit' ? 'DEBIT' : stated === 'credit' ? 'CREDIT' : null;
+
+    // Only `success` is money. A failed or pending line is a row about
+    // something that did not happen.
+    const isSuccess = norm(status) === 'success';
+
+    if (
+      amountInr === null ||
+      occurredAt === null ||
+      txnId === '' ||
+      rowKind === null ||
+      !isSuccess
+    ) {
+      counters.skipped += 1;
       continue;
     }
-    read += 1;
-    sum += Number(amountInr);
-    if (from === null || chargedAt < from) from = chargedAt;
-    if (to === null || chargedAt > to) to = chargedAt;
+    if (rowKind !== kind) {
+      // A credit sitting in the deductions sheet, or the reverse. Kept
+      // on its own word — see above — and counted so it is not silent.
+      counters.skipped += 1;
+      continue;
+    }
 
+    counters.read += 1;
+    if (counters.from === null || occurredAt < counters.from) counters.from = occurredAt;
+    if (counters.to === null || occurredAt > counters.to) counters.to = occurredAt;
+
+    const awbRaw = col(row, 'awb').trim();
     const shipmentStatus = col(row, 'shipmentStatus').trim();
-    const isRto = norm(shipmentStatus) === 'rto';
-    const charge: LedgerCharge = {
-      awbNumber,
+    const detail = parseDetail(col(row, 'description'));
+
+    out.push({
+      txnId,
+      awbNumber: awbRaw === '' ? null : awbRaw,
+      kind: rowKind,
+      category: classify(shipmentStatus, detail),
+      // Exact match on their RTO status, as before. Their other return
+      // words (DTO) are left on the forward leg rather than guessed
+      // into the RTO one — a wrong leg moves money between two P&L
+      // lines that exist precisely to be told apart.
+      leg: norm(shipmentStatus) === 'rto' ? 'RTO' : 'FORWARD',
       amountInr,
-      txnId: col(row, 'txnId').trim(),
-      chargedAt,
+      occurredAt,
+      status,
       shipmentStatus,
-      isRto,
-    };
-    const bucket = isRto ? rto : forward;
-    const held = bucket.get(awbNumber);
-    // Strictly later wins. Equal timestamps keep the FIRST seen rather
-    // than flip-flopping between runs on a tie — the export is ordered
-    // newest-first, so the first of a tie is the newest.
-    if (held === undefined || charge.chargedAt > held.chargedAt) bucket.set(awbNumber, charge);
+      detail,
+    });
+  }
+}
+
+/**
+ * EVERY successful transaction in the export, both directions.
+ *
+ * It used to return the latest debit per AWB, which is wrong whenever a
+ * charge is reversed or re-cut — see the model comment on
+ * `CourierWalletTransaction` for the measured damage. The caller nets
+ * them per parcel.
+ */
+export function parseWalletLedger(file: Buffer): ParsedLedger {
+  const txns: LedgerTxn[] = [];
+  const counters = { read: 0, skipped: 0, from: null as Date | null, to: null as Date | null };
+
+  readTxnSheet(file, SHEET_DEBITS, 'DEBIT', txns, counters);
+  try {
+    readTxnSheet(file, SHEET_CREDITS, 'CREDIT', txns, counters);
+  } catch (err) {
+    // An export with no refunds sheet is older or narrower, not broken.
+    // Debits alone still import; the identity check below then cannot
+    // balance and says so, which is the honest outcome.
+    if (!(err instanceof LedgerFormatError)) throw err;
   }
 
-  let stated: string | null = null;
+  /*
+    THE SAME TXN ID TWICE IN ONE FILE.
+
+    Their id is the identity the import rests on, so a duplicate inside
+    a single export means the file cannot be trusted to describe itself
+    — and silently keeping one of the two would change a parcel's cost
+    by whichever copy won. Refused outright.
+  */
+  const seen = new Set<string>();
+  for (const t of txns) {
+    if (seen.has(t.txnId)) {
+      throw new LedgerFormatError(
+        `Transaction ${t.txnId} appears more than once in this export — the file contradicts itself.`,
+      );
+    }
+    seen.add(t.txnId);
+  }
+
+  let debits = 0;
+  let credits = 0;
+  for (const t of txns) {
+    if (t.kind === 'DEBIT') debits += Number(t.amountInr);
+    else credits += Number(t.amountInr);
+  }
+
+  const summary: LedgerSummary = {
+    totalDeductionsInr: null,
+    totalRefundsInr: null,
+    totalRechargesInr: null,
+    openingBalanceInr: null,
+  };
+  const mutable = summary as { -readonly [K in keyof LedgerSummary]: LedgerSummary[K] };
   try {
     for (const r of readSheet(file, SHEET_SUMMARY)) {
-      if (norm(r[0] ?? '') === 'total deductions') stated = money(r[1] ?? '');
+      const key = norm(r[0] ?? '');
+      const val = money(r[1] ?? '');
+      if (key === 'total deductions') mutable.totalDeductionsInr = val;
+      else if (key === 'total refunds') mutable.totalRefundsInr = val;
+      else if (key === 'total recharges') mutable.totalRechargesInr = val;
+      else if (key === 'opening balance') mutable.openingBalanceInr = val;
     }
   } catch {
     // A workbook without a Summary sheet is still importable; it just
     // cannot check itself, and the caller is told so.
-    stated = null;
   }
 
   return {
-    forward,
-    rto,
-    rowsRead: read,
-    rowsSkipped: skipped,
-    sumInr: sum.toFixed(2),
-    statedTotalInr: stated,
-    periodFrom: from,
-    periodTo: to,
+    txns,
+    summary,
+    rowsRead: counters.read,
+    rowsSkipped: counters.skipped,
+    netInr: (debits - credits).toFixed(2),
+    sumInr: debits.toFixed(2),
+    statedTotalInr: summary.totalDeductionsInr,
+    periodFrom: counters.from,
+    periodTo: counters.to,
   };
 }

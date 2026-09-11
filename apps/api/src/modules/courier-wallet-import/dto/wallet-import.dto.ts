@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsUUID, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class ImportWalletLedgerDto {
   @ApiProperty({
@@ -30,4 +30,15 @@ export class ImportWalletLedgerDto {
   @IsOptional()
   @IsBoolean()
   force?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      "Which courier account's wallet this export is. Each account is its own company at " +
+      'Delhivery with its own ledger, and every transaction is stored under the account it ' +
+      'came from. Omitted, the default active Delhivery account is used — and the import is ' +
+      'REFUSED if there is none, because a ledger stored under no account cannot be netted.',
+  })
+  @IsOptional()
+  @IsUUID()
+  courierAccountId?: string;
 }

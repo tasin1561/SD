@@ -8,6 +8,12 @@ const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
 
 function makeSut(opts: {
   freight?: Array<{ totalInr: Prisma.Decimal; ourCostInr: Prisma.Decimal | null }>;
+  /** Grouped adjustment rows, as the ledger would return them. */
+  courierAdjustments?: Array<{
+    kind: string;
+    _sum: { amountInr: Prisma.Decimal };
+    _count: { _all: number };
+  }>;
   shippingRevenue?: Prisma.Decimal | null;
   shipments?: Array<{ actualCourierCostInr: Prisma.Decimal | null }>;
   rtoFees?: Prisma.Decimal | null;
@@ -25,6 +31,13 @@ function makeSut(opts: {
 }) {
   const client = {
     inboundFreightCharge: { findMany: async () => opts.freight ?? [] },
+    // Courier account adjustments — reconciliations and credit notes
+    // the courier applied to the wallet rather than to a parcel. Empty
+    // unless a test says otherwise: they have their own describe block.
+    courierWalletTransaction: {
+      groupBy: async () => opts.courierAdjustments ?? [],
+    },
+
     orderCharge: {
       aggregate: async () => ({ _sum: { amountInr: opts.shippingRevenue ?? null } }),
       // The same revenue, split by charge type for the line's basis —
@@ -247,6 +260,7 @@ describe('a cost already counted by its leg is not counted again', () => {
     let scoped: unknown;
     const client = {
       inboundFreightCharge: { findMany: async () => [] },
+      courierWalletTransaction: { groupBy: async () => [] },
       orderCharge: {
         aggregate: async () => ({ _sum: { amountInr: null } }),
         groupBy: async () => [],
@@ -322,5 +336,57 @@ describe('the tax deducted from a COD is OURS', () => {
     const r = await svc.report(FROM, TO);
     expect(r.lines.find((l) => l.key === 'rto')?.revenueInr).toBe('200.00');
     expect(r.lines.find((l) => l.key === 'cod_tax')?.revenueInr).toBe('608.64');
+  });
+});
+
+/**
+ * What the courier charged the ACCOUNT rather than a parcel.
+ *
+ * Their ledger carries monthly reconciliations, lost-shipment
+ * settlements and fraud credit notes — 37 of 23,276 rows over ninety
+ * days, and 36 of those name a waybill despite having nothing to do
+ * with what moving that box cost. They get their own line so a fraud
+ * settlement cannot quietly make a parcel look profitable.
+ */
+describe('PnlService — courier account adjustments', () => {
+  const adj = (kind: string, amount: string, count = 1) => ({
+    kind,
+    _sum: { amountInr: new Prisma.Decimal(amount) },
+    _count: { _all: count },
+  });
+
+  it('a debit is a cost and a credit gives it back', async () => {
+    const svc = makeSut({
+      courierAdjustments: [adj('DEBIT', '2100.00', 36), adj('CREDIT', '1290.00', 1)],
+    });
+    const out = await svc.report(new Date('2026-06-01'), new Date('2026-09-01'));
+    const line = out.lines.find((l) => l.key === 'courier_adjustments');
+    expect(line?.costInr).toBe('810.00');
+  });
+
+  it('has NO revenue — nobody was billed for any of it', async () => {
+    const svc = makeSut({ courierAdjustments: [adj('DEBIT', '500.00')] });
+    const out = await svc.report(new Date('2026-06-01'), new Date('2026-09-01'));
+    const line = out.lines.find((l) => l.key === 'courier_adjustments');
+    expect(line?.revenueInr).toBe('0.00');
+    expect(line?.marginInr).toBe('-500.00');
+  });
+
+  it('counts as fully MEASURED, because it is read from their ledger', async () => {
+    // Not an estimate and not uncovered: every row is a fact the
+    // courier stated. Reporting it as unpriced would make the P&L
+    // understate its own completeness.
+    const svc = makeSut({ courierAdjustments: [adj('DEBIT', '500.00', 3)] });
+    const out = await svc.report(new Date('2026-06-01'), new Date('2026-09-01'));
+    const line = out.lines.find((l) => l.key === 'courier_adjustments');
+    expect(line?.coverage).toMatchObject({ priced: 3, total: 3 });
+  });
+
+  it('is silent when the courier made none', async () => {
+    const svc = makeSut({});
+    const out = await svc.report(new Date('2026-06-01'), new Date('2026-09-01'));
+    const line = out.lines.find((l) => l.key === 'courier_adjustments');
+    expect(line?.costInr).toBe('0.00');
+    expect(line?.coverage.note).toBeNull();
   });
 });

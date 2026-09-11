@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { BankEntryType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
+import {
+  BankEntryType,
+  CourierWalletTxnCategory,
+  CourierWalletTxnKind,
+  Currency,
+  Prisma,
+  WalletEntryDirection,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 const ZERO = new Prisma.Decimal(0);
@@ -108,17 +115,19 @@ export class PnlService {
   constructor(private readonly prisma: PrismaService) {}
 
   async report(from: Date, to: Date): Promise<PnlReport> {
-    const [inbound, delivery, rto, codTax, fx, expenses, unattributed] = await Promise.all([
-      this.inboundFreight(from, to),
-      this.delivery(from, to),
-      this.rto(from, to),
-      this.codTaxDeduction(from, to),
-      this.fx(from, to),
-      this.expenses(from, to),
-      this.unattributedLegCosts(from, to),
-    ]);
+    const [inbound, delivery, rto, codTax, fx, courierAdj, expenses, unattributed] =
+      await Promise.all([
+        this.inboundFreight(from, to),
+        this.delivery(from, to),
+        this.rto(from, to),
+        this.codTaxDeduction(from, to),
+        this.fx(from, to),
+        this.courierAdjustments(from, to),
+        this.expenses(from, to),
+        this.unattributedLegCosts(from, to),
+      ]);
 
-    const lines = [inbound, delivery, rto, codTax, fx];
+    const lines = [inbound, delivery, rto, codTax, fx, courierAdj];
     const gross = lines.reduce((acc, l) => acc.add(new Prisma.Decimal(l.marginInr)), ZERO);
 
     return {
@@ -440,6 +449,92 @@ export class PnlService {
    * It has NO cost side — nothing is spent to collect it — and an empty
    * cost basis says that more honestly than a zero would.
    */
+  /**
+   * What the courier charged the ACCOUNT, rather than a parcel.
+   *
+   * Their ledger is not only carriage. It carries monthly
+   * reconciliations, lost-shipment settlements and fraud credit notes —
+   * 37 of 23,276 rows over ninety days, and 36 of those 37 name a
+   * waybill even though they are nothing to do with what moving that
+   * box cost. Folding a fraud credit note into a parcel would quietly
+   * make that parcel look profitable, so they are kept out of the
+   * delivery and returns lines and reported here instead.
+   *
+   * A DEBIT is a cost; a CREDIT gives money back and so reduces it. The
+   * line has no revenue: nobody was billed for any of this.
+   *
+   * ── WHY THIS IS NOT AN EXPENSE (bank) ROW ────────────────────────
+   * No money leaves a bank account when the courier debits their own
+   * wallet — the cash left when we recharged it, and that recharge
+   * already has its bank entry. Writing one here as well would count
+   * the same rupee twice. The wallet is prepaid float, and consuming it
+   * is a cost recognised against the float, exactly as a parcel's
+   * carriage already is.
+   */
+  private async courierAdjustments(from: Date, to: Date): Promise<PnlLine> {
+    const rows = await this.prisma.client.courierWalletTransaction.groupBy({
+      by: ['kind'],
+      where: {
+        category: CourierWalletTxnCategory.ADJUSTMENT,
+        occurredAt: { gte: from, lte: to },
+        // `success` only. A failed line is a row about something that
+        // did not happen.
+        status: 'success',
+      },
+      _sum: { amountInr: true },
+      _count: { _all: true },
+    });
+
+    let cost = ZERO;
+    let count = 0;
+    let debited = ZERO;
+    let credited = ZERO;
+    for (const r of rows) {
+      const amt = r._sum.amountInr ?? ZERO;
+      count += r._count._all;
+      if (r.kind === CourierWalletTxnKind.DEBIT) {
+        debited = debited.add(amt);
+        cost = cost.add(amt);
+      } else {
+        credited = credited.add(amt);
+        cost = cost.sub(amt);
+      }
+    }
+
+    return this.line({
+      key: 'courier_adjustments',
+      label: 'Courier account adjustments',
+      revenue: ZERO,
+      cost,
+      // Every one of them is known: they are read from the courier's own
+      // ledger, not estimated. Nothing here is uncovered.
+      priced: count,
+      total: count,
+      note:
+        count === 0
+          ? null
+          : 'Reconciliations, settlements and credit notes the courier applied to the account ' +
+            'rather than to a parcel. A credit reduces the cost.',
+      basis: {
+        revenue: [],
+        cost: [
+          {
+            label: 'Debited by the courier',
+            source: "courier_wallet_transactions WHERE category='adjustment' AND kind='debit'",
+            count,
+            amountInr: debited.toFixed(2),
+          },
+          {
+            label: 'Credited back',
+            source: "courier_wallet_transactions WHERE category='adjustment' AND kind='credit'",
+            count,
+            amountInr: credited.negated().toFixed(2),
+          },
+        ],
+      },
+    });
+  }
+
   private async codTaxDeduction(from: Date, to: Date): Promise<PnlLine> {
     const agg = await this.prisma.client.sellerWalletEntry.aggregate({
       where: {

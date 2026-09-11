@@ -18,13 +18,22 @@ jest.mock('../../src/modules/wallet-ledger/services/wallet-ledger-parser', () =>
   parseWalletLedger: jest.fn(),
 }));
 
-const charge = (awb: string, amount: string, rto = false): parser.LedgerCharge => ({
+const charge = (
+  awb: string,
+  amount: string,
+  rto = false,
+  kind: 'DEBIT' | 'CREDIT' = 'DEBIT',
+): parser.LedgerTxn => ({
+  txnId: `txn-${awb}-${kind}-${amount}`,
   awbNumber: awb,
+  kind,
+  category: 'PARCEL',
+  leg: rto ? 'RTO' : 'FORWARD',
   amountInr: amount,
-  txnId: `txn-${awb}`,
-  chargedAt: new Date('2026-09-08T10:00:00Z'),
+  occurredAt: new Date('2026-09-08T10:00:00Z'),
+  status: 'success',
   shipmentStatus: rto ? 'RTO' : 'Delivered',
-  isRto: rto,
+  detail: null,
 });
 
 function makeSut(
@@ -36,8 +45,43 @@ function makeSut(
     orderNumber: string | null;
   }>,
 ) {
-  const update = jest.fn(async () => ({}));
+  // Typed so the assertions below can read the data it was called with.
+  const update = jest.fn(async (_args: { data: Record<string, Prisma.Decimal> }) => ({}));
+  const createMany = jest.fn(async () => ({ count: LEDGER.length }));
   const client = {
+    /*
+      The stored ledger, standing in for the table.
+
+      `netFromLedger` reads back what was just inserted rather than
+      netting the file, because a 90-day window can hold a credit whose
+      debit is older. The fake therefore answers from the same
+      transactions the test handed in — which is what the table WOULD
+      hold for an account seeing them for the first time.
+    */
+    courierWalletTransaction: {
+      findMany: async () => [],
+      createMany,
+      groupBy: async () => {
+        const acc = new Map<
+          string,
+          { awbNumber: string; leg: string; kind: string; sum: number }
+        >();
+        for (const t of LEDGER) {
+          if (t.awbNumber === null || t.category !== 'PARCEL') continue;
+          const key = `${t.awbNumber}|${t.leg}|${t.kind}`;
+          const e = acc.get(key) ?? { awbNumber: t.awbNumber, leg: t.leg, kind: t.kind, sum: 0 };
+          e.sum += Number(t.amountInr);
+          acc.set(key, e);
+        }
+        return [...acc.values()].map((e) => ({
+          awbNumber: e.awbNumber,
+          leg: e.leg,
+          kind: e.kind,
+          _sum: { amountInr: new Prisma.Decimal(e.sum.toFixed(2)) },
+          _max: { occurredAt: new Date('2026-09-08T10:00:00Z') },
+        }));
+      },
+    },
     shipment: {
       findMany: async () =>
         shipments.map((s) => ({
@@ -59,12 +103,23 @@ function makeSut(
   return { svc, update };
 }
 
-function parsed(forward: parser.LedgerCharge[], rto: parser.LedgerCharge[] = []): void {
+/** What the ledger holds for the current test. */
+let LEDGER: parser.LedgerTxn[] = [];
+
+function parsed(forward: parser.LedgerTxn[], rto: parser.LedgerTxn[] = []): void {
+  const txns = [...forward, ...rto];
+  LEDGER = txns;
   (parser.parseWalletLedger as jest.Mock).mockReturnValue({
-    forward: new Map(forward.map((c) => [c.awbNumber, c])),
-    rto: new Map(rto.map((c) => [c.awbNumber, c])),
-    rowsRead: forward.length + rto.length,
+    txns,
+    summary: {
+      totalDeductionsInr: '100.00',
+      totalRefundsInr: '0.00',
+      totalRechargesInr: '0.00',
+      openingBalanceInr: '0.00',
+    },
+    rowsRead: txns.length,
     rowsSkipped: 0,
+    netInr: '100.00',
     sumInr: '100.00',
     statedTotalInr: '100.00',
     periodFrom: new Date('2026-09-01T00:00:00Z'),
@@ -87,7 +142,7 @@ describe('an import says which parcels it wrote', () => {
       },
     ]);
 
-    const r = await svc.importDelhiveryWallet(FILE, null, {});
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
 
     expect(r.forwardWritten).toBe(1);
     expect(r.writes).toEqual([
@@ -115,7 +170,7 @@ describe('an import says which parcels it wrote', () => {
       },
     ]);
 
-    const r = await svc.importDelhiveryWallet(FILE, null, {});
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
 
     expect(r.revised).toBe(1);
     expect(r.writes[0]).toMatchObject({ revised: true, amountInr: '60' });
@@ -136,7 +191,10 @@ describe('an import says which parcels it wrote', () => {
       },
     ]);
 
-    const r = await svc.importDelhiveryWallet(FILE, null, { dryRun: true });
+    const r = await svc.importDelhiveryWallet(FILE, null, {
+      dryRun: true,
+      courierAccountId: 'acct-1',
+    });
 
     expect(r.writes).toHaveLength(1);
     expect(update).not.toHaveBeenCalled();
@@ -156,7 +214,7 @@ describe('an import says which parcels it wrote', () => {
       },
     ]);
 
-    const r = await svc.importDelhiveryWallet(FILE, null, {});
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
 
     expect(r.unchanged).toBe(1);
     expect(r.writes).toEqual([]);
@@ -174,7 +232,7 @@ describe('an import says which parcels it wrote', () => {
       },
     ]);
 
-    const r = await svc.importDelhiveryWallet(FILE, null, {});
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
 
     expect(r.rtoWritten).toBe(1);
     expect(r.writes[0]).toMatchObject({ leg: 'rto' });
@@ -194,7 +252,7 @@ describe('an import says which parcels it wrote', () => {
       },
     ]);
 
-    const r = await svc.importDelhiveryWallet(FILE, null, {});
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
 
     expect(r.writes[0]).toMatchObject({ awbNumber: 'DL666', orderNumber: null });
   });
@@ -208,17 +266,120 @@ describe('an import says which parcels it wrote', () => {
     const { svc } = makeSut(
       charges.map((c, i) => ({
         id: `s${i}`,
-        awbNumber: c.awbNumber,
+        awbNumber: c.awbNumber ?? '',
         actualCourierCostInr: null,
         actualRtoCostInr: null,
         orderNumber: `SD-X-${i}`,
       })),
     );
 
-    const r = await svc.importDelhiveryWallet(FILE, null, {});
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
 
     expect(r.forwardWritten).toBe(105);
     expect(r.writes).toHaveLength(100);
     expect(r.writesTruncated).toBe(5);
+  });
+});
+
+/**
+ * A parcel costs the NET of its transactions.
+ *
+ * The import used to write the latest successful debit. On 90 days of
+ * real data that was wrong for 705 of 11,389 parcels — always
+ * OVERSTATING, ₹843,191 against a true ₹775,577 — because Delhivery
+ * charges, reverses and re-charges the same waybill.
+ */
+describe('the cost is debits minus credits', () => {
+  it('a fully reversed charge costs ZERO, not the debit', () => {
+    // The case that used to be booked at full freight.
+    parsed([charge('DL1', '60.04'), charge('DL1', '60.04', false, 'CREDIT')]);
+    const { svc, update } = makeSut([
+      {
+        id: 's1',
+        awbNumber: 'DL1',
+        actualCourierCostInr: null,
+        actualRtoCostInr: null,
+        orderNumber: 'SD-1',
+      },
+    ]);
+
+    return svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' }).then(() => {
+      const data = (
+        update.mock.calls[0]?.[0] as { data: Record<string, Prisma.Decimal> } | undefined
+      )?.data;
+      expect(data?.['actualCourierCostInr']?.toString()).toBe('0');
+    });
+  });
+
+  it('a re-cut charge costs what is left after the reversal', async () => {
+    // ₹100 charged, ₹100 refunded, ₹85.65 charged again.
+    parsed([
+      charge('DL2', '100.00'),
+      charge('DL2', '100.00', false, 'CREDIT'),
+      charge('DL2', '85.65'),
+    ]);
+    const { svc, update } = makeSut([
+      {
+        id: 's2',
+        awbNumber: 'DL2',
+        actualCourierCostInr: null,
+        actualRtoCostInr: null,
+        orderNumber: 'SD-2',
+      },
+    ]);
+
+    await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
+    const data = (update.mock.calls[0]?.[0] as { data: Record<string, Prisma.Decimal> } | undefined)
+      ?.data;
+    expect(data?.['actualCourierCostInr']?.toString()).toBe('85.65');
+  });
+
+  it('two debits on one leg ADD UP', async () => {
+    // Not "the latest wins": a surcharge billed after the freight is a
+    // second charge for the same parcel, and taking the later one alone
+    // would lose the first.
+    parsed([charge('DL3', '80.00'), charge('DL3', '20.00')]);
+    const { svc, update } = makeSut([
+      {
+        id: 's3',
+        awbNumber: 'DL3',
+        actualCourierCostInr: null,
+        actualRtoCostInr: null,
+        orderNumber: 'SD-3',
+      },
+    ]);
+
+    await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
+    const data = (update.mock.calls[0]?.[0] as { data: Record<string, Prisma.Decimal> } | undefined)
+      ?.data;
+    expect(data?.['actualCourierCostInr']?.toString()).toBe('100');
+  });
+
+  it('an ADJUSTMENT never touches a parcel’s cost, even carrying its waybill', async () => {
+    // 36 of 37 on the real sample carried an AWB. A fraud credit note
+    // landing on a parcel would quietly make it look profitable.
+    const adj: parser.LedgerTxn = {
+      ...charge('DL4', '58.83'),
+      txnId: 'adj-1',
+      category: 'ADJUSTMENT',
+    };
+    parsed([charge('DL4', '40.00'), adj]);
+    const { svc, update } = makeSut([
+      {
+        id: 's4',
+        awbNumber: 'DL4',
+        actualCourierCostInr: null,
+        actualRtoCostInr: null,
+        orderNumber: 'SD-4',
+      },
+    ]);
+
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
+    const data = (update.mock.calls[0]?.[0] as { data: Record<string, Prisma.Decimal> } | undefined)
+      ?.data;
+    expect(data?.['actualCourierCostInr']?.toString()).toBe('40');
+    // …and it is reported on its own line rather than vanishing.
+    expect(r.adjustments).toBe(1);
+    expect(r.adjustmentsNetInr).toBe('58.83');
   });
 });

@@ -471,10 +471,10 @@ const systemSettings: SystemSettingSeed[] = [
     key: 'courier.wallet_sync_window_days',
     category: 'courier',
     valueType: SettingValueType.INT,
-    valueInt: 7,
+    valueInt: 90,
     displayName: 'Delhivery wallet sync — days to re-read each night',
     description:
-      'How far back each nightly fetch reaches. SEVEN, because that is what their ledger export actually returns \u2014 it was set to 45 and every export came back covering about a week, which is the mismatch the coverage alarm was raising every night. NOT one day: the import overwrites rather than skips, so re-reading a week catches a charge re-cut within that week. A charge re-cut LATER than seven days after the parcel moved is not picked up by the nightly run at all; catching one of those means exporting a wider range by hand from their Finances page and uploading it on the Delhivery screen.',
+      'How far back each nightly fetch reaches. NINETY: their Finances page offers a Last 90 Days range and returns all of it, and re-reading it costs nothing now that transactions are stored by THEIR id — the overlap is recognised and skipped rather than re-applied. It was seven, which was a real constraint back when the import overwrote a parcel\u2019s cost with the latest debit it happened to see; a charge re-cut later than seven days after the parcel moved was then never picked up at all. Ninety days is as far back as their picker goes, so a correction made any time within that window now lands on its own.',
   },
   {
     key: 'ops.nsa_enabled',
