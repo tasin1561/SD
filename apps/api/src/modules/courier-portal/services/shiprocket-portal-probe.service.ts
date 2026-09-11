@@ -35,6 +35,8 @@ export interface ShiprocketProbePage {
   readonly landedOnLogin: boolean;
   readonly textBytes: number;
   readonly htmlBytes: number;
+  /** Whether a picture was saved too — best-effort; the DOM is the record. */
+  readonly screenshot: boolean;
 }
 
 export interface ShiprocketProbeAccount {
@@ -137,21 +139,36 @@ export class ShiprocketPortalProbeService {
       const pages: ShiprocketProbePage[] = [];
       for (const tab of SR_WALLET_TABS) {
         const url = `${SR_PORTAL_ORIGIN}/seller/wallet-transactions/${tab}?from=${from}&to=${to}&current_page=1`;
-        // A mid-run bounce to login is recorded as `landedOnLogin`, not thrown.
-        await gotoShiprocket(handle.page, url);
-        await handle.page.waitForTimeout(6_000);
-        const html = await handle.page.content();
-        const text = await handle.page.locator('body').innerText();
-        await handle.page.screenshot({ path: join(dir, `${tab}.png`), fullPage: true });
-        await writeFile(join(dir, `${tab}.html`), html);
-        await writeFile(join(dir, `${tab}.txt`), text);
-        pages.push({
-          tab,
-          url: handle.page.url(),
-          landedOnLogin: isShiprocketLoginUrl(handle.page.url()),
-          textBytes: text.length,
-          htmlBytes: html.length,
-        });
+        // A fresh tab per read: a tab their router has redirected can stop
+        // painting for good (see ShiprocketPortalSessionService.open).
+        const page = await handle.newPage();
+        try {
+          // A mid-run bounce to login is recorded as `landedOnLogin`, not thrown.
+          await gotoShiprocket(page, url);
+          await page.waitForTimeout(6_000);
+          // The DOM is the evidence, and reading it needs no painted frame,
+          // so it is saved FIRST; the screenshot is best-effort after it.
+          const html = await page.content();
+          const text = await page.locator('body').innerText({ timeout: 15_000 });
+          await writeFile(join(dir, `${tab}.html`), html);
+          await writeFile(join(dir, `${tab}.txt`), text);
+          const screenshot = await page
+            .screenshot({ path: join(dir, `${tab}.png`), fullPage: true, timeout: 20_000 })
+            .then(
+              () => true,
+              () => false,
+            );
+          pages.push({
+            tab,
+            url: page.url(),
+            landedOnLogin: isShiprocketLoginUrl(page.url()),
+            textBytes: text.length,
+            htmlBytes: html.length,
+            screenshot,
+          });
+        } finally {
+          await page.close().catch(() => undefined);
+        }
       }
       await this.issues.resolveByKey(
         `shiprocket-portal-login:${a.id}`,

@@ -71,6 +71,9 @@ export async function gotoShiprocket(page: Page, url: string): Promise<void> {
 
 export interface ShiprocketPortalHandle {
   readonly page: Page;
+  /** A new tab in the signed-in context. Use one per page read: a tab
+   *  their router has redirected can stop painting for good. */
+  newPage(): Promise<Page>;
   close(): Promise<void>;
 }
 
@@ -123,7 +126,7 @@ export class ShiprocketPortalSessionService {
         timezoneId: 'Asia/Kolkata',
       });
       context.setDefaultTimeout(30_000);
-      const page = await context.newPage();
+      let page = await context.newPage();
 
       // A page that REQUIRES a session. Their redirect to the login page
       // may be client-side, so wait before judging — the Delhivery
@@ -134,12 +137,22 @@ export class ShiprocketPortalSessionService {
         isShiprocketLoginUrl(page.url()) ||
         (await page.locator('input[type="password"]').count()) > 0
       ) {
+        // Sign in from a NEW tab. After their router bounces
+        // /seller/homepage to /newlogin, that tab never paints again —
+        // measured on 2026-09-11: 0 animation frames, still 0 after a
+        // fresh goto in the same tab, while a new tab in the same context
+        // painted 3 frames in 48ms. Script still runs there, so reading
+        // the URL works; clicking and screenshots, which wait on a frame,
+        // hang until they time out.
+        await page.close().catch(() => undefined);
+        page = await context.newPage();
         await this.login(page, courierAccountId, runId);
         await context.storageState({ path: statePath });
       }
 
       return {
         page,
+        newPage: (): Promise<Page> => context.newPage(),
         close: async (): Promise<void> => {
           try {
             await context.storageState({ path: statePath });
