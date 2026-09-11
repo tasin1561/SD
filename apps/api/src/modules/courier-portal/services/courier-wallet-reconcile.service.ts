@@ -24,6 +24,16 @@ export interface WalletReconcileResult {
 
 const LOW_BALANCE_KEY = 'courier.delhivery_wallet_low_balance_inr';
 const DEFAULT_LOW_BALANCE = '10000';
+/**
+ * How far the page's stated window debit may sit from the export's sum
+ * before it means something.
+ *
+ * Their page rounds for display and the file does not: every capture so
+ * far differs by exactly one paisa. A rupee is comfortably above that
+ * and far below any missing row — the smallest real charge on this
+ * account is an order of magnitude larger.
+ */
+const ROUNDING_TOLERANCE_INR = 1;
 
 /**
  * Does every rupee in the courier's wallet match a rupee that left ours?
@@ -72,7 +82,20 @@ export class CourierWalletReconcileService {
     private readonly issues: SystemIssueService,
   ) {}
 
-  async reconcile(courierCode = 'delhivery'): Promise<WalletReconcileResult> {
+  async reconcile(
+    courierCode = 'delhivery',
+    /**
+     * What each account's wallet export summed to on THIS run, keyed by
+     * account id.
+     *
+     * Passed in rather than re-read: the import has just done the work,
+     * and downloading the file a second time to check it against the
+     * page would be a second live request for a number we are holding.
+     * Absent when the reconcile runs on its own, and the check simply
+     * does not run — a missing input is not a finding.
+     */
+    exportSums?: ReadonlyMap<string, string>,
+  ): Promise<WalletReconcileResult> {
     const accounts = await this.prisma.client.courierAccount.findMany({
       where: { courier: { code: courierCode }, deletedAt: null },
       select: { id: true, label: true },
@@ -92,7 +115,11 @@ export class CourierWalletReconcileService {
 
     for (const account of accounts) {
       try {
-        const one = await this.reconcileAccount(account.id, account.label);
+        const one = await this.reconcileAccount(
+          account.id,
+          account.label,
+          exportSums?.get(account.id),
+        );
         result.rechargesSeen += one.rechargesSeen;
         result.newlySeen += one.newlySeen;
         result.matched += one.matched;
@@ -140,6 +167,7 @@ export class CourierWalletReconcileService {
   private async reconcileAccount(
     accountId: string,
     label: string,
+    exportSumInr?: string,
   ): Promise<Omit<WalletReconcileResult, 'accounts' | 'paidButNeverArrived'>> {
     const page = await this.session.page(accountId);
     const portal = new WalletRechargesPage(page);
@@ -211,7 +239,7 @@ export class CourierWalletReconcileService {
       */
       let lowBalance = 0;
       try {
-        lowBalance = await this.checkBalance(accountId, label, balance);
+        lowBalance = await this.checkBalance(accountId, label, balance, exportSumInr);
       } catch (err) {
         this.logger.error(
           { accountId, err: err instanceof Error ? err.message : String(err) },
@@ -379,9 +407,14 @@ export class CourierWalletReconcileService {
     label: string,
     balance: {
       balanceInr: string;
+      /** THE SELECTED WINDOW's totals, not all-time — see the long note
+       *  below. Stored because they cross-check the export. */
       totalCreditInr: string | null;
       totalDebitInr: string | null;
     } | null,
+    /** What the wallet export for the same window summed to, when this
+     *  run had one. Absent on a reconcile that ran without an import. */
+    exportSumInr?: string,
   ): Promise<number> {
     if (balance === null) return 0;
 
@@ -407,51 +440,88 @@ export class CourierWalletReconcileService {
     const current = new Prisma.Decimal(balance.balanceInr);
 
     /*
-      THE CHECK THE PER-ROW ONES CANNOT MAKE.
+      ── WHAT THESE TOTALS ARE, AND THE CHECK THAT DIED WITH IT ────────
 
-      Their own page states a balance AND a running credit and debit
-      total. Those three have to agree, and if they do not, something is
-      missing from the transaction list they showed us — a page we never
-      reached, a filter that silently excluded rows, a change to their
-      layout that quietly dropped a column. Every other check here reads
-      that list and trusts it; this is the only one that can notice the
-      list itself is short, which makes it the one worth having.
+      This used to assert `credit − debit == balance` and raise CRITICAL
+      when it did not, on the reasoning that a balance disagreeing with
+      the running totals means the transaction list we were shown is
+      short. The reasoning was sound. The premise was wrong.
 
-      Reported CRITICAL, not because the money is necessarily wrong but
-      because from here on nothing else on this account can be believed.
+      Their "Total Credit" and "Total Debit" are for the DATE WINDOW the
+      Finances page currently has selected — not since inception. The
+      balance is point-in-time. Subtracting one from the other and
+      expecting the balance is a category error, so the check could
+      never pass, and it fired CRITICAL every night on a healthy account
+      while telling the reader that nothing else here could be trusted —
+      discrediting the reconciliation that was working.
+
+      Measured, not assumed. An all-time total can only grow; these
+      moved DOWN as often as up:
+
+        07 Sep  credit 60,086.54  debit 167,602.22
+        08 Sep  credit 53,411.52  debit 133,782.35
+        09 Sep  credit 53,704.64  debit 122,165.85
+        10 Sep  credit 56,416.69  debit 113,163.95
+
+      and each debit equals THAT night's wallet-export sum to the paisa,
+      over the same rolling window.
+
+      The original verification note in `wallet-recharges.page.ts` says
+      the balance line was checked against the live page — and it was.
+      It confirmed the labels were there and the numbers parsed. What it
+      could not see from one reading is what the numbers MEAN, which is
+      only visible across several. **Scraping a figure correctly and
+      understanding it are separate acts, and a comment recording the
+      first reads like a record of the second.**
+
+      ── THE CHECK THAT REPLACES IT ────────────────────────────────────
+
+      Windowed totals are not useless — they are the same window the
+      export covers, from a different surface. So the page's stated
+      debit should equal the sum of the rows in the file we downloaded.
+      That is a real invariant between two independent readings of one
+      source, and it catches exactly what the old check was reaching
+      for: a truncated export sums BELOW what their own page says was
+      charged.
+
+      A rupee of tolerance, because their page rounds for display and
+      the file does not — every capture above differs by exactly one
+      paisa, which is the rounding and not a missing row.
     */
     const statedKey = `courier-wallet-totals-disagree:${accountId}`;
-    if (balance.totalCreditInr !== null && balance.totalDebitInr !== null) {
-      const implied = new Prisma.Decimal(balance.totalCreditInr).minus(balance.totalDebitInr);
-      if (!implied.equals(current)) {
+    const exportSum = exportSumInr === undefined ? null : new Prisma.Decimal(exportSumInr);
+    if (balance.totalDebitInr !== null && exportSum !== null) {
+      const stated = new Prisma.Decimal(balance.totalDebitInr);
+      const gap = stated.minus(exportSum).abs();
+      if (gap.greaterThan(ROUNDING_TOLERANCE_INR)) {
         await this.issues.raise({
           kind: SystemIssueKind.MONEY,
-          severity: SystemIssueSeverity.CRITICAL,
-          title: `${label}'s own wallet figures do not add up`,
+          severity: SystemIssueSeverity.HIGH,
+          title: `${label}'s wallet export does not match their own page`,
           detail:
-            `Their page states a balance of ₹${current.toFixed(2)}, but their own credit ` +
-            `(₹${new Prisma.Decimal(balance.totalCreditInr).toFixed(2)}) minus debit ` +
-            `(₹${new Prisma.Decimal(balance.totalDebitInr).toFixed(2)}) comes to ` +
-            `₹${implied.toFixed(2)} — a difference of ` +
-            `₹${implied.minus(current).abs().toFixed(2)}.
-
-` +
-            'Something is missing from the transaction list we were shown: a page we did not ' +
-            'reach, a filter excluding rows, or a change to their layout. Until it is ' +
-            'explained, nothing else reconciled on this account can be trusted — every other ' +
-            'check here reads that same list and believes it.',
+            `Their Finances page states ₹${stated.toFixed(2)} of debits for the window it is ` +
+            `showing, but the export we downloaded for the same window sums to ` +
+            `₹${exportSum.toFixed(2)} — a difference of ₹${gap.toFixed(2)}.\n\n` +
+            'The two are independent readings of the same ledger, so they should agree. A ' +
+            'shortfall in the file means rows are missing from it — a page we did not reach, a ' +
+            'filter excluding rows, or a truncated download — and every courier cost imported ' +
+            'from that file is therefore incomplete.',
           source: 'CourierWalletReconcileService',
           dedupeKey: statedKey,
           metadata: {
             courierAccountId: accountId,
-            statedBalanceInr: current.toFixed(2),
-            impliedBalanceInr: implied.toFixed(2),
+            statedWindowDebitInr: stated.toFixed(2),
+            exportSumInr: exportSum.toFixed(2),
+            differenceInr: gap.toFixed(2),
           },
         });
       } else {
         // Cleared as soon as they agree again — an issue that can only
         // ever open is one people stop reading.
-        await this.issues.resolveByKey(statedKey, 'Their stated figures agree again');
+        await this.issues.resolveByKey(
+          statedKey,
+          'The export matches their stated window debit again',
+        );
       }
     }
 

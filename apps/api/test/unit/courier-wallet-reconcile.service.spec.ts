@@ -221,9 +221,60 @@ describe('CourierWalletReconcileService', () => {
     expect(out.rechargesSeen).toBe(2);
   });
 
-  it('notices when THEIR OWN figures do not add up', async () => {
-    // The only check that can see the transaction list itself is short —
-    // every other one reads that list and believes it.
+  /**
+   * The export we downloaded against the figure their own page states
+   * for the same window.
+   *
+   * Two independent readings of one ledger, so a shortfall in the file
+   * means rows are missing from it. This REPLACED a check that asserted
+   * `credit − debit == balance` and raised CRITICAL when it did not: the
+   * reasoning was right and the premise was wrong, because their totals
+   * are for the selected window while the balance is point-in-time. It
+   * could never pass, and fired nightly on a healthy account saying
+   * nothing else there could be trusted.
+   */
+  function totalsIssue(
+    ctx: ReturnType<typeof make>,
+  ): { severity: string; metadata: Record<string, string> } | undefined {
+    return ctx.raise.mock.calls.find((c) =>
+      String((c[0] as { dedupeKey: string }).dedupeKey).startsWith(
+        'courier-wallet-totals-disagree',
+      ),
+    )?.[0] as { severity: string; metadata: Record<string, string> } | undefined;
+  }
+
+  it('raises when the export sums BELOW what their page says was charged', async () => {
+    const ctx = make();
+    Portal.recharges = [];
+    Portal.balance = {
+      balanceInr: '50000.00',
+      totalCreditInr: '100000.00',
+      totalDebitInr: '30000.00',
+    };
+    await ctx.svc.reconcile('delhivery', new Map([['ca-1', '25000.00']]));
+    const issue = totalsIssue(ctx);
+    expect(issue?.severity).toBe('HIGH');
+    expect(issue?.metadata['differenceInr']).toBe('5000.00');
+  });
+
+  it('a rounded paisa is NOT a missing row', async () => {
+    // Their page rounds for display and the file does not; every real
+    // capture differs by exactly this much.
+    const ctx = make();
+    Portal.recharges = [];
+    Portal.balance = {
+      balanceInr: '50000.00',
+      totalCreditInr: '100000.00',
+      totalDebitInr: '133782.35',
+    };
+    await ctx.svc.reconcile('delhivery', new Map([['ca-1', '133782.36']]));
+    expect(totalsIssue(ctx)).toBeUndefined();
+  });
+
+  it('says NOTHING when there was no export to compare against', async () => {
+    // A reconcile run on its own has no file. A missing input is not a
+    // finding, and raising on it would be the old check's mistake in a
+    // new costume.
     const ctx = make();
     Portal.recharges = [];
     Portal.balance = {
@@ -232,13 +283,22 @@ describe('CourierWalletReconcileService', () => {
       totalDebitInr: '30000.00',
     };
     await ctx.svc.reconcile();
-    const issue = ctx.raise.mock.calls.find((c) =>
-      String((c[0] as { dedupeKey: string }).dedupeKey).startsWith(
-        'courier-wallet-totals-disagree',
-      ),
-    )?.[0] as { severity: string; metadata: { impliedBalanceInr: string } };
-    expect(issue.severity).toBe('CRITICAL');
-    expect(issue.metadata.impliedBalanceInr).toBe('70000.00');
+    expect(totalsIssue(ctx)).toBeUndefined();
+  });
+
+  it('does NOT compare the balance against the windowed totals', async () => {
+    // The old check. `100000 − 30000 = 70000 ≠ 50000` and that is
+    // entirely normal: the totals cover a date window, the balance is
+    // now. Nothing should be raised on that arithmetic ever again.
+    const ctx = make();
+    Portal.recharges = [];
+    Portal.balance = {
+      balanceInr: '50000.00',
+      totalCreditInr: '100000.00',
+      totalDebitInr: '30000.00',
+    };
+    await ctx.svc.reconcile('delhivery', new Map([['ca-1', '30000.00']]));
+    expect(totalsIssue(ctx)).toBeUndefined();
   });
 
   it('clears the low-balance warning once it has been topped up', async () => {

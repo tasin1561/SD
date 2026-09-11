@@ -240,7 +240,15 @@ export class WalletSyncService {
       ledger import that has already succeeded.
     */
     try {
-      const recon = await this.walletReconcile.reconcile();
+      // What each account's export summed to, so the reconcile can hold
+      // it against the figure their own page states for the same
+      // window. Two independent readings of one ledger: if the file is
+      // short, its sum falls below theirs.
+      const exportSums = new Map<string, string>();
+      for (const r of results) {
+        if (r.result !== null) exportSums.set(r.courierAccountId, r.result.sumInr);
+      }
+      const recon = await this.walletReconcile.reconcile('delhivery', exportSums);
       this.logger.log(recon, 'Courier wallet reconciliation done');
     } catch (err) {
       this.logger.error(
