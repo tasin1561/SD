@@ -110,6 +110,16 @@ export const isRechargeDescription = (d: string): boolean =>
 
 const bankRef = (d: string): string | null => /Bank ReferenceNo:\s*([^\s|]+)/i.exec(d)?.[1] ?? null;
 
+/**
+ * A wallet credit that came out of a COD payout rather than from us or
+ * from them. Their exact wording for it has not been seen yet (none in
+ * the first 90 days), so this matches on what it must mention; a credit
+ * it misses is caught by the payout cross-check in the wallet sync, which
+ * names any payout whose top-up never shows up here.
+ */
+export const isCodFundedTopUp = (d: string): boolean =>
+  /\bCOD\b|\bCRF\b|remittance|postpaid/i.test(d);
+
 /** A recharge as the PASSBOOK shows it — with the exact time the history lacks. */
 export interface PassbookRecharge {
   readonly bankTxnRef: string | null;
@@ -136,6 +146,14 @@ export interface PassbookRead {
   readonly txns: readonly LedgerTxn[];
   readonly recharges: readonly PassbookRecharge[];
   readonly accountCredits: readonly PassbookCredit[];
+  /**
+   * Wallet credits funded from a COD payout (Shiprocket Postpaid: part of
+   * the remittance goes to the wallet instead of the bank). Our OWN money
+   * moving, exactly like a recharge — so NOT a transaction here, which
+   * would book it as the courier handing us income. Checked instead
+   * against the payouts that say they sent it.
+   */
+  readonly codTopUps: readonly PassbookCredit[];
   readonly rowsRead: number;
   readonly periodFrom: Date | null;
   readonly periodTo: Date | null;
@@ -206,6 +224,7 @@ export function parsePassbook(rows: readonly (readonly string[])[]): PassbookRea
   const txns: LedgerTxn[] = [];
   const recharges: PassbookRecharge[] = [];
   const accountCredits: PassbookCredit[] = [];
+  const codTopUps: PassbookCredit[] = [];
   const ordinals = new Map<string, number>();
   let debits = 0;
 
@@ -223,6 +242,15 @@ export function parsePassbook(rows: readonly (readonly string[])[]): PassbookRea
         amountInr: paiseToInr(Math.abs(p.amount)),
         occurredAt: p.at,
       });
+      continue;
+    }
+    if (
+      category === 'ADJUSTMENT' &&
+      credit &&
+      type === 'Recharge and Credit' &&
+      isCodFundedTopUp(description)
+    ) {
+      codTopUps.push({ amountPaise: p.amount, occurredAt: p.at, description });
       continue;
     }
     if (category === 'ADJUSTMENT' && credit) {
@@ -272,6 +300,7 @@ export function parsePassbook(rows: readonly (readonly string[])[]): PassbookRea
     txns,
     recharges,
     accountCredits,
+    codTopUps,
     rowsRead: rows.length,
     periodFrom: times.length === 0 ? null : new Date(Math.min(...times)),
     periodTo: times.length === 0 ? null : new Date(Math.max(...times)),
@@ -386,10 +415,12 @@ export interface LedgerCoverage {
  */
 export function ledgerCoverage(
   entries: readonly LedgerEntry[],
-  passbook: Pick<PassbookRead, 'recharges' | 'accountCredits'>,
+  passbook: Pick<PassbookRead, 'recharges' | 'accountCredits'> & {
+    readonly codTopUps?: readonly PassbookCredit[];
+  },
 ): LedgerCoverage {
   const pool: Array<{ amountPaise: number; at: number; used: boolean }> = [
-    ...passbook.accountCredits.map((c) => ({
+    ...[...passbook.accountCredits, ...(passbook.codTopUps ?? [])].map((c) => ({
       amountPaise: c.amountPaise,
       at: c.occurredAt.getTime(),
       used: false,
@@ -435,4 +466,42 @@ export function ledgerCoverage(
     });
   }
   return { checked, uncovered, documents };
+}
+
+/** A COD payout that says it sent part of the COD to the wallet. */
+export interface CodTopUpClaim {
+  readonly reference: string;
+  readonly amountPaise: number;
+  readonly at: Date;
+}
+
+/**
+ * Pair each payout's freight top-up with the wallet credit it should have
+ * produced: same amount, within 15 days, nearest first. What is left on
+ * either side is a problem worth naming — a top-up the wallet never
+ * showed (or showed under wording we did not recognise, and so booked as
+ * the courier's credit), or a COD-funded credit with no payout recorded.
+ */
+export function pairCodTopUps(
+  claims: readonly CodTopUpClaim[],
+  seen: readonly PassbookCredit[],
+  windowDays = LEDGER_MATCH_DAYS,
+): { unseen: CodTopUpClaim[]; unclaimed: PassbookCredit[] } {
+  const window = windowDays * 24 * 60 * 60 * 1000;
+  const pool = seen.map((s) => ({ s, used: false }));
+  const unseen: CodTopUpClaim[] = [];
+  for (const c of [...claims].sort((a, b) => a.at.getTime() - b.at.getTime())) {
+    let hit: (typeof pool)[number] | undefined;
+    for (const p of pool) {
+      if (p.used || p.s.amountPaise !== c.amountPaise) continue;
+      const gap = Math.abs(p.s.occurredAt.getTime() - c.at.getTime());
+      if (gap > window) continue;
+      if (hit === undefined || gap < Math.abs(hit.s.occurredAt.getTime() - c.at.getTime())) {
+        hit = p;
+      }
+    }
+    if (hit === undefined) unseen.push(c);
+    else hit.used = true;
+  }
+  return { unseen, unclaimed: pool.filter((p) => !p.used).map((p) => p.s) };
 }

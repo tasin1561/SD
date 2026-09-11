@@ -12,6 +12,7 @@ import {
   Prisma,
   BankEntryType,
   BankOwnerKind,
+  CourierRechargeMatch,
 } from '@skydrop/db';
 import { CodCreditService } from '../../seller-wallet-accrual/services/cod-credit.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
@@ -406,13 +407,16 @@ export class CourierSettlementService {
       // /expenses and the P&L as the cost it is — rather than a hole in
       // capital labelled "shortfall" that no report ever counts.
       //
-      // Freight and RTO reversals kept back are NOT grossed up: whether
-      // either is a cost depends on what the courier's wallet already
-      // shows (freight debited there too would be counted twice), so they
-      // stay against capital, named, for a person to judge.
-      const gross = amount.add(earlyCodFee);
+      // Freight kept back is Shiprocket POSTPAID: part of the COD goes
+      // into our Shiprocket wallet instead of our bank, and the freight is
+      // then debited from the wallet like any other (so it is already each
+      // parcel's cost). It is a TOP-UP, not a cost: grossed up here, then
+      // posted out as a courier-wallet recharge — the same entry a bank
+      // transfer into the wallet makes — with its recharge record, so the
+      // "paid but never arrived" check sees where it went.
+      const gross = amount.add(earlyCodFee).add(freightKept);
       const toCapital = gross.sub(attributed);
-      const otherKept = freightKept.add(rtoKept);
+      const otherKept = rtoKept;
       if (!toCapital.isZero()) {
         await this.bank.post(
           {
@@ -427,8 +431,7 @@ export class CourierSettlementService {
             staffId,
             note: toCapital.isNegative()
               ? otherKept.gt(0)
-                ? `Kept back by the courier on ${reference}: freight from COD ₹${freightKept.toFixed(2)}, ` +
-                  `RTO reversal ₹${rtoKept.toFixed(2)} — not booked as a cost; check against the courier wallet`
+                ? `RTO reversal ₹${rtoKept.toFixed(2)} kept back by the courier on ${reference}`
                 : `Shortfall absorbed on ${reference}`
               : `Ours from ${reference} — instant-pay reimbursement or unallocated`,
           },
@@ -462,6 +465,39 @@ export class CourierSettlementService {
           },
           tx,
         );
+      }
+      if (freightKept.gt(0)) {
+        const topUpRef = `COD-${reference}`;
+        const entry = await this.bank.post(
+          {
+            accountId: receivingAccount.id,
+            type: BankEntryType.COURIER_WALLET_RECHARGE,
+            signedAmount: freightKept.negated(),
+            amountCurrency: Currency.INR,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: receivedAt,
+            reference: topUpRef,
+            settlementId: row.id,
+            staffId,
+            note: `Moved from COD payout ${reference} into the courier wallet (freight from COD)`,
+          },
+          tx,
+        );
+        // Its recharge record, already matched: the money provably went
+        // to their wallet, because they say so in the payout itself. The
+        // wallet sync cross-checks that the credit shows up there.
+        await tx.courierWalletRecharge.create({
+          data: {
+            courierAccountId: input.courierAccountId,
+            externalTxnId: topUpRef,
+            bankTxnRef: topUpRef,
+            amountInr: freightKept,
+            status: 'Success',
+            occurredAt: receivedAt,
+            bankEntryId: entry.id,
+            matchState: CourierRechargeMatch.MATCHED,
+          },
+        });
       }
       const unexplained = amount.add(keptBack).sub(allocated);
 

@@ -62,6 +62,7 @@ function makeSut(
       lines: lines.map((l) => ({ ...l, order: { orderNumber: 'SD-2026-07-000001' } })),
     };
   });
+  const rechargeCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ id: 'rc-1' }));
   const orderFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async (args) => {
     const where = (args['where'] ?? {}) as AnyArgs;
     // The reconciliation query filters on status; the record path filters on id.
@@ -80,6 +81,8 @@ function makeSut(
     order: { findMany: orderFindMany },
     // The early-COD fee's category, found or created on first use.
     expenseCategory: { upsert: jest.fn(async () => ({ id: 'cat-cod-fee' })) },
+    // A COD-funded wallet top-up's recharge record.
+    courierWalletRecharge: { create: rechargeCreate },
   };
   // The shortfall circuit breaker reads its threshold from settings.
   const client2 = {
@@ -119,6 +122,7 @@ function makeSut(
     auditLog,
     created,
     settlementCreate,
+    rechargeCreate,
   };
 }
 
@@ -457,9 +461,10 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     );
   });
 
-  it('records freight kept back and explains the payout — but does not cost it', async () => {
-    // Whether freight taken from COD is a cost depends on whether the
-    // wallet debited it too; booking it here could count it twice.
+  it('books freight kept back as a TOP-UP of the courier wallet — never a cost, never a shortfall', async () => {
+    // Shiprocket Postpaid: ₹50 of the COD went into our Shiprocket wallet
+    // and paid for freight there, where each parcel's cost already
+    // records it. Costing it again here would count it twice.
     const sut = makeSut({ orders });
     await sut.svc.record(STAFF, {
       ...BASE,
@@ -472,9 +477,25 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     });
     const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
     expect(posts.filter((p) => p['type'] === 'EXPENSE')).toHaveLength(0);
-    const capital = posts.filter((p) => ownerKind(p) === 'CAPITAL');
-    expect(String(capital[0]?.['signedAmount'])).toBe('-50');
-    expect(String(capital[0]?.['note'])).toMatch(/freight from COD ₹50\.00/);
+    // Nothing absorbed by capital: the payout is explained in full.
+    expect(
+      posts.filter((p) => p['type'] === 'COURIER_SETTLEMENT' && ownerKind(p) === 'CAPITAL'),
+    ).toHaveLength(0);
+    const topUp = posts.filter((p) => p['type'] === 'COURIER_WALLET_RECHARGE');
+    expect(topUp).toHaveLength(1);
+    expect(String(topUp[0]?.['signedAmount'])).toBe('-50');
+    expect(topUp[0]?.['reference']).toBe('COD-DLV-PAYOUT-0001');
+    // Its recharge record, matched to that entry — or the "paid but
+    // never arrived" check would call it money lost.
+    expect(sut.rechargeCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        externalTxnId: 'COD-DLV-PAYOUT-0001',
+        bankEntryId: 'be-1',
+        matchState: 'MATCHED',
+      }),
+    });
+    const net = posts.reduce((t, p) => t.add(p['signedAmount'] as Prisma.Decimal), D('0'));
+    expect(net.toString()).toBe('950');
     expect(sut.auditLog).toHaveBeenCalledWith(
       expect.objectContaining({ severity: 'MEDIUM' }),
       expect.anything(),

@@ -18,11 +18,16 @@ import {
 } from './shiprocket-portal-session.service';
 import {
   ledgerCoverage,
+  pairCodTopUps,
+  paiseToInr,
   parseLedgerRows,
   parsePassbook,
   parseRechargeHistory,
   type LedgerCoverage,
+  type PassbookCredit,
 } from './shiprocket-wallet-rows';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const ACTION_SR_WALLET_OK = 'courier.shiprocket_wallet.synced';
 export const ACTION_SR_WALLET_FAILED = 'courier.shiprocket_wallet.sync_failed';
@@ -314,6 +319,8 @@ export class ShiprocketWalletSyncService {
         await this.issues.resolveByKey(ledgerKey, 'Every ledger credit is in the passbook again.');
       }
 
+      await this.checkCodTopUps(account, pb.codTopUps, now, windowDays);
+
       await this.issues.resolveByKey(
         `shiprocket-wallet-sync:${account.id}`,
         'The Shiprocket wallet sync completed on its own.',
@@ -395,6 +402,111 @@ export class ShiprocketWalletSyncService {
     const rechargeRows = await read((p) => p.readTab('recharge-history', from, to));
     const ledgerRows = await read((p) => p.readTab('ledger', from, to));
     return { passbookRows, usable, rechargeRows, ledgerRows };
+  }
+
+  /**
+   * Freight taken from a COD payout (Shiprocket Postpaid) is OUR money
+   * moving into the wallet: the payout books it as a top-up, and the
+   * passbook shows it as a credit we leave out of the P&L. Both halves
+   * must exist. A payout whose top-up never shows up means the credit
+   * never arrived — or arrived under wording we did not recognise, in
+   * which case it was booked as the courier's credit and the P&L reads
+   * our own money as income. A COD-funded credit with no payout means
+   * the payout was never recorded.
+   */
+  private async checkCodTopUps(
+    account: { id: string; label: string },
+    seen: readonly PassbookCredit[],
+    now: Date,
+    windowDays: number,
+  ): Promise<void> {
+    const since = new Date(now.getTime() - windowDays * DAY_MS);
+    const claims = await this.prisma.client.courierSettlement.findMany({
+      where: {
+        courierAccountId: account.id,
+        freightDeductedInr: { gt: 0 },
+        receivedAt: { gte: since },
+      },
+      select: { reference: true, freightDeductedInr: true, receivedAt: true },
+    });
+    const { unseen, unclaimed } = pairCodTopUps(
+      claims.map((c) => ({
+        reference: c.reference,
+        amountPaise: Math.round(Number(c.freightDeductedInr.toFixed(2)) * 100),
+        at: c.receivedAt,
+      })),
+      seen.filter((s) => s.occurredAt.getTime() >= since.getTime()),
+    );
+    // A payout recorded in the last three days may not have reached their passbook yet.
+    const overdue = unseen.filter((u) => now.getTime() - u.at.getTime() > 3 * DAY_MS);
+
+    const unseenKey = `shiprocket-cod-topup-unseen:${account.id}`;
+    if (overdue.length > 0) {
+      await this.issues.raise({
+        kind: SystemIssueKind.MONEY,
+        severity: SystemIssueSeverity.MEDIUM,
+        title: `${overdue.length} COD payout top-up(s) never showed up in ${account.label}'s Shiprocket wallet`,
+        detail:
+          'These payouts say Shiprocket moved part of the COD into our wallet (freight from ' +
+          'COD), and no wallet credit of that amount appears within 15 days. Either it never ' +
+          'arrived — ask Shiprocket — or their passbook worded it in a way we did not recognise, ' +
+          "in which case it was booked as the courier's own credit and the P&L reads our money as " +
+          'income until this is fixed.\n\n' +
+          overdue
+            .map(
+              (u) =>
+                `payout ${u.reference} · ${u.at.toISOString().slice(0, 10)} · ₹${paiseToInr(u.amountPaise)}`,
+            )
+            .join('\n'),
+        source: 'ShiprocketWalletSyncService',
+        dedupeKey: unseenKey,
+        metadata: {
+          courierAccountId: account.id,
+          payouts: overdue.map((u) => ({
+            reference: u.reference,
+            amountInr: paiseToInr(u.amountPaise),
+            receivedAt: u.at.toISOString(),
+          })),
+        },
+      });
+    } else {
+      await this.issues.resolveByKey(unseenKey, 'Every COD payout top-up is in the wallet.');
+    }
+
+    const unrecordedKey = `shiprocket-cod-topup-unrecorded:${account.id}`;
+    if (unclaimed.length > 0) {
+      await this.issues.raise({
+        kind: SystemIssueKind.MONEY,
+        severity: SystemIssueSeverity.MEDIUM,
+        title: `${unclaimed.length} wallet credit(s) in ${account.label} came from a COD payout we have not recorded`,
+        detail:
+          "Shiprocket's passbook shows part of a COD payout moved into the wallet, and no " +
+          'recorded payout says so. Record that payout on /settlements with its freight ' +
+          'deduction — until then the bank book is missing the payout (the credit itself is ' +
+          'correctly left out of the P&L: it is our own money).\n\n' +
+          unclaimed
+            .map(
+              (c) =>
+                `${c.occurredAt.toISOString().slice(0, 10)} · ₹${paiseToInr(c.amountPaise)} · ${c.description.slice(0, 100)}`,
+            )
+            .join('\n'),
+        source: 'ShiprocketWalletSyncService',
+        dedupeKey: unrecordedKey,
+        metadata: {
+          courierAccountId: account.id,
+          credits: unclaimed.map((c) => ({
+            amountInr: paiseToInr(c.amountPaise),
+            occurredAt: c.occurredAt.toISOString(),
+            description: c.description.slice(0, 200),
+          })),
+        },
+      });
+    } else {
+      await this.issues.resolveByKey(
+        unrecordedKey,
+        'Every COD-funded wallet credit has its payout.',
+      );
+    }
   }
 
   private async finish(summary: ShiprocketWalletSyncSummary): Promise<ShiprocketWalletSyncSummary> {

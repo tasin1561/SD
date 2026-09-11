@@ -94,6 +94,11 @@ function makeSut(opts: {
   openChallenge?: boolean;
   openError?: Error;
   rows?: Rows | Error;
+  codTopUps?: Array<{
+    reference: string;
+    freightDeductedInr: { toFixed: (n: number) => string };
+    receivedAt: Date;
+  }>;
 }) {
   const handle = {
     page: {},
@@ -121,6 +126,8 @@ function makeSut(opts: {
       systemIssue: {
         findFirst: async () => (opts.openChallenge === true ? { id: 'x' } : null),
       },
+      // Payouts that sent part of the COD to the wallet (Postpaid).
+      courierSettlement: { findMany: async () => opts.codTopUps ?? [] },
     },
   };
   const importer = { importTransactions: jest.fn(async (_i: Record<string, unknown>) => IMPORTED) };
@@ -278,5 +285,35 @@ describe('ShiprocketWalletSyncService', () => {
     expect(s.audit.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'courier.shiprocket_wallet.sync_failed' }),
     );
+  });
+});
+
+describe('ShiprocketWalletSyncService — COD-funded wallet top-ups', () => {
+  it('names a payout whose freight top-up never reached the wallet', async () => {
+    const s = makeSut({
+      codTopUps: [
+        {
+          reference: 'IN22625415423299',
+          freightDeductedInr: { toFixed: () => '500.00' },
+          receivedAt: new Date('2026-09-01T10:00:00Z'),
+        },
+      ],
+    });
+    await s.svc.sync('SCHEDULE', new Date('2026-09-11T10:00:00Z'));
+    expect(raisedKeys(s.issues)).toContain('shiprocket-cod-topup-unseen:acct-sr');
+  });
+
+  it('gives a payout recorded in the last three days time to arrive', async () => {
+    const s = makeSut({
+      codTopUps: [
+        {
+          reference: 'IN22625415423299',
+          freightDeductedInr: { toFixed: () => '500.00' },
+          receivedAt: new Date('2026-09-10T10:00:00Z'),
+        },
+      ],
+    });
+    await s.svc.sync('SCHEDULE', new Date('2026-09-11T10:00:00Z'));
+    expect(raisedKeys(s.issues)).not.toContain('shiprocket-cod-topup-unseen:acct-sr');
   });
 });

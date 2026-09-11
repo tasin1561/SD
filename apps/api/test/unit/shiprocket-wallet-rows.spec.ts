@@ -1,6 +1,7 @@
 import {
   classifyPassbookRow,
   ledgerCoverage,
+  pairCodTopUps,
   parseLedgerRows,
   parsePassbook,
   parseRechargeHistory,
@@ -385,5 +386,100 @@ describe('ledgerCoverage — their Ledger checked against their Passbook, never 
     const out = ledger([note, [...note.slice(0, 5), 'CN-B', '₹ 0']]);
     expect(out.checked).toBe(2);
     expect(out.uncovered).toHaveLength(1);
+  });
+});
+
+/**
+ * Shiprocket Postpaid: part of a COD payout goes into the wallet instead
+ * of the bank. That credit is OUR money moving — booked as a top-up on
+ * the payout — so the passbook must not store it as the courier handing
+ * us income.
+ */
+describe('a wallet credit funded from a COD payout', () => {
+  const rows = passbook(0, [
+    [
+      '05 Oct, 2026 10:00 AM',
+      'NA',
+      'NA',
+      'Recharge and Credit',
+      'Recharge and Credit',
+      'Amount credited from COD remittance CRF 13449838',
+      50000,
+    ],
+    [
+      '05 Oct, 2026 11:00 AM',
+      '5650817040',
+      '80156885583',
+      'Freight Charges',
+      'Freight Forward',
+      'Forward charges applied',
+      -9036,
+    ],
+    [
+      '06 Oct, 2026 03:34 PM',
+      'NA',
+      'NA',
+      'Recharge and Credit',
+      'Recharge and Credit',
+      'Credit note for lost shipment #SF3771705459KR',
+      46000,
+    ],
+  ]);
+
+  it('is set aside as a top-up: not a transaction, not a courier credit', () => {
+    const pb = parsePassbook(rows);
+    expect(pb.chainBreaks).toHaveLength(0);
+    expect(pb.codTopUps.map((c) => c.amountPaise)).toEqual([50000]);
+    // The freight is still the parcel's cost, and a real credit note is
+    // still the courier's credit — only the top-up is left out.
+    expect(pb.txns.map((t) => t.category)).toEqual(['PARCEL', 'ADJUSTMENT']);
+    expect(pb.accountCredits.map((c) => c.amountPaise)).toEqual([46000]);
+  });
+
+  it('counts as present when their Ledger lists it', () => {
+    const pb = parsePassbook(rows);
+    const cov = ledgerCoverage(
+      [
+        {
+          date: new Date('2026-10-05T00:00:00Z'),
+          particulars: 'Other Wallet Credits',
+          debitPaise: 0,
+          creditPaise: 50000,
+          description: 'COD remittance',
+        },
+      ],
+      pb,
+    );
+    expect(cov.uncovered).toHaveLength(0);
+  });
+});
+
+describe('pairCodTopUps', () => {
+  const at = (s: string): Date => new Date(s);
+  const credit = (paise: number, when: string) => ({
+    amountPaise: paise,
+    occurredAt: at(when),
+    description: 'COD remittance',
+  });
+
+  it('pairs a payout with the credit of the same amount, nearest first', () => {
+    const out = pairCodTopUps(
+      [{ reference: 'UTR-1', amountPaise: 50000, at: at('2026-10-04T10:00:00Z') }],
+      [credit(50000, '2026-10-20T10:00:00Z'), credit(50000, '2026-10-05T10:00:00Z')],
+    );
+    expect(out.unseen).toHaveLength(0);
+    // The far one is left over — a second top-up with no payout behind it.
+    expect(out.unclaimed.map((c) => c.occurredAt.toISOString())).toEqual([
+      '2026-10-20T10:00:00.000Z',
+    ]);
+  });
+
+  it('names a payout whose top-up never appeared, and a credit with no payout', () => {
+    const out = pairCodTopUps(
+      [{ reference: 'UTR-2', amountPaise: 30000, at: at('2026-10-04T10:00:00Z') }],
+      [credit(12000, '2026-10-05T10:00:00Z')],
+    );
+    expect(out.unseen.map((u) => u.reference)).toEqual(['UTR-2']);
+    expect(out.unclaimed).toHaveLength(1);
   });
 });
