@@ -213,10 +213,20 @@ export class ShiprocketPortalSessionService {
   }
 
   /** Broad on purpose: a false positive asks a person; a false negative
-   *  keeps hammering a challenge. */
+   *  keeps hammering a challenge.
+   *
+   *  But only what a person would SEE. Their login page always loads an
+   *  invisible reCAPTCHA — an anchor iframe and badge with
+   *  `visibility: hidden` — and counting that stopped the very first run
+   *  (2026-09-11) on a page asking nothing of anybody. A real challenge
+   *  is a visible checkbox or the visible picture popup. If the invisible
+   *  one silently refuses us, the login simply does not reach the panel,
+   *  which is reported as UNKNOWN with a screenshot. */
   private async detectChallenge(page: Page): Promise<'OTP' | 'CAPTCHA' | null> {
     const captcha = await page
-      .locator('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .g-recaptcha, [data-sitekey]')
+      .locator(
+        'iframe[src*="recaptcha"]:visible, iframe[src*="hcaptcha"]:visible, .g-recaptcha:visible, [data-sitekey]:visible',
+      )
       .count();
     if (captcha > 0) return 'CAPTCHA';
     const otp = await page
@@ -236,7 +246,10 @@ export class ShiprocketPortalSessionService {
       `shiprocket-challenge-${kind}-${Date.now()}.png`,
     );
     try {
-      await page.screenshot({ path: artifactPath, fullPage: true });
+      // The viewport, not fullPage: the first real challenge came back
+      // with no screenshot at all, and what a person needs is what the
+      // login box showed.
+      await page.screenshot({ path: artifactPath, fullPage: false, timeout: 15_000 });
     } catch {
       artifactPath = null;
     }
