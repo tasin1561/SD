@@ -1,5 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, Prisma, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
+import {
+  ActorType,
+  CourierWalletTxnCategory,
+  CourierWalletTxnKind,
+  Prisma,
+  SystemIssueKind,
+  SystemIssueSeverity,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
@@ -311,16 +318,21 @@ export class ShiprocketCostSyncService {
       }
       finalCount += 1;
 
-      // Their final figure is CHECKED against what the passbook ledger
-      // recorded — never written. One cost per parcel, from one writer.
+      // Their final figure is CHECKED against the passbook ledger — never
+      // written. One cost per parcel, from one writer.
+      //
+      // Against the FREIGHT part of the ledger only. `billing_amount` is
+      // their freight bill; the per-order extras the wallet also charged
+      // (WhatsApp messages, RTO-risk scoring, Delivery Boost) are billed on
+      // their separate VAS invoices. The parcel's recorded cost rightly
+      // includes those — it is what the parcel cost us — but comparing the
+      // bill with it would flag every parcel by ₹10.02 the day they bill.
       const billed = new Prisma.Decimal(reading.billedInr);
-      if (s.actualCourierCostInr === null && s.actualRtoCostInr === null) {
+      const recorded = await this.ledgerFreightInr(account.id, reading.awbNumber ?? s.awbNumber);
+      if (recorded === null) {
         ledgerUncovered += 1;
         continue;
       }
-      const recorded = (s.actualCourierCostInr ?? new Prisma.Decimal(0)).add(
-        s.actualRtoCostInr ?? new Prisma.Decimal(0),
-      );
       if (recorded.equals(billed)) {
         ledgerAgrees += 1;
         continue;
@@ -397,6 +409,35 @@ export class ShiprocketCostSyncService {
       ledgerUncovered,
       disagreements,
     };
+  }
+
+  /**
+   * Σ freight debits − Σ freight credits the wallet ledger holds for one
+   * parcel on one account; null when it holds none yet (not costed).
+   */
+  private async ledgerFreightInr(
+    courierAccountId: string,
+    awbNumber: string | null,
+  ): Promise<Prisma.Decimal | null> {
+    if (awbNumber === null) return null;
+    const rows = await this.prisma.client.courierWalletTransaction.groupBy({
+      by: ['kind'],
+      where: {
+        courierAccountId,
+        awbNumber,
+        category: CourierWalletTxnCategory.PARCEL,
+        missingFromExportAt: null,
+        detail: { path: ['transactionType'], equals: 'Freight Charges' },
+      },
+      _sum: { amountInr: true },
+    });
+    if (rows.length === 0) return null;
+    let net = new Prisma.Decimal(0);
+    for (const r of rows) {
+      const amount = r._sum.amountInr ?? new Prisma.Decimal(0);
+      net = r.kind === CourierWalletTxnKind.DEBIT ? net.add(amount) : net.sub(amount);
+    }
+    return net;
   }
 
   private failedResult(

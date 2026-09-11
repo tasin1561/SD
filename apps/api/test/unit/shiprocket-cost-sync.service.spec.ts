@@ -27,11 +27,23 @@ function makeSut(opts: {
   orders?: Record<string, unknown>;
   failOn?: string;
   heldReadings?: Record<string, { fingerprint: string; provisionalInr: Prisma.Decimal | null }>;
+  /** The wallet ledger's FREIGHT rows per waybill, as the passbook sync stored them. */
+  freight?: Record<string, { debit?: string; credit?: string }>;
 }) {
   const updates: Array<{ id: string; data: Record<string, unknown> }> = [];
   const readings: Array<Record<string, unknown>> = [];
   const snapshots: Array<Record<string, unknown>> = [];
   const held = { ...(opts.heldReadings ?? {}) };
+  const freightGroupBy = jest.fn(async ({ where }: { where: { awbNumber: string } }) => {
+    const f = opts.freight?.[where.awbNumber];
+    if (f === undefined) return [];
+    const rows: Array<{ kind: string; _sum: { amountInr: Prisma.Decimal } }> = [];
+    if (f.debit !== undefined)
+      rows.push({ kind: 'DEBIT', _sum: { amountInr: new Prisma.Decimal(f.debit) } });
+    if (f.credit !== undefined)
+      rows.push({ kind: 'CREDIT', _sum: { amountInr: new Prisma.Decimal(f.credit) } });
+    return rows;
+  });
   const client = {
     systemSetting: {
       findUnique: async () => ({ valueBoolean: opts.enabled ?? true }),
@@ -58,6 +70,9 @@ function makeSut(opts: {
         updates.push({ id: where.id, data });
         return {};
       },
+    },
+    courierWalletTransaction: {
+      groupBy: freightGroupBy,
     },
     courierCostReading: {
       findFirst: async ({ where }: { where: { shipmentId: string } }) =>
@@ -96,7 +111,7 @@ function makeSut(opts: {
     audit as unknown as AuditLogService,
     issues as unknown as SystemIssueService,
   );
-  return { svc, updates, readings, snapshots, audit, issues };
+  return { svc, updates, readings, snapshots, audit, issues, freightGroupBy };
 }
 
 const ship = (id: string, fwd: string | null = null, rto: string | null = null): Ship => ({
@@ -122,6 +137,7 @@ describe('ShiprocketCostSyncService', () => {
     // a parcel Shiprocket has not billed yet.
     const s = makeSut({
       shipments: [ship('back', '0', '163.40'), ship('unbilled')],
+      freight: { AWB: { debit: '211.40', credit: '48.00' } },
       orders: {
         'SR-back': srOrder('RTO DELIVERED', {
           cod_charges: 47,
@@ -156,6 +172,7 @@ describe('ShiprocketCostSyncService', () => {
   it('names a final bill that disagrees with the wallet ledger, and says so', async () => {
     const s = makeSut({
       shipments: [ship('p', '90.00')],
+      freight: { AWB: { debit: '90.00' } },
       orders: {
         'SR-p': srOrder('DELIVERED', { freight_charges: '94.00', billing_amount: '94.00' }),
       },
@@ -186,6 +203,30 @@ describe('ShiprocketCostSyncService', () => {
     expect(s.issues.raise).not.toHaveBeenCalled();
   });
 
+  it('the extras their wallet charged beside freight are not a disagreement', async () => {
+    // WhatsApp (₹5.90) and RTO scoring (₹4.12) are in the parcel's recorded
+    // cost — they are what it cost us — but billed on their VAS invoices,
+    // not in `billing_amount`. Comparing the bill with the whole cost would
+    // flag every parcel by ₹10.02 the day they bill it.
+    const s = makeSut({
+      shipments: [ship('p', '104.02')],
+      freight: { AWB: { debit: '94.00' } },
+      orders: {
+        'SR-p': srOrder('DELIVERED', { freight_charges: '94.00', billing_amount: '94.00' }),
+      },
+    });
+    const run = await s.svc.sync('MANUAL');
+    expect(run.accounts[0]).toMatchObject({ ledgerAgrees: 1, ledgerDisagrees: 0 });
+    expect(s.freightGroupBy.mock.calls[0]?.[0]).toMatchObject({
+      where: {
+        courierAccountId: 'acct-sr',
+        awbNumber: 'AWB',
+        missingFromExportAt: null,
+        detail: { path: ['transactionType'], equals: 'Freight Charges' },
+      },
+    });
+  });
+
   it('stores a reading only when something changed', async () => {
     const orders = {
       'SR-p': srOrder('DELIVERED', { freight_charges: '94.00', billing_amount: '' }),
@@ -199,6 +240,7 @@ describe('ShiprocketCostSyncService', () => {
   it('one order that will not load does not stop the others', async () => {
     const s = makeSut({
       shipments: [ship('bad'), ship('good', '94.00')],
+      freight: { AWB: { debit: '94.00' } },
       failOn: 'SR-bad',
       orders: {
         'SR-good': srOrder('DELIVERED', { freight_charges: '94.00', billing_amount: '94.00' }),
