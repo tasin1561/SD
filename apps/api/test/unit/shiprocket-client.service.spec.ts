@@ -2,6 +2,7 @@ import type { CourierWriteGuardService } from '../../src/modules/courier-shared/
 import { ShiprocketClientService } from '../../src/modules/courier-shiprocket/services/shiprocket-client.service';
 import type { ShiprocketHttpService } from '../../src/modules/courier-shiprocket/services/shiprocket-http.service';
 import type { ShiprocketAwbRequest } from '../../src/modules/courier-shiprocket/types/shiprocket.types';
+import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
 type Call = { path: string; body?: unknown; method: string };
 
@@ -11,6 +12,8 @@ function makeSut(
     responses?: Record<string, unknown>;
     throwOn?: string;
     throwWith?: string;
+    /** The account's registered pickup location; null = none recorded. */
+    pickupLocationName?: string | null;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -31,13 +34,24 @@ function makeSut(
   // own suite, which already covers it for both couriers.
   const assertWritable = jest.fn(async () => undefined);
   const writeGuard = { assertWritable } as unknown as CourierWriteGuardService;
-  return { svc: new ShiprocketClientService(http, writeGuard), calls, assertWritable };
+  // The account's registered pickup location — what every real booking
+  // must send as `pickup_location`.
+  const prisma = {
+    client: {
+      courierAccount: {
+        findUnique: async () => ({
+          pickupLocationName:
+            opts.pickupLocationName === undefined ? 'warehouse' : opts.pickupLocationName,
+        }),
+      },
+    },
+  } as unknown as PrismaService;
+  return { svc: new ShiprocketClientService(http, writeGuard, prisma), calls, assertWritable };
 }
 
 const REQ: ShiprocketAwbRequest = {
   shipmentId: '01930000-0000-7000-8000-000000000042',
   orderNumber: 'SD-2026-08-000042',
-  pickupLocationName: 'BLR-01',
   recipient: {
     name: 'Pooja Sharma',
     addressLine1: '12 MG Road',
@@ -87,6 +101,33 @@ describe('ShiprocketClientService.generateAwb — two calls, one waybill', () =>
       courierShipmentId: '9911',
       courierOrderId: '8811',
     });
+  });
+
+  it("sends the ACCOUNT's registered pickup location — never our warehouse id", async () => {
+    // Shiprocket matches `pickup_location` against names registered on
+    // the account. The booking used to be handed our warehouse's UUID,
+    // which no Shiprocket account has, so every real booking would have
+    // been refused.
+    const sut = makeSut({
+      pickupLocationName: 'warehouse',
+      responses: { 'orders/create/adhoc': OK_CREATE, 'courier/assign/awb': OK_ASSIGN },
+    });
+    await sut.svc.generateAwb(REQ, 'acct-1');
+    expect((sut.calls[0]?.body as { pickup_location: string }).pickup_location).toBe('warehouse');
+  });
+
+  it('refuses as TRANSIENT, and calls nothing, when the account has no pickup location', async () => {
+    // A setup gap, not an opinion about the parcel: it must not fail over
+    // or land in manual placement, and nothing may reach Shiprocket.
+    const sut = makeSut({
+      pickupLocationName: null,
+      responses: { 'orders/create/adhoc': OK_CREATE, 'courier/assign/awb': OK_ASSIGN },
+    });
+    const r = await sut.svc.generateAwb(REQ, 'acct-1');
+    expect(r).toMatchObject({ ok: false, failure: 'TRANSIENT' });
+    expect((r as { message: string }).message).toMatch(/PICKUP_LOCATION_NOT_CONFIGURED/);
+    expect(sut.calls).toHaveLength(0);
+    expect(sut.assertWritable).not.toHaveBeenCalled();
   });
 
   it('converts grams to KILOGRAMS, because their API takes kg', async () => {

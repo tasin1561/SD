@@ -143,7 +143,6 @@ export class ReversePickupBookingService {
       // their panel without cross-referencing ours.
       shipmentNumber: `${s.shipmentNumber}-RVP`,
       orderNumber: s.shipmentNumber,
-      pickupLocationName: '',
       recipientName: s.destRecipientName,
       recipientPhoneE164: s.destRecipientPhoneE164,
       addressLine1: s.destAddressLine1,

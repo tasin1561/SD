@@ -18,7 +18,6 @@ function input(over: Partial<DispatchAwbInput> = {}): DispatchAwbInput {
     shipmentId: 'ship-1',
     shipmentNumber: 'SH-2026-05-000042',
     orderNumber: 'SD-2026-05-000042',
-    pickupLocationName: 'Bengaluru WH',
     recipientName: 'Asha',
     recipientPhoneE164: '+919876543210',
     addressLine1: '12 MG Road',

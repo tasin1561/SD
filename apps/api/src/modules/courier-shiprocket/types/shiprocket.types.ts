@@ -181,7 +181,6 @@ export interface ShiprocketTrackingResponse {
 export interface ShiprocketAwbRequest {
   readonly shipmentId: string;
   readonly orderNumber: string;
-  readonly pickupLocationName: string;
   readonly recipient: {
     readonly name: string;
     readonly addressLine1: string;

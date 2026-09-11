@@ -15,7 +15,6 @@ export interface DispatchAwbInput {
   readonly shipmentId: string;
   readonly shipmentNumber: string;
   readonly orderNumber: string;
-  readonly pickupLocationName: string;
   readonly recipientName: string;
   readonly recipientPhoneE164: string;
   readonly addressLine1: string;
@@ -344,7 +343,6 @@ export class CourierAwbDispatchService {
     const req: ShiprocketAwbRequest = {
       shipmentId: input.shipmentId,
       orderNumber: input.orderNumber,
-      pickupLocationName: input.pickupLocationName,
       recipient: {
         name: input.recipientName,
         addressLine1: input.addressLine1,

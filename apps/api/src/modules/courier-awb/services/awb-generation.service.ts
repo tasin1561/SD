@@ -314,10 +314,6 @@ export class AwbGenerationService {
       shipmentId,
       shipmentNumber: shipment.shipmentNumber,
       orderNumber: shipment.orderShipments[0]?.order.orderNumber ?? shipment.shipmentNumber,
-      // Their pickup locations are registered by NAME and matched
-      // exactly (the same rule courier-ops warns about for Delhivery
-      // warehouse registration).
-      pickupLocationName: shipment.originWarehouseId,
       recipientName: shipment.destRecipientName,
       recipientPhoneE164: shipment.destRecipientPhoneE164,
       addressLine1: shipment.destAddressLine1,

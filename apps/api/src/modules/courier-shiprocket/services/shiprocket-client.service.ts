@@ -1,3 +1,4 @@
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { ActorType } from '@skydrop/db';
 import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
@@ -74,7 +75,28 @@ export class ShiprocketClientService {
   constructor(
     private readonly http: ShiprocketHttpService,
     private readonly writeGuard: CourierWriteGuardService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * The pickup location this ACCOUNT registered with Shiprocket, by name.
+   *
+   * Shiprocket matches `pickup_location` against the names registered on
+   * the account, exactly — so it has to be THEIR name ("warehouse"), read
+   * from the account it will be booked on. The booking used to be handed
+   * our internal warehouse id here, a UUID no Shiprocket account has ever
+   * registered, so every real booking would have been refused. Delhivery
+   * never noticed because it resolves its own name the same way this now
+   * does. Null when the account has none recorded.
+   */
+  private async pickupLocationName(courierAccountId: string): Promise<string | null> {
+    const row = await this.prisma.client.courierAccount.findUnique({
+      where: { id: courierAccountId },
+      select: { pickupLocationName: true },
+    });
+    const name = (row?.pickupLocationName ?? '').trim();
+    return name === '' ? null : name;
+  }
 
   private actor(): CourierCredentialActor {
     return { type: ActorType.SYSTEM };
@@ -108,6 +130,21 @@ export class ShiprocketClientService {
   ): Promise<ShiprocketAwbResult> {
     if (await this.http.isStubMode()) return this.stubAwb(req);
 
+    // A setup gap, not an opinion about the parcel: TRANSIENT, so it is
+    // neither failed over nor pushed to manual placement, and the
+    // waybill watchdog names it until somebody records the name.
+    const pickupLocationName = await this.pickupLocationName(courierAccountId);
+    if (pickupLocationName === null) {
+      return {
+        ok: false,
+        failure: 'TRANSIENT',
+        message:
+          'PICKUP_LOCATION_NOT_CONFIGURED: this Shiprocket account has no pickup location name. ' +
+          'Record the exact name registered on Shiprocket (Settings → Pickup Addresses) on the ' +
+          'courier account before booking.',
+      };
+    }
+
     // Manifests a real parcel Shiprocket now expects to collect. The
     // guard sits before createOrder rather than before the AWB assign,
     // because the ORDER is the thing that becomes real — a created
@@ -118,7 +155,7 @@ export class ShiprocketClientService {
       orderNumber: req.orderNumber,
     });
 
-    const created = await this.createOrder(req, courierAccountId);
+    const created = await this.createOrder(req, courierAccountId, pickupLocationName);
     if (!created.ok) return created;
 
     try {
@@ -163,6 +200,7 @@ export class ShiprocketClientService {
   private async createOrder(
     req: ShiprocketAwbRequest,
     courierAccountId: string,
+    pickupLocationName: string,
   ): Promise<
     // Its OWN result type, not the AWB one. Sharing it made both
     // branches structurally `ok: true` and the narrowing collapsed —
@@ -177,7 +215,7 @@ export class ShiprocketClientService {
     const body: ShiprocketCreateOrderRequest = {
       order_id: req.orderNumber,
       order_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-      pickup_location: req.pickupLocationName,
+      pickup_location: pickupLocationName,
       billing_customer_name: firstName ?? req.recipient.name,
       // Their API wants the surname separately and rejects an empty one
       // on some plans; a single-word name repeats rather than sends ''.
