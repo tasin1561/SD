@@ -150,6 +150,89 @@ export class WalletSyncService {
           coveredDays,
         });
         await this.reportCoverage(account, windowDays, coveredDays, rangeApplied, result);
+
+        /*
+          THEY EDITED A TRANSACTION WE ALREADY HOLD.
+
+          A courier corrects a charge by adding a reversal, never by
+          rewriting history, so this should never fire — which is exactly
+          why it is worth an alarm when it does. Our copy is NOT rewritten
+          (the importer reports rather than applies); this tells a person
+          so the difference is put to the courier while it is fresh.
+        */
+        if (result.txnsMutated > 0) {
+          await this.issues.raise({
+            kind: SystemIssueKind.MONEY,
+            severity: SystemIssueSeverity.HIGH,
+            title: `${result.txnsMutated} transaction(s) changed in ${account.label}'s ledger`,
+            detail:
+              `Their latest export carries ${result.txnsMutated} transaction(s) under ids we ` +
+              'already hold, with a different amount, direction or waybill. They correct a ' +
+              'charge by adding a reversal, not by editing one, so this is history being ' +
+              'rewritten.\n\n' +
+              result.mutated
+                .slice(0, 10)
+                .map(
+                  (m) =>
+                    `${m.txnId} · ${m.awbNumber ?? 'no AWB'} · ours ${m.ourKind} ₹${m.ourAmountInr} → theirs ${m.theirKind} ₹${m.theirAmountInr}`,
+                )
+                .join('\n') +
+              '\n\nOur recorded copy has been kept unchanged. Ask Delhivery in writing which is ' +
+              'correct.',
+            source: 'WalletSyncService',
+            dedupeKey: `wallet-txn-mutated:${account.id}`,
+            metadata: {
+              courierAccountId: account.id,
+              label: account.label,
+              count: result.txnsMutated,
+              mutated: result.mutated.slice(0, 25).map((m) => ({ ...m })),
+            },
+          });
+        }
+
+        /*
+          THEIR LEDGER DROPPED SOMETHING WE HOLD.
+
+          Raised here, not in the importer, because this is where the
+          issue service already lives and where the account is known by
+          name. The importer has already stamped the rows and stopped
+          netting them; this is the part that tells a person, because a
+          charge vanishing from a courier's own history is a question to
+          put to the courier, in writing, while the dates are fresh.
+        */
+        if (result.txnsMissing > 0) {
+          const total = result.missing.reduce(
+            (a, m) => a + (m.kind === 'DEBIT' ? 1 : -1) * Number(m.amountInr),
+            0,
+          );
+          await this.issues.raise({
+            kind: SystemIssueKind.MONEY,
+            severity: SystemIssueSeverity.HIGH,
+            title: `${result.txnsMissing} transaction(s) vanished from ${account.label}'s ledger`,
+            detail:
+              `Their latest export covers these dates but no longer contains ` +
+              `${result.txnsMissing} transaction(s) we recorded earlier (net ₹${total.toFixed(2)}). ` +
+              'Not a changed amount — the rows are gone.\n\n' +
+              result.missing
+                .slice(0, 10)
+                .map(
+                  (m) =>
+                    `${m.txnId} · ${m.awbNumber ?? 'no AWB'} · ${m.kind} ₹${m.amountInr} · ${m.occurredAt.slice(0, 10)}`,
+                )
+                .join('\n') +
+              '\n\nThey are kept on our side as evidence and no longer counted in parcel costs, ' +
+              'because the current export still balances to the live wallet without them. Ask ' +
+              'Delhivery in writing why they were removed.',
+            source: 'WalletSyncService',
+            dedupeKey: `wallet-txn-missing:${account.id}`,
+            metadata: {
+              courierAccountId: account.id,
+              label: account.label,
+              count: result.txnsMissing,
+              missing: result.missing.slice(0, 25).map((m) => ({ ...m })),
+            },
+          });
+        }
         // It worked, so clear its own alarm. A job that starts working
         // again should not leave a stale row for a person to tidy.
         await this.issues.resolveByKey(

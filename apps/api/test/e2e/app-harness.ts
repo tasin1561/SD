@@ -456,6 +456,10 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // NULL, so truncating the entries alone would leave recharges
         // reading as "never paid for" — the exact state the sweep raises
         // a CRITICAL about. Cleared here, ahead of the entries (MUST #12).
+        // The per-transaction wallet ledger. A leaf (nothing references it)
+        // but it references courier_accounts, so it must be cleared here or
+        // one suite's transactions leak into the next suite's netting.
+        'courier_wallet_transactions',
         'courier_wallet_recharges',
         'courier_wallet_balances',
         'bank_entries',

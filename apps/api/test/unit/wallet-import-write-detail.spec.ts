@@ -152,6 +152,8 @@ describe('an import says which parcels it wrote', () => {
         leg: 'forward',
         amountInr: '42.5',
         revised: false,
+        // A first reading had nothing before it.
+        previousInr: null,
       },
     ]);
   });

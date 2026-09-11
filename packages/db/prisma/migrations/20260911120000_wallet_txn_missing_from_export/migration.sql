@@ -1,0 +1,13 @@
+-- A transaction the courier's ledger stopped admitting to.
+--
+-- On 2026-09-11 four debits dated 7 Sep — ₹77.19 three times and ₹83.30
+-- once — were in that night's wallet export and absent from a 90-day
+-- export covering the same day. Not a changed amount under the same id:
+-- the rows were gone. Mutation detection could not see that, because it
+-- only compares a transaction against itself.
+--
+-- The row is KEPT (it is the evidence) and stamped; the stamp is cleared
+-- if the transaction reappears. Netting excludes stamped rows, because
+-- the later file still balances to the live wallet — it is the ledger
+-- the money actually follows.
+ALTER TABLE "courier_wallet_transactions" ADD COLUMN "missing_from_export_at" TIMESTAMPTZ;

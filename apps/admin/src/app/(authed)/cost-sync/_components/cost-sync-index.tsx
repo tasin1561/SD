@@ -177,6 +177,12 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
         {a.rangeApplied === false && (
           <StatusBadge kind="pending" label="Date filter was not applied" />
         )}
+        {a.txnsMissing > 0 && (
+          // Their ledger dropped transactions we held for dates this file
+          // covers. Not a parse problem — a history change, and a system
+          // issue says which ones.
+          <StatusBadge kind="failed" label={`${a.txnsMissing} vanished from their ledger`} />
+        )}
       </div>
     </div>
   );
@@ -291,8 +297,13 @@ function WrittenParcels({
             {w.revised && (
               // A figure that MOVED is the normal case on a later export
               // and a different fact from a first reading — worth telling
-              // apart when a margin changes under somebody.
-              <StatusBadge kind="pending" label="revised" />
+              // apart when a margin changes under somebody. The previous
+              // figure is shown because "revised" alone does not say by
+              // how much, or in which direction.
+              <StatusBadge
+                kind="pending"
+                label={w.previousInr === null ? 'revised' : `was ₹${w.previousInr}`}
+              />
             )}
           </div>
         ))}

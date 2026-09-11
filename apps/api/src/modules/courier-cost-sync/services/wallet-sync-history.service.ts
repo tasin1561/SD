@@ -44,6 +44,8 @@ export interface WalletSyncRunAccount {
   readonly writes: readonly WalletSyncWrite[];
   /** How many were written but not listed, past the cap. */
   readonly writesTruncated: number;
+  /** Transactions we held that this run's export no longer contained. */
+  readonly txnsMissing: number;
 }
 
 export interface WalletSyncWrite {
@@ -52,6 +54,8 @@ export interface WalletSyncWrite {
   readonly leg: string;
   readonly amountInr: string;
   readonly revised: boolean;
+  /** What it was before this run; null on a first reading or an old run. */
+  readonly previousInr: string | null;
 }
 
 export interface WalletSyncRun {
@@ -244,6 +248,7 @@ function toAccount(raw: unknown): WalletSyncRunAccount {
     dryRun: bool(res, 'dryRun'),
     writes: toWrites(res['writes']),
     writesTruncated: num(res, 'writesTruncated') ?? 0,
+    txnsMissing: num(res, 'txnsMissing') ?? 0,
   };
 }
 
@@ -260,6 +265,7 @@ function toWrites(raw: unknown): WalletSyncWrite[] {
       leg: typeof w['leg'] === 'string' ? w['leg'] : 'forward',
       amountInr: typeof w['amountInr'] === 'string' ? w['amountInr'] : '0',
       revised: w['revised'] === true,
+      previousInr: typeof w['previousInr'] === 'string' ? w['previousInr'] : null,
     });
   }
   return out;

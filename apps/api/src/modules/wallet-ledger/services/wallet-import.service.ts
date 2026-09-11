@@ -81,6 +81,8 @@ export interface WalletImportResult {
    * disagree about a past fact, and it is reported rather than applied.
    */
   readonly txnsMutated: number;
+  /** The mutated transactions themselves, our copy against theirs (capped). */
+  readonly mutated: readonly MutatedTxn[];
   /** Ledger-level entries in the file — reconciliations, settlements,
    *  credit notes. Not a parcel's cost; their own P&L line. */
   readonly adjustments: number;
@@ -88,6 +90,14 @@ export interface WalletImportResult {
   /** The file's own arithmetic: opening + recharges + refunds − deductions.
    *  Null when the Summary sheet is absent. */
   readonly impliedClosingInr: string | null;
+  /**
+   * Transactions WE hold, dated inside this export's span, that the
+   * export no longer contains. Zero is normal; anything else means their
+   * ledger changed its own history. Listed (capped) so the audit row
+   * names them.
+   */
+  readonly txnsMissing: number;
+  readonly missing: readonly MissingTxn[];
 }
 
 export interface WalletImportWrite {
@@ -100,6 +110,35 @@ export interface WalletImportWrite {
   /** True when a figure already existed and MOVED. The normal case on a
    *  later export, and worth telling apart from a first reading. */
   readonly revised: boolean;
+  /**
+   * What it was BEFORE this import. Null on a first reading.
+   *
+   * The audit row used to record only the new figure, so a revision
+   * overwrote its own evidence: on 2026-09-11 four parcels were about
+   * to move from ₹77.19 to ₹75.95 with nothing anywhere saying they had
+   * ever been ₹77.19. Before→after is what a dispute is argued from.
+   */
+  readonly previousInr: string | null;
+}
+
+/** A transaction whose amount, direction or waybill differs between our
+ *  stored copy and the courier's latest export — history, edited. */
+export interface MutatedTxn {
+  readonly txnId: string;
+  readonly awbNumber: string | null;
+  readonly ourKind: string;
+  readonly theirKind: string;
+  readonly ourAmountInr: string;
+  readonly theirAmountInr: string;
+}
+
+/** A transaction a fresh export covering its date no longer contains. */
+export interface MissingTxn {
+  readonly txnId: string;
+  readonly awbNumber: string | null;
+  readonly kind: string;
+  readonly amountInr: string;
+  readonly occurredAt: string;
 }
 
 /**
@@ -214,6 +253,15 @@ export class WalletImportService {
     */
     const courierAccountId = opts.courierAccountId ?? (await this.defaultAccountId());
     const stored = await this.storeTransactions(parsed.txns, courierAccountId, dryRun);
+    // BEFORE netting, so a row their ledger has dropped stops counting in
+    // the same run that notices it.
+    const missing = await this.reconcileWindow(
+      courierAccountId,
+      parsed.txns,
+      parsed.periodFrom,
+      parsed.periodTo,
+      dryRun,
+    );
 
     const awbs = new Set(
       parsed.txns.map((t) => t.awbNumber).filter((a): a is string => a !== null),
@@ -309,6 +357,7 @@ export class WalletImportService {
           leg,
           amountInr: next.toString(),
           revised: wasRevised,
+          previousInr: current === null ? null : current.toString(),
         });
       } else {
         writesTruncated += 1;
@@ -393,9 +442,12 @@ export class WalletImportService {
       txnsNew: stored.created,
       txnsAlreadyHeld: stored.existing,
       txnsMutated: stored.mutated.length,
+      mutated: stored.mutated.slice(0, WRITE_DETAIL_CAP),
       adjustments: adjustmentTxns.length,
       adjustmentsNetInr: adjustmentsNet.toFixed(2),
       impliedClosingInr: impliedClosing,
+      txnsMissing: missing.length,
+      missing: missing.slice(0, WRITE_DETAIL_CAP),
     };
 
     if (!dryRun) {
@@ -418,6 +470,70 @@ export class WalletImportService {
     }
     this.logger.log({ ...result }, 'Delhivery wallet ledger imported');
     return result;
+  }
+
+  /**
+   * A transaction we hold that a fresh export covering its date omits.
+   *
+   * Mutation detection compares a transaction against ITSELF, so it
+   * cannot see one that is simply gone — and on 2026-09-11 that is what
+   * happened: four debits dated 7 Sep were in that night's export and
+   * absent from a 90-day export covering the same day.
+   *
+   * Only the span the file actually covers is judged: from its earliest
+   * row to its latest. A row dated outside that is not "missing", the
+   * file just does not reach it. The row is KEPT — it is the evidence —
+   * and stamped; the stamp is cleared if the transaction reappears, so a
+   * transient omission corrects itself instead of haunting the ledger.
+   */
+  private async reconcileWindow(
+    courierAccountId: string,
+    txns: readonly LedgerTxn[],
+    from: Date | null,
+    to: Date | null,
+    dryRun: boolean,
+  ): Promise<MissingTxn[]> {
+    if (from === null || to === null) return [];
+    const inFile = new Set(txns.map((t) => t.txnId));
+    const held = await this.prisma.client.courierWalletTransaction.findMany({
+      where: { courierAccountId, occurredAt: { gte: from, lte: to } },
+      select: {
+        id: true,
+        txnId: true,
+        awbNumber: true,
+        kind: true,
+        amountInr: true,
+        occurredAt: true,
+        missingFromExportAt: true,
+      },
+    });
+
+    const missing = held.filter((h) => !inFile.has(h.txnId));
+    const returned = held.filter((h) => inFile.has(h.txnId) && h.missingFromExportAt !== null);
+
+    if (!dryRun) {
+      const newly = missing.filter((h) => h.missingFromExportAt === null).map((h) => h.id);
+      if (newly.length > 0) {
+        await this.prisma.client.courierWalletTransaction.updateMany({
+          where: { id: { in: newly } },
+          data: { missingFromExportAt: new Date() },
+        });
+      }
+      if (returned.length > 0) {
+        await this.prisma.client.courierWalletTransaction.updateMany({
+          where: { id: { in: returned.map((h) => h.id) } },
+          data: { missingFromExportAt: null },
+        });
+      }
+    }
+
+    return missing.map((h) => ({
+      txnId: h.txnId,
+      awbNumber: h.awbNumber,
+      kind: h.kind,
+      amountInr: h.amountInr.toString(),
+      occurredAt: h.occurredAt.toISOString(),
+    }));
   }
 
   /** The default active production Delhivery account — the same lookup
@@ -464,7 +580,7 @@ export class WalletImportService {
     txns: readonly LedgerTxn[],
     courierAccountId: string,
     dryRun: boolean,
-  ): Promise<{ created: number; existing: number; mutated: LedgerTxn[] }> {
+  ): Promise<{ created: number; existing: number; mutated: MutatedTxn[] }> {
     if (txns.length === 0) return { created: 0, existing: 0, mutated: [] };
 
     const byId = new Map(txns.map((t) => [t.txnId, t]));
@@ -473,7 +589,7 @@ export class WalletImportService {
       select: { txnId: true, amountInr: true, kind: true, awbNumber: true },
     });
 
-    const mutated: LedgerTxn[] = [];
+    const mutated: MutatedTxn[] = [];
     for (const h of held) {
       const t = byId.get(h.txnId);
       if (t === undefined) continue;
@@ -481,7 +597,16 @@ export class WalletImportService {
         !h.amountInr.equals(new Prisma.Decimal(t.amountInr)) ||
         h.kind !== t.kind ||
         (h.awbNumber ?? null) !== t.awbNumber;
-      if (changed) mutated.push(t);
+      if (changed) {
+        mutated.push({
+          txnId: t.txnId,
+          awbNumber: t.awbNumber,
+          ourKind: h.kind,
+          theirKind: t.kind,
+          ourAmountInr: h.amountInr.toString(),
+          theirAmountInr: t.amountInr,
+        });
+      }
     }
 
     const fresh = txns.filter((t) => !held.some((h) => h.txnId === t.txnId));
@@ -533,6 +658,9 @@ export class WalletImportService {
         where: {
           awbNumber: { in: awbs.slice(i, i + AWB_CHUNK) },
           category: CourierWalletTxnCategory.PARCEL,
+          // A row their ledger has since dropped no longer moves money:
+          // the later export still balances to the live wallet without it.
+          missingFromExportAt: null,
         },
         _sum: { amountInr: true },
         _max: { occurredAt: true },

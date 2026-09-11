@@ -18,6 +18,21 @@ function make(
     periodFrom?: string;
     periodTo?: string;
     rowsRead?: number;
+    missing?: Array<{
+      txnId: string;
+      awbNumber: string | null;
+      kind: string;
+      amountInr: string;
+      occurredAt: string;
+    }>;
+    mutated?: Array<{
+      txnId: string;
+      awbNumber: string | null;
+      ourKind: string;
+      theirKind: string;
+      ourAmountInr: string;
+      theirAmountInr: string;
+    }>;
   } = {},
 ) {
   const settings: Record<string, AnyArgs> = {
@@ -55,6 +70,10 @@ function make(
     periodFrom: opts.periodFrom ?? null,
     periodTo: opts.periodTo ?? null,
     dryRun: false,
+    txnsMissing: opts.missing?.length ?? 0,
+    missing: opts.missing ?? [],
+    txnsMutated: opts.mutated?.length ?? 0,
+    mutated: opts.mutated ?? [],
   }));
   const importer = { importDelhiveryWallet } as unknown as WalletImportService;
 
@@ -322,5 +341,70 @@ describe('the recharge reconciliation runs alongside the ledger', () => {
       const summary = await svc.sync();
       expect(summary.accounts[0]?.rangeApplied).toBe(false);
     });
+  });
+});
+
+/**
+ * Their ledger rewriting its own history is an alarm, not a log line.
+ *
+ * The importer detects both shapes — a transaction that vanished from an
+ * export covering its date, and one that came back with a different
+ * amount — but a count inside an audit row is read by nobody. These are
+ * money disagreements with a courier, and they need a person while the
+ * evidence is fresh.
+ */
+describe('WalletSyncService — their ledger changed its history', () => {
+  const issueFor = (raise: jest.Mock, key: string): AnyArgs | undefined =>
+    (raise.mock.calls as unknown as AnyArgs[][])
+      .map((c) => c[0] as AnyArgs)
+      .find((a) => a['dedupeKey'] === key);
+
+  it('raises a MONEY issue naming each vanished transaction', async () => {
+    const { svc, raise } = make({
+      enabled: true,
+      writes: true,
+      missing: [
+        {
+          txnId: 'MTX-7SEP',
+          awbNumber: '38061110522900',
+          kind: 'DEBIT',
+          amountInr: '77.19',
+          occurredAt: '2026-09-07T10:00:00.000Z',
+        },
+      ],
+    });
+    await svc.sync();
+    const arg = issueFor(raise, 'wallet-txn-missing:acct-1');
+    expect(arg?.['kind']).toBe('MONEY');
+    expect(arg?.['severity']).toBe('HIGH');
+    expect(String(arg?.['detail'])).toContain('MTX-7SEP');
+  });
+
+  it('raises a MONEY issue showing ours against theirs for an edited one', async () => {
+    const { svc, raise } = make({
+      enabled: true,
+      writes: true,
+      mutated: [
+        {
+          txnId: 'MTX-EDIT',
+          awbNumber: 'DL1',
+          ourKind: 'DEBIT',
+          theirKind: 'DEBIT',
+          ourAmountInr: '41',
+          theirAmountInr: '40.00',
+        },
+      ],
+    });
+    await svc.sync();
+    const arg = issueFor(raise, 'wallet-txn-mutated:acct-1');
+    expect(arg?.['kind']).toBe('MONEY');
+    expect(String(arg?.['detail'])).toContain('ours DEBIT ₹41 → theirs DEBIT ₹40.00');
+  });
+
+  it('says nothing on an ordinary night', async () => {
+    const { svc, raise } = make({ enabled: true, writes: true });
+    await svc.sync();
+    expect(issueFor(raise, 'wallet-txn-missing:acct-1')).toBeUndefined();
+    expect(issueFor(raise, 'wallet-txn-mutated:acct-1')).toBeUndefined();
   });
 });

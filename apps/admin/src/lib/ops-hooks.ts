@@ -4116,6 +4116,7 @@ export interface WalletSyncRunAccount {
   readonly dryRun: boolean | null;
   readonly writes: readonly WalletSyncWrite[];
   readonly writesTruncated: number;
+  readonly txnsMissing: number;
 }
 
 export interface WalletSyncWrite {
@@ -4124,6 +4125,7 @@ export interface WalletSyncWrite {
   readonly leg: string;
   readonly amountInr: string;
   readonly revised: boolean;
+  readonly previousInr: string | null;
 }
 
 export interface WalletSyncRun {
