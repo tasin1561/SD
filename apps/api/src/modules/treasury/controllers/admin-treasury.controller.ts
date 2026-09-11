@@ -26,6 +26,7 @@ import { TreasuryReadService } from '../services/treasury-read.service';
 import {
   CreateExpenseCategoryDto,
   CreateInvestmentDto,
+  OwnerMoneyDto,
   ReconcileAccountDto,
   RecordEntryDto,
   RecordInvestmentReturnDto,
@@ -280,6 +281,29 @@ export class AdminTreasuryController {
       },
       statedBalance: body.statedBalance,
       reason: body.reason,
+      staffId: staff.id,
+    });
+  }
+
+  @Post('accounts/:accountId/owner-money')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('money.treasury.manage')
+  @ApiOperation({
+    summary:
+      'Record money the owner put into the business, or took out of it. Equity — never counted as income or as an expense.',
+  })
+  ownerMoney(
+    @Param('accountId', new ParseUUIDPipe({ version: '7' })) accountId: string,
+    @Body() body: OwnerMoneyDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<BankLedgerService['recordOwnerMoney']> {
+    return this.ledger.recordOwnerMoney({
+      accountId,
+      direction: body.direction,
+      amount: body.amount,
+      occurredAt: new Date(body.occurredAt),
+      reason: body.reason,
+      ...(body.reference === undefined ? {} : { reference: body.reference }),
       staffId: staff.id,
     });
   }

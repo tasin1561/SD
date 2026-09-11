@@ -105,6 +105,23 @@ function norm(s: string): string {
 }
 
 /**
+ * Which leg a row's charge belongs to, from the parcel's status on it.
+ *
+ * `RTO` (turned round, on its way back) and `DTO` (delivered back to
+ * the origin — the same return, finished) are both the RETURN. DTO used
+ * to be left on the forward leg "rather than guessed", which left a
+ * parcel whose return had completed with no return-leg row at all: once
+ * it was received back, the returns line counted it as UNCOVERED for
+ * good, because a return is measured only once its return cost exists.
+ * Matched exactly, never by substring — a wrong leg moves money between
+ * two P&L lines that exist precisely to be told apart.
+ */
+export function legFor(shipmentStatus: string): 'RTO' | 'FORWARD' {
+  const s = norm(shipmentStatus);
+  return s === 'rto' || s === 'dto' ? 'RTO' : 'FORWARD';
+}
+
+/**
  * Delhivery writes `2026-09-01 09:15:42` with no zone. Their panel is
  * IST, so that is what it means — reading it as UTC would date every
  * charge five and a half hours early and put some on the wrong day.
@@ -294,11 +311,7 @@ function readTxnSheet(
       awbNumber: awbRaw === '' ? null : awbRaw,
       kind: rowKind,
       category: classify(shipmentStatus, detail),
-      // Exact match on their RTO status, as before. Their other return
-      // words (DTO) are left on the forward leg rather than guessed
-      // into the RTO one — a wrong leg moves money between two P&L
-      // lines that exist precisely to be told apart.
-      leg: norm(shipmentStatus) === 'rto' ? 'RTO' : 'FORWARD',
+      leg: legFor(shipmentStatus),
       amountInr,
       occurredAt,
       status,

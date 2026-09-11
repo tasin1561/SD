@@ -393,6 +393,88 @@ export class BankLedgerService {
   }
 
   /**
+   * Money the OWNER put into the business, or took out of it — equity.
+   *
+   * Not a reconciliation. A reconciliation says the book was WRONG, and
+   * the P&L reads a positive one as money we did not know we had — so an
+   * injection recorded that way read as profit (a ৳100,000 "Initial
+   * Balance" did, as ₹81,300.81) and a drawing read as a loss. Its own
+   * entry types keep it off every P&L line. Capital only, in the
+   * account's own currency, dated when it happened, audited HIGH.
+   */
+  async recordOwnerMoney(input: {
+    accountId: string;
+    direction: 'IN' | 'OUT';
+    amount: Prisma.Decimal | string;
+    occurredAt: Date;
+    reason: string;
+    reference?: string;
+    staffId: string;
+  }): Promise<{ id: string }> {
+    if (input.reason.trim().length < 10) {
+      throw new BadRequestException({
+        code: 'BANK_REASON_TOO_SHORT',
+        message: 'Say what the money was for — at least 10 characters',
+      });
+    }
+    const amount = new Prisma.Decimal(input.amount);
+    if (amount.lessThanOrEqualTo(0)) {
+      throw new BadRequestException({
+        code: 'OWNER_MONEY_AMOUNT_INVALID',
+        message: 'Give the amount as a positive figure; the direction says which way it went',
+      });
+    }
+    if (Number.isNaN(input.occurredAt.getTime())) {
+      throw new BadRequestException({ code: 'INVALID_DATE', message: 'When did it happen?' });
+    }
+    const account = await this.prisma.client.platformBankAccount.findFirst({
+      where: { id: input.accountId, deletedAt: null },
+      select: { currency: true, label: true },
+    });
+    if (!account) {
+      throw new NotFoundException({
+        code: 'BANK_ACCOUNT_NOT_FOUND',
+        message: 'No such bank account',
+      });
+    }
+    const entry = await this.post({
+      accountId: input.accountId,
+      type:
+        input.direction === 'IN' ? BankEntryType.OWNER_CONTRIBUTION : BankEntryType.OWNER_DRAWING,
+      signedAmount: input.direction === 'IN' ? amount : amount.neg(),
+      amountCurrency: account.currency,
+      owner: { kind: BankOwnerKind.CAPITAL },
+      occurredAt: input.occurredAt,
+      reference: input.reference ?? null,
+      note: input.reason.trim(),
+      staffId: input.staffId,
+    });
+    await this.audit.log({
+      actorType: 'STAFF',
+      staffUserId: input.staffId,
+      action:
+        input.direction === 'IN'
+          ? 'staff.bank_account.owner_contribution'
+          : 'staff.bank_account.owner_drawing',
+      entityType: 'platform_bank_account',
+      entityId: input.accountId,
+      // The owner's own money moving in or out of the business. Not an
+      // error being corrected, but a figure that changes what the
+      // business is worth — worth a person's attention.
+      severity: 'HIGH',
+      metadata: {
+        account: account.label,
+        amount: amount.toFixed(2),
+        currency: account.currency,
+        occurredAt: input.occurredAt.toISOString(),
+        reason: input.reason.trim(),
+        entryId: entry.id,
+      },
+    });
+    return entry;
+  }
+
+  /**
    * What this owner holds in this account, right now.
    *
    * PUBLIC so a caller can ask before it moves money — `reconcile` is no

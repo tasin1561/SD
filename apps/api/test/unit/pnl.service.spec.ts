@@ -86,13 +86,30 @@ function makeSut(opts: {
   }>;
   /** Reconciliation entries that are their account's FIRST entry (opening balances). */
   openingIds?: string[];
-  investments?: Array<{ placedInr: Prisma.Decimal; returnedInr: Prisma.Decimal }>;
+  /** Closed investments; `currency` defaults to INR, as the account's currency. */
+  investments?: Array<{
+    placedInr: Prisma.Decimal;
+    returnedInr: Prisma.Decimal;
+    currency?: string;
+  }>;
   /**
    * EXPENSE entries filed under a leg category with no consignment
    * behind them — reported rather than moved, because we cannot know
    * which consignment they were for.
    */
   unattributed?: Array<{ signedAmount: Prisma.Decimal }>;
+  /** Orders first delivered or lost in the window; default one order. */
+  fates?: Array<{ orderId: string; _min: { createdAt: Date } }>;
+  /** Of those, orders whose parcel came back anyway. */
+  cameBack?: Array<{ orderId: string }>;
+  /** Parcels with the courier right now. */
+  moving?: number;
+  /** Waybills of VOIDED Skydrop shipments (same courier). */
+  deadAwbs?: string[];
+  /** Waybills of live shipments of ANOTHER courier. */
+  otherCourierAwbs?: string[];
+  /** Today's rate, used when a day has none recorded. */
+  todayRate?: { fromCurrency: string; rate: Prisma.Decimal } | null;
   /** Shortfalls recognised on payout lines (negative = a recovery). */
   shortfalls?: Prisma.Decimal[];
   /** Deductions returned on reversed CODs: the tax, and the fees. */
@@ -104,14 +121,10 @@ function makeSut(opts: {
   expensesWhere = undefined;
   refundWhere = undefined;
   reconciliationWhere = undefined;
-  const cohort = (where: Record<string, unknown>): 'delivery' | 'returns' => {
-    const shipment = (
-      ((where['order'] as Record<string, unknown>)['orderShipments'] as Record<string, unknown>)[
-        'some'
-      ] as Record<string, unknown>
-    )['shipment'] as Record<string, unknown>;
-    return shipment['rtoReceivedAt'] === null ? 'delivery' : 'returns';
-  };
+  // Delivery reads its orders by id (the fate cohort); returns reaches
+  // them through a shipment received back in the window.
+  const cohort = (where: Record<string, unknown>): 'delivery' | 'returns' =>
+    where['orderId'] !== undefined ? 'delivery' : 'returns';
   const chargeSum = (where: Record<string, unknown>): Prisma.Decimal | null =>
     cohort(where) === 'delivery' ? (opts.shippingRevenue ?? null) : (opts.rtoFees ?? null);
   const client = {
@@ -133,6 +146,7 @@ function makeSut(opts: {
       groupBy: async (args: { where: Record<string, unknown> }) => {
         if (args.where['category'] === 'PARCEL') {
           return (opts.parcelTxns ?? []).map((t) => ({
+            courierAccountId: 'acct-1',
             awbNumber: t.awbNumber,
             kind: t.kind,
             _sum: { amountInr: t.amount },
@@ -172,9 +186,20 @@ function makeSut(opts: {
         if (args.where['awbNumber'] !== undefined && typeof args.where['awbNumber'] === 'object') {
           const inList = (args.where['awbNumber'] as { in?: string[] }).in;
           if (inList !== undefined) {
-            return (opts.liveAwbs ?? [])
-              .filter((a) => inList.includes(a))
-              .map((a) => ({ awbNumber: a }));
+            // Every shipment that ever carried the waybill: live ones of
+            // the account's courier, voided ones, and live ones of ANOTHER
+            // courier that merely share the number.
+            const row = (a: string, courierCode: string, deletedAt: Date | null) => ({
+              awbNumber: a,
+              courierCode,
+              deletedAt,
+              supersededAt: null,
+            });
+            return [
+              ...(opts.liveAwbs ?? []).map((a) => row(a, 'delhivery', null)),
+              ...(opts.deadAwbs ?? []).map((a) => row(a, 'delhivery', FROM)),
+              ...(opts.otherCourierAwbs ?? []).map((a) => row(a, 'shiprocket', null)),
+            ].filter((s) => inList.includes(s.awbNumber));
           }
         }
         // BOTH cohort queries mention rtoReceivedAt — the delivery line
@@ -183,6 +208,17 @@ function makeSut(opts: {
           ? (opts.shipments ?? [])
           : (opts.returned ?? []);
       },
+      // Parcels still with the courier — on no line yet.
+      count: async () => opts.moving ?? 0,
+    },
+    // The fate cohort: orders first delivered (or lost) in the window.
+    orderEvent: {
+      groupBy: async () => opts.fates ?? [{ orderId: 'o-del', _min: { createdAt: FROM } }],
+    },
+    // Orders of that cohort whose parcel came back anyway.
+    orderShipment: { findMany: async () => opts.cameBack ?? [] },
+    courierAccount: {
+      findMany: async () => [{ id: 'acct-1', courier: { code: 'delhivery' } }],
     },
     sellerWalletEntry: {
       // Keyed on DIRECTION, never answered the same way twice: several
@@ -279,9 +315,13 @@ function makeSut(opts: {
         };
       },
     },
-    investment: { findMany: async () => opts.investments ?? [] },
+    investment: {
+      findMany: async () =>
+        (opts.investments ?? []).map((i) => ({ currency: 'INR', closedAt: FROM, ...i })),
+    },
     fxRateHistory: { findFirst: async () => opts.rate ?? null },
-    fxRate: { findFirst: async () => null },
+    // Today's rate — the fallback when nothing was recorded for a day.
+    fxRate: { findFirst: async () => opts.todayRate ?? null },
   };
   return new PnlService({ client } as unknown as PrismaService);
 }
@@ -509,7 +549,8 @@ describe('a cost already counted by its leg is not counted again', () => {
         aggregate: async () => ({ _sum: { amountInr: null } }),
         groupBy: async () => [],
       },
-      shipment: { findMany: async () => [] },
+      shipment: { findMany: async () => [], count: async () => 0 },
+      orderEvent: { groupBy: async () => [] },
       sellerWalletEntry: {
         aggregate: async () => ({ _sum: { amount: null }, _count: { _all: 0 } }),
         groupBy: async () => [],
@@ -799,7 +840,7 @@ describe('the P&L counts what it used to miss', () => {
     // Only refunds on orders IN the delivery cohort.
     expect(refundWhere).toMatchObject({
       direction: 'ORDER_CHARGES_REFUND',
-      linkedOrder: { orderShipments: { some: { shipment: { rtoReceivedAt: null } } } },
+      linkedOrderId: { in: ['o-del'] },
     });
   });
 
@@ -914,5 +955,85 @@ describe('the P&L counts what it used to miss', () => {
     expect(recon?.coverage).toMatchObject({ priced: 1, total: 1 });
     expect(recon?.coverage.note).toContain('opening balance');
     expect(r.netInr).toBe('-12.00');
+  });
+});
+
+/**
+ * A parcel's revenue and cost are recognised when its FATE is known —
+ * delivered (or lost), or received back — never at booking. On production
+ * the delivery line counted ₹3,800 of ₹6,000 on orders never billed:
+ * cancelled ones, and parcels still moving.
+ */
+describe('recognised when the parcel’s fate is known', () => {
+  const line = (r: Awaited<ReturnType<PnlService['report']>>, key: string) =>
+    r.lines.find((l) => l.key === key);
+
+  it('an order not yet delivered earns nothing on the delivery line, however it was billed', async () => {
+    const svc = makeSut({
+      fates: [],
+      shippingRevenue: D('600'),
+      shipments: [{ actualCourierCostInr: D('90') }],
+      moving: 3,
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'delivery')).toMatchObject({ revenueInr: '0.00', costInr: '0.00' });
+    expect(line(r, 'delivery')?.coverage.note).toMatch(/3 parcels are with the courier/);
+  });
+
+  it('a delivered order that came back anyway is on the RETURNS line only', async () => {
+    const svc = makeSut({
+      fates: [{ orderId: 'o-1', _min: { createdAt: FROM } }],
+      cameBack: [{ orderId: 'o-1' }],
+      shippingRevenue: D('200'),
+      shipments: [{ actualCourierCostInr: D('90') }],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'delivery')?.revenueInr).toBe('0.00');
+  });
+
+  it('charges on a VOIDED Skydrop parcel count whatever the cutover; a stranger’s only after it', async () => {
+    // August, before the 1 Oct cutover.
+    const svc = makeSut({
+      cutover: new Date('2026-09-30T18:30:00.000Z'),
+      parcelTxns: [
+        { awbNumber: 'DEAD', kind: 'DEBIT', amount: D('40.00') },
+        { awbNumber: 'STRANGER', kind: 'DEBIT', amount: D('25.00') },
+      ],
+      deadAwbs: ['DEAD'],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'courier_unmatched')?.costInr).toBe('40.00');
+  });
+
+  it('a live parcel of ANOTHER courier sharing the waybill does not absorb the charge', async () => {
+    const svc = makeSut({
+      cutover: null,
+      parcelTxns: [{ awbNumber: 'SHARED', kind: 'DEBIT', amount: D('33.00') }],
+      otherCourierAwbs: ['SHARED'],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'courier_unmatched')?.costInr).toBe('33.00');
+  });
+
+  it('investment income on a taka account is put in rupees at the rate the day it closed', async () => {
+    // ৳1,500 earned; 1 INR = 1.32 BDT → ₹1,136.36, not ₹1,500.
+    const svc = makeSut({
+      investments: [{ placedInr: D('100000'), returnedInr: D('101500'), currency: 'BDT' }],
+      rate: { fromCurrency: 'INR', rate: D('1.32') },
+    });
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'investment_income')?.revenueInr).toBe('1136.36');
+  });
+
+  it('an amount converted at TODAY’s rate is converted — and the report says so', async () => {
+    const svc = makeSut({
+      expenses: D('-500'),
+      foreignExpenses: [{ signedAmount: D('-1320'), currency: 'BDT', occurredAt: FROM }],
+      rate: null,
+      todayRate: { fromCurrency: 'INR', rate: D('1.32') },
+    });
+    const r = await svc.report(FROM, TO);
+    expect(r.operatingExpensesInr).toBe('1500.00');
+    expect(r.warnings.some((w) => /today's rate/.test(w))).toBe(true);
   });
 });

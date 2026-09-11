@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumberString,
   IsOptional,
@@ -67,6 +68,24 @@ export class ReconcileAccountDto {
   @IsString()
   @Length(10, 2000)
   reason!: string;
+}
+
+export class OwnerMoneyDto {
+  @ApiProperty({
+    enum: ['IN', 'OUT'],
+    description: 'IN: the owner put money into the business. OUT: the owner took money out.',
+  })
+  @IsIn(['IN', 'OUT'])
+  direction!: 'IN' | 'OUT';
+  @ApiProperty({ description: "How much, in the account's own currency (positive)" })
+  @IsNumberString()
+  amount!: string;
+  @IsDateString() occurredAt!: string;
+  @ApiProperty({ description: 'What it was for — kept with the entry' })
+  @IsString()
+  @Length(10, 2000)
+  reason!: string;
+  @IsOptional() @IsString() @Length(1, 200) reference?: string;
 }
 
 export class CreateExpenseCategoryDto {
