@@ -30,7 +30,7 @@ import {
  *
  * The fixture (`delhivery-wallet-sample.xlsx`):
  *   AWB-REVISED  debit 100.00, credit 100.00, debit 85.65   → 85.65
- *   AWB-BOTH     debit 57.46 (forward), debit 56.28 (RTO)   → 57.46 / 56.28
+ *   AWB-BOTH     debit 57.46 (forward), debit 56.28 (RTO)   → 0 / 113.74
  *   AWB-ZERO     debit 60.04, credit 60.04                  → 0.00
  *   AWB-PLAIN    debit 40.00; a FAILED 99.99; a 58.83 adjustment → 40.00
  *   (no AWB)     a 1,290.00 lost-shipment credit note (adjustment)
@@ -145,8 +145,11 @@ describe('Delhivery wallet ledger import (e2e)', () => {
     // Charged and fully reversed. Latest-debit booked this at full
     // freight; the parcel cost nothing.
     expect((await cost(zero)).fwd).toBe('0.00');
-    // Forward and return are two columns, never one (TRE-6).
-    expect(await cost(both)).toEqual({ fwd: '57.46', rto: '56.28' });
+    // A parcel that came BACK carries its whole cost on the return
+    // column: Delhivery refunds the delivery charge when it turns round
+    // (not in this fixture, which is why the sum is both charges), and
+    // the P&L reads a returned parcel's cost from the two columns added.
+    expect(await cost(both)).toEqual({ fwd: '0.00', rto: '113.74' });
     // The failed 99.99 is not money, and the 58.83 reconciliation is an
     // ACCOUNT cost even though it names this waybill.
     expect((await cost(plain)).fwd).toBe('40.00');

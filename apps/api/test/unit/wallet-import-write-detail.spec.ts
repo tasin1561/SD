@@ -237,7 +237,7 @@ describe('an import says which parcels it wrote', () => {
     const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
 
     expect(r.rtoWritten).toBe(1);
-    expect(r.writes[0]).toMatchObject({ leg: 'rto' });
+    expect(r.writes.find((w) => w.leg === 'rto')).toMatchObject({ amountInr: '30' });
   });
 
   it('an unlinked parcel is listed by waybill rather than dropped', async () => {
@@ -383,5 +383,90 @@ describe('the cost is debits minus credits', () => {
     // …and it is reported on its own line rather than vanishing.
     expect(r.adjustments).toBe(1);
     expect(r.adjustmentsNetInr).toBe('58.83');
+  });
+});
+
+/**
+ * A parcel that came BACK.
+ *
+ * When a parcel turns round Delhivery refunds the delivery charge and
+ * bills one combined return charge, and both rows carry the status
+ * "RTO". Netted per leg, that refund landed on the return leg: 301
+ * parcels on the 90-day sample read a NEGATIVE return cost, and the P&L —
+ * which reads a returned parcel from the return column — reported
+ * ₹73.51 for a parcel that cost ₹151.91.
+ */
+describe('a returned parcel is costed as a whole', () => {
+  const ours = (awb: string) => ({
+    id: `s-${awb}`,
+    awbNumber: awb,
+    actualCourierCostInr: null,
+    actualRtoCostInr: null,
+    orderNumber: null,
+  });
+
+  it('the refund of its delivery charge does not come off the return cost', async () => {
+    // 38061110524086, as it really happened.
+    parsed(
+      [charge('DL524086', '78.40')],
+      [charge('DL524086', '151.91', true), charge('DL524086', '78.40', true, 'CREDIT')],
+    );
+    const { svc, update } = makeSut([ours('DL524086')]);
+
+    await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
+
+    const data = update.mock.calls.map((c) => c[0].data);
+    // Delivery refunded, so ₹0 forward; the whole cost on the return.
+    expect(
+      data.find((d) => 'actualCourierCostInr' in d)?.['actualCourierCostInr']?.toString(),
+    ).toBe('0');
+    expect(data.find((d) => 'actualRtoCostInr' in d)?.['actualRtoCostInr']?.toString()).toBe(
+      '151.91',
+    );
+  });
+
+  it('the two columns ADD UP to what it cost, refund or not', async () => {
+    // A manual-style bill: both legs charged, nothing refunded.
+    parsed([charge('DL777', '57.46')], [charge('DL777', '56.28', true)]);
+    const { svc, update } = makeSut([ours('DL777')]);
+
+    await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
+
+    const data = update.mock.calls.map((c) => c[0].data);
+    const fwd = data.find((d) => 'actualCourierCostInr' in d)?.['actualCourierCostInr'];
+    const rto = data.find((d) => 'actualRtoCostInr' in d)?.['actualRtoCostInr'];
+    expect(fwd?.add(rto ?? 0).toString()).toBe('113.74');
+  });
+});
+
+describe('a parcel that nets below zero is never stamped', () => {
+  it('leaves the old figure, and names the parcel when it is OURS', async () => {
+    // A refund with its debit missing — dated before our ledger began, or
+    // vanished. Stamping −₹60 would subtract money from the P&L.
+    parsed([charge('DL-NEG', '60.00', false, 'CREDIT')]);
+    const { svc, update } = makeSut([
+      {
+        id: 's-neg',
+        awbNumber: 'DL-NEG',
+        actualCourierCostInr: new Prisma.Decimal('60'),
+        actualRtoCostInr: null,
+        orderNumber: 'SD-2026-26-000009',
+      },
+    ]);
+
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
+
+    expect(update).not.toHaveBeenCalled();
+    expect(r.incompleteHistory).toBe(1);
+    expect(r.incomplete).toEqual([{ awbNumber: 'DL-NEG', netInr: '-60.00' }]);
+  });
+
+  it('says nothing about somebody else’s parcel', async () => {
+    parsed([charge('NOT-OURS', '60.00', false, 'CREDIT')]);
+    const { svc } = makeSut([]);
+
+    const r = await svc.importDelhiveryWallet(FILE, null, { courierAccountId: 'acct-1' });
+
+    expect(r.incompleteHistory).toBe(0);
   });
 });

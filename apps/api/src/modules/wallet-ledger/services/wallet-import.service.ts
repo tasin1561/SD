@@ -3,6 +3,7 @@ import {
   ActorType,
   CourierWalletTxnCategory,
   CourierWalletTxnKind,
+  CourierWalletTxnLeg,
   CredentialEnvironment,
   Prisma,
 } from '@skydrop/db';
@@ -98,6 +99,17 @@ export interface WalletImportResult {
    */
   readonly txnsMissing: number;
   readonly missing: readonly MissingTxn[];
+  /**
+   * OUR parcels whose net came out NEGATIVE, and were therefore NOT
+   * stamped.
+
+   * Nobody is paid to carry a parcel, so a negative net only ever means
+   * the ledger lacks one of its debits — its history started before we
+   * held it, or a debit has since vanished. Stamping it would subtract
+   * money from the P&L; leaving the old figure and saying so is honest.
+   */
+  readonly incompleteHistory: number;
+  readonly incomplete: readonly IncompleteParcel[];
 }
 
 export interface WalletImportWrite {
@@ -130,6 +142,12 @@ export interface MutatedTxn {
   readonly theirKind: string;
   readonly ourAmountInr: string;
   readonly theirAmountInr: string;
+}
+
+/** One of our parcels whose ledger nets below zero — see `incompleteHistory`. */
+export interface IncompleteParcel {
+  readonly awbNumber: string;
+  readonly netInr: string;
 }
 
 /** A transaction a fresh export covering its date no longer contains. */
@@ -302,8 +320,8 @@ export class WalletImportService {
     /*
       ── STEP 2: THE COST, NETTED FROM OUR OWN LEDGER ──────────────────
 
-      `Σ debits − Σ credits` per parcel per leg, read back from the
-      TABLE rather than computed from this file.
+      `Σ debits − Σ credits` per PARCEL, read back from the TABLE rather
+      than computed from this file.
 
       That distinction is the whole point of storing them. The nightly
       export is a WINDOW: a parcel charged in June and credited today
@@ -311,15 +329,26 @@ export class WalletImportService {
       file would report its cost as NEGATIVE the refund. Netting our own
       ledger — which holds both — gives the truth.
 
+      PER PARCEL, NOT PER LEG. When a parcel turns around, Delhivery
+      refunds the delivery charge and bills ONE combined return charge,
+      and BOTH rows carry the shipment status "RTO". On the 90-day sample
+      891 of 921 return-leg credits were exactly a forward debit being
+      given back. Netted per leg, that refund landed on the return leg:
+      301 parcels came out with a NEGATIVE return cost, and 38061110524086
+      read ₹73.51 back against a real ₹151.91 — while the P&L, which
+      counts only the return column for a returned parcel, reported the
+      smaller number. So a parcel with ANY return-leg transaction carries
+      its whole net on the RETURN column and ₹0 forward (the delivery
+      charge was refunded), and every other parcel carries it forward.
+      The two columns then always ADD UP to what the parcel cost.
+
       ADJUSTMENTS are excluded here even when they name an AWB. A
       monthly reconciliation or a fraud credit note is an account-level
       cost, and 36 of the 37 on the 90-day sample carried a waybill, so
       including them would put a settlement for fraud into the price of
       moving one box.
     */
-    const netByAwbLeg = dryRun
-      ? this.netFromFile(parsed.txns)
-      : await this.netFromLedger([...awbs]);
+    const netByAwb = dryRun ? this.netFromFile(parsed.txns) : await this.netFromLedger([...awbs]);
 
     let forwardWritten = 0;
     let rtoWritten = 0;
@@ -377,11 +406,23 @@ export class WalletImportService {
       });
     };
 
-    for (const [key, net] of netByAwbLeg) {
-      const sep = key.lastIndexOf('|');
-      const awbNumber = key.slice(0, sep);
-      const leg = key.slice(sep + 1) === 'RTO' ? 'rto' : 'forward';
-      await apply(awbNumber, leg, net.amount, net.latestAt);
+    const incomplete: IncompleteParcel[] = [];
+    for (const [awbNumber, net] of netByAwb) {
+      if (net.total.isNegative()) {
+        // Only OURS are worth naming: somebody else's parcel is not
+        // written either way, and 298 of them on the 90-day sample began
+        // before the window.
+        if (byAwb.has(awbNumber)) {
+          incomplete.push({ awbNumber, netInr: net.total.toFixed(2) });
+        }
+        continue;
+      }
+      if (net.returned) {
+        await apply(awbNumber, 'forward', new Prisma.Decimal(0), net.latestAt);
+        await apply(awbNumber, 'rto', net.total, net.latestAt);
+      } else {
+        await apply(awbNumber, 'forward', net.total, net.latestAt);
+      }
     }
 
     /*
@@ -448,6 +489,8 @@ export class WalletImportService {
       impliedClosingInr: impliedClosing,
       txnsMissing: missing.length,
       missing: missing.slice(0, WRITE_DETAIL_CAP),
+      incompleteHistory: incomplete.length,
+      incomplete: incomplete.slice(0, WRITE_DETAIL_CAP),
     };
 
     if (!dryRun) {
@@ -636,7 +679,8 @@ export class WalletImportService {
   }
 
   /**
-   * `Σ debits − Σ credits` per parcel per leg, from OUR ledger.
+   * `Σ debits − Σ credits` per parcel, from OUR ledger, and whether the
+   * parcel came back (any return-leg transaction).
    *
    * Grouped in the database rather than loaded and summed here: the
    * table holds every transaction ever seen, and a parcel's history can
@@ -646,10 +690,8 @@ export class WalletImportService {
    * its own report line (see the P&L); letting one through here would
    * put a fraud settlement into the price of moving one box.
    */
-  private async netFromLedger(
-    awbs: readonly string[],
-  ): Promise<Map<string, { amount: Prisma.Decimal; latestAt: Date }>> {
-    const out = new Map<string, { amount: Prisma.Decimal; latestAt: Date }>();
+  private async netFromLedger(awbs: readonly string[]): Promise<Map<string, ParcelNet>> {
+    const out = new Map<string, ParcelNet>();
     if (awbs.length === 0) return out;
 
     for (let i = 0; i < awbs.length; i += AWB_CHUNK) {
@@ -667,14 +709,12 @@ export class WalletImportService {
       });
       for (const r of rows) {
         if (r.awbNumber === null) continue;
-        const key = `${r.awbNumber}|${r.leg}`;
-        const held = out.get(key) ?? { amount: new Prisma.Decimal(0), latestAt: new Date(0) };
-        const amt = r._sum.amountInr ?? new Prisma.Decimal(0);
-        held.amount =
-          r.kind === CourierWalletTxnKind.DEBIT ? held.amount.add(amt) : held.amount.sub(amt);
-        const at = r._max.occurredAt;
-        if (at !== null && at > held.latestAt) held.latestAt = at;
-        out.set(key, held);
+        fold(out, r.awbNumber, {
+          debit: r.kind === CourierWalletTxnKind.DEBIT,
+          returnLeg: r.leg === CourierWalletTxnLeg.RTO,
+          amount: r._sum.amountInr ?? new Prisma.Decimal(0),
+          at: r._max.occurredAt,
+        });
       }
     }
     return out;
@@ -682,19 +722,40 @@ export class WalletImportService {
 
   /** The same arithmetic over the FILE, for a dry run — which must not
    *  read back rows it has deliberately not written. */
-  private netFromFile(
-    txns: readonly LedgerTxn[],
-  ): Map<string, { amount: Prisma.Decimal; latestAt: Date }> {
-    const out = new Map<string, { amount: Prisma.Decimal; latestAt: Date }>();
+  private netFromFile(txns: readonly LedgerTxn[]): Map<string, ParcelNet> {
+    const out = new Map<string, ParcelNet>();
     for (const t of txns) {
       if (t.awbNumber === null || t.category !== 'PARCEL') continue;
-      const key = `${t.awbNumber}|${t.leg}`;
-      const held = out.get(key) ?? { amount: new Prisma.Decimal(0), latestAt: new Date(0) };
-      const amt = new Prisma.Decimal(t.amountInr);
-      held.amount = t.kind === 'DEBIT' ? held.amount.add(amt) : held.amount.sub(amt);
-      if (t.occurredAt > held.latestAt) held.latestAt = t.occurredAt;
-      out.set(key, held);
+      fold(out, t.awbNumber, {
+        debit: t.kind === 'DEBIT',
+        returnLeg: t.leg === 'RTO',
+        amount: new Prisma.Decimal(t.amountInr),
+        at: t.occurredAt,
+      });
     }
     return out;
   }
+}
+
+/** A parcel's whole net, whether it came back, and its latest charge. */
+interface ParcelNet {
+  total: Prisma.Decimal;
+  returned: boolean;
+  latestAt: Date;
+}
+
+function fold(
+  out: Map<string, ParcelNet>,
+  awb: string,
+  row: { debit: boolean; returnLeg: boolean; amount: Prisma.Decimal; at: Date | null },
+): void {
+  const held = out.get(awb) ?? {
+    total: new Prisma.Decimal(0),
+    returned: false,
+    latestAt: new Date(0),
+  };
+  held.total = row.debit ? held.total.add(row.amount) : held.total.sub(row.amount);
+  if (row.returnLeg) held.returned = true;
+  if (row.at !== null && row.at > held.latestAt) held.latestAt = row.at;
+  out.set(awb, held);
 }

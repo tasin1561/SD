@@ -287,6 +287,7 @@ export class CourierMarginReportService {
         destPostalCode: true,
         courierCode: true,
         actualCourierCostInr: true,
+        actualRtoCostInr: true,
         actualCourierCostAt: true,
         orderShipments: { select: { orderId: true }, take: 1 },
       },
@@ -298,7 +299,13 @@ export class CourierMarginReportService {
     let totalActual = ZERO;
 
     for (const s of shipments) {
-      if (s.actualCourierCostInr === null) {
+      // What the parcel cost is BOTH columns: a returned parcel's forward
+      // is ₹0 once Delhivery's refund is netted (COST-1), so reading the
+      // forward alone would report a return as the most profitable
+      // parcel we ever shipped.
+      const fwd = s.actualCourierCostInr ?? null;
+      const back = s.actualRtoCostInr ?? null;
+      if (fwd === null && back === null) {
         skipped.push({
           shipmentId: s.id,
           reason: 'No courier cost recorded yet — run the live report to price this one.',
@@ -315,7 +322,7 @@ export class CourierMarginReportService {
         continue;
       }
 
-      const actual = s.actualCourierCostInr;
+      const actual = (fwd ?? ZERO).add(back ?? ZERO);
       const margin = billed.sub(actual);
       rows.push({
         shipmentId: s.id,

@@ -216,12 +216,16 @@ export class PnlService {
     // deliberately WITHOUT GST, which is the government's and not ours,
     // and without the RTO fee, which prices a second movement and is its
     // own line below.
-    // Returned parcels are EXCLUDED, and that is the whole point of
-    // splitting the two lines. Delhivery refunds the delivery deduction
-    // when a parcel comes back and charges an RTO fee instead, so a
-    // return's forward cost is not a cost we bore — counting it here as
-    // well as on the returns line would charge the same carriage twice
-    // and make both margins wrong in opposite directions.
+    // Parcels RECEIVED back are excluded: they belong to the returns
+    // line, and the two lines are split on receipt so no parcel is in
+    // both.
+    //
+    // The cost is BOTH columns added. The importer nets refunds (COST-1),
+    // so a parcel Delhivery turned round carries its whole cost on the
+    // return column and ₹0 forward — adding them no longer counts the
+    // same carriage twice, which is what the old forward-only rule
+    // guarded against. It also stops a parcel that is on its way back,
+    // or LOST on its way back, from reading as costing nothing here.
     const shipmentWindow = {
       deletedAt: null,
       awbNumber: { not: null },
@@ -231,7 +235,7 @@ export class PnlService {
 
     const shipments = await this.prisma.client.shipment.findMany({
       where: shipmentWindow,
-      select: { actualCourierCostInr: true },
+      select: { actualCourierCostInr: true, actualRtoCostInr: true },
     });
 
     // Revenue for exactly those parcels — reached through the orders
@@ -275,8 +279,8 @@ export class PnlService {
     let cost = ZERO;
     let priced = 0;
     for (const s of shipments) {
-      if (s.actualCourierCostInr !== null) {
-        cost = cost.add(s.actualCourierCostInr);
+      if (s.actualCourierCostInr !== null || s.actualRtoCostInr !== null) {
+        cost = cost.add(s.actualCourierCostInr ?? ZERO).add(s.actualRtoCostInr ?? ZERO);
         priced += 1;
       }
     }
@@ -308,8 +312,9 @@ export class PnlService {
         })),
         cost: [
           {
-            label: 'Courier cost on delivered parcels',
-            source: 'shipments.actual_courier_cost_inr (excludes returns)',
+            label: 'Courier cost on parcels not received back',
+            source:
+              'shipments.actual_courier_cost_inr + actual_rto_cost_inr (excludes parcels received back)',
             count: priced,
             amountInr: cost.toFixed(2),
           },
@@ -324,12 +329,13 @@ export class PnlService {
    * Revenue is the RTO fee the seller pays, which is its own wallet
    * direction precisely so this question is answerable.
    *
-   * The cost is what the courier charged to bring the parcel BACK, and
-   * that is a different number from what they charged to take it out:
-   * Delhivery refunds the delivery deduction on a return and bills an
-   * RTO fee instead. Keeping them in separate columns is what stops a
-   * returned parcel being charged for twice — once on the delivery line
-   * and again here.
+   * The cost is everything the courier charged for the parcel, both
+   * columns added. Delhivery refunds the delivery charge on a return and
+   * bills one combined return charge; the importer nets that (COST-1),
+   * so the forward column of such a parcel is ₹0 and the sum is the true
+   * figure. A manual courier bills both legs and refunds neither, and
+   * the sum is right there too — reading the return column alone lost
+   * its forward cost from every line.
    */
   private async rto(from: Date, to: Date): Promise<PnlLine> {
     const fees = await this.prisma.client.sellerWalletEntry.aggregate({
@@ -346,18 +352,15 @@ export class PnlService {
         deletedAt: null,
         rtoReceivedAt: { gte: from, lte: to },
       },
-      select: { actualRtoCostInr: true },
+      select: { actualCourierCostInr: true, actualRtoCostInr: true },
     });
     let cost = ZERO;
     let priced = 0;
     for (const s of returned) {
-      // The RTO cost specifically — not the forward one. What the
-      // courier charged to bring it back IS what the return cost,
-      // because the delivery deduction was refunded.
-      if (s.actualRtoCostInr !== null) {
-        cost = cost.add(s.actualRtoCostInr);
-        priced += 1;
-      }
+      cost = cost.add(s.actualCourierCostInr ?? ZERO).add(s.actualRtoCostInr ?? ZERO);
+      // MEASURED only once the return itself has been billed: until then
+      // the forward figure is all we know, and it is not the whole cost.
+      if (s.actualRtoCostInr !== null) priced += 1;
     }
     return this.line({
       key: 'rto',
@@ -382,7 +385,7 @@ export class PnlService {
         cost: [
           {
             label: 'Courier cost to bring parcels back',
-            source: 'shipments.actual_rto_cost_inr (NOT the forward cost)',
+            source: 'shipments.actual_courier_cost_inr + actual_rto_cost_inr',
             count: priced,
             amountInr: cost.toFixed(2),
           },
@@ -746,7 +749,13 @@ export class PnlService {
           items: rows.slice(0, take).map((s) => {
             const order = s.orderShipments[0]?.order ?? null;
             const billed = (order?.charges ?? []).reduce((t, c) => t.add(c.amountInr), ZERO);
-            const cost = isRto ? s.actualRtoCostInr : s.actualCourierCostInr;
+            // Both columns, as on the summary lines: a returned parcel's
+            // forward is ₹0 once the refund is netted, so the sum is the
+            // parcel's cost. Null only when neither has been recorded.
+            const cost =
+              s.actualCourierCostInr === null && s.actualRtoCostInr === null
+                ? null
+                : (s.actualCourierCostInr ?? ZERO).add(s.actualRtoCostInr ?? ZERO);
             return {
               ref: s.shipmentNumber,
               subRef: order?.orderNumber ?? s.awbNumber,

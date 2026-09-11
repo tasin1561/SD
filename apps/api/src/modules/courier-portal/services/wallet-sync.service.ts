@@ -233,6 +233,40 @@ export class WalletSyncService {
             },
           });
         }
+        /*
+          ONE OF OUR PARCELS NETS BELOW ZERO.
+
+          Nobody is paid to carry a parcel, so this means our ledger is
+          missing one of its debits — a charge dated before we held its
+          history, or one that has since vanished. The importer refused to
+          stamp it (a negative cost would be subtracted from the P&L);
+          this is the half that tells somebody which parcels to look at.
+        */
+        if (result.incompleteHistory > 0) {
+          await this.issues.raise({
+            kind: SystemIssueKind.MONEY,
+            severity: SystemIssueSeverity.HIGH,
+            title: `${result.incompleteHistory} of our parcels net below zero in ${account.label}'s ledger`,
+            detail:
+              `Their charges and refunds for ${result.incompleteHistory} of our parcels add up ` +
+              'to LESS than nothing, so a debit is missing from what we hold. Their cost was not ' +
+              'changed.\n\n' +
+              result.incomplete
+                .slice(0, 10)
+                .map((p) => `${p.awbNumber} · net ₹${p.netInr}`)
+                .join('\n') +
+              '\n\nFind the original charge on their panel; if it predates our ledger, record ' +
+              'the cost by hand on the order.',
+            source: 'WalletSyncService',
+            dedupeKey: `wallet-negative-net:${account.id}`,
+            metadata: {
+              courierAccountId: account.id,
+              label: account.label,
+              count: result.incompleteHistory,
+              incomplete: result.incomplete.slice(0, 25).map((p) => ({ ...p })),
+            },
+          });
+        }
         // It worked, so clear its own alarm. A job that starts working
         // again should not leave a stale row for a person to tidy.
         await this.issues.resolveByKey(

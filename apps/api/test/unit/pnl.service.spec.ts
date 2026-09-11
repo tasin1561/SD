@@ -15,11 +15,17 @@ function makeSut(opts: {
     _count: { _all: number };
   }>;
   shippingRevenue?: Prisma.Decimal | null;
-  shipments?: Array<{ actualCourierCostInr: Prisma.Decimal | null }>;
+  shipments?: Array<{
+    actualCourierCostInr: Prisma.Decimal | null;
+    actualRtoCostInr?: Prisma.Decimal | null;
+  }>;
   rtoFees?: Prisma.Decimal | null;
   /** Tax deducted from CODs — OUR revenue since 2026-09-07, not a liability. */
   codTax?: Prisma.Decimal | null;
-  returned?: Array<{ actualRtoCostInr: Prisma.Decimal | null }>;
+  returned?: Array<{
+    actualRtoCostInr: Prisma.Decimal | null;
+    actualCourierCostInr?: Prisma.Decimal | null;
+  }>;
   fxSpread?: Prisma.Decimal | null;
   expenses?: Prisma.Decimal | null;
   /**
@@ -159,11 +165,9 @@ describe('PnlService', () => {
   });
 
   it('never charges a returned parcel twice — the delivery line excludes it', async () => {
-    // Delhivery refunds the delivery deduction on a return and bills an
-    // RTO fee instead. Counting the forward cost here as well would
-    // charge the same carriage twice and make both margins wrong in
-    // opposite directions. The `rtoReceivedAt: null` filter is what
-    // enforces it, so the fake distinguishes the two queries.
+    // A parcel received back belongs to the returns line alone. The
+    // `rtoReceivedAt: null` filter is what keeps the two lines disjoint,
+    // so the fake distinguishes the two queries.
     const svc = makeSut({
       shippingRevenue: D('1000'),
       shipments: [{ actualCourierCostInr: D('700') }], // the ones that stayed delivered
@@ -177,6 +181,30 @@ describe('PnlService', () => {
     // 300 on delivery + 50 on returns. If the return's forward cost had
     // leaked into the delivery line this would be lower.
     expect(r.grossMarginInr).toBe('350.00');
+  });
+
+  it('a parcel on its way BACK still costs something on the delivery line', async () => {
+    // Delhivery has turned it round and netted the refund (COST-1): ₹0
+    // forward, the whole ₹151.91 on the return column — and we have not
+    // received it. Reading the forward column alone showed it as free,
+    // and a parcel LOST on the way back never showed up anywhere.
+    const svc = makeSut({
+      shipments: [{ actualCourierCostInr: D('0'), actualRtoCostInr: D('151.91') }],
+    });
+    const r = await svc.report(FROM, TO);
+
+    expect(r.lines.find((l) => l.key === 'delivery')?.costInr).toBe('151.91');
+  });
+
+  it('a returned parcel billed on BOTH legs counts both on the returns line', async () => {
+    // A manual courier bills the delivery and the return and refunds
+    // neither. The return column alone dropped the ₹62 from every line.
+    const svc = makeSut({
+      returned: [{ actualCourierCostInr: D('62'), actualRtoCostInr: D('48') }],
+    });
+    const r = await svc.report(FROM, TO);
+
+    expect(r.lines.find((l) => l.key === 'rto')?.costInr).toBe('110.00');
   });
 
   it('an empty window is zero everywhere, and complete', async () => {
