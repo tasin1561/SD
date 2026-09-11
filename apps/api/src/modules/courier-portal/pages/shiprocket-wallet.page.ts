@@ -54,6 +54,8 @@ const ROW_DATE = /^\d{2} [A-Z][a-z]{2}, \d{4}(?: \d{2}:\d{2} [AP]M)?$/;
 const PAGE_SIZE = 100;
 /** Far above 90 days at their volume (~65 pages); a runaway loop stops here. */
 const MAX_PAGES = 400;
+/** An empty table is believed only after this many looks in a row with the loader gone. */
+const EMPTY_READS_TO_BELIEVE = 4;
 
 /** A row is only accepted fully drawn: the right number of cells and a date. */
 export function isCompleteRow(tab: ShiprocketWalletTab, row: readonly string[]): boolean {
@@ -102,24 +104,37 @@ export class ShiprocketWalletPage {
     let previousFirst: string | null = null;
     for (let n = 1; n <= MAX_PAGES; n++) {
       const pageRows = await this.waitForPage(tab, previousFirst);
-      const last = await this.nextDisabled();
       if (pageRows.length === 0) {
-        // An empty window is a legitimate answer only on the first page
-        // and only when there is nowhere to go.
-        if (n === 1 && last) return [];
-        throw new ShiprocketWalletPageError(`${tab}: page ${n} came back empty`);
+        // Empty only after it STAYED empty with their loader gone (see
+        // waitForPage). On page one that is an empty window; later, it is
+        // the page after the last — their Next does not always grey out.
+        return rows;
       }
-      if (!last && pageRows.length !== PAGE_SIZE) {
+      rows.push(...pageRows);
+      previousFirst = JSON.stringify(pageRows[0]);
+      const last = await this.nextDisabled();
+      if (last) return rows;
+
+      await this.settle();
+      await this.page.locator('.pagination-container .next-btn').first().click({ timeout: 20_000 });
+
+      if (pageRows.length !== PAGE_SIZE) {
+        /*
+          A SHORT page with "Next" still enabled. On Recharge History that
+          is simply the last page — measured 2026-09-11: 27 rows at 100 a
+          page, Next enabled, and pressing it drew an empty table. So it is
+          PROVED rather than assumed: the page after it must be empty. If a
+          real page appears instead, the short one was a partial read and
+          the whole tab is refused — importing a short ledger is the one
+          failure this reader exists to prevent.
+        */
+        const after = await this.waitForPage(tab, previousFirst);
+        if (after.length === 0) return rows;
         throw new ShiprocketWalletPageError(
           `${tab}: page ${n} has ${pageRows.length} rows while more pages follow — refusing a ` +
             'partial read rather than importing a short ledger',
         );
       }
-      rows.push(...pageRows);
-      if (last) return rows;
-      previousFirst = JSON.stringify(pageRows[0]);
-      await this.settle();
-      await this.page.locator('.pagination-container .next-btn').first().click({ timeout: 20_000 });
     }
     throw new ShiprocketWalletPageError(`${tab}: more than ${MAX_PAGES} pages — stopped`);
   }
@@ -194,24 +209,36 @@ export class ShiprocketWalletPage {
     );
   }
 
-  /** Rows once the page is fully drawn and is not the page before. */
+  /**
+   * Rows once the page is fully drawn and is not the page before — or an
+   * empty list, but only once the table has STAYED empty with their loader
+   * gone. A table caught mid-load is also empty, and taking that for "no
+   * more rows" would cut the oldest movements off the read; the balance
+   * chain could not see it, because nothing is missing BETWEEN the rows
+   * that were read.
+   */
   private async waitForPage(
     tab: ShiprocketWalletTab,
     previousFirst: string | null,
   ): Promise<string[][]> {
     let rows: string[][] = [];
+    let emptyReads = 0;
     for (let i = 0; i < 60; i++) {
       await this.settle();
       this.assertSignedIn();
       rows = await this.rows();
-      const complete = rows.every((r) => isCompleteRow(tab, r));
-      if (complete && (rows.length === 0 || JSON.stringify(rows[0]) !== previousFirst)) {
-        return rows;
+      if (rows.length === 0) {
+        emptyReads += 1;
+        if (emptyReads >= EMPTY_READS_TO_BELIEVE) return [];
+      } else {
+        emptyReads = 0;
+        const complete = rows.every((r) => isCompleteRow(tab, r));
+        if (complete && JSON.stringify(rows[0]) !== previousFirst) return rows;
       }
       await this.page.waitForTimeout(500);
     }
     throw new ShiprocketWalletPageError(
-      `${tab}: the table never finished drawing (${rows.length} rows, some incomplete)`,
+      `${tab}: the table never finished drawing (${rows.length} rows, some incomplete or repeated)`,
     );
   }
 }
