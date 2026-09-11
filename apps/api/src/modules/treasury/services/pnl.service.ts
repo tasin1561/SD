@@ -12,6 +12,15 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 const ZERO = new Prisma.Decimal(0);
 
 /**
+ * The first day every parcel on the courier accounts is a Skydrop parcel
+ * (1 Oct 2026). Before it the same accounts carried the business's parcels
+ * shipped OUTSIDE Skydrop — 12,941 of 12,970 waybills in the first 90 days
+ * — whose cost and revenue are not in this report, so their account
+ * adjustments (lost-shipment credits, insurance refunds) are not either.
+ */
+export const SETTING_PNL_COURIER_ADJUSTMENTS_FROM = 'pnl.courier_adjustments_from';
+
+/**
  * Expense categories whose costs belong to a LEG, not to running the
  * business. Money filed here that is not attributed to a consignment is
  * reported as such rather than quietly inflating operating expenses
@@ -438,21 +447,6 @@ export class PnlService {
   }
 
   /**
-   * The tax deducted from a COD, which is OURS.
-   *
-   * ── WHY THIS IS REVENUE AND NOT A LIABILITY (2026-09-07) ─────────────
-   * It was reported as money held for the government, on the reading
-   * that we file a return against it. We do not: the courier bills GST
-   * on the shipping alongside their own charge and remits it, so there
-   * is no separate filing of ours behind this deduction. What we keep
-   * back from a COD is income, and reporting it as a liability made the
-   * business look poorer than it is while implying a filing obligation
-   * that does not exist.
-   *
-   * It has NO cost side — nothing is spent to collect it — and an empty
-   * cost basis says that more honestly than a zero would.
-   */
-  /**
    * What the courier charged the ACCOUNT, rather than a parcel.
    *
    * Their ledger is not only carriage. It carries monthly
@@ -473,24 +467,58 @@ export class PnlService {
    * the same rupee twice. The wallet is prepaid float, and consuming it
    * is a cost recognised against the float, exactly as a parcel's
    * carriage already is.
+   *
+   * ── ONLY FROM THE CUTOVER (`pnl.courier_adjustments_from`) ───────────
+   * Until every parcel on the accounts went through Skydrop, most of
+   * their adjustments were about parcels this report never sees — no
+   * order, no revenue, no parcel cost. Counting those credits would book
+   * income from somebody else's parcels. So adjustments dated before the
+   * cutover are left out and SAID to be left out; with the setting
+   * cleared, every adjustment counts.
    */
   private async courierAdjustments(from: Date, to: Date): Promise<PnlLine> {
-    const rows = await this.prisma.client.courierWalletTransaction.groupBy({
-      by: ['kind'],
-      where: {
-        category: CourierWalletTxnCategory.ADJUSTMENT,
-        occurredAt: { gte: from, lte: to },
-        // `success` only. A failed line is a row about something that
-        // did not happen.
-        status: 'success',
-        // A transaction their ledger has since DROPPED is kept as evidence
-        // but moves no money: the later export still balances to the live
-        // wallet without it. Parcel costs already exclude it; so must this.
-        missingFromExportAt: null,
-      },
-      _sum: { amountInr: true },
-      _count: { _all: true },
-    });
+    const cutover = await this.adjustmentsCutover();
+    const countFrom = cutover !== null && cutover.getTime() > from.getTime() ? cutover : from;
+    const base = {
+      category: CourierWalletTxnCategory.ADJUSTMENT,
+      // `success` only. A failed line is a row about something that
+      // did not happen.
+      status: 'success',
+      // A transaction their ledger has since DROPPED is kept as evidence
+      // but moves no money: the later export still balances to the live
+      // wallet without it. Parcel costs already exclude it; so must this.
+      missingFromExportAt: null,
+    } as const;
+    const rows =
+      countFrom.getTime() > to.getTime()
+        ? []
+        : await this.prisma.client.courierWalletTransaction.groupBy({
+            by: ['kind'],
+            where: { ...base, occurredAt: { gte: countFrom, lte: to } },
+            _sum: { amountInr: true },
+            _count: { _all: true },
+          });
+    // What the cutover left out of THIS window, so the line says so.
+    const excluded =
+      countFrom.getTime() > from.getTime()
+        ? await this.prisma.client.courierWalletTransaction.groupBy({
+            by: ['kind'],
+            where: {
+              ...base,
+              occurredAt: { gte: from, lt: countFrom.getTime() > to.getTime() ? to : countFrom },
+            },
+            _sum: { amountInr: true },
+            _count: { _all: true },
+          })
+        : [];
+    let excludedCount = 0;
+    let excludedNet = ZERO;
+    for (const r of excluded) {
+      excludedCount += r._count._all;
+      const amt = r._sum.amountInr ?? ZERO;
+      excludedNet =
+        r.kind === CourierWalletTxnKind.DEBIT ? excludedNet.add(amt) : excludedNet.sub(amt);
+    }
 
     let cost = ZERO;
     let debited = ZERO;
@@ -510,8 +538,18 @@ export class PnlService {
       }
     }
     const count = debitCount + creditCount;
+    // Said even though the line is fully measured — `line()` keeps a note
+    // only for missing coverage, and money deliberately left out of a
+    // total is exactly what a reader of that total needs told.
+    const cutoverNote =
+      excludedCount > 0 && cutover !== null
+        ? `${excludedCount} adjustment(s) dated before ${istDate(cutover)} (net ` +
+          `${excludedNet.isNegative() ? 'credit' : 'debit'} ₹${excludedNet.abs().toFixed(2)}) ` +
+          'are not counted: they belong to parcels shipped outside Skydrop, whose cost and ' +
+          'revenue are not in this report either.'
+        : null;
 
-    return this.line({
+    const line = this.line({
       key: 'courier_adjustments',
       label: 'Courier account adjustments',
       revenue: ZERO,
@@ -543,8 +581,35 @@ export class PnlService {
         ],
       },
     });
+    return cutoverNote === null
+      ? line
+      : { ...line, coverage: { ...line.coverage, note: cutoverNote } };
   }
 
+  /** The cutover date, or null when the setting is cleared (count every adjustment). */
+  private async adjustmentsCutover(): Promise<Date | null> {
+    const row = await this.prisma.client.systemSetting.findUnique({
+      where: { key: SETTING_PNL_COURIER_ADJUSTMENTS_FROM },
+      select: { valueDate: true },
+    });
+    return row?.valueDate ?? null;
+  }
+
+  /**
+   * The tax deducted from a COD, which is OURS.
+   *
+   * ── WHY THIS IS REVENUE AND NOT A LIABILITY (2026-09-07) ─────────────
+   * It was reported as money held for the government, on the reading
+   * that we file a return against it. We do not: the courier bills GST
+   * on the shipping alongside their own charge and remits it, so there
+   * is no separate filing of ours behind this deduction. What we keep
+   * back from a COD is income, and reporting it as a liability made the
+   * business look poorer than it is while implying a filing obligation
+   * that does not exist.
+   *
+   * It has NO cost side — nothing is spent to collect it — and an empty
+   * cost basis says that more honestly than a zero would.
+   */
   private async codTaxDeduction(from: Date, to: Date): Promise<PnlLine> {
     const agg = await this.prisma.client.sellerWalletEntry.aggregate({
       where: {
@@ -888,4 +953,14 @@ export class PnlService {
       basis: input.basis,
     };
   }
+}
+
+/** "1 Oct 2026" — a date as a person in India reads it. */
+function istDate(d: Date): string {
+  return d.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
 }

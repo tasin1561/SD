@@ -43,6 +43,7 @@ type SystemSettingSeed = {
   valueDecimal?: string;
   valueBoolean?: boolean;
   valueJson?: unknown;
+  valueDate?: Date;
   // Seller-override caps (settings-resolver mechanism, R0 of the
   // revised-plan roadmap). Unset = not seller-overridable.
   sellerOverridable?: boolean;
@@ -511,6 +512,16 @@ const systemSettings: SystemSettingSeed[] = [
     displayName: 'Shiprocket wallet sync — days to re-read each night',
     description:
       'How far back each night’s Passbook read reaches. Ninety, like Delhivery: re-reading costs nothing because each movement is stored once and recognised when seen again, and a wide window is what lets a movement that later VANISHES from their passbook be noticed. About 70 pages of 100 rows, three minutes.',
+  },
+  {
+    key: 'pnl.courier_adjustments_from',
+    category: 'wallet',
+    valueType: SettingValueType.DATE,
+    // 1 Oct 2026, 00:00 IST.
+    valueDate: new Date('2026-09-30T18:30:00.000Z'),
+    displayName: 'P&L — count courier account adjustments from',
+    description:
+      'The first day every parcel on the Delhivery and Shiprocket accounts goes through Skydrop. Before it the same accounts carried parcels shipped OUTSIDE Skydrop, whose cost and revenue are not in the P&L, so their account adjustments (lost-shipment credits, insurance refunds, reconciliations) are left out too — the line says how many and their net. Clear it to count every adjustment.',
   },
   {
     key: 'courier.shiprocket_invoice_check_enabled',
@@ -1526,6 +1537,7 @@ async function seedSystemSettings() {
         valueDecimal: s.valueDecimal ?? null,
         valueBoolean: s.valueBoolean ?? null,
         valueJson: (s.valueJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        valueDate: s.valueDate ?? null,
         displayName: s.displayName,
         description: s.description,
         sellerOverridable: s.sellerOverridable ?? false,
@@ -3492,6 +3504,11 @@ async function seedExpenseCategories(): Promise<void> {
       'courier_charges',
       'Courier charges',
       'What a courier bills us, beyond what is recovered per order.',
+    ],
+    [
+      'courier_cod_fees',
+      'Courier COD fees',
+      'Early-COD fees a courier kept back from a COD payout. Booked automatically when the payout is recorded — do not file these by hand, or the P&L counts them twice.',
     ],
     [
       'freight_forwarder',

@@ -6,8 +6,10 @@ import { ShipmentCostService } from '../../src/modules/treasury/services/shipmen
 
 const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
 
-/** The filter the courier-adjustments query was called with, last time. */
+/** The filter the COUNTED courier-adjustments query was called with, last time. */
 let adjustmentWhere: Record<string, unknown> | undefined;
+/** The filter of the query that measures what the cutover left out, if it ran. */
+let excludedWhere: Record<string, unknown> | undefined;
 
 function makeSut(opts: {
   freight?: Array<{ totalInr: Prisma.Decimal; ourCostInr: Prisma.Decimal | null }>;
@@ -17,6 +19,14 @@ function makeSut(opts: {
     _sum: { amountInr: Prisma.Decimal };
     _count: { _all: number };
   }>;
+  /** Adjustments dated before the cutover, as the second query returns them. */
+  preCutoverAdjustments?: Array<{
+    kind: string;
+    _sum: { amountInr: Prisma.Decimal };
+    _count: { _all: number };
+  }>;
+  /** `pnl.courier_adjustments_from`; absent = the setting is cleared. */
+  cutover?: Date | null;
   shippingRevenue?: Prisma.Decimal | null;
   shipments?: Array<{
     actualCourierCostInr: Prisma.Decimal | null;
@@ -38,13 +48,25 @@ function makeSut(opts: {
    */
   unattributed?: Array<{ signedAmount: Prisma.Decimal }>;
 }) {
+  adjustmentWhere = undefined;
+  excludedWhere = undefined;
   const client = {
+    systemSetting: {
+      findUnique: async () => (opts.cutover == null ? null : { valueDate: opts.cutover }),
+    },
     inboundFreightCharge: { findMany: async () => opts.freight ?? [] },
     // Courier account adjustments — reconciliations and credit notes
     // the courier applied to the wallet rather than to a parcel. Empty
     // unless a test says otherwise: they have their own describe block.
+    // Two queries now: the counted window (lte) and, when a cutover cuts
+    // into it, what was left out (lt).
     courierWalletTransaction: {
       groupBy: async (args: { where: Record<string, unknown> }) => {
+        const window = args.where['occurredAt'] as Record<string, unknown>;
+        if ('lt' in window) {
+          excludedWhere = args.where;
+          return opts.preCutoverAdjustments ?? [];
+        }
         adjustmentWhere = args.where;
         return opts.courierAdjustments ?? [];
       },
@@ -293,6 +315,7 @@ describe('a cost already counted by its leg is not counted again', () => {
     */
     let scoped: unknown;
     const client = {
+      systemSetting: { findUnique: async () => null },
       inboundFreightCharge: { findMany: async () => [] },
       courierWalletTransaction: { groupBy: async () => [] },
       orderCharge: {
@@ -455,5 +478,71 @@ describe('courier account adjustments — what the P&L counts', () => {
 
     expect(line?.costInr).toBe('-1231.17');
     expect(line?.basis.cost.map((b) => b.count)).toEqual([1, 2]);
+  });
+});
+
+/**
+ * Before 1 Oct 2026 the courier accounts carried the business's parcels
+ * shipped OUTSIDE Skydrop — 12,941 of 12,970 waybills in the first 90
+ * days. Their costs and revenue are not in the report, so their account
+ * adjustments must not be either.
+ */
+describe('courier account adjustments — only from the cutover', () => {
+  const CUTOVER = new Date('2026-09-30T18:30:00.000Z'); // 1 Oct 2026, 00:00 IST
+  const adj = (kind: string, amount: string, count = 1) => ({
+    kind,
+    _sum: { amountInr: D(amount) },
+    _count: { _all: count },
+  });
+
+  it('counts from the cutover when it falls inside the window, and says what it left out', async () => {
+    const from = new Date('2026-09-15T00:00:00.000Z');
+    const to = new Date('2026-10-15T00:00:00.000Z');
+    const svc = makeSut({
+      cutover: CUTOVER,
+      courierAdjustments: [adj('DEBIT', '100.00')],
+      preCutoverAdjustments: [adj('DEBIT', '9206.66'), adj('CREDIT', '10560.00', 2)],
+    });
+    const r = await svc.report(from, to);
+    const line = r.lines.find((l) => l.key === 'courier_adjustments');
+
+    expect(adjustmentWhere).toMatchObject({ occurredAt: { gte: CUTOVER, lte: to } });
+    expect(excludedWhere).toMatchObject({ occurredAt: { gte: from, lt: CUTOVER } });
+    expect(line?.costInr).toBe('100.00');
+    expect(line?.coverage.note).toMatch(/3 adjustment\(s\) dated before 1 Oct 2026/);
+    expect(line?.coverage.note).toMatch(/net credit ₹1353\.34/);
+  });
+
+  it('a window wholly before the cutover counts nothing — and still says why', async () => {
+    const svc = makeSut({
+      cutover: CUTOVER,
+      courierAdjustments: [adj('DEBIT', '999.00')], // would be wrong to count
+      preCutoverAdjustments: [adj('CREDIT', '500.00')],
+    });
+    const r = await svc.report(FROM, TO); // August
+    const line = r.lines.find((l) => l.key === 'courier_adjustments');
+
+    expect(adjustmentWhere).toBeUndefined();
+    expect(excludedWhere).toMatchObject({ occurredAt: { gte: FROM, lt: TO } });
+    expect(line?.costInr).toBe('0.00');
+    expect(line?.coverage.note).toMatch(/not counted/);
+  });
+
+  it('a window wholly after the cutover counts everything in it, with no second query', async () => {
+    const from = new Date('2026-11-01T00:00:00.000Z');
+    const to = new Date('2026-11-30T00:00:00.000Z');
+    const svc = makeSut({ cutover: CUTOVER, courierAdjustments: [adj('DEBIT', '40.00')] });
+    const r = await svc.report(from, to);
+
+    expect(adjustmentWhere).toMatchObject({ occurredAt: { gte: from, lte: to } });
+    expect(excludedWhere).toBeUndefined();
+    expect(r.lines.find((l) => l.key === 'courier_adjustments')?.costInr).toBe('40.00');
+  });
+
+  it('with the setting cleared every adjustment counts', async () => {
+    const svc = makeSut({ cutover: null, courierAdjustments: [adj('DEBIT', '40.00')] });
+    await svc.report(FROM, TO);
+    expect(adjustmentWhere).toMatchObject({ occurredAt: { gte: FROM, lte: TO } });
+    expect(excludedWhere).toBeUndefined();
   });
 });
