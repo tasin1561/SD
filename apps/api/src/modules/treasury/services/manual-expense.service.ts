@@ -1,7 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType, BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
-import { BankLedgerService } from './bank-ledger.service';
+import { isUniqueViolation } from '../../../common/db/unique-violation';
+import { BankLedgerService, idempotencyKeyReused } from './bank-ledger.service';
+
+/** The material fields an expense's idempotency key vouches for. */
+interface ExpenseShape {
+  readonly accountId: string;
+  readonly signedAmount: Prisma.Decimal;
+  readonly currency: Currency;
+  readonly occurredAt: Date;
+  readonly expenseCategoryId: string;
+  readonly reference: string | null;
+}
 
 export interface ManualEntryInput {
   readonly accountId: string;
@@ -15,6 +26,8 @@ export interface ManualEntryInput {
   readonly occurredAt: string;
   readonly reference?: string;
   readonly note?: string;
+  /** One per opening of the form (IDEM-1); a replay posts nothing. */
+  readonly idempotencyKey?: string;
 }
 
 /**
@@ -129,6 +142,21 @@ export class ManualExpenseService {
           'Say what the money was spent on — an uncategorised expense cannot be told apart later.',
       });
     }
+    // IDEM-1: a double-click, or a retry after a timeout, must not pay
+    // the same bill twice. Checked before the category, so a replay of a
+    // request that already landed still answers after the category is
+    // retired.
+    const expected: ExpenseShape = {
+      accountId: input.accountId,
+      signedAmount: amount,
+      currency: input.amountCurrency,
+      occurredAt: new Date(input.occurredAt),
+      expenseCategoryId: input.expenseCategoryId,
+      reference: input.reference ?? null,
+    };
+    const replay = await this.replay(input.idempotencyKey, expected);
+    if (replay !== null) return replay;
+
     const category = await this.prisma.client.expenseCategory.findFirst({
       where: { id: input.expenseCategoryId, deletedAt: null, isActive: true },
       select: { id: true },
@@ -140,18 +168,66 @@ export class ManualExpenseService {
       });
     }
 
-    return this.ledger.post({
-      accountId: input.accountId,
-      type: BankEntryType.EXPENSE,
-      signedAmount: amount,
-      amountCurrency: input.amountCurrency,
-      owner: { kind: BankOwnerKind.CAPITAL },
-      actorType: ActorType.STAFF,
-      staffId,
-      occurredAt: new Date(input.occurredAt),
-      expenseCategoryId: category.id,
-      ...(input.reference === undefined ? {} : { reference: input.reference }),
-      ...(input.note === undefined ? {} : { note: input.note }),
+    try {
+      return await this.ledger.post({
+        accountId: input.accountId,
+        type: BankEntryType.EXPENSE,
+        signedAmount: amount,
+        amountCurrency: input.amountCurrency,
+        owner: { kind: BankOwnerKind.CAPITAL },
+        actorType: ActorType.STAFF,
+        staffId,
+        occurredAt: expected.occurredAt,
+        expenseCategoryId: category.id,
+        idempotencyKey: input.idempotencyKey ?? null,
+        ...(input.reference === undefined ? {} : { reference: input.reference }),
+        ...(input.note === undefined ? {} : { note: input.note }),
+      });
+    } catch (err) {
+      // The same request racing itself: the loser answers with the winner.
+      if (input.idempotencyKey !== undefined && isUniqueViolation(err)) {
+        const again = await this.replay(input.idempotencyKey, expected);
+        if (again !== null) return again;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * The entry a key already posted, or null for a new key. A key whose
+   * entry is not THIS expense — account, amount, currency, date, category
+   * or reference — is refused (IDEM-1) rather than answered with it.
+   */
+  private async replay(
+    idempotencyKey: string | undefined,
+    expected: ExpenseShape,
+  ): Promise<{ id: string } | null> {
+    if (idempotencyKey === undefined) return null;
+    const prior = await this.prisma.client.bankEntry.findUnique({
+      where: { idempotencyKey },
+      select: {
+        id: true,
+        type: true,
+        accountId: true,
+        signedAmount: true,
+        currency: true,
+        occurredAt: true,
+        expenseCategoryId: true,
+        reference: true,
+      },
     });
+    if (prior === null) return null;
+    if (
+      prior.type !== BankEntryType.EXPENSE ||
+      prior.accountId !== expected.accountId ||
+      !prior.signedAmount.equals(expected.signedAmount) ||
+      prior.currency !== expected.currency ||
+      prior.occurredAt.getTime() !== expected.occurredAt.getTime() ||
+      prior.expenseCategoryId !== expected.expenseCategoryId ||
+      (prior.reference ?? '').trim() !== (expected.reference ?? '').trim()
+    ) {
+      throw idempotencyKeyReused('expense');
+    }
+    return { id: prior.id };
   }
 }

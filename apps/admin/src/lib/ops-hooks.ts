@@ -1411,6 +1411,8 @@ export function useRecordBankEntry(): UseMutationResult<
     occurredAt: string;
     reference?: string;
     note?: string;
+    /** One per opening of the form; a retry with it posts nothing. */
+    idempotencyKey?: string;
   }
 > {
   const client = useApiClient();

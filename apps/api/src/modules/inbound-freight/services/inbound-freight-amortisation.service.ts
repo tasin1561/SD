@@ -347,11 +347,15 @@ export class InboundFreightAmortisationService {
     let total = ZERO;
     let unitsCharged = 0;
     const touched = new Map<string, { units: number; amount: Prisma.Decimal }>();
+    // Every bill a unit resolved to, charged or not — the residue sweep
+    // below has to see a bill whose own line owed nothing this time.
+    const seen = new Set<string>();
 
     for (const item of input.items) {
       if (item.pickedBatchId === null) continue;
       const alloc = await this.resolveAllocation(tx, item.pickedBatchId);
       if (!alloc) continue;
+      seen.add(alloc.freightChargeId);
 
       // Charged by RUNNING TOTAL, not per-unit rate x quantity.
       //
@@ -406,6 +410,28 @@ export class InboundFreightAmortisationService {
       });
       total = total.add(amount);
       unitsCharged += newlySettled;
+    }
+
+    // ── THE LAST UNIT OUT CLOSES THE BILL ON ITS MONEY ────────────────
+    // Each line lands on its own gross share, so once every unit has left
+    // the bill has collected its total — EXCEPT where a line was fully
+    // charged before its gross figure existed (the pre-service-charge
+    // rate). That line's units are all gone, so no later unit of its own
+    // can catch its share up; the bill used to close SETTLED on its units
+    // with the difference uncollectable (`settle` refuses a SETTLED bill)
+    // while the P&L booked the whole total. When this charge takes the
+    // bill's last unit, whatever is still owed is charged here, on the
+    // unit that finished it, and every line is marked fully charged —
+    // so the lifetime total is exactly `totalInr`.
+    for (const chargeId of seen) {
+      const residue = await this.sweepResidueIfLastOut(tx, chargeId, touched.get(chargeId));
+      if (residue.lte(0)) continue;
+      const prior = touched.get(chargeId);
+      touched.set(chargeId, {
+        units: prior?.units ?? 0,
+        amount: (prior?.amount ?? ZERO).add(residue),
+      });
+      total = total.add(residue);
     }
 
     if (total.lte(0)) {
@@ -505,6 +531,42 @@ export class InboundFreightAmortisationService {
     return null;
   }
 
+  /**
+   * What is still owed on a bill whose LAST unit this charge takes, or 0.
+   *
+   * Read under the WALLET lock the caller holds, before `rollUpCharge`
+   * moves the bill's counters, so `pending` is exactly what this charge
+   * is about to add. When the residue is positive every line is marked
+   * fully charged (units and gross), in the same transaction.
+   */
+  private async sweepResidueIfLastOut(
+    tx: Prisma.TransactionClient,
+    chargeId: string,
+    pending: { units: number; amount: Prisma.Decimal } | undefined,
+  ): Promise<Prisma.Decimal> {
+    const bill = await tx.inboundFreightCharge.findUnique({
+      where: { id: chargeId },
+      select: { totalInr: true, amountSettledInr: true, unitsSettled: true, totalUnits: true },
+    });
+    if (bill === null || bill.totalUnits <= 0) return ZERO;
+    const unitsAfter = bill.unitsSettled + (pending?.units ?? 0);
+    if (unitsAfter < bill.totalUnits) return ZERO;
+    const residue = bill.totalInr.sub(bill.amountSettledInr).sub(pending?.amount ?? ZERO);
+    if (residue.lte(0)) return ZERO;
+
+    const lines = await tx.inboundFreightAllocation.findMany({
+      where: { freightChargeId: chargeId },
+      select: { id: true, units: true, lineGrossInr: true },
+    });
+    for (const line of lines) {
+      await tx.inboundFreightAllocation.update({
+        where: { id: line.id },
+        data: { unitsSettled: line.units, amountSettledInr: line.lineGrossInr },
+      });
+    }
+    return residue;
+  }
+
   /** Roll the line-level settlement up onto the bill and advance status. */
   private async rollUpCharge(
     tx: Prisma.TransactionClient,
@@ -518,18 +580,27 @@ export class InboundFreightAmortisationService {
         unitsSettled: { increment: units },
         amountSettledInr: { increment: amount },
       },
-      select: { unitsSettled: true, totalUnits: true, status: true },
+      select: { amountSettledInr: true, totalInr: true, status: true },
     });
 
-    // Fully consumed ⇒ SETTLED; otherwise PARTIALLY_SETTLED. Never
-    // downgrade a bill an operator already settled or waived by hand.
+    // Fully PAID ⇒ SETTLED; otherwise PARTIALLY_SETTLED. Never downgrade
+    // a bill an operator already settled or waived by hand.
+    //
+    // Decided on MONEY, not units. "Every unit has left" and "every rupee
+    // came in" used to be treated as the same fact, and on a bill with a
+    // line charged before its gross figure existed they are not: the bill
+    // closed SETTLED short, `settle` then refused it, and the difference
+    // could never be collected. A bill whose units are all gone but whose
+    // money is not stays PARTIALLY_SETTLED, where `settle` charges exactly
+    // the outstanding remainder (and the sweep above normally takes it
+    // with the last unit anyway).
     if (
       updated.status === InboundFreightStatus.SETTLED ||
       updated.status === InboundFreightStatus.WAIVED
     ) {
       return;
     }
-    const done = updated.totalUnits > 0 && updated.unitsSettled >= updated.totalUnits;
+    const done = updated.totalInr.gt(0) && updated.amountSettledInr.gte(updated.totalInr);
     await tx.inboundFreightCharge.update({
       where: { id: chargeId },
       data: {

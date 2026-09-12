@@ -60,6 +60,16 @@ export const AdvisoryLock = {
    * remainder and together allocate past the cash that landed.
    */
   SETTLEMENT: 0x05354,
+  /**
+   * 'FC' — recomputing ONE freight bill's cost from its forwarder payments.
+   *
+   * A payment (or an attribution) posts its entry and then re-sums every
+   * payment on the bill. Under READ COMMITTED two of them at once each
+   * see only their own uncommitted entry, and the second write of the
+   * total drops the first payment — which, being linked, is excluded from
+   * operating expenses too, so it falls off the P&L entirely.
+   */
+  FREIGHT_COST: 0x04643,
 } as const;
 
 /**

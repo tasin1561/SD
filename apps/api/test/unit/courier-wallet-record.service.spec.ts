@@ -282,8 +282,19 @@ describe('CourierWalletRecordService.recordOutgoingPayment — idempotent on the
     expect(post.mock.calls[0]![0]).toMatchObject({ idempotencyKey: KEY });
   });
 
+  // What the key's first request posted — the entry a replay is compared to.
+  const prior = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'be-first',
+    type: 'COURIER_WALLET_RECHARGE',
+    accountId: 'ba-1',
+    signedAmount: new Prisma.Decimal('-20000.00'),
+    occurredAt: new Date('2026-09-01T00:00:00Z'),
+    reference: 'UTR999',
+    ...over,
+  });
+
   it('a replay books nothing and returns the original entry', async () => {
-    const { svc, post } = makeKeyed([{ id: 'be-first', type: 'COURIER_WALLET_RECHARGE' }]);
+    const { svc, post } = makeKeyed([prior()]);
     await expect(svc.recordOutgoingPayment(PAYMENT)).resolves.toEqual({
       bankEntryId: 'be-first',
     });
@@ -292,7 +303,7 @@ describe('CourierWalletRecordService.recordOutgoingPayment — idempotent on the
 
   it('two copies racing: the loser answers with the winner’s entry', async () => {
     const { svc } = makeKeyed(
-      [null, { id: 'be-first', type: 'COURIER_WALLET_RECHARGE' }],
+      [null, prior()],
       new Prisma.PrismaClientKnownRequestError('duplicate', {
         code: 'P2002',
         clientVersion: 'test',
@@ -304,9 +315,22 @@ describe('CourierWalletRecordService.recordOutgoingPayment — idempotent on the
   });
 
   it('refuses a key that posted something else', async () => {
-    const { svc } = makeKeyed([{ id: 'be-x', type: 'EXPENSE' }]);
+    const { svc } = makeKeyed([prior({ id: 'be-x', type: 'EXPENSE' })]);
     await expect(svc.recordOutgoingPayment(PAYMENT)).rejects.toMatchObject({
       response: { code: 'IDEMPOTENCY_KEY_REUSED' },
     });
+  });
+
+  it.each([
+    ['amount', { signedAmount: new Prisma.Decimal('-25000.00') }],
+    ['account', { accountId: 'ba-2' }],
+    ['date', { occurredAt: new Date('2026-09-02T00:00:00Z') }],
+    ['reference', { reference: 'UTR111' }],
+  ])('the same key on a top-up with a different %s is 409', async (_what, over) => {
+    const { svc, post } = makeKeyed([prior(over)]);
+    await expect(svc.recordOutgoingPayment(PAYMENT)).rejects.toMatchObject({
+      response: { code: 'IDEMPOTENCY_KEY_REUSED' },
+    });
+    expect(post).not.toHaveBeenCalled();
   });
 });

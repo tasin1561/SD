@@ -15,9 +15,20 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
+import {
+  BankLedgerService,
+  idempotencyKeyReused,
+} from '../../treasury/services/bank-ledger.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { isUniqueViolation } from '../../../common/db/unique-violation';
+
+/** The material fields a courier top-up's idempotency key vouches for. */
+interface RechargeShape {
+  readonly accountId: string;
+  readonly signedAmount: Prisma.Decimal;
+  readonly occurredAt: Date;
+  readonly reference: string;
+}
 
 /**
  * The two ways a person answers the reconciliation.
@@ -293,9 +304,6 @@ export class CourierWalletRecordService {
      */
     readonly idempotencyKey?: string | null;
   }): Promise<{ bankEntryId: string }> {
-    const replay = await this.replayPayment(input.idempotencyKey);
-    if (replay !== null) return replay;
-
     const amount = new Prisma.Decimal(input.amountInr);
     if (amount.lessThanOrEqualTo(0)) {
       throw new BadRequestException({
@@ -311,6 +319,16 @@ export class CourierWalletRecordService {
           'Without it the payment can never be matched and will be flagged as missing.',
       });
     }
+
+    // What this request would post — a replay must match it exactly.
+    const expected: RechargeShape = {
+      accountId: input.bankAccountId,
+      signedAmount: amount.negated(),
+      occurredAt: input.occurredAt,
+      reference: input.reference.trim(),
+    };
+    const replay = await this.replayPayment(input.idempotencyKey, expected);
+    if (replay !== null) return replay;
 
     const courierAccount = await this.prisma.client.courierAccount.findFirst({
       where: { id: input.courierAccountId, deletedAt: null },
@@ -343,7 +361,7 @@ export class CourierWalletRecordService {
     } catch (err) {
       // The same request racing itself: answer with the winner's entry.
       if (input.idempotencyKey != null && isUniqueViolation(err)) {
-        const again = await this.replayPayment(input.idempotencyKey);
+        const again = await this.replayPayment(input.idempotencyKey, expected);
         if (again !== null) return again;
       }
       throw err;
@@ -370,24 +388,36 @@ export class CourierWalletRecordService {
   }
 
   /**
-   * The entry a key already posted, or null for a new key. A key that
-   * posted something other than a courier top-up is a client bug, and is
-   * refused rather than answered with an unrelated entry.
+   * The entry a key already posted, or null for a new key. A key whose
+   * entry is not THIS top-up — another type, account, amount, date or
+   * reference — is a client bug, and is refused (IDEM-1) rather than
+   * answered with an unrelated entry.
    */
   private async replayPayment(
     idempotencyKey: string | null | undefined,
+    expected: RechargeShape,
   ): Promise<{ bankEntryId: string } | null> {
     if (idempotencyKey == null) return null;
     const prior = await this.prisma.client.bankEntry.findUnique({
       where: { idempotencyKey },
-      select: { id: true, type: true },
+      select: {
+        id: true,
+        type: true,
+        accountId: true,
+        signedAmount: true,
+        occurredAt: true,
+        reference: true,
+      },
     });
     if (prior === null) return null;
-    if (prior.type !== BankEntryType.COURIER_WALLET_RECHARGE) {
-      throw new ConflictException({
-        code: 'IDEMPOTENCY_KEY_REUSED',
-        message: 'This request key was already used for a different entry.',
-      });
+    if (
+      prior.type !== BankEntryType.COURIER_WALLET_RECHARGE ||
+      prior.accountId !== expected.accountId ||
+      !prior.signedAmount.equals(expected.signedAmount) ||
+      prior.occurredAt.getTime() !== expected.occurredAt.getTime() ||
+      (prior.reference ?? '').trim() !== expected.reference
+    ) {
+      throw idempotencyKeyReused('courier wallet payment');
     }
     return { bankEntryId: prior.id };
   }

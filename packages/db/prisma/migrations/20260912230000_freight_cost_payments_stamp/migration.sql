@@ -1,0 +1,15 @@
+-- ─────────────────────────────────────────────────────────────────────
+-- Each forwarder payment's rupee figure, stamped with the bill's cost.
+--
+-- `our_cost_inr` is the sum of a bill's forwarder payments, each priced
+-- at the rate in force at its own instant, and is re-summed only when a
+-- payment is recorded or attributed. The page's per-payment breakdown
+-- priced every payment AGAIN on read, so a rate back-filled into
+-- `fx_rate_history` afterwards made the rows disagree with the total
+-- printed above them. The per-payment figures are now stamped alongside
+-- the total and read back, never re-priced.
+--
+-- No backfill: a bill with no stamp is priced on read exactly as before,
+-- until its next payment or attribution stamps it.
+-- ─────────────────────────────────────────────────────────────────────
+ALTER TABLE "inbound_freight_charges" ADD COLUMN "our_cost_payments" JSONB;

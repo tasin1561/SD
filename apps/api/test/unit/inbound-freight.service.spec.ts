@@ -669,10 +669,21 @@ describe('InboundFreightService.recordForwarderPayment', () => {
     expect(entry.metadata.amountPaid).toBe('2000.00');
   });
 
+  // What the key's first request posted — the entry a replay is compared to.
+  const priorPayment = (over: AnyArgs = {}): AnyArgs => ({
+    inboundFreightChargeId: 'fc-1',
+    type: 'EXPENSE',
+    accountId: 'ba-1',
+    signedAmount: new Prisma.Decimal('-2000.00'),
+    occurredAt: new Date('2026-09-01T00:00:00Z'),
+    reference: null,
+    ...over,
+  });
+
   it('a replay with the same key records NOTHING and returns the bill', async () => {
     const { svc, post, chargeUpdate } = makeSut({
       loaded: chargeRow({ ourCostInr: new Prisma.Decimal('2000.00') }),
-      priorByKey: [{ inboundFreightChargeId: 'fc-1' }],
+      priorByKey: [priorPayment()],
     });
     const view = await svc.recordForwarderPayment('st-1', 'fc-1', {
       ...payment,
@@ -687,7 +698,7 @@ describe('InboundFreightService.recordForwarderPayment', () => {
     const { svc } = makeSut({
       loaded: chargeRow({ ourCostInr: new Prisma.Decimal('2000.00') }),
       // First lookup: nothing yet. After the insert fails: the winner's row.
-      priorByKey: [null, { inboundFreightChargeId: 'fc-1' }],
+      priorByKey: [null, priorPayment()],
       postThrows: new Prisma.PrismaClientKnownRequestError('duplicate', {
         code: 'P2002',
         clientVersion: 'test',
@@ -703,7 +714,7 @@ describe('InboundFreightService.recordForwarderPayment', () => {
   it('refuses a key that created something else rather than pretending', async () => {
     const { svc, post } = makeSut({
       loaded: chargeRow(),
-      priorByKey: [{ inboundFreightChargeId: 'fc-other' }],
+      priorByKey: [priorPayment({ inboundFreightChargeId: 'fc-other' })],
     });
     await expect(
       svc.recordForwarderPayment('st-1', 'fc-1', {
@@ -712,6 +723,103 @@ describe('InboundFreightService.recordForwarderPayment', () => {
       }),
     ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
     expect(post).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['amount', { signedAmount: new Prisma.Decimal('-2500.00') }],
+    ['account', { accountId: 'ba-2' }],
+    ['date', { occurredAt: new Date('2026-09-02T00:00:00Z') }],
+    ['reference', { reference: 'INV-77' }],
+  ])(
+    'the same key on a payment with a different %s is 409, never answered',
+    async (_what, over) => {
+      const { svc, post } = makeSut({ loaded: chargeRow(), priorByKey: [priorPayment(over)] });
+      await expect(
+        svc.recordForwarderPayment('st-1', 'fc-1', {
+          ...payment,
+          idempotencyKey: '4f1c2c1e-4e7a-4b59-9d0e-3a2f5b1c8d11',
+        }),
+      ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+      expect(post).not.toHaveBeenCalled();
+    },
+  );
+
+  it('takes the bill’s cost lock BEFORE posting — the re-sum is serialised', async () => {
+    const { svc, post, lockTaken } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
+    await svc.recordForwarderPayment('st-1', 'fc-1', payment);
+    expect(lockTaken).toHaveBeenCalled();
+    expect(lockTaken.mock.invocationCallOrder[0]).toBeLessThan(
+      post.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('stamps each payment’s rupee figure with the total it sums to', async () => {
+    const { svc, chargeUpdate } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
+    await svc.recordForwarderPayment('st-1', 'fc-1', payment);
+    const data = chargeUpdate.mock.calls.at(-1)?.[0]['data'] as {
+      ourCostPayments: Array<{ costInr: string }>;
+    };
+    expect(data.ourCostPayments.map((p) => p.costInr)).toEqual(['2000.00']);
+  });
+});
+
+describe('InboundFreightService.costBreakdown reads the STAMPED per-payment figure', () => {
+  const bdtEntry = (id: string): AnyArgs => ({
+    id,
+    signedAmount: new Prisma.Decimal('-2000.00'),
+    currency: 'BDT',
+    occurredAt: new Date('2026-09-01T00:00:00Z'),
+    reference: null,
+    account: { label: 'Tasin City' },
+    createdBy: null,
+  });
+
+  it('a rate back-filled later moves neither the rows nor the total', async () => {
+    // Stamped at INR→BDT 1.23 = ₹1,626.02. A 1.30 rate added to the
+    // history since would re-price the row at ₹1,538.46 — and then the
+    // rows no longer add up to the stamped total printed above them.
+    const { svc } = makeSut({
+      loaded: {
+        ourCostInr: new Prisma.Decimal('1626.02'),
+        ourCostPayments: [
+          {
+            bankEntryId: 'be-1',
+            currency: 'BDT',
+            amount: '2000.00',
+            occurredAt: '2026-09-01T00:00:00.000Z',
+            costInr: '1626.02',
+            inrPerUnit: '0.8130081',
+            rateSource: 'HISTORY',
+            rateRecordedAt: '2026-08-24T00:00:00.000Z',
+            rateAsStored: 'INR→BDT 1.23',
+          },
+        ],
+        allocations: [],
+        bankEntries: [bdtEntry('be-1')],
+      },
+      fxHistory: {
+        fromCurrency: 'INR',
+        toCurrency: 'BDT',
+        rate: new Prisma.Decimal('1.30'),
+        recordedAt: new Date('2026-08-30T00:00:00Z'),
+      },
+    });
+    const out = await svc.costBreakdown('fc-1');
+    expect(out.ourCostInr).toBe('1626.02');
+    expect(out.payments[0]).toMatchObject({ costInr: '1626.02', rateAsStored: 'INR→BDT 1.23' });
+  });
+
+  it('a payment the stamp predates is still priced, at its own instant’s rate', async () => {
+    const { svc } = makeSut({
+      loaded: {
+        ourCostInr: new Prisma.Decimal('1626.02'),
+        ourCostPayments: null,
+        allocations: [],
+        bankEntries: [bdtEntry('be-1')],
+      },
+    });
+    const out = await svc.costBreakdown('fc-1');
+    expect(out.payments[0]).toMatchObject({ costInr: '1626.02' });
   });
 });
 
