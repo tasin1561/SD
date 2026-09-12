@@ -220,6 +220,23 @@ export class SystemIssueService implements OnModuleDestroy {
   }
 
   /**
+   * The dedupe keys of every OPEN issue whose key starts with `prefix`.
+   *
+   * For a sweep that has to clear issues about things that are no longer
+   * in its candidate set — a voided waybill that got cancelled drops out
+   * of the query that found it, so the sweep cannot reach its issue by
+   * iterating candidates. Asking for the open keys is bounded by what is
+   * actually open, not by history.
+   */
+  async openDedupeKeys(prefix: string): Promise<readonly string[]> {
+    const rows = await this.prisma.client.systemIssue.findMany({
+      where: { dedupeKey: { startsWith: prefix }, resolvedAt: null },
+      select: { dedupeKey: true },
+    });
+    return rows.map((r) => r.dedupeKey);
+  }
+
+  /**
    * A background worker fell over.
    *
    * Every BullMQ worker has an `on('error')` that logged and stopped

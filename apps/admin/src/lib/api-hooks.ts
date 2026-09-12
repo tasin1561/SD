@@ -1228,6 +1228,9 @@ export interface AdminShipmentRow {
   readonly manualCourierName: string | null;
   readonly createdAt: string;
   readonly supersedesShipmentId: string | null;
+  /** When the courier accepted a cancellation of this waybill. A voided
+   *  (CANCELLED) shipment with an AWB and no stamp is still live there. */
+  readonly courierCancelledAt: string | null;
 }
 
 export function useAdminOrderShipments(

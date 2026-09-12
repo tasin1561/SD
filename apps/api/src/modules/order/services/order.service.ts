@@ -1231,6 +1231,9 @@ export class OrderService {
       manualCourierName: string | null;
       createdAt: Date;
       supersedesShipmentId: string | null;
+      /** When the courier accepted a cancellation of this waybill. A
+       *  voided shipment with an AWB and no stamp is still live there. */
+      courierCancelledAt: Date | null;
     }>
   > {
     const order = await this.prisma.client.order.findFirst({
@@ -1258,6 +1261,7 @@ export class OrderService {
             manualCourierName: true,
             createdAt: true,
             supersedesShipmentId: true,
+            courierCancelledAt: true,
           },
         },
       },

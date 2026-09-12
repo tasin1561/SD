@@ -17,6 +17,7 @@ import {
   Toolbar,
   useToast,
 } from '@skydrop/ui/components';
+import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import {
   useAcknowledgeIssue,
@@ -27,6 +28,13 @@ import {
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+
+/** The order an issue is about, when its metadata names one. */
+function orderIdOf(metadata: unknown): string | null {
+  if (metadata === null || typeof metadata !== 'object') return null;
+  const v = (metadata as { orderId?: unknown }).orderId;
+  return typeof v === 'string' && v !== '' ? v : null;
+}
 
 /** Severity → the colour it deserves. */
 function tone(sev: SystemIssueView['severity']): string {
@@ -185,6 +193,16 @@ export function SystemIssuesIndex(): ReactElement {
                     <p className="text-text-body mt-2 max-w-3xl text-xs whitespace-pre-line">
                       {r.detail}
                     </p>
+                    {/* An issue about an order says which one; the link
+                        saves copying the number into the search box. */}
+                    {orderIdOf(r.metadata) !== null && (
+                      <Link
+                        href={`/orders/${orderIdOf(r.metadata) ?? ''}`}
+                        className="text-accent hover:text-accent-hover mt-2 inline-block text-xs"
+                      >
+                        Open the order
+                      </Link>
+                    )}
                     <div className="text-text-faint mt-2 text-xs">
                       {r.source} · first seen {since(r.firstSeenAt)} · last {since(r.lastSeenAt)}
                       {/* Seen many times is a different problem from seen
