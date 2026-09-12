@@ -42,11 +42,20 @@ export class OrderChargesAccrualService {
     // concurrent one, or both see "not charged" and both charge.
     await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
 
-    const already = await tx.sellerWalletEntry.findFirst({
-      where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES },
-      select: { id: true },
-    });
-    if (already) return false;
+    // Billed means MORE charges than refunds (2026-09-12). A charge that
+    // was refunded — the parcel was lost, or the order called off — and
+    // the order then delivered after all ("lost then found", god mode)
+    // owes the fee again; a plain "a charge exists" gate left it refunded
+    // AND unbilled. `OrderChargesRefundService` pairs them the same way.
+    const [charged, refunded] = await Promise.all([
+      tx.sellerWalletEntry.count({
+        where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES },
+      }),
+      tx.sellerWalletEntry.count({
+        where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES_REFUND },
+      }),
+    ]);
+    if (charged > refunded) return false;
 
     const charges = await tx.orderCharge.findMany({
       where: { orderId, deletedAt: null },

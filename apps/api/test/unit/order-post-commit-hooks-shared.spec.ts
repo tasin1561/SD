@@ -65,7 +65,9 @@ describe('both writers of orders.status share ONE set of post-commit hooks', () 
     expect(src).not.toMatch(/StockReservationService|StockMutationService/);
     // prisma, audit, callQueue, shipmentProvision, chargesRefund, bus,
     // settings (the per-seller default courier for the provision, SET-1 —
-    // a settings read, not a stock collaborator).
-    expect(OrderPostCommitHooksService.length).toBe(7);
+    // a settings read, not a stock collaborator), endedMoney (the money an
+    // order ending undelivered gives back) and issues (a provision that
+    // failed is raised) — none of them stock.
+    expect(OrderPostCommitHooksService.length).toBe(9);
   });
 });

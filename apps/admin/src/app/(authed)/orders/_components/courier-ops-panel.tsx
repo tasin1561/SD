@@ -24,6 +24,7 @@ import {
 import {
   useAttachEwaybill,
   useCancelWithCourier,
+  useRecordCancelledOutside,
   useEditShipment,
   useFetchDocument,
   useNdrAction,
@@ -348,7 +349,9 @@ function VoidedWaybill({
 }): ReactElement {
   const toast = useToast();
   const cancel = useCancelWithCourier();
+  const recordOutside = useRecordCancelledOutside();
   const [confirming, setConfirming] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [reason, setReason] = useState('');
 
   if (awbNumber === null) {
@@ -383,6 +386,18 @@ function VoidedWaybill({
     }
   }
 
+  async function doRecordOutside(): Promise<void> {
+    try {
+      const r = await recordOutside.mutateAsync({ shipmentId, reason: reason.trim() });
+      toast.success(r.message ?? 'Recorded as cancelled outside Skydrop.');
+      setRecording(false);
+      setReason('');
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      setRecording(false);
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <p className="text-xs text-[var(--color-warning)]">
@@ -392,6 +407,32 @@ function VoidedWaybill({
       <Button variant="destructive" size="sm" onClick={() => setConfirming(true)}>
         Cancel waybill with courier
       </Button>
+      <Button variant="secondary" size="sm" onClick={() => setRecording(true)}>
+        Mark cancelled outside Skydrop
+      </Button>
+      <ConfirmDialog
+        open={recording}
+        onOpenChange={setRecording}
+        title="Record this waybill as cancelled outside Skydrop?"
+        confirmLabel={recordOutside.isPending ? 'Recording…' : 'Record as cancelled'}
+        disabled={recordOutside.isPending || reason.trim().length < MIN_CANCEL_REASON}
+        onConfirm={() => void doRecordOutside()}
+        description={
+          <div className="space-y-2">
+            <p>
+              Use this only when the waybill was already cancelled in the courier&apos;s own portal
+              or by phone. Skydrop does NOT call the courier; it records your word, and the record
+              says so.
+            </p>
+            <Textarea
+              rows={2}
+              placeholder="How was it cancelled? e.g. cancelled in the Delhivery portal on 12 Sep"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+        }
+      />
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}

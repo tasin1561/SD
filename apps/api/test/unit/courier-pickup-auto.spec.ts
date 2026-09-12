@@ -196,6 +196,32 @@ describe('CourierPickupService.raiseIfDue', () => {
     expect(requestPickup).not.toHaveBeenCalled();
   });
 
+  it('a van already booked today clears an open "no van" issue for the building', async () => {
+    const { svc, resolveByKey } = make({
+      autoPickupEnabled: true,
+      existingToday: { id: 'already-there', status: 'REQUESTED' },
+    });
+    await svc.raiseIfDue(BOX);
+    expect(resolveByKey).toHaveBeenCalledWith(ISSUE_KEY, expect.any(String));
+  });
+
+  it('a MANUAL raise that succeeds clears the issue too — a van is a van', async () => {
+    const { svc, resolveByKey } = make({});
+    await svc.raise(
+      'staff-1',
+      {
+        warehouseId: WAREHOUSE_ID,
+        courierCode: 'delhivery',
+        courierAccountId: null,
+        pickupDate: '2026-09-13',
+        pickupTime: '18:00:00',
+        expectedPackageCount: 3,
+      },
+      { ipAddress: null, userAgent: null, requestId: null },
+    );
+    expect(resolveByKey).toHaveBeenCalledWith(ISSUE_KEY, expect.any(String));
+  });
+
   it('the headcount floors at 1 even if the waiting query comes back empty', async () => {
     const { svc, create } = make({ autoPickupEnabled: true, waiting: [] });
     await svc.raiseIfDue({
@@ -346,6 +372,16 @@ describe('CourierPickupService.raiseIfDue — nothing fails quietly', () => {
     expect(raiseIssue).not.toHaveBeenCalled();
   });
 
+  it('the racing loser clears the issue — the winner booked the van', async () => {
+    const p2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: 'test',
+    });
+    const { svc, resolveByKey } = make({ autoPickupEnabled: true, createThrows: p2002 });
+    await svc.raiseIfDue(BOX);
+    expect(resolveByKey).toHaveBeenCalledWith(ISSUE_KEY, expect.any(String));
+  });
+
   it('a successful request clears the (courier, warehouse) issue', async () => {
     const { svc, resolveByKey, raiseIssue } = make({ autoPickupEnabled: true });
     const r = await svc.raiseIfDue(BOX);
@@ -390,6 +426,13 @@ describe('pickupDateFor', () => {
     expect(pickupDateFor('18:00:00', new Date('2026-09-12T12:30:00.000Z'))).toBe('2026-09-13');
     expect(pickupDateFor('18:00', new Date('2026-09-12T12:31:00.000Z'))).toBe('2026-09-13');
   });
+  it('reads an unpadded hour numerically — "9:30" is morning, not after 17:00', () => {
+    // 08:00 IST: still before a 9:30 van, so today.
+    expect(pickupDateFor('9:30', new Date('2026-09-12T02:30:00.000Z'))).toBe('2026-09-12');
+    // 10:00 IST: past it, so tomorrow.
+    expect(pickupDateFor('9:30', new Date('2026-09-12T04:30:00.000Z'))).toBe('2026-09-13');
+  });
+
   it('rolls the month', () => {
     expect(pickupDateFor('18:00:00', new Date('2026-09-30T15:00:00.000Z'))).toBe('2026-10-01');
   });

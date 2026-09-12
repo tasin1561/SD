@@ -195,6 +195,12 @@ export class CourierAwbDispatchService {
     return ADAPTER_COURIERS.has(courierCode);
   }
 
+  /** Every courier code with an adapter — for a query that must ask only
+   *  about couriers a label (or booking) can be fetched from. */
+  adapterCourierCodes(): readonly string[] {
+    return [...ADAPTER_COURIERS];
+  }
+
   /**
    * A courier with no adapter is a MANUAL courier by definition (CUR-8)
    * — somebody books it by hand. Reported as not-serviceable-by-us so

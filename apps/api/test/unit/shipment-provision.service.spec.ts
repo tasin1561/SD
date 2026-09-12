@@ -36,6 +36,9 @@ function makeService(
     count: 1,
   }));
   const txClient = {
+    // The per-order provision lock, and the re-check made inside it.
+    $executeRaw: jest.fn(async () => 1),
+    orderShipment: { findFirst: orderShipmentFindFirst },
     shipment: { create: shipmentCreate, updateMany: shipmentUpdateMany },
   };
   const client = {
@@ -70,6 +73,7 @@ function makeService(
     shipmentUpdateMany,
     auditLog,
     nextShipmentNumber,
+    txClient,
   };
 }
 
@@ -97,6 +101,19 @@ const SNAPSHOT = {
     },
   ],
 };
+
+describe('ShipmentProvisionService.provisionFromSnapshot — two writers of CONFIRMED', () => {
+  it('re-checks under a per-order lock: the loser of a race gets the winner’s shipment, not a second', async () => {
+    const { svc, shipmentCreate, orderShipmentFindFirst, txClient } = makeService();
+    // Outside the lock: nothing yet. Inside it: the other writer's row.
+    orderShipmentFindFirst.mockResolvedValueOnce(null);
+    orderShipmentFindFirst.mockResolvedValueOnce({ shipmentId: 'sh-raced' });
+    const r = await svc.provisionFromSnapshot(SNAPSHOT);
+    expect(r).toEqual({ shipmentId: 'sh-raced', created: false });
+    expect(txClient.$executeRaw).toHaveBeenCalled();
+    expect(shipmentCreate).not.toHaveBeenCalled();
+  });
+});
 
 describe('ShipmentProvisionService.provisionFromSnapshot', () => {
   it('idempotent: an existing non-CANCELLED shipment is returned, no create', async () => {

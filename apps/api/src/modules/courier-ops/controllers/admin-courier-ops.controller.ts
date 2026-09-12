@@ -165,6 +165,22 @@ export class AdminCourierOpsController {
     );
   }
 
+  @Post('cancelled-outside')
+  @RequirePermissions('courier.ops.write')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Record that a voided shipment's waybill was cancelled with the courier OUTSIDE Skydrop (their portal, a call). The courier is NOT called; audited HIGH.",
+  })
+  recordCancelledOutside(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('shipmentId', new ParseUUIDPipe({ version: '7' })) shipmentId: string,
+    @Body() body: CancelWithCourierDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<ActionOutcome> {
+    return this.actions.recordCancelledOutside(staff.id, shipmentId, body.reason, ctx);
+  }
+
   @Post('ewaybill')
   @RequirePermissions('courier.ops.write')
   @HttpCode(HttpStatus.OK)

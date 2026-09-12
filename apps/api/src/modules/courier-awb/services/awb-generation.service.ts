@@ -17,6 +17,10 @@ import { CourierDistributionService } from '../../courier-shared/services/courie
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
+/** Magic bytes of the two image formats a courier label may arrive as. */
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
+
 export type AwbGenerationOutcome =
   | {
       status: 'GENERATED';
@@ -716,9 +720,15 @@ export class AwbGenerationService {
    * retried and raised, rather than a stored "label" that prints nothing.
    */
   static labelMimeType(bytes: Buffer, declared: string): string {
-    if (bytes.subarray(0, 5).toString('latin1') === '%PDF-') return 'application/pdf';
+    // The PDF spec lets `%PDF-` sit anywhere in the first 1024 bytes (a
+    // BOM or junk before the header is legal and some generators emit it).
+    if (bytes.subarray(0, 1024).includes('%PDF-', 0, 'latin1')) return 'application/pdf';
     const d = declared.trim().toLowerCase();
     if (d.startsWith('image/')) return d;
+    // An image sent with no (or a useless) type is named by its own magic
+    // bytes, exactly as a PDF is — Delhivery sends an EMPTY Content-Type.
+    if (bytes.subarray(0, 8).equals(PNG_MAGIC)) return 'image/png';
+    if (bytes.subarray(0, 3).equals(JPEG_MAGIC)) return 'image/jpeg';
     throw new Error(
       `LABEL_NOT_A_PDF: the courier returned ${bytes.length} bytes of ${
         d === '' ? 'unlabelled content' : d

@@ -152,6 +152,13 @@ function makeService(
     chargesRefund as never,
     lifecycleBus as never,
     { resolve: settingsResolve } as never,
+    // Ended-order money (retire the deferred accrual, undo an uncovered
+    // Instant Pay credit) and the issue board — inert here.
+    {
+      retirePendingAccrual: jest.fn(async () => 0),
+      reverseUncoveredInstantPayCredit: jest.fn(async () => ({ reversed: false })),
+    } as never,
+    { raise: jest.fn(async () => undefined), resolveByKey: jest.fn(async () => 0) } as never,
   );
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,

@@ -70,6 +70,14 @@ export const AdvisoryLock = {
    * operating expenses too, so it falls off the P&L entirely.
    */
   FREIGHT_COST: 0x04643,
+  /**
+   * 'SP' — provisioning an order's shipment. `provisionFromSnapshot`
+   * checks "does this order already have a live shipment?" and then
+   * creates one; two writers of CONFIRMED at once (a transition racing a
+   * god-mode force, or the AWB-less sweep's re-provision) both read "no"
+   * and both create — two parcels, and two real waybills booked.
+   */
+  SHIPMENT_PROVISION: 0x05350,
 } as const;
 
 /**

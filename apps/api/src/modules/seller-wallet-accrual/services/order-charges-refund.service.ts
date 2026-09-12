@@ -64,22 +64,32 @@ export class OrderChargesRefundService {
       // refunded" and both credit the seller back.
       await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
 
-      const charged = await tx.sellerWalletEntry.findFirst({
+      // Charges and refunds PAIR UP (2026-09-12). An order may be billed,
+      // refunded, and billed again — a lost parcel is refunded and then
+      // found and delivered ("lost then found", god mode) — so "already
+      // refunded once" is not "nothing owed back". Refund the latest
+      // charge no refund points at, and only while charges outnumber
+      // refunds; `OrderChargesAccrualService.debitIfNeeded` counts the
+      // same pairs, so the two sides can never disagree.
+      const charges = await tx.sellerWalletEntry.findMany({
         where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES },
         select: { id: true, amount: true, currency: true },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { id: 'desc' },
       });
       // Never charged — the ordinary case for an AT_DELIVERY seller.
-      if (!charged) return null;
+      if (charges.length === 0) return null;
 
-      const already = await tx.sellerWalletEntry.findFirst({
+      const refunds = await tx.sellerWalletEntry.findMany({
         where: {
           linkedOrderId: orderId,
           direction: WalletEntryDirection.ORDER_CHARGES_REFUND,
         },
-        select: { id: true },
+        select: { linkedEntryId: true },
       });
-      if (already) return null;
+      if (refunds.length >= charges.length) return null;
+      const refundedIds = new Set(refunds.map((r) => r.linkedEntryId));
+      const charged = charges.find((c) => !refundedIds.has(c.id));
+      if (charged === undefined) return null;
 
       await this.wallet.applyEntry(tx, {
         sellerId,

@@ -18,7 +18,11 @@ function makeService(opts: { order?: AnyArgs | null; tier?: string } = {}) {
     value: opts.tier ?? 'T_PLUS_N',
     source: 'SYSTEM_DEFAULT' as const,
   }));
-  const executeAccrual = jest.fn(async () => undefined);
+  const executeAccrual = jest.fn(
+    async (): Promise<{ executed: true } | { executed: false; reason: string }> => ({
+      executed: true,
+    }),
+  );
   const scheduleIfNeeded = jest.fn(async () => undefined);
   const svc = new DeliveredAccrualService(
     prisma,
@@ -36,6 +40,15 @@ describe('DeliveredAccrualService.accrueForDelivered — the one dispatch every 
     expect(resolve).toHaveBeenCalledWith('seller-1', 'wallet.accrual_timing_tier');
     expect(executeAccrual).toHaveBeenCalledWith('order-1');
     expect(scheduleIfNeeded).not.toHaveBeenCalled();
+  });
+
+  it('INSTANT tier: SKIPPED when the order is no longer delivered by the time it runs', async () => {
+    const { svc, executeAccrual } = makeService({ tier: 'INSTANT' });
+    executeAccrual.mockResolvedValueOnce({
+      executed: false,
+      reason: 'ORDER_NOT_DELIVERED:CANCELLED',
+    });
+    await expect(svc.accrueForDelivered('order-1')).resolves.toBe('SKIPPED');
   });
 
   it('T_PLUS_N tier: schedules a PendingAccrual instead of executing', async () => {

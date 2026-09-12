@@ -10,6 +10,8 @@ const SWEEP_BATCH_LIMIT = 200;
 export interface PendingAccrualSweepResult {
   scanned: number;
   processed: number;
+  /** Closed WITHOUT billing: the order stopped being DELIVERED first. */
+  skipped: number;
   failed: number;
 }
 
@@ -45,15 +47,23 @@ export class PendingAccrualSweepService {
     });
 
     let processed = 0;
+    let skipped = 0;
     let failed = 0;
     for (const row of due) {
       try {
-        await this.execution.executeAccrual(row.orderId);
-        await this.prisma.client.pendingAccrual.update({
-          where: { id: row.id },
-          data: { processedAt: new Date() },
+        const outcome = await this.execution.executeAccrual(row.orderId);
+        // A skipped row is CLOSED with its reason, not left to be retried
+        // every hour: the order is no longer delivered, and a re-delivery
+        // re-arms it (PendingAccrualSchedulerService). Guarded on
+        // `processedAt: null` so a cancel that already retired it wins.
+        await this.prisma.client.pendingAccrual.updateMany({
+          where: { id: row.id, processedAt: null },
+          data: outcome.executed
+            ? { processedAt: new Date() }
+            : { processedAt: new Date(), skippedReason: outcome.reason },
         });
-        processed += 1;
+        if (outcome.executed) processed += 1;
+        else skipped += 1;
       } catch (err) {
         failed += 1;
         this.logger.error(
@@ -67,7 +77,7 @@ export class PendingAccrualSweepService {
       }
     }
 
-    const result: PendingAccrualSweepResult = { scanned: due.length, processed, failed };
+    const result: PendingAccrualSweepResult = { scanned: due.length, processed, skipped, failed };
     if (due.length > 0) {
       this.logger.log(result, 'Pending accrual sweep complete');
     }

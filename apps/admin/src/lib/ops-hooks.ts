@@ -2021,6 +2021,25 @@ export function useCancelWithCourier(): UseMutationResult<
   });
 }
 
+/** A voided shipment's waybill cancelled with the courier OUTSIDE Skydrop
+ *  (their portal, a call) — recorded without calling the courier. */
+export function useRecordCancelledOutside(): UseMutationResult<
+  ActionOutcome,
+  Error,
+  { shipmentId: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shipmentId, reason }) =>
+      client.request<ActionOutcome>(`${opsBase(shipmentId)}/cancelled-outside`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-orders'] }),
+  });
+}
+
 export function useAttachEwaybill(): UseMutationResult<
   ActionOutcome,
   Error,

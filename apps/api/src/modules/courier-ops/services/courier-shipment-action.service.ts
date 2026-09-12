@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ActorType, ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -18,6 +18,9 @@ import {
   courierActor,
   type CourierCredentialActor,
 } from '../../courier-shared/services/courier-credential.service';
+
+/** A cancel claim older than this is a crash mid-call and may be taken over. */
+const CANCEL_CLAIM_STALE_MS = 5 * 60_000;
 
 export interface ActionOutcome {
   readonly success: boolean;
@@ -204,12 +207,53 @@ export class CourierShipmentActionService {
   ): Promise<ActionOutcome> {
     const shipment = await this.requireAwb(shipmentId, { allowVoided: true });
 
-    const result = await this.opsDispatch.cancel(
-      shipment.courierCode,
-      shipment.courierAccountId,
-      shipment.awbNumber,
-      actor,
-    );
+    // A stub answers "cancelled" without calling anyone, and the stamp
+    // below would then record a cancellation the courier never saw — the
+    // waybill stays live and charged while the sweep reads it as closed.
+    if (await this.opsDispatch.isStubbedInProduction(shipment.courierCode)) {
+      throw new BadRequestException({
+        code: 'COURIER_STUBBED',
+        message: `${shipment.courierCode} is not connected to its live API here, so a cancel would reach nobody. Cancel it in the courier's own portal, then record it with "Mark cancelled outside Skydrop".`,
+      });
+    }
+
+    // CLAIM before calling (the read-then-write lesson): the stamp is
+    // guarded, but the courier call is not, so two operators clicking at
+    // once both reached the courier. A guarded updateMany on the in-flight
+    // marker lets exactly one through; a stale claim (a crash mid-call) is
+    // taken over after five minutes.
+    const claimedAt = new Date();
+    const claim = await this.prisma.client.shipment.updateMany({
+      where: {
+        id: shipment.shipmentId,
+        ...(shipment.voided ? { courierCancelledAt: null } : {}),
+        OR: [
+          { courierCancelStartedAt: null },
+          { courierCancelStartedAt: { lt: new Date(claimedAt.getTime() - CANCEL_CLAIM_STALE_MS) } },
+        ],
+      },
+      data: { courierCancelStartedAt: claimedAt },
+    });
+    if (claim.count === 0) {
+      throw new ConflictException({
+        code: 'WAYBILL_CANCEL_IN_PROGRESS',
+        message:
+          'Somebody is cancelling this waybill with the courier right now (or it was just cancelled). Reload to see how it ended.',
+      });
+    }
+
+    let result: Awaited<ReturnType<CourierOpsDispatchService['cancel']>>;
+    try {
+      result = await this.opsDispatch.cancel(
+        shipment.courierCode,
+        shipment.courierAccountId,
+        shipment.awbNumber,
+        actor,
+      );
+    } catch (err) {
+      await this.releaseCancelClaim(shipment.shipmentId, claimedAt);
+      throw err;
+    }
 
     // The courier's acceptance is the fact; our stamp records it. A
     // failed stamp after an accepted cancel is logged loudly rather than
@@ -221,7 +265,7 @@ export class CourierShipmentActionService {
       try {
         await this.prisma.client.shipment.updateMany({
           where: { id: shipment.shipmentId, courierCancelledAt: null },
-          data: { courierCancelledAt: new Date() },
+          data: { courierCancelledAt: new Date(), courierCancelStartedAt: null },
         });
         recorded = true;
       } catch (err) {
@@ -235,6 +279,10 @@ export class CourierShipmentActionService {
         );
       }
     }
+
+    // Whatever happened, the call is over — free the claim (a no-op when
+    // the stamp above already cleared it).
+    await this.releaseCancelClaim(shipment.shipmentId, claimedAt);
 
     const isStaff = actor.type === ActorType.STAFF;
     await this.audit.log({
@@ -273,6 +321,86 @@ export class CourierShipmentActionService {
       awbNumber: shipment.awbNumber,
       message: result.message,
     };
+  }
+
+  /**
+   * Record that a voided shipment's waybill was cancelled with the courier
+   * OUTSIDE Skydrop — in their own portal, or by phone.
+   *
+   * Without this such a waybill could not be recorded at all: resolving its
+   * LIVE_WAYBILL issue by hand only re-raised it the next hour, because the
+   * sweep reads `courier_cancelled_at` and nothing had stamped it. This
+   * stamps it WITHOUT calling the courier, and says so: audited HIGH as its
+   * own action, so "how many cancellations did we take on somebody's word"
+   * is answerable by filtering. Voided shipments only — that is the only
+   * place the stamp is a fact anything reads.
+   */
+  async recordCancelledOutside(
+    staffId: string,
+    shipmentId: string,
+    reason: string,
+    ctx: ClientInfoPayload,
+  ): Promise<ActionOutcome> {
+    const shipment = await this.requireAwb(shipmentId, { allowVoided: true });
+    if (!shipment.voided) {
+      throw new BadRequestException({
+        code: 'NOT_A_VOIDED_SHIPMENT',
+        message:
+          'Only a shipment voided with its cancelled order can be recorded as cancelled outside Skydrop. A live parcel is cancelled with the courier from here.',
+      });
+    }
+    const stamped = await this.prisma.client.shipment.updateMany({
+      where: { id: shipment.shipmentId, courierCancelledAt: null },
+      data: { courierCancelledAt: new Date() },
+    });
+    if (stamped.count === 0) {
+      throw new ConflictException({
+        code: 'WAYBILL_ALREADY_CANCELLED',
+        message: 'This waybill is already recorded as cancelled with the courier.',
+      });
+    }
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      action: 'courier.shipment.cancel_recorded_outside',
+      entityType: 'shipment',
+      entityId: shipment.shipmentId,
+      // HIGH: this closes out a live-waybill charge on an operator's word.
+      severity: 'HIGH',
+      metadata: {
+        awbNumber: shipment.awbNumber,
+        orderId: shipment.orderId,
+        courierCode: shipment.courierCode,
+        reason,
+        courierCalled: false,
+        note: 'Recorded as cancelled with the courier outside Skydrop — the courier was NOT called.',
+        ipAddress: ctx.ipAddress ?? null,
+        userAgent: ctx.userAgent ?? null,
+        requestId: ctx.requestId ?? null,
+      },
+    });
+    return {
+      success: true,
+      awbNumber: shipment.awbNumber,
+      message:
+        'Recorded as cancelled with the courier outside Skydrop. The courier was not called.',
+    };
+  }
+
+  /** Free a cancel claim this call holds. Best-effort: a stuck claim goes
+   *  stale after five minutes anyway. */
+  private async releaseCancelClaim(shipmentId: string, claimedAt: Date): Promise<void> {
+    try {
+      await this.prisma.client.shipment.updateMany({
+        where: { id: shipmentId, courierCancelStartedAt: claimedAt },
+        data: { courierCancelStartedAt: null },
+      });
+    } catch (err) {
+      this.logger.warn(
+        { shipmentId, err: err instanceof Error ? err.message : String(err) },
+        'Could not release a courier-cancel claim; it goes stale in five minutes',
+      );
+    }
   }
 
   /** Whether Indian law requires an e-way bill for this parcel's value. */

@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   ActorType,
-  OrderEventType,
   OrderStatus,
   Prisma,
   QueueClosureReason,
-  ShipmentStatus,
+  SystemIssueKind,
+  SystemIssueSeverity,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -18,94 +18,30 @@ import {
   type OrderLifecycleEventSource,
 } from '../../lifecycle-events/order-lifecycle-event-bus.service';
 import { OrderChargesRefundService } from '../../seller-wallet-accrual/services/order-charges-refund.service';
+import { EndedOrderMoneyService } from '../../seller-wallet-accrual/services/ended-order-money.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import {
+  ADMIN_OVERRIDE_SOURCE,
+  REFUNDABLE_FROM_STATES,
+  VOIDABLE_TERMINAL_STATES,
+  parcelLeftWithCourier,
+} from '../order-carriage';
 import type { EventActor } from './order-event-writer.service';
 
-/** Marks god mode's own STATUS_CHANGED rows and its lifecycle events. */
-export const ADMIN_OVERRIDE_SOURCE = 'ADMIN_OVERRIDE' as const;
+// The carriage rule and the status sets it is drawn from live in a plain
+// module shared with the delivery-time money (WAL-8), and are re-exported
+// here for the callers that have always imported them from this file.
+export {
+  ADMIN_OVERRIDE_SOURCE,
+  VOIDABLE_TERMINAL_STATES,
+  REFUNDABLE_FROM_STATES,
+} from '../order-carriage';
 
-/** M8 commit 16: the set of "deliberately ending the order" landings
- *  on which the shipment-provision wiring (R3) should void a CREATED
- *  shipment. voidForOrder is idempotent against non-CREATED shipments,
- *  so this list is intentionally generous — post-pick/pack/dispatch
- *  shipments are no longer CREATED and are naturally untouched. */
-export const VOIDABLE_TERMINAL_STATES: ReadonlySet<OrderStatus> = new Set([
-  OrderStatus.CANCELLED,
-  OrderStatus.CANCELLED_BY_ADMIN,
-  OrderStatus.REJECTED,
-  OrderStatus.REJECTED_BY_CUSTOMER,
-  OrderStatus.REJECTED_NDR,
-]);
-
-/**
- * States an order can be called off from and honestly say the parcel
- * never went anywhere — so a delivery fee already taken has to go back.
- *
- * An ALLOW-LIST rather than "everything before DISPATCHED", so a status
- * added later is not silently refundable: someone has to decide where
- * it sits relative to the courier having the parcel. The dividing line
- * is exactly that — once DISPATCHED, the courier has been given the
- * goods and the cost of moving them is real whatever happens next.
- * PENDING_DISPATCH is on this side of the line: it is packed and
- * manifested but still on our floor.
- *
- * God mode (ORD-2) draws the SAME line from the other side: its forced
- * `from` proves nothing, so it asks whether the order ever reached a
- * status outside this set and the cancel family through a real
- * transition — see `parcelLeftWithCourier`.
- */
-export const REFUNDABLE_FROM_STATES: ReadonlySet<OrderStatus> = new Set([
-  OrderStatus.DRAFT,
-  OrderStatus.PENDING_CONFIRMATION,
-  OrderStatus.CALL_NO_RESPONSE,
-  OrderStatus.CALL_RESCHEDULED,
-  OrderStatus.AWAITING_SELLER_DECISION,
-  // CUR-17 — held for a carrier decision. No waybill exists and
-  // nothing has been picked, so this is one of the cheapest points in
-  // the lifecycle for a seller to change their mind.
-  OrderStatus.AWAITING_COURIER,
-  OrderStatus.CONFIRMED,
-  OrderStatus.OUT_OF_STOCK,
-  OrderStatus.PENDING_PICK,
-  OrderStatus.PICKED,
-  OrderStatus.PACK_FAILED,
-  OrderStatus.PACKED,
-  OrderStatus.PENDING_DISPATCH,
-  OrderStatus.PENDING_MANUAL_PLACEMENT,
-]);
-
-/**
- * Statuses that mean the courier HAD the parcel: everything outside the
- * refundable allow-list and outside the cancel family itself. DERIVED,
- * so a god-mode cancel refunds exactly when a normal cancel would, and a
- * status added later lands on the no-refund side until somebody puts it
- * on the allow-list.
- */
-const PAST_THE_DIVIDING_LINE: readonly OrderStatus[] = Object.values(OrderStatus).filter(
-  (s) => !REFUNDABLE_FROM_STATES.has(s) && !VOIDABLE_TERMINAL_STATES.has(s),
-);
-
-/** A shipment in one of these was physically with a courier at some point. */
-const SHIPMENT_STATUSES_WITH_COURIER: readonly ShipmentStatus[] = [
-  ShipmentStatus.HANDED_TO_COURIER,
-  ShipmentStatus.IN_TRANSIT,
-  ShipmentStatus.AT_HUB,
-  ShipmentStatus.OUT_FOR_DELIVERY,
-  ShipmentStatus.DELIVERY_ATTEMPTED,
-  ShipmentStatus.DELIVERED,
-  ShipmentStatus.RTO_INITIATED,
-  ShipmentStatus.RTO_IN_TRANSIT,
-  ShipmentStatus.RTO_DELIVERED,
-  ShipmentStatus.LOST,
-  ShipmentStatus.DAMAGED,
-];
-
-function isAdminOverrideEvent(data: Prisma.JsonValue): boolean {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    !Array.isArray(data) &&
-    (data as Record<string, unknown>).source === ADMIN_OVERRIDE_SOURCE
-  );
+/** One open issue per order whose parcel could not be provisioned at
+ *  CONFIRMED — raised by the hook, re-checked (and cleared) by the
+ *  hourly AWB-less sweep (`OrderAttentionService`). */
+export function shipmentMissingIssueKey(orderId: string): string {
+  return `shipment-missing:${orderId}`;
 }
 
 /** What the shipment-provision hook needs from the order: the recipient
@@ -215,9 +151,14 @@ export interface StatusChangeHookInput {
  *   1. CC-6 call queue: enqueue on entry to PENDING_CONFIRMATION, else
  *      dequeue on exit from it.
  *   2. Pack eligibility audit on entry to PICKED.
- *   3. Shipment: provision on entry to CONFIRMED; or on entry to a
- *      cancel/reject terminal, void, THEN refund a delivery fee taken for
- *      a parcel that never left.
+ *   3. Shipment: provision on entry to CONFIRMED (a failure is RAISED —
+ *      `shipment-missing:<orderId>` — and the AWB-less sweep retries it);
+ *      or on entry to a cancel/reject terminal, void, THEN give back what
+ *      a parcel that never left was charged or credited: retire the
+ *      deferred accrual, refund the delivery fee, take back an Instant
+ *      Pay credit no courier paid (EndedOrderMoneyService). On entry to
+ *      LOST_IN_TRANSIT: refund the fee and retire the accrual (a lost
+ *      parcel is not charged, TRE-6).
  *   4. The lifecycle-bus emit, LAST — so the AWB listener (CUR-2b) finds
  *      the shipment step 3 provisioned.
  *
@@ -241,6 +182,13 @@ export class OrderPostCommitHooksService {
     private readonly lifecycleBus: OrderLifecycleEventBus,
     // SET-1 — the courier a new parcel is provisioned with is per seller.
     private readonly settings: SettingsResolverService,
+    // What else an order ending undelivered gives back (the deferred
+    // accrual, an Instant Pay credit no courier paid) — a money
+    // collaborator like chargesRefund, not a stock one.
+    private readonly endedMoney: EndedOrderMoneyService,
+    // A parcel that could not be provisioned is invisible to every queue
+    // that selects on a shipment row, so the failure is raised.
+    private readonly issues: SystemIssueService,
   ) {}
 
   async runForStatusChange(input: StatusChangeHookInput): Promise<void> {
@@ -276,7 +224,17 @@ export class OrderPostCommitHooksService {
       // AFTER the void so the shipment is dead first — the money step is
       // the one whose failure we most want to be loud about, and putting
       // it last means a failure here cannot leave a live shipment behind.
-      await this.refundChargesForEndedOrder(input);
+      await this.unwindMoneyForEndedOrder(input);
+    } else if (from !== landed && landed === OrderStatus.LOST_IN_TRANSIT) {
+      // A LOST parcel is not charged (the founder, 2026-09-12 — TRE-6):
+      // an AT_AWB seller was debited at booking and nothing gave it back,
+      // so ₹200 was kept for a parcel nobody delivered and sat on no P&L
+      // line. The same refund, the same exactly-once gate; carriage does
+      // not matter here, because the parcel's FATE is that it never
+      // arrived. The deferred accrual is retired too. "Lost then found"
+      // (god mode) re-bills on the re-delivery: charges and refunds pair
+      // up, and a retired accrual is re-armed.
+      await this.unwindMoneyForLostOrder(input);
     }
 
     // 4. M11 (NOTIF-1 / NOTIF-5): the lifecycle event, after every prior
@@ -352,44 +310,105 @@ export class OrderPostCommitHooksService {
         );
         return;
       }
-      const courierCode = await this.resolveCourierCode(input.sellerId);
-      await this.shipmentProvision.provisionFromSnapshot(
-        {
-          orderId: order.id,
-          courierCode,
-          recipient: {
-            name: order.recipientName,
-            phoneE164: order.recipientPhoneE164,
-            addressLine1: order.recipientAddressLine1,
-            addressLine2: order.recipientAddressLine2,
-            landmark: order.recipientLandmark,
-            city: order.recipientCity,
-            stateProvince: order.recipientStateProvince,
-            postalCode: order.recipientPostalCode,
-            countryCode: order.recipientCountryCode,
-          },
-          declaredValueInr: order.declaredValueInr,
-          codAmountInr: order.codAmountInr,
-          items: order.items.map((i) => ({
-            orderItemId: i.id,
-            quantity: i.quantity,
-            skuCode: i.skuCode,
-            productName: i.productName,
-            variantLabel: i.variantLabel,
-            unitWeightGrams: i.unitWeightGrams,
-            unitDeclaredValueInr: i.unitDeclaredValueInr,
-            unitPriceInr: i.unitPriceInr,
-          })),
-        },
-        { type: ActorType.SYSTEM, id: null },
-        input.ctx,
-      );
+      await this.provisionFrom(order, input.sellerId, input.ctx);
     } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
       this.logger.error(
-        { orderId: input.orderId, source: input.source, err: (e as Error).message },
-        'Post-commit shipment provision failed; order CONFIRMED persisted, supervisor/reconciler can re-trigger via OrderAdminOverrideService or a follow-up CONFIRMED→CONFIRMED matrix self-loop',
+        { orderId: input.orderId, source: input.source, err: error },
+        'Post-commit shipment provision failed; order CONFIRMED persisted with NO shipment',
       );
+      // NOTHING else would see this order: the AWB listener finds no
+      // shipment to book (NO_LIVE_SHIPMENT, silently), the pick queue
+      // joins shipments, and the AWB-less sweep used to select shipment
+      // rows only. So it is raised, once per order; the hourly sweep
+      // re-provisions it through `ensureShipmentProvisioned` and clears
+      // the issue when that works.
+      await this.raiseShipmentMissing(input.orderId, input.sellerId, error);
     }
+  }
+
+  /**
+   * Provision the order's shipment if it has none — the SAME snapshot and
+   * per-seller courier as the post-commit hook, re-read from the committed
+   * row. Idempotent (`provisionFromSnapshot` returns an existing live
+   * shipment under its per-order lock). THROWS on failure, unlike the hook:
+   * the caller (the AWB-less sweep, via `OrderWriteService`) decides how
+   * loud to be.
+   */
+  async ensureShipmentProvisioned(
+    orderId: string,
+  ): Promise<{ readonly shipmentId: string; readonly created: boolean }> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: orderId, deletedAt: null },
+      select: { ...PROVISIONABLE_ORDER_SELECT, sellerId: true },
+    });
+    if (!order) throw new Error(`Order ${orderId} not found`);
+    return this.provisionFrom(order, order.sellerId);
+  }
+
+  private async raiseShipmentMissing(
+    orderId: string,
+    sellerId: string,
+    error: string,
+  ): Promise<void> {
+    try {
+      await this.issues.raise({
+        kind: SystemIssueKind.INTEGRATION,
+        severity: SystemIssueSeverity.HIGH,
+        title: 'A confirmed order has no shipment, so nothing can pick or book it',
+        detail:
+          `The order was confirmed but its shipment could not be created: ${error}\n\n` +
+          'Every queue that moves a parcel — the AWB booking, printing, the pick list — ' +
+          'selects on a shipment, so this order is invisible to all of them while the seller ' +
+          'believes it is on its way. The hourly sweep retries the provision and clears this ' +
+          "once it works; if it keeps failing, fix the cause (usually the seller's " +
+          'ops.default_courier_code override or the default warehouse setting).',
+        source: 'OrderPostCommitHooksService',
+        dedupeKey: shipmentMissingIssueKey(orderId),
+        metadata: { orderId, sellerId, error },
+      });
+    } catch {
+      // raise() swallows its own failures; this sits in a catch already.
+    }
+  }
+
+  private async provisionFrom(
+    order: ProvisionableOrder,
+    sellerId: string,
+    ctx?: ClientContext,
+  ): Promise<{ readonly shipmentId: string; readonly created: boolean }> {
+    const courierCode = await this.resolveCourierCode(sellerId);
+    return this.shipmentProvision.provisionFromSnapshot(
+      {
+        orderId: order.id,
+        courierCode,
+        recipient: {
+          name: order.recipientName,
+          phoneE164: order.recipientPhoneE164,
+          addressLine1: order.recipientAddressLine1,
+          addressLine2: order.recipientAddressLine2,
+          landmark: order.recipientLandmark,
+          city: order.recipientCity,
+          stateProvince: order.recipientStateProvince,
+          postalCode: order.recipientPostalCode,
+          countryCode: order.recipientCountryCode,
+        },
+        declaredValueInr: order.declaredValueInr,
+        codAmountInr: order.codAmountInr,
+        items: order.items.map((i) => ({
+          orderItemId: i.id,
+          quantity: i.quantity,
+          skuCode: i.skuCode,
+          productName: i.productName,
+          variantLabel: i.variantLabel,
+          unitWeightGrams: i.unitWeightGrams,
+          unitDeclaredValueInr: i.unitDeclaredValueInr,
+          unitPriceInr: i.unitPriceInr,
+        })),
+      },
+      { type: ActorType.SYSTEM, id: null },
+      ctx,
+    );
   }
 
   /**
@@ -401,9 +420,12 @@ export class OrderPostCommitHooksService {
    *
    * FAILS CLOSED, unlike most settings reads: an error here propagates
    * into the provision's own catch, so the order stays CONFIRMED with no
-   * shipment (visible — the AWB listener and the watchdog find it)
-   * rather than being provisioned with the global default. Falling back
-   * would book a real waybill for a seller who asked for none.
+   * shipment rather than being provisioned with the global default.
+   * Falling back would book a real waybill for a seller who asked for
+   * none. "No shipment" is visible because that catch RAISES it
+   * (`shipment-missing:<orderId>`) and the hourly AWB-less sweep looks
+   * for confirmed orders with no live shipment and retries — the AWB
+   * listener does NOT find it (it answers NO_LIVE_SHIPMENT silently).
    */
   private async resolveCourierCode(sellerId: string): Promise<string> {
     const resolved = await this.settings.resolve(sellerId, 'ops.default_courier_code');
@@ -438,101 +460,123 @@ export class OrderPostCommitHooksService {
   }
 
   /**
-   * Give back a delivery fee taken for a parcel that will now never ship.
+   * Give back what an order that will now never ship was charged or
+   * credited: the delivery fee, an Instant Pay COD credit no courier paid
+   * for, and the deferred (T+N) accrual that would otherwise bill it
+   * later.
    *
    * WHETHER the parcel left is judged by the writer's trustworthiness:
    * a matrix transition's `from` is a fact (an order in PACKED really is
    * packed), so it is read directly; a god-mode `from` proves nothing (an
    * order forced PENDING_CONFIRMATION → DELIVERED was never carried), so
-   * the order's history is asked instead (`parcelLeftWithCourier`).
-   * Carriage that happened is never refunded; carriage that did not
-   * always is.
+   * the order's history is asked instead (`parcelLeftWithCourier`, shared
+   * with the delivery-time billing so the two cannot disagree). Carriage
+   * that happened is never refunded; carriage that did not always is.
+   *
+   * The deferred accrual is retired WHATEVER the carriage: an order that
+   * is no longer delivered must not be billed as delivered, and the sweep
+   * re-checks the status too.
    *
    * Best-effort in the sense that it cannot undo the status change; NOT
    * in the sense of quietly giving up — a failure means we hold money for
    * a service we will not perform, so it audits HIGH and names the order.
-   * `refundIfCharged` is idempotent on the order (one
-   * ORDER_CHARGES_REFUND, read under the WALLET lock), so a re-run or a
+   * Every step is idempotent under the WALLET lock, so a re-run or a
    * second writer landing too cannot double-credit.
    */
-  private async refundChargesForEndedOrder(input: StatusChangeHookInput): Promise<void> {
+  private async unwindMoneyForEndedOrder(input: StatusChangeHookInput): Promise<void> {
     const { orderId, sellerId, from, landed, source } = input;
     const forced = source === ADMIN_OVERRIDE_SOURCE;
+    const label = landed.toLowerCase().replaceAll('_', ' ');
+    await this.moneyStep(input, 'wallet.pending_accrual_retire_failed', () =>
+      this.endedMoney.retirePendingAccrual(orderId, `ORDER_${landed}`),
+    );
+    let left: boolean;
     try {
-      if (forced) {
-        if (await this.parcelLeftWithCourier(orderId)) return;
-      } else if (!REFUNDABLE_FROM_STATES.has(from)) {
-        // Cancelling a DISPATCHED order is a real thing an admin can do,
-        // but the courier already has the parcel.
-        return;
-      }
-      await this.chargesRefund.refundIfCharged(
+      left = forced
+        ? await parcelLeftWithCourier(this.prisma.client, orderId)
+        : !REFUNDABLE_FROM_STATES.has(from);
+    } catch (e) {
+      // Cannot tell — refund nothing rather than guess; audited.
+      await this.reportMoneyFailure(input, 'wallet.order_charges_refund_failed', e);
+      return;
+    }
+    // Cancelling a DISPATCHED order is a real thing an admin can do, but
+    // the courier already has the parcel.
+    if (left) return;
+    await this.moneyStep(input, 'wallet.order_charges_refund_failed', () =>
+      this.chargesRefund.refundIfCharged(
         orderId,
         sellerId,
         forced
-          ? `Order ${landed.toLowerCase().replaceAll('_', ' ')} by admin override before it left with a courier`
-          : `Order ${landed.toLowerCase().replaceAll('_', ' ')} before dispatch`,
-      );
+          ? `Order ${label} by admin override before it left with a courier`
+          : `Order ${label} before dispatch`,
+      ),
+    );
+    await this.moneyStep(input, 'wallet.instant_pay_reversal_failed', () =>
+      this.endedMoney.reverseUncoveredInstantPayCredit(
+        orderId,
+        sellerId,
+        `COD credit taken back — order ${label} before its parcel reached a customer`,
+      ),
+    );
+  }
+
+  /** LOST_IN_TRANSIT: a lost parcel is not charged (TRE-6). */
+  private async unwindMoneyForLostOrder(input: StatusChangeHookInput): Promise<void> {
+    await this.moneyStep(input, 'wallet.pending_accrual_retire_failed', () =>
+      this.endedMoney.retirePendingAccrual(input.orderId, 'ORDER_LOST_IN_TRANSIT'),
+    );
+    await this.moneyStep(input, 'wallet.order_charges_refund_failed', () =>
+      this.chargesRefund.refundIfCharged(
+        input.orderId,
+        input.sellerId,
+        'Parcel lost in transit — a lost parcel is not charged',
+      ),
+    );
+  }
+
+  /** One money step, isolated: its failure is logged and audited HIGH and
+   *  never stops the next step or undoes the status change. */
+  private async moneyStep(
+    input: StatusChangeHookInput,
+    failureAction: string,
+    step: () => Promise<unknown>,
+  ): Promise<void> {
+    try {
+      await step();
     } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      this.logger.error(
-        { orderId, sellerId, from, landed, source, err: error },
-        'Post-commit order-charges refund FAILED — the seller is still holding a charge for a parcel that will not ship',
-      );
-      await this.audit
-        .log({
-          actorType: ActorType.SYSTEM,
-          actorId: null,
-          sellerId,
-          action: 'wallet.order_charges_refund_failed',
-          entityType: 'order',
-          entityId: orderId,
-          severity: 'HIGH',
-          metadata: {
-            ...(forced ? { trigger: 'force_mutation' } : {}),
-            fromStatus: from,
-            landedStatus: landed,
-            error,
-          },
-        })
-        .catch(() => undefined);
+      await this.reportMoneyFailure(input, failureAction, e);
     }
   }
 
-  /**
-   * Did this order's parcel ever leave with a courier?
-   *
-   * Two independent facts, either one enough:
-   *  - a shipment on the order was handed over (scanned at the handover
-   *    bench, or in any status only a courier puts it in). God mode never
-   *    touches shipment status, so this is physical evidence it cannot
-   *    fake.
-   *  - the order reached a status past the dividing line through a REAL
-   *    transition — a STATUS_CHANGED row not stamped `source:
-   *    ADMIN_OVERRIDE`. God mode's own rows are skipped: a status it
-   *    forced is exactly the claim under suspicion.
-   */
-  private async parcelLeftWithCourier(orderId: string): Promise<boolean> {
-    const handedOver = await this.prisma.client.shipment.count({
-      where: {
-        orderShipments: { some: { orderId } },
-        OR: [
-          { handoverScannedAt: { not: null } },
-          { status: { in: [...SHIPMENT_STATUSES_WITH_COURIER] } },
-        ],
-      },
-    });
-    if (handedOver > 0) return true;
-
-    const reached = await this.prisma.client.orderEvent.findMany({
-      where: {
-        orderId,
-        type: OrderEventType.STATUS_CHANGED,
-        toStatus: { in: [...PAST_THE_DIVIDING_LINE] },
-      },
-      select: { data: true },
-    });
-    return reached.some((e) => !isAdminOverrideEvent(e.data));
+  private async reportMoneyFailure(
+    input: StatusChangeHookInput,
+    action: string,
+    e: unknown,
+  ): Promise<void> {
+    const { orderId, sellerId, from, landed, source } = input;
+    const error = e instanceof Error ? e.message : String(e);
+    this.logger.error(
+      { orderId, sellerId, from, landed, source, action, err: error },
+      'Post-commit money step FAILED on an ended order — money may be held for a parcel that will not ship',
+    );
+    await this.audit
+      .log({
+        actorType: ActorType.SYSTEM,
+        actorId: null,
+        sellerId,
+        action,
+        entityType: 'order',
+        entityId: orderId,
+        severity: 'HIGH',
+        metadata: {
+          ...(source === ADMIN_OVERRIDE_SOURCE ? { trigger: 'force_mutation' } : {}),
+          fromStatus: from,
+          landedStatus: landed,
+          error,
+        },
+      })
+      .catch(() => undefined);
   }
 
   /** CC-6 post-commit call-queue dequeue (idempotent, best-effort). */

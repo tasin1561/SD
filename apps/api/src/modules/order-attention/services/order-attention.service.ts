@@ -15,6 +15,8 @@ import { NotificationChannel, NotificationRecipientType } from '@skydrop/db';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import { OrderReadService } from '../../order/services/order-read.service';
+import { OrderWriteService } from '../../order/services/order-write.service';
+import { shipmentMissingIssueKey } from '../../order/services/order-post-commit-hooks.service';
 import { AwbGenerationJobService } from '../../courier-awb/services/awb-generation-job.service';
 import { TrackingEventAppendService } from '../../tracking-events/services/tracking-event-append.service';
 import { AwbLabelRecoveryService } from '../../courier-awb/services/awb-label-recovery.service';
@@ -50,6 +52,21 @@ const AWB_EXPECTED_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.PACKED,
   OrderStatus.PENDING_DISPATCH,
 ]);
+
+/**
+ * Statuses in which an order MUST have a live shipment: confirmed, and not
+ * yet anywhere a missing shipment could be explained. PICKED and later
+ * cannot be reached without one; these three can, when the provision at
+ * CONFIRMED failed (the per-seller courier lookup, a missing setting).
+ */
+const SHIPMENT_EXPECTED_STATUSES: readonly OrderStatus[] = [
+  OrderStatus.CONFIRMED,
+  OrderStatus.AWAITING_COURIER,
+  OrderStatus.PENDING_PICK,
+];
+
+/** Per sweep — a backlog drains over the hourly runs. */
+const SHIPMENTLESS_SWEEP_LIMIT = 50;
 
 const RTO_UNDERWAY: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.RTO_INITIATED,
@@ -98,6 +115,8 @@ export interface NsaSweepSummary {
   readonly stalledReturns: number;
   /** Confirmed orders still carrying no waybill after the grace window. */
   readonly awbless: number;
+  /** Confirmed orders with NO live shipment that could not be re-provisioned. */
+  readonly shipmentless: number;
   /** Parcels whose courier scans cannot move the order — the model has
    *  no route from where the order is to where the courier says it is. */
   readonly strandedTracking: number;
@@ -173,6 +192,9 @@ export class OrderAttentionService {
     private readonly trackingEvents: TrackingEventAppendService,
     // CUR-6 — asks again for a label the AWB job gave up on.
     private readonly labels: AwbLabelRecoveryService,
+    // The order WRITE facade — only to re-provision a confirmed order's
+    // missing shipment through the same post-commit path (idempotent).
+    private readonly orderWrite: OrderWriteService,
   ) {}
 
   /**
@@ -236,6 +258,7 @@ export class OrderAttentionService {
       cleared: 0,
       stalledReturns: 0,
       awbless: 0,
+      shipmentless: 0,
       strandedTracking: 0,
       unreceivedReturns: 0,
       liveWaybills: 0,
@@ -251,6 +274,12 @@ export class OrderAttentionService {
     // Also unconditional, and for the same reason: an order that has no
     // waybill is not moving, whatever the NSA switch says.
     summary.awbless = await this.checkAwblessConfirmed(now);
+
+    // Also unconditional, and first-class for the same reason: a
+    // confirmed order with NO shipment is invisible to the AWB booking,
+    // to printing and to the pick list alike — every one of them selects
+    // on a shipment row. The check above could not see it either.
+    summary.shipmentless = await this.checkShipmentlessConfirmed();
 
     // Also unconditional: a parcel whose scans cannot move its order is
     // silently misreporting to a seller, whatever the NSA switch says.
@@ -546,6 +575,83 @@ export class OrderAttentionService {
           retriesExhausted: exhausted,
         },
       });
+    }
+    return stuck;
+  }
+
+  /**
+   * A confirmed order with no live shipment at all.
+   *
+   * `checkAwblessConfirmed` starts from shipment rows, so an order whose
+   * provision at CONFIRMED failed (the per-seller default-courier lookup
+   * fails CLOSED on purpose, CUR-19) was invisible to it, to the AWB
+   * listener (`NO_LIVE_SHIPMENT`, silently) and to the pick queue. This
+   * re-provisions it through the same post-commit path the transition
+   * uses — idempotent under the provision's per-order lock, so a hook
+   * running at the same moment cannot produce a second parcel — asks for
+   * its waybill, and raises only if it still has none. Clears the
+   * `shipment-missing:<orderId>` issue the hook raised once it works.
+   *
+   * Never throws: one order's failure must not cost the rest their retry.
+   */
+  private async checkShipmentlessConfirmed(): Promise<number> {
+    let orders: Array<{ id: string; orderNumber: string; sellerId: string; status: OrderStatus }>;
+    try {
+      orders = await this.prisma.client.order.findMany({
+        where: {
+          status: { in: [...SHIPMENT_EXPECTED_STATUSES] },
+          deletedAt: null,
+          orderShipments: { none: { shipment: { deletedAt: null, supersededAt: null } } },
+        },
+        orderBy: { createdAt: 'asc' },
+        take: SHIPMENTLESS_SWEEP_LIMIT,
+        select: { id: true, orderNumber: true, sellerId: true, status: true },
+      });
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Shipment-less order check failed this run; the rest of the sweep continues',
+      );
+      return 0;
+    }
+
+    let stuck = 0;
+    for (const o of orders) {
+      const key = shipmentMissingIssueKey(o.id);
+      try {
+        await this.orderWrite.reprovisionShipment(o.id);
+      } catch (err) {
+        stuck += 1;
+        const error = err instanceof Error ? err.message : String(err);
+        await this.issues.raise({
+          kind: SystemIssueKind.INTEGRATION,
+          severity: SystemIssueSeverity.HIGH,
+          title: `${o.orderNumber}: confirmed with no shipment — nothing can book, print or pick it`,
+          detail:
+            `This order is ${o.status.toLowerCase().replaceAll('_', ' ')} but has no live ` +
+            `shipment, and creating one just now failed: ${error}\n\n` +
+            'Every queue that moves a parcel selects on a shipment, so this order is invisible ' +
+            'to all of them while the seller believes it is on its way. This retries every ' +
+            "hour; fix the cause (usually the seller's ops.default_courier_code override or the " +
+            'default warehouse setting) and it clears itself.',
+          source: 'OrderAttentionService',
+          dedupeKey: key,
+          metadata: { orderId: o.id, orderNumber: o.orderNumber, sellerId: o.sellerId, error },
+        });
+        continue;
+      }
+      // The shipment exists now; ask for its waybill as the confirmation
+      // would have (CUR-2b). A failure here is the AWB sweep's to raise,
+      // on its next run, with the parcel named.
+      try {
+        await this.awbJob.processOrder(o.id);
+      } catch (err) {
+        this.logger.warn(
+          { orderId: o.id, err: (err as Error).message },
+          'Waybill request after re-provisioning threw — the AWB-less check will follow it up',
+        );
+      }
+      await this.issues.resolveByKey(key, 'The order has a shipment now.');
     }
     return stuck;
   }
@@ -984,9 +1090,27 @@ export class OrderAttentionService {
    *
    * Never throws: a failed label check must not cost the NSA half its run.
    */
+  /** Of these shipments, the ones that now have a current label or are no
+   *  longer a live pre-dispatch waybill — safe to clear unexamined. */
+  private async labelsNoLongerMissing(ids: readonly string[]): Promise<Set<string>> {
+    const stillMissing = await this.prisma.client.shipment.findMany({
+      where: {
+        id: { in: [...ids] },
+        awbNumber: { not: null },
+        deletedAt: null,
+        supersededAt: null,
+        status: ShipmentStatus.CREATED,
+        awbLabels: { none: { isCurrent: true } },
+      },
+      select: { id: true },
+    });
+    const missing = new Set(stillMissing.map((s) => s.id));
+    return new Set(ids.filter((id) => !missing.has(id)));
+  }
+
   private async checkLabellessAwbs(now: Date): Promise<number> {
     try {
-      const results = await this.labels.retryMissing({
+      const { results, sawEverything } = await this.labels.retryMissing({
         scope: 'PRE_DISPATCH',
         limit: LABEL_SWEEP_LIMIT,
         olderThan: new Date(now.getTime() - LABEL_RETRY_AFTER_MS),
@@ -994,14 +1118,25 @@ export class OrderAttentionService {
       const pending = results.filter((r) => r.outcome.status === 'PENDING');
       const pendingIds = new Set(pending.map((r) => r.missing.shipmentId));
       const examined = new Set(results.map((r) => r.missing.shipmentId));
-      // A full page may have left some candidates unexamined; only clear
-      // what this run actually looked at unless it saw everything.
-      const sawEverything = results.length < LABEL_SWEEP_LIMIT;
 
-      for (const key of await this.issues.openDedupeKeys(LABEL_MISSING_KEY_PREFIX)) {
+      // Clear only what this run LOOKED AT (and did not leave pending), or
+      // — when it could not have seen everything — what verifiably no
+      // longer needs a label. `sawEverything` is judged on the RAW row
+      // count of a query that already excludes what the leg would skip,
+      // so a full page of permanently-skipped rows can no longer pass for
+      // "saw everything" and clear issues it never examined.
+      const open = await this.issues.openDedupeKeys(LABEL_MISSING_KEY_PREFIX);
+      const unexamined = open
+        .map((key) => key.slice(LABEL_MISSING_KEY_PREFIX.length))
+        .filter((id) => !examined.has(id) && !pendingIds.has(id));
+      const settled =
+        sawEverything || unexamined.length === 0
+          ? new Set(unexamined)
+          : await this.labelsNoLongerMissing(unexamined);
+      for (const key of open) {
         const id = key.slice(LABEL_MISSING_KEY_PREFIX.length);
         if (pendingIds.has(id)) continue;
-        if (!examined.has(id) && !sawEverything) continue;
+        if (!examined.has(id) && !settled.has(id)) continue;
         await this.issues.resolveByKey(
           key,
           'The label is stored now, or the parcel no longer needs one here.',

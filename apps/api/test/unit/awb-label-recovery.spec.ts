@@ -163,6 +163,16 @@ describe('AwbGenerationService.labelMimeType', () => {
       'image/png',
     );
   });
+  it('finds %PDF- anywhere in the first 1024 bytes, as the PDF spec allows', () => {
+    const late = Buffer.concat([Buffer.alloc(300, 0x20), Buffer.from('%PDF-1.4\n')]);
+    expect(AwbGenerationService.labelMimeType(late, '')).toBe('application/pdf');
+  });
+  it('names an untyped PNG or JPEG by its own magic bytes', () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
+    expect(AwbGenerationService.labelMimeType(png, '')).toBe('image/png');
+    expect(AwbGenerationService.labelMimeType(jpeg, 'binary/octet-stream')).toBe('image/jpeg');
+  });
   it('refuses anything else', () => {
     expect(() => AwbGenerationService.labelMimeType(Buffer.from('{}'), '')).toThrow(
       /LABEL_NOT_A_PDF.*unlabelled content/,
@@ -184,7 +194,12 @@ describe('AwbLabelRecoveryService', () => {
     };
   }
 
-  function makeRecovery(rows: AnyArgs[], outcomes: Record<string, LabelOnlyOutcome | Error>) {
+  function makeRecovery(
+    rows: AnyArgs[],
+    outcomes: Record<string, LabelOnlyOutcome | Error>,
+    production = false,
+    stubbed: string[] = [],
+  ) {
     const findMany = jest.fn(async (_args: AnyArgs) => rows);
     const auditLog = jest.fn(async (_e: AnyArgs) => 'a');
     const persistLabelForExistingAwb = jest.fn(async (id: string) => {
@@ -199,7 +214,12 @@ describe('AwbLabelRecoveryService', () => {
       { client: { shipment: { findMany } } } as never,
       { log: auditLog } as never,
       { persistLabelForExistingAwb, generateForShipment } as never,
-      { hasAdapter: (c: string): boolean => c === 'delhivery' || c === 'shiprocket' } as never,
+      {
+        hasAdapter: (c: string): boolean => c === 'delhivery' || c === 'shiprocket',
+        adapterCourierCodes: (): string[] => ['delhivery', 'shiprocket'],
+        isStubMode: async (c: string): Promise<boolean> => stubbed.includes(c),
+      } as never,
+      { isProduction: production } as never,
     );
     return { svc, findMany, auditLog, persistLabelForExistingAwb, generateForShipment };
   }
@@ -221,6 +241,28 @@ describe('AwbLabelRecoveryService', () => {
     });
     await svc.findMissing({ scope: 'ALL', limit: 10 });
     expect((findMany.mock.calls[1]?.[0] as { where: AnyArgs }).where.status).toBeUndefined();
+  });
+
+  it('asks the QUERY only about couriers whose label leg would run — never a stub in production', async () => {
+    const dev = makeRecovery([], {});
+    await dev.svc.findMissing({ scope: 'ALL', limit: 10 });
+    expect((dev.findMany.mock.calls[0]?.[0] as { where: AnyArgs }).where.courierCode).toEqual({
+      in: ['delhivery', 'shiprocket'],
+    });
+    // Production with Shiprocket stubbed: its rows would be SKIPPED
+    // forever and hold the oldest slots of every page.
+    const prod = makeRecovery([], {}, true, ['shiprocket']);
+    await prod.svc.findMissing({ scope: 'ALL', limit: 10 });
+    expect((prod.findMany.mock.calls[0]?.[0] as { where: AnyArgs }).where.courierCode).toEqual({
+      in: ['delhivery'],
+    });
+  });
+
+  it('"saw everything" is judged on the RAW row count against the limit', async () => {
+    const full = makeRecovery([missingRow('a'), missingRow('b')], {});
+    expect((await full.svc.retryMissing({ scope: 'ALL', limit: 2 })).sawEverything).toBe(false);
+    const short = makeRecovery([missingRow('a')], {});
+    expect((await short.svc.retryMissing({ scope: 'ALL', limit: 2 })).sawEverything).toBe(true);
   });
 
   it('drops a courier with no adapter — there is no label to fetch', async () => {
