@@ -2,6 +2,7 @@ import { CourierOpsDispatchService } from './courier-ops-dispatch.service';
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,16 +10,48 @@ import {
   ActorType,
   PickupRequestStatus,
   Prisma,
+  SystemIssueKind,
+  SystemIssueSeverity,
   WarehouseStatus,
   ShipmentStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
 const COURIER_CODE = 'delhivery';
 const PICKUP_LOCATION_SETTING = 'courier.delhivery_pickup_location';
+
+/**
+ * What a packed box's pickup check came to. Every value that is not
+ * REQUESTED or ALREADY_REQUESTED_TODAY means NO van was asked for, and
+ * each of those is recorded somewhere a person will see it — see
+ * `raiseIfDue`.
+ */
+export type AutoPickupReason =
+  /** Manual courier — nobody to ask. Skipped before this is reached. */
+  | 'NO_ADAPTER'
+  /** `courier.<code>_auto_pickup_enabled` is off — an operator's choice. */
+  | 'AUTO_PICKUP_DISABLED'
+  /** A van is already booked for this (courier, warehouse, day). */
+  | 'ALREADY_REQUESTED_TODAY'
+  /** The day's request FAILED earlier; left for a human, never retried. */
+  | 'DAY_FAILED'
+  /** The courier did not accept the request (row kept, marked FAILED). */
+  | 'COURIER_FAILED'
+  /** We could not even ask — configuration, warehouse, or a fault. */
+  | 'NOT_RAISED'
+  | 'REQUESTED';
+
+export interface AutoPickupOutcome {
+  readonly fired: boolean;
+  readonly reason: AutoPickupReason;
+  readonly requestId: string | null;
+  /** The code behind a NOT_RAISED / COURIER_FAILED, for the log line. */
+  readonly detail?: string;
+}
 
 export interface PickupRequestView {
   readonly id: string;
@@ -99,6 +132,7 @@ export class CourierPickupService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly opsDispatch: CourierOpsDispatchService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   /**
@@ -136,11 +170,23 @@ export class CourierPickupService {
    * the Pickups screen's release-day / retry flow is where that gets
    * resolved.
    *
+   * ── NOTHING HERE FAILS QUIETLY (2026-09-12) ─────────────────────────
+   * The first version returned a reason nobody read and let every
+   * pre-claim refusal (no pickup location, an inactive warehouse) escape
+   * as a throw the caller turned into one warn line. A packed box that
+   * summons no van is exactly the failure nobody notices until the
+   * parcel is still on the bench tomorrow, so every "no van was asked
+   * for" outcome other than the operator's own switch now raises a HIGH
+   * INTEGRATION issue keyed on (courier, warehouse) — the same problem
+   * on the next box bumps it rather than opening another — and a
+   * successful request clears it. A pre-claim refusal also writes its own
+   * audit row, because no request row exists to carry one.
+   *
    * Best-effort by construction: this is called from `PackService`'s
-   * post-commit hook and must never be allowed to fail a pack. Any
-   * throw here is the CALLER's problem to swallow, not this method's —
-   * kept a real throw rather than a caught result so a genuine bug does
-   * not silently disappear in two places.
+   * post-commit hook and must never be allowed to fail a pack, so it
+   * NEVER throws — a fault anywhere inside becomes a NOT_RAISED outcome
+   * with an issue behind it, rather than a throw that the caller can
+   * only log.
    */
   async raiseIfDue(input: {
     warehouseId: string;
@@ -148,26 +194,65 @@ export class CourierPickupService {
     courierAccountId: string | null;
     /** Named for the audit trail — WHICH parcel prompted the check. */
     triggeredByShipmentId: string;
-  }): Promise<{ fired: boolean; reason: string; requestId: string | null }> {
+  }): Promise<AutoPickupOutcome> {
     // Only a courier with an adapter can be asked for a van at all —
     // matches CourierOpsDispatchService.requestPickup's own switch.
     if (input.courierCode !== 'delhivery' && input.courierCode !== 'shiprocket') {
       return { fired: false, reason: 'NO_ADAPTER', requestId: null };
     }
+    try {
+      return await this.raiseIfDueInner(input);
+    } catch (err) {
+      // Anything that escaped the inner method is a fault we did not
+      // anticipate (the database blinked mid-check). Still a box with
+      // no van behind it, so it is said out loud like the rest.
+      const code = errorCode(err) ?? 'AUTO_PICKUP_FAULT';
+      await this.reportNotRaised(input, null, code, errorMessage(err));
+      return { fired: false, reason: 'NOT_RAISED', requestId: null, detail: code };
+    }
+  }
+
+  private async raiseIfDueInner(input: {
+    warehouseId: string;
+    courierCode: string;
+    courierAccountId: string | null;
+    triggeredByShipmentId: string;
+  }): Promise<AutoPickupOutcome> {
+    // The switch is an operator's deliberate choice, recorded where it
+    // was made (the settings audit), so a box packed while it is off is
+    // not a problem to announce — and auditing every box would bury the
+    // table under rows that all say the same thing.
     if (!(await this.autoPickupEnabled(input.courierCode))) {
       return { fired: false, reason: 'AUTO_PICKUP_DISABLED', requestId: null };
     }
 
-    const pickupDate = todayInKolkata();
+    const pickupTime = await this.defaultPickupTime();
+    // A box closed after today's van time is asking for TOMORROW's van:
+    // a request for 18:00 today sent at 19:30 is a request for the past,
+    // which the courier refuses, and a refused day is not retried.
+    const pickupDate = pickupDateFor(pickupTime, new Date());
+
+    // BOTH open states: a FAILED day is still claimed (see the class
+    // doc). It used to be looked up as REQUESTED only, so every later
+    // box re-tried the insert and was stopped by the partial unique —
+    // correct by accident, and invisible.
     const existing = await this.prisma.client.courierPickupRequest.findFirst({
       where: {
         courierCode: input.courierCode,
         warehouseId: input.warehouseId,
         pickupDate: parseDate(pickupDate),
-        status: PickupRequestStatus.REQUESTED,
+        status: { in: [PickupRequestStatus.REQUESTED, PickupRequestStatus.FAILED] },
       },
-      select: { id: true },
+      select: { id: true, status: true, courierMessage: true },
     });
+    if (existing !== null && existing.status === PickupRequestStatus.FAILED) {
+      // Never retried automatically (CUR-10 #3) — but the parcel that
+      // just got packed is one more with no van, so the issue is
+      // re-stated (a bump, not a second row) in case somebody closed it
+      // without releasing the day.
+      await this.reportCourierFailed(input, existing.id, pickupDate, existing.courierMessage);
+      return { fired: false, reason: 'DAY_FAILED', requestId: existing.id };
+    }
     if (existing !== null) {
       return { fired: false, reason: 'ALREADY_REQUESTED_TODAY', requestId: existing.id };
     }
@@ -180,21 +265,133 @@ export class CourierPickupService {
     // query runs.
     const waiting = await this.awaitingPickup(input.warehouseId, input.courierCode);
     const expectedPackageCount = Math.max(1, waiting.length);
-    const pickupTime = await this.defaultPickupTime();
 
-    const view = await this.raise(
-      null,
-      {
-        warehouseId: input.warehouseId,
-        courierCode: input.courierCode,
-        courierAccountId: input.courierAccountId,
-        pickupDate,
-        pickupTime,
-        expectedPackageCount,
-      },
-      { ipAddress: null, userAgent: null, requestId: null },
+    let view: PickupRequestView;
+    try {
+      view = await this.raise(
+        null,
+        {
+          warehouseId: input.warehouseId,
+          courierCode: input.courierCode,
+          courierAccountId: input.courierAccountId,
+          pickupDate,
+          pickupTime,
+          expectedPackageCount,
+        },
+        { ipAddress: null, userAgent: null, requestId: null },
+      );
+    } catch (err) {
+      const code = errorCode(err);
+      if (code === 'PICKUP_ALREADY_REQUESTED') {
+        // Two boxes closed at once and the other one claimed the day —
+        // the partial unique doing its job. One van, as intended.
+        return { fired: false, reason: 'ALREADY_REQUESTED_TODAY', requestId: null };
+      }
+      if (code === 'PICKUP_REQUEST_FAILED') {
+        // The row exists, marked FAILED, and `raise` audited it.
+        await this.reportCourierFailed(input, null, pickupDate, errorMessage(err));
+        return { fired: false, reason: 'COURIER_FAILED', requestId: null, detail: code };
+      }
+      // Refused before any row was claimed: no pickup location, an
+      // inactive warehouse. Nothing else will ever record this.
+      await this.reportNotRaised(input, pickupDate, code ?? 'AUTO_PICKUP_FAULT', errorMessage(err));
+      return {
+        fired: false,
+        reason: 'NOT_RAISED',
+        requestId: null,
+        detail: code ?? 'AUTO_PICKUP_FAULT',
+      };
+    }
+
+    if (view.status === PickupRequestStatus.FAILED) {
+      await this.reportCourierFailed(input, view.id, pickupDate, view.courierMessage);
+      return { fired: false, reason: 'COURIER_FAILED', requestId: view.id };
+    }
+    await this.issues.resolveByKey(
+      autoPickupIssueKey(input.courierCode, input.warehouseId),
+      `A pickup was requested automatically for ${pickupDate}.`,
     );
     return { fired: true, reason: 'REQUESTED', requestId: view.id };
+  }
+
+  /** Could not ask at all. Audit (no request row exists) + issue. */
+  private async reportNotRaised(
+    input: { warehouseId: string; courierCode: string; triggeredByShipmentId: string },
+    pickupDate: string | null,
+    code: string,
+    message: string,
+  ): Promise<void> {
+    await this.audit.log({
+      actorType: ActorType.SYSTEM,
+      action: 'courier.pickup.auto_not_raised',
+      entityType: 'shipment',
+      entityId: input.triggeredByShipmentId,
+      severity: 'MEDIUM',
+      metadata: {
+        courierCode: input.courierCode,
+        warehouseId: input.warehouseId,
+        pickupDate,
+        code,
+        message,
+      },
+    });
+    const where = await this.warehouseLabel(input.warehouseId);
+    await this.issues.raise({
+      kind: SystemIssueKind.INTEGRATION,
+      severity: SystemIssueSeverity.HIGH,
+      title: `No ${input.courierCode} pickup was requested for ${where}`,
+      detail:
+        code === 'PICKUP_LOCATION_NOT_CONFIGURED'
+          ? `A parcel was packed and no van was asked for, because no pickup location is configured. Set the courier account's pickup location name on /courier-accounts (or the system setting ${PICKUP_LOCATION_SETTING}) to the warehouse name registered with ${input.courierCode}, byte for byte, then raise today's pickup on /warehouse/pickups. Every box packed until then will say the same.`
+          : `A parcel was packed and no van was asked for: [${code}] ${message}. Fix the cause, then raise today's pickup by hand on /warehouse/pickups.`,
+      source: 'courier-pickup.auto',
+      dedupeKey: autoPickupIssueKey(input.courierCode, input.warehouseId),
+      metadata: {
+        courierCode: input.courierCode,
+        warehouseId: input.warehouseId,
+        pickupDate,
+        code,
+        triggeredByShipmentId: input.triggeredByShipmentId,
+      },
+    });
+  }
+
+  /** The courier was asked and said no (or failed). The row carries the
+   *  audit; this makes sure a PERSON hears about it. */
+  private async reportCourierFailed(
+    input: { warehouseId: string; courierCode: string; triggeredByShipmentId: string },
+    requestId: string | null,
+    pickupDate: string,
+    courierMessage: string | null,
+  ): Promise<void> {
+    const where = await this.warehouseLabel(input.warehouseId);
+    await this.issues.raise({
+      kind: SystemIssueKind.INTEGRATION,
+      severity: SystemIssueSeverity.HIGH,
+      title: `${input.courierCode} did not accept the ${pickupDate} pickup for ${where}`,
+      detail: `The automatic pickup request failed${courierMessage === null ? '' : `: ${courierMessage}`}. The day stays claimed and is NOT retried automatically, because we cannot tell whether ${input.courierCode} registered it. Check their panel: if a pickup exists, mark it collected on /warehouse/pickups when the van comes; if not, release the day there and raise it again.`,
+      source: 'courier-pickup.auto',
+      dedupeKey: autoPickupIssueKey(input.courierCode, input.warehouseId),
+      metadata: {
+        courierCode: input.courierCode,
+        warehouseId: input.warehouseId,
+        pickupDate,
+        requestId,
+        triggeredByShipmentId: input.triggeredByShipmentId,
+      },
+    });
+  }
+
+  private async warehouseLabel(warehouseId: string): Promise<string> {
+    try {
+      const w = await this.prisma.client.warehouse.findFirst({
+        where: { id: warehouseId },
+        select: { name: true },
+      });
+      return w?.name ?? `warehouse ${warehouseId}`;
+    } catch {
+      return `warehouse ${warehouseId}`;
+    }
   }
 
   /** The switch: default OFF, fails closed on an unreadable row. */
@@ -264,7 +461,7 @@ export class CourierPickupService {
     }
 
     const courierCode = input.courierCode ?? COURIER_CODE;
-    const pickupLocationName = await this.pickupLocationName();
+    const pickupLocationName = await this.pickupLocationName(input.courierAccountId ?? null);
     const pickupDate = parseDate(input.pickupDate);
 
     // Claim the day FIRST. If the courier call then fails we still hold
@@ -480,7 +677,23 @@ export class CourierPickupService {
     return out;
   }
 
-  private async pickupLocationName(): Promise<string> {
+  /**
+   * The registered pickup-location name, resolved EXACTLY as the AWB
+   * booking resolves it (`DelhiveryAwbService.resolvePickupLocationName`):
+   * the account's own name wins, the global setting is the fallback. It
+   * read the global setting only, so an account with its own
+   * registration would book parcels at one location and summon the van
+   * to another.
+   */
+  private async pickupLocationName(courierAccountId: string | null): Promise<string> {
+    if (courierAccountId !== null) {
+      const account = await this.prisma.client.courierAccount.findUnique({
+        where: { id: courierAccountId },
+        select: { pickupLocationName: true },
+      });
+      const perAccount = (account?.pickupLocationName ?? '').trim();
+      if (perAccount !== '') return perAccount;
+    }
     const row = await this.prisma.client.systemSetting.findUnique({
       where: { key: PICKUP_LOCATION_SETTING },
       select: { valueString: true },
@@ -489,7 +702,7 @@ export class CourierPickupService {
     if (name === '') {
       throw new BadRequestException({
         code: 'PICKUP_LOCATION_NOT_CONFIGURED',
-        message: `No pickup location configured (system setting ${PICKUP_LOCATION_SETTING}). It must match the warehouse name registered with Delhivery exactly.`,
+        message: `No pickup location configured: the courier account has no pickup location name and system setting ${PICKUP_LOCATION_SETTING} is empty. It must match the warehouse name registered with the courier exactly.`,
       });
     }
     return name;
@@ -557,12 +770,51 @@ export class CourierPickupService {
   }
 }
 
-/** YYYY-MM-DD → a UTC midnight Date, which is how @db.Date round-trips. */
-/** Today's date at the warehouse's own clock (India-only, per ORD-3
- *  and every other calendar-day boundary in this codebase). */
-function todayInKolkata(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+/** One issue per (courier, warehouse) — NOT per day: a location that is
+ *  still unconfigured tomorrow is the same problem, not a new one. */
+export function autoPickupIssueKey(courierCode: string, warehouseId: string): string {
+  return `auto-pickup:${courierCode}:${warehouseId}`;
 }
+
+/**
+ * The day whose van a box packed at `now` should ask for, at the
+ * warehouse's own clock (India-only, like every other calendar-day
+ * boundary in this codebase): today while today's van time is still
+ * ahead, otherwise tomorrow.
+ */
+export function pickupDateFor(pickupTime: string, now: Date): string {
+  const tz = 'Asia/Kolkata';
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now);
+  const clock = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(now);
+  const vanAt = /^\d{2}:\d{2}$/.test(pickupTime) ? `${pickupTime}:00` : pickupTime;
+  if (clock < vanAt) return today;
+  const next = new Date(`${today}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
+}
+
+function errorCode(err: unknown): string | null {
+  if (err instanceof HttpException) {
+    const body = err.getResponse();
+    if (typeof body === 'object' && body !== null && 'code' in body) {
+      const code = (body as { code?: unknown }).code;
+      if (typeof code === 'string') return code;
+    }
+  }
+  return null;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** YYYY-MM-DD → a UTC midnight Date, which is how @db.Date round-trips. */
 
 function parseDate(value: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
