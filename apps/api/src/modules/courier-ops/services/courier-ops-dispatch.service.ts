@@ -4,6 +4,9 @@ import { DelhiveryPickupService } from '../../courier-delhivery/services/delhive
 import { DelhiveryWarehouseService } from '../../courier-delhivery/services/delhivery-warehouse.service';
 import { ShiprocketClientService } from '../../courier-shiprocket/services/shiprocket-client.service';
 import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
+import { DelhiveryHttpService } from '../../courier-delhivery/services/delhivery-http.service';
+import { ShiprocketHttpService } from '../../courier-shiprocket/services/shiprocket-http.service';
+import { EnvService } from '../../../config/env.service';
 
 export interface OpsActionResult {
   readonly success: boolean;
@@ -71,7 +74,30 @@ export class CourierOpsDispatchService {
     private readonly delhiveryPickup: DelhiveryPickupService,
     private readonly delhiveryWarehouse: DelhiveryWarehouseService,
     private readonly shiprocket: ShiprocketClientService,
+    private readonly delhiveryHttp: DelhiveryHttpService,
+    private readonly shiprocketHttp: ShiprocketHttpService,
+    private readonly env: EnvService,
   ) {}
+
+  /**
+   * In production, is this courier answering from its STUB? A stub
+   * reports every write as a success before any guard runs (Delhivery's
+   * edit/cancel, Shiprocket's cancel), so a write it "accepts" never
+   * reached the courier — and anything we RECORD on the strength of that
+   * reply is false. The same rule the label leg applies (COURIER_STUBBED,
+   * CUR-15's spirit): outside production a stub is the point.
+   */
+  async isStubbedInProduction(courierCode: string): Promise<boolean> {
+    if (!this.env.isProduction) return false;
+    switch (courierCode) {
+      case 'delhivery':
+        return this.delhiveryHttp.isStubMode();
+      case 'shiprocket':
+        return this.shiprocketHttp.isStubMode();
+      default:
+        return false;
+    }
+  }
 
   /** Cancel a live consignment. */
   async cancel(

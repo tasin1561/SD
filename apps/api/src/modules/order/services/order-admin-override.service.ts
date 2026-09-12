@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -252,7 +253,22 @@ export class OrderAdminOverrideService {
 
     let shipmentsSynced = 0;
     const statusEventId = await this.prisma.client.$transaction(async (tx) => {
-      await tx.order.update({ where: { id: order.id }, data });
+      // Guarded on the status we READ (outside this tx): a stale force —
+      // an operator's form open while an agent confirmed the order — must
+      // not interleave with a real transition (a forced cancel landing on
+      // an order a confirm just provisioned a shipment for, which then
+      // books a real waybill on a cancelled order). God mode still
+      // bypasses the MATRIX; it may not bypass what the order IS now.
+      const written = await tx.order.updateMany({
+        where: { id: order.id, status: from, deletedAt: null },
+        data: data as Prisma.OrderUpdateManyMutationInput,
+      });
+      if (written.count === 0) {
+        throw new ConflictException({
+          code: 'STALE_ORDER_STATUS',
+          message: `The order is no longer ${from} — it changed while this override was being prepared. Reload it and try again.`,
+        });
+      }
 
       // Same tx as the order write: a corrected recipient and the copy
       // the courier is handed must not be able to disagree.

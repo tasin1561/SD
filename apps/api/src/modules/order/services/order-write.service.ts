@@ -364,6 +364,21 @@ export class OrderWriteService {
   }
 
   /**
+   * Give a pre-dispatch order the shipment its confirmation should have
+   * provisioned — the SAME post-commit path, re-read from the committed
+   * row, idempotent under the provision's per-order lock. For the AWB-less
+   * sweep (`OrderAttentionService`), which finds confirmed orders with no
+   * live shipment: every queue that moves a parcel selects on a shipment,
+   * so without one the order is invisible. Throws on failure; the caller
+   * decides how loud to be.
+   */
+  async reprovisionShipment(
+    orderId: string,
+  ): Promise<{ readonly shipmentId: string; readonly created: boolean }> {
+    return this.postCommit.ensureShipmentProvisioned(orderId);
+  }
+
+  /**
    * A seller calling off their own order.
    *
    * ── Why this lives on the WRITE boundary ──────────────────────────

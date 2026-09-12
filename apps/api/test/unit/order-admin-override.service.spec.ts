@@ -23,6 +23,8 @@ function makeService(
     /** STATUS_CHANGED rows past the dividing line (their `data`). */
     history?: Array<{ data: unknown }>;
     emitThrows?: boolean;
+    /** The order's status moved between the override's read and write. */
+    staleStatus?: boolean;
   } = {},
 ) {
   const order =
@@ -36,12 +38,15 @@ function makeService(
         }
       : opts.order;
 
-  const orderUpdate = jest.fn(async (a: { data: AnyArgs }) => ({ id: 'o1', ...a.data }));
+  // Guarded on the status the override READ: 0 rows ⇒ STALE_ORDER_STATUS.
+  const orderUpdate = jest.fn(async (_a: { where: AnyArgs; data: AnyArgs }) => ({
+    count: opts.staleStatus ? 0 : 1,
+  }));
   const shipmentUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
     count: opts.shipmentsMatched ?? 1,
   }));
   const txClient = {
-    order: { update: orderUpdate },
+    order: { updateMany: orderUpdate },
     shipment: { updateMany: shipmentUpdateMany },
   };
   const orderFindFirst = jest.fn(async () => order);
@@ -131,6 +136,13 @@ function makeService(
     { refundIfCharged } as never,
     { emit } as never,
     { resolve: settingsResolve } as never,
+    // Ended-order money (retire the deferred accrual, undo an uncovered
+    // Instant Pay credit) and the issue board — inert here.
+    {
+      retirePendingAccrual: jest.fn(async () => 0),
+      reverseUncoveredInstantPayCredit: jest.fn(async () => ({ reversed: false })),
+    } as never,
+    { raise: jest.fn(async () => undefined), resolveByKey: jest.fn(async () => 0) } as never,
   );
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,
@@ -200,6 +212,25 @@ describe('OrderAdminOverrideService.forceMutate — guardrails', () => {
     await expect(
       svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.DELIVERED }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('OrderAdminOverrideService.forceMutate — a stale force', () => {
+  it('writes only if the order is STILL what it read, and 409s STALE_ORDER_STATUS otherwise', async () => {
+    // An operator's form open while an agent confirmed the order: the
+    // forced cancel must not land on the order the confirm just gave a
+    // shipment (which then books a real waybill on a cancelled order).
+    const { svc, orderUpdate, emit, voidForOrder } = makeService({ staleStatus: true });
+    await expect(
+      svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CANCELLED_BY_ADMIN }),
+    ).rejects.toMatchObject({ response: { code: 'STALE_ORDER_STATUS' } });
+    expect(orderUpdate.mock.calls[0]![0].where).toMatchObject({
+      id: 'o1',
+      status: OrderStatus.PENDING_CONFIRMATION,
+    });
+    // Nothing downstream of a write that did not happen.
+    expect(emit).not.toHaveBeenCalled();
+    expect(voidForOrder).not.toHaveBeenCalled();
   });
 });
 

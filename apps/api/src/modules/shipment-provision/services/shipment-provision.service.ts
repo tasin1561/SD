@@ -4,6 +4,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { ShipmentNumberingService } from './shipment-numbering.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 const SETTING_DEFAULT_WAREHOUSE = 'ops.default_warehouse_id';
 
@@ -93,13 +94,7 @@ export class ShipmentProvisionService {
     actor: { type: ActorType; id?: string | null } = { type: ActorType.SYSTEM },
     ctx?: ClientContext,
   ): Promise<ProvisionResult> {
-    const existing = await this.prisma.client.orderShipment.findFirst({
-      where: {
-        orderId: input.orderId,
-        shipment: { status: { not: ShipmentStatus.CANCELLED }, deletedAt: null },
-      },
-      select: { shipmentId: true },
-    });
+    const existing = await this.findLive(this.prisma.client, input.orderId);
     if (existing) {
       return { shipmentId: existing.shipmentId, created: false };
     }
@@ -117,7 +112,16 @@ export class ShipmentProvisionService {
       input.totalWeightGrams ??
       input.items.reduce((s, i) => s + (i.unitWeightGrams ?? 0) * i.quantity, 0);
 
-    const shipmentId = await this.prisma.client.$transaction(async (tx) => {
+    const outcome = await this.prisma.client.$transaction(async (tx) => {
+      // Read-then-create is not a guard under READ COMMITTED: two writers
+      // of CONFIRMED (a transition and a god-mode force, or the AWB-less
+      // sweep re-provisioning) both see "none" above and both create. The
+      // per-order lock serialises them and the re-check inside it sees the
+      // winner's committed row.
+      await takeAdvisoryLock(tx, AdvisoryLock.SHIPMENT_PROVISION, input.orderId);
+      const raced = await this.findLive(tx, input.orderId);
+      if (raced) return { shipmentId: raced.shipmentId, created: false };
+
       const shipmentNumber = await this.numbering.nextShipmentNumber(tx);
       const shipment = await tx.shipment.create({
         data: {
@@ -181,10 +185,23 @@ export class ShipmentProvisionService {
         },
         tx,
       );
-      return shipment.id;
+      return { shipmentId: shipment.id, created: true };
     });
 
-    return { shipmentId, created: true };
+    return outcome;
+  }
+
+  private findLive(
+    db: Pick<Prisma.TransactionClient, 'orderShipment'>,
+    orderId: string,
+  ): Promise<{ shipmentId: string } | null> {
+    return db.orderShipment.findFirst({
+      where: {
+        orderId,
+        shipment: { status: { not: ShipmentStatus.CANCELLED }, deletedAt: null },
+      },
+      select: { shipmentId: true },
+    });
   }
 
   /** Void the order's open (pre-pick, status CREATED) shipment(s) on a

@@ -62,6 +62,10 @@ function make(
   opts: {
     context?: Partial<ShipmentCourierContext>;
     latestAttempt?: { courierNslCode: string | null; attemptNumber: number } | null;
+    /** Production, with this courier answering from its stub. */
+    stubbed?: boolean;
+    /** The cancel claim is held by somebody else. */
+    claimTaken?: boolean;
   } = {},
 ): Deps {
   const audit = jest.fn(async () => undefined);
@@ -97,7 +101,15 @@ function make(
 
   const deliveryAttemptFindFirst = jest.fn(async () => opts.latestAttempt ?? null);
 
-  const stamp = jest.fn(async () => ({ count: 1 }));
+  // Every shipment.updateMany: the cancel CLAIM, the stamp, the release.
+  const stamp = jest.fn(async (a: { data: Record<string, unknown> }) => ({
+    count:
+      opts.claimTaken &&
+      'courierCancelStartedAt' in a.data &&
+      a.data.courierCancelStartedAt !== null
+        ? 0
+        : 1,
+  }));
   const prisma = {
     client: {
       deliveryAttempt: { findFirst: deliveryAttemptFindFirst },
@@ -124,6 +136,7 @@ function make(
     // assertion keeps meaning what it did — including the ones that
     // assert the courier was never called at all.
     {
+      isStubbedInProduction: async () => opts.stubbed ?? false,
       cancel: (
         _courierCode: string,
         _accountId: string | null,
@@ -359,7 +372,7 @@ describe('CourierShipmentActionService — a voided shipment’s waybill', () =>
     // Guarded on the stamp being empty, so a second success cannot move it.
     expect(stamp).toHaveBeenCalledWith({
       where: { id: SHIPMENT_ID, courierCancelledAt: null },
-      data: { courierCancelledAt: expect.any(Date) },
+      data: { courierCancelledAt: expect.any(Date), courierCancelStartedAt: null },
     });
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -384,7 +397,120 @@ describe('CourierShipmentActionService — a voided shipment’s waybill', () =>
       CLIENT,
     );
     expect(r.success).toBe(false);
+    // The claim was taken and released; nothing was STAMPED cancelled.
+    const stamped = stamp.mock.calls.filter((c) => c[0].data.courierCancelledAt !== undefined);
+    expect(stamped).toEqual([]);
+  });
+
+  it('in production, refuses a STUBBED courier — its "cancelled" reached nobody', async () => {
+    // A stub reports success before any guard; recording that would mark
+    // a live, charged waybill closed.
+    const { svc, cancel, stamp } = make({ context: VOIDED, stubbed: true });
+    expect(
+      await refusalCode(
+        svc.cancelWithCourier(
+          courierActor.operator('staff-1'),
+          SHIPMENT_ID,
+          'x'.repeat(12),
+          CLIENT,
+        ),
+      ),
+    ).toMatchObject({ code: 'COURIER_STUBBED' });
+    expect(cancel).not.toHaveBeenCalled();
     expect(stamp).not.toHaveBeenCalled();
+  });
+
+  it('CLAIMS before calling: a second operator mid-cancel is refused and the courier asked once', async () => {
+    const { svc, cancel } = make({ context: VOIDED, claimTaken: true });
+    expect(
+      await refusalCode(
+        svc.cancelWithCourier(
+          courierActor.operator('staff-2'),
+          SHIPMENT_ID,
+          'x'.repeat(12),
+          CLIENT,
+        ),
+      ),
+    ).toMatchObject({ code: 'WAYBILL_CANCEL_IN_PROGRESS' });
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('the claim is guarded (unstamped, free or stale) and released after the call', async () => {
+    const { svc, stamp } = make({ context: VOIDED });
+    await svc.cancelWithCourier(
+      courierActor.operator('staff-1'),
+      SHIPMENT_ID,
+      'order cancelled before pickup',
+      CLIENT,
+    );
+    const claim = stamp.mock.calls[0]![0] as unknown as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(claim.where).toMatchObject({ id: SHIPMENT_ID, courierCancelledAt: null });
+    expect(claim.where.OR).toEqual([
+      { courierCancelStartedAt: null },
+      { courierCancelStartedAt: { lt: expect.any(Date) } },
+    ]);
+    expect(claim.data).toEqual({ courierCancelStartedAt: expect.any(Date) });
+    const release = stamp.mock.calls.at(-1)![0] as unknown as {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    };
+    expect(release).toEqual({
+      where: { id: SHIPMENT_ID, courierCancelStartedAt: claim.data.courierCancelStartedAt },
+      data: { courierCancelStartedAt: null },
+    });
+  });
+
+  it('a courier call that THROWS releases the claim, so the next attempt is not locked out', async () => {
+    const { svc, cancel, stamp } = make({ context: VOIDED });
+    cancel.mockRejectedValueOnce(new Error('socket hang up'));
+    await expect(
+      svc.cancelWithCourier(courierActor.operator('staff-1'), SHIPMENT_ID, 'x'.repeat(12), CLIENT),
+    ).rejects.toThrow('socket hang up');
+    const last = stamp.mock.calls.at(-1)![0] as unknown as { data: Record<string, unknown> };
+    expect(last.data).toEqual({ courierCancelStartedAt: null });
+  });
+
+  it('records a waybill cancelled OUTSIDE Skydrop without calling the courier, audited HIGH', async () => {
+    const { svc, cancel, stamp, audit } = make({ context: VOIDED });
+    const r = await svc.recordCancelledOutside(
+      'staff-1',
+      SHIPMENT_ID,
+      'cancelled in the Delhivery portal',
+      CLIENT,
+    );
+    expect(r.success).toBe(true);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(stamp).toHaveBeenCalledWith({
+      where: { id: SHIPMENT_ID, courierCancelledAt: null },
+      data: { courierCancelledAt: expect.any(Date) },
+    });
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'courier.shipment.cancel_recorded_outside',
+        severity: 'HIGH',
+        metadata: expect.objectContaining({ courierCalled: false }),
+      }),
+    );
+  });
+
+  it('refuses to record an outside cancel on a LIVE (non-voided) parcel', async () => {
+    const { svc, stamp } = make({});
+    expect(
+      await refusalCode(svc.recordCancelledOutside('staff-1', SHIPMENT_ID, 'x'.repeat(12), CLIENT)),
+    ).toMatchObject({ code: 'NOT_A_VOIDED_SHIPMENT' });
+    expect(stamp).not.toHaveBeenCalled();
+  });
+
+  it('refuses to record an outside cancel twice', async () => {
+    const { svc } = make({
+      context: { ...VOIDED, courierCancelledAt: new Date('2026-09-12T10:00:00Z') },
+    });
+    expect(
+      await refusalCode(svc.recordCancelledOutside('staff-1', SHIPMENT_ID, 'x'.repeat(12), CLIENT)),
+    ).toMatchObject({ code: 'WAYBILL_ALREADY_CANCELLED' });
   });
 
   it('refuses a voided shipment that never had a waybill — nothing at the courier', async () => {

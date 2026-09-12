@@ -43,6 +43,9 @@ function makeService(
       requestPickup: srPickup,
       registerPickupLocation: srWarehouse,
     } as unknown as ShiprocketClientService,
+    { isStubMode: async () => false } as never,
+    { isStubMode: async () => false } as never,
+    { isProduction: false } as never,
   );
   return { svc, dlCancel, dlPickup, dlWarehouse, srCancel, srPickup, srWarehouse };
 }
@@ -199,6 +202,9 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
       { requestPickup: jest.fn() } as unknown as DelhiveryPickupService,
       { register: jest.fn() } as unknown as DelhiveryWarehouseService,
       { editShipment: srEdit } as unknown as ShiprocketClientService,
+      { isStubMode: async () => false } as never,
+      { isStubMode: async () => false } as never,
+      { isProduction: false } as never,
     );
     return { svc, dlEdit, srEdit };
   }
@@ -281,5 +287,28 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
     const r = await svc.edit({ ...base, courierCode: 'shiprocket', courierOrderId: null }, ACTOR);
     expect(srEdit).not.toHaveBeenCalled();
     expect(r.success).toBe(false);
+  });
+});
+
+describe('CourierOpsDispatchService.isStubbedInProduction', () => {
+  function build(production: boolean, dlStub: boolean, srStub: boolean): CourierOpsDispatchService {
+    return new CourierOpsDispatchService(
+      {} as unknown as DelhiveryShipmentEditService,
+      {} as unknown as DelhiveryPickupService,
+      {} as unknown as DelhiveryWarehouseService,
+      {} as unknown as ShiprocketClientService,
+      { isStubMode: async () => dlStub } as never,
+      { isStubMode: async () => srStub } as never,
+      { isProduction: production } as never,
+    );
+  }
+  it('outside production a stub is the point — never refused', async () => {
+    expect(await build(false, true, true).isStubbedInProduction('delhivery')).toBe(false);
+  });
+  it('in production, reports each courier’s own stub mode', async () => {
+    const svc = build(true, false, true);
+    expect(await svc.isStubbedInProduction('delhivery')).toBe(false);
+    expect(await svc.isStubbedInProduction('shiprocket')).toBe(true);
+    expect(await svc.isStubbedInProduction('manual')).toBe(false);
   });
 });

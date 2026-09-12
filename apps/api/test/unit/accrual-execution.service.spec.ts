@@ -14,6 +14,10 @@ function makeService(
     order?: AnyArgs | null;
     charges?: AnyArgs[];
     chargesEntryExists?: boolean;
+    /** The order's status as the in-transaction re-check reads it. */
+    txStatus?: string;
+    /** Whether a courier ever had the parcel (handover / real transition). */
+    carried?: boolean;
   } = {},
 ) {
   const walletEntryFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
@@ -36,21 +40,35 @@ function makeService(
           sellerId: 'seller-1',
           paymentMode: PaymentMode.COD,
           codAmountInr: new Prisma.Decimal('500'),
+          status: 'DELIVERED',
         }
-      : opts.order,
+      : opts.order === null
+        ? null
+        : { status: 'DELIVERED', ...opts.order },
+  );
+  // Charges and refunds pair up (OrderChargesAccrualService counts them).
+  const walletEntryCount = jest.fn(async (args: AnyArgs) =>
+    (args.where as { direction: WalletEntryDirection }).direction ===
+      WalletEntryDirection.ORDER_CHARGES && opts.chargesEntryExists
+      ? 1
+      : 0,
   );
 
   const tx = {
     // WAL-7's advisory lock, as the fake sees it — a tx with no
     // $executeRaw would let an unlocked money guard pass this suite.
     $executeRaw: jest.fn(async () => 1),
-    sellerWalletEntry: { findFirst: walletEntryFindFirst },
+    sellerWalletEntry: { findFirst: walletEntryFindFirst, count: walletEntryCount },
     orderCharge: { findMany: orderChargeFindMany },
+    order: { findUnique: jest.fn(async () => ({ status: opts.txStatus ?? 'DELIVERED' })) },
   };
   const $transaction = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx));
   const client = {
     order: { findUnique: orderFindUnique },
     sellerWalletEntry: { findFirst: walletEntryFindFirst },
+    // Carriage evidence (the shared rule): a handed-over shipment.
+    shipment: { count: jest.fn(async () => (opts.carried === false ? 0 : 1)) },
+    orderEvent: { findMany: jest.fn(async () => []) },
     $transaction,
   };
   const prisma = { client } as unknown as PrismaService;
@@ -176,7 +194,10 @@ describe('AccrualExecutionService.executeAccrual', () => {
 
   it('order vanished before execution: logs + returns, no writes, no throw', async () => {
     const { svc, applyEntry } = makeService({ order: null });
-    await expect(svc.executeAccrual('order-1')).resolves.toBeUndefined();
+    await expect(svc.executeAccrual('order-1')).resolves.toEqual({
+      executed: false,
+      reason: 'ORDER_NOT_FOUND',
+    });
     expect(applyEntry).not.toHaveBeenCalled();
   });
 
@@ -203,6 +224,12 @@ describe('AccrualExecutionService.executeAccrual', () => {
         return chargesWritten ? { id: 'y' } : null;
       return null;
     });
+    const walletEntryCount = jest.fn(async (args: AnyArgs) =>
+      (args.where as { direction: WalletEntryDirection }).direction ===
+        WalletEntryDirection.ORDER_CHARGES && chargesWritten
+        ? 1
+        : 0,
+    );
     const orderChargeFindMany = jest.fn(async () => [
       { type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') },
     ]);
@@ -211,16 +238,20 @@ describe('AccrualExecutionService.executeAccrual', () => {
       sellerId: 'seller-1',
       paymentMode: PaymentMode.COD,
       codAmountInr: new Prisma.Decimal('500'),
+      status: 'DELIVERED',
     }));
     const tx = {
       $executeRaw: jest.fn(async () => 1),
-      sellerWalletEntry: { findFirst: walletEntryFindFirst },
+      sellerWalletEntry: { findFirst: walletEntryFindFirst, count: walletEntryCount },
       orderCharge: { findMany: orderChargeFindMany },
+      order: { findUnique: jest.fn(async () => ({ status: 'DELIVERED' })) },
     };
     const $transaction = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx));
     const client = {
       order: { findUnique: orderFindUnique },
       sellerWalletEntry: { findFirst: walletEntryFindFirst },
+      shipment: { count: jest.fn(async () => 1) },
+      orderEvent: { findMany: jest.fn(async () => []) },
       $transaction,
     };
     const prisma = { client } as unknown as PrismaService;
@@ -272,11 +303,22 @@ describe('AccrualExecutionService.executeAccrual', () => {
  * and the deductions were taken from whatever else they held.
  */
 describe('AccrualExecutionService — Instant Pay fronts the COD', () => {
-  function makeInstant(opts: { credited?: boolean; debtRepaid?: string } = {}) {
+  function makeInstant(opts: { credited?: boolean; debtRepaid?: string; carried?: boolean } = {}) {
     const tx = {
       $executeRaw: jest.fn(async () => 1),
-      sellerWalletEntry: { findFirst: jest.fn(async () => null) },
-      orderCharge: { findMany: jest.fn(async () => []) },
+      sellerWalletEntry: { findFirst: jest.fn(async () => null), count: jest.fn(async () => 0) },
+      orderCharge: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'c1',
+            type: 'BASE_SHIPPING',
+            amountInr: new Prisma.Decimal('200'),
+            status: 'ESTIMATED',
+          },
+        ]),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+      order: { findUnique: jest.fn(async () => ({ status: 'DELIVERED' })) },
       shipment: {
         findFirst: jest.fn(async () => ({
           courierAccount: {
@@ -292,8 +334,11 @@ describe('AccrualExecutionService — Instant Pay fronts the COD', () => {
           sellerId: 'seller-1',
           paymentMode: PaymentMode.COD,
           codAmountInr: new Prisma.Decimal('1000'),
+          status: 'DELIVERED',
         })),
       },
+      shipment: { count: jest.fn(async () => (opts.carried === false ? 0 : 1)) },
+      orderEvent: { findMany: jest.fn(async () => []) },
       $transaction: jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)),
     };
     const wallet = {
@@ -315,24 +360,58 @@ describe('AccrualExecutionService — Instant Pay fronts the COD', () => {
       })),
       front,
     };
+    const debitForDeliveredOrder = jest.fn(async () => ({
+      amountInr: '0',
+      unitsCharged: 0,
+      alreadyCharged: false,
+    }));
     const svc = new AccrualExecutionService(
       { client } as unknown as PrismaService,
       wallet as unknown as WalletService,
       new OrderChargesAccrualService(wallet as unknown as WalletService),
-      {
-        debitForDeliveredOrder: jest.fn(async () => ({
-          amountInr: '0',
-          unitsCharged: 0,
-          alreadyCharged: false,
-        })),
-      } as unknown as InboundFreightAmortisationService,
+      { debitForDeliveredOrder } as unknown as InboundFreightAmortisationService,
       codCredit as unknown as CodCreditService,
       { persistForOrderSystem } as never,
       { raise: raiseIssue } as never,
       attribution as never,
     );
-    return { svc, front, creditForOrder };
+    return { svc, front, creditForOrder, debitForDeliveredOrder, applyEntry: wallet.applyEntry };
   }
+
+  it('a forced DELIVERED with NO record of carriage: bills the charge, withholds the credit and freight, and says so', async () => {
+    // The refund on a later cancel refuses to trust a status god mode
+    // forced; billing now asks the same question. The charge is
+    // reversible (that same missing evidence refunds it); the Instant Pay
+    // credit (cash out of capital) and the freight share are not.
+    raiseIssue.mockClear();
+    const { svc, front, creditForOrder, debitForDeliveredOrder, applyEntry } = makeInstant({
+      carried: false,
+    });
+    await expect(svc.executeAccrual('order-1')).resolves.toEqual({ executed: true });
+    expect(front).not.toHaveBeenCalled();
+    expect(creditForOrder).not.toHaveBeenCalled();
+    expect(debitForDeliveredOrder).not.toHaveBeenCalled();
+    expect(applyEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ direction: WalletEntryDirection.ORDER_CHARGES }),
+    );
+    expect(raiseIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'MONEY',
+        severity: 'HIGH',
+        dedupeKey: 'delivered-without-carriage:order-1',
+      }),
+    );
+  });
+
+  it('a real delivery (carriage on record) credits and charges freight as before', async () => {
+    raiseIssue.mockClear();
+    const { svc, creditForOrder, debitForDeliveredOrder } = makeInstant();
+    await svc.executeAccrual('order-1');
+    expect(creditForOrder).toHaveBeenCalled();
+    expect(debitForDeliveredOrder).toHaveBeenCalled();
+    expect(raiseIssue).not.toHaveBeenCalled();
+  });
 
   it('holds the COD for the seller from our money, BEFORE the credit, in the courier’s account', async () => {
     const { svc, front, creditForOrder } = makeInstant();
@@ -391,7 +470,7 @@ describe('AccrualExecutionService — charges exist before money is taken', () =
 
     // Best-effort: a failure here must not withhold the COD credit the
     // seller is owed for a parcel that was delivered.
-    await expect(svc.executeAccrual('order-1')).resolves.toBeUndefined();
+    await expect(svc.executeAccrual('order-1')).resolves.toEqual({ executed: true });
   });
 
   it('says on the board that the order is being credited unbilled', async () => {
@@ -426,5 +505,56 @@ describe('AccrualExecutionService — charges exist before money is taken', () =
     await svc.executeAccrual('order-1');
 
     expect(raiseIssue).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ONLY A DELIVERED ORDER IS BILLED. A T+N accrual runs up to seven days
+ * after the delivery that scheduled it; a delivery god mode forced and then
+ * cancelled was charged, credited and freight-billed on a CANCELLED order,
+ * after the cancel's own refund had already run and found nothing.
+ */
+describe('AccrualExecutionService — the order must still be DELIVERED', () => {
+  it('skips an order that is no longer delivered, before computing or taking anything', async () => {
+    const { svc, applyEntry, debitForDeliveredOrder } = makeService({
+      order: {
+        id: 'order-1',
+        sellerId: 'seller-1',
+        paymentMode: PaymentMode.COD,
+        codAmountInr: new Prisma.Decimal('500'),
+        status: 'CANCELLED_BY_ADMIN',
+      },
+      charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
+    });
+    persistForOrderSystem.mockClear();
+    await expect(svc.executeAccrual('order-1')).resolves.toEqual({
+      executed: false,
+      reason: 'ORDER_NOT_DELIVERED:CANCELLED_BY_ADMIN',
+    });
+    expect(persistForOrderSystem).not.toHaveBeenCalled();
+    expect(applyEntry).not.toHaveBeenCalled();
+    expect(debitForDeliveredOrder).not.toHaveBeenCalled();
+  });
+
+  it('re-checks INSIDE the transaction under the wallet lock — a cancel that landed meanwhile wins', async () => {
+    const { svc, applyEntry } = makeService({
+      txStatus: 'CANCELLED_BY_ADMIN',
+      charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
+    });
+    await expect(svc.executeAccrual('order-1')).resolves.toEqual({
+      executed: false,
+      reason: 'ORDER_NOT_DELIVERED:CANCELLED_BY_ADMIN',
+    });
+    expect(applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('never bills a LOST parcel — a lost parcel is not charged (TRE-6)', async () => {
+    const { svc, applyEntry } = makeService({
+      txStatus: 'LOST_IN_TRANSIT',
+      charges: [{ type: 'BASE_SHIPPING', amountInr: new Prisma.Decimal('80') }],
+    });
+    const r = await svc.executeAccrual('order-1');
+    expect(r).toEqual({ executed: false, reason: 'ORDER_NOT_DELIVERED:LOST_IN_TRANSIT' });
+    expect(applyEntry).not.toHaveBeenCalled();
   });
 });

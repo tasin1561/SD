@@ -3398,6 +3398,11 @@ model Shipment {
   /// sitting on the courier account — `OrderAttentionService` raises it.
   /// Recording the fact does not move the order (CUR-11).
   courierCancelledAt       DateTime?        @map("courier_cancelled_at") @db.Timestamptz
+  /// A courier cancel IN FLIGHT: claimed by a guarded updateMany before the
+  /// courier is called and cleared after, so two operators cannot both reach
+  /// the courier for one waybill. A claim older than five minutes is stale
+  /// (a crash mid-call) and may be taken over.
+  courierCancelStartedAt   DateTime?        @map("courier_cancel_started_at") @db.Timestamptz
   podPhotoSpacesKeys       String[]         @default([]) @map("pod_photo_spaces_keys")
   podSignatureSpacesKey    String?          @map("pod_signature_spaces_key")
   podRecipientName         String?          @map("pod_recipient_name")
@@ -6477,12 +6482,17 @@ model WithdrawalRequest {
 /// (default) tier calls immediately — only the trigger timing differs;
 /// `WalletService.applyEntry` stays the sole ledger writer either way.
 model PendingAccrual {
-  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  orderId     String    @unique @map("order_id") @db.Uuid
-  sellerId    String    @map("seller_id") @db.Uuid
-  eligibleAt  DateTime  @map("eligible_at") @db.Timestamptz
-  processedAt DateTime? @map("processed_at") @db.Timestamptz
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId       String    @unique @map("order_id") @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+  eligibleAt    DateTime  @map("eligible_at") @db.Timestamptz
+  processedAt   DateTime? @map("processed_at") @db.Timestamptz
+  /// Set when the row was CLOSED WITHOUT billing: the order stopped being
+  /// DELIVERED before the window ran out (cancelled, lost, returned). A
+  /// re-delivery (god mode's "lost then found") re-arms exactly these rows;
+  /// a row that really executed is never re-armed.
+  skippedReason String?   @map("skipped_reason")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   order  Order  @relation(fields: [orderId], references: [id])
   seller Seller @relation(fields: [sellerId], references: [id])

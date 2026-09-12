@@ -11,8 +11,10 @@ function makeSut(
   opts: {
     /** The ORDER_CHARGES debit already on the ledger, if any. */
     charged?: { id: string; amount: string; currency?: 'INR' | 'BDT' } | null;
-    /** A refund already issued for this order. */
+    /** A refund already issued for this order (against `charged`). */
     alreadyRefunded?: boolean;
+    /** A LATER debit — the order billed again after a refund. */
+    chargedAgain?: { id: string; amount: string };
   } = {},
 ) {
   const charged =
@@ -20,18 +22,19 @@ function makeSut(
       ? { id: 'we-debit', amount: '200.00', currency: 'INR' }
       : opts.charged;
 
-  const entryFindFirst = jest.fn(async (args: AnyArgs) => {
+  const debits = [
+    ...(opts.chargedAgain === undefined
+      ? []
+      : [{ id: opts.chargedAgain.id, amount: new Prisma.Decimal(opts.chargedAgain.amount) }]),
+    ...(charged === null ? [] : [{ id: charged.id, amount: new Prisma.Decimal(charged.amount) }]),
+  ].map((d) => ({ ...d, currency: charged?.currency ?? 'INR' }));
+  // Newest first, as the service asks (orderBy id desc).
+  const entryFindMany = jest.fn(async (args: AnyArgs) => {
     const where = args['where'] as AnyArgs;
     if (where['direction'] === WalletEntryDirection.ORDER_CHARGES_REFUND) {
-      return opts.alreadyRefunded ? { id: 'we-refund-prior' } : null;
+      return opts.alreadyRefunded && charged !== null ? [{ linkedEntryId: charged.id }] : [];
     }
-    return charged === null
-      ? null
-      : {
-          id: charged.id,
-          amount: new Prisma.Decimal(charged.amount),
-          currency: charged.currency ?? 'INR',
-        };
+    return debits;
   });
 
   const txClient = {
@@ -40,7 +43,7 @@ function makeSut(
     // against a concurrent one, and a fake with no $executeRaw would let
     // an unlocked version pass this suite.
     $executeRaw: lockTaken,
-    sellerWalletEntry: { findFirst: entryFindFirst },
+    sellerWalletEntry: { findMany: entryFindMany },
   };
   const client = {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient),
@@ -105,6 +108,18 @@ describe('OrderChargesRefundService', () => {
 
     await expect(svc.refundIfCharged('o1', 's1', 'cancelled')).resolves.toBeNull();
     expect(applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('charges and refunds PAIR UP: billed again after a refund, it refunds the LATER charge once', async () => {
+    // Lost (refunded), then found and delivered (billed again), then called
+    // off: the second charge is owed back, and the first stays refunded.
+    const { svc, applyEntry } = makeSut({
+      alreadyRefunded: true,
+      chargedAgain: { id: 'we-debit-2', amount: '200.00' },
+    });
+    const refunded = await svc.refundIfCharged('o1', 's1', 'cancelled');
+    expect(refunded?.toString()).toBe('200');
+    expect(applyEntry.mock.calls[0]![1]['linkedEntryId']).toBe('we-debit-2');
   });
 
   it('refunds in the currency the charge was taken in', async () => {

@@ -127,6 +127,13 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     labelResults?: unknown[];
     /** Open missing-label issue keys. */
     openLabelKeys?: string[];
+    /** Whether the label query returned fewer rows than its limit. */
+    labelSawEverything?: boolean;
+    /** Of unexamined label issues, the shipments STILL missing a label. */
+    labelStillMissing?: string[];
+    /** Confirmed orders with no live shipment. */
+    shipmentless?: Array<{ id: string; orderNumber: string; status: string }>;
+    reprovisionThrows?: string;
   }) {
     const processOrder = jest.fn(async () => ({ result: 'ERROR' }));
     const raise = jest.fn(async () => undefined);
@@ -138,12 +145,22 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
           ? (opts.openLabelKeys ?? [])
           : [],
     );
-    const retryMissing = jest.fn(async () => opts.labelResults ?? []);
+    const retryMissing = jest.fn(async () => ({
+      results: opts.labelResults ?? [],
+      sawEverything: opts.labelSawEverything ?? true,
+    }));
+    const reprovisionShipment = jest.fn(async () => {
+      if (opts.reprovisionThrows) throw new Error(opts.reprovisionThrows);
+      return { shipmentId: 'ship-new', created: true };
+    });
     // Three checks share shipment.findMany; the where-clause tells them
     // apart — the live-waybill candidates (status CANCELLED), its
     // dropped-out lookup (id IN …), and the unreceived-returns sweep.
     const shipmentFindMany = jest.fn(async (args: { where?: Record<string, unknown> }) => {
       const where = args?.where ?? {};
+      if (where.awbLabels !== undefined) {
+        return (opts.labelStillMissing ?? []).map((id) => ({ id }));
+      }
       if (where.status === 'CANCELLED') {
         return (opts.liveWaybills ?? []).map((s) => ({
           id: s.id,
@@ -225,7 +242,9 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       },
       order: {
         findUnique: jest.fn(async () => ({ status: opts.orderAfter ?? 'CONFIRMED' })),
-        findMany: jest.fn(async () => []),
+        findMany: jest.fn(async () =>
+          (opts.shipmentless ?? []).map((o) => ({ ...o, sellerId: 'sel-1' })),
+        ),
       },
       shipment: {
         findUnique: jest.fn(async () => opts.afterRetry ?? { awbNumber: null, supersededAt: null }),
@@ -260,8 +279,19 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       // No labelless waybills by default: most cases are about other
       // watchdogs.
       { retryMissing } as never,
+      // Re-provisioning a confirmed order with no shipment goes through
+      // the order write facade.
+      { reprovisionShipment } as never,
     );
-    return { svc, processOrder, raise, resolveByKey, shipmentFindMany, retryMissing };
+    return {
+      svc,
+      processOrder,
+      raise,
+      resolveByKey,
+      shipmentFindMany,
+      retryMissing,
+      reprovisionShipment,
+    };
   }
 
   // ── The missing-label watchdog (CUR-6) ─────────────────────────────
@@ -291,6 +321,50 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       limit: 50,
       olderThan: new Date(NOW.getTime() - 10 * 60_000),
     });
+  });
+
+  it('with a PARTIAL page, clears an unexamined label issue only once its shipment verifiably needs none', async () => {
+    // A page full of permanently-skipped rows used to pass for "saw
+    // everything" and clear issues nobody examined.
+    const { svc, resolveByKey } = makeService({
+      openLabelKeys: ['awb-label-missing:gone', 'awb-label-missing:still'],
+      labelSawEverything: false,
+      labelStillMissing: ['still'],
+    });
+    await svc.sweep(NOW);
+    expect(resolveByKey).toHaveBeenCalledWith('awb-label-missing:gone', expect.any(String));
+    expect(resolveByKey).not.toHaveBeenCalledWith('awb-label-missing:still', expect.any(String));
+  });
+
+  it('a confirmed order with NO shipment is re-provisioned, booked, and its issue cleared', async () => {
+    const { svc, reprovisionShipment, processOrder, resolveByKey, raise } = makeService({
+      shipmentless: [{ id: 'ord-bare', orderNumber: 'SD-BARE', status: 'CONFIRMED' }],
+    });
+    const summary = await svc.sweep(NOW);
+    expect(reprovisionShipment).toHaveBeenCalledWith('ord-bare');
+    expect(processOrder).toHaveBeenCalledWith('ord-bare');
+    expect(resolveByKey).toHaveBeenCalledWith('shipment-missing:ord-bare', expect.any(String));
+    expect(raise).not.toHaveBeenCalledWith(
+      expect.objectContaining({ dedupeKey: 'shipment-missing:ord-bare' }),
+    );
+    expect(summary.shipmentless).toBe(0);
+  });
+
+  it('a confirmed order that still cannot be given a shipment is RAISED, HIGH, once per order', async () => {
+    const { svc, raise, processOrder } = makeService({
+      shipmentless: [{ id: 'ord-bare', orderNumber: 'SD-BARE', status: 'CONFIRMED' }],
+      reprovisionThrows: 'ops.default_courier_code resolved empty',
+    });
+    const summary = await svc.sweep(NOW);
+    expect(raise).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'HIGH',
+        dedupeKey: 'shipment-missing:ord-bare',
+        metadata: expect.objectContaining({ orderId: 'ord-bare' }),
+      }),
+    );
+    expect(processOrder).not.toHaveBeenCalledWith('ord-bare');
+    expect(summary.shipmentless).toBe(1);
   });
 
   it('raises a HIGH issue for a label still missing an hour after its waybill — and not before', async () => {

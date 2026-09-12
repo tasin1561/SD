@@ -10,12 +10,20 @@ type AnyArgs = Record<string, unknown>;
 function makeService(
   opts: {
     existingEntry?: AnyArgs | null;
+    /** A charge that was taken and then REFUNDED (a lost parcel). */
+    refunded?: boolean;
     charges?: AnyArgs[];
   } = {},
 ) {
-  const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
-    opts.existingEntry === undefined ? null : opts.existingEntry,
-  );
+  // Charges and refunds pair up: billed means more charges than refunds.
+  const count = jest.fn<Promise<number>, [AnyArgs]>(async (a) => {
+    const direction = (a.where as { direction: WalletEntryDirection }).direction;
+    if (direction === WalletEntryDirection.ORDER_CHARGES) {
+      return opts.existingEntry ? 1 : 0;
+    }
+    return opts.refunded ? 1 : 0;
+  });
+  const findFirst = count;
   const orderChargeFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.charges ?? [],
   );
@@ -30,7 +38,7 @@ function makeService(
     // against a concurrent one, and a fake with no $executeRaw would let
     // an unlocked version pass this suite.
     $executeRaw: lockTaken,
-    sellerWalletEntry: { findFirst },
+    sellerWalletEntry: { count },
     orderCharge: { findMany: orderChargeFindMany },
   };
   const svc = new OrderChargesAccrualService(wallet as unknown as WalletService);
@@ -38,6 +46,28 @@ function makeService(
 }
 
 describe('OrderChargesAccrualService.debitIfNeeded', () => {
+  it('bills AGAIN when the earlier charge was refunded — lost, then found and delivered', async () => {
+    // Charges and refunds pair up. A plain "a charge exists" gate left a
+    // found parcel refunded AND unbilled.
+    const { svc, tx, applyEntry } = makeService({
+      existingEntry: { id: 'e' },
+      refunded: true,
+      charges: [
+        {
+          id: 'c-base',
+          type: ChargeType.BASE_SHIPPING,
+          amountInr: new Prisma.Decimal('200'),
+          status: 'CONFIRMED',
+        },
+      ],
+    });
+    (tx as unknown as { orderCharge: { updateMany?: unknown } }).orderCharge.updateMany = jest.fn(
+      async () => ({ count: 0 }),
+    );
+    await expect(svc.debitIfNeeded(tx as never, 'o1', 's1')).resolves.toBe(true);
+    expect(applyEntry).toHaveBeenCalledTimes(1);
+  });
+
   it('confirms exactly the ESTIMATED lines it billed, in the same transaction', async () => {
     const { svc, tx, applyEntry } = makeService({
       charges: [

@@ -254,6 +254,13 @@ export class CourierPickupService {
       return { fired: false, reason: 'DAY_FAILED', requestId: existing.id };
     }
     if (existing !== null) {
+      // A van IS booked for this building today, so an earlier "no van"
+      // issue is no longer true — say so rather than leave it open.
+      await this.clearAutoPickupIssue(
+        input.courierCode,
+        input.warehouseId,
+        `A pickup is already requested for ${pickupDate}.`,
+      );
       return { fired: false, reason: 'ALREADY_REQUESTED_TODAY', requestId: existing.id };
     }
 
@@ -285,6 +292,11 @@ export class CourierPickupService {
       if (code === 'PICKUP_ALREADY_REQUESTED') {
         // Two boxes closed at once and the other one claimed the day —
         // the partial unique doing its job. One van, as intended.
+        await this.clearAutoPickupIssue(
+          input.courierCode,
+          input.warehouseId,
+          `A pickup is already requested for ${pickupDate}.`,
+        );
         return { fired: false, reason: 'ALREADY_REQUESTED_TODAY', requestId: null };
       }
       if (code === 'PICKUP_REQUEST_FAILED') {
@@ -307,11 +319,22 @@ export class CourierPickupService {
       await this.reportCourierFailed(input, view.id, pickupDate, view.courierMessage);
       return { fired: false, reason: 'COURIER_FAILED', requestId: view.id };
     }
-    await this.issues.resolveByKey(
-      autoPickupIssueKey(input.courierCode, input.warehouseId),
-      `A pickup was requested automatically for ${pickupDate}.`,
-    );
+    // `raise` has already cleared the issue on its success.
     return { fired: true, reason: 'REQUESTED', requestId: view.id };
+  }
+
+  /** The "no van" issue for this courier and building is no longer true. */
+  private async clearAutoPickupIssue(
+    courierCode: string,
+    warehouseId: string,
+    note: string,
+  ): Promise<void> {
+    try {
+      await this.issues.resolveByKey(autoPickupIssueKey(courierCode, warehouseId), note);
+    } catch {
+      // resolveByKey swallows its own failures; a stale open issue is
+      // cleared by the next success.
+    }
   }
 
   /** Could not ask at all. Audit (no request row exists) + issue. */
@@ -539,6 +562,15 @@ export class CourierPickupService {
       },
     });
     await this.auditRaise(staffId, row.id, warehouse.id, result.success, result.message, ctx);
+    if (result.success) {
+      // A van is booked — manually or automatically — so an open "no van
+      // for this building" issue is resolved here, whoever raised it.
+      await this.clearAutoPickupIssue(
+        courierCode,
+        warehouse.id,
+        `A pickup was requested for ${input.pickupDate}${staffId === null ? ' automatically' : ''}.`,
+      );
+    }
     return this.toView(updated, warehouse.name);
   }
 
@@ -792,8 +824,17 @@ export function pickupDateFor(pickupTime: string, now: Date): string {
     second: '2-digit',
     hourCycle: 'h23',
   }).format(now);
-  const vanAt = /^\d{2}:\d{2}$/.test(pickupTime) ? `${pickupTime}:00` : pickupTime;
-  if (clock < vanAt) return today;
+  // Compared as NUMBERS, so the setting may be `9:30` as well as `09:30`
+  // (a string compare put "9:30" after "17:00" and asked for tomorrow's
+  // van all morning).
+  const van = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(pickupTime.trim());
+  const [h, m, s] = clock.split(':').map(Number);
+  const nowSeconds = (h ?? 0) * 3600 + (m ?? 0) * 60 + (s ?? 0);
+  const vanSeconds =
+    van === null
+      ? null
+      : Number(van[1] ?? 0) * 3600 + Number(van[2] ?? 0) * 60 + Number(van[3] ?? 0);
+  if (vanSeconds === null ? clock < pickupTime : nowSeconds < vanSeconds) return today;
   const next = new Date(`${today}T00:00:00.000Z`);
   next.setUTCDate(next.getUTCDate() + 1);
   return next.toISOString().slice(0, 10);

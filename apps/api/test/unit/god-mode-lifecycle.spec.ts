@@ -42,9 +42,10 @@ function makeGodMode(bus: OrderLifecycleEventBus, initial: OrderStatus) {
   let seq = 0;
   const tx = {
     order: {
-      update: jest.fn(async (a: { data: AnyArgs }) => {
+      // Guarded on the status it read (STALE_ORDER_STATUS otherwise).
+      updateMany: jest.fn(async (a: { data: AnyArgs }) => {
         if (a.data.status !== undefined) status = a.data.status as OrderStatus;
-        return {};
+        return { count: 1 };
       }),
     },
     shipment: { updateMany: jest.fn(async () => ({ count: 0 })) },
@@ -82,6 +83,13 @@ function makeGodMode(bus: OrderLifecycleEventBus, initial: OrderStatus) {
     { refundIfCharged } as never,
     bus,
     { resolve: jest.fn(async () => ({ value: 'delhivery', source: 'SYSTEM_DEFAULT' })) } as never,
+    // Ended-order money (retire the deferred accrual, undo an uncovered
+    // Instant Pay credit) and the issue board — inert here.
+    {
+      retirePendingAccrual: jest.fn(async () => 0),
+      reverseUncoveredInstantPayCredit: jest.fn(async () => ({ reversed: false })),
+    } as never,
+    { raise: jest.fn(async () => undefined), resolveByKey: jest.fn(async () => 0) } as never,
   );
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,

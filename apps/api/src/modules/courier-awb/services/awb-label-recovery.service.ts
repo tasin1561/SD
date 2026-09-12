@@ -4,6 +4,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { AwbGenerationService, type LabelOnlyOutcome } from './awb-generation.service';
 import { CourierAwbDispatchService } from './courier-awb-dispatch.service';
+import { EnvService } from '../../../config/env.service';
 
 /**
  * PRE_DISPATCH — parcels still in the building (status CREATED), where a
@@ -29,6 +30,14 @@ export interface MissingLabel {
 export interface LabelRecoveryResult {
   missing: MissingLabel;
   outcome: LabelOnlyOutcome;
+}
+
+export interface LabelRecoveryRun {
+  results: LabelRecoveryResult[];
+  /** The query returned fewer rows than its limit, so every candidate was
+   *  looked at. Judged on the RAW row count, never on what survived a
+   *  filter in code. */
+  sawEverything: boolean;
 }
 
 export interface LabelBackfillReport {
@@ -77,7 +86,24 @@ export class AwbLabelRecoveryService {
     private readonly audit: AuditLogService,
     private readonly generation: AwbGenerationService,
     private readonly dispatch: CourierAwbDispatchService,
+    private readonly env: EnvService,
   ) {}
+
+  /**
+   * Couriers whose label leg would actually run: they have an adapter
+   * (CUR-6 — a manual courier has no label), and in production they are
+   * not stubbed (`persistLabelForExistingAwb` skips COURIER_STUBBED).
+   * Filtering these IN THE QUERY is what keeps a permanently-skipped row
+   * from holding the oldest slot of every page forever.
+   */
+  private async fetchableCourierCodes(): Promise<string[]> {
+    const codes: string[] = [];
+    for (const code of this.dispatch.adapterCourierCodes()) {
+      if (this.env.isProduction && (await this.dispatch.isStubMode(code))) continue;
+      codes.push(code);
+    }
+    return codes;
+  }
 
   /** Live waybills with no current label, oldest first. */
   async findMissing(opts: {
@@ -87,9 +113,18 @@ export class AwbLabelRecoveryService {
      *  job may still be retrying its own label leg. */
     olderThan?: Date;
   }): Promise<MissingLabel[]> {
+    return (await this.findMissingPage(opts)).rows;
+  }
+
+  private async findMissingPage(opts: {
+    scope: LabelRecoveryScope;
+    limit: number;
+    olderThan?: Date;
+  }): Promise<{ rows: MissingLabel[]; sawEverything: boolean }> {
     const where: Prisma.ShipmentWhereInput = {
       awbNumber: { not: null },
       isManualCourier: false,
+      courierCode: { in: await this.fetchableCourierCodes() },
       deletedAt: null,
       supersededAt: null,
       awbLabels: { none: { isCurrent: true } },
@@ -123,7 +158,7 @@ export class AwbLabelRecoveryService {
     });
     const out: MissingLabel[] = [];
     for (const r of rows) {
-      // A courier with no adapter has no label to fetch (CUR-6).
+      // Defensive only — the query already asked for exactly these.
       if (r.awbNumber === null || !this.dispatch.hasAdapter(r.courierCode)) continue;
       const order = r.orderShipments[0]?.order ?? null;
       out.push({
@@ -138,7 +173,7 @@ export class AwbLabelRecoveryService {
         orderNumber: order?.orderNumber ?? null,
       });
     }
-    return out;
+    return { rows: out, sawEverything: rows.length < opts.limit };
   }
 
   /**
@@ -150,9 +185,9 @@ export class AwbLabelRecoveryService {
     limit: number;
     olderThan?: Date;
     actor?: { type: ActorType; id?: string | null };
-  }): Promise<LabelRecoveryResult[]> {
+  }): Promise<LabelRecoveryRun> {
     const actor = opts.actor ?? { type: ActorType.SYSTEM };
-    const missing = await this.findMissing(opts);
+    const { rows: missing, sawEverything } = await this.findMissingPage(opts);
     const results: LabelRecoveryResult[] = [];
     for (const m of missing) {
       let outcome: LabelOnlyOutcome;
@@ -168,7 +203,7 @@ export class AwbLabelRecoveryService {
       }
       results.push({ missing: m, outcome });
     }
-    return results;
+    return { results, sawEverything };
   }
 
   /**
@@ -206,7 +241,7 @@ export class AwbLabelRecoveryService {
       return report;
     }
 
-    const results = await this.retryMissing({
+    const { results } = await this.retryMissing({
       scope: opts.scope,
       limit: opts.limit,
       actor: { type: ActorType.STAFF, id: opts.staffId },

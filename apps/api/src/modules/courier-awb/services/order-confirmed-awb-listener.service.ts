@@ -91,16 +91,16 @@ export class OrderConfirmedAwbListener implements OnApplicationBootstrap, OnModu
 
   /**
    * ── GOD MODE (source: ADMIN_OVERRIDE) IS TREATED LIKE ANY CONFIRMATION ─
-   * Decided 2026-09-12, when god mode joined the bus. God mode does not
-   * provision a shipment (ORD-2), so a forced CONFIRMED usually has no
-   * CREATED shipment and `processOrder` answers `NO_LIVE_SHIPMENT` —
-   * a clean return, nothing thrown, so BullMQ does not retry. When a live
-   * shipment DOES exist without a waybill (an order forced back to
-   * CONFIRMED from manual placement or out of stock), booking it now is
-   * the same act ATT-1's sweep would take hours later, the label queue
-   * needs the waybill before anything can be printed, and CUR-9's
-   * `awbNumber` gate keeps it once-only. Refusing god mode here would
-   * only delay the identical courier call.
+   * Decided 2026-09-12, when god mode joined the bus. God mode now runs
+   * the SAME post-commit hooks as a transition (ORD-2), so a forced
+   * CONFIRMED is provisioned a shipment before this event is emitted and
+   * is booked here exactly like any confirmation. Booking it now is the
+   * same act ATT-1's sweep would take hours later, the label queue needs
+   * the waybill before anything can be printed, and CUR-9's `awbNumber`
+   * gate keeps it once-only. If the provision FAILED, `processOrder`
+   * answers `NO_LIVE_SHIPMENT` — a clean return, nothing thrown, so
+   * BullMQ does not retry — and it is the provision hook's issue and the
+   * AWB-less sweep's shipment-less check that follow it up.
    */
   async handle(event: OrderLifecycleEvent): Promise<void> {
     // Entry to CONFIRMED only. A matrix self-loop or a re-emit for an

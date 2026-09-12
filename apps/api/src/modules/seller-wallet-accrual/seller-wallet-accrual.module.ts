@@ -15,6 +15,7 @@ import { DeliveredAccrualService } from './services/delivered-accrual.service';
 import { CourierFeeAccrualService } from './services/courier-fee-accrual.service';
 import { OrderChargesAccrualService } from './services/order-charges-accrual.service';
 import { OrderChargesRefundService } from './services/order-charges-refund.service';
+import { EndedOrderMoneyService } from './services/ended-order-money.service';
 import { CodCreditService } from './services/cod-credit.service';
 import { RtoFeeAccrualService } from './services/rto-fee-accrual.service';
 import { OrderDeliveredAccrualListener } from './services/order-delivered-accrual-listener.service';
@@ -76,6 +77,7 @@ import { TreasuryModule } from '../treasury/treasury.module';
     OrderDeliveredAccrualListener,
     OrderChargesAccrualService,
     OrderChargesRefundService,
+    EndedOrderMoneyService,
     RtoFeeAccrualService,
     CodCreditService,
     CourierFeeAccrualService,
@@ -95,6 +97,10 @@ import { TreasuryModule } from '../treasury/treasury.module';
     // by OrderWriteService's post-commit cancel hook and by god mode's
     // mirror of it (OrderAdminOverrideService).
     OrderChargesRefundService,
+    // What else an order ENDING undelivered gives back: the deferred
+    // accrual is retired, and an Instant Pay credit no courier paid for
+    // is taken back — the shared post-commit hooks call it.
+    EndedOrderMoneyService,
     CourierFeeAccrualService,
     RtoFeeAccrualService,
     CodCreditService,

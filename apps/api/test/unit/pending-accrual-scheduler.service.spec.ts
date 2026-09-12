@@ -12,7 +12,8 @@ function makeService(opts: { existing?: AnyArgs | null; delayDays?: number } = {
     id: 'pa-1',
     ...(a.data as AnyArgs),
   }));
-  const client = { pendingAccrual: { findUnique, create } };
+  const updateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({ count: 1 }));
+  const client = { pendingAccrual: { findUnique, create, updateMany } };
   const prisma = { client } as unknown as PrismaService;
 
   const resolve = jest.fn(async () => ({
@@ -27,7 +28,7 @@ function makeService(opts: { existing?: AnyArgs | null; delayDays?: number } = {
     prisma,
     settings as unknown as SettingsResolverService,
   );
-  return { svc, findUnique, create, resolve };
+  return { svc, findUnique, create, resolve, updateMany };
 }
 
 describe('PendingAccrualSchedulerService.scheduleIfNeeded', () => {
@@ -50,8 +51,26 @@ describe('PendingAccrualSchedulerService.scheduleIfNeeded', () => {
   });
 
   it('is idempotent: does not reset the clock when a row already exists', async () => {
-    const { svc, create } = makeService({ existing: { id: 'pa-existing' } });
+    const { svc, create, updateMany } = makeService({
+      existing: { id: 'pa-existing', skippedReason: null },
+    });
     await svc.scheduleIfNeeded('order-1', 'seller-1');
     expect(create).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('RE-ARMS a row that was closed without billing — lost, then found and delivered', async () => {
+    // The loss refunded the fee and retired this row; without re-arming,
+    // the one-row-per-order unique leaves the re-delivery unbilled.
+    const { svc, create, updateMany } = makeService({
+      existing: { id: 'pa-existing', skippedReason: 'ORDER_LOST_IN_TRANSIT' },
+      delayDays: 7,
+    });
+    await svc.scheduleIfNeeded('order-1', 'seller-1');
+    expect(create).not.toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'pa-existing', skippedReason: { not: null } },
+      data: { processedAt: null, skippedReason: null, eligibleAt: expect.any(Date) },
+    });
   });
 });

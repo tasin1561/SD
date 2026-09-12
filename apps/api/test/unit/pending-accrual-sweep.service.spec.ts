@@ -4,18 +4,23 @@ import type { AccrualExecutionService } from '../../src/modules/seller-wallet-ac
 
 type AnyArgs = Record<string, unknown>;
 
-function makeService(opts: { due?: AnyArgs[]; executeThrowsFor?: string[] } = {}) {
+function makeService(
+  opts: { due?: AnyArgs[]; executeThrowsFor?: string[]; skipFor?: string[] } = {},
+) {
   const findMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(
     async () => opts.due ?? [{ id: 'pa-1', orderId: 'order-1' }],
   );
-  const update = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
-  const client = { pendingAccrual: { findMany, update } };
+  const update = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ count: 1 }));
+  const client = { pendingAccrual: { findMany, updateMany: update } };
   const prisma = { client } as unknown as PrismaService;
 
   const executeAccrual = jest.fn(async (orderId: string) => {
     if (opts.executeThrowsFor?.includes(orderId)) {
       throw new Error(`boom-${orderId}`);
     }
+    return opts.skipFor?.includes(orderId)
+      ? { executed: false as const, reason: 'ORDER_NOT_DELIVERED:CANCELLED_BY_ADMIN' }
+      : { executed: true as const };
   });
   const execution = { executeAccrual };
 
@@ -44,9 +49,30 @@ describe('PendingAccrualSweepService.sweep', () => {
     const result = await svc.sweep();
     expect(executeAccrual).toHaveBeenCalledWith('order-1');
     expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'pa-1' }, data: { processedAt: expect.any(Date) } }),
+      expect.objectContaining({
+        where: { id: 'pa-1', processedAt: null },
+        data: { processedAt: expect.any(Date) },
+      }),
     );
-    expect(result).toEqual({ scanned: 1, processed: 1, failed: 0 });
+    expect(result).toEqual({ scanned: 1, processed: 1, skipped: 0, failed: 0 });
+  });
+
+  it('closes a row WITHOUT billing, with its reason, when the order is no longer delivered', async () => {
+    // A delivery god mode forced and then cancelled used to be billed by
+    // this sweep up to seven days later — on a cancelled order.
+    const { svc, update } = makeService({
+      due: [{ id: 'pa-1', orderId: 'order-1' }],
+      skipFor: ['order-1'],
+    });
+    const result = await svc.sweep();
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'pa-1', processedAt: null },
+      data: {
+        processedAt: expect.any(Date),
+        skippedReason: 'ORDER_NOT_DELIVERED:CANCELLED_BY_ADMIN',
+      },
+    });
+    expect(result).toEqual({ scanned: 1, processed: 0, skipped: 1, failed: 0 });
   });
 
   it('per-row failure isolation: one failing order does not block the rest', async () => {
@@ -58,16 +84,18 @@ describe('PendingAccrualSweepService.sweep', () => {
       executeThrowsFor: ['order-1'],
     });
     const result = await svc.sweep();
-    expect(result).toEqual({ scanned: 2, processed: 1, failed: 1 });
+    expect(result).toEqual({ scanned: 2, processed: 1, skipped: 0, failed: 1 });
     // Only the successful row gets marked processed.
     expect(update).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'pa-2' } }));
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'pa-2', processedAt: null } }),
+    );
   });
 
   it('empty due set: no-op, zeroed result', async () => {
     const { svc, executeAccrual } = makeService({ due: [] });
     const result = await svc.sweep();
-    expect(result).toEqual({ scanned: 0, processed: 0, failed: 0 });
+    expect(result).toEqual({ scanned: 0, processed: 0, skipped: 0, failed: 0 });
     expect(executeAccrual).not.toHaveBeenCalled();
   });
 });

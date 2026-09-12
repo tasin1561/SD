@@ -7,7 +7,7 @@ import { PendingAccrualSchedulerService } from './pending-accrual-scheduler.serv
 const ACCRUAL_TIMING_TIER_KEY = 'wallet.accrual_timing_tier';
 const T_PLUS_N = 'T_PLUS_N';
 
-export type DeliveredAccrualOutcome = 'EXECUTED' | 'SCHEDULED' | 'ORDER_NOT_FOUND';
+export type DeliveredAccrualOutcome = 'EXECUTED' | 'SCHEDULED' | 'SKIPPED' | 'ORDER_NOT_FOUND';
 
 /**
  * The money an order owes — and is owed — because it was DELIVERED, in
@@ -76,7 +76,9 @@ export class DeliveredAccrualService {
 
     // INSTANT — execute immediately. A per-seller choice: crediting at
     // DELIVERED means Skydrop fronts the money until the courier settles.
-    await this.execution.executeAccrual(order.id);
-    return 'EXECUTED';
+    // SKIPPED when the order is no longer DELIVERED by the time this runs
+    // (a cancel raced the event) — the execution's own gate.
+    const outcome = await this.execution.executeAccrual(order.id);
+    return outcome.executed ? 'EXECUTED' : 'SKIPPED';
   }
 }
