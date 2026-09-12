@@ -286,6 +286,11 @@ EXPECTED_ORPHANS = {
     # from there. A second caller for the same five numbers would be a
     # second thing to keep in step, not a feature.
     'admin/courier-escalation/outbox/counts',
+    # A one-off catch-up run from a runbook: fetch and store the shipping
+    # label for waybills that have none (CUR-6). The hourly order-attention
+    # sweep already retries pre-dispatch parcels on its own, so there is
+    # no everyday reason for a screen to call it.
+    'admin/courier/awb-labels/backfill',
     # Called, but deliberately not through `request()`: the single-flight
     # refresh in packages/api-client uses the raw `fetchImpl` (a 401 from
     # inside request() would recurse), and it composes the path from

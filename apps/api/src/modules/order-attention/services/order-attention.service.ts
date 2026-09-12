@@ -17,6 +17,7 @@ import { TrackingStatusMappingService } from '../../tracking-events/services/tra
 import { OrderReadService } from '../../order/services/order-read.service';
 import { AwbGenerationJobService } from '../../courier-awb/services/awb-generation-job.service';
 import { TrackingEventAppendService } from '../../tracking-events/services/tracking-event-append.service';
+import { AwbLabelRecoveryService } from '../../courier-awb/services/awb-label-recovery.service';
 
 /** Where the parcels are. The cutoff is an hour of the DELIVERY day. */
 const DELIVERY_TIMEZONE = 'Asia/Kolkata';
@@ -105,10 +106,24 @@ export interface NsaSweepSummary {
   /** Voided shipments of cancelled orders whose waybill is still live
    *  with the courier past the grace window. */
   readonly liveWaybills: number;
+  /** Pre-dispatch waybills still without a stored label after an hour,
+   *  having been asked for again on this run. */
+  readonly labelless: number;
 }
 
 /** One issue per voided shipment; the suffix is the shipment id. */
 const LIVE_WAYBILL_KEY_PREFIX = 'live-waybill:';
+
+/** One issue per shipment whose waybill has no stored label. */
+const LABEL_MISSING_KEY_PREFIX = 'awb-label-missing:';
+/** The AWB job retries its own label leg for ~20s; ten minutes is well
+ *  clear of that, so the sweep never races a job still in flight. */
+const LABEL_RETRY_AFTER_MS = 10 * 60_000;
+/** Raised only once the label has been missing this long — a courier
+ *  whose download link lags a minute is not an incident. */
+const LABEL_ALERT_AFTER_MS = 60 * 60_000;
+/** Per run; the sweep is hourly and a backlog drains over a few runs. */
+const LABEL_SWEEP_LIMIT = 50;
 
 /**
  * NSA — Needs Seller Attention.
@@ -156,6 +171,8 @@ export class OrderAttentionService {
     // The courier's own scan times (TRK-3) — see reachedStatusAt for why
     // `shipments.updatedAt` cannot answer "how long has this waited".
     private readonly trackingEvents: TrackingEventAppendService,
+    // CUR-6 — asks again for a label the AWB job gave up on.
+    private readonly labels: AwbLabelRecoveryService,
   ) {}
 
   /**
@@ -222,6 +239,7 @@ export class OrderAttentionService {
       strandedTracking: 0,
       unreceivedReturns: 0,
       liveWaybills: 0,
+      labelless: 0,
     };
 
     // Runs even when the NSA half is switched off, and before the
@@ -245,6 +263,10 @@ export class OrderAttentionService {
     // Also unconditional: a cancelled order's waybill left live with the
     // courier is a booking charge not credited back, whatever NSA says.
     summary.liveWaybills = await this.checkLiveWaybills(now);
+
+    // Also unconditional: a parcel with a waybill and no label cannot be
+    // scanned at the pack bench, whatever the NSA switch says.
+    summary.labelless = await this.checkLabellessAwbs(now);
 
     if (!enabled) return summary;
 
@@ -941,6 +963,92 @@ export class OrderAttentionService {
       });
     }
     return raised;
+  }
+
+  /**
+   * A waybill in the building with no shipping label stored (CUR-6).
+   *
+   * The AWB job fetches the label once and, on failure, retries for about
+   * twenty seconds before BullMQ gives up — filing one generic per-worker
+   * issue and never asking for that label again. So a courier whose
+   * download link lagged, or a Spaces blip, left a booked parcel with no
+   * label for good, and nothing named the parcel.
+   *
+   * This ASKS AGAIN first (a label fetch is a read: it books nothing,
+   * CUR-10 is not engaged), through the same label-only path the operator
+   * backfill uses, which refuses to book a waybill. Only a label still
+   * missing an hour after its waybill raises. Pre-dispatch only — that is
+   * where a missing label stops work; a parcel already with the courier is
+   * the backfill's business. Clears itself once the label is stored or
+   * the parcel stops needing one.
+   *
+   * Never throws: a failed label check must not cost the NSA half its run.
+   */
+  private async checkLabellessAwbs(now: Date): Promise<number> {
+    try {
+      const results = await this.labels.retryMissing({
+        scope: 'PRE_DISPATCH',
+        limit: LABEL_SWEEP_LIMIT,
+        olderThan: new Date(now.getTime() - LABEL_RETRY_AFTER_MS),
+      });
+      const pending = results.filter((r) => r.outcome.status === 'PENDING');
+      const pendingIds = new Set(pending.map((r) => r.missing.shipmentId));
+      const examined = new Set(results.map((r) => r.missing.shipmentId));
+      // A full page may have left some candidates unexamined; only clear
+      // what this run actually looked at unless it saw everything.
+      const sawEverything = results.length < LABEL_SWEEP_LIMIT;
+
+      for (const key of await this.issues.openDedupeKeys(LABEL_MISSING_KEY_PREFIX)) {
+        const id = key.slice(LABEL_MISSING_KEY_PREFIX.length);
+        if (pendingIds.has(id)) continue;
+        if (!examined.has(id) && !sawEverything) continue;
+        await this.issues.resolveByKey(
+          key,
+          'The label is stored now, or the parcel no longer needs one here.',
+        );
+      }
+
+      let raised = 0;
+      for (const { missing: m, outcome } of pending) {
+        const since = m.awbGeneratedAt ?? m.createdAt;
+        if (now.getTime() - since.getTime() < LABEL_ALERT_AFTER_MS) continue;
+        const error = outcome.status === 'PENDING' ? outcome.errorMessage : null;
+        const label = m.orderNumber ?? m.shipmentNumber;
+        raised += 1;
+        await this.issues.raise({
+          kind: SystemIssueKind.INTEGRATION,
+          severity: SystemIssueSeverity.HIGH,
+          title: `${label}: ${m.courierCode} waybill ${m.awbNumber} has no shipping label stored`,
+          detail:
+            `Shipment ${m.shipmentNumber} was booked with ${m.courierCode} on ` +
+            `${since.toISOString().slice(0, 16)} and no label was ever stored for it, so the ` +
+            'pack bench has nothing to print or scan. The label was asked for again just now and ' +
+            `failed: ${error ?? 'no reason given'}.\n\n` +
+            'This retries every hour and clears itself once a label is stored. To try at once, ' +
+            'POST /admin/courier/awb-labels/backfill with {"dryRun":false}. Nothing here books a ' +
+            'waybill.',
+          source: 'OrderAttentionService',
+          dedupeKey: `${LABEL_MISSING_KEY_PREFIX}${m.shipmentId}`,
+          metadata: {
+            orderId: m.orderId,
+            orderNumber: m.orderNumber,
+            shipmentId: m.shipmentId,
+            shipmentNumber: m.shipmentNumber,
+            awbNumber: m.awbNumber,
+            courierCode: m.courierCode,
+            awbSince: since.toISOString(),
+            lastError: error,
+          },
+        });
+      }
+      return raised;
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Label watchdog failed this run; the rest of the sweep continues',
+      );
+      return 0;
+    }
   }
 
   private async clearMoved(): Promise<number> {

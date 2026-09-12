@@ -78,6 +78,32 @@ export type AwbGenerationOutcome =
       errorMessage: string | null;
     };
 
+/** Why the label-only leg declined to fetch anything. */
+export type LabelSkipReason =
+  | 'SHIPMENT_NOT_FOUND'
+  /** No waybill — and this path NEVER books one (CUR-9). */
+  | 'NO_AWB'
+  /** A paper docket; there is no API to ask for a PDF (CUR-6). */
+  | 'MANUAL_COURIER'
+  | 'NO_LABEL_ADAPTER'
+  | 'ALREADY_HAS_LABEL'
+  /** Superseded or voided: its waybill is not what goes on a box. */
+  | 'RETIRED'
+  /** In production a stubbed courier would hand back a FABRICATED label
+   *  for a real waybill — a wrong label on a real parcel (CUR-15). */
+  | 'COURIER_STUBBED';
+
+export type LabelOnlyOutcome =
+  | {
+      status: 'STORED';
+      shipmentId: string;
+      awbNumber: string;
+      labelSpacesKey: string;
+      labelVersion: number;
+    }
+  | { status: 'SKIPPED'; shipmentId: string; reason: LabelSkipReason }
+  | { status: 'PENDING'; shipmentId: string; awbNumber: string; errorMessage: string };
+
 /**
  * Module 9 — per-shipment AWB generation (CUR-6 + CUR-9). M10 commit 1
  * applied the visible-vs-silent / source-of-truth-first reorder that
@@ -601,6 +627,106 @@ export class AwbGenerationService {
   }
 
   /**
+   * The label leg ALONE, for a shipment that already carries a waybill.
+   *
+   * The saga's own recovery (Phase A → Phase D) only ever runs inside the
+   * AWB job, which BullMQ retries three times over ~20 seconds and then
+   * abandons — after that, nothing ever asked for the label again. This is
+   * the entry point for everything that asks later: the hourly watchdog
+   * (`OrderAttentionService.checkLabellessAwbs`) and the operator backfill
+   * (`AwbLabelRecoveryService.backfill`).
+   *
+   * It can NEVER book. A shipment with no waybill is SKIPPED, not handed
+   * to `generateForShipment` — that method would book one, and a
+   * "fetch a label" button that can create a real Delhivery waybill and a
+   * real charge is exactly the trap CUR-9 exists to close. The fetch goes
+   * through the dispatcher (CUR-12) and so through each courier's own rate
+   * limiter. A concurrent second run for the same shipment loses on
+   * `@@unique([shipmentId, version])` and reports PENDING; it can never
+   * leave two current labels.
+   */
+  async persistLabelForExistingAwb(
+    shipmentId: string,
+    actor: { type: ActorType; id?: string | null } = { type: ActorType.SYSTEM },
+  ): Promise<LabelOnlyOutcome> {
+    const s = await this.prisma.client.shipment.findUnique({
+      where: { id: shipmentId },
+      select: {
+        awbNumber: true,
+        courierShipmentId: true,
+        courierCode: true,
+        courierAccountId: true,
+        isManualCourier: true,
+        deletedAt: true,
+        supersededAt: true,
+        awbLabels: { where: { isCurrent: true }, select: { id: true }, take: 1 },
+      },
+    });
+    const skip = (reason: LabelSkipReason): LabelOnlyOutcome => ({
+      status: 'SKIPPED',
+      shipmentId,
+      reason,
+    });
+    if (!s) return skip('SHIPMENT_NOT_FOUND');
+    if (s.awbNumber === null) return skip('NO_AWB');
+    if (s.isManualCourier) return skip('MANUAL_COURIER');
+    if (!this.dispatch.hasAdapter(s.courierCode)) return skip('NO_LABEL_ADAPTER');
+    if (s.awbLabels.length > 0) return skip('ALREADY_HAS_LABEL');
+    if (s.deletedAt !== null || s.supersededAt !== null) return skip('RETIRED');
+    if (this.env.isProduction && (await this.dispatch.isStubMode(s.courierCode))) {
+      return skip('COURIER_STUBBED');
+    }
+
+    const out = await this.uploadAndPersistLabel(
+      shipmentId,
+      s.awbNumber,
+      s.courierShipmentId,
+      s.courierCode,
+      s.courierAccountId ?? '',
+      actor,
+    );
+    if (out.status === 'GENERATED') {
+      return {
+        status: 'STORED',
+        shipmentId,
+        awbNumber: out.awbNumber,
+        labelSpacesKey: out.labelSpacesKey,
+        labelVersion: out.labelVersion,
+      };
+    }
+    return {
+      status: 'PENDING',
+      shipmentId,
+      awbNumber: s.awbNumber,
+      errorMessage: out.status === 'GENERATED_AWB_LABEL_PENDING' ? out.errorMessage : out.status,
+    };
+  }
+
+  /**
+   * What to store the label as — and whether it is a label at all.
+   *
+   * Delhivery's download link answers with an EMPTY Content-Type: both
+   * labels in production were stored with `mime_type = ''` (checked
+   * 2026-09-12), and the Spaces object inherited it, so a browser opening
+   * one gets bytes it cannot name. `?? 'application/pdf'` never caught
+   * that, because an empty string is not null. So the bytes decide: a PDF
+   * starts `%PDF-` whatever the header says. An image with an honest type
+   * is kept. Anything else — an HTML error page, a JSON refusal sent with
+   * a 200 — is REFUSED here, so it lands as a pending label that is
+   * retried and raised, rather than a stored "label" that prints nothing.
+   */
+  static labelMimeType(bytes: Buffer, declared: string): string {
+    if (bytes.subarray(0, 5).toString('latin1') === '%PDF-') return 'application/pdf';
+    const d = declared.trim().toLowerCase();
+    if (d.startsWith('image/')) return d;
+    throw new Error(
+      `LABEL_NOT_A_PDF: the courier returned ${bytes.length} bytes of ${
+        d === '' ? 'unlabelled content' : d
+      }, not a label`,
+    );
+  }
+
+  /**
    * Phase D — fetch the label, upload to Spaces, persist the awb_labels
    * row. Catches every failure into `GENERATED_AWB_LABEL_PENDING` so the
    * AWB-already-persisted fact is preserved and the caller can drive a
@@ -634,9 +760,10 @@ export class AwbGenerationService {
         },
         courierActor.runner('awb-generation', shipmentId),
       );
+      const mimeType = AwbGenerationService.labelMimeType(label.bytes, label.mimeType);
       const labelVersion = await this.nextLabelVersion(shipmentId);
       const spacesKey = `awb-labels/${shipmentId}/v${labelVersion}-${awbNumber}.pdf`;
-      await this.spaces.putObject(spacesKey, label.bytes, label.mimeType);
+      await this.spaces.putObject(spacesKey, label.bytes, mimeType);
 
       await this.prisma.client.$transaction(async (tx) => {
         // Demote any prior current label for this shipment (re-issue
@@ -655,7 +782,7 @@ export class AwbGenerationService {
             isCurrent: true,
             spacesKey,
             spacesBucket: this.env.spacesBucket,
-            mimeType: label.mimeType,
+            mimeType,
             generatedByStaffId: actor.id ?? null,
             generatedReason:
               labelVersion > 1 ? LabelGenerationReason.AWB_REISSUED : LabelGenerationReason.INITIAL,

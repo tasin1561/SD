@@ -123,13 +123,22 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
        *  target — >0 means the scan is stale and the skip is right. */
       timesAtTarget?: number;
     }>;
+    /** What the label watchdog's retry returned this run. */
+    labelResults?: unknown[];
+    /** Open missing-label issue keys. */
+    openLabelKeys?: string[];
   }) {
     const processOrder = jest.fn(async () => ({ result: 'ERROR' }));
     const raise = jest.fn(async () => undefined);
     const resolveByKey = jest.fn(async () => undefined);
     const openDedupeKeys = jest.fn(async (prefix: string) =>
-      prefix === 'live-waybill:' ? (opts.openLiveWaybillKeys ?? []) : [],
+      prefix === 'live-waybill:'
+        ? (opts.openLiveWaybillKeys ?? [])
+        : prefix === 'awb-label-missing:'
+          ? (opts.openLabelKeys ?? [])
+          : [],
     );
+    const retryMissing = jest.fn(async () => opts.labelResults ?? []);
     // Three checks share shipment.findMany; the where-clause tells them
     // apart — the live-waybill candidates (status CANCELLED), its
     // dropped-out lookup (id IN …), and the unreceived-returns sweep.
@@ -248,9 +257,85 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       // falls back to the row timestamp exactly as it does for a status
       // that was set by hand.
       { reachedStatusAt: async () => new Map<string, Date>() } as never,
+      // No labelless waybills by default: most cases are about other
+      // watchdogs.
+      { retryMissing } as never,
     );
-    return { svc, processOrder, raise, resolveByKey, shipmentFindMany };
+    return { svc, processOrder, raise, resolveByKey, shipmentFindMany, retryMissing };
   }
+
+  // ── The missing-label watchdog (CUR-6) ─────────────────────────────
+  const NOW = new Date('2026-09-12T12:00:00Z');
+  function labelRow(id: string, awbSince: Date, outcome: Record<string, unknown>): unknown {
+    return {
+      missing: {
+        shipmentId: id,
+        shipmentNumber: `SH-${id}`,
+        awbNumber: `AWB-${id}`,
+        courierCode: 'delhivery',
+        status: 'CREATED',
+        awbGeneratedAt: awbSince,
+        createdAt: awbSince,
+        orderId: `ord-${id}`,
+        orderNumber: `SD-${id}`,
+      },
+      outcome: { shipmentId: id, ...outcome },
+    };
+  }
+
+  it('asks for the label again, pre-dispatch only and never inside the AWB job’s own retry window', async () => {
+    const { svc, retryMissing } = makeService({});
+    await svc.sweep(NOW);
+    expect(retryMissing).toHaveBeenCalledWith({
+      scope: 'PRE_DISPATCH',
+      limit: 50,
+      olderThan: new Date(NOW.getTime() - 10 * 60_000),
+    });
+  });
+
+  it('raises a HIGH issue for a label still missing an hour after its waybill — and not before', async () => {
+    const pending = { status: 'PENDING', awbNumber: 'x', errorMessage: 'LABEL_NOT_A_PDF' };
+    const { svc, raise } = makeService({
+      labelResults: [
+        labelRow('old', new Date(NOW.getTime() - 2 * 3_600_000), pending),
+        labelRow('fresh', new Date(NOW.getTime() - 20 * 60_000), pending),
+        labelRow('fixed', new Date(NOW.getTime() - 5 * 3_600_000), {
+          status: 'STORED',
+          awbNumber: 'x',
+          labelSpacesKey: 'k',
+          labelVersion: 1,
+        }),
+      ],
+    });
+    const summary = await svc.sweep(NOW);
+    expect(summary.labelless).toBe(1);
+    const labelRaises = (raise.mock.calls as unknown as Array<[Record<string, unknown>]>).filter(
+      ([i]) => String(i.dedupeKey).startsWith('awb-label-missing:'),
+    );
+    expect(labelRaises).toHaveLength(1);
+    expect(labelRaises[0]?.[0]).toMatchObject({
+      severity: 'HIGH',
+      dedupeKey: 'awb-label-missing:old',
+      metadata: expect.objectContaining({ lastError: 'LABEL_NOT_A_PDF' }),
+    });
+  });
+
+  it('clears an open issue once its label is stored, and keeps one that is still failing', async () => {
+    const { svc, resolveByKey } = makeService({
+      openLabelKeys: ['awb-label-missing:stored', 'awb-label-missing:still'],
+      labelResults: [
+        labelRow('still', new Date(NOW.getTime() - 3 * 3_600_000), {
+          status: 'PENDING',
+          awbNumber: 'x',
+          errorMessage: 'timeout',
+        }),
+      ],
+    });
+    await svc.sweep(NOW);
+    const cleared = (resolveByKey.mock.calls as unknown as Array<[string]>).map(([k]) => k);
+    expect(cleared).toContain('awb-label-missing:stored');
+    expect(cleared).not.toContain('awb-label-missing:still');
+  });
 
   it('asks the courier again BEFORE raising anything', async () => {
     const { svc, processOrder } = makeService({});

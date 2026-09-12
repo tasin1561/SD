@@ -18,6 +18,8 @@ import { CourierDecisionSweepWorker } from './queue/courier-decision-sweep.worke
 import { OrderConfirmedAwbListener } from './services/order-confirmed-awb-listener.service';
 import { CourierDecisionService } from './services/courier-decision.service';
 import { AdminCourierDecisionController } from './controllers/admin-courier-decision.controller';
+import { AdminAwbLabelController } from './controllers/admin-awb-label.controller';
+import { AwbLabelRecoveryService } from './services/awb-label-recovery.service';
 import { SystemIssuesModule } from '../system-issues/system-issues.module';
 
 /**
@@ -56,8 +58,10 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     // confirmation without closing an order ↔ courier-awb cycle.
     LifecycleEventsModule,
   ],
-  controllers: [AdminCourierDecisionController],
+  controllers: [AdminCourierDecisionController, AdminAwbLabelController],
   providers: [
+    // CUR-6 — a waybill with no stored label, found and fixed.
+    AwbLabelRecoveryService,
     CourierAwbDispatchService,
     CourierDecisionService,
     CourierChoiceService,
@@ -80,6 +84,8 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
     AwbGenerationService,
     AwbGenerationJobService,
     AwbGenerationQueue,
+    // The hourly order-attention sweep retries and raises missing labels.
+    AwbLabelRecoveryService,
     // Exported for the e2e harness's between-test drain only.
     OrderConfirmedAwbListener,
   ],
