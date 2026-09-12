@@ -177,6 +177,24 @@ const ORDER_BASE: OrderFixture = {
   deliveredAt: null,
 };
 
+// God mode (ORD-2) emits the same event a matrix transition does, stamped
+// `source: ADMIN_OVERRIDE`, and may land on an edge the matrix forbids.
+// Notifications fire for the status it lands on, like any other change.
+describe('NotificationListener — a god-mode status change', () => {
+  it('fans out for the landing status, keyed on the god-mode STATUS_CHANGED row', async () => {
+    const { listener, enqueueCalls } = makeSut(ORDER_BASE);
+    await listener.handle({
+      ...lifecycleEvent(OrderStatus.DISPATCHED, 'evt-god-1'),
+      from: OrderStatus.DRAFT,
+      actorType: ActorType.STAFF,
+      actorId: 'staff-1',
+      source: 'ADMIN_OVERRIDE',
+    });
+    expect(enqueueCalls).toHaveLength(2);
+    for (const c of enqueueCalls) expect(c.eventId).toBe('order_status:evt-god-1');
+  });
+});
+
 describe('NotificationListener', () => {
   describe('DISPATCHED — both targets fan out + tracking URL composed', () => {
     it('enqueues seller + customer rows with the M10 tracking URL in variables', async () => {

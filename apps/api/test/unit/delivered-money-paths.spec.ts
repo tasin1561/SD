@@ -6,12 +6,13 @@ import { join, relative } from 'node:path';
  * delivery owes — the ORDER_CHARGES debit, the Instant Pay COD credit and
  * the inbound-freight share (`DeliveredAccrualService`).
  *
- * That money used to hang off the lifecycle bus alone, and the bus is
- * emitted by `OrderWriteService.transitionStatus` and nothing else. God
- * mode writes `orders.status` directly and emits nothing, so an order
- * forced to DELIVERED was carried for free until somebody ran the
+ * That money hangs off the lifecycle bus, and until 2026-09-12 the bus
+ * was emitted by `OrderWriteService.transitionStatus` and nothing else.
+ * God mode wrote `orders.status` directly and emitted nothing, so an
+ * order forced to DELIVERED was carried for free until somebody ran the
  * backfill (SD-TEST-SR-9711128000, 2026-09-11). Nothing failed; a charge
- * simply did not happen.
+ * simply did not happen. God mode now emits the same event, so there is
+ * ONE path: every writer of DELIVERED emits, and the bus listener bills.
  *
  * A behavioural test cannot see the NEXT writer of `orders.status` — it
  * does not exist yet. So this reads the sources: it finds every
@@ -28,7 +29,7 @@ const KNOWN_STATUS_WRITERS: Readonly<Record<string, string>> = {
   'modules/order/services/order-write.service.ts':
     'transitionStatus — emits to the lifecycle bus post-commit; OrderDeliveredAccrualListener bills DELIVERED',
   'modules/order/services/order-admin-override.service.ts':
-    'god mode — emits nothing, so it calls DeliveredAccrualService itself when it lands on DELIVERED',
+    'god mode — emits the same lifecycle event post-commit (source ADMIN_OVERRIDE); OrderDeliveredAccrualListener bills DELIVERED',
   'modules/order/services/order.service.ts':
     'create / submit — orders are born DRAFT or PENDING_CONFIRMATION, never DELIVERED',
 };
@@ -114,16 +115,27 @@ describe('delivery-time money follows EVERY writer of orders.status', () => {
     );
     expect(src).toMatch(/event\.to !== OrderStatus\.DELIVERED/);
     expect(src).toMatch(/this\.delivered\.accrueForDelivered\(event\.orderId\)/);
+    // A failure is loud: the order is delivered and unbilled.
+    expect(src).toMatch(/action: 'wallet\.delivered_accrual_failed'/);
+    expect(src).toMatch(/severity: 'HIGH'/);
   });
 
-  it('god mode calls the same accrual when it lands on DELIVERED', () => {
+  it('god mode emits the same lifecycle event on every status change', () => {
     const src = readFileSync(
       join(SRC, 'modules/order/services/order-admin-override.service.ts'),
       'utf8',
     );
-    expect(src).toMatch(
-      /if \(to === OrderStatus\.DELIVERED && from !== OrderStatus\.DELIVERED\) \{\s*await this\.accrueDelivered\(/,
-    );
-    expect(src).toMatch(/this\.deliveredAccrual\.accrueForDelivered\(orderId\)/);
+    expect(src).toMatch(/this\.lifecycleBus\.emit\(/);
+    expect(src).toMatch(/source: ADMIN_OVERRIDE/);
+  });
+
+  it('there is ONE path to the delivery money: nothing but the bus listener calls it', () => {
+    const callers = walk(SRC)
+      .filter((f) => /\.accrueForDelivered\(/.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(SRC, f).split('\\').join('/'))
+      .sort();
+    expect(callers).toEqual([
+      'modules/seller-wallet-accrual/services/order-delivered-accrual-listener.service.ts',
+    ]);
   });
 });

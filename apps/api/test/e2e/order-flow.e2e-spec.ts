@@ -320,6 +320,17 @@ describe('Order flow (e2e)', () => {
     expect(evt!.description).toContain('admin_force_mutation');
     expect((evt!.data as Record<string, unknown>).requestId).toBeTruthy();
 
+    // The forced change is ALSO a real STATUS_CHANGED row (ORD-2,
+    // 2026-09-12): the seller timeline, templates and NOTIF-2's dedup key
+    // read it like any other change, and it says it was forced.
+    const changed = await h.prisma.orderEvent.findFirst({
+      where: { orderId, type: 'STATUS_CHANGED', toStatus: OrderStatus.DISPATCHED },
+    });
+    expect(changed).not.toBeNull();
+    expect(changed!.fromStatus).toBe(OrderStatus.DRAFT);
+    expect(changed!.isVisibleToSeller).toBe(true);
+    expect((changed!.data as Record<string, unknown>).source).toBe('ADMIN_OVERRIDE');
+
     // guardrail: short reason rejected
     await request(h.baseUrl)
       .post(`/admin/orders/${orderId}/force-mutation`)

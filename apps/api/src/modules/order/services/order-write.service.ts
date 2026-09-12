@@ -46,7 +46,7 @@ const CANCEL_FAMILY: ReadonlySet<OrderStatus> = new Set([
  *  shipment. voidForOrder is idempotent against non-CREATED shipments,
  *  so this list is intentionally generous — post-pick/pack/dispatch
  *  shipments are no longer CREATED and are naturally untouched. */
-const VOIDABLE_TERMINAL_STATES: ReadonlySet<OrderStatus> = new Set([
+export const VOIDABLE_TERMINAL_STATES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.CANCELLED,
   OrderStatus.CANCELLED_BY_ADMIN,
   OrderStatus.REJECTED,
@@ -65,8 +65,13 @@ const VOIDABLE_TERMINAL_STATES: ReadonlySet<OrderStatus> = new Set([
  * goods and the cost of moving them is real whatever happens next.
  * PENDING_DISPATCH is on this side of the line: it is packed and
  * manifested but still on our floor.
+ *
+ * Exported because god mode (ORD-2) draws the SAME line from the other
+ * side: its forced `from` proves nothing, so it asks whether the order
+ * ever reached a status outside this set and the cancel family through a
+ * real transition — see `OrderAdminOverrideService.parcelLeftWithCourier`.
  */
-const REFUNDABLE_FROM_STATES: ReadonlySet<OrderStatus> = new Set([
+export const REFUNDABLE_FROM_STATES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.DRAFT,
   OrderStatus.PENDING_CONFIRMATION,
   OrderStatus.CALL_NO_RESPONSE,
@@ -515,6 +520,7 @@ export class OrderWriteService {
         actorType: input.actor.type,
         actorId: input.actor.id ?? null,
         occurredAt: new Date(),
+        source: 'TRANSITION',
       });
     } catch (err) {
       // The bus contracts NEVER to re-throw, but defensively swallow

@@ -17,6 +17,11 @@ function makeService(
     insufficientAfter?: number;
     shipmentsMatched?: number;
     active?: Array<{ id: string; orderItemId: string; qtyReserved: number }>;
+    /** Shipments on the order that a courier has had. */
+    handedOver?: number;
+    /** STATUS_CHANGED rows past the dividing line (their `data`). */
+    history?: Array<{ data: unknown }>;
+    emitThrows?: boolean;
   } = {},
 ) {
   const order =
@@ -41,18 +46,30 @@ function makeService(
   const orderFindFirst = jest.fn(async () => order);
   const systemSettingFindUnique = jest.fn(async () => ({ valueString: 'wh-1' }));
 
+  const shipmentCount = jest.fn<Promise<number>, [AnyArgs]>(async () => opts.handedOver ?? 0);
+  const orderEventFindMany = jest.fn<Promise<Array<{ data: unknown }>>, [AnyArgs]>(
+    async () => opts.history ?? [],
+  );
+
   const client = {} as {
     $transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
     order: { findFirst: typeof orderFindFirst };
     systemSetting: { findUnique: typeof systemSettingFindUnique };
+    shipment: { count: typeof shipmentCount };
+    orderEvent: { findMany: typeof orderEventFindMany };
   };
   client.$transaction = <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn(txClient);
   client.order = { findFirst: orderFindFirst };
   client.systemSetting = { findUnique: systemSettingFindUnique };
+  client.shipment = { count: shipmentCount };
+  client.orderEvent = { findMany: orderEventFindMany };
 
   const events = {
     adminAction: jest.fn<Promise<{ id: string }>, [unknown, AnyArgs]>(async () => ({
       id: 'e1',
+    })),
+    statusChanged: jest.fn<Promise<{ id: string }>, [unknown, AnyArgs]>(async () => ({
+      id: 'sc1',
     })),
   };
   const audit = {
@@ -78,19 +95,25 @@ function makeService(
   }));
   const listActiveForOrder = jest.fn(async () => opts.active ?? []);
   const reservations = { reserve, release, listActiveForOrder };
-  const accrueForDelivered = jest.fn(async () => 'EXECUTED');
-  const deliveredAccrual = { accrueForDelivered };
+  const refundIfCharged = jest.fn(async () => null);
+  const emit = jest.fn((_e: AnyArgs) => {
+    if (opts.emitThrows) throw new Error('bus exploded');
+  });
 
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,
     events as never,
     audit as never,
     reservations as never,
-    deliveredAccrual as never,
+    { refundIfCharged } as never,
+    { emit } as never,
   );
   return {
     svc,
-    accrueForDelivered,
+    refundIfCharged,
+    emit,
+    shipmentCount,
+    orderEventFindMany,
     orderUpdate,
     shipmentUpdateMany,
     orderFindFirst,
@@ -423,11 +446,11 @@ describe('OrderAdminOverrideService.restoreReservations', () => {
   });
 });
 
-// God mode is the one writer of DELIVERED that emits NO lifecycle event,
-// so the bus listener that bills a delivery never hears about it. Before
-// this, SD-TEST-SR-9711128000 (forced dispatched → delivered, 2026-09-11)
-// sat unbilled for seven hours until the backfill happened to run.
-describe('forceMutate — a god-mode DELIVERED takes the delivery-time money', () => {
+// God mode used to be the one writer of orders.status that emitted NO
+// lifecycle event, so every bus subscriber — notifications, webhooks,
+// invoices, the delivery-time money — missed a forced change. It now
+// writes a real STATUS_CHANGED row and emits the same event, once.
+describe('forceMutate — a forced status change is announced like any other', () => {
   const dispatched = {
     id: 'o1',
     sellerId: 's1',
@@ -436,45 +459,163 @@ describe('forceMutate — a god-mode DELIVERED takes the delivery-time money', (
     items: [{ id: 'oi1', variantId: 'v1', quantity: 1 }],
   };
 
-  it('forced to DELIVERED: runs the shared accrual once, AFTER the override commits', async () => {
-    const { svc, accrueForDelivered, orderUpdate } = makeService({ order: dispatched });
+  it('writes a STATUS_CHANGED row stamped ADMIN_OVERRIDE in the same tx, and emits it once, post-commit', async () => {
+    const { svc, events, emit, orderUpdate } = makeService({ order: dispatched });
     await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.DELIVERED });
-    expect(accrueForDelivered).toHaveBeenCalledTimes(1);
-    expect(accrueForDelivered).toHaveBeenCalledWith('o1');
+
+    expect(events.statusChanged).toHaveBeenCalledTimes(1);
+    expect(events.statusChanged.mock.calls[0]![1]).toMatchObject({
+      orderId: 'o1',
+      from: OrderStatus.DISPATCHED,
+      to: OrderStatus.DELIVERED,
+      actor: { id: 'staff-1' },
+      data: { source: 'ADMIN_OVERRIDE', adminActionEventId: 'e1' },
+    });
+    // The staff-only note (reason + outcomes) is still written.
+    expect(events.adminAction).toHaveBeenCalledTimes(1);
+
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit.mock.calls[0]![0]).toMatchObject({
+      orderId: 'o1',
+      sellerId: 's1',
+      from: OrderStatus.DISPATCHED,
+      to: OrderStatus.DELIVERED,
+      // NOTIF-2's `order_status:<statusEventId>` dedup key is the row above.
+      statusEventId: 'sc1',
+      actorId: 'staff-1',
+      source: 'ADMIN_OVERRIDE',
+    });
     // Post-commit: the status write happened first.
     expect(orderUpdate.mock.invocationCallOrder[0]).toBeLessThan(
-      accrueForDelivered.mock.invocationCallOrder[0] ?? 0,
+      emit.mock.invocationCallOrder[0] ?? 0,
     );
   });
 
-  it('any other target — including LOST_IN_TRANSIT, which is not charged — takes nothing', async () => {
-    for (const target of [
-      OrderStatus.OUT_FOR_DELIVERY,
-      OrderStatus.LOST_IN_TRANSIT,
-      OrderStatus.CANCELLED_BY_ADMIN,
+  it('a field-only edit, or forcing an order to where it already is, announces nothing', async () => {
+    const a = makeService({ order: { ...dispatched, status: OrderStatus.DELIVERED } });
+    await a.svc.forceMutate({ ...baseInput, fieldChanges: { recipientName: 'Corrected Name' } });
+    await a.svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.DELIVERED });
+    expect(a.events.statusChanged).not.toHaveBeenCalled();
+    expect(a.emit).not.toHaveBeenCalled();
+    expect(a.refundIfCharged).not.toHaveBeenCalled();
+  });
+
+  it('a throwing bus never fails the override (NOTIF-1)', async () => {
+    const { svc, orderUpdate } = makeService({ order: dispatched, emitThrows: true });
+    const res = await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.DELIVERED });
+    expect(res.status).toBe(OrderStatus.DELIVERED);
+    expect(orderUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('no longer bills a delivery itself — the bus listener is the one path', () => {
+    // By construction: the service has no DeliveredAccrualService to call.
+    expect(OrderAdminOverrideService.length).toBe(6);
+    expect(Object.getOwnPropertyNames(OrderAdminOverrideService.prototype)).not.toContain(
+      'accrueDelivered',
+    );
+  });
+});
+
+// A god-mode cancel gives the delivery fee back EXACTLY when a normal cancel
+// would — when the parcel never left with a courier — judged on history,
+// never on the forced `from`.
+describe('forceMutate — the cancel-time ORDER_CHARGES refund', () => {
+  const at = (status: OrderStatus) => ({
+    id: 'o1',
+    sellerId: 's1',
+    orderNumber: 'SD-2026-26-000009',
+    status,
+    items: [{ id: 'oi1', variantId: 'v1', quantity: 1 }],
+  });
+
+  it('a never-dispatched order is refunded once, before the event goes out', async () => {
+    const { svc, refundIfCharged, emit } = makeService({ order: at(OrderStatus.CONFIRMED) });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CANCELLED_BY_ADMIN });
+    expect(refundIfCharged).toHaveBeenCalledTimes(1);
+    expect(refundIfCharged).toHaveBeenCalledWith('o1', 's1', expect.stringContaining('admin'));
+    expect(refundIfCharged.mock.invocationCallOrder[0]).toBeLessThan(
+      emit.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('a genuinely DELIVERED order is NOT refunded — that carriage happened', async () => {
+    // A real (matrix) STATUS_CHANGED into DELIVERED: no ADMIN_OVERRIDE stamp.
+    const { svc, refundIfCharged } = makeService({
+      order: at(OrderStatus.DELIVERED),
+      history: [{ data: null }],
+    });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CANCELLED_BY_ADMIN });
+    expect(refundIfCharged).not.toHaveBeenCalled();
+  });
+
+  it('a parcel handed to a courier is NOT refunded, whatever the history says', async () => {
+    const { svc, refundIfCharged } = makeService({
+      order: at(OrderStatus.PENDING_MANUAL_PLACEMENT),
+      handedOver: 1,
+    });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CANCELLED });
+    expect(refundIfCharged).not.toHaveBeenCalled();
+  });
+
+  it('an order god mode only PRETENDED was delivered IS refunded — its forced DELIVERED proves nothing', async () => {
+    const { svc, refundIfCharged } = makeService({
+      order: at(OrderStatus.DELIVERED),
+      history: [{ data: { source: 'ADMIN_OVERRIDE', adminActionEventId: 'e0' } }],
+    });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CANCELLED_BY_ADMIN });
+    expect(refundIfCharged).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks history about the statuses past the dividing line only', async () => {
+    const { svc, orderEventFindMany } = makeService({ order: at(OrderStatus.CONFIRMED) });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.REJECTED });
+    const where = orderEventFindMany.mock.calls[0]![0].where as {
+      type: string;
+      toStatus: { in: OrderStatus[] };
+    };
+    expect(where.type).toBe('STATUS_CHANGED');
+    expect(where.toStatus.in).toEqual(
+      expect.arrayContaining([
+        OrderStatus.DISPATCHED,
+        OrderStatus.IN_TRANSIT,
+        OrderStatus.DELIVERED,
+        OrderStatus.RTO_RECEIVED,
+        OrderStatus.LOST_IN_TRANSIT,
+      ]),
+    );
+    for (const refundable of [
+      OrderStatus.CONFIRMED,
+      OrderStatus.PACKED,
+      OrderStatus.PENDING_DISPATCH,
+      OrderStatus.CANCELLED,
+      OrderStatus.REJECTED_NDR,
     ]) {
-      const { svc, accrueForDelivered } = makeService({ order: dispatched });
-      await svc.forceMutate({ ...baseInput, targetStatus: target });
-      expect(accrueForDelivered).not.toHaveBeenCalled();
+      expect(where.toStatus.in).not.toContain(refundable);
     }
   });
 
-  it('a field-only edit on an order already DELIVERED does not re-run it', async () => {
-    const { svc, accrueForDelivered } = makeService({
-      order: { ...dispatched, status: OrderStatus.DELIVERED },
+  it('only a landing in the cancel/reject family refunds', async () => {
+    const { svc, refundIfCharged, shipmentCount } = makeService({
+      order: at(OrderStatus.CONFIRMED),
     });
-    await svc.forceMutate({ ...baseInput, fieldChanges: { recipientName: 'Corrected Name' } });
-    expect(accrueForDelivered).not.toHaveBeenCalled();
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.PENDING_PICK });
+    expect(refundIfCharged).not.toHaveBeenCalled();
+    expect(shipmentCount).not.toHaveBeenCalled();
   });
 
-  it('an accrual failure never undoes the override — it audits HIGH and names the order', async () => {
-    const { svc, accrueForDelivered, audit } = makeService({ order: dispatched });
-    accrueForDelivered.mockRejectedValueOnce(new Error('wallet down'));
-    const res = await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.DELIVERED });
-    expect(res.status).toBe(OrderStatus.DELIVERED);
+  it('a refund failure never undoes the override — it audits HIGH and names the order', async () => {
+    const { svc, refundIfCharged, audit, emit } = makeService({ order: at(OrderStatus.CONFIRMED) });
+    refundIfCharged.mockRejectedValueOnce(new Error('wallet down'));
+    const res = await svc.forceMutate({
+      ...baseInput,
+      targetStatus: OrderStatus.CANCELLED_BY_ADMIN,
+    });
+    expect(res.status).toBe(OrderStatus.CANCELLED_BY_ADMIN);
     const failed = audit.log.mock.calls.find(
-      ([a]) => (a as { action?: string }).action === 'wallet.delivered_accrual_failed',
+      ([a]) => (a as { action?: string }).action === 'wallet.order_charges_refund_failed',
     );
     expect(failed?.[0]).toMatchObject({ severity: 'HIGH', entityId: 'o1', sellerId: 's1' });
+    // And the change is still announced.
+    expect(emit).toHaveBeenCalledTimes(1);
   });
 });

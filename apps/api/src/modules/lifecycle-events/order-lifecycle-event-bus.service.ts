@@ -42,7 +42,22 @@ export interface OrderLifecycleEvent {
   readonly actorType: ActorType;
   readonly actorId: string | null;
   readonly occurredAt: Date;
+  /**
+   * WHICH writer committed the change. Absent means TRANSITION (every
+   * emitter before god mode joined the bus).
+   *
+   * `ADMIN_OVERRIDE` is god mode (ORD-2): the status was forced, so the
+   * edge may be one the matrix never allows (DELIVERED → CANCELLED_BY_ADMIN,
+   * PENDING_CONFIRMATION → DELIVERED) and nothing about `from` can be
+   * trusted to say where the parcel physically went. A listener whose
+   * decision rests on the edge rather than the landing reads this; one
+   * that only cares about the landing (notifications, webhooks, invoices,
+   * delivery-time money) treats it like any other change.
+   */
+  readonly source?: OrderLifecycleEventSource;
 }
+
+export type OrderLifecycleEventSource = 'TRANSITION' | 'ADMIN_OVERRIDE';
 
 /**
  * Module 11 — the order lifecycle event PRIMITIVE module (R3).
