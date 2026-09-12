@@ -7,6 +7,7 @@ import { BankTransferService } from './services/bank-transfer.service';
 import { ExpenseCategoryService } from './services/expense-category.service';
 import { InvestmentService } from './services/investment.service';
 import { LiabilitiesService } from './services/liabilities.service';
+import { InstantPayAdvanceService } from './services/instant-pay-advance.service';
 import { SellerCashAttributionService } from './services/seller-cash-attribution.service';
 import { ShipmentCostService } from './services/shipment-cost.service';
 import { ManualExpenseService } from './services/manual-expense.service';
@@ -34,6 +35,7 @@ import { TreasuryReadService } from './services/treasury-read.service';
     ExpenseCategoryService,
     InvestmentService,
     LiabilitiesService,
+    InstantPayAdvanceService,
     ShipmentCostService,
     SellerCashAttributionService,
     ManualExpenseService,

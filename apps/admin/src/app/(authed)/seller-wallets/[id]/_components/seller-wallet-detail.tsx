@@ -28,7 +28,7 @@ import {
 } from '@/lib/seller-wallet-hooks';
 import { isWalletCredit, walletDirectionLabel } from '@skydrop/ui/status';
 import type { WalletEntryDirection } from '@skydrop/db';
-import { useSellerHoldings } from '@/lib/ops-hooks';
+import { useInstantPayAdvances, useSellerHoldings } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { MoveSellerCashModal, type HoldingRef } from './move-seller-cash-modal';
 
@@ -53,6 +53,8 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
   const topups = useSellerWalletTopups(sellerId);
   const withdrawals = useSellerWalletWithdrawals(sellerId);
   const holdings = useSellerHoldings(canReadTreasury ? sellerId : null);
+  // Same treasury gate: skipped rather than 403'd for anybody without it.
+  const advances = useInstantPayAdvances({ sellerId }, canReadTreasury);
   const [tab, setTab] = useState<'ledger' | 'topups' | 'withdrawals'>('ledger');
 
   if (detail.isLoading) return <LoadingState />;
@@ -105,6 +107,40 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           hint="Claimed, not matched to a statement — in no balance yet"
         />
       </div>
+
+      {/* Money we paid this seller before the courier paid us (Instant
+          Pay). It is inside their balance above; what this adds is that
+          the courier still owes it to US. */}
+      {canReadTreasury &&
+        (advances.isError ? (
+          <p className="text-text-muted text-sm">
+            Could not read Instant Pay advances.{' '}
+            <button
+              type="button"
+              className="text-accent hover:underline"
+              onClick={() => void advances.refetch()}
+            >
+              Retry
+            </button>
+          </p>
+        ) : advances.data !== undefined ? (
+          <p className="text-sm">
+            <span className="text-text-muted">Advanced via Instant Pay, awaiting courier: </span>
+            <Money amount={advances.data.totalCodInr} currency="INR" convert={false} /> (
+            {advances.data.count} {advances.data.count === 1 ? 'order' : 'orders'})
+            {advances.data.count > 0 && (
+              <>
+                {' '}
+                <Link
+                  href={`/liabilities/instant-pay?sellerId=${sellerId}`}
+                  className="text-accent hover:underline"
+                >
+                  See orders →
+                </Link>
+              </>
+            )}
+          </p>
+        ) : null)}
 
       {/* Where the money physically is, which the balance above does not
           say. The wallet is what we OWE them; this is which of our

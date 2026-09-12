@@ -1,6 +1,7 @@
 import { Prisma } from '@skydrop/db';
 import { LiabilitiesService } from '../../src/modules/treasury/services/liabilities.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
+import type { InstantPayAdvanceService } from '../../src/modules/treasury/services/instant-pay-advance.service';
 
 const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
 
@@ -19,6 +20,8 @@ function makeSut(opts: {
   lastSolventEntryId?: { id: string; runningBalanceAfter: Prisma.Decimal } | null;
   paidSince?: Prisma.Decimal | null;
   causes?: Array<{ direction: string; _sum: { amount: Prisma.Decimal | null } }>;
+  /** The Instant Pay part of the float, as InstantPayAdvanceService reports it. */
+  instantPay?: { amount: Prisma.Decimal; count: number };
 }) {
   const client = {
     sellerWalletBalance: { findMany: async () => opts.balances ?? [] },
@@ -56,7 +59,13 @@ function makeSut(opts: {
     },
     stockLevel: { findMany: async () => opts.stock ?? [] },
   };
-  return new LiabilitiesService({ client } as unknown as PrismaService);
+  const advances = {
+    summary: async () => opts.instantPay ?? { amount: new Prisma.Decimal(0), count: 0 },
+  };
+  return new LiabilitiesService(
+    { client } as unknown as PrismaService,
+    advances as unknown as InstantPayAdvanceService,
+  );
 }
 
 describe('LiabilitiesService', () => {
@@ -149,6 +158,32 @@ describe('LiabilitiesService', () => {
     const line = r.due.find((l) => l.key === 'courier_float');
     expect(line?.amountInr).toBe('2000.00');
     expect(line?.count).toBe(2);
+  });
+
+  it('splits the float into Instant Pay advances and settlement-mode COD that add up to it exactly', async () => {
+    // The Instant Pay half is OUR money at risk; the settlement half is
+    // the seller's when it lands. Reading them as one figure is what hid
+    // "how much have we advanced". The parts must never drift from the
+    // line they explain, and the line and the due total must not move.
+    const r = await makeSut({
+      cod: [{ codAmountInr: D('1180') }, { codAmountInr: D('800.55') }, { codAmountInr: D('500') }],
+      instantPay: { amount: D('1180'), count: 1 },
+    }).report();
+    const line = r.due.find((l) => l.key === 'courier_float');
+    expect(line?.amountInr).toBe('2480.55');
+    const parts = line?.parts ?? [];
+    expect(parts.map((p) => p.key)).toEqual([
+      'courier_float_instant_pay',
+      'courier_float_settlement',
+    ]);
+    const sum = parts.reduce((a, p) => a.add(D(p.amountInr)), D('0'));
+    expect(sum.toFixed(2)).toBe(line?.amountInr);
+    expect(parts.reduce((a, p) => a + p.count, 0)).toBe(line?.count);
+    expect(parts[0]?.amountInr).toBe('1180.00');
+    expect(parts[1]?.amountInr).toBe('1300.55');
+    // Parts explain a line; they are not extra lines in the total.
+    expect(r.dueTotalInr).toBe('2480.55');
+    expect(r.due.some((l) => l.key.startsWith('courier_float_'))).toBe(false);
   });
 
   it('every line carries what it means — a bare number moves the problem to the reader', async () => {

@@ -1560,6 +1560,8 @@ export interface LedgerLineView {
   readonly amountInr: string;
   readonly count: number;
   readonly meaning: string;
+  /** What the line is made of; the parts sum to it and are not in any total. */
+  readonly parts?: readonly LedgerLineView[];
 }
 
 export interface SellerDebtView {
@@ -1590,6 +1592,66 @@ export function useLiabilities(): UseQueryResult<LiabilitiesView> {
   return useQuery({
     queryKey: ['admin-treasury', 'liabilities'],
     queryFn: () => client.request<LiabilitiesView>('/api/admin/treasury/liabilities'),
+  });
+}
+
+export interface InstantPayAdvanceRowView {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly sellerId: string;
+  readonly sellerName: string;
+  readonly deliveredAt: string | null;
+  readonly creditedAt: string;
+  readonly codInr: string;
+  readonly netCreditedInr: string;
+  /** Cash moved from capital for it — below the credit when part of the COD repaid a debt. */
+  readonly frontedInr: string;
+  readonly frontAccountId: string | null;
+  readonly frontAccountLabel: string | null;
+  readonly courierCode: string | null;
+  readonly courierAccountId: string | null;
+  readonly courierAccountLabel: string | null;
+  readonly ageDays: number;
+}
+
+export interface InstantPayAdvanceGroupView {
+  readonly key: string | null;
+  readonly label: string;
+  readonly count: number;
+  readonly codInr: string;
+  readonly frontedInr: string;
+}
+
+export interface InstantPayAdvancesView {
+  readonly rows: readonly InstantPayAdvanceRowView[];
+  readonly count: number;
+  readonly totalCodInr: string;
+  readonly totalNetCreditedInr: string;
+  readonly totalFrontedInr: string;
+  readonly bySeller: readonly InstantPayAdvanceGroupView[];
+  readonly byCourierAccount: readonly InstantPayAdvanceGroupView[];
+}
+
+/**
+ * Orders paid to sellers under Instant Pay that the courier has not yet
+ * paid us for. `enabled` lets a page gated on a narrower permission skip
+ * the request rather than render a 403 (it needs `money.treasury.view`).
+ */
+export function useInstantPayAdvances(
+  filter: { sellerId?: string; courierAccountId?: string },
+  enabled = true,
+): UseQueryResult<InstantPayAdvancesView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-treasury', 'instant-pay-advances', filter.sellerId, filter.courierAccountId],
+    enabled,
+    queryFn: () =>
+      client.request<InstantPayAdvancesView>(
+        `/api/admin/treasury/instant-pay-advances${qs({
+          sellerId: filter.sellerId,
+          courierAccountId: filter.courierAccountId,
+        })}`,
+      ),
   });
 }
 
