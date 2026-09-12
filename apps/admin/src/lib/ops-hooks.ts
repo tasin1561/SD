@@ -1132,6 +1132,29 @@ export interface BankEntryView {
   readonly recordedByName: string | null;
   readonly recordedAt: string;
   readonly inboundFreightChargeId: string | null;
+  /** The account's marked opening balance — left off the P&L. */
+  readonly isOpeningBalance: boolean;
+}
+
+/**
+ * Mark an existing capital reconciliation / opening-balance entry as the
+ * account's opening balance (once per account, audited HIGH).
+ */
+export function useMarkOpeningBalance(): UseMutationResult<
+  { entryId: string; accountId: string },
+  Error,
+  { entryId: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ entryId, ...body }) =>
+      client.request<{ entryId: string; accountId: string }>(
+        `/api/admin/treasury/entries/${entryId}/mark-opening-balance`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-treasury'] }),
+  });
 }
 
 export function useBankEntries(
@@ -1459,6 +1482,8 @@ export function useReconcileAccount(): UseMutationResult<
     reason: string;
     /** The account's opening balance — left off the P&L. Capital only, once per account. */
     isOpeningBalance?: boolean;
+    /** A seller's holding in a non-rupee account: its worth to their wallet, in rupees. */
+    inrValue?: string;
   }
 > {
   const client = useApiClient();
@@ -1510,6 +1535,8 @@ export function useReclassifySellerCash(): UseMutationResult<
     direction: 'TO_CAPITAL' | 'TO_SELLER';
     amount: string;
     reason: string;
+    /** In a non-rupee account: its worth to the seller's wallet, in rupees. */
+    inrValue?: string;
   }
 > {
   const client = useApiClient();

@@ -1100,6 +1100,59 @@ describe('Treasury (e2e)', () => {
       expect(opening?.isOpeningBalance).toBe(true);
     });
 
+    it('an existing capital correction can be MARKED as the opening balance later — once', async () => {
+      // An account whose real opening balance was reconciled in before the
+      // mark existed counted it as income; the operator names the entry.
+      const created = await request(h.baseUrl)
+        .post('/admin/platform-bank-accounts')
+        .set(auth)
+        .send({
+          label: 'Mark Later Test',
+          bankName: 'Test Bank',
+          accountName: 'Skydrop',
+          accountNumber: 'MARK-LATER-1',
+          currency: Currency.INR,
+          openingBalance: '0',
+        })
+        .expect(201);
+      const accountId = created.body.id as string;
+      const first = await request(h.baseUrl)
+        .post(`/admin/treasury/accounts/${accountId}/reconcile`)
+        .set(auth)
+        .send({
+          ownerKind: BankOwnerKind.CAPITAL,
+          statedBalance: '5000',
+          reason: 'Balance on the day the book started',
+        })
+        .expect(200);
+      await request(h.baseUrl)
+        .post(`/admin/treasury/entries/${first.body.entryId as string}/mark-opening-balance`)
+        .set(auth)
+        .send({ reason: 'This was the money already in the account' })
+        .expect(200);
+      const marked = await h.prisma.bankEntry.findUnique({
+        where: { id: first.body.entryId as string },
+        select: { isOpeningBalance: true },
+      });
+      expect(marked?.isOpeningBalance).toBe(true);
+
+      const second = await request(h.baseUrl)
+        .post(`/admin/treasury/accounts/${accountId}/reconcile`)
+        .set(auth)
+        .send({
+          ownerKind: BankOwnerKind.CAPITAL,
+          statedBalance: '5500',
+          reason: 'A later correction, not an opening',
+        })
+        .expect(200);
+      await request(h.baseUrl)
+        .post(`/admin/treasury/entries/${second.body.entryId as string}/mark-opening-balance`)
+        .set(auth)
+        .send({ reason: 'Trying to mark a second one here' })
+        .expect(409)
+        .expect((r) => expect(r.body.code).toBe('OPENING_BALANCE_EXISTS'));
+    });
+
     it("corrects a SELLER's holding without touching our own money", async () => {
       // Each owner is its own running sum in an account. Reconciling
       // could only ever correct capital before, so a seller's holding

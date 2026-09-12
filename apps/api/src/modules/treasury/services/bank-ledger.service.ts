@@ -10,8 +10,48 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
   AdvisoryLock,
   ATTRIBUTION_RECONCILE_KEY,
+  lockAccountsForPosting,
   takeAdvisoryLock,
 } from '../../../common/db/advisory-lock';
+
+/**
+ * An operator's stated rupee value for a SELLER row in a non-rupee
+ * account (TRE-8's book value). Positive, audited; refused on a rupee
+ * account, where a rupee is its own book and a second figure could only
+ * disagree with the first.
+ */
+function statedInrValue(
+  raw: Prisma.Decimal | string | undefined,
+  accountCurrency: Currency,
+  required: boolean,
+): Prisma.Decimal | null {
+  if (raw === undefined) {
+    if (required) {
+      throw new BadRequestException({
+        code: 'INR_VALUE_REQUIRED',
+        message:
+          `This moves a seller's money in a ${accountCurrency} account. Say what it is worth to ` +
+          'their wallet in rupees (inrValue) — valued at today’s rate it would move what the ' +
+          'book holds for them while their wallet stood still.',
+      });
+    }
+    return null;
+  }
+  if (accountCurrency === Currency.INR) {
+    throw new BadRequestException({
+      code: 'INR_VALUE_NOT_APPLICABLE',
+      message: 'A rupee account is its own book value — leave inrValue empty.',
+    });
+  }
+  const v = new Prisma.Decimal(raw);
+  if (v.lessThanOrEqualTo(0)) {
+    throw new BadRequestException({
+      code: 'INR_VALUE_INVALID',
+      message: 'Give the rupee value as a positive figure; the direction sets its sign.',
+    });
+  }
+  return v.toDecimalPlaces(2);
+}
 
 const ZERO = new Prisma.Decimal(0);
 const ONE = new Prisma.Decimal(1);
@@ -486,6 +526,12 @@ export class BankLedgerService {
      * account.
      */
     isOpeningBalance?: boolean;
+    /**
+     * A SELLER's holding in a non-rupee account: what the correction is
+     * worth to their wallet, in rupees (positive; the delta sets its
+     * sign). Required there, refused on a rupee account.
+     */
+    inrValue?: Prisma.Decimal | string;
   }): Promise<{ delta: string; entryId: string | null }> {
     if (input.reason.trim().length < 10) {
       throw new BadRequestException({
@@ -510,9 +556,13 @@ export class BankLedgerService {
     // account ends up corrected twice — permanently, because the ledger
     // is append-only.
     //
-    // The per-(account, owner) key: reconciling our capital and a seller's
-    // holding in the same account are independent sums and need not queue
-    // behind each other.
+    // The ACCOUNT key (every owner in it): every writer that posts a
+    // non-pair row into this account — a transfer arriving, a payout
+    // leaving, a settlement landing, owner money — takes it too, so none
+    // lands between the read and the correction. It was per (account,
+    // owner) and a transfer's arriving row took only the SENDING
+    // account's seller key, so a reconcile of the receiving account could
+    // fold the arrival into its adjustment. See `accountReconcileKey`.
     //
     // Then the ATTRIBUTION key. Wallet charges and refunds move cash
     // between a seller and capital with reclassification pairs, and every
@@ -523,17 +573,18 @@ export class BankLedgerService {
     // all accounts rather than one per account, because an attribution
     // that touches two accounts in opposite orders to another would
     // otherwise deadlock with it. Reconcile takes no WALLET lock, and
-    // nothing takes a WALLET lock after this key, so there is no cycle.
-    const ownerKey = `${input.accountId}|${input.owner.kind}|${input.owner.sellerId ?? ''}`;
+    // nothing takes a WALLET or an account key after this key, so there is
+    // no cycle (the full order is on `accountReconcileKey`).
     let result: {
       entry: { id: string };
       current: Prisma.Decimal;
       stated: Prisma.Decimal;
       delta: Prisma.Decimal;
+      inrValue: Prisma.Decimal | null;
     } | null;
     try {
       result = await this.prisma.client.$transaction(async (tx) => {
-        await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ownerKey);
+        await lockAccountsForPosting(tx, [input.accountId]);
         await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ATTRIBUTION_RECONCILE_KEY);
 
         if (opening) {
@@ -555,6 +606,14 @@ export class BankLedgerService {
           where: { id: input.accountId },
           select: { currency: true },
         });
+        // A seller's holding in taka: the operator states what the
+        // correction is worth to their wallet. Valued at today's rate
+        // (post()'s default for an inflow) it moved the book's rupee
+        // figure for them by the rate's drift since they were credited.
+        const inrValue =
+          input.owner.kind === BankOwnerKind.SELLER
+            ? statedInrValue(input.inrValue, account.currency, account.currency !== Currency.INR)
+            : statedInrValue(input.inrValue, Currency.INR, false);
 
         const entry = await this.post(
           {
@@ -567,10 +626,13 @@ export class BankLedgerService {
             note: input.reason,
             staffId: input.staffId,
             isOpeningBalance: opening,
+            ...(inrValue === null
+              ? {}
+              : { inrBookValue: delta.isNegative() ? inrValue.neg() : inrValue }),
           },
           tx,
         );
-        return { entry, current, stated, delta };
+        return { entry, current, stated, delta, inrValue };
       });
     } catch (err) {
       // The partial unique on the mark: an opening balance written by
@@ -580,7 +642,7 @@ export class BankLedgerService {
     }
 
     if (result === null) return { delta: '0.00', entryId: null };
-    const { entry, current, stated, delta } = result;
+    const { entry, current, stated, delta, inrValue } = result;
 
     await this.audit.log({
       actorType: 'STAFF',
@@ -599,9 +661,100 @@ export class BankLedgerService {
         sellerId: input.owner.sellerId ?? null,
         reason: input.reason,
         isOpeningBalance: opening,
+        inrValue: inrValue?.toFixed(2) ?? null,
       },
     });
     return { delta: delta.toFixed(2), entryId: entry.id };
+  }
+
+  /**
+   * Mark an EXISTING capital entry as the account's opening balance.
+   *
+   * `reconcile({ isOpeningBalance })` marks one as it is written, but an
+   * account whose first capital entry was written before the mark existed
+   * — or by a flow rather than a person — keeps a real opening balance
+   * that the P&L counts as income. This is the operator saying which
+   * entry it was. A capital RECONCILIATION_ADJUSTMENT or OPENING_BALANCE
+   * only (nothing else can be money the business already had), once per
+   * account (the partial unique index), audited HIGH. Changes the flag
+   * and nothing else — no amount, owner, account or date.
+   */
+  async markOpeningBalance(input: {
+    entryId: string;
+    reason: string;
+    staffId: string;
+  }): Promise<{ entryId: string; accountId: string }> {
+    if (input.reason.trim().length < 10) {
+      throw new BadRequestException({
+        code: 'BANK_REASON_TOO_SHORT',
+        message: 'Say why this is the opening balance — at least 10 characters',
+      });
+    }
+    const entry = await this.prisma.client.bankEntry.findUnique({
+      where: { id: input.entryId },
+      select: {
+        id: true,
+        accountId: true,
+        type: true,
+        ownerKind: true,
+        isOpeningBalance: true,
+        signedAmount: true,
+        currency: true,
+        occurredAt: true,
+      },
+    });
+    if (!entry) {
+      throw new NotFoundException({ code: 'BANK_ENTRY_NOT_FOUND', message: 'No such entry' });
+    }
+    if (entry.isOpeningBalance) return { entryId: entry.id, accountId: entry.accountId };
+    if (
+      entry.ownerKind !== BankOwnerKind.CAPITAL ||
+      (entry.type !== BankEntryType.RECONCILIATION_ADJUSTMENT &&
+        entry.type !== BankEntryType.OPENING_BALANCE)
+    ) {
+      throw new BadRequestException({
+        code: 'OPENING_BALANCE_NOT_ELIGIBLE',
+        message:
+          'Only a capital reconciliation or opening-balance entry can be an opening balance — ' +
+          'every other entry records a movement with its own cause.',
+      });
+    }
+    try {
+      await this.prisma.client.$transaction(async (tx) => {
+        await lockAccountsForPosting(tx, [entry.accountId]);
+        const existing = await tx.bankEntry.findFirst({
+          where: { accountId: entry.accountId, isOpeningBalance: true },
+          select: { occurredAt: true },
+        });
+        if (existing) throw openingBalanceExists(existing.occurredAt);
+        const claimed = await tx.bankEntry.updateMany({
+          where: { id: entry.id, isOpeningBalance: false },
+          data: { isOpeningBalance: true },
+        });
+        if (claimed.count === 0) throw openingBalanceExists(null);
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) throw openingBalanceExists(null);
+      throw err;
+    }
+    await this.audit.log({
+      actorType: 'STAFF',
+      staffUserId: input.staffId,
+      action: 'staff.bank_account.opening_balance_marked',
+      entityType: 'platform_bank_account',
+      entityId: entry.accountId,
+      // Moves money off the P&L: a figure that read as income no longer does.
+      severity: 'HIGH',
+      metadata: {
+        entryId: entry.id,
+        type: entry.type,
+        amount: entry.signedAmount.toFixed(2),
+        currency: entry.currency,
+        occurredAt: entry.occurredAt.toISOString(),
+        reason: input.reason.trim(),
+      },
+    });
+    return { entryId: entry.id, accountId: entry.accountId };
   }
 
   /**
@@ -642,13 +795,25 @@ export class BankLedgerService {
       if (key === undefined) return null;
       const prior = await this.prisma.client.bankEntry.findUnique({
         where: { idempotencyKey: key },
-        select: { id: true, accountId: true, type: true, signedAmount: true },
+        select: {
+          id: true,
+          accountId: true,
+          type: true,
+          signedAmount: true,
+          occurredAt: true,
+          reference: true,
+        },
       });
       if (prior === null) return null;
+      // Every field that changes what the entry SAYS. The reason is prose
+      // and may be retyped on a retry; the date and the reference are
+      // facts matched against the statement.
       if (
         prior.accountId !== input.accountId ||
         prior.type !== type ||
-        !prior.signedAmount.abs().equals(amount)
+        !prior.signedAmount.abs().equals(amount) ||
+        prior.occurredAt.getTime() !== input.occurredAt.getTime() ||
+        (prior.reference ?? null) !== (input.reference ?? null)
       ) {
         throw idempotencyKeyReused('owner-money entry');
       }
@@ -677,17 +842,25 @@ export class BankLedgerService {
     }
     let entry: { id: string };
     try {
-      entry = await this.post({
-        accountId: input.accountId,
-        type,
-        signedAmount: input.direction === 'IN' ? amount : amount.neg(),
-        amountCurrency: account.currency,
-        owner: { kind: BankOwnerKind.CAPITAL },
-        occurredAt: input.occurredAt,
-        reference: input.reference ?? null,
-        note: input.reason.trim(),
-        staffId: input.staffId,
-        idempotencyKey: key ?? null,
+      // Under the account's reconcile key: a reconcile of our capital here
+      // must not read the balance before this lands and correct it after.
+      entry = await this.prisma.client.$transaction(async (tx) => {
+        await lockAccountsForPosting(tx, [input.accountId]);
+        return this.post(
+          {
+            accountId: input.accountId,
+            type,
+            signedAmount: input.direction === 'IN' ? amount : amount.neg(),
+            amountCurrency: account.currency,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: input.occurredAt,
+            reference: input.reference ?? null,
+            note: input.reason.trim(),
+            staffId: input.staffId,
+            idempotencyKey: key ?? null,
+          },
+          tx,
+        );
       });
     } catch (err) {
       // Two copies of one request racing: the other committed first.
@@ -739,6 +912,14 @@ export class BankLedgerService {
     amount: Prisma.Decimal | string;
     reason: string;
     staffId: string;
+    /**
+     * In a non-rupee account: what the relabelled cash is worth to the
+     * seller's wallet, in rupees (positive). REQUIRED toward the seller —
+     * valued at today's rate it moved the book for them by the rate's
+     * drift — optional toward capital (default: their average there).
+     * Refused on a rupee account.
+     */
+    inrValue?: Prisma.Decimal | string;
   }): Promise<{ entryIds: string[] }> {
     if (input.reason.trim().length < 10) {
       throw new BadRequestException({
@@ -765,12 +946,9 @@ export class BankLedgerService {
       // in this same order. Taken the other way round, a correction and a
       // charge landing together could each hold one and wait for the other.
       await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${input.sellerId}|${Currency.INR}`);
-      // Reads a balance and writes from it: both owners' reconcile locks,
-      // in a fixed order so two corrections cannot wait on each other.
-      const keys = [seller, capital]
-        .map((o) => `${input.accountId}|${o.kind}|${o.sellerId ?? ''}`)
-        .sort();
-      for (const k of keys) await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, k);
+      // Reads a balance and writes from it: the account's reconcile key,
+      // the one `reconcile()` and every other writer here take.
+      await lockAccountsForPosting(tx, [input.accountId]);
 
       const account = await tx.platformBankAccount.findFirst({
         where: { id: input.accountId, deletedAt: null },
@@ -789,6 +967,11 @@ export class BankLedgerService {
       if (!exists) {
         throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller' });
       }
+      const inrValue = statedInrValue(
+        input.inrValue,
+        account.currency,
+        account.currency !== Currency.INR && input.direction === 'TO_SELLER',
+      );
       const held = await this.ownerBalance(input.accountId, giver, tx);
       if (held.lessThan(amount)) {
         throw new BadRequestException({
@@ -806,9 +989,31 @@ export class BankLedgerService {
         note: input.reason.trim(),
         staffId: input.staffId,
       } as const;
-      const out = await this.post({ ...base, signedAmount: amount.neg(), owner: giver }, tx);
-      const inn = await this.post({ ...base, signedAmount: amount, owner: taker }, tx);
-      return { entryIds: [out.id, inn.id], held, account };
+      // The seller's row carries the stated book value (its sign follows
+      // the row); capital's never carries one.
+      const sellerBook =
+        inrValue === null
+          ? {}
+          : { inrBookValue: input.direction === 'TO_SELLER' ? inrValue : inrValue.neg() };
+      const out = await this.post(
+        {
+          ...base,
+          signedAmount: amount.neg(),
+          owner: giver,
+          ...(giver.kind === BankOwnerKind.SELLER ? sellerBook : {}),
+        },
+        tx,
+      );
+      const inn = await this.post(
+        {
+          ...base,
+          signedAmount: amount,
+          owner: taker,
+          ...(taker.kind === BankOwnerKind.SELLER ? sellerBook : {}),
+        },
+        tx,
+      );
+      return { entryIds: [out.id, inn.id], held, account, inrValue };
     });
 
     await this.audit.log({
@@ -826,6 +1031,7 @@ export class BankLedgerService {
         amount: amount.toFixed(2),
         currency: result.account.currency,
         giverHeldBefore: result.held.toFixed(2),
+        inrValue: result.inrValue?.toFixed(2) ?? null,
         reason: input.reason.trim(),
         entryIds: result.entryIds,
       },
@@ -838,8 +1044,8 @@ export class BankLedgerService {
    *
    * PUBLIC so a caller can ask before it moves money — `reconcile` is no
    * longer the only thing that needs the figure. A caller doing that
-   * MUST hold `AdvisoryLock.BANK_RECONCILE` on the same
-   * `account|kind|seller` key inside the same transaction (TRE-1): a
+   * MUST hold the account's `BANK_RECONCILE` key (`lockAccountsForPosting`)
+   * inside the same transaction (TRE-1): a
    * balance read outside the write that depends on it is not a guard,
    * because two operators both read the same figure and both proceed.
    */

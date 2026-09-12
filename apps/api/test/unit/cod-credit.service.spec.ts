@@ -1,6 +1,9 @@
 import { Prisma } from '@skydrop/db';
 import { CodCreditService } from '../../src/modules/seller-wallet-accrual/services/cod-credit.service';
-import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
+import {
+  assertCodFeesWithinLimit,
+  type SettingsResolverService,
+} from '../../src/modules/settings/services/settings-resolver.service';
 
 /** WAL-7's advisory lock, as the fake sees it. */
 const lockTaken = jest.fn(async () => 1);
@@ -479,5 +482,95 @@ describe('CodCreditService — the COD fee and the Instant Pay fee are independe
     const settings = (svc as unknown as { settings: { resolve: jest.Mock } }).settings;
     const keys = settings.resolve.mock.calls.map((c: unknown[]) => c[1]);
     expect(keys).not.toContain('wallet.instant_pay_fee_percent');
+  });
+});
+
+describe('CodCreditService — the two fees never take more than there is', () => {
+  it('60% + 60% on ₹1,180: the second fee takes only what the first left — net ₹0, never negative', async () => {
+    // Each percent is clamped 0–100 on its own, so a bad pair used to
+    // deduct ₹1,200 from ₹1,000 and credit the seller −₹200.
+    const { svc, tx, entries } = makeSut({
+      collectionFeePercent: '60',
+      instantFeePercent: '60',
+    });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1180'),
+      mode: 'INSTANT_PAY',
+    });
+    expect(r.collectionFeeInr).toBe('600.00');
+    expect(r.instantFeeInr).toBe('400.00');
+    expect(r.netCreditedInr).toBe('0.00');
+    expect(amountOf(entries, 'INSTANT_PAY_FEE')).toBe('400.00');
+  });
+
+  it('a pair within 100% is untouched', async () => {
+    const { svc, tx } = makeSut({ collectionFeePercent: '1', instantFeePercent: '2.5' });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1180'),
+      mode: 'INSTANT_PAY',
+    });
+    expect([r.collectionFeeInr, r.instantFeeInr, r.netCreditedInr]).toEqual([
+      '10.00',
+      '25.00',
+      '965.00',
+    ]);
+  });
+});
+
+describe('assertCodFeesWithinLimit — a pair past 100% is refused on write', () => {
+  const fakeTx = (override: string | null, system: string) => {
+    const sellerSettingOverride = {
+      findUnique: jest.fn(async () =>
+        override === null ? null : { valueDecimal: new Prisma.Decimal(override) },
+      ),
+    };
+    const systemSetting = {
+      findUnique: jest.fn(async () => ({ valueDecimal: new Prisma.Decimal(system) })),
+    };
+    return {
+      tx: { sellerSettingOverride, systemSetting } as unknown as Prisma.TransactionClient,
+      sellerSettingOverride,
+      systemSetting,
+    };
+  };
+  const COD = 'wallet.cod_collection_fee_percent';
+  const INSTANT = 'wallet.instant_pay_fee_percent';
+
+  it("refuses a seller's value that, with what they resolve for the other fee, passes 100", async () => {
+    const { tx, sellerSettingOverride } = fakeTx('50', '0');
+    await expect(
+      assertCodFeesWithinLimit(tx, COD, new Prisma.Decimal('60'), 'seller-1'),
+    ).rejects.toMatchObject({ response: { code: 'COD_FEES_EXCEED_100' } });
+    expect(sellerSettingOverride.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { sellerId_key: { sellerId: 'seller-1', key: INSTANT } } }),
+    );
+  });
+
+  it('falls back to the global value of the other fee when the seller has no override', async () => {
+    const { tx } = fakeTx(null, '30');
+    await expect(
+      assertCodFeesWithinLimit(tx, INSTANT, new Prisma.Decimal('70'), 'seller-1'),
+    ).resolves.toBeUndefined();
+    await expect(
+      assertCodFeesWithinLimit(tx, INSTANT, new Prisma.Decimal('70.01'), 'seller-1'),
+    ).rejects.toMatchObject({ response: { code: 'COD_FEES_EXCEED_100' } });
+  });
+
+  it('a global change is checked against the global sibling only', async () => {
+    const { tx, sellerSettingOverride } = fakeTx('99', '50');
+    await expect(
+      assertCodFeesWithinLimit(tx, COD, new Prisma.Decimal('51'), null),
+    ).rejects.toMatchObject({ response: { code: 'COD_FEES_EXCEED_100' } });
+    expect(sellerSettingOverride.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('any other key is not its business', async () => {
+    const { tx, systemSetting } = fakeTx(null, '99');
+    await assertCodFeesWithinLimit(tx, 'wallet.cod_gst_percent', new Prisma.Decimal('99'), null);
+    expect(systemSetting.findUnique).not.toHaveBeenCalled();
   });
 });

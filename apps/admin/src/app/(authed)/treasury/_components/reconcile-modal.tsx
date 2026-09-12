@@ -48,7 +48,12 @@ export function ReconcileModal({
   // Our own money only: the P&L leaves exactly the marked entry off its
   // reconciliation line, so an opening balance never reads as income.
   const [opening, setOpening] = useState(false);
+  // A seller's holding in a taka account: what the correction is worth to
+  // their wallet, in rupees. Required there by the server; not asked for
+  // anywhere else.
+  const [inrValue, setInrValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const needsInrValue = sellerId !== '' && currency !== 'INR';
 
   // Each owner is its own running sum, so the figure being corrected has
   // to be that owner's — comparing a seller's stated holding against the
@@ -82,11 +87,13 @@ export function ReconcileModal({
         statedBalance: Number(statedBalance).toFixed(2),
         reason: reason.trim(),
         ...(sellerId === '' && opening ? { isOpeningBalance: true } : {}),
+        ...(needsInrValue && inrValue.trim() !== '' ? { inrValue: inrValue.trim() } : {}),
       });
       setStated('');
       setSellerId('');
       setReason('');
       setOpening(false);
+      setInrValue('');
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -152,6 +159,21 @@ export function ReconcileModal({
               will be posted against {sellerId === '' ? 'our own money' : 'their holding'}.
             </p>
           </div>
+        )}
+        {needsInrValue && (
+          <FormField
+            label="Worth to their wallet (INR)"
+            required
+            hint="The rupees this difference is worth to the seller's wallet — the book keeps a taka holding at what it was credited for, not at today's rate."
+          >
+            <Input
+              type="number"
+              step="0.01"
+              value={inrValue}
+              onChange={(e) => setInrValue(e.target.value)}
+              placeholder="0.00"
+            />
+          </FormField>
         )}
         {sellerId === '' && (
           <label className="flex items-start gap-2 text-sm">

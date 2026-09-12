@@ -2,6 +2,7 @@ import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import {
   AdvisoryLock,
   ATTRIBUTION_RECONCILE_KEY,
+  accountReconcileKey,
   advisoryKey,
 } from '../../src/common/db/advisory-lock';
 import { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
@@ -23,6 +24,8 @@ interface PriorEntry {
   accountId: string;
   type: BankEntryType;
   signedAmount: Prisma.Decimal;
+  occurredAt: Date;
+  reference: string | null;
 }
 
 function makeLedger(
@@ -80,6 +83,7 @@ function makeLedger(
         opts.existingOpening ? { occurredAt: new Date('2026-09-01T00:00:00Z') } : null,
       ),
       findUnique,
+      updateMany: jest.fn(async () => ({ count: 1 })),
     },
     fxRate: {
       findFirst: jest.fn(async () =>
@@ -90,7 +94,8 @@ function makeLedger(
   db['$transaction'] = async (fn: (t: unknown) => unknown) => fn(db);
   const audit = { log: jest.fn(async () => 'a1') };
   const svc = new BankLedgerService({ client: db } as never, audit as never);
-  return { svc, created, locks, findUnique, audit };
+  const updateMany = (db['bankEntry'] as { updateMany: jest.Mock }).updateMany;
+  return { svc, created, locks, findUnique, audit, updateMany };
 }
 
 const SELLER = { kind: BankOwnerKind.SELLER, sellerId: 's1' } as const;
@@ -217,13 +222,129 @@ describe('BankLedgerService.reconcile — the opening balance is MARKED', () => 
     expect(created).toHaveLength(0);
   });
 
-  it('holds the attribution key, after its own, so no charge lands mid-correction', async () => {
+  it('holds the ACCOUNT key then the attribution key, so nothing lands mid-correction', async () => {
+    // The account key, not a per-owner one: every writer posting a
+    // non-pair row into this account takes the same key.
     const { svc, locks } = makeLedger();
     await svc.reconcile({ ...BASE, owner: CAPITAL });
     expect(locks).toEqual([
-      [AdvisoryLock.BANK_RECONCILE, advisoryKey(`tasin|${BankOwnerKind.CAPITAL}|`)],
+      [AdvisoryLock.BANK_RECONCILE, advisoryKey(accountReconcileKey('tasin'))],
       [AdvisoryLock.BANK_RECONCILE, advisoryKey(ATTRIBUTION_RECONCILE_KEY)],
     ]);
+  });
+});
+
+describe('BankLedgerService.reconcile — a seller’s taka holding carries a stated rupee value', () => {
+  const BASE = {
+    accountId: 'tasin',
+    reason: 'Statement shows less held for them than the book',
+    staffId: 'staff-1',
+  };
+
+  it('refuses a correction of a seller’s taka holding with no rupee value', async () => {
+    const { svc, created } = makeLedger({
+      accountCurrency: Currency.BDT,
+      sellerHolding: { units: '1000', book: '800' },
+    });
+    await expect(
+      svc.reconcile({ ...BASE, owner: SELLER, statedBalance: '900' }),
+    ).rejects.toMatchObject({ response: { code: 'INR_VALUE_REQUIRED' } });
+    expect(created).toHaveLength(0);
+  });
+
+  it('posts the stated value with the difference’s sign', async () => {
+    const { svc, created, audit } = makeLedger({
+      accountCurrency: Currency.BDT,
+      sellerHolding: { units: '1000', book: '800' },
+    });
+    await svc.reconcile({ ...BASE, owner: SELLER, statedBalance: '900', inrValue: '80' });
+    expect((created[0]?.['signedAmount'] as Prisma.Decimal).toFixed(2)).toBe('-100.00');
+    expect((created[0]?.['inrBookValue'] as Prisma.Decimal).toFixed(2)).toBe('-80.00');
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ inrValue: '80.00' }) }),
+    );
+  });
+
+  it('refuses a rupee value on a rupee account, and a non-positive one anywhere', async () => {
+    const inr = makeLedger({ sellerHolding: { units: '1000', book: '1000' } });
+    await expect(
+      inr.svc.reconcile({ ...BASE, owner: SELLER, statedBalance: '900', inrValue: '100' }),
+    ).rejects.toMatchObject({ response: { code: 'INR_VALUE_NOT_APPLICABLE' } });
+    const bdt = makeLedger({
+      accountCurrency: Currency.BDT,
+      sellerHolding: { units: '1000', book: '800' },
+    });
+    await expect(
+      bdt.svc.reconcile({ ...BASE, owner: SELLER, statedBalance: '900', inrValue: '0' }),
+    ).rejects.toMatchObject({ response: { code: 'INR_VALUE_INVALID' } });
+  });
+});
+
+describe('BankLedgerService.markOpeningBalance — an existing entry can be MARKED', () => {
+  const ENTRY = {
+    id: 'be-9',
+    accountId: 'tasin',
+    type: BankEntryType.RECONCILIATION_ADJUSTMENT,
+    ownerKind: BankOwnerKind.CAPITAL,
+    isOpeningBalance: false,
+    signedAmount: D('100000'),
+    currency: Currency.BDT,
+    occurredAt: AT,
+  };
+  const INPUT = { entryId: 'be-9', reason: 'The statement balance on day one', staffId: 's' };
+
+  it('marks an eligible capital entry, guarded, under the account key, audited HIGH', async () => {
+    const { svc, locks, audit, updateMany } = makeLedger({
+      priorEntry: ENTRY as unknown as PriorEntry,
+    });
+    await expect(svc.markOpeningBalance(INPUT)).resolves.toEqual({
+      entryId: 'be-9',
+      accountId: 'tasin',
+    });
+    expect(locks).toEqual([
+      [AdvisoryLock.BANK_RECONCILE, advisoryKey(accountReconcileKey('tasin'))],
+    ]);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'be-9', isOpeningBalance: false },
+      data: { isOpeningBalance: true },
+    });
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'staff.bank_account.opening_balance_marked',
+        severity: 'HIGH',
+      }),
+    );
+  });
+
+  it('refuses a seller’s entry, and a movement with a cause of its own', async () => {
+    for (const bad of [
+      { ...ENTRY, ownerKind: BankOwnerKind.SELLER },
+      { ...ENTRY, type: BankEntryType.TRANSFER_IN },
+    ]) {
+      const { svc, updateMany } = makeLedger({ priorEntry: bad as unknown as PriorEntry });
+      await expect(svc.markOpeningBalance(INPUT)).rejects.toMatchObject({
+        response: { code: 'OPENING_BALANCE_NOT_ELIGIBLE' },
+      });
+      expect(updateMany).not.toHaveBeenCalled();
+    }
+  });
+
+  it('refuses a second opening balance on the account', async () => {
+    const { svc, updateMany } = makeLedger({
+      priorEntry: ENTRY as unknown as PriorEntry,
+      existingOpening: true,
+    });
+    await expect(svc.markOpeningBalance(INPUT)).rejects.toMatchObject({
+      response: { code: 'OPENING_BALANCE_EXISTS' },
+    });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses a short reason', async () => {
+    const { svc } = makeLedger({ priorEntry: ENTRY as unknown as PriorEntry });
+    await expect(svc.markOpeningBalance({ ...INPUT, reason: 'day one' })).rejects.toMatchObject({
+      response: { code: 'BANK_REASON_TOO_SHORT' },
+    });
   });
 });
 
@@ -243,6 +364,8 @@ describe('BankLedgerService.recordOwnerMoney — a retried request posts once', 
     accountId: 'tasin',
     type: BankEntryType.OWNER_CONTRIBUTION,
     signedAmount: D('5000'),
+    occurredAt: AT,
+    reference: null,
   };
 
   it('the same key returns the entry already recorded and posts nothing', async () => {
@@ -260,6 +383,25 @@ describe('BankLedgerService.recordOwnerMoney — a retried request posts once', 
     await expect(svc.recordOwnerMoney({ ...INPUT, direction: 'OUT' })).rejects.toMatchObject({
       response: { code: 'IDEMPOTENCY_KEY_REUSED' },
     });
+  });
+
+  it('refuses the same key sent with a different date or reference', async () => {
+    const { svc, created } = makeLedger({ priorEntry: PRIOR });
+    await expect(
+      svc.recordOwnerMoney({ ...INPUT, occurredAt: new Date('2026-09-13T10:00:00Z') }),
+    ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    await expect(svc.recordOwnerMoney({ ...INPUT, reference: 'NEFT-1' })).rejects.toMatchObject({
+      response: { code: 'IDEMPOTENCY_KEY_REUSED' },
+    });
+    expect(created).toHaveLength(0);
+  });
+
+  it('posts under the account’s reconcile key', async () => {
+    const { svc, locks } = makeLedger();
+    await svc.recordOwnerMoney(INPUT);
+    expect(locks).toEqual([
+      [AdvisoryLock.BANK_RECONCILE, advisoryKey(accountReconcileKey('tasin'))],
+    ]);
   });
 
   it('two copies racing: the loser answers with the winner’s entry', async () => {

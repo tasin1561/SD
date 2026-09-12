@@ -89,6 +89,22 @@ export class ReconcileAccountDto {
   @IsOptional()
   @IsBoolean()
   isOpeningBalance?: boolean;
+  @ApiPropertyOptional({
+    description:
+      "A SELLER's holding in a non-rupee account: what the correction is worth to their " +
+      'wallet in rupees (positive; the difference sets its sign). Required there, refused on ' +
+      'a rupee account.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  inrValue?: string;
+}
+
+export class MarkOpeningBalanceDto {
+  @ApiProperty({ description: 'Why this entry is the money the business already had' })
+  @IsString()
+  @Length(10, 2000)
+  reason!: string;
 }
 
 export class OwnerMoneyDto {
@@ -135,6 +151,15 @@ export class ReclassifySellerCashDto {
   @IsString()
   @Length(10, 2000)
   reason!: string;
+  @ApiPropertyOptional({
+    description:
+      "In a non-rupee account: what the cash is worth to the seller's wallet in rupees " +
+      '(positive). Required toward the seller, optional toward capital (default: their average ' +
+      'rate there), refused on a rupee account.',
+  })
+  @IsOptional()
+  @IsNumberString()
+  inrValue?: string;
 }
 
 export class CreateExpenseCategoryDto {

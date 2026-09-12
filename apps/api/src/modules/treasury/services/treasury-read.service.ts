@@ -112,6 +112,15 @@ export class TreasuryReadService {
         _sum: { signedAmount: true },
       }),
     ]);
+    // A seller's money held in ANOTHER currency counts too, at what it is
+    // worth to their wallet — its rupee BOOK value (TRE-8), never units
+    // times today's rate. Summing rupee rows alone left a taka top-up out
+    // of "held" while its credit sat in "owed", so an account holding
+    // every rupee it should read as a gap.
+    const heldElsewhere = await this.prisma.client.bankEntry.aggregate({
+      where: { ownerKind: BankOwnerKind.SELLER, currency: { not: Currency.INR } },
+      _sum: { inrBookValue: true },
+    });
 
     const byId = new Map(accounts.map((a) => [a.id, a]));
     const enriched = balances.map((b) => {
@@ -179,7 +188,7 @@ export class TreasuryReadService {
     );
 
     const owedInr = owed.reduce((acc, r) => acc.add(r.balance), ZERO);
-    const heldInr = held._sum.signedAmount ?? ZERO;
+    const heldInr = (held._sum.signedAmount ?? ZERO).add(heldElsewhere._sum.inrBookValue ?? ZERO);
     const gap = owedInr.sub(heldInr);
 
     return {
@@ -236,6 +245,8 @@ export class TreasuryReadService {
       recordedAt: Date;
       /** The consignment this payment was attributed to, if any. */
       inboundFreightChargeId: string | null;
+      /** The account's marked opening balance (TRE-9) — left off the P&L. */
+      isOpeningBalance: boolean;
     }>;
   }> {
     const rows = await this.prisma.client.bankEntry.findMany({
@@ -271,6 +282,7 @@ export class TreasuryReadService {
         occurredAt: true,
         createdAt: true,
         inboundFreightChargeId: true,
+        isOpeningBalance: true,
         account: { select: { label: true } },
         seller: { select: { companyName: true } },
         expenseCategory: { select: { name: true, code: true } },
@@ -298,6 +310,7 @@ export class TreasuryReadService {
         recordedByName: r.createdBy?.emailDisplay ?? null,
         recordedAt: r.createdAt,
         inboundFreightChargeId: r.inboundFreightChargeId,
+        isOpeningBalance: r.isOpeningBalance,
       })),
     };
   }

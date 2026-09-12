@@ -178,7 +178,14 @@ export class CodCreditService {
       COLLECTION_FEE_KEY,
       DEFAULT_COLLECTION_FEE_PERCENT,
     );
-    const collectionFee = postGst.times(collectionPercent).dividedBy(100).toDecimalPlaces(2);
+    // Capped at what there is to take a fee from. Each percent is clamped
+    // 0–100 on its own, so a bad pair (60% + 60%) could otherwise deduct
+    // more than the post-GST amount and credit the seller a NEGATIVE net
+    // for a parcel their customer paid for.
+    const collectionFee = Prisma.Decimal.min(
+      postGst.times(collectionPercent).dividedBy(100).toDecimalPlaces(2),
+      postGst,
+    );
 
     // The Instant Pay fee: the price of being paid before the courier
     // settles, so only when THIS credit is an Instant Pay one — and ON
@@ -189,7 +196,14 @@ export class CodCreditService {
       mode === 'INSTANT_PAY'
         ? await this.sellerDecimal(sellerId, INSTANT_FEE_KEY, DEFAULT_INSTANT_FEE_PERCENT)
         : new Prisma.Decimal(0);
-    const instantFee = postGst.times(instantPercent).dividedBy(100).toDecimalPlaces(2);
+    // The second fee takes only what the first left — never a negative
+    // net credit. The settings write refuses a pair summing past 100%
+    // (COD_FEES_EXCEED_100); this is the backstop for one that got there
+    // another way (a global change under a seller's override).
+    const instantFee = Prisma.Decimal.min(
+      postGst.times(instantPercent).dividedBy(100).toDecimalPlaces(2),
+      Prisma.Decimal.max(postGst.minus(collectionFee), 0),
+    );
 
     // The full COD is credited, and the deductions are their own
     // entries. Netting them into one credit would hide both the tax and

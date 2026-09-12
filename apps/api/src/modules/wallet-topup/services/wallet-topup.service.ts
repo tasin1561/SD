@@ -16,6 +16,11 @@ import {
   TopupRequestStatus,
   WalletEntryDirection,
 } from '@skydrop/db';
+import {
+  AdvisoryLock,
+  lockAccountsForPosting,
+  takeAdvisoryLock,
+} from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -425,6 +430,13 @@ export class WalletTopupService {
                 })
               ).amount,
             );
+      // The seller's WALLET lock (applyEntry takes it again — reentrant),
+      // then the receiving account's reconcile key, BEFORE the debt split
+      // whose pair takes the attribution key. The seller row lands in this
+      // account; a reconcile of their holding here must not read around
+      // it. Order on `accountReconcileKey`.
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${existing.sellerId}|${Currency.INR}`);
+      await lockAccountsForPosting(tx, [existing.bankAccountId]);
       // Read against the balance BEFORE this credit: the part of it that
       // repays what the seller owed is ours (TRE-8).
       const split = credited.greaterThan(0)

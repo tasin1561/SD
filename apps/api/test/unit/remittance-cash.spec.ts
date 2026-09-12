@@ -275,8 +275,14 @@ describe('recording a remittance — a retried request pays once', () => {
     sellerId: 's1',
     currency: Currency.BDT,
     amount: D('625'),
+    sourceCurrency: Currency.INR,
     sourceAmount: D('500'),
+    fxRateSnapshot: D('1.25'),
     paidFromAccountId: 'tasin',
+    paidAt: new Date('2026-09-12T10:00:00.000Z'),
+    bankReference: 'BRAC-TRF-0001',
+    // No fee: nothing posted as the payout's EXPENSE.
+    bankEntries: [] as Array<{ signedAmount: Prisma.Decimal }>,
   };
 
   it('the same key returns the remittance already recorded and debits nothing', async () => {
@@ -295,6 +301,35 @@ describe('recording a remittance — a retried request pays once', () => {
     expect(wallet.applyEntry).not.toHaveBeenCalled();
   });
 
+  it('refuses the same key with a different rate, fee, date or bank reference', async () => {
+    // Each changes what was recorded: the rate values their money
+    // elsewhere, the fee is our expense, the date picks the month, the
+    // reference is what the statement is matched on.
+    for (const change of [
+      { fxRateSnapshot: 1.24, amount: 620 },
+      { bankFee: 15 },
+      { paidAt: '2026-09-13T10:00:00.000Z' },
+      { bankReference: 'BRAC-TRF-0002' },
+    ]) {
+      const { svc, wallet, posts } = makeSut({ prior: PRIOR });
+      await expect(
+        record(svc, { ...BD_PAYOUT, ...change, idempotencyKey: KEY }),
+      ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+      expect(wallet.applyEntry).not.toHaveBeenCalled();
+      expect(posts).toHaveLength(0);
+    }
+  });
+
+  it('the same fee under the same key is the same payout', async () => {
+    const { svc } = makeSut({
+      prior: { ...PRIOR, bankEntries: [{ signedAmount: D('-15') }] },
+    });
+    await expect(record(svc, { ...BD_PAYOUT, bankFee: 15, idempotencyKey: KEY })).resolves.toEqual({
+      id: 'rem-0',
+      replayed: true,
+    });
+  });
+
   it('a fresh payout says it is not a replay', async () => {
     const { svc } = makeSut({
       holdings: [{ accountId: 'hdfc', currency: Currency.INR, amount: '511.40' }],
@@ -303,5 +338,33 @@ describe('recording a remittance — a retried request pays once', () => {
       id: 'rem-1',
       replayed: false,
     });
+  });
+});
+
+describe('recording a remittance — the wallet it debits is in rupees', () => {
+  it('refuses a payout from a taka wallet rather than post a seller row with no book value', async () => {
+    const { svc, wallet, posts } = makeSut({});
+    await expect(
+      record(svc, {
+        ...BD_PAYOUT,
+        sourceCurrency: Currency.BDT,
+        sourceAmount: 625,
+        fxRateSnapshot: 1,
+      }),
+    ).rejects.toMatchObject({ response: { code: 'REMITTANCE_SOURCE_CURRENCY_UNSUPPORTED' } });
+    expect(wallet.applyEntry).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(0);
+  });
+
+  it('takes the paying account’s reconcile key right after the wallet lock, before reading', async () => {
+    const { svc, events } = makeSut({
+      here: { units: '1000', book: '800' },
+    });
+    await record(svc, BD_PAYOUT);
+    expect(events.slice(0, 3)).toEqual([
+      'lock:' + String(0x04d49),
+      'lock:' + String(0x04252),
+      'read',
+    ]);
   });
 });

@@ -57,12 +57,17 @@ function world(opts: {
     async (a: AnyArgs) => reqs.find((r) => r.id === (a.where as { id: string }).id) ?? null,
   );
   const aggregate = jest.fn(async (a: AnyArgs) => {
-    const w = a.where as { sellerId: string; status: string; id?: { not: string } };
+    const w = a.where as {
+      sellerId: string;
+      status: WithdrawalRequestStatus | { in: WithdrawalRequestStatus[] };
+      id?: { not: string };
+    };
+    const statuses = typeof w.status === 'string' ? [w.status] : w.status.in;
     const sum = reqs
       .filter(
         (r) =>
           r.sellerId === w.sellerId &&
-          r.status === w.status &&
+          statuses.includes(r.status) &&
           (w.id === undefined || r.id !== w.id.not),
       )
       .reduce((s, r) => s.add(r.amountRequested), D('0'));
@@ -169,6 +174,54 @@ describe('UnpayableWithdrawalService', () => {
     expect(res.rejected).toBe(1);
     expect(two.reqs.find((r) => r.id === 'newer')?.status).toBe(WithdrawalRequestStatus.REJECTED);
     expect(two.reqs.find((r) => r.id === 'older')?.status).toBe(WithdrawalRequestStatus.PENDING);
+  });
+
+  it('rejects only what cannot be paid ON ITS OWN first — ₹500, an older ₹1,000 and a newer ₹100', async () => {
+    // Newest-first alone judged the ₹100 with the ₹1,000 still held,
+    // rejected it, then rejected the ₹1,000 too — while the ₹100 was
+    // payable all along.
+    const w = world({
+      requests: [pending('older', 's1', '1000'), pending('newer', 's1', '100')],
+      balance: { s1: '500' },
+    });
+    const res = await w.svc.sweep();
+    expect(res.rejected).toBe(1);
+    expect(w.reqs.find((r) => r.id === 'older')?.status).toBe(WithdrawalRequestStatus.REJECTED);
+    expect(w.reqs.find((r) => r.id === 'newer')?.status).toBe(WithdrawalRequestStatus.PENDING);
+  });
+
+  it('an APPROVED request holds its money: a later request against it is rejected, and the approved one is not flagged', async () => {
+    // ₹1,000 wallet, ₹900 approved. The approved money is spoken for, so
+    // a ₹200 request cannot be paid even alone — and the approved one,
+    // judged without counting ITSELF, is still covered.
+    const approved: Req = {
+      ...pending('ap', 's1', '900'),
+      status: WithdrawalRequestStatus.APPROVED,
+    };
+    const w = world({
+      requests: [approved, pending('late', 's1', '200')],
+      balance: { s1: '1000' },
+    });
+    const res = await w.svc.sweep();
+    expect(res.rejected).toBe(1);
+    expect(res.flaggedApproved).toBe(0);
+    expect(w.reqs.find((r) => r.id === 'late')?.status).toBe(WithdrawalRequestStatus.REJECTED);
+    expect(w.reqs.find((r) => r.id === 'ap')?.status).toBe(WithdrawalRequestStatus.APPROVED);
+    expect(w.raise).not.toHaveBeenCalled();
+  });
+
+  it('a newer PENDING request does not make an approved one look uncovered', async () => {
+    const approved: Req = {
+      ...pending('ap', 's1', '600'),
+      status: WithdrawalRequestStatus.APPROVED,
+    };
+    const w = world({
+      requests: [approved, pending('p', 's1', '300')],
+      balance: { s1: '800' },
+      enabled: { s1: false },
+    });
+    await w.svc.sweep();
+    expect(w.raise).not.toHaveBeenCalled();
   });
 
   it('does nothing when the setting is off for that seller, or cannot be read', async () => {

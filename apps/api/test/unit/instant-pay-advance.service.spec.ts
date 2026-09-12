@@ -46,6 +46,8 @@ function makeSut(data: { orders: FakeOrder[]; entries: FakeEntry[]; bank: FakeBa
   const floatMatch = (o: FakeOrder | undefined, f: Record<string, unknown>): boolean => {
     if (o === undefined) return false;
     if (f['status'] !== undefined && o.status !== String(f['status'])) return false;
+    // `events: { some: { toStatus: DELIVERED } }` — EVER delivered.
+    if (f['events'] !== undefined && o.deliveredAt === undefined) return false;
     if (f['codAmountInr'] !== undefined && !(o.codAmountInr ?? D('0')).greaterThan(0)) return false;
     if (f['courierSettlementLines'] !== undefined && o.settlementLines > 0) return false;
     return true;
@@ -83,8 +85,11 @@ function makeSut(data: { orders: FakeOrder[]; entries: FakeEntry[]; bank: FakeBa
         ),
     },
     order: {
-      aggregate: async (args: { where: { id: { in: string[] } } }) => {
-        const hit = data.orders.filter((o) => args.where.id.in.includes(o.id));
+      aggregate: async (args: { where: { id: { in: string[] }; status?: { not: string } } }) => {
+        const not = args.where.status?.not;
+        const hit = data.orders.filter(
+          (o) => args.where.id.in.includes(o.id) && (not === undefined || o.status !== not),
+        );
         return {
           _sum: { codAmountInr: hit.reduce((a, o) => a.add(o.codAmountInr ?? D('0')), D('0')) },
           _count: { _all: hit.length },
@@ -97,6 +102,7 @@ function makeSut(data: { orders: FakeOrder[]; entries: FakeEntry[]; bank: FakeBa
             id: o.id,
             orderNumber: o.orderNumber,
             sellerId: o.sellerId,
+            status: o.status,
             codAmountInr: o.codAmountInr,
             seller: { companyName: `Seller ${o.sellerId}` },
             orderShipments: [
@@ -278,6 +284,56 @@ describe('InstantPayAdvanceService', () => {
     });
     const r = await makeSut({ orders: [delivered('o2', 's1', '1000')], ...c }).report({}, NOW);
     expect(r.count).toBe(0);
+  });
+
+  it('keeps an order returned AFTER delivery — the credit stands and our cash is still out', async () => {
+    // DELIVERED → RTO_INITIATED is a real edge. Selected on the current
+    // status, this order vanished from the list and from the float while
+    // we had ₹1,180 fronted on it.
+    const c = instantPayCredit('o9', 's1', '1180', {
+      gst: '180',
+      fee: '25',
+      front: '1180',
+      at: daysAgo(5),
+    });
+    const svc = makeSut({
+      orders: [delivered('o9', 's1', '1180', { status: 'RTO_IN_TRANSIT' })],
+      ...c,
+    });
+    const r = await svc.report({}, NOW);
+    expect(r.count).toBe(1);
+    expect(r.rows[0]?.currentStatus).toBe('RTO_IN_TRANSIT');
+    expect(r.rows[0]?.frontedInr).toBe('1180.00');
+    const s = await svc.summary();
+    expect([
+      s.amount.toFixed(2),
+      s.count,
+      s.notDeliveredNow.amount.toFixed(2),
+      s.notDeliveredNow.count,
+    ]).toEqual(['1180.00', 1, '1180.00', 1]);
+  });
+
+  it('never lists an order that never reached DELIVERED, whatever its entries say', async () => {
+    const c = instantPayCredit('o10', 's1', '500', {
+      gst: '0',
+      fee: '0',
+      front: '500',
+      at: daysAgo(1),
+    });
+    const svc = makeSut({
+      orders: [
+        {
+          id: 'o10',
+          orderNumber: 'SD-o10',
+          sellerId: 's1',
+          status: 'OUT_FOR_DELIVERY',
+          codAmountInr: D('500'),
+          settlementLines: 0,
+        },
+      ],
+      ...c,
+    });
+    expect((await svc.report({}, NOW)).count).toBe(0);
   });
 
   it('never lists a settlement-mode order — delivered, unpaid, but not credited', async () => {
