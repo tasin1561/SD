@@ -9,6 +9,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
 import type { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
+import { AdvisoryLock, advisoryKey } from '../../src/common/db/advisory-lock';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -40,6 +41,8 @@ function makeSut(
     reverse?: { reversed: boolean; reason?: string; grossInr?: string };
     /** Cash the reversed order's seller holds with us, across accounts. */
     sellerHeld?: string;
+    /** Their wallet balance just before a reversal (defaults to `sellerHeld`). */
+    walletBefore?: string;
     /** What each seller owes us before this payout (a positive number). */
     debt?: Record<string, string>;
     /** Waybill-bearing shipments of the payout's orders. */
@@ -94,10 +97,11 @@ function makeSut(
     return (opts.orders ?? []).filter((o) => ids === undefined || ids.includes(o.id));
   });
 
+  // The per-order and wallet advisory locks: (strings, namespace, key).
+  const executeRaw = jest.fn(async (..._args: unknown[]) => 1);
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
-    // The per-order and wallet advisory locks.
-    $executeRaw: jest.fn(async () => 1),
+    $executeRaw: executeRaw,
     shipment: { findMany: jest.fn(async () => opts.shipments ?? []) },
     courierAccount: { findFirst: accountFindFirst },
     courierSettlement: {
@@ -190,6 +194,7 @@ function makeSut(
   );
   const attribution = {
     takeToCapital,
+    walletBalance: jest.fn(async () => D(opts.walletBefore ?? opts.sellerHeld ?? '0')),
     sellerHeld: jest.fn(async () => ({
       total: D(opts.sellerHeld ?? '0'),
       accountId: 'bank-inr-1',
@@ -204,6 +209,8 @@ function makeSut(
 
   return {
     svc: new CourierSettlementService(prisma, audit, codCredit, wallet, bank, attribution),
+    wallet: wallet as unknown as { recomputeCacheAfterCommit: jest.Mock },
+    executeRaw,
     creditForOrder,
     reverseForOrder,
     resolveMode,
@@ -799,6 +806,77 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     ]);
   });
 
+  it('takes only what the reversal took off their wallet — not the tax it gave back', async () => {
+    // Owed ₹100 before a ₹300 reversal: the most that stops being theirs
+    // is ₹100 (max(0, 100) − max(0, 100 − 300)). The returned tax moved
+    // back to them as its own entry; taking the whole ₹300 took it too.
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '300.00' },
+      sellerHeld: '5000',
+      walletBefore: '100',
+      reverse: { reversed: true, grossInr: '300.00' },
+    });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '700.00',
+      deductions: { rtoReversals: [{ orderId: 'o-9', amountInr: '300.00' }] },
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    expect(sut.takeToCapital).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sellerId: 's-rto', amount: D('100') }),
+    );
+  });
+
+  it('a payout that only takes a COD back still refreshes that seller’s cached balance', async () => {
+    // TRE-7's credit block at order create reads the cache: left stale, a
+    // seller whose COD was just reversed keeps trading on the old figure.
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '300.00' },
+      sellerHeld: '5000',
+      reverse: { reversed: true, grossInr: '300.00' },
+    });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '0.00',
+      deductions: { rtoReversals: [{ orderId: 'o-9', amountInr: '300.00' }] },
+      lines: [],
+    });
+    expect(sut.wallet.recomputeCacheAfterCommit).toHaveBeenCalledWith(
+      's-rto',
+      'INR',
+      expect.any(String),
+    );
+  });
+
+  it('locks every seller’s wallet up front, in ONE sorted order, whatever order the lines are in', async () => {
+    // Line by line, two payouts covering the same two sellers in opposite
+    // orders each held one wallet and waited on the other (40P01).
+    const sut = makeSut({
+      orders: [
+        { id: 'o-1', orderNumber: 'SD-1', codAmountInr: D('600.00'), sellerId: 's-b' },
+        { id: 'o-2', orderNumber: 'SD-2', codAmountInr: D('400.00'), sellerId: 's-a' },
+      ],
+    });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '1000.00',
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    const walletKeys = sut.executeRaw.mock.calls
+      .filter((c) => c[1] === AdvisoryLock.WALLET)
+      .map((c) => c[2]);
+    expect(walletKeys.slice(0, 2)).toEqual([advisoryKey('s-a|INR'), advisoryKey('s-b|INR')]);
+  });
+
   it('credits an order nobody has credited yet, whatever the seller’s mode is now', async () => {
     // A seller switched to Instant Pay after o-1 was delivered: its credit
     // never ran at delivery, so this payout owes it. o-2 WAS credited at
@@ -1117,8 +1195,12 @@ describe('CourierSettlementService.allocateMore', () => {
       fee?: string;
       existingOrders?: string[];
       orders?: Array<{ id: string; sellerId: string; codAmountInr: Prisma.Decimal | null }>;
+      /** What the payout reads as allocated INSIDE the transaction — another operator's allocation landed meanwhile. */
+      allocatedInTx?: string;
     } = {},
   ) {
+    let reads = 0;
+    const executeRaw = jest.fn(async (..._args: unknown[]) => 1);
     const bankPost = jest.fn<Promise<{ id: string }>, [AnyArgs, unknown?]>(async () => ({
       id: 'be-1',
     }));
@@ -1130,7 +1212,12 @@ describe('CourierSettlementService.allocateMore', () => {
           id: SETTLEMENT,
           reference: 'DLV-PAYOUT-0001',
           amountInr: D(opts.amount ?? '1000.00'),
-          allocatedInr: D(opts.allocated ?? '600.00'),
+          // The first read is outside the transaction; later ones inside it.
+          allocatedInr: D(
+            (reads += 1) > 1 && opts.allocatedInTx !== undefined
+              ? opts.allocatedInTx
+              : (opts.allocated ?? '600.00'),
+          ),
           earlyCodFeeInr: D(opts.fee ?? '0'),
           freightDeductedInr: D('0'),
           rtoReversalInr: D('0'),
@@ -1157,7 +1244,7 @@ describe('CourierSettlementService.allocateMore', () => {
         ),
       },
       shipment: { findMany: jest.fn(async () => []) },
-      $executeRaw: jest.fn(async () => 1),
+      $executeRaw: executeRaw,
       $transaction: async (fn: (tx: unknown) => unknown) => fn(client),
     } as AnyArgs;
     const prisma = { client } as unknown as PrismaService;
@@ -1181,8 +1268,26 @@ describe('CourierSettlementService.allocateMore', () => {
     // getById reads back through the same client; stub it out — the
     // return shape is pinned by record()'s own tests.
     jest.spyOn(svc, 'getById').mockResolvedValue({} as never);
-    return { svc, bankPost, createMany, update };
+    return { svc, bankPost, createMany, update, executeRaw };
   }
+
+  it('re-reads what is left INSIDE the transaction, under the payout’s lock', async () => {
+    // Both operators read ₹400 left; the other's ₹300 landed first. Checked
+    // against the stale figure, both passed and together allocated ₹700
+    // of ₹400 — and each wrote stale + adding, so one vanished.
+    const { svc, createMany, executeRaw } = makeAllocSut({
+      amount: '1000.00',
+      allocated: '600.00',
+      allocatedInTx: '900.00',
+    });
+    await expect(
+      svc.allocateMore('staff-1', SETTLEMENT, {
+        lines: [{ orderId: 'o-2', settledInr: '400.00' }],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SETTLEMENT_OVER_ALLOCATED' } });
+    expect(createMany).not.toHaveBeenCalled();
+    expect(executeRaw.mock.calls.some((c) => c[1] === AdvisoryLock.SETTLEMENT)).toBe(true);
+  });
 
   it('refuses to allocate more than actually landed', async () => {
     // The one thing this must not be able to do. Past the ceiling it

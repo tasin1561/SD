@@ -228,6 +228,7 @@ export class AdminTreasuryController {
       movedAt: new Date(body.movedAt),
       ...(body.reference === undefined ? {} : { reference: body.reference }),
       ...(body.note === undefined ? {} : { note: body.note }),
+      ...(body.idempotencyKey === undefined ? {} : { idempotencyKey: body.idempotencyKey }),
       staffId: staff.id,
     });
   }
@@ -267,6 +268,7 @@ export class AdminTreasuryController {
       statedBalance: body.statedBalance,
       reason: body.reason,
       staffId: staff.id,
+      ...(body.isOpeningBalance === undefined ? {} : { isOpeningBalance: body.isOpeningBalance }),
     });
   }
 
@@ -289,6 +291,7 @@ export class AdminTreasuryController {
       occurredAt: new Date(body.occurredAt),
       reason: body.reason,
       ...(body.reference === undefined ? {} : { reference: body.reference }),
+      ...(body.idempotencyKey === undefined ? {} : { idempotencyKey: body.idempotencyKey }),
       staffId: staff.id,
     });
   }

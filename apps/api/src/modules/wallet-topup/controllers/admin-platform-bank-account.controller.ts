@@ -130,6 +130,9 @@ export class AdminPlatformBankAccountController {
             occurredAt: new Date(),
             staffId: staff.id,
             note: 'Opening balance, entered when the account was added',
+            // The P&L reads the mark, never the entry's position: this is
+            // the account's opening balance, and there is only one.
+            isOpeningBalance: true,
           },
           tx,
         );

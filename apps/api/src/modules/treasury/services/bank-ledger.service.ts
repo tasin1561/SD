@@ -1,10 +1,39 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ActorType, BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import {
+  AdvisoryLock,
+  ATTRIBUTION_RECONCILE_KEY,
+  takeAdvisoryLock,
+} from '../../../common/db/advisory-lock';
 
 const ZERO = new Prisma.Decimal(0);
+const ONE = new Prisma.Decimal(1);
+
+/**
+ * A unique-index violation: for an idempotent create, the sign that a
+ * concurrent request with the same key won the race. The caller re-reads
+ * by key and replays what the winner recorded.
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}
+
+/** The same idempotency key sent with a DIFFERENT request. Refused, never replayed. */
+export function idempotencyKeyReused(what: string): ConflictException {
+  return new ConflictException({
+    code: 'IDEMPOTENCY_KEY_REUSED',
+    message:
+      `This request's idempotency key already recorded a different ${what}. ` +
+      'Reopen the form and submit again — a new form gets a new key.',
+  });
+}
 
 export interface OwnerRef {
   readonly kind: BankOwnerKind;
@@ -57,12 +86,25 @@ export interface PostEntryInput {
   readonly inboundFreightChargeId?: string | null;
   readonly staffId?: string | null;
   /**
-   * The client's key for the request that asked for this entry (UNIQUE).
-   * A caller that accepts one looks it up first and, on a replay, returns
-   * the original result instead of posting — and treats a P2002 on it as
-   * the same replay having won a race.
+   * What a SELLER entry in a non-rupee account is worth to their wallet,
+   * in rupees (signed like the amount). Ignored anywhere else. When a
+   * SELLER entry in a non-rupee account arrives without one, `post()`
+   * values it itself — an outflow at the seller's average rate there, an
+   * inflow at today's rate — so no such row is ever left unvalued.
    */
+  readonly inrBookValue?: Prisma.Decimal | null;
+  /** The payout this entry is part of. */
+  readonly remittanceId?: string | null;
+  /** The operator declared this the account's opening balance (capital only). */
+  readonly isOpeningBalance?: boolean;
+  /** The client's key for the request that created it; UNIQUE. */
   readonly idempotencyKey?: string | null;
+}
+
+/** What a seller holds in one account: units, and their rupee book value. */
+export interface SellerBook {
+  readonly units: Prisma.Decimal;
+  readonly book: Prisma.Decimal;
 }
 
 export interface AccountBalance {
@@ -188,8 +230,30 @@ export class BankLedgerService {
       });
     }
 
+    // A seller's money in a non-rupee account always carries its rupee
+    // book value: summed, it is what their wallet holds for that money,
+    // and a charge takes units at book ÷ units. Valued here when the
+    // caller did not, so no path — an operator's raw entry, a correction
+    // — can leave a row the book cannot count.
+    let inrBookValue: Prisma.Decimal | null = null;
+    const sellerId = input.owner.sellerId;
+    if (
+      input.owner.kind === BankOwnerKind.SELLER &&
+      sellerId &&
+      account.currency !== Currency.INR
+    ) {
+      inrBookValue =
+        input.inrBookValue !== undefined && input.inrBookValue !== null
+          ? new Prisma.Decimal(input.inrBookValue).toDecimalPlaces(2)
+          : await this.defaultBookValue(sellerId, input.accountId, account.currency, amount, tx);
+    }
+
     const created = await db.bankEntry.create({
       data: {
+        inrBookValue,
+        remittanceId: input.remittanceId ?? null,
+        isOpeningBalance: input.isOpeningBalance ?? false,
+        idempotencyKey: input.idempotencyKey ?? null,
         // Named rather than inferred from the staff id: a null there
         // could mean the system or could mean nobody knows, and a bank
         // book must not leave that open.
@@ -212,11 +276,102 @@ export class BankLedgerService {
         note: input.note ?? null,
         occurredAt: input.occurredAt,
         createdByStaffId: input.staffId ?? null,
-        idempotencyKey: input.idempotencyKey ?? null,
       },
       select: { id: true },
     });
     return created;
+  }
+
+  /**
+   * What a seller holds in one account: its units, and what those units
+   * are worth to their wallet in rupees. A rupee account is its own book.
+   */
+  async sellerBook(
+    sellerId: string,
+    accountId: string,
+    currency: Currency,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SellerBook> {
+    const agg = await (tx ?? this.prisma.client).bankEntry.aggregate({
+      where: { accountId, ownerKind: BankOwnerKind.SELLER, sellerId },
+      _sum: { signedAmount: true, inrBookValue: true },
+    });
+    const units = agg._sum.signedAmount ?? ZERO;
+    return { units, book: currency === Currency.INR ? units : (agg._sum.inrBookValue ?? ZERO) };
+  }
+
+  /**
+   * What `units` of a seller's money in this account are worth to their
+   * wallet, in rupees.
+   *
+   * At their weighted-average rate (book ÷ units) while they hold some
+   * there — and ALL of the book when all of the units go, so a spent
+   * holding is exactly 0 units and ₹0. At today's rate when they hold
+   * none. Null when there is neither: the money cannot be valued.
+   */
+  async inrValueOfSellerUnits(
+    sellerId: string,
+    accountId: string,
+    currency: Currency,
+    units: Prisma.Decimal,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Prisma.Decimal | null> {
+    if (currency === Currency.INR) return units;
+    const held = await this.sellerBook(sellerId, accountId, currency, tx);
+    if (held.units.gt(0) && held.book.gt(0)) {
+      return units.equals(held.units)
+        ? held.book
+        : units.mul(held.book).div(held.units).toDecimalPlaces(2);
+    }
+    const rate = await this.currentInrPerUnit(currency, tx);
+    return rate === null ? null : units.mul(rate).toDecimalPlaces(2);
+  }
+
+  /** Rupees per unit of `currency` at the system rate, or null when there is none. */
+  async currentInrPerUnit(
+    currency: Currency,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Prisma.Decimal | null> {
+    if (currency === Currency.INR) return ONE;
+    const fx = await (tx ?? this.prisma.client).fxRate.findFirst({
+      where: {
+        OR: [
+          { fromCurrency: currency, toCurrency: Currency.INR },
+          { fromCurrency: Currency.INR, toCurrency: currency },
+        ],
+      },
+      select: { fromCurrency: true, rate: true },
+    });
+    if (!fx || fx.rate.lessThanOrEqualTo(0)) return null;
+    // "1 fromCurrency = rate toCurrency".
+    return fx.fromCurrency === currency ? fx.rate : ONE.div(fx.rate);
+  }
+
+  /**
+   * The book value of a SELLER entry nobody valued: money leaving goes at
+   * their average there (all of the book when all of the units go);
+   * money arriving at today's rate. Null only when there is no rate.
+   */
+  private async defaultBookValue(
+    sellerId: string,
+    accountId: string,
+    currency: Currency,
+    amount: Prisma.Decimal,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Prisma.Decimal | null> {
+    if (amount.lessThan(0)) {
+      const held = await this.sellerBook(sellerId, accountId, currency, tx);
+      if (held.units.gt(0) && held.book.gt(0)) {
+        const out = amount.neg();
+        return (
+          out.greaterThanOrEqualTo(held.units)
+            ? held.book
+            : out.mul(held.book).div(held.units).toDecimalPlaces(2)
+        ).neg();
+      }
+    }
+    const rate = await this.currentInrPerUnit(currency, tx);
+    return rate === null ? null : amount.mul(rate).toDecimalPlaces(2);
   }
 
   /** Every account with its balance, split by whose money it is. */
@@ -324,11 +479,27 @@ export class BankLedgerService {
     statedBalance: Prisma.Decimal | string;
     reason: string;
     staffId: string;
+    /**
+     * The operator says this is the account's OPENING balance — money the
+     * business already had, not a correction. The P&L leaves exactly the
+     * marked entry off the reconciliation line. Capital only, and once per
+     * account.
+     */
+    isOpeningBalance?: boolean;
   }): Promise<{ delta: string; entryId: string | null }> {
     if (input.reason.trim().length < 10) {
       throw new BadRequestException({
         code: 'BANK_REASON_TOO_SHORT',
         message: 'Say why the book was wrong — at least 10 characters',
+      });
+    }
+    const opening = input.isOpeningBalance === true;
+    if (opening && input.owner.kind !== BankOwnerKind.CAPITAL) {
+      throw new BadRequestException({
+        code: 'OPENING_BALANCE_CAPITAL_ONLY',
+        message:
+          'An opening balance is what the business already had — our own money. A seller’s ' +
+          'money arrives through a top-up or a settlement, each of which records why.',
       });
     }
     // ── Read and write under ONE lock, in ONE transaction ───────────
@@ -337,44 +508,76 @@ export class BankLedgerService {
     // outside the write and two operators reconciling the same account
     // both see the same figure, both post the same difference, and the
     // account ends up corrected twice — permanently, because the ledger
-    // is append-only. The same window lets an ordinary entry landing
-    // mid-reconcile get baked into the adjustment as though it were an
-    // error.
+    // is append-only.
     //
-    // The lock is per (account, owner): reconciling our capital and a
-    // seller's holding in the same account are independent sums and
-    // need not queue behind each other.
+    // The per-(account, owner) key: reconciling our capital and a seller's
+    // holding in the same account are independent sums and need not queue
+    // behind each other.
+    //
+    // Then the ATTRIBUTION key. Wallet charges and refunds move cash
+    // between a seller and capital with reclassification pairs, and every
+    // such pair takes this same key (after its seller's WALLET lock). So
+    // no pair can land between the balance read below and the correction
+    // posted from it — without it, a charge landing mid-reconcile was
+    // folded into the adjustment as though it were an error. One key for
+    // all accounts rather than one per account, because an attribution
+    // that touches two accounts in opposite orders to another would
+    // otherwise deadlock with it. Reconcile takes no WALLET lock, and
+    // nothing takes a WALLET lock after this key, so there is no cycle.
     const ownerKey = `${input.accountId}|${input.owner.kind}|${input.owner.sellerId ?? ''}`;
-    const result = await this.prisma.client.$transaction(async (tx) => {
-      await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ownerKey);
+    let result: {
+      entry: { id: string };
+      current: Prisma.Decimal;
+      stated: Prisma.Decimal;
+      delta: Prisma.Decimal;
+    } | null;
+    try {
+      result = await this.prisma.client.$transaction(async (tx) => {
+        await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ownerKey);
+        await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ATTRIBUTION_RECONCILE_KEY);
 
-      const current = await this.ownerBalance(input.accountId, input.owner, tx);
-      const stated = new Prisma.Decimal(input.statedBalance);
-      const delta = stated.sub(current);
-      if (delta.isZero()) return null;
+        if (opening) {
+          const existing = await tx.bankEntry.findFirst({
+            where: { accountId: input.accountId, isOpeningBalance: true },
+            select: { occurredAt: true },
+          });
+          if (existing) throw openingBalanceExists(existing.occurredAt);
+        }
 
-      // The statement being reconciled against IS this account's, so the
-      // difference is in its currency by construction.
-      const account = await tx.platformBankAccount.findUniqueOrThrow({
-        where: { id: input.accountId },
-        select: { currency: true },
+        const current = await this.ownerBalance(input.accountId, input.owner, tx);
+        const stated = new Prisma.Decimal(input.statedBalance);
+        const delta = stated.sub(current);
+        if (delta.isZero()) return null;
+
+        // The statement being reconciled against IS this account's, so the
+        // difference is in its currency by construction.
+        const account = await tx.platformBankAccount.findUniqueOrThrow({
+          where: { id: input.accountId },
+          select: { currency: true },
+        });
+
+        const entry = await this.post(
+          {
+            accountId: input.accountId,
+            type: BankEntryType.RECONCILIATION_ADJUSTMENT,
+            signedAmount: delta,
+            amountCurrency: account.currency,
+            owner: input.owner,
+            occurredAt: new Date(),
+            note: input.reason,
+            staffId: input.staffId,
+            isOpeningBalance: opening,
+          },
+          tx,
+        );
+        return { entry, current, stated, delta };
       });
-
-      const entry = await this.post(
-        {
-          accountId: input.accountId,
-          type: BankEntryType.RECONCILIATION_ADJUSTMENT,
-          signedAmount: delta,
-          amountCurrency: account.currency,
-          owner: input.owner,
-          occurredAt: new Date(),
-          note: input.reason,
-          staffId: input.staffId,
-        },
-        tx,
-      );
-      return { entry, current, stated, delta };
-    });
+    } catch (err) {
+      // The partial unique on the mark: an opening balance written by
+      // account creation at the same moment. Same answer as the check.
+      if (opening && isUniqueViolation(err)) throw openingBalanceExists(null);
+      throw err;
+    }
 
     if (result === null) return { delta: '0.00', entryId: null };
     const { entry, current, stated, delta } = result;
@@ -395,6 +598,7 @@ export class BankLedgerService {
         ownerKind: input.owner.kind,
         sellerId: input.owner.sellerId ?? null,
         reason: input.reason,
+        isOpeningBalance: opening,
       },
     });
     return { delta: delta.toFixed(2), entryId: entry.id };
@@ -418,6 +622,8 @@ export class BankLedgerService {
     reason: string;
     reference?: string;
     staffId: string;
+    /** The form's key: a replay returns the original entry and posts nothing. */
+    idempotencyKey?: string;
   }): Promise<{ id: string }> {
     if (input.reason.trim().length < 10) {
       throw new BadRequestException({
@@ -426,6 +632,30 @@ export class BankLedgerService {
       });
     }
     const amount = new Prisma.Decimal(input.amount);
+    const type =
+      input.direction === 'IN' ? BankEntryType.OWNER_CONTRIBUTION : BankEntryType.OWNER_DRAWING;
+    const key = input.idempotencyKey;
+    // A replay: the same key already recorded this. Same request ⇒ the
+    // same answer and nothing posted; a DIFFERENT request under the same
+    // key is refused rather than silently answered with somebody else's.
+    const replay = async (): Promise<{ id: string } | null> => {
+      if (key === undefined) return null;
+      const prior = await this.prisma.client.bankEntry.findUnique({
+        where: { idempotencyKey: key },
+        select: { id: true, accountId: true, type: true, signedAmount: true },
+      });
+      if (prior === null) return null;
+      if (
+        prior.accountId !== input.accountId ||
+        prior.type !== type ||
+        !prior.signedAmount.abs().equals(amount)
+      ) {
+        throw idempotencyKeyReused('owner-money entry');
+      }
+      return { id: prior.id };
+    };
+    const replayed = await replay();
+    if (replayed !== null) return replayed;
     if (amount.lessThanOrEqualTo(0)) {
       throw new BadRequestException({
         code: 'OWNER_MONEY_AMOUNT_INVALID',
@@ -445,18 +675,26 @@ export class BankLedgerService {
         message: 'No such bank account',
       });
     }
-    const entry = await this.post({
-      accountId: input.accountId,
-      type:
-        input.direction === 'IN' ? BankEntryType.OWNER_CONTRIBUTION : BankEntryType.OWNER_DRAWING,
-      signedAmount: input.direction === 'IN' ? amount : amount.neg(),
-      amountCurrency: account.currency,
-      owner: { kind: BankOwnerKind.CAPITAL },
-      occurredAt: input.occurredAt,
-      reference: input.reference ?? null,
-      note: input.reason.trim(),
-      staffId: input.staffId,
-    });
+    let entry: { id: string };
+    try {
+      entry = await this.post({
+        accountId: input.accountId,
+        type,
+        signedAmount: input.direction === 'IN' ? amount : amount.neg(),
+        amountCurrency: account.currency,
+        owner: { kind: BankOwnerKind.CAPITAL },
+        occurredAt: input.occurredAt,
+        reference: input.reference ?? null,
+        note: input.reason.trim(),
+        staffId: input.staffId,
+        idempotencyKey: key ?? null,
+      });
+    } catch (err) {
+      // Two copies of one request racing: the other committed first.
+      const raced = isUniqueViolation(err) ? await replay() : null;
+      if (raced !== null) return raced;
+      throw err;
+    }
     await this.audit.log({
       actorType: 'STAFF',
       staffUserId: input.staffId,
@@ -622,4 +860,15 @@ export class BankLedgerService {
     });
     return agg._sum.signedAmount ?? ZERO;
   }
+}
+
+/** An account's opening balance is recorded once; a second is a correction, not an opening. */
+function openingBalanceExists(at: Date | null): ConflictException {
+  return new ConflictException({
+    code: 'OPENING_BALANCE_EXISTS',
+    message:
+      'This account already has an opening balance' +
+      (at === null ? '' : ` (recorded ${at.toISOString().slice(0, 10)})`) +
+      '. Reconcile without marking it: a later difference is a correction, not an opening.',
+  });
 }

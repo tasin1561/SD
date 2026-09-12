@@ -103,4 +103,15 @@ export class CreateRemittanceDto {
   @IsString()
   @MaxLength(2000)
   note?: string;
+
+  @ApiProperty({
+    required: false,
+    format: 'uuid',
+    description:
+      'One key per opening of the form. A retry with the same key returns the original ' +
+      'remittance (200) and debits nothing.',
+  })
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }

@@ -45,6 +45,9 @@ export function ReconcileModal({
   const [sellerId, setSellerId] = useState('');
   const [statedBalance, setStated] = useState('');
   const [reason, setReason] = useState('');
+  // Our own money only: the P&L leaves exactly the marked entry off its
+  // reconciliation line, so an opening balance never reads as income.
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Each owner is its own running sum, so the figure being corrected has
@@ -78,10 +81,12 @@ export function ReconcileModal({
         ...(sellerId === '' ? {} : { sellerId }),
         statedBalance: Number(statedBalance).toFixed(2),
         reason: reason.trim(),
+        ...(sellerId === '' && opening ? { isOpeningBalance: true } : {}),
       });
       setStated('');
       setSellerId('');
       setReason('');
+      setOpening(false);
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -147,6 +152,21 @@ export function ReconcileModal({
               will be posted against {sellerId === '' ? 'our own money' : 'their holding'}.
             </p>
           </div>
+        )}
+        {sellerId === '' && (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={opening}
+              onChange={(e) => setOpening(e.target.checked)}
+            />
+            <span>
+              This is the account&apos;s <strong>opening balance</strong> — money the business
+              already had when the book started. It is left off the P&amp;L instead of reading as
+              income. Once per account.
+            </span>
+          </label>
         )}
         <FormField label="Why the book was wrong" required hint="At least a sentence; it is kept">
           <Textarea

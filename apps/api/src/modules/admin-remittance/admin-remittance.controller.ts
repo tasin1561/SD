@@ -7,8 +7,10 @@ import {
   Param,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Currency } from '@skydrop/db';
 import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
@@ -41,12 +43,16 @@ export class AdminRemittanceController {
   @ApiOperation({
     summary: 'Record a remittance — debits the seller wallet + audits',
   })
-  create(
+  async create(
     @Body() body: CreateRemittanceDto,
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<{ id: string }> {
-    return this.svc.create(body, { staffId: staff.id }, ctx);
+    const created = await this.svc.create(body, { staffId: staff.id }, ctx);
+    // A replay of an idempotency key created nothing: 200, the original id.
+    if (created.replayed) res.status(HttpStatus.OK);
+    return { id: created.id };
   }
 
   @Get()

@@ -40,6 +40,8 @@ interface BankRow {
   ownerKind: string;
   sellerId: string | null;
   signedAmount: Prisma.Decimal;
+  /** A seller's non-rupee entry: what it is worth to their wallet. */
+  inrBookValue: Prisma.Decimal | null;
 }
 interface Topup {
   sellerId: string;
@@ -80,6 +82,7 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
         signedAmount: Prisma.Decimal;
         amountCurrency: string;
         owner: { kind: string; sellerId?: string };
+        inrBookValue?: Prisma.Decimal | null;
       }) => {
         bank.push({
           accountId: input.accountId,
@@ -87,6 +90,7 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
           ownerKind: input.owner.kind,
           sellerId: input.owner.sellerId ?? null,
           signedAmount: input.signedAmount,
+          inrBookValue: input.inrBookValue ?? null,
         });
         return { id: nextId() };
       },
@@ -116,17 +120,29 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
       // By account, or by account AND currency — as the real one is asked.
       groupBy: jest.fn(async (a: { by: string[]; where: { sellerId: string } }) => {
         const withCurrency = a.by.includes('currency');
-        const by = new Map<string, { accountId: string; currency: string; sum: Prisma.Decimal }>();
+        const by = new Map<
+          string,
+          { accountId: string; currency: string; sum: Prisma.Decimal; book: Prisma.Decimal }
+        >();
         for (const b of bank) {
           if (b.ownerKind !== 'SELLER' || b.sellerId !== a.where.sellerId) continue;
           const key = withCurrency ? `${b.accountId}|${b.currency}` : b.accountId;
-          const cur = by.get(key) ?? { accountId: b.accountId, currency: b.currency, sum: ZERO };
-          by.set(key, { ...cur, sum: cur.sum.add(b.signedAmount) });
+          const cur = by.get(key) ?? {
+            accountId: b.accountId,
+            currency: b.currency,
+            sum: ZERO,
+            book: ZERO,
+          };
+          by.set(key, {
+            ...cur,
+            sum: cur.sum.add(b.signedAmount),
+            book: cur.book.add(b.inrBookValue ?? ZERO),
+          });
         }
         return [...by.values()].map((v) => ({
           accountId: v.accountId,
           ...(withCurrency ? { currency: v.currency } : {}),
-          _sum: { signedAmount: v.sum },
+          _sum: { signedAmount: v.sum, inrBookValue: v.book },
         }));
       }),
     },
@@ -291,6 +307,7 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
       signedAmount: amount,
       amountCurrency: 'BDT',
       owner: { kind: 'SELLER', sellerId },
+      inrBookValue: credited,
     });
     await attribution.repayDebt(tx as never, {
       sellerId,
@@ -298,6 +315,7 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
       currency: Currency.BDT,
       amount: amount.mul(split.toCapital).div(credited).toDecimalPlaces(2),
       reference: entry.id,
+      inrValue: split.toCapital,
     });
   };
   /** A charge given back (ORDER_CHARGES_REFUND): TO_SELLER, clamped by debt. */
@@ -309,17 +327,24 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
       amount: D(amount),
     });
   };
-  /** Rupees per unit of a seller's money in an account: their last top-up there. */
-  const rateFor = (sellerId: string, accountId: string, currency: string): Prisma.Decimal => {
-    if (currency === 'INR') return D('1');
-    const t = topups.filter((x) => x.sellerId === sellerId && x.bankAccountId === accountId).at(-1);
-    return t === undefined ? ZERO : t.credited.div(t.amount);
-  };
-  /** What the book holds for them, every currency valued in rupees. */
+  /**
+   * What the book holds for them, every currency valued in rupees: rupees
+   * as they are, anything else by its BOOK value — what it is worth to
+   * their wallet, which is what the invariant compares.
+   */
   const held = (sellerId: string): string =>
     bank
       .filter((b) => b.ownerKind === 'SELLER' && b.sellerId === sellerId)
-      .reduce((t, b) => t.add(b.signedAmount.mul(rateFor(sellerId, b.accountId, b.currency))), ZERO)
+      .reduce(
+        (t, b) => t.add(b.currency === 'INR' ? b.signedAmount : (b.inrBookValue ?? ZERO)),
+        ZERO,
+      )
+      .toFixed(2);
+  /** The units of one currency held for them — a spent holding must read 0. */
+  const units = (sellerId: string, currency: string): string =>
+    bank
+      .filter((b) => b.ownerKind === 'SELLER' && b.sellerId === sellerId && b.currency === currency)
+      .reduce((t, b) => t.add(b.signedAmount), ZERO)
       .toFixed(2);
   /** Our own rupees across the book. */
   const capital = (): string =>
@@ -358,8 +383,10 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
           }),
     });
   };
-  return { pay, owe, topUp, refund, held, owed, accountTotal, capital };
+  return { pay, owe, topUp, refund, held, units, owed, accountTotal, capital };
 }
+
+type World = ReturnType<typeof makeWorld>;
 
 describe('the bank book holds each seller exactly what their wallet owes them', () => {
   it('a seller in credit: held the COD less the tax on it', async () => {
@@ -492,5 +519,75 @@ describe('the bank book holds each seller exactly what their wallet owes them', 
     expect(w.accountTotal()).toBe('2000.00');
     // All that is left ours is t's tax: the ₹50 absorbed on a came back.
     expect(w.capital()).toBe('305.08');
+  });
+
+  it('two taka top-ups at different rates are held at what was credited, and a charge of it all leaves nothing', async () => {
+    // ৳1,000 credited ₹700, then ৳1,000 credited ₹800. Valued at the last
+    // top-up's rate this read ৳2,000 × 0.80 = ₹1,600 against a ₹1,500
+    // wallet, and a ₹1,500 charge took ৳1,875 and stranded ৳125 "theirs".
+    const w = makeWorld([]);
+    await w.topUp('s', '1000', '700');
+    await w.topUp('s', '1000', '800');
+    expect(w.owed('s')).toBe('1500.00');
+    expect(w.held('s')).toBe('1500.00');
+    await w.owe('s', '1500');
+    expect(w.owed('s')).toBe('0.00');
+    expect(w.held('s')).toBe('0.00');
+    expect(w.units('s', 'BDT')).toBe('0.00');
+  });
+
+  it('charges in pieces go at the average rate, and the last one spends every unit exactly', async () => {
+    const w = makeWorld([]);
+    await w.topUp('s', '1000', '700');
+    await w.topUp('s', '1000', '800');
+    for (const charge of ['500', '333.33', '0.01', '666.66']) {
+      await w.owe('s', charge);
+      expect(w.held('s')).toBe(w.owed('s'));
+    }
+    expect(w.owed('s')).toBe('0.00');
+    expect(w.units('s', 'BDT')).toBe('0.00');
+  });
+
+  describe('a COD reversal takes back what the wallet lost — whatever they held before it', () => {
+    // s is paid ₹1,000 COD on a (₹847.46 after tax), moved to a starting
+    // balance, then the courier takes a back on a payout that pays t ₹2,000.
+    const run = async (moveTo: (w: World) => Promise<void>): Promise<World> => {
+      const w = makeWorld([
+        { id: 'a', sellerId: 's', cod: '1000' },
+        { id: 'b', sellerId: 't', cod: '2000' },
+      ]);
+      await w.pay('1000', [['a', '1000']]);
+      await moveTo(w);
+      await w.pay('1000', [['b', '2000']], [['a', '1000']]);
+      expect(w.accountTotal()).toBe('2000.00');
+      expect(w.held('t')).toBe(w.owed('t'));
+      return w;
+    };
+
+    it('starting at ₹0: nothing held before, nothing after', async () => {
+      const w = await run((x) => x.owe('s', '847.46'));
+      expect(w.owed('s')).toBe('0.00');
+      expect(w.held('s')).toBe('0.00');
+    });
+
+    it('starting between the COD less its tax and the COD (₹900): the returned tax stays theirs', async () => {
+      // 900 − 1,000 + 152.54 = 52.54. Taking the whole ₹1,000 after the
+      // tax refund had moved in took the refund too, and held them ₹0.
+      const w = await run((x) => x.refund('s', '52.54'));
+      expect(w.owed('s')).toBe('52.54');
+      expect(w.held('s')).toBe('52.54');
+    });
+
+    it('starting above the COD (₹1,500)', async () => {
+      const w = await run((x) => x.refund('s', '652.54'));
+      expect(w.owed('s')).toBe('652.54');
+      expect(w.held('s')).toBe('652.54');
+    });
+
+    it('starting in debt (−₹200): nothing to take, and the debt grows by the reversal', async () => {
+      const w = await run((x) => x.owe('s', '1047.46'));
+      expect(w.owed('s')).toBe('0.00');
+      expect(w.held('s')).toBe('0.00');
+    });
   });
 });

@@ -328,7 +328,11 @@ export class CourierSettlementService {
       ZERO,
     );
 
-    const creditedSellers = new Set<string>();
+    // Every seller whose wallet this payout moves — a credit OR a reversal.
+    // Their cached balance is refreshed after commit: TRE-7's credit block
+    // at order create reads the cache, so a seller only reversed would
+    // otherwise keep trading on the balance from before.
+    const touchedSellers = new Set<string>();
     const shortfalls: Array<{
       orderId: string;
       expected: string;
@@ -379,6 +383,20 @@ export class CourierSettlementService {
         await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT_ORDER, id);
       }
       const prior = await this.priorByOrder(tx, touched);
+      // Every seller this payout credits or takes back from, locked UP
+      // FRONT and in one sorted order. Taken line by line, two payouts
+      // covering the same two sellers in opposite orders each held one
+      // wallet and waited for the other — a deadlock Postgres broke by
+      // killing one of them (40P01). Still WALLET before any bank
+      // reconcile lock, as everywhere.
+      const sellers = [
+        ...new Set(
+          touched.map((id) => byId.get(id)?.sellerId).filter((s): s is string => s !== undefined),
+        ),
+      ].sort();
+      for (const s of sellers) {
+        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${s}|${Currency.INR}`);
+      }
 
       let allocated = ZERO;
       const lineData = parsedLines.map((line) => {
@@ -539,7 +557,7 @@ export class CourierSettlementService {
             message: `Order ${order.id} was credited by another payout meanwhile — record this one again.`,
           });
         }
-        creditedSellers.add(order.sellerId);
+        touchedSellers.add(order.sellerId);
       }
 
       // ── RTO reversals ────────────────────────────────────────────
@@ -553,12 +571,16 @@ export class CourierSettlementService {
       const clawbacks: Array<{
         sellerId: string | null;
         amount: Prisma.Decimal;
-        /** The reversed credit's gross — the most of their cash it can take. */
+        /** The reversed credit's gross. */
         gross: Prisma.Decimal;
+        /** Their cash that stops being theirs — see below. */
+        take: Prisma.Decimal;
       }> = [];
       for (const r of rtoReversals) {
         const order = byId.get(r.orderId);
         if (!order) continue; // refused before the transaction
+        // What they were owed before this reversal, under their wallet lock.
+        const before = await this.attribution.walletBalance(tx, order.sellerId);
         const res = await this.codCredit.reverseForOrder(tx, {
           orderId: order.id,
           sellerId: order.sellerId,
@@ -570,10 +592,25 @@ export class CourierSettlementService {
             message: `This order's COD was already reversed on an earlier payout (${r.orderId}).`,
           });
         }
+        const gross = new Prisma.Decimal(res.grossInr);
+        // Across the WHOLE reversal, the cash that stops being theirs is
+        //   max(0, before) − max(0, after)
+        // where `after` is the wallet once the reversal AND the refunds of
+        // its tax and fee have landed. Those refunds are TO_SELLER and have
+        // ALREADY moved their share back to the seller as each was written —
+        // max(0, after) − max(0, before − G) in all — so what is taken here
+        // is the difference of the two:
+        //   max(0, before) − max(0, before − G),   never more than G.
+        // Taking the whole G after the refunds took the refunds back too:
+        // ₹900 held, a ₹1,000 credit reversed with ₹152.54 of tax returned,
+        // left them holding ₹0 against a wallet of ₹52.54.
+        const take = res.reversed ? positive(before).sub(positive(before.sub(gross))) : ZERO;
+        if (res.reversed) touchedSellers.add(order.sellerId);
         clawbacks.push({
           sellerId: res.reversed ? order.sellerId : null,
           amount: r.amount,
-          gross: new Prisma.Decimal(res.grossInr),
+          gross,
+          take,
         });
       }
 
@@ -631,23 +668,23 @@ export class CourierSettlementService {
       }
       // The reversed COD leaving again, grossed up above like the rest.
       //
-      // Two steps. First, the seller's part stops being theirs: the
-      // reversal debited their wallet the whole credit (G) and returned
-      // its deductions, so what they must stop holding is up to G, capped
-      // at what they hold anywhere — their rupees first, then any taka
-      // (TRE-8, clamped). Capping at the courier's figure R instead left a
-      // short-paid order's gap (G − R) "theirs" while their wallet said
-      // nothing was owed. Then the cash itself leaves as OURS: all of R,
-      // from the account it was taken out of. Net, capital is charged
-      // R − (what the seller gave up), which is positive by the shortfall
-      // capital absorbed when the order was first paid short.
+      // Two steps. First, the seller's part stops being theirs: exactly
+      // what the reversal took off the wallet net of the refunds (`take`,
+      // above), at most the credit's gross G, taken wherever they hold it —
+      // their rupees first, then any taka (TRE-8, clamped). Capping at the
+      // courier's figure R instead left a short-paid order's gap (G − R)
+      // "theirs" while their wallet said nothing was owed. Then the cash
+      // itself leaves as OURS: all of R, from the account it was taken out
+      // of. Net, capital is charged R − (what the seller gave up), which
+      // is positive by the shortfall capital absorbed when the order was
+      // first paid short.
       for (const c of clawbacks) {
         const fromSeller =
-          c.sellerId === null
+          c.sellerId === null || c.take.lessThanOrEqualTo(0)
             ? ZERO
             : await this.attribution.takeToCapital(tx, {
                 sellerId: c.sellerId,
-                amount: c.gross,
+                amount: c.take,
                 reference,
                 note: `COD reversed by the courier on ${reference} — the credit is gone, so is their cash`,
               });
@@ -773,8 +810,8 @@ export class CourierSettlementService {
       return row;
     });
 
-    // Balances are cached; the credits above changed them.
-    for (const sellerId of creditedSellers) {
+    // Balances are cached; the credits and reversals above changed them.
+    for (const sellerId of touchedSellers) {
       await this.wallet.recomputeCacheAfterCommit(sellerId, Currency.INR, 'post-settlement-credit');
     }
 
@@ -975,13 +1012,65 @@ export class CourierSettlementService {
       });
     }
 
+    const credited = new Set<string>();
     await this.prisma.client.$transaction(async (tx) => {
+      // The payout re-read under ITS lock. What is left to allocate was
+      // read above outside any transaction: two operators each saw the
+      // same remainder and together allocated past the cash that landed,
+      // and each wrote `stale + adding`, so one addition vanished from
+      // `allocatedInr` while its lines and credits stayed.
+      await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT, settlement.id);
+      const fresh = await tx.courierSettlement.findUnique({
+        where: { id: settlement.id },
+        select: {
+          amountInr: true,
+          allocatedInr: true,
+          earlyCodFeeInr: true,
+          freightDeductedInr: true,
+          lines: { select: { orderId: true } },
+        },
+      });
+      if (!fresh) {
+        throw new NotFoundException({
+          code: 'SETTLEMENT_NOT_FOUND',
+          message: `Settlement ${settlementId} not found`,
+        });
+      }
+      const onPayout = new Set(fresh.lines.map((l) => l.orderId));
+      const allocatedMeanwhile = parsedLines
+        .filter((l) => onPayout.has(l.orderId))
+        .map((l) => l.orderId);
+      if (allocatedMeanwhile.length > 0) {
+        throw new BadRequestException({
+          code: 'SETTLEMENT_ORDER_ALREADY_ALLOCATED',
+          message: `Already allocated on this payout: ${allocatedMeanwhile.join(', ')}`,
+        });
+      }
+      const remainingNow = fresh.amountInr.add(explainedKeptBackOf(fresh)).sub(fresh.allocatedInr);
+      if (adding.gt(remainingNow)) {
+        throw new BadRequestException({
+          code: 'SETTLEMENT_OVER_ALLOCATED',
+          message:
+            `This payout has ${remainingNow.toFixed(2)} left to allocate and you named ` +
+            `${adding.toFixed(2)}. Record a separate payout for cash that landed separately.`,
+        });
+      }
+
       // Priors read under each order's lock, as in `record`.
       const touched = [...new Set(parsedLines.map((l) => l.orderId))].sort();
       for (const id of touched) {
         await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT_ORDER, id);
       }
       const prior = await this.priorByOrder(tx, touched);
+      // Every seller's wallet up front, sorted — as in `record`.
+      const sellers = [
+        ...new Set(
+          touched.map((id) => byId.get(id)?.sellerId).filter((s): s is string => s !== undefined),
+        ),
+      ].sort();
+      for (const s of sellers) {
+        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${s}|${Currency.INR}`);
+      }
       const lineData = parsedLines.map((line) => {
         const expected = byId.get(line.orderId)?.codAmountInr ?? ZERO;
         const p = prior.get(line.orderId) ?? NO_PRIOR;
@@ -1004,7 +1093,7 @@ export class CourierSettlementService {
       });
       await tx.courierSettlement.update({
         where: { id: settlement.id },
-        data: { allocatedInr: settlement.allocatedInr.add(adding) },
+        data: { allocatedInr: fresh.allocatedInr.add(adding) },
       });
 
       // The zero-sum pair. No new cash arrived, so the account total
@@ -1058,6 +1147,7 @@ export class CourierSettlementService {
             message: `Order ${order.id} was credited by another payout meanwhile — allocate again.`,
           });
         }
+        credited.add(order.sellerId);
       }
       if (!moved.isZero()) {
         await this.bank.post(
@@ -1085,8 +1175,8 @@ export class CourierSettlementService {
           entityType: 'courier_settlement',
           entityId: settlement.id,
           changes: {
-            before: { allocatedInr: settlement.allocatedInr.toString() },
-            after: { allocatedInr: settlement.allocatedInr.add(adding).toString() },
+            before: { allocatedInr: fresh.allocatedInr.toString() },
+            after: { allocatedInr: fresh.allocatedInr.add(adding).toString() },
           },
           metadata: {
             reference: settlement.reference,
@@ -1100,6 +1190,11 @@ export class CourierSettlementService {
         tx,
       );
     });
+
+    // The credits changed cached balances (TRE-7 reads the cache).
+    for (const sellerId of credited) {
+      await this.wallet.recomputeCacheAfterCommit(sellerId, Currency.INR, 'post-settlement-credit');
+    }
 
     return this.getById(settlement.id);
   }
@@ -1338,6 +1433,10 @@ export class CourierSettlementService {
       createdAt: row.createdAt,
     };
   }
+}
+
+function positive(v: Prisma.Decimal): Prisma.Decimal {
+  return v.lessThan(0) ? ZERO : v;
 }
 
 /** Everything the courier kept back from a payout, whatever the kind. */

@@ -1,33 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import {
-  BankEntryType,
-  BankOwnerKind,
-  Currency,
-  Prisma,
-  TopupRequestStatus,
-  WalletEntryDirection,
-} from '@skydrop/db';
+import { BankEntryType, BankOwnerKind, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { BankLedgerService } from './bank-ledger.service';
-import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import {
+  AdvisoryLock,
+  ATTRIBUTION_RECONCILE_KEY,
+  takeAdvisoryLock,
+} from '../../../common/db/advisory-lock';
 
 const ZERO = new Prisma.Decimal(0);
-const ONE = new Prisma.Decimal(1);
+const PAISA = new Prisma.Decimal('0.01');
 
 type TxClient = Prisma.TransactionClient;
 
 /** Which way the CASH behind a wallet movement changes hands. */
 type Reclassification = 'TO_CAPITAL' | 'TO_SELLER' | 'NONE';
 
-/**
- * What one unit of a seller's holding in an account is worth in rupees.
- * `TOPUP`: the rate of the latest accepted top-up into that account — the
- * rate their wallet was credited at, so valuing the holding at it keeps
- * the book equal to the wallet. `CURRENT`: no top-up has ever landed
- * there, so today's rate is the only figure there is.
- */
-export interface InrRate {
-  readonly rate: Prisma.Decimal;
-  readonly source: 'INR' | 'TOPUP' | 'CURRENT';
+/** One positive holding: units in the account's currency, and their rupee book value. */
+interface Holding {
+  readonly accountId: string;
+  readonly currency: Currency;
+  readonly units: Prisma.Decimal;
+  /** What the wallet holds for these units, in rupees. Rupees are their own book. */
+  readonly book: Prisma.Decimal;
 }
 
 /**
@@ -57,6 +51,18 @@ export interface InrRate {
  * negative wallet has nothing behind it in any account, and inventing an
  * entry for it would put a number in the bank book that no statement
  * will ever agree with.
+ *
+ * ── MONEY IN ANOTHER CURRENCY ────────────────────────────────────────
+ * A seller's taka is valued by its BOOK: every SELLER entry in a
+ * non-rupee account carries `inr_book_value`, what that money is worth to
+ * their wallet. Summed per account it is exactly what the wallet holds
+ * for it, and book ÷ units is their weighted-average rate there. A charge
+ * takes units AT that average and book by exactly the rupees charged, so
+ * the book follows the wallet to the paisa across any number of top-ups
+ * at different rates. Valued at one rate — their latest top-up's, as it
+ * was — ৳1,000 at ₹0.70 plus ৳1,000 at ₹0.80 read as ₹1,600 against a
+ * ₹1,500 wallet, and a ₹1,500 charge left ৳125 "theirs" for a wallet at
+ * zero.
  */
 @Injectable()
 export class SellerCashAttributionService {
@@ -209,10 +215,10 @@ export class SellerCashAttributionService {
    * they hold: the rest is a receivable, not cash.
    *
    * Same-currency holdings first, the largest first. For a rupee amount it
-   * then continues into their other currencies, each converted at the rate
-   * their wallet was credited at when that money landed (`inrPerUnit`) —
-   * valued any other way, the book and the wallet stop agreeing the moment
-   * the market moves.
+   * then continues into their other currencies, each taken at the seller's
+   * AVERAGE rate there (book ÷ units): the book falls by exactly the rupees
+   * charged, and a charge that spends the whole holding takes every unit
+   * and every rupee of book, so nothing is ever stranded as "theirs".
    */
   async takeToCapital(
     tx: TxClient,
@@ -231,12 +237,20 @@ export class SellerCashAttributionService {
 
     for (const h of holdings.filter((x) => x.currency === currency)) {
       if (remaining.lessThanOrEqualTo(0)) break;
-      const take = h.amount.lessThan(remaining) ? h.amount : remaining;
+      const take = h.units.lessThan(remaining) ? h.units : remaining;
       await this.pair(tx, {
         accountId: h.accountId,
         currency,
         sellerId: input.sellerId,
         fromSeller: take,
+        // A non-rupee amount taken from its own currency: the book goes at
+        // their average, all of it when all of the units go.
+        inrValue:
+          currency === Currency.INR
+            ? undefined
+            : take.equals(h.units)
+              ? h.book
+              : take.mul(h.book).div(h.units).toDecimalPlaces(2),
         walletEntryId: input.reference,
         note: input.note,
       });
@@ -248,18 +262,30 @@ export class SellerCashAttributionService {
     if (currency === Currency.INR) {
       for (const h of holdings.filter((x) => x.currency !== Currency.INR)) {
         if (remaining.lessThanOrEqualTo(0)) break;
-        const r = await this.inrPerUnit(tx, input.sellerId, h.accountId, h.currency);
-        if (r === null || r.rate.lessThanOrEqualTo(0)) continue;
-        const value = h.amount.mul(r.rate);
+        // Money whose worth to the wallet is unknown is left alone rather
+        // than taken at a guessed rate.
+        if (h.book.lessThanOrEqualTo(0)) continue;
         let units: Prisma.Decimal;
         let moved: Prisma.Decimal;
-        if (value.lessThanOrEqualTo(remaining)) {
-          units = h.amount;
-          moved = value;
+        if (h.book.lessThanOrEqualTo(remaining)) {
+          // All of it: every unit and every rupee of book, exactly.
+          units = h.units;
+          moved = h.book;
         } else {
-          units = remaining.div(r.rate).toDecimalPlaces(2);
-          if (units.greaterThan(h.amount)) units = h.amount;
           moved = remaining;
+          units = remaining.mul(h.units).div(h.book).toDecimalPlaces(2);
+          if (units.greaterThanOrEqualTo(h.units)) {
+            // Rounding reached the whole holding while book remains. Leave
+            // the last unit to carry the residue, so the holding never
+            // reads 0 units with rupees still against it.
+            const lessOne = h.units.sub(PAISA);
+            if (lessOne.greaterThan(0)) {
+              units = lessOne;
+            } else {
+              units = h.units;
+              moved = h.book;
+            }
+          }
         }
         if (units.lessThanOrEqualTo(0)) continue;
         await this.pair(tx, {
@@ -267,62 +293,16 @@ export class SellerCashAttributionService {
           currency: h.currency,
           sellerId: input.sellerId,
           fromSeller: units,
+          inrValue: moved,
           walletEntryId: input.reference,
           note:
-            `${input.note} — ${units.toFixed(2)} ${h.currency} at ₹${r.rate.toDecimalPlaces(6).toString()} ` +
-            (r.source === 'TOPUP'
-              ? '(the rate of their last top-up into this account)'
-              : '(today’s rate — no top-up has landed in this account)'),
+            `${input.note} — ${units.toFixed(2)} ${h.currency} worth ₹${moved.toFixed(2)} ` +
+            '(at their average rate in this account)',
         });
         remaining = remaining.sub(moved);
       }
     }
     return input.amount.sub(remaining.lessThan(0) ? ZERO : remaining);
-  }
-
-  /**
-   * What one unit of this seller's money in `accountId` is worth in rupees.
-   *
-   * The rate of the latest ACCEPTED top-up into that account (rupees
-   * credited ÷ what arrived), because that is the rate their wallet
-   * recorded the money at. Only when none has ever landed there, today's
-   * rate. Null when there is neither — the holding cannot be valued, and
-   * is left alone rather than guessed at.
-   */
-  async inrPerUnit(
-    tx: TxClient,
-    sellerId: string,
-    accountId: string,
-    currency: Currency,
-  ): Promise<InrRate | null> {
-    if (currency === Currency.INR) return { rate: ONE, source: 'INR' };
-    const topup = await tx.walletTopupRequest.findFirst({
-      where: {
-        sellerId,
-        bankAccountId: accountId,
-        currency,
-        status: TopupRequestStatus.ACCEPTED,
-        walletEntryId: { not: null },
-      },
-      orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
-      select: { amount: true, walletEntry: { select: { amount: true } } },
-    });
-    const credited = topup?.walletEntry?.amount ?? null;
-    if (topup && credited !== null && topup.amount.greaterThan(0) && credited.greaterThan(0)) {
-      return { rate: credited.div(topup.amount), source: 'TOPUP' };
-    }
-    const fx = await tx.fxRate.findFirst({
-      where: {
-        OR: [
-          { fromCurrency: currency, toCurrency: Currency.INR },
-          { fromCurrency: Currency.INR, toCurrency: currency },
-        ],
-      },
-      select: { fromCurrency: true, rate: true },
-    });
-    if (!fx || fx.rate.lessThanOrEqualTo(0)) return null;
-    // "1 fromCurrency = rate toCurrency".
-    return { rate: fx.fromCurrency === currency ? fx.rate : ONE.div(fx.rate), source: 'CURRENT' };
   }
 
   /** What this seller holds in `currency` across every live account, and where most of it is. */
@@ -332,6 +312,22 @@ export class SellerCashAttributionService {
     currency: Currency,
   ): Promise<{ total: Prisma.Decimal; accountId: string | null }> {
     return this.heldBySeller(tx, sellerId, currency);
+  }
+
+  /**
+   * The seller's rupee wallet balance, under their wallet lock (re-entrant
+   * within the transaction) so nothing can move it before the caller acts
+   * on it. The last entry's running balance, as the wallet itself reads it
+   * (WAL-7).
+   */
+  async walletBalance(tx: TxClient, sellerId: string): Promise<Prisma.Decimal> {
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+    const last = await tx.sellerWalletEntry.findFirst({
+      where: { sellerId, currency: Currency.INR },
+      orderBy: { id: 'desc' },
+      select: { runningBalanceAfter: true },
+    });
+    return last?.runningBalanceAfter ?? ZERO;
   }
 
   /**
@@ -350,13 +346,7 @@ export class SellerCashAttributionService {
     sellerId: string,
     amount: Prisma.Decimal,
   ): Promise<{ toCapital: Prisma.Decimal; toSeller: Prisma.Decimal }> {
-    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
-    const last = await tx.sellerWalletEntry.findFirst({
-      where: { sellerId, currency: Currency.INR },
-      orderBy: { id: 'desc' },
-      select: { runningBalanceAfter: true },
-    });
-    const balance = last?.runningBalanceAfter ?? ZERO;
+    const balance = await this.walletBalance(tx, sellerId);
     const debt = balance.lessThan(0) ? balance.neg() : ZERO;
     const toCapital = debt.lessThan(amount) ? debt : amount;
     return { toCapital, toSeller: amount.sub(toCapital) };
@@ -394,6 +384,8 @@ export class SellerCashAttributionService {
   /**
    * Cash that arrived as the seller's but repays what they owed: ours.
    * A zero-sum pair in the account, and the currency, it landed in.
+   * `inrValue` is the rupees of debt it repays — for a non-rupee account,
+   * what comes off the seller's book there.
    */
   async repayDebt(
     tx: TxClient,
@@ -403,6 +395,7 @@ export class SellerCashAttributionService {
       currency: Currency;
       amount: Prisma.Decimal;
       reference: string;
+      inrValue?: Prisma.Decimal;
     },
   ): Promise<void> {
     if (input.amount.lessThanOrEqualTo(0)) return;
@@ -411,6 +404,7 @@ export class SellerCashAttributionService {
       currency: input.currency,
       sellerId: input.sellerId,
       fromSeller: input.amount,
+      ...(input.inrValue === undefined ? {} : { inrValue: input.inrValue }),
       walletEntryId: input.reference,
       note: 'Repays what the seller owed — cash now ours',
     });
@@ -431,6 +425,10 @@ export class SellerCashAttributionService {
    * and the first thing it would let through is cash posted into a
    * retired account — money that then vanishes from every balance the
    * page shows.
+   *
+   * Under the ATTRIBUTION reconcile key, taken after the seller's WALLET
+   * lock (which every caller holds): `reconcile()` takes the same key, so
+   * no pair lands between its balance read and the correction it posts.
    */
   private async pair(
     tx: TxClient,
@@ -440,10 +438,16 @@ export class SellerCashAttributionService {
       sellerId: string;
       /** Positive: leaving the seller's pot. Negative: entering it. */
       fromSeller: Prisma.Decimal;
+      /**
+       * For a non-rupee account: the rupees of the seller's book that go
+       * with it, signed like `fromSeller`. Omitted, `post()` values it.
+       */
+      inrValue?: Prisma.Decimal | undefined;
       walletEntryId: string;
       note: string;
     },
   ): Promise<void> {
+    await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ATTRIBUTION_RECONCILE_KEY);
     const base = {
       accountId: input.accountId,
       type: BankEntryType.RECLASSIFICATION,
@@ -458,6 +462,7 @@ export class SellerCashAttributionService {
         ...base,
         signedAmount: input.fromSeller.neg(),
         owner: { kind: BankOwnerKind.SELLER, sellerId: input.sellerId },
+        ...(input.inrValue === undefined ? {} : { inrBookValue: input.inrValue.neg() }),
       },
       tx,
     );
@@ -501,11 +506,11 @@ export class SellerCashAttributionService {
     return { total: total.lessThan(0) ? ZERO : total, accountId: best?.id ?? null };
   }
 
-  /** Every positive holding the seller has, in any currency, largest first. */
-  private async holdings(
-    tx: TxClient,
-    sellerId: string,
-  ): Promise<Array<{ accountId: string; currency: Currency; amount: Prisma.Decimal }>> {
+  /**
+   * Every positive holding the seller has, in any currency, with its rupee
+   * book value — the most valuable first.
+   */
+  private async holdings(tx: TxClient, sellerId: string): Promise<Holding[]> {
     const grouped = await tx.bankEntry.groupBy({
       by: ['accountId', 'currency'],
       where: {
@@ -514,16 +519,20 @@ export class SellerCashAttributionService {
         // Never a retired account — see heldBySeller.
         account: { deletedAt: null },
       },
-      _sum: { signedAmount: true },
+      _sum: { signedAmount: true, inrBookValue: true },
     });
     return grouped
-      .map((g) => ({
-        accountId: g.accountId,
-        currency: g.currency,
-        amount: g._sum.signedAmount ?? ZERO,
-      }))
-      .filter((h) => h.amount.greaterThan(0))
-      .sort((a, b) => b.amount.comparedTo(a.amount));
+      .map((g) => {
+        const units = g._sum.signedAmount ?? ZERO;
+        return {
+          accountId: g.accountId,
+          currency: g.currency,
+          units,
+          book: g.currency === Currency.INR ? units : (g._sum.inrBookValue ?? ZERO),
+        };
+      })
+      .filter((h) => h.units.greaterThan(0))
+      .sort((a, b) => b.book.comparedTo(a.book));
   }
 
   private async anyAccount(tx: TxClient, currency: Currency): Promise<string | null> {

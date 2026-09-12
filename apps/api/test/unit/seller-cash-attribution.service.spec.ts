@@ -1,4 +1,9 @@
 import { Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
+import {
+  AdvisoryLock,
+  ATTRIBUTION_RECONCILE_KEY,
+  advisoryKey,
+} from '../../src/common/db/advisory-lock';
 import { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
 
 const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
@@ -10,10 +15,18 @@ interface Created {
   type: string;
   currency: string;
   note: string;
+  /** The rupee book value the entry carried, when one was given. */
+  inrBookValue: string | null;
 }
 
 function makeTx(opts: {
-  held?: Array<{ accountId: string; amount: Prisma.Decimal; currency?: Currency }>;
+  /** Holdings: units, and — for a non-rupee account — their rupee book value. */
+  held?: Array<{
+    accountId: string;
+    amount: Prisma.Decimal;
+    currency?: Currency;
+    book?: Prisma.Decimal;
+  }>;
   anyAccount?: string | null;
   /**
    * The seller's wallet balance — before the cash arrives for debtSplit,
@@ -37,7 +50,7 @@ function makeTx(opts: {
         (opts.held ?? []).map((h) => ({
           accountId: h.accountId,
           currency: h.currency ?? Currency.INR,
-          _sum: { signedAmount: h.amount },
+          _sum: { signedAmount: h.amount, inrBookValue: h.book ?? null },
         })),
     },
     walletTopupRequest: {
@@ -78,6 +91,7 @@ function makeLedger(created: Created[]) {
       type: string;
       amountCurrency: string;
       note?: string | null;
+      inrBookValue?: Prisma.Decimal | null;
     }) => {
       created.push({
         signedAmount: input.signedAmount,
@@ -86,6 +100,10 @@ function makeLedger(created: Created[]) {
         type: input.type,
         currency: input.amountCurrency,
         note: input.note ?? '',
+        inrBookValue:
+          input.inrBookValue === undefined || input.inrBookValue === null
+            ? null
+            : input.inrBookValue.toString(),
       });
       return { id: `be-${created.length}` };
     },
@@ -276,16 +294,15 @@ describe('SellerCashAttributionService', () => {
     const summary = (c: Created[]): string[][] =>
       c.map((x) => [x.ownerKind, x.signedAmount.toString(), x.currency]);
 
-    it('a charge beyond their rupees continues into their taka, at their last top-up rate', async () => {
-      // ₹100 at HDFC, ৳10,000 at Tasin credited at ₹8,000 (₹0.80 a taka).
+    it('a charge beyond their rupees continues into their taka, at their average rate there', async () => {
+      // ₹100 at HDFC, ৳10,000 at Tasin worth ₹8,000 (₹0.80 a taka).
       // A ₹300 charge takes the ₹100, then ₹200 of taka = ৳250.
       const created = await run(
         {
           held: [
-            { accountId: 'tasin', amount: D('10000'), currency: Currency.BDT },
+            { accountId: 'tasin', amount: D('10000'), currency: Currency.BDT, book: D('8000') },
             { accountId: 'hdfc', amount: D('100') },
           ],
-          topup: { amount: '10000', credited: '8000' },
         },
         WalletEntryDirection.ORDER_CHARGES,
         '300',
@@ -296,30 +313,76 @@ describe('SellerCashAttributionService', () => {
         ['SELLER', '-250', 'BDT'],
         ['CAPITAL', '250', 'BDT'],
       ]);
-      expect(created[2]?.note).toContain('last top-up');
+      expect(created[2]?.note).toContain('average');
+      // The book falls by exactly the rupees charged.
+      expect(created[2]?.inrBookValue).toBe('-200');
     });
 
-    it('with no top-up into that account, values it at today’s rate — and says so', async () => {
-      // 1 INR = 1.25 BDT, so a taka is ₹0.80 either way.
+    it('two top-ups at different rates: a charge of it all takes every unit and every rupee', async () => {
+      // ৳1,000 at ₹0.70 and ৳1,000 at ₹0.80 — ৳2,000 worth ₹1,500. Valued
+      // at the last top-up's ₹0.80 it read ₹1,600, and a ₹1,500 charge took
+      // ৳1,875 and left ৳125 "theirs" against a wallet at zero.
       const created = await run(
         {
-          held: [{ accountId: 'tasin', amount: D('10000'), currency: Currency.BDT }],
-          fx: { fromCurrency: Currency.INR, rate: '1.25' },
+          held: [
+            { accountId: 'tasin', amount: D('2000'), currency: Currency.BDT, book: D('1500') },
+          ],
         },
         WalletEntryDirection.RTO_FEE,
-        '200',
+        '1500',
       );
       expect(summary(created)).toEqual([
-        ['SELLER', '-250', 'BDT'],
-        ['CAPITAL', '250', 'BDT'],
+        ['SELLER', '-2000', 'BDT'],
+        ['CAPITAL', '2000', 'BDT'],
       ]);
-      expect(created[0]?.note).toContain('today');
+      expect(created[0]?.inrBookValue).toBe('-1500');
+    });
+
+    it('the last unit carries the rounding, so a spent holding is exactly 0 and ₹0', async () => {
+      // ৳1.00 worth ₹100 (a rate chosen so rounding bites): ₹99.90 is ৳0.999,
+      // which rounds to the whole ৳1.00 while ₹0.10 of book remains. The
+      // last unit is left to carry it, and the next charge takes both.
+      const first = await run(
+        {
+          held: [{ accountId: 'tasin', amount: D('1'), currency: Currency.BDT, book: D('100') }],
+        },
+        WalletEntryDirection.ORDER_CHARGES,
+        '99.90',
+      );
+      expect(first[0]?.signedAmount.toString()).toBe('-0.99');
+      expect(first[0]?.inrBookValue).toBe('-99.9');
+      const last = await run(
+        {
+          held: [
+            { accountId: 'tasin', amount: D('0.01'), currency: Currency.BDT, book: D('0.10') },
+          ],
+        },
+        WalletEntryDirection.ORDER_CHARGES,
+        '5',
+      );
+      expect(last[0]?.signedAmount.toString()).toBe('-0.01');
+      expect(last[0]?.inrBookValue).toBe('-0.1');
+    });
+
+    it('takes the ONE attribution reconcile key, so reconcile never folds a charge in', async () => {
+      const { tx, created } = makeTx({ held: [{ accountId: 'hdfc', amount: D('100') }] });
+      const svc = new SellerCashAttributionService(makeLedger(created) as never);
+      await svc.takeToCapital(tx as never, {
+        sellerId: 's1',
+        amount: D('10'),
+        reference: 'r',
+        note: 'n',
+      });
+      expect(tx.$executeRaw).toHaveBeenCalledWith(
+        expect.anything(),
+        AdvisoryLock.BANK_RECONCILE,
+        advisoryKey(ATTRIBUTION_RECONCILE_KEY),
+      );
     });
 
     it('never takes more than they hold, and says how much it took', async () => {
       const { tx, created } = makeTx({
-        held: [{ accountId: 'tasin', amount: D('100'), currency: Currency.BDT }],
-        topup: { amount: '1000', credited: '800' },
+        held: [{ accountId: 'tasin', amount: D('100'), currency: Currency.BDT, book: D('80') }],
       });
       const svc = new SellerCashAttributionService(makeLedger(created) as never);
       const moved = await svc.takeToCapital(tx as never, {

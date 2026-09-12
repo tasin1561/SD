@@ -1,19 +1,41 @@
 import { Currency, Prisma } from '@skydrop/db';
 import { AdvisoryLock } from '../../src/common/db/advisory-lock';
 import { BankTransferService } from '../../src/modules/treasury/services/bank-transfer.service';
-import { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
+
+const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
+
+interface PriorTransfer {
+  id: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amountOut: Prisma.Decimal;
+  amountIn: Prisma.Decimal;
+  currencyOut: Currency;
+  currencyIn: Currency;
+  sellerId: string | null;
+  quotedRate: Prisma.Decimal | null;
+  achievedRate: Prisma.Decimal | null;
+  entries: Array<{ type: string; signedAmount: Prisma.Decimal }>;
+}
 
 function make(
   fromCur: Currency,
   toCur: Currency,
   sellerHeld = '1000000',
-  /** The latest accepted top-up per account: [what arrived, what the wallet was credited]. */
-  topups: Record<string, [string, string]> = {},
+  opts: {
+    /** What one unit of the seller's money in the SENDING account is worth to their wallet. */
+    inrPerUnit?: string;
+    /** A transfer already recorded under the same idempotency key. */
+    prior?: PriorTransfer | null;
+  } = {},
 ) {
   const posted: Array<{ type: string; signedAmount: string; ownerKind: string }> = [];
+  // The rupee book value each entry carried, in the same order as `posted`.
+  const books: Array<string | null> = [];
   const notes: string[] = [];
   // The advisory-lock namespaces taken, in order.
   const locks: number[] = [];
+  const created: unknown[] = [];
   const ledger = {
     post: jest.fn(
       async (i: {
@@ -21,12 +43,18 @@ function make(
         signedAmount: Prisma.Decimal;
         owner: { kind: string };
         note?: string | null;
+        inrBookValue?: Prisma.Decimal | null;
       }) => {
         posted.push({
           type: i.type,
           signedAmount: new Prisma.Decimal(i.signedAmount).toFixed(2),
           ownerKind: i.owner.kind,
         });
+        books.push(
+          i.inrBookValue === undefined || i.inrBookValue === null
+            ? null
+            : new Prisma.Decimal(i.inrBookValue).toFixed(2),
+        );
         notes.push(i.note ?? '');
         return { id: 'e' };
       },
@@ -34,6 +62,12 @@ function make(
     // What the source account holds for that seller. Generous by
     // default so the rate cases below stay about the rate.
     ownerBalance: jest.fn(async () => new Prisma.Decimal(sellerHeld)),
+    // Rupees are their own value; anything else at the seller's average
+    // there (the real arithmetic is pinned in the ledger's own spec).
+    inrValueOfSellerUnits: jest.fn(
+      async (_s: string, _a: string, cur: Currency, units: Prisma.Decimal) =>
+        cur === Currency.INR ? units : units.mul(D(opts.inrPerUnit ?? '0.8')).toDecimalPlaces(2),
+    ),
   };
   const prisma = {
     client: {
@@ -45,10 +79,15 @@ function make(
           deletedAt: null,
         })),
       },
-      bankTransfer: { create: jest.fn(async () => ({ id: 't1' })) },
+      bankTransfer: { findUnique: jest.fn(async () => opts.prior ?? null) },
       $transaction: async (fn: (tx: unknown) => unknown) =>
         fn({
-          bankTransfer: { create: async () => ({ id: 't1' }) },
+          bankTransfer: {
+            create: async (a: { data: unknown }) => {
+              created.push(a.data);
+              return { id: 't1' };
+            },
+          },
           // The bank-charges category a short same-currency transfer files under.
           expenseCategory: { upsert: async () => ({ id: 'cat-bank' }) },
           // The holding guard takes the same advisory lock reconcile
@@ -58,19 +97,6 @@ function make(
             locks.push(ns);
             return 1;
           },
-          // What a seller's money in each account is worth in rupees.
-          walletTopupRequest: {
-            findFirst: async (a: { where: { bankAccountId: string } }) => {
-              const t = topups[a.where.bankAccountId];
-              return t === undefined
-                ? null
-                : {
-                    amount: new Prisma.Decimal(t[0]),
-                    walletEntry: { amount: new Prisma.Decimal(t[1]) },
-                  };
-            },
-          },
-          fxRate: { findFirst: async () => null },
         }),
     },
   };
@@ -78,44 +104,55 @@ function make(
     prisma as never,
     ledger as never,
     { log: jest.fn() } as never,
-    new SellerCashAttributionService(ledger as never),
   );
-  return { svc, posted, notes, locks };
+  return { svc, posted, books, notes, locks, created, ledger };
 }
 
 const BASE = { fromAccountId: 'from', toAccountId: 'to', movedAt: new Date(), staffId: 's1' };
 
 describe('BankTransferService — a seller’s money moved with no quote', () => {
-  it('credits it at the rate their wallet holds each side at; the gap is FX_SPREAD', async () => {
-    // Taka at Tasin were credited at ₹0.80 (৳10,000 → ₹8,000), so ₹1,000
-    // of theirs is ৳1,250 of theirs. ৳1,300 arrived: ৳50 is ours. Credited
-    // the whole ৳1,300, they would have been held ₹1,040 of value for a
-    // wallet that says ₹1,000.
-    const { svc, posted, notes } = make(Currency.INR, Currency.BDT, '1000000', {
-      to: ['10000', '8000'],
-    });
+  it('into taka: credits what actually arrived, carrying the rupees that left — no spread', async () => {
+    // It used to invent a quote from the seller's "last top-up rate" on
+    // each side and book the gap as FX — a phantom gain or loss on every
+    // such move. Their money simply moved: the taka that arrived are
+    // theirs, and worth to their wallet exactly what left.
+    const { svc, posted, books } = make(Currency.INR, Currency.BDT);
     const r = await svc.transfer({
       ...BASE,
       amountOut: '1000',
       amountIn: '1300',
       sellerId: 'seller-a',
     });
-    expect(r.creditedToSeller).toBe('1250.00');
-    expect(r.fxSpread).toBe('50.00');
+    expect(r.creditedToSeller).toBe('1300.00');
+    expect(r.fxSpread).toBeNull();
     expect(posted).toEqual([
       { type: 'TRANSFER_OUT', signedAmount: '-1000.00', ownerKind: 'SELLER' },
-      { type: 'TRANSFER_IN', signedAmount: '1250.00', ownerKind: 'SELLER' },
-      { type: 'FX_SPREAD', signedAmount: '50.00', ownerKind: 'CAPITAL' },
+      { type: 'TRANSFER_IN', signedAmount: '1300.00', ownerKind: 'SELLER' },
     ]);
-    expect(notes.at(-1)).toContain('no quote given');
+    expect(books).toEqual(['-1000.00', '1000.00']);
   });
 
-  it('refuses when there is no rate to value their money at — give a quote', async () => {
-    const { svc, posted } = make(Currency.INR, Currency.BDT);
-    await expect(
-      svc.transfer({ ...BASE, amountOut: '1000', amountIn: '1300', sellerId: 'seller-a' }),
-    ).rejects.toMatchObject({ response: { code: 'TRANSFER_QUOTE_REQUIRED' } });
-    expect(posted).toHaveLength(0);
+  it('into rupees: credited what it was worth to their wallet; the bank’s gap is realised FX', async () => {
+    // ৳2,000 held at an average ₹0.75: worth ₹1,500 to their wallet. The
+    // bank gave ₹1,480. A rupee holding is its own book, so they are held
+    // ₹1,500 and the ₹20 is ours to cover.
+    const { svc, posted, books } = make(Currency.BDT, Currency.INR, '2000', {
+      inrPerUnit: '0.75',
+    });
+    const r = await svc.transfer({
+      ...BASE,
+      amountOut: '2000',
+      amountIn: '1480',
+      sellerId: 'seller-a',
+    });
+    expect(r.creditedToSeller).toBe('1500.00');
+    expect(r.fxSpread).toBe('-20.00');
+    expect(posted).toEqual([
+      { type: 'TRANSFER_OUT', signedAmount: '-2000.00', ownerKind: 'SELLER' },
+      { type: 'TRANSFER_IN', signedAmount: '1500.00', ownerKind: 'SELLER' },
+      { type: 'FX_SPREAD', signedAmount: '-20.00', ownerKind: 'CAPITAL' },
+    ]);
+    expect(books[0]).toBe('-1500.00');
   });
 
   it('takes the seller’s wallet lock before the reconcile lock', async () => {
@@ -125,9 +162,63 @@ describe('BankTransferService — a seller’s money moved with no quote', () =>
   });
 });
 
+describe('BankTransferService — a retried request is recorded once', () => {
+  const PRIOR: PriorTransfer = {
+    id: 't0',
+    fromAccountId: 'from',
+    toAccountId: 'to',
+    amountOut: D('300'),
+    amountIn: D('295'),
+    currencyOut: Currency.INR,
+    currencyIn: Currency.INR,
+    sellerId: null,
+    quotedRate: null,
+    achievedRate: D('0.983333'),
+    entries: [
+      { type: 'TRANSFER_OUT', signedAmount: D('-300') },
+      { type: 'TRANSFER_IN', signedAmount: D('300') },
+      { type: 'EXPENSE', signedAmount: D('-5') },
+    ],
+  };
+  const KEY = '7f3a2c1e-5b6d-4e8f-9a0b-1c2d3e4f5a6b';
+
+  it('the same key returns the transfer already recorded, and moves nothing', async () => {
+    const { svc, posted, created } = make(Currency.INR, Currency.INR, '0', { prior: PRIOR });
+    const r = await svc.transfer({
+      ...BASE,
+      amountOut: '300',
+      amountIn: '295',
+      idempotencyKey: KEY,
+    });
+    expect(r).toEqual({
+      transferId: 't0',
+      achievedRate: '0.983333',
+      fxSpread: null,
+      bankCharge: '5.00',
+      creditedToSeller: '300.00',
+    });
+    expect(posted).toHaveLength(0);
+    expect(created).toHaveLength(0);
+  });
+
+  it('refuses the same key sent with a DIFFERENT transfer', async () => {
+    const { svc, posted } = make(Currency.INR, Currency.INR, '0', { prior: PRIOR });
+    await expect(
+      svc.transfer({ ...BASE, amountOut: '300', amountIn: '290', idempotencyKey: KEY }),
+    ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    expect(posted).toHaveLength(0);
+  });
+
+  it('stores the key on the transfer it records', async () => {
+    const { svc, created } = make(Currency.INR, Currency.INR);
+    await svc.transfer({ ...BASE, amountOut: '300', amountIn: '300', idempotencyKey: KEY });
+    expect(created[0]).toMatchObject({ idempotencyKey: KEY });
+  });
+});
+
 describe('BankTransferService — the quoted rate is a promise', () => {
   it('credits the seller at the QUOTED rate and keeps the upside', async () => {
-    const { svc, posted } = make(Currency.INR, Currency.BDT);
+    const { svc, posted, books } = make(Currency.INR, Currency.BDT);
     // ₹1,000 quoted at 1.30 → the seller is owed ৳1,300.
     // The bank gave 1.35 → ৳1,350 arrived, so ৳50 is ours.
     const r = await svc.transfer({
@@ -146,6 +237,8 @@ describe('BankTransferService — the quoted rate is a promise', () => {
       { type: 'TRANSFER_IN', signedAmount: '1300.00', ownerKind: 'SELLER' },
       { type: 'FX_SPREAD', signedAmount: '50.00', ownerKind: 'CAPITAL' },
     ]);
+    // The ৳1,300 are worth to their wallet what left: ₹1,000.
+    expect(books.slice(0, 2)).toEqual(['-1000.00', '1000.00']);
   });
 
   it('honours the quote when the rate goes against us, from capital', async () => {
