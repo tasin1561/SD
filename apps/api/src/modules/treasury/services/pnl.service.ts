@@ -147,6 +147,28 @@ function transferRate(
 }
 
 /**
+ * Rupees per unit of `currency` at a payout's OWN rate: the rupees the
+ * wallet was debited over the units that left. Null when the entry is not
+ * in the payout's currency or the payout was not debited in rupees.
+ */
+function remittanceRate(
+  currency: Currency,
+  r: {
+    amount: Prisma.Decimal;
+    currency: Currency;
+    sourceAmount: Prisma.Decimal;
+    sourceCurrency: Currency;
+  } | null,
+): Prisma.Decimal | null {
+  if (currency === Currency.INR) return new Prisma.Decimal(1);
+  if (r === null) return null;
+  if (r.currency === currency && r.sourceCurrency === Currency.INR && r.amount.gt(0)) {
+    return r.sourceAmount.div(r.amount);
+  }
+  return null;
+}
+
+/**
  * One report's exchange rates, and WHICH amounts had to be put in rupees
  * at TODAY's rate because nothing was recorded at or before their instant.
  * Per report, never shared: the service is a singleton and two reports
@@ -863,11 +885,14 @@ export class PnlService {
 
   /**
    * FX spread entries in the window, each put in rupees at its OWN
-   * transfer's rate (the one that produced it), and only failing that at
-   * the rate in force at its instant. Null `inr` = no rate at all.
+   * transfer's or payout's rate (the one that produced it), and only
+   * failing that at the rate in force at its instant. Null `inr` = no
+   * rate at all.
    *
    * The spread is posted in the RECEIVING account's currency — usually
-   * taka. Summed as it stood it was taka read as rupees.
+   * taka. Summed as it stood it was taka read as rupees. A payout's is
+   * the realised FX on a taka remittance: the units paid against the
+   * units the seller's book said the rupees were worth.
    */
   private async fxRows(
     from: Date,
@@ -894,12 +919,16 @@ export class PnlService {
         transfer: {
           select: { amountOut: true, currencyOut: true, amountIn: true, currencyIn: true },
         },
+        remittance: {
+          select: { amount: true, currency: true, sourceAmount: true, sourceCurrency: true },
+        },
       },
     });
     const out: Array<{ ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }> = [];
     for (const r of rows) {
       const rate =
         transferRate(r.currency, r.transfer) ??
+        remittanceRate(r.currency, r.remittance) ??
         (await this.inrPerUnit(r.currency, r.occurredAt, rates, `bank_entries:${r.id}`));
       out.push({
         ref: r.reference ?? r.account.label,
@@ -946,7 +975,8 @@ export class PnlService {
         revenue: [
           {
             label: 'Gap between the rate quoted and the rate achieved, in rupees',
-            source: 'bank_entries.signed_amount WHERE type=FX_SPREAD × the transfer’s own rate',
+            source:
+              'bank_entries.signed_amount WHERE type=FX_SPREAD × the transfer’s (or payout’s) own rate',
             count: rows.length - unconverted,
             amountInr: spread.toFixed(2),
           },
@@ -1710,12 +1740,14 @@ export class PnlService {
    * classified — the ONE computation the line total and its drill-down
    * both read.
    *
-   * The account's FIRST capital entry is its OPENING balance: money the
-   * business already had when the book started — capital put in, not
-   * earned. Judged on CAPITAL entries only, so a seller top-up landing
-   * before the owner got round to entering the balance does not turn the
-   * balance into income. Money put in LATER has its own entry type
-   * (OWNER_CONTRIBUTION) and never reaches this line.
+   * An entry the operator MARKED as the account's opening balance
+   * (`is_opening_balance`) is money the business already had when the
+   * book started — capital put in, not earned — and is left off. Marked,
+   * not inferred: this used to take the account's first capital entry,
+   * and charges, transfers and remittances post capital rows by
+   * themselves, so on a new account a system row could come first and a
+   * real opening balance then read as income. Money put in LATER has its
+   * own entry type (OWNER_CONTRIBUTION) and never reaches this line.
    */
   private async reconciliationRows(
     from: Date,
@@ -1745,6 +1777,7 @@ export class PnlService {
         currency: true,
         occurredAt: true,
         reference: true,
+        isOpeningBalance: true,
         account: { select: { label: true } },
       },
     });
@@ -1756,12 +1789,8 @@ export class PnlService {
       inr: Prisma.Decimal | null;
     }> = [];
     for (const r of rows) {
-      const earlier = await this.prisma.client.bankEntry.findFirst({
-        where: { accountId: r.accountId, ownerKind: BankOwnerKind.CAPITAL, id: { lt: r.id } },
-        select: { id: true },
-      });
       const rate = await this.inrPerUnit(r.currency, r.occurredAt, rates, `bank_entries:${r.id}`);
-      const opening = earlier === null;
+      const opening = r.isOpeningBalance;
       out.push({
         ref: r.reference ?? r.account.label,
         subRef:
@@ -1822,7 +1851,7 @@ export class PnlService {
           {
             label: 'Corrections against a bank statement (charges, interest, unexplained)',
             source:
-              "bank_entries.signed_amount WHERE type=RECONCILIATION_ADJUSTMENT AND owner='capital' AND not the account's first capital entry",
+              "bank_entries.signed_amount WHERE type=RECONCILIATION_ADJUSTMENT AND owner='capital' AND NOT is_opening_balance",
             count: counted.length,
             amountInr: total.toFixed(2),
           },

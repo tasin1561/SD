@@ -33,6 +33,14 @@ export class RecordTransferDto {
   @IsDateString() movedAt!: string;
   @IsOptional() @IsString() @Length(1, 200) reference?: string;
   @IsOptional() @IsString() @Length(1, 2000) note?: string;
+  @ApiPropertyOptional({
+    description:
+      'One key per opening of the form. A retry with the same key returns the original ' +
+      'transfer and moves nothing.',
+  })
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }
 
 export class RecordEntryDto {
@@ -68,6 +76,14 @@ export class ReconcileAccountDto {
   @IsString()
   @Length(10, 2000)
   reason!: string;
+  @ApiPropertyOptional({
+    description:
+      "This is the account's OPENING balance — money the business already had, left off " +
+      'the P&L. Our own money only, and once per account.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isOpeningBalance?: boolean;
 }
 
 export class OwnerMoneyDto {
@@ -86,6 +102,14 @@ export class OwnerMoneyDto {
   @Length(10, 2000)
   reason!: string;
   @IsOptional() @IsString() @Length(1, 200) reference?: string;
+  @ApiPropertyOptional({
+    description:
+      'One key per opening of the form. A retry with the same key returns the original ' +
+      'entry and posts nothing.',
+  })
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }
 
 export class ReclassifySellerCashDto {

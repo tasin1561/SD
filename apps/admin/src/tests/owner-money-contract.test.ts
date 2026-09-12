@@ -33,7 +33,14 @@ describe('owner money — client body matches the server DTO', () => {
       .filter((f) => f !== 'accountId')
       .sort();
 
-    expect(server).toEqual(['amount', 'direction', 'occurredAt', 'reason', 'reference']);
+    expect(server).toEqual([
+      'amount',
+      'direction',
+      'idempotencyKey',
+      'occurredAt',
+      'reason',
+      'reference',
+    ]);
     expect(client).toEqual(server);
     expect(hookBlock).toContain('/api/admin/treasury/accounts/${accountId}/owner-money');
   });

@@ -162,6 +162,8 @@ class World {
     inboundFreightChargeId?: string | null;
     expenseCategoryId?: string | null;
     reference?: string | null;
+    remittanceId?: string | null;
+    isOpeningBalance?: boolean;
   }): Row {
     return this.add('bankEntry', {
       id: nextId('be'),
@@ -171,6 +173,8 @@ class World {
       currency: spec.currency ?? 'INR',
       ownerKind: spec.ownerKind ?? 'CAPITAL',
       occurredAt: spec.at,
+      remittanceId: spec.remittanceId ?? null,
+      isOpeningBalance: spec.isOpeningBalance ?? false,
       transferId: spec.transferId ?? null,
       settlementId: spec.settlementId ?? null,
       inboundFreightChargeId: spec.inboundFreightChargeId ?? null,
@@ -768,7 +772,7 @@ describe('the P&L counts what it used to miss', () => {
 
   it('an account’s OPENING balance is capital put in, not income — and it says so', async () => {
     const w = new World();
-    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '100000', at: IN });
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '100000', at: IN, isOpeningBalance: true });
     w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '-12.00', at: IN });
     const r = await w.svc().report(FROM, TO);
     const recon = line(r, 'bank_reconciliation');
@@ -882,7 +886,7 @@ describe('X1 — every line has its rows', () => {
 
   it('bank reconciliation: counted rows in rupees, the opening balance listed and NOT counted', async () => {
     const w = new World();
-    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '100000', at: IN }); // opening
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '100000', at: IN, isOpeningBalance: true });
     w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '-12.00', at: IN });
     w.bank({ type: 'OWNER_CONTRIBUTION', amount: '1000', currency: 'BDT', at: T('2026-07-01Z') });
     w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '500', currency: 'BDT', at: IN });
@@ -921,6 +925,40 @@ describe('X2 — the FX rows are in RUPEES, as the total is', () => {
     expect(line(await svc.report(FROM, TO), 'fx')?.revenueInr).toBe('5.38');
     expect(rows.items[0]?.revenueInr).toBe('5.38');
     expect(rows.items[0]?.subRef).toContain('7.00 BDT');
+  });
+
+  it('a payout’s realised FX converts at THAT payout’s rate, and its row adds up to the line', async () => {
+    // ₹500 paid out as ৳625: a taka is ₹0.80 on this payout. ৳25 more than
+    // the seller's book was worth went out — ₹20 of realised FX, ours.
+    const w = new World();
+    w.add('remittance', {
+      id: 'rem-1',
+      amount: D('625'),
+      currency: 'BDT',
+      sourceAmount: D('500'),
+      sourceCurrency: 'INR',
+    });
+    w.bank({ type: 'FX_SPREAD', amount: '-25', currency: 'BDT', at: IN, remittanceId: 'rem-1' });
+    const svc = w.svc();
+    const rows = await drill(svc, 'fx');
+    expect(line(await svc.report(FROM, TO), 'fx')?.revenueInr).toBe('-20.00');
+    expect(rows.revenue).toBe('-20.00');
+  });
+});
+
+describe('the opening balance is what the operator MARKED, not whatever came first', () => {
+  it('a correction written before the marked opening balance is still counted', async () => {
+    // A charge's reclassification, a transfer or a payout can post a
+    // capital row before anybody enters the balance. "First capital entry"
+    // then named the wrong row — and a real ৳100,000 opening balance read
+    // as income.
+    const w = new World();
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '500', at: IN });
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '100000', at: IN, isOpeningBalance: true });
+    const svc = w.svc();
+    const rows = await drill(svc, 'bank_reconciliation');
+    expect(line(await svc.report(FROM, TO), 'bank_reconciliation')?.revenueInr).toBe('500.00');
+    expect(rows.revenue).toBe('500.00');
   });
 });
 

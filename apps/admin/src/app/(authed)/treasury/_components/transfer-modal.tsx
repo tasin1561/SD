@@ -64,6 +64,13 @@ export function TransferModal({
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // One key per opening of the form, kept across retries: a retried
+  // request with it is answered with the transfer already recorded, so a
+  // double-click or a timed-out save cannot move the money twice.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  useEffect(() => {
+    if (open) setIdempotencyKey(crypto.randomUUID());
+  }, [open]);
 
   const list = accounts.data ?? [];
   const from = list.find((a) => a.id === fromAccountId);
@@ -139,6 +146,7 @@ export function TransferModal({
         movedAt: new Date(movedAt).toISOString(),
         ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
+        idempotencyKey,
       });
       setOut('');
       setIn('');

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import {
   BankEntryType,
@@ -321,6 +322,37 @@ describe('Treasury (e2e)', () => {
       });
       expect(charge?.signedAmount.toFixed(2)).toBe('-5.00');
       expect(charge?.ownerKind).toBe('CAPITAL');
+    });
+
+    it('a retried transfer with the same key is recorded ONCE — and a different one under it is refused', async () => {
+      // A double-click or a timed-out save used to record the move twice.
+      const key = randomUUID();
+      const body = {
+        fromAccountId: inrAccount,
+        toAccountId: bdtAccount,
+        amountOut: '100',
+        amountIn: '130',
+        movedAt: new Date().toISOString(),
+        idempotencyKey: key,
+      };
+      const first = await request(h.baseUrl)
+        .post('/admin/treasury/transfers')
+        .set(auth)
+        .send(body)
+        .expect(200);
+      const again = await request(h.baseUrl)
+        .post('/admin/treasury/transfers')
+        .set(auth)
+        .send(body)
+        .expect(200);
+      expect(again.body.transferId).toBe(first.body.transferId);
+      expect(await h.prisma.bankTransfer.count({ where: { idempotencyKey: key } })).toBe(1);
+      await request(h.baseUrl)
+        .post('/admin/treasury/transfers')
+        .set(auth)
+        .send({ ...body, amountIn: '131' })
+        .expect(409)
+        .expect((r) => expect(r.body.code).toBe('IDEMPOTENCY_KEY_REUSED'));
     });
   });
 
@@ -841,6 +873,57 @@ describe('Treasury (e2e)', () => {
         where: { accountId: created.body.id as string },
       });
       expect(entries).toBe(0);
+    });
+
+    it('an opening balance is MARKED when reconciled, and an account has only one', async () => {
+      // The P&L reads the mark: a system reclassification landing first on
+      // a new account used to make a real opening balance read as income.
+      const res = await request(h.baseUrl)
+        .post(`/admin/treasury/accounts/${bdtAccount}/reconcile`)
+        .set(auth)
+        .send({
+          ownerKind: BankOwnerKind.CAPITAL,
+          statedBalance: '100000',
+          reason: 'Initial balance from the bank statement',
+          isOpeningBalance: true,
+        })
+        .expect(200);
+      const entry = await h.prisma.bankEntry.findUnique({
+        where: { id: res.body.entryId as string },
+        select: { isOpeningBalance: true },
+      });
+      expect(entry?.isOpeningBalance).toBe(true);
+      await request(h.baseUrl)
+        .post(`/admin/treasury/accounts/${bdtAccount}/reconcile`)
+        .set(auth)
+        .send({
+          ownerKind: BankOwnerKind.CAPITAL,
+          statedBalance: '100500',
+          reason: 'Initial balance from the bank statement',
+          isOpeningBalance: true,
+        })
+        .expect(409)
+        .expect((r) => expect(r.body.code).toBe('OPENING_BALANCE_EXISTS'));
+    });
+
+    it('the balance an account is created with is its opening balance', async () => {
+      const created = await request(h.baseUrl)
+        .post('/admin/platform-bank-accounts')
+        .set(auth)
+        .send({
+          label: 'Opening Mark Test',
+          bankName: 'Test Bank',
+          accountName: 'Skydrop',
+          accountNumber: 'OPEN-MARK-1',
+          currency: Currency.INR,
+          openingBalance: '5000',
+        })
+        .expect(201);
+      const opening = await h.prisma.bankEntry.findFirst({
+        where: { accountId: created.body.id as string },
+        select: { isOpeningBalance: true },
+      });
+      expect(opening?.isOpeningBalance).toBe(true);
     });
 
     it("corrects a SELLER's holding without touching our own money", async () => {

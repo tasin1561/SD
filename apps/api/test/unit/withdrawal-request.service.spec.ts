@@ -54,6 +54,8 @@ function makeService(
     sellerBalance?: string;
     /** When the longest-waiting pending request was raised. */
     oldestPendingAt?: Date;
+    /** Another request the remittance being linked already paid. */
+    linkedElsewhere?: string;
     /** null makes getRate throw, mimicking an unconfigured pair. */
     fxRate?: string | null;
     countryCode?: string;
@@ -93,9 +95,14 @@ function makeService(
     _count: { _all: opts.breachedCount ?? 0 },
   }));
   // Oldest pending, for the "waiting longest" figure.
-  const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
-    opts.oldestPendingAt === undefined ? null : { createdAt: opts.oldestPendingAt },
-  );
+  const findFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
+    // markPaid asks whether the remittance already paid another request.
+    const where = (args['where'] ?? {}) as AnyArgs;
+    if (where['linkedRemittanceId'] !== undefined) {
+      return opts.linkedElsewhere === undefined ? null : { id: opts.linkedElsewhere };
+    }
+    return opts.oldestPendingAt === undefined ? null : { createdAt: opts.oldestPendingAt };
+  });
   const withdrawalRequest = {
     create,
     findMany,
@@ -429,6 +436,18 @@ describe('WithdrawalRequestService.markPaid', () => {
     });
     await expect(svc.markPaid('wr-1', 'staff-1', 'rem-1')).rejects.toMatchObject({
       response: { code: 'REMITTANCE_SELLER_MISMATCH' },
+    });
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  it('refuses a remittance that already paid ANOTHER request — one payment pays one request', async () => {
+    // Otherwise the seller is told two requests were paid by one transfer.
+    const { svc, claim } = makeService({
+      existingRequest: makeRow({ status: 'APPROVED' }),
+      linkedElsewhere: 'wr-2',
+    });
+    await expect(svc.markPaid('wr-1', 'staff-1', 'rem-1')).rejects.toMatchObject({
+      response: { code: 'REMITTANCE_ALREADY_LINKED' },
     });
     expect(claim).not.toHaveBeenCalled();
   });

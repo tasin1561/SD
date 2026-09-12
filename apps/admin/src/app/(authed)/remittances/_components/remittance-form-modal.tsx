@@ -142,6 +142,10 @@ export function RemittanceFormModal({
     [bankAccounts.data, currency],
   );
   const [error, setError] = useState<string | null>(null);
+  // One key for the life of this form (it mounts per opening), kept
+  // across retries: a retried save is answered with the remittance
+  // already recorded, so the seller's wallet is never debited twice.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   // Same-currency → force fxRate=1.
   useEffect(() => {
@@ -242,6 +246,7 @@ export function RemittanceFormModal({
         ...(note.trim() ? { note: note.trim() } : {}),
         // Sent as typed: the server decides what a valid fee is (FE-2).
         ...(fee !== null ? { bankFee: fee } : {}),
+        idempotencyKey,
       };
       const created = await create.mutateAsync(body);
       onSuccess(created);

@@ -628,6 +628,16 @@ export class WithdrawalRequestService {
         message: 'The linked remittance belongs to a different seller',
       });
     }
+    // ONE payment pays ONE request. Linking the same remittance to a second
+    // request would mark it PAID with money that already paid somebody else
+    // — the seller told they were paid twice for one transfer. The unique
+    // index on the link refuses it too; this names it instead of surfacing
+    // a constraint error.
+    const alreadyPaid = await this.prisma.client.withdrawalRequest.findFirst({
+      where: { linkedRemittanceId, id: { not: requestId } },
+      select: { id: true },
+    });
+    if (alreadyPaid) throw remittanceAlreadyLinked(linkedRemittanceId, alreadyPaid.id);
 
     // Guarded on "still unresolved", not just `id`. The check above is a
     // read outside any transaction; without this, two admins resolving the
@@ -636,15 +646,25 @@ export class WithdrawalRequestService {
     // real bank transfer ends up accounted to nothing. No money is
     // duplicated (the remittance moves it, not this row), but a withdrawal
     // that cannot be traced back to its request is its own problem.
-    const claimed = await this.prisma.client.withdrawalRequest.updateMany({
-      where: { id: requestId, status: { notIn: RESOLVED_STATUSES } },
-      data: {
-        status: WithdrawalRequestStatus.PAID,
-        linkedRemittanceId,
-        resolvedByStaffId: staffId,
-        resolvedAt: new Date(),
-      },
-    });
+    let claimed: { count: number };
+    try {
+      claimed = await this.prisma.client.withdrawalRequest.updateMany({
+        where: { id: requestId, status: { notIn: RESOLVED_STATUSES } },
+        data: {
+          status: WithdrawalRequestStatus.PAID,
+          linkedRemittanceId,
+          resolvedByStaffId: staffId,
+          resolvedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      // Two requests paid with one remittance at the same moment: the check
+      // above cannot see the other, the unique index can.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw remittanceAlreadyLinked(linkedRemittanceId, null);
+      }
+      throw err;
+    }
     if (claimed.count === 0) {
       throw new ConflictException({
         code: 'WITHDRAWAL_REQUEST_ALREADY_RESOLVED',
@@ -878,4 +898,18 @@ export class WithdrawalRequestService {
       resolvedAt: row.resolvedAt,
     };
   }
+}
+
+/** One remittance pays ONE withdrawal request. */
+function remittanceAlreadyLinked(
+  remittanceId: string,
+  otherRequestId: string | null,
+): ConflictException {
+  return new ConflictException({
+    code: 'REMITTANCE_ALREADY_LINKED',
+    message:
+      `Remittance ${remittanceId} already paid ` +
+      (otherRequestId === null ? 'another withdrawal request' : `request ${otherRequestId}`) +
+      '. One payment pays one request — record the payment for this one separately.',
+  });
 }

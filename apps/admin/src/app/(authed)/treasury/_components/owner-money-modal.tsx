@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import {
   Button,
   FormField,
@@ -40,6 +40,12 @@ export function OwnerMoneyModal({
   const [reason, setReason] = useState('');
   const [reference, setReference] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // One key per opening of the form, kept across retries: a retried save
+  // is answered with the entry already recorded instead of a second one.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  useEffect(() => {
+    if (accountId !== null) setIdempotencyKey(crypto.randomUUID());
+  }, [accountId]);
 
   function reset(): void {
     setDirection('IN');
@@ -61,6 +67,7 @@ export function OwnerMoneyModal({
         occurredAt: new Date(occurredOn).toISOString(),
         reason: reason.trim(),
         ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
+        idempotencyKey,
       });
       reset();
       onClose();

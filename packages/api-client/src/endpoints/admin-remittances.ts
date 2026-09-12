@@ -46,4 +46,6 @@ export interface CreateRemittanceRequest {
   readonly note?: string;
   /** What the bank charged to send it, in `currency`; our expense. */
   readonly bankFee?: number;
+  /** One per opening of the form; a retry with it returns the original and pays nothing. */
+  readonly idempotencyKey?: string;
 }

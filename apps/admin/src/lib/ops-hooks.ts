@@ -1418,6 +1418,8 @@ export function useRecordTransfer(): UseMutationResult<
     movedAt: string;
     reference?: string;
     note?: string;
+    /** One per opening of the form; a retry with it moves nothing twice. */
+    idempotencyKey?: string;
   }
 > {
   const client = useApiClient();
@@ -1438,6 +1440,8 @@ export function useReconcileAccount(): UseMutationResult<
     sellerId?: string;
     statedBalance: string;
     reason: string;
+    /** The account's opening balance — left off the P&L. Capital only, once per account. */
+    isOpeningBalance?: boolean;
   }
 > {
   const client = useApiClient();
@@ -1463,6 +1467,8 @@ export function useRecordOwnerMoney(): UseMutationResult<
     occurredAt: string;
     reason: string;
     reference?: string;
+    /** One per opening of the form; a retry with it posts nothing twice. */
+    idempotencyKey?: string;
   }
 > {
   const client = useApiClient();

@@ -6359,6 +6359,10 @@ model Remittance {
   // Audit + ops.
   staffId             String   @map("staff_id") @db.Uuid
   note                String?  @db.Text
+  /// The client's key for the request that recorded it. A replay with the
+  /// same key returns this remittance and pays nothing — a retried POST
+  /// must not debit the wallet twice.
+  idempotencyKey      String?  @unique @map("idempotency_key") @db.Uuid
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   seller            Seller               @relation(fields: [sellerId], references: [id])
@@ -6366,6 +6370,7 @@ model Remittance {
   staff             StaffUser            @relation("RemittanceStaff", fields: [staffId], references: [id])
   ledgerEntries     SellerWalletEntry[]
   withdrawalRequest WithdrawalRequest?
+  bankEntries       BankEntry[]
 
   @@index([sellerId, paidAt])
   @@index([paidAt])
@@ -7620,6 +7625,9 @@ model BankTransfer {
   note             String?  @db.Text
   movedAt          DateTime @map("moved_at") @db.Timestamptz
   createdByStaffId String?  @map("created_by_staff_id") @db.Uuid
+  /// The client's key for the request that recorded it. A replay with the
+  /// same key returns this transfer and moves nothing.
+  idempotencyKey   String?  @unique @map("idempotency_key") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   fromAccount PlatformBankAccount @relation("BankTransferFrom", fields: [fromAccountId], references: [id])
@@ -7682,6 +7690,11 @@ model BankEntry {
   /// `createdByStaffId`.
   actorType        ActorType @default(SYSTEM) @map("actor_type")
   createdByStaffId String?   @map("created_by_staff_id") @db.Uuid
+  /// The client's key for the request that created this entry, when a
+  /// person's form created it. UNIQUE: a replay with the same key returns
+  /// the original result and posts nothing, so a double-click or a retried
+  /// request cannot move the same money twice.
+  idempotencyKey   String?   @unique @map("idempotency_key") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   account         PlatformBankAccount @relation(fields: [accountId], references: [id])
@@ -7713,7 +7726,35 @@ model BankEntry {
   inboundFreightChargeId String?               @map("inbound_freight_charge_id") @db.Uuid
   inboundFreightCharge   InboundFreightCharge? @relation(fields: [inboundFreightChargeId], references: [id], onDelete: Restrict)
 
+  /// What a SELLER-owned entry in a NON-RUPEE account is worth to their
+  /// wallet, in rupees — a top-up: the rupees credited; a charge: minus
+  /// the rupees charged. NULL on every other row (rupees are their own
+  /// value, and capital is not tracked against a wallet).
+  ///
+  /// Why it exists: a seller's taka used to be valued at ONE rate (their
+  /// latest top-up's), so two top-ups at 0.70 and 0.80 read as ৳2,000 ×
+  /// 0.80 = ₹1,600 against a ₹1,500 wallet, and a charge then stranded
+  /// taka as "theirs" for a wallet at zero. Summed, this is exactly what
+  /// the wallet holds for the money in that account; units ÷ book is
+  /// their weighted-average rate, and a charge takes units at it.
+  inrBookValue Decimal? @map("inr_book_value") @db.Decimal(14, 2)
+
+  /// The payout this entry is part of — the seller's cash leaving, ours
+  /// leaving on their behalf, the bank's fee, and the realised FX on a
+  /// taka payout (which the P&L converts at THIS remittance's own rate).
+  remittanceId String?     @map("remittance_id") @db.Uuid
+  remittance   Remittance? @relation(fields: [remittanceId], references: [id], onDelete: Restrict)
+
+  /// The operator said, when reconciling, that this is the account's
+  /// OPENING balance — money the business already had, not income. An
+  /// explicit mark rather than "the account's first capital entry",
+  /// because charges, transfers and remittances post capital rows by
+  /// themselves, so on a new account a system row can come first and a
+  /// real opening balance then read as ₹81,300 of profit. One per account.
+  isOpeningBalance Boolean @default(false) @map("is_opening_balance")
+
   @@index([actorType])
+  @@index([remittanceId])
   @@index([inboundFreightChargeId])
   @@index([accountId, occurredAt])
   @@index([accountId, ownerKind, sellerId])

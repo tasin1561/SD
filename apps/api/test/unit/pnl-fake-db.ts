@@ -53,6 +53,7 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
     account: one('platformBankAccount', 'accountId'),
     transfer: one('bankTransfer', 'transferId'),
     expenseCategory: one('expenseCategory', 'expenseCategoryId'),
+    remittance: one('remittance', 'remittanceId'),
   },
   courierSettlementLine: {
     order: one('order', 'orderId'),

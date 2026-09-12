@@ -466,6 +466,10 @@ export class WalletTopupService {
           topupRequestId: existing.id,
           staffId,
           note: 'Top-up verified against the statement',
+          // What this money is worth to their wallet: exactly the rupees
+          // credited for it. In a taka account that is the book the
+          // seller's charges are later taken against, at their average.
+          inrBookValue: credited,
         },
         tx,
       );
@@ -484,6 +488,8 @@ export class WalletTopupService {
           currency: existing.currency,
           amount: repaid,
           reference: entry.id,
+          // The rupees of debt it repays, off the book the top-up added.
+          inrValue: split.toCapital,
         });
       }
 

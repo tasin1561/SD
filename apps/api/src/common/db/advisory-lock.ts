@@ -52,7 +52,28 @@ export const AdvisoryLock = {
    * each recognise the whole gap.
    */
   SETTLEMENT_ORDER: 0x05353,
+  /**
+   * 'ST' — adding lines to ONE recorded courier payout.
+   *
+   * `allocateMore` reads how much of the payout is still unallocated and
+   * writes more. Read outside a lock, two operators each see the same
+   * remainder and together allocate past the cash that landed.
+   */
+  SETTLEMENT: 0x05354,
 } as const;
+
+/**
+ * The ONE `BANK_RECONCILE` key every seller-cash reclassification takes.
+ *
+ * `reconcile()` reads an owner's balance and posts the difference; a
+ * charge's reclassification pair landing in between would be folded into
+ * the correction. A key per ACCOUNT would let two attributions that touch
+ * two accounts in opposite orders deadlock each other, so it is one key:
+ * reconcile takes it after its per-owner key, and every attribution pair
+ * takes it after the seller's WALLET lock. Nothing takes a WALLET lock
+ * after it, so it cannot be part of a cycle.
+ */
+export const ATTRIBUTION_RECONCILE_KEY = '*|attribution';
 
 /**
  * 32-bit FNV-1a, returned signed so it fits `pg_advisory_xact_lock`'s
