@@ -45,6 +45,37 @@ export interface DebitResult {
 const ZERO = new Prisma.Decimal(0);
 
 /**
+ * Each line's GROSS total — what the seller owes for it over its life:
+ * its invoice line plus its share of the bill's service charge.
+ *
+ * The lines used to be charged at their pre-charge totals while the bill
+ * carried the charge on top, so a bill whose every unit left closed at
+ * the pre-charge figure and the service charge was never collected. Now
+ * each line carries its proportional share, rounded to the paisa, and
+ * the rounding residue goes on the LARGEST line — so the gross figures
+ * sum to `billTotal` exactly and the last unit out of the bill lands the
+ * seller's running total on it, to the paisa.
+ */
+export function grossLineTotals(
+  lineTotals: readonly Prisma.Decimal[],
+  billTotal: Prisma.Decimal,
+): Prisma.Decimal[] {
+  const invoice = lineTotals.reduce((sum, l) => sum.add(l), ZERO);
+  if (lineTotals.length === 0) return [];
+  if (invoice.isZero() || invoice.equals(billTotal)) return [...lineTotals];
+  const out = lineTotals.map((l) => l.mul(billTotal).div(invoice).toDecimalPlaces(2));
+  const residue = billTotal.sub(out.reduce((sum, g) => sum.add(g), ZERO));
+  let largest = 0;
+  lineTotals.forEach((l, i) => {
+    const best = lineTotals[largest];
+    if (best !== undefined && l.gt(best)) largest = i;
+  });
+  const held = out[largest];
+  if (held !== undefined) out[largest] = held.add(residue);
+  return out;
+}
+
+/**
  * R3 amortisation — freight is a per-unit LANDED COST.
  *
  * The founder's model, and the correct one: 100 units of a SKU arrive on
@@ -75,8 +106,9 @@ const ZERO = new Prisma.Decimal(0);
  * honoured (MUST #13).
  *
  * ── WHAT IS NOT AMORTISED ─────────────────────────────────────────────
- * PAY_NOW bills. Those were charged in full when ops recorded them, so
- * amortising them again would double-bill.
+ * PAY_NOW bills (charged in full when ops recorded them), WAIVED bills,
+ * and SETTLED bills — once a bill is settled, every later unit out of it
+ * owes nothing more, because the settle charged the remainder.
  */
 @Injectable()
 export class InboundFreightAmortisationService {
@@ -269,6 +301,11 @@ export class InboundFreightAmortisationService {
     if (input.shipmentItemIds.length === 0) {
       return { amountInr: '0', unitsCharged: 0, alreadyCharged: false };
     }
+    // The same WALLET lock as the delivery path and as `settle`: the
+    // allocation counters are read and advanced under it, so a settle
+    // running at the same moment either sees these units charged or
+    // charges them itself — never both.
+    await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${input.sellerId}|${Currency.INR}`);
     const already = await tx.sellerWalletEntry.findFirst({
       where: {
         linkedOrderId: input.orderId,
@@ -334,13 +371,20 @@ export class InboundFreightAmortisationService {
       //
       // Clamped at `units` because a shipment item claiming more than
       // the line received would otherwise charge past the whole bill.
+      //
+      // Against the line's GROSS total (its share of the service charge
+      // included), so a pay-later bill collects every rupee of its total
+      // by the time its last unit leaves. A bill part-charged before the
+      // gross figure existed catches its unbilled service charge up on
+      // the next unit out: the target is absolute, not a delta.
       const settledUnits = Math.min(alloc.unitsSettled + item.quantity, alloc.units);
       const shouldHaveCharged =
         alloc.units === 0
           ? ZERO
-          : alloc.lineTotalInr.mul(settledUnits).div(alloc.units).toDecimalPlaces(2);
+          : alloc.lineGrossInr.mul(settledUnits).div(alloc.units).toDecimalPlaces(2);
       const amount = shouldHaveCharged.sub(alloc.amountSettledInr);
       if (amount.lte(0)) continue;
+      const newlySettled = settledUnits - alloc.unitsSettled;
 
       await tx.inboundFreightAllocation.update({
         where: { id: alloc.id },
@@ -354,11 +398,14 @@ export class InboundFreightAmortisationService {
       });
       const prior = touched.get(alloc.freightChargeId);
       touched.set(alloc.freightChargeId, {
-        units: (prior?.units ?? 0) + item.quantity,
+        // The CLAMPED count, as on the line: an item claiming more units
+        // than the line received would otherwise walk the bill's own
+        // counter past its total and close it early.
+        units: (prior?.units ?? 0) + newlySettled,
         amount: (prior?.amount ?? ZERO).add(amount),
       });
       total = total.add(amount);
-      unitsCharged += settledUnits - alloc.unitsSettled;
+      unitsCharged += newlySettled;
     }
 
     if (total.lte(0)) {
@@ -389,8 +436,14 @@ export class InboundFreightAmortisationService {
   /**
    * batch → consignment line → rate. Walks `parentBatchId` once so an R6b
    * cross-warehouse RTO child batch resolves to its parent's line.
-   * Returns null when the goods did not come from a billed consignment
-   * (no freight recorded, or a PAY_NOW bill — already paid in full).
+   * Returns null when the goods did not come from a billed consignment,
+   * or when the bill is no longer being amortised: PAY_NOW (paid in full
+   * at record time), WAIVED (forgiven), or SETTLED — whether by hand,
+   * where `settle` charged the whole remainder and marked every line
+   * fully charged, or by amortisation itself once the last unit left.
+   * Charging a SETTLED bill again is how a ₹10,000 bill came to cost
+   * ₹18,000: the remainder was debited at settle, and the per-line
+   * counters kept charging every later delivery on top of it.
    */
   private async resolveAllocation(
     tx: Prisma.TransactionClient,
@@ -402,6 +455,7 @@ export class InboundFreightAmortisationService {
     units: number;
     unitsSettled: number;
     lineTotalInr: Prisma.Decimal;
+    lineGrossInr: Prisma.Decimal;
     amountSettledInr: Prisma.Decimal;
   } | null> {
     const batch = await tx.stockBatch.findUnique({
@@ -423,6 +477,7 @@ export class InboundFreightAmortisationService {
               units: true,
               unitsSettled: true,
               lineTotalInr: true,
+              lineGrossInr: true,
               amountSettledInr: true,
               freightCharge: { select: { mode: true, status: true } },
             },
@@ -435,6 +490,7 @@ export class InboundFreightAmortisationService {
       // would charge the seller twice for the same freight.
       if (alloc.freightCharge.mode === InboundFreightMode.PAY_NOW) return null;
       if (alloc.freightCharge.status === InboundFreightStatus.WAIVED) return null;
+      if (alloc.freightCharge.status === InboundFreightStatus.SETTLED) return null;
       return {
         id: alloc.id,
         freightChargeId: alloc.freightChargeId,
@@ -442,6 +498,7 @@ export class InboundFreightAmortisationService {
         units: alloc.units,
         unitsSettled: alloc.unitsSettled,
         lineTotalInr: alloc.lineTotalInr,
+        lineGrossInr: alloc.lineGrossInr,
         amountSettledInr: alloc.amountSettledInr,
       };
     }

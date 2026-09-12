@@ -133,7 +133,7 @@ export class AdminInboundFreightController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Pay the forwarder for this consignment: writes the bank entry, attributes it to the bill, and fills in our cost if it was unset. Use this rather than a loose expense — an unattributed forwarder payment is counted twice in the P&L.',
+      'Pay the forwarder for this consignment: writes the bank entry, attributes it to the bill, and recomputes our cost as the sum of every payment on it, each in rupees at the rate in force when it moved. Idempotent on `idempotencyKey`. Use this rather than a loose expense — an unattributed forwarder payment is counted twice in the P&L.',
   })
   payForwarder(
     @CurrentStaff() staff: AuthenticatedStaff,
@@ -148,10 +148,10 @@ export class AdminInboundFreightController {
       {
         bankAccountId: body.bankAccountId,
         amountPaid: body.amountPaid,
-        ...(body.costInr === undefined ? {} : { costInr: body.costInr }),
         occurredAt: new Date(body.occurredAt),
         reference: body.reference ?? null,
         note: body.note ?? null,
+        idempotencyKey: body.idempotencyKey ?? null,
       },
       ctx,
     );
@@ -174,7 +174,7 @@ export class AdminInboundFreightController {
     return this.svc.attributeExistingPayment(
       staff.id,
       freightChargeId,
-      { bankEntryId: body.bankEntryId, costInr: body.costInr ?? null },
+      { bankEntryId: body.bankEntryId },
       ctx,
     );
   }

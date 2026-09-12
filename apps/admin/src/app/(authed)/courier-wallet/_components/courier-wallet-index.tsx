@@ -492,6 +492,9 @@ function RecordPaymentModal({
   const [amountInr, setAmountInr] = useState('');
   const [reference, setReference] = useState('');
   const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
+  // Mounted per opening, so this is one key per opening, reused on every
+  // retry: a double-click books the top-up once.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
   const m = useRecordCourierPayment();
   const inr = banks.filter((b) => b.currency === 'INR');
   const ready =
@@ -562,6 +565,7 @@ function RecordPaymentModal({
                 amountInr,
                 reference,
                 occurredAt: new Date(`${occurredAt}T00:00:00Z`).toISOString(),
+                idempotencyKey,
               },
               { onSuccess: onClose },
             )

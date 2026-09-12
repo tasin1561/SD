@@ -69,6 +69,14 @@ export class RecordOutgoingRechargeDto {
   @IsString()
   @MaxLength(500)
   note?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'The client’s key for this request, generated once when the form opens. A replay with the same key returns the original entry and records nothing.',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  idempotencyKey?: string;
 }
 
 export class ListRechargesQueryDto {

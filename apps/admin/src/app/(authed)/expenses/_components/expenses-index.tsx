@@ -345,14 +345,12 @@ function AttributeModal({
 }): ReactElement {
   const [term, setTerm] = useState('');
   const [picked, setPicked] = useState<FreightChargeView | null>(null);
-  const [costInr, setCostInr] = useState('');
   const [error, setError] = useState<string | null>(null);
   const results = useFreightSearch(term);
   const attribute = useAttributeExpense();
   const amount = Math.abs(Number(entry.signedAmount)).toFixed(2);
-  // A ৳2,000 payment against a ₹3,000 bill needs its INR cost stated —
-  // converting at a posted rate would absorb the bank's charges and the
-  // rate actually achieved (TRE-5).
+  // A non-INR payment is priced in rupees by the server, at the rate in
+  // force when it moved — the consignment's cost is the sum of those.
   const needsInr = entry.currency !== 'INR';
 
   async function save(): Promise<void> {
@@ -361,15 +359,10 @@ function AttributeModal({
       setError('Find the consignment this paid for');
       return;
     }
-    if (needsInr && (costInr.trim() === '' || !Number.isFinite(Number(costInr)))) {
-      setError('Enter what this cost in INR');
-      return;
-    }
     try {
       await attribute.mutateAsync({
         freightChargeId: picked.id,
         bankEntryId: entry.id,
-        ...(needsInr ? { costInr: Number(costInr).toFixed(2) } : {}),
       });
       onClose();
     } catch (err) {
@@ -447,20 +440,10 @@ function AttributeModal({
         )}
 
         {needsInr && (
-          <FormField
-            label="What it cost us (₹)"
-            required
-            hint={`Paid in ${entry.currency}, but a consignment's cost is reported in INR. Read this off the INR side of the statement rather than converting at a posted rate.`}
-          >
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={costInr}
-              onChange={(e) => setCostInr(e.target.value)}
-              placeholder="0.00"
-            />
-          </FormField>
+          <p className="text-text-muted text-xs">
+            Paid in {entry.currency}. It is priced in rupees at the rate recorded for the day it
+            moved, and the consignment&apos;s cost becomes the sum of every payment against it.
+          </p>
         )}
         {error !== null && <p className="text-danger text-sm">{error}</p>}
       </div>

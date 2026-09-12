@@ -19,7 +19,10 @@ const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
  */
 function makeSut(opts: {
   known?: Array<{ awb: string; orderId: string; orderNumber: string; cod: string }>;
+  /** Paid IN FULL on earlier payouts (net paid = the order's COD). */
   settledOrderIds?: string[];
+  /** Net paid so far on earlier payouts, by order. */
+  paid?: Record<string, string>;
 }) {
   const known = opts.known ?? [];
   const prisma = {
@@ -41,8 +44,19 @@ function makeSut(opts: {
           })),
         ),
       },
+      // Net paid per order across earlier payout lines — the figure the
+      // real settlement reads (WAL-6), not "has any line at all".
       courierSettlementLine: {
-        findMany: jest.fn(async () => (opts.settledOrderIds ?? []).map((orderId) => ({ orderId }))),
+        groupBy: jest.fn(async () => [
+          ...(opts.settledOrderIds ?? []).map((orderId) => ({
+            orderId,
+            _sum: { settledInr: D(known.find((k) => k.orderId === orderId)?.cod ?? '0') },
+          })),
+          ...Object.entries(opts.paid ?? {}).map(([orderId, amount]) => ({
+            orderId,
+            _sum: { settledInr: D(amount) },
+          })),
+        ]),
       },
     },
   } as unknown as PrismaService;
@@ -164,6 +178,29 @@ describe('RemittanceMatchService.preview', () => {
     expect(out.alreadySettledCount).toBe(1);
     expect(out.matchedCount).toBe(0);
     expect(out.allocatableInr).toBe('0.00');
+  });
+
+  it('the SECOND part of a part-paid order is allocatable, not "already settled"', async () => {
+    // WAL-6: an order can be paid in parts. Flagging the second part
+    // pushed it out of the allocation, so it was never credited.
+    const svc = makeSut({
+      known: [{ awb: '38061110519610', orderId: 'o-1', orderNumber: 'SD-1', cod: '1500.00' }],
+      paid: { 'o-1': '500.00' },
+    });
+    const out = await svc.preview('delhivery', CSV);
+    const row = out.rows.find((r) => r.awbNumber === '38061110519610');
+    expect(row).toMatchObject({ problem: null, alreadySettled: false, paidSoFarInr: '500.00' });
+    expect(out.alreadySettledCount).toBe(0);
+    expect(out.allocatableInr).toBe('1000.00');
+  });
+
+  it('an order whose payments were REVERSED to nothing is allocatable again', async () => {
+    const svc = makeSut({
+      known: [{ awb: '38061110519610', orderId: 'o-1', orderNumber: 'SD-1', cod: '1000.00' }],
+      paid: { 'o-1': '0.00' },
+    });
+    const out = await svc.preview('delhivery', CSV);
+    expect(out.rows.find((r) => r.awbNumber === '38061110519610')?.alreadySettled).toBe(false);
   });
 
   it('surfaces what we expected, so a short payment shows before recording', async () => {

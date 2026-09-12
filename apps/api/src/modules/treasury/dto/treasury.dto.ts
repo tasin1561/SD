@@ -129,6 +129,13 @@ export class CreateInvestmentDto {
   amount!: string;
   @IsDateString() placedAt!: string;
   @IsOptional() @IsString() @Length(1, 2000) note?: string;
+  @ApiPropertyOptional({
+    description:
+      'The client’s key for this request, generated once when the form opens. A replay with the same key returns the original investment and places nothing.',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  idempotencyKey?: string;
 }
 
 export class RecordInvestmentReturnDto {
@@ -140,6 +147,13 @@ export class RecordInvestmentReturnDto {
   @IsBoolean()
   close?: boolean;
   @IsOptional() @IsString() @Length(1, 2000) note?: string;
+  @ApiPropertyOptional({
+    description:
+      'The client’s key for this request, generated once when the form opens. A replay with the same key returns the investment as it stands and records nothing.',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  idempotencyKey?: string;
 }
 
 export class RecordShipmentCostDto {

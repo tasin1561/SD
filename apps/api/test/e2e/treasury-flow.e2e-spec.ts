@@ -8,6 +8,7 @@ import {
   WalletEntryDirection,
 } from '@skydrop/db';
 import { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
+import { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
 import {
   bootTestApp,
   createTestStaff,
@@ -120,18 +121,48 @@ describe('Treasury (e2e)', () => {
   }
 
   /**
-   * Post an entry through the API, as an operator would.
+   * Put an entry in the book.
+   *
+   * An EXPENSE goes through the API, as an operator records one. Every
+   * other type is fixture money — an opening balance, a settlement, a
+   * withdrawal — posted straight through the ledger: POST
+   * /admin/treasury/entries records expenses ONLY now, and each of those
+   * has its own flow that these fixtures have no reason to drive.
    *
    * `amountCurrency` defaults to INR because most of these fixtures use
    * the INR account; the BDT cases state it, which is the point of the
    * field — the number has to say what it is.
    */
   async function post(body: Record<string, unknown>): Promise<void> {
-    await request(h.baseUrl)
-      .post('/admin/treasury/entries')
-      .set(auth)
-      .send({ amountCurrency: Currency.INR, occurredAt: new Date().toISOString(), ...body })
-      .expect(200);
+    if (body['type'] === BankEntryType.EXPENSE) {
+      await request(h.baseUrl)
+        .post('/admin/treasury/entries')
+        .set(auth)
+        .send({ amountCurrency: Currency.INR, occurredAt: new Date().toISOString(), ...body })
+        .expect(200);
+      return;
+    }
+    const sellerId = body['sellerId'] as string | undefined;
+    await h.app.get(BankLedgerService).post({
+      accountId: body['accountId'] as string,
+      type: body['type'] as BankEntryType,
+      signedAmount: body['signedAmount'] as string,
+      amountCurrency: (body['amountCurrency'] as Currency | undefined) ?? Currency.INR,
+      owner: {
+        kind: body['ownerKind'] as BankOwnerKind,
+        ...(sellerId === undefined ? {} : { sellerId }),
+      },
+      occurredAt: new Date(),
+    });
+  }
+
+  /** A category an expense can be filed under — the API now requires one. */
+  async function category(): Promise<string> {
+    const c = await h.prisma.expenseCategory.create({
+      data: { code: `e2e_${Date.now()}_${Math.floor(Math.random() * 1e6)}`, name: 'E2E' },
+      select: { id: true },
+    });
+    return c.id;
   }
 
   async function overview(): Promise<{
@@ -423,10 +454,10 @@ describe('Treasury (e2e)', () => {
         .send({
           accountId: inrAccount,
           amountCurrency: Currency.BDT,
-          type: BankEntryType.SELLER_TOPUP,
-          signedAmount: '500',
-          ownerKind: BankOwnerKind.SELLER,
-          sellerId: sellerA,
+          type: BankEntryType.EXPENSE,
+          signedAmount: '-500',
+          ownerKind: BankOwnerKind.CAPITAL,
+          expenseCategoryId: await category(),
           occurredAt: new Date().toISOString(),
         })
         .expect(400)
@@ -580,21 +611,129 @@ describe('Treasury (e2e)', () => {
       );
     });
 
-    it("refuses to invest a seller's money — it is not ours to place", async () => {
+    it('the raw entry form cannot move money outside an investment — or anywhere else', async () => {
+      // It used to post any type: an INVESTMENT_OUT with no investment, an
+      // FX_SPREAD with no transfer (revenue from nothing), a SELLER_TOPUP
+      // with no wallet credit (client money that was never owed). Each has
+      // its own flow and its own guard; the form now takes expenses only.
+      for (const [type, signedAmount, ownerKind, sellerId] of [
+        [BankEntryType.INVESTMENT_OUT, '-1000', BankOwnerKind.CAPITAL, undefined],
+        [BankEntryType.FX_SPREAD, '500', BankOwnerKind.CAPITAL, undefined],
+        [BankEntryType.SELLER_TOPUP, '500', BankOwnerKind.SELLER, sellerA],
+        [BankEntryType.RECONCILIATION_ADJUSTMENT, '500', BankOwnerKind.CAPITAL, undefined],
+      ] as const) {
+        await request(h.baseUrl)
+          .post('/admin/treasury/entries')
+          .set(auth)
+          .send({
+            accountId: inrAccount,
+            amountCurrency: Currency.INR,
+            type,
+            signedAmount,
+            ownerKind,
+            ...(sellerId === undefined ? {} : { sellerId }),
+            occurredAt: new Date().toISOString(),
+          })
+          .expect(400)
+          .expect((r) => expect(r.body.code).toBe('TREASURY_ENTRY_NOT_ALLOWED'));
+      }
+      // A POSITIVE expense is income filed as spending.
       await request(h.baseUrl)
         .post('/admin/treasury/entries')
         .set(auth)
         .send({
           accountId: inrAccount,
           amountCurrency: Currency.INR,
-          type: BankEntryType.INVESTMENT_OUT,
-          signedAmount: '-1000',
+          type: BankEntryType.EXPENSE,
+          signedAmount: '1000',
           ownerKind: BankOwnerKind.CAPITAL,
-          sellerId: sellerA,
+          expenseCategoryId: await category(),
           occurredAt: new Date().toISOString(),
         })
         .expect(400)
-        .expect((r) => expect(r.body.code).toBe('BANK_CAPITAL_HAS_SELLER'));
+        .expect((r) => expect(r.body.code).toBe('TREASURY_EXPENSE_NOT_NEGATIVE'));
+      // Nothing reached the book.
+      expect(await h.prisma.bankEntry.count({ where: { accountId: inrAccount } })).toBe(0);
+    });
+
+    it('a return in another currency, or on a closed investment, is refused; the close date never moves', async () => {
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.OPENING_BALANCE,
+        signedAmount: '100000',
+        ownerKind: BankOwnerKind.CAPITAL,
+      });
+      const inv = await request(h.baseUrl)
+        .post('/admin/treasury/investments')
+        .set(auth)
+        .send({
+          label: 'Short FD',
+          counterparty: 'HDFC Bank',
+          fromAccountId: inrAccount,
+          amount: '50000',
+          placedAt: new Date().toISOString(),
+        })
+        .expect(201);
+      const id = inv.body.id as string;
+
+      // Rupees placed, taka returned: the two would be added as one figure.
+      await request(h.baseUrl)
+        .post(`/admin/treasury/investments/${id}/return`)
+        .set(auth)
+        .send({ toAccountId: bdtAccount, amount: '1000', receivedAt: new Date().toISOString() })
+        .expect(400)
+        .expect((r) => expect(r.body.code).toBe('INVESTMENT_CURRENCY_MISMATCH'));
+
+      const closedAt = '2026-09-01T00:00:00.000Z';
+      await request(h.baseUrl)
+        .post(`/admin/treasury/investments/${id}/return`)
+        .set(auth)
+        .send({ toAccountId: inrAccount, amount: '50500', receivedAt: closedAt, close: true })
+        .expect(200);
+
+      await request(h.baseUrl)
+        .post(`/admin/treasury/investments/${id}/return`)
+        .set(auth)
+        .send({ toAccountId: inrAccount, amount: '10', receivedAt: new Date().toISOString() })
+        .expect(409)
+        .expect((r) => expect(r.body.code).toBe('INVESTMENT_CLOSED'));
+
+      const row = await h.prisma.investment.findUniqueOrThrow({ where: { id } });
+      expect(row.closedAt?.toISOString()).toBe(closedAt);
+      expect(row.returnedInr.toFixed(2)).toBe('50500.00');
+    });
+
+    it('placing twice with the same key places ONCE', async () => {
+      await post({
+        accountId: inrAccount,
+        type: BankEntryType.OPENING_BALANCE,
+        signedAmount: '100000',
+        ownerKind: BankOwnerKind.CAPITAL,
+      });
+      const body = {
+        label: 'FD',
+        counterparty: 'HDFC Bank',
+        fromAccountId: inrAccount,
+        amount: '20000',
+        placedAt: new Date().toISOString(),
+        idempotencyKey: '3f8a2c1e-9b7d-4e6f-8a1b-2c3d4e5f6a7b',
+      };
+      const a = await request(h.baseUrl)
+        .post('/admin/treasury/investments')
+        .set(auth)
+        .send(body)
+        .expect(201);
+      const b = await request(h.baseUrl)
+        .post('/admin/treasury/investments')
+        .set(auth)
+        .send(body)
+        .expect(201);
+      expect(b.body.id).toBe(a.body.id);
+      expect(
+        await h.prisma.bankEntry.count({
+          where: { accountId: inrAccount, type: BankEntryType.INVESTMENT_OUT },
+        }),
+      ).toBe(1);
     });
   });
 

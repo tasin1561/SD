@@ -387,7 +387,7 @@ export class WalletImportService {
     const stored = await this.storeTransactions(input.txns, courierAccountId, dryRun);
     // BEFORE netting, so a row their ledger has dropped stops counting in
     // the same run that notices it.
-    const missing = await this.reconcileWindow(
+    const { missing, reappeared } = await this.reconcileWindow(
       courierAccountId,
       input.txns,
       input.periodFrom,
@@ -510,8 +510,18 @@ export class WalletImportService {
       including them would put a settlement for fraud into the price of
       moving one box.
     */
+    //
+    // A DRY RUN nets the same way — our stored ledger — plus the file's
+    // NEW rows, which it has deliberately not written, and with the rows
+    // this run would stamp missing (or un-stamp) treated as the real run
+    // would treat them. It used to net the FILE alone, so a preview of a
+    // file naming only a parcel's return charge showed that charge as the
+    // parcel's whole cost, overwriting a forward debit the ledger holds.
     const netByAwb = dryRun
-      ? this.netFromFile(input.txns)
+      ? await this.netForPreview(courierAccountId, [...awbs], stored.fresh, {
+          excludeTxnIds: missing.map((m) => m.txnId),
+          reinstateTxnIds: reappeared,
+        })
       : await this.netFromLedger(courierAccountId, [...awbs]);
     // One parcel, one net — whichever of its waybills a charge was filed under.
     // A reverse-pickup alias is the parcel coming back, so its parcel is
@@ -714,8 +724,8 @@ export class WalletImportService {
     from: Date | null,
     to: Date | null,
     dryRun: boolean,
-  ): Promise<MissingTxn[]> {
-    if (from === null || to === null) return [];
+  ): Promise<{ missing: MissingTxn[]; reappeared: string[] }> {
+    if (from === null || to === null) return { missing: [], reappeared: [] };
     const inFile = new Set(txns.map((t) => t.txnId));
     const held = await this.prisma.client.courierWalletTransaction.findMany({
       where: { courierAccountId, occurredAt: { gte: from, lte: to } },
@@ -749,13 +759,16 @@ export class WalletImportService {
       }
     }
 
-    return missing.map((h) => ({
-      txnId: h.txnId,
-      awbNumber: h.awbNumber,
-      kind: h.kind,
-      amountInr: h.amountInr.toString(),
-      occurredAt: h.occurredAt.toISOString(),
-    }));
+    return {
+      missing: missing.map((h) => ({
+        txnId: h.txnId,
+        awbNumber: h.awbNumber,
+        kind: h.kind,
+        amountInr: h.amountInr.toString(),
+        occurredAt: h.occurredAt.toISOString(),
+      })),
+      reappeared: returned.map((h) => h.txnId),
+    };
   }
 
   /** The default active production Delhivery account — the same lookup
@@ -802,8 +815,14 @@ export class WalletImportService {
     txns: readonly LedgerTxn[],
     courierAccountId: string,
     dryRun: boolean,
-  ): Promise<{ created: number; existing: number; mutated: MutatedTxn[] }> {
-    if (txns.length === 0) return { created: 0, existing: 0, mutated: [] };
+  ): Promise<{
+    created: number;
+    existing: number;
+    mutated: MutatedTxn[];
+    /** The file's rows not already held — written unless this is a dry run. */
+    fresh: readonly LedgerTxn[];
+  }> {
+    if (txns.length === 0) return { created: 0, existing: 0, mutated: [], fresh: [] };
 
     const byId = new Map(txns.map((t) => [t.txnId, t]));
     const held = await this.prisma.client.courierWalletTransaction.findMany({
@@ -855,7 +874,7 @@ export class WalletImportService {
         });
       }
     }
-    return { created: fresh.length, existing: held.length, mutated };
+    return { created: fresh.length, existing: held.length, mutated, fresh };
   }
 
   /**
@@ -873,9 +892,20 @@ export class WalletImportService {
   private async netFromLedger(
     courierAccountId: string,
     awbs: readonly string[],
+    /**
+     * A dry run's stand-in for the stamps it does not write: rows this run
+     * WOULD mark missing are left out, and rows it WOULD un-stamp are
+     * counted again — exactly as the real run nets after writing them.
+     */
+    opts: {
+      readonly excludeTxnIds?: readonly string[];
+      readonly reinstateTxnIds?: readonly string[];
+    } = {},
   ): Promise<Map<string, ParcelNet>> {
     const out = new Map<string, ParcelNet>();
     if (awbs.length === 0) return out;
+    const exclude = opts.excludeTxnIds ?? [];
+    const reinstate = opts.reinstateTxnIds ?? [];
 
     for (let i = 0; i < awbs.length; i += AWB_CHUNK) {
       const rows = await this.prisma.client.courierWalletTransaction.groupBy({
@@ -887,7 +917,12 @@ export class WalletImportService {
           category: CourierWalletTxnCategory.PARCEL,
           // A row their ledger has since dropped no longer moves money:
           // the later export still balances to the live wallet without it.
-          missingFromExportAt: null,
+          ...(reinstate.length === 0
+            ? { missingFromExportAt: null }
+            : {
+                OR: [{ missingFromExportAt: null }, { txnId: { in: [...reinstate] } }],
+              }),
+          ...(exclude.length === 0 ? {} : { txnId: { notIn: [...exclude] } }),
         },
         _sum: { amountInr: true },
         _max: { occurredAt: true },
@@ -987,12 +1022,26 @@ export class WalletImportService {
     return out;
   }
 
-  /** The same arithmetic over the FILE, for a dry run — which must not
-   *  read back rows it has deliberately not written. */
-  private netFromFile(txns: readonly LedgerTxn[]): Map<string, ParcelNet> {
-    const out = new Map<string, ParcelNet>();
-    for (const t of txns) {
-      if (t.awbNumber === null || t.category !== 'PARCEL') continue;
+  /**
+   * What the real import WOULD net, without writing anything: our stored
+   * ledger (with this run's missing/reappeared rows treated as the real
+   * run treats them) plus the file's NEW parcel rows, which a dry run
+   * has deliberately not stored. A row already held is never counted
+   * twice — it is not "fresh", so it comes from the ledger alone.
+   */
+  private async netForPreview(
+    courierAccountId: string,
+    awbs: readonly string[],
+    fresh: readonly LedgerTxn[],
+    opts: {
+      readonly excludeTxnIds: readonly string[];
+      readonly reinstateTxnIds: readonly string[];
+    },
+  ): Promise<Map<string, ParcelNet>> {
+    const out = await this.netFromLedger(courierAccountId, awbs, opts);
+    const wanted = new Set(awbs);
+    for (const t of fresh) {
+      if (t.awbNumber === null || t.category !== 'PARCEL' || !wanted.has(t.awbNumber)) continue;
       fold(out, t.awbNumber, {
         debit: t.kind === 'DEBIT',
         returnLeg: t.leg === 'RTO',
