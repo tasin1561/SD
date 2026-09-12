@@ -35,12 +35,18 @@ import { join, resolve } from 'node:path';
  */
 const API = resolve(__dirname, '../..');
 
+/** Any read of the wallet ledger — the guard's "is there already an entry?". */
+const LEDGER_READ = /sellerWalletEntry\.(findFirst|findMany|count|groupBy|aggregate)\(/;
+
 /** Files that guard a money write by reading the wallet ledger first. */
 function guardedFiles(): string[] {
   return globSync('src/modules/**/*.ts', { cwd: API }).filter((f) => {
     const src = readFileSync(join(API, f), 'utf8');
-    // The guard shape: a read of the ledger AND a write through it.
-    return /sellerWalletEntry\.findFirst/.test(src) && /wallet\.applyEntry\(/.test(src);
+    // The guard shape: a read of the ledger AND a write through it. EVERY
+    // read shape counts — a guard rewritten from `findFirst` to `count` or
+    // `findMany` (charges and refunds pair up since 2026-09-12) dropped out
+    // of this check silently while it stayed green.
+    return LEDGER_READ.test(src) && /wallet\.applyEntry\(/.test(src);
   });
 }
 
@@ -63,8 +69,10 @@ describe('every money guard that reads before writing holds the wallet lock', ()
     const src = readFileSync(join(API, file), 'utf8');
     // Order is the entire property. Locking after the read serialises
     // nothing that matters — both callers have already decided.
-    const lockAt = src.indexOf('takeAdvisoryLock');
-    const readAt = src.indexOf('sellerWalletEntry.findFirst');
+    // The CALL, not the import line at the top of the file — matching the
+    // bare name made every file pass this by its import.
+    const lockAt = src.indexOf('takeAdvisoryLock(');
+    const readAt = src.search(LEDGER_READ);
     expect(lockAt).toBeGreaterThan(-1);
     expect(lockAt).toBeLessThan(readAt);
   });

@@ -430,7 +430,7 @@ export class WalletTopupService {
                 })
               ).amount,
             );
-      // The seller's WALLET lock (applyEntry takes it again — reentrant),
+      // The seller's WALLET lock (the wallet write takes it again — reentrant),
       // then the receiving account's reconcile key, BEFORE the debt split
       // whose pair takes the attribution key. The seller row lands in this
       // account; a reconcile of their holding here must not read around

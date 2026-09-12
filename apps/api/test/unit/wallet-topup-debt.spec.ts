@@ -15,6 +15,8 @@ const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
 
 function makeSut(opts: { currency: Currency; amount: string; credited: string; repaid: string }) {
   const tx = {
+    // The wallet and account locks are advisory locks (pg_advisory_xact_lock).
+    $executeRaw: jest.fn(async () => 1),
     walletTopupRequest: {
       updateMany: jest.fn(async () => ({ count: 1 })),
       update: jest.fn(async () => ({ id: 'topup-1', walletEntryId: 'we-1' })),
