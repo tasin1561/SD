@@ -120,6 +120,9 @@ export function RemittanceFormModal({
   const [paidFromAccountId, setPaidFromAccountId] = useState('');
   const [paidAt, setPaidAt] = useState(toLocalDt(new Date()));
   const [note, setNote] = useState('');
+  // What the bank took for sending it, in the bank currency. Ours — booked
+  // as a bank charge — so it never reduces what the seller receives.
+  const [bankFee, setBankFee] = useState('');
   const [busy, setBusy] = useState(false);
   // Only accounts held in the currency that hits the seller's bank. The
   // server refuses a mismatch outright (BANK_CURRENCY_MISMATCH); offering
@@ -173,6 +176,16 @@ export function RemittanceFormModal({
     return (s * f).toFixed(2);
   }, [sourceAmount, fxRate]);
 
+  // What leaves our account in all: the payout plus the bank's fee. Null
+  // while there is no fee to add, so the line only appears when it says
+  // something the destination amount does not.
+  const leavesAccount = useMemo(() => {
+    const d = Number(destAmount);
+    const f = Number(bankFee);
+    if (bankFee.trim() === '' || !Number.isFinite(f) || f <= 0 || !Number.isFinite(d)) return null;
+    return (d + f).toFixed(2);
+  }, [destAmount, bankFee]);
+
   function fmtError(e: unknown): string {
     if (e instanceof ApiError) {
       const b = e.body as { code?: unknown; message?: unknown } | null;
@@ -209,6 +222,11 @@ export function RemittanceFormModal({
       setError('Say which of our accounts the money left');
       return;
     }
+    const fee = bankFee.trim() === '' ? null : Number(bankFee);
+    if (fee !== null && !Number.isFinite(fee)) {
+      setError('Bank fee must be a number');
+      return;
+    }
     setBusy(true);
     try {
       const body: CreateRemittanceRequest = {
@@ -222,6 +240,8 @@ export function RemittanceFormModal({
         paidFromAccountId,
         paidAt: new Date(paidAt).toISOString(),
         ...(note.trim() ? { note: note.trim() } : {}),
+        // Sent as typed: the server decides what a valid fee is (FE-2).
+        ...(fee !== null ? { bankFee: fee } : {}),
       };
       const created = await create.mutateAsync(body);
       onSuccess(created);
@@ -239,7 +259,7 @@ export function RemittanceFormModal({
         if (!o) onClose();
       }}
       title="Record remittance"
-      description="Debits the seller's wallet on the source currency + writes a paired credit on the destination currency for cross-currency remits."
+      description="Debits the seller's wallet by the source amount and records the cash leaving the account you paid from. A bank fee is booked as our expense."
       size="lg"
     >
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
@@ -399,6 +419,27 @@ export function RemittanceFormModal({
             ))}
           </Select>
         </FormField>
+
+        <FormField
+          label={`Bank fee (optional, ${currency})`}
+          hint="What the bank charged to send it. Booked as our bank charge — the seller still receives the full amount."
+        >
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            value={bankFee}
+            onChange={(e) => setBankFee(e.target.value)}
+            placeholder="0.00"
+          />
+        </FormField>
+        {leavesAccount !== null && (
+          <div className="text-text-muted text-xs">
+            Leaves our account in all:{' '}
+            <Money amount={leavesAccount} currency={currency} convert={false} /> — the payout plus
+            the fee.
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Bank reference" required>

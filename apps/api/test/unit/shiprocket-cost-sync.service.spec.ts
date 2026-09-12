@@ -235,6 +235,39 @@ describe('ShiprocketCostSyncService', () => {
     expect(s.updates).toHaveLength(0);
   });
 
+  it('clears a waybill-swap issue once both sides show the same waybill again', async () => {
+    // Somebody re-pointed our shipment (or Shiprocket moved it back): the
+    // issue raised on an earlier night now describes a parcel that is fine.
+    const s = makeSut({
+      shipments: [ship('m')],
+      orders: {
+        'SR-m': srOrder('IN TRANSIT', { freight_charges: '90.00', billing_amount: '' }),
+      },
+    });
+    await s.svc.sync('MANUAL');
+    expect(s.issues.resolveByKey).toHaveBeenCalledWith(
+      'shiprocket-awb-swapped:m',
+      expect.stringContaining('AWB'),
+    );
+    expect(s.issues.raise).not.toHaveBeenCalledWith(
+      expect.objectContaining({ dedupeKey: 'shiprocket-awb-swapped:m' }),
+    );
+  });
+
+  it('does not clear a swap that is still there', async () => {
+    const s = makeSut({
+      shipments: [ship('m', null, null, 'OLD-AWB')],
+      orders: {
+        'SR-m': srOrder('IN TRANSIT', { freight_charges: '90.00', billing_amount: '' }),
+      },
+    });
+    await s.svc.sync('MANUAL');
+    expect(s.issues.resolveByKey).not.toHaveBeenCalledWith(
+      'shiprocket-awb-swapped:m',
+      expect.anything(),
+    );
+  });
+
   it('the extras their wallet charged beside freight are not a disagreement', async () => {
     // WhatsApp (₹5.90) and RTO scoring (₹4.12) are in the parcel's recorded
     // cost — they are what it cost us — but billed on their VAS invoices,

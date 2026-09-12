@@ -92,9 +92,7 @@ export class RtoFeeAccrualService {
     });
     if (already) return { deliveryFeeSwept, rtoFeeInr: null };
 
-    const fee = isCustomerReturn
-      ? await this.pricing.resolveCustomerReturnFee(sellerId)
-      : await this.pricing.resolveRtoFee(sellerId);
+    const fee = { amount: await this.returnFeeFor(sellerId, isCustomerReturn) };
     if (fee.amount.lessThanOrEqualTo(0)) {
       // A zero fee is a legitimate configuration — a seller may have
       // been given free returns — so this is a quiet no-op, not an error.
@@ -132,5 +130,18 @@ export class RtoFeeAccrualService {
     });
 
     return { deliveryFeeSwept, rtoFeeInr: fee.amount.toFixed(2) };
+  }
+
+  /**
+   * The fee a received return owes — the customer-return fee when the
+   * customer asked for it back, the RTO fee otherwise. The ONE place that
+   * choice is made, so the backfill sweep asks the same question the
+   * receive step does.
+   */
+  async returnFeeFor(sellerId: string, isCustomerReturn: boolean): Promise<Prisma.Decimal> {
+    const fee = isCustomerReturn
+      ? await this.pricing.resolveCustomerReturnFee(sellerId)
+      : await this.pricing.resolveRtoFee(sellerId);
+    return fee.amount;
   }
 }

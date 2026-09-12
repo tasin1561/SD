@@ -513,6 +513,12 @@ export class BankLedgerService {
     const taker = input.direction === 'TO_CAPITAL' ? capital : seller;
 
     const result = await this.prisma.client.$transaction(async (tx) => {
+      // The seller's WALLET lock first, then the reconcile locks. Every
+      // wallet write takes the wallet lock and its attribution then moves
+      // this seller's cash; seller transfers and remittances take the two
+      // in this same order. Taken the other way round, a correction and a
+      // charge landing together could each hold one and wait for the other.
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${input.sellerId}|${Currency.INR}`);
       // Reads a balance and writes from it: both owners' reconcile locks,
       // in a fixed order so two corrections cannot wait on each other.
       const keys = [seller, capital]

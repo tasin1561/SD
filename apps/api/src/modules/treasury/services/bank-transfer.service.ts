@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActorType, BankEntryType, BankOwnerKind, Prisma } from '@skydrop/db';
+import { ActorType, BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { BankLedgerService } from './bank-ledger.service';
+import { SellerCashAttributionService } from './seller-cash-attribution.service';
 
 /** The expense category a same-currency transfer's bank charge is filed under. */
 export const BANK_CHARGES_CATEGORY = 'bank_charges';
@@ -68,6 +69,7 @@ export class BankTransferService {
     private readonly prisma: PrismaService,
     private readonly ledger: BankLedgerService,
     private readonly audit: AuditLogService,
+    private readonly attribution: SellerCashAttributionService,
   ) {}
 
   async transfer(input: TransferInput): Promise<TransferResult> {
@@ -123,18 +125,57 @@ export class BankTransferService {
       ? { kind: BankOwnerKind.SELLER, sellerId: input.sellerId }
       : { kind: BankOwnerKind.CAPITAL };
 
-    // What the owner is credited on the far side: at the quoted rate when a
-    // seller was quoted one; across a currency otherwise, everything that
-    // arrived; in the same currency, everything that left.
-    const quoted = input.quotedRate ? new Prisma.Decimal(input.quotedRate) : null;
-    const creditedToSeller = !crossCurrency
-      ? out
-      : input.sellerId && quoted
-        ? out.mul(quoted).toDecimalPlaces(2)
-        : inn;
-    const spread = input.sellerId && crossCurrency ? inn.sub(creditedToSeller) : null;
+    const quotedInput = input.quotedRate ? new Prisma.Decimal(input.quotedRate) : null;
 
     return this.prisma.client.$transaction(async (tx) => {
+      // The seller's WALLET lock before the reconcile lock below — the
+      // order every path that moves a seller's cash takes them in, so a
+      // transfer and a charge on the same seller cannot deadlock.
+      if (input.sellerId) {
+        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${input.sellerId}|${Currency.INR}`);
+      }
+
+      // A seller's money crossing a currency with NO quote is still
+      // credited at a rate — the one their wallet holds it at on each side
+      // (the rate of their last top-up into that account, else today's).
+      // Credited at whatever the bank achieved instead, the book stopped
+      // agreeing with the wallet by exactly the bank's margin; this way the
+      // seller keeps the value they had and the margin is FX_SPREAD, ours,
+      // as it is when a quote was given (TRE-5).
+      let quoted = quotedInput;
+      let impliedFrom: string | null = null;
+      if (input.sellerId && crossCurrency && quoted === null) {
+        const fromRate = await this.attribution.inrPerUnit(
+          tx,
+          input.sellerId,
+          from.id,
+          from.currency,
+        );
+        const toRate = await this.attribution.inrPerUnit(tx, input.sellerId, to.id, to.currency);
+        if (fromRate === null || toRate === null || toRate.rate.lte(0)) {
+          throw new BadRequestException({
+            code: 'TRANSFER_QUOTE_REQUIRED',
+            message:
+              `There is no rate for ${from.currency}→${to.currency} to value this seller's money ` +
+              'at — no top-up into either account and no system rate. Give the quoted rate.',
+          });
+        }
+        quoted = fromRate.rate.div(toRate.rate).toDecimalPlaces(6);
+        impliedFrom = [fromRate.source, toRate.source].includes('CURRENT')
+          ? 'today’s rate'
+          : 'their last top-up rate';
+      }
+
+      // What the owner is credited on the far side: at the quoted rate
+      // when the money is a seller's; across a currency otherwise,
+      // everything that arrived; in the same currency, everything that left.
+      const creditedToSeller = !crossCurrency
+        ? out
+        : input.sellerId && quoted
+          ? out.mul(quoted).toDecimalPlaces(2)
+          : inn;
+      const spread = input.sellerId && crossCurrency ? inn.sub(creditedToSeller) : null;
+
       /*
         YOU CANNOT MOVE MORE OF SOMEBODY'S MONEY THAN THEY HAVE HERE.
 
@@ -247,6 +288,7 @@ export class BankTransferService {
             transferId: transfer.id,
             note:
               `Quoted ${quoted?.toString() ?? '-'}, achieved ${achieved?.toString() ?? '-'}` +
+              (impliedFrom !== null ? ` (no quote given — ${impliedFrom})` : '') +
               (spread.isNegative() ? ' — covered from capital' : ''),
             staffId: input.staffId,
           },

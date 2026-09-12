@@ -17,7 +17,12 @@ import { WithdrawalRequestService } from '../../seller-wallet-withdrawal/service
 import type { CreateRemittanceDto } from '../dto/create-remittance.dto';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
+import { BANK_CHARGES_CATEGORY } from '../../treasury/services/bank-transfer.service';
+import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+
+const ZERO = new Prisma.Decimal(0);
 
 /**
  * Phase 1B M23 — Admin records a manual bank transfer to a seller.
@@ -44,6 +49,7 @@ export class RemittanceService {
     private readonly bank: BankLedgerService,
     private readonly withdrawals: WithdrawalRequestService,
     private readonly issues: SystemIssueService,
+    private readonly attribution: SellerCashAttributionService,
   ) {}
 
   /**
@@ -185,7 +191,18 @@ export class RemittanceService {
       });
     }
 
+    // What the bank took for sending it, in the paying account's currency.
+    // Ours, not the seller's: they are owed what they asked for.
+    const bankFee =
+      input.bankFee === undefined || input.bankFee === null
+        ? ZERO
+        : new Prisma.Decimal(input.bankFee);
+
     const result = await this.prisma.client.$transaction(async (tx) => {
+      // WAL-7: a guard that reads the balance and then debits it holds the
+      // wallet's own lock, taken BEFORE the read. Without it two payouts
+      // for one seller each read the same balance and both pass.
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${input.sellerId}|${input.sourceCurrency}`);
       const balance = await this.wallet.balanceLive(input.sellerId, input.sourceCurrency, tx);
       if (balance.lt(sourceAmount)) {
         throw new BadRequestException({
@@ -243,20 +260,114 @@ export class RemittanceService {
       // bank, and that is what our account was debited. `sourceAmount`
       // is the wallet's INR view of the same payment and would be the
       // wrong number to take out of a BDT account.
-      await this.bank.post(
-        {
-          accountId: input.paidFromAccountId,
-          type: BankEntryType.SELLER_WITHDRAWAL,
-          signedAmount: amount.neg(),
-          amountCurrency: input.currency,
-          owner: { kind: BankOwnerKind.SELLER, sellerId: input.sellerId },
-          occurredAt: new Date(input.paidAt),
-          reference: input.bankReference.trim(),
-          staffId: actor.staffId,
-          note: 'Paid out to the seller',
-        },
+      //
+      // WHOSE cash left is decided per ACCOUNT. The seller's part is at
+      // most what they hold in the paying account — posting all of it as
+      // theirs drove that account's held-for-them figure negative whenever
+      // their money sat elsewhere (a BD payout from a taka account while
+      // their COD is in rupees at HDFC, which is the ordinary case). The
+      // rest leaves as OURS, and an equal value of their money wherever
+      // else it sits becomes ours in its place — so the payout is never
+      // blocked, and what we hold for them still falls by exactly what the
+      // wallet did (TRE-8).
+      const paidAt = new Date(input.paidAt);
+      const reference = input.bankReference.trim();
+      const sellerOwner = { kind: BankOwnerKind.SELLER, sellerId: input.sellerId } as const;
+      await takeAdvisoryLock(
         tx,
+        AdvisoryLock.BANK_RECONCILE,
+        `${input.paidFromAccountId}|${BankOwnerKind.SELLER}|${input.sellerId}`,
       );
+      const heldHere = await this.bank.ownerBalance(input.paidFromAccountId, sellerOwner, tx);
+      let sellerUnits = heldHere.lt(amount) ? (heldHere.lt(0) ? ZERO : heldHere) : amount;
+      // The rupee value of their holding here, at the rate the wallet
+      // credited it at. The seller part never takes more VALUE than the
+      // wallet debit, or the book would fall further than the wallet did.
+      const rate =
+        input.sourceCurrency === Currency.INR
+          ? await this.attribution.inrPerUnit(
+              tx,
+              input.sellerId,
+              input.paidFromAccountId,
+              input.currency,
+            )
+          : null;
+      if (rate !== null && rate.rate.gt(0)) {
+        const cap = sourceAmount.div(rate.rate).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+        if (sellerUnits.gt(cap)) sellerUnits = cap;
+      }
+      const capitalUnits = amount.sub(sellerUnits);
+      if (sellerUnits.gt(0)) {
+        await this.bank.post(
+          {
+            accountId: input.paidFromAccountId,
+            type: BankEntryType.SELLER_WITHDRAWAL,
+            signedAmount: sellerUnits.neg(),
+            amountCurrency: input.currency,
+            owner: sellerOwner,
+            occurredAt: paidAt,
+            reference,
+            staffId: actor.staffId,
+            note: 'Paid out to the seller',
+          },
+          tx,
+        );
+      }
+      if (capitalUnits.gt(0)) {
+        await this.bank.post(
+          {
+            accountId: input.paidFromAccountId,
+            type: BankEntryType.SELLER_WITHDRAWAL,
+            signedAmount: capitalUnits.neg(),
+            amountCurrency: input.currency,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: paidAt,
+            reference,
+            staffId: actor.staffId,
+            note: 'Paid out to the seller from our money here — their money elsewhere becomes ours',
+          },
+          tx,
+        );
+      }
+      if (rate !== null) {
+        const rest = sourceAmount.sub(sellerUnits.mul(rate.rate));
+        if (rest.gt(0)) {
+          await this.attribution.takeToCapital(tx, {
+            sellerId: input.sellerId,
+            amount: rest,
+            reference: remittance.id,
+            note: `Paid out from our money on remittance ${reference} — this was theirs`,
+          });
+        }
+      }
+
+      if (bankFee.gt(0)) {
+        const category = await tx.expenseCategory.upsert({
+          where: { code: BANK_CHARGES_CATEGORY },
+          update: {},
+          create: {
+            code: BANK_CHARGES_CATEGORY,
+            name: 'Bank charges',
+            hint: 'What a bank took to move money. Booked automatically on a transfer that arrives short and on a remittance fee — do not file these by hand, or the P&L counts them twice.',
+          },
+          select: { id: true },
+        });
+        await this.bank.post(
+          {
+            accountId: input.paidFromAccountId,
+            type: BankEntryType.EXPENSE,
+            signedAmount: bankFee.neg(),
+            amountCurrency: input.currency,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: paidAt,
+            reference,
+            expenseCategoryId: category.id,
+            staffId: actor.staffId,
+            note: `Bank fee on remittance ${reference}`,
+          },
+          tx,
+        );
+      }
 
       // NO paired credit on the destination currency.
       //
@@ -298,6 +409,7 @@ export class RemittanceService {
         sourceAmount: sourceAmount.toString(),
         fxRateSnapshot: fxRate.toString(),
         bankReference: input.bankReference,
+        bankFee: bankFee.gt(0) ? bankFee.toFixed(2) : null,
       },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });

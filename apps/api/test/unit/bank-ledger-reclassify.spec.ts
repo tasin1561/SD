@@ -1,4 +1,5 @@
 import { Prisma } from '@skydrop/db';
+import { AdvisoryLock } from '../../src/common/db/advisory-lock';
 import { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
 
 /**
@@ -12,7 +13,8 @@ type Post = { signedAmount: Prisma.Decimal; owner: { kind: string }; type: strin
 function makeSut(held: string) {
   const posts: Post[] = [];
   const tx = {
-    $executeRaw: jest.fn(async () => 1),
+    // (strings, namespace, key) — a tagged-template call.
+    $executeRaw: jest.fn(async (..._args: unknown[]) => 1),
     platformBankAccount: {
       findFirst: jest.fn(async () => ({ currency: 'INR', label: 'HDFC — COD receiving' })),
     },
@@ -29,7 +31,7 @@ function makeSut(held: string) {
     posts.push(input as unknown as Post);
     return { id: `be${posts.length}` } as never;
   });
-  return { svc, posts, audit, ownerBalance };
+  return { svc, posts, audit, ownerBalance, tx };
 }
 
 const BASE = {
@@ -56,6 +58,19 @@ describe('BankLedgerService.reclassifySellerCash', () => {
       true,
     );
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ severity: 'HIGH' }));
+  });
+
+  it('takes the seller’s wallet lock before the reconcile locks', async () => {
+    // Every wallet write holds the wallet lock while its attribution moves
+    // this seller's cash; taken the other way round here, a correction and
+    // a charge landing together could each hold one and wait for the other.
+    const { svc, tx } = makeSut('1455.00');
+    await svc.reclassifySellerCash({ ...BASE, direction: 'TO_CAPITAL', amount: '10.00' });
+    expect(tx.$executeRaw.mock.calls.map((c) => c[1])).toEqual([
+      AdvisoryLock.WALLET,
+      AdvisoryLock.BANK_RECONCILE,
+      AdvisoryLock.BANK_RECONCILE,
+    ]);
   });
 
   it('refuses to move more than the seller holds there', async () => {
