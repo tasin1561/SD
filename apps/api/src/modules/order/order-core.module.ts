@@ -18,6 +18,8 @@ import { OrderAdminOverrideService } from './services/order-admin-override.servi
 import { SellerStoreModule } from '../seller-store/seller-store.module';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
+import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
+import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.service';
 
 /**
  * Module 6 — INTERNAL core (the Module-5 `inventory-shared` analogue).
@@ -57,15 +59,18 @@ import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.modu
     // A wallet too deep in the red stops new orders, checked beside the
     // restriction so the CSV path is covered by the same line.
     SellerCreditModule,
-    // God mode mirrors transitionStatus's cancel-time refund of the
-    // delivery fee (OrderChargesRefundService). No cycle:
-    // seller-wallet-accrual imports neither order module — OrderModule
-    // already imports it for the same refund.
+    // OrderPostCommitHooksService — the non-stock post-commit
+    // consequences BOTH writers of orders.status run (transitionStatus
+    // and god mode, 2026-09-12) — reaches these four. None imports
+    // either order module, so no cycle:
+    //  - SellerWalletAccrualModule: the cancel-time delivery-fee refund.
+    //  - LifecycleEventsModule: the R3 bus (NOTIF-5).
+    //  - ShipmentProvisionModule: provision on CONFIRMED / void on cancel
+    //    (R3 primitive, imports nothing).
+    //  - CallQueueModule (above): CC-6 enqueue / dequeue.
     SellerWalletAccrualModule,
-    // God mode emits the same lifecycle event a matrix transition does
-    // (ORD-2, 2026-09-12). The R3 bus is dependency-free, so this is the
-    // same edge OrderModule already has.
     LifecycleEventsModule,
+    ShipmentProvisionModule,
   ],
   providers: [
     OrderNumberingService,
@@ -77,8 +82,12 @@ import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.modu
     AddressValidationService,
     OrderService,
     OrderAdminOverrideService,
+    OrderPostCommitHooksService,
   ],
   exports: [
+    // Intra-Module-6 only: OrderModule's OrderWriteService draws it from
+    // here (NestJS forbids re-exporting an imported provider).
+    OrderPostCommitHooksService,
     CustomerReputationService,
     OrderNumberingService,
     OrderStateMachineService,

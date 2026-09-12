@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@skydrop/db';
 import { OrderAdminOverrideService } from '../../src/modules/order/services/order-admin-override.service';
+import { OrderPostCommitHooksService } from '../../src/modules/order/services/order-post-commit-hooks.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { InsufficientStockError } from '../../src/modules/inventory-stock/services/stock-reservation.service';
 
@@ -100,18 +101,44 @@ function makeService(
     if (opts.emitThrows) throw new Error('bus exploded');
   });
 
+  const enqueueOrder = jest.fn<Promise<unknown>, [string, unknown?]>(async () => ({
+    created: true,
+  }));
+  const dequeueOrder = jest.fn<Promise<unknown>, [string, string, unknown?]>(async () => ({
+    dequeued: 1,
+  }));
+  const provisionFromSnapshot = jest.fn<Promise<unknown>, [AnyArgs, unknown, unknown?]>(
+    async () => ({ shipmentId: 'ship-new', created: true }),
+  );
+  const voidForOrder = jest.fn<Promise<{ voided: number }>, [string, string, unknown, unknown?]>(
+    async () => ({ voided: 1 }),
+  );
+
+  // The REAL shared hooks service — the one transitionStatus runs — over
+  // the same mocks, so what is asserted is what god mode actually does.
+  const postCommit = new OrderPostCommitHooksService(
+    { client } as unknown as PrismaService,
+    audit as never,
+    { enqueueOrder, dequeueOrder } as never,
+    { provisionFromSnapshot, voidForOrder } as never,
+    { refundIfCharged } as never,
+    { emit } as never,
+  );
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,
     events as never,
     audit as never,
     reservations as never,
-    { refundIfCharged } as never,
-    { emit } as never,
+    postCommit,
   );
   return {
     svc,
     refundIfCharged,
     emit,
+    enqueueOrder,
+    dequeueOrder,
+    provisionFromSnapshot,
+    voidForOrder,
     shipmentCount,
     orderEventFindMany,
     orderUpdate,
@@ -508,8 +535,9 @@ describe('forceMutate — a forced status change is announced like any other', (
   });
 
   it('no longer bills a delivery itself — the bus listener is the one path', () => {
-    // By construction: the service has no DeliveredAccrualService to call.
-    expect(OrderAdminOverrideService.length).toBe(6);
+    // By construction: the service has no DeliveredAccrualService to call
+    // (prisma, events, audit, reservations, the shared post-commit hooks).
+    expect(OrderAdminOverrideService.length).toBe(5);
     expect(Object.getOwnPropertyNames(OrderAdminOverrideService.prototype)).not.toContain(
       'accrueDelivered',
     );
@@ -617,5 +645,119 @@ describe('forceMutate — the cancel-time ORDER_CHARGES refund', () => {
     expect(failed?.[0]).toMatchObject({ severity: 'HIGH', entityId: 'o1', sellerId: 's1' });
     // And the change is still announced.
     expect(emit).toHaveBeenCalledTimes(1);
+  });
+});
+
+// God mode runs the SAME non-stock post-commit hooks transitionStatus
+// runs, through the one shared method (2026-09-12). Each case is a hole
+// that existed before: a forced CONFIRMED with no shipment, a forced exit
+// from PENDING_CONFIRMATION left in the call queue, a forced cancel with a
+// live shipment behind it.
+describe('forceMutate — the post-commit hooks a matrix transition runs', () => {
+  const at = (status: OrderStatus) => ({
+    id: 'o1',
+    sellerId: 's1',
+    orderNumber: 'SD-2026-26-000077',
+    status,
+    items: [{ id: 'oi1', variantId: 'v1', quantity: 1 }],
+  });
+  const ctx = baseInput.ctx;
+
+  it('→ CONFIRMED provisions a shipment from the COMMITTED order, before the event goes out', async () => {
+    const { svc, provisionFromSnapshot, emit, orderFindFirst, orderUpdate } = makeService({
+      order: at(OrderStatus.OUT_OF_STOCK),
+    });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CONFIRMED });
+
+    expect(provisionFromSnapshot).toHaveBeenCalledTimes(1);
+    expect(provisionFromSnapshot.mock.calls[0]![0]).toMatchObject({ orderId: 'o1' });
+    // The snapshot is re-read AFTER the write, so a recipient corrected in
+    // the same forced edit is what the courier is handed.
+    const reread = orderFindFirst.mock.calls.at(-1) as unknown as [
+      { select?: Record<string, unknown> },
+    ];
+    expect(reread[0].select).toMatchObject({ recipientName: true, items: expect.anything() });
+    expect(orderUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      provisionFromSnapshot.mock.invocationCallOrder[0] ?? 0,
+    );
+    // The AWB listener (CUR-2b) hears CONFIRMED only once the shipment exists.
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(provisionFromSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
+      emit.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('→ PENDING_CONFIRMATION puts the order back in the call queue (CC-6)', async () => {
+    const { svc, enqueueOrder, dequeueOrder } = makeService({
+      order: at(OrderStatus.OUT_OF_STOCK),
+    });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.PENDING_CONFIRMATION });
+    expect(enqueueOrder).toHaveBeenCalledWith('o1', ctx);
+    expect(dequeueOrder).not.toHaveBeenCalled();
+  });
+
+  it('leaving PENDING_CONFIRMATION takes it out of the call queue, whatever the landing', async () => {
+    const a = makeService(); // default: PENDING_CONFIRMATION
+    await a.svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.DISPATCHED });
+    expect(a.dequeueOrder).toHaveBeenCalledWith('o1', 'ADMIN_CLOSED', ctx);
+    expect(a.enqueueOrder).not.toHaveBeenCalled();
+
+    const b = makeService();
+    await b.svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CANCELLED_BY_ADMIN });
+    expect(b.dequeueOrder).toHaveBeenCalledWith('o1', 'ORDER_CANCELLED', ctx);
+  });
+
+  it('→ a cancel/reject terminal voids the shipment, then refunds, then announces', async () => {
+    const { svc, voidForOrder, refundIfCharged, emit, provisionFromSnapshot } = makeService({
+      order: at(OrderStatus.CONFIRMED),
+    });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.REJECTED_BY_CUSTOMER });
+    expect(voidForOrder).toHaveBeenCalledTimes(1);
+    expect(voidForOrder.mock.calls[0]![0]).toBe('o1');
+    expect(voidForOrder.mock.calls[0]![1]).toBe('Order transitioned to REJECTED_BY_CUSTOMER');
+    expect(provisionFromSnapshot).not.toHaveBeenCalled();
+    expect(voidForOrder.mock.invocationCallOrder[0]).toBeLessThan(
+      refundIfCharged.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(refundIfCharged.mock.invocationCallOrder[0]).toBeLessThan(
+      emit.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('→ PICKED writes the pack-eligible audit', async () => {
+    const { svc, audit } = makeService({ order: at(OrderStatus.CONFIRMED) });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.PICKED });
+    const eligible = audit.log.mock.calls.filter(([a]) => a['action'] === 'pack_queue.eligible');
+    expect(eligible).toHaveLength(1);
+    expect(eligible[0]![0]).toMatchObject({ entityId: 'o1', severity: 'LOW' });
+  });
+
+  it('a field-only edit runs NO hook at all', async () => {
+    const m = makeService({ order: at(OrderStatus.PENDING_CONFIRMATION) });
+    await m.svc.forceMutate({ ...baseInput, fieldChanges: { recipientName: 'Corrected Name' } });
+    expect(m.enqueueOrder).not.toHaveBeenCalled();
+    expect(m.dequeueOrder).not.toHaveBeenCalled();
+    expect(m.provisionFromSnapshot).not.toHaveBeenCalled();
+    expect(m.voidForOrder).not.toHaveBeenCalled();
+    expect(m.refundIfCharged).not.toHaveBeenCalled();
+    expect(m.emit).not.toHaveBeenCalled();
+    expect(m.audit.log.mock.calls.map(([a]) => a['action'])).toEqual(['order.force_mutation']);
+  });
+
+  it('a throwing hook never fails the override, and the rest still run', async () => {
+    const m = makeService(); // PENDING_CONFIRMATION → CONFIRMED: dequeue + provision + emit
+    m.dequeueOrder.mockRejectedValueOnce(new Error('redis down'));
+    m.provisionFromSnapshot.mockRejectedValueOnce(new Error('numbering sequence missing'));
+    const res = await m.svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CONFIRMED });
+    expect(res.status).toBe(OrderStatus.CONFIRMED);
+    expect(m.provisionFromSnapshot).toHaveBeenCalledTimes(1);
+    expect(m.emit).toHaveBeenCalledTimes(1);
+  });
+
+  it('stock stays opted out: a forced PICKED → PACKED reserves and releases nothing', async () => {
+    const m = makeService({ order: at(OrderStatus.PICKED) });
+    await m.svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.PACKED });
+    expect(m.reserve).not.toHaveBeenCalled();
+    expect(m.release).not.toHaveBeenCalled();
   });
 });

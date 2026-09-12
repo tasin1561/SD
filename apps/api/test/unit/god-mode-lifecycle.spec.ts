@@ -8,7 +8,7 @@ import { OrderDeliveredAccrualListener } from '../../src/modules/seller-wallet-a
 import { OutboundWebhookListener } from '../../src/modules/seller-webhook-delivery/services/outbound-webhook-listener.service';
 import { WebhookEventMappingService } from '../../src/modules/seller-webhook-delivery/services/webhook-event-mapping.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
-import { AwbGenerationJobService } from '../../src/modules/courier-awb/services/awb-generation-job.service';
+import { OrderPostCommitHooksService } from '../../src/modules/order/services/order-post-commit-hooks.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
 /**
@@ -69,17 +69,29 @@ function makeGodMode(bus: OrderLifecycleEventBus, initial: OrderStatus) {
     statusChanged: jest.fn(async () => ({ id: `sc-${++seq}` })),
   };
   const refundIfCharged = jest.fn(async () => null);
+  const provisionFromSnapshot = jest.fn(async () => ({ shipmentId: 'ship-1', created: true }));
+  const audit = { log: jest.fn(async () => 'a1') };
+  const postCommit = new OrderPostCommitHooksService(
+    { client } as unknown as PrismaService,
+    audit as never,
+    {
+      enqueueOrder: jest.fn(async () => ({ created: true })),
+      dequeueOrder: jest.fn(async () => ({ dequeued: 0 })),
+    } as never,
+    { provisionFromSnapshot, voidForOrder: jest.fn(async () => ({ voided: 0 })) } as never,
+    { refundIfCharged } as never,
+    bus,
+  );
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,
     events as never,
-    { log: jest.fn(async () => 'a1') } as never,
+    audit as never,
     {
       reserve: jest.fn(async () => ({ id: 'r1' })),
       release: jest.fn(),
       listActiveForOrder: jest.fn(async () => []),
     } as never,
-    { refundIfCharged } as never,
-    bus,
+    postCommit,
   );
   const force = (targetStatus?: OrderStatus, fieldChanges?: AnyArgs): Promise<unknown> =>
     svc.forceMutate({
@@ -90,7 +102,7 @@ function makeGodMode(bus: OrderLifecycleEventBus, initial: OrderStatus) {
       ...(targetStatus !== undefined ? { targetStatus } : {}),
       ...(fieldChanges !== undefined ? { fieldChanges } : {}),
     });
-  return { force, events, refundIfCharged };
+  return { force, events, refundIfCharged, provisionFromSnapshot };
 }
 
 function record(bus: OrderLifecycleEventBus): OrderLifecycleEvent[] {
@@ -169,7 +181,7 @@ describe('god mode publishes the same lifecycle event a matrix transition does',
     await bus.onModuleDestroy();
   });
 
-  it('a god-mode CONFIRMED reaches the AWB listener; with no shipment the job no-ops cleanly', async () => {
+  it('a god-mode CONFIRMED provisions its shipment BEFORE the AWB listener hears it', async () => {
     const bus = makeBus();
     const enqueueOrder = jest.fn(async () => 'job-1');
     const awb = new OrderConfirmedAwbListener(bus, { enqueueOrder } as never);
@@ -178,29 +190,17 @@ describe('god mode publishes the same lifecycle event a matrix transition does',
 
     await god.force(OrderStatus.CONFIRMED);
     await awb.drainInFlight();
+
+    // Until 2026-09-12 god mode provisioned nothing, so this job found no
+    // live shipment and the order could never be picked. It now runs the
+    // same post-commit hooks as a matrix transition, in the same order:
+    // the shipment exists by the time the event goes out (CUR-2b).
+    expect(god.provisionFromSnapshot).toHaveBeenCalledTimes(1);
     expect(enqueueOrder).toHaveBeenCalledTimes(1);
     expect(enqueueOrder).toHaveBeenCalledWith('o1');
-
-    // What that job then does: god mode provisions no shipment (ORD-2),
-    // so there is nothing CREATED to book. A clean return — no throw, so
-    // BullMQ does not retry, and no courier is called.
-    const generateForShipment = jest.fn();
-    const job = new AwbGenerationJobService(
-      {
-        client: { orderShipment: { findFirst: jest.fn(async () => null) } },
-      } as unknown as PrismaService,
-      { log: jest.fn() } as never,
-      {} as never,
-      { generateForShipment } as never,
-      {} as never,
-      {} as never,
+    expect(god.provisionFromSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
+      enqueueOrder.mock.invocationCallOrder[0] ?? 0,
     );
-    await expect(job.processOrder('o1')).resolves.toEqual({
-      orderId: 'o1',
-      shipmentId: null,
-      result: 'NO_LIVE_SHIPMENT',
-    });
-    expect(generateForShipment).not.toHaveBeenCalled();
 
     await awb.onModuleDestroy();
     await bus.onModuleDestroy();

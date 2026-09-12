@@ -4,10 +4,6 @@ import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
-import { CallQueueModule } from '../call-queue/call-queue.module';
-import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
-import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
-import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { OrderCoreModule } from './order-core.module';
 import { SellerOrderController } from './controllers/seller-order.controller';
 import { SellerCustomerController } from './controllers/seller-customer.controller';
@@ -63,19 +59,10 @@ import { OrderWriteService } from './services/order-write.service';
     InventorySharedModule,
     // The seller's own default for the delivery-fee field (SET-1).
     SettingsModule,
-    CallQueueModule,
-    ShipmentProvisionModule,
-    // Module 11 (NOTIF-5): the R3 lifecycle-event primitive — provides
-    // OrderLifecycleEventBus to OrderWriteService for the post-commit
-    // emit hook. The order module knows nothing about the
-    // notifications module on the other side of the bus.
-    LifecycleEventsModule,
-    // Cancelling an order before it ships has to give back a delivery
-    // fee already taken (an AT_AWB seller is debited at CONFIRMED).
-    // Safe to import: seller-wallet-accrual reaches wallet / settings /
-    // pricing / inbound-freight and none of them reach back here, so
-    // this does not close a cycle.
-    SellerWalletAccrualModule,
+    // CallQueue / ShipmentProvision / LifecycleEvents / SellerWalletAccrual
+    // are no longer imported here: OrderWriteService reaches all four only
+    // through OrderPostCommitHooksService, provided by OrderCoreModule and
+    // shared with god mode (2026-09-12).
     SellerRestrictionModule,
   ],
   controllers: [

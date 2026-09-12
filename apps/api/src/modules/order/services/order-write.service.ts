@@ -11,7 +11,6 @@ import {
   OrderStatus,
   PackBoxStatus,
   Prisma,
-  QueueClosureReason,
   ReservationReleaseReason,
   ShipmentStatus,
   StockMovementType,
@@ -26,12 +25,9 @@ import {
   StockReservationService,
 } from '../../inventory-stock/services/stock-reservation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
-import { CallQueueService } from '../../call-queue/services/call-queue.service';
-import { ShipmentProvisionService } from '../../shipment-provision/services/shipment-provision.service';
-import { OrderLifecycleEventBus } from '../../lifecycle-events/order-lifecycle-event-bus.service';
-import { OrderChargesRefundService } from '../../seller-wallet-accrual/services/order-charges-refund.service';
 import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
 import { OrderSideEffect, OrderStateMachineService } from './order-state-machine.service';
+import { OrderPostCommitHooksService } from './order-post-commit-hooks.service';
 
 const DEFAULT_WAREHOUSE_SETTING_KEY = 'ops.default_warehouse_id';
 
@@ -41,55 +37,9 @@ const CANCEL_FAMILY: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.REJECTED,
 ]);
 
-/** M8 commit 16: the set of "deliberately ending the order" landings
- *  on which the shipment-provision wiring (R3) should void a CREATED
- *  shipment. voidForOrder is idempotent against non-CREATED shipments,
- *  so this list is intentionally generous — post-pick/pack/dispatch
- *  shipments are no longer CREATED and are naturally untouched. */
-export const VOIDABLE_TERMINAL_STATES: ReadonlySet<OrderStatus> = new Set([
-  OrderStatus.CANCELLED,
-  OrderStatus.CANCELLED_BY_ADMIN,
-  OrderStatus.REJECTED,
-  OrderStatus.REJECTED_BY_CUSTOMER,
-  OrderStatus.REJECTED_NDR,
-]);
-
-/**
- * States an order can be called off from and honestly say the parcel
- * never went anywhere — so a delivery fee already taken has to go back.
- *
- * An ALLOW-LIST rather than "everything before DISPATCHED", so a status
- * added later is not silently refundable: someone has to decide where
- * it sits relative to the courier having the parcel. The dividing line
- * is exactly that — once DISPATCHED, the courier has been given the
- * goods and the cost of moving them is real whatever happens next.
- * PENDING_DISPATCH is on this side of the line: it is packed and
- * manifested but still on our floor.
- *
- * Exported because god mode (ORD-2) draws the SAME line from the other
- * side: its forced `from` proves nothing, so it asks whether the order
- * ever reached a status outside this set and the cancel family through a
- * real transition — see `OrderAdminOverrideService.parcelLeftWithCourier`.
- */
-export const REFUNDABLE_FROM_STATES: ReadonlySet<OrderStatus> = new Set([
-  OrderStatus.DRAFT,
-  OrderStatus.PENDING_CONFIRMATION,
-  OrderStatus.CALL_NO_RESPONSE,
-  OrderStatus.CALL_RESCHEDULED,
-  OrderStatus.AWAITING_SELLER_DECISION,
-  // CUR-17 — held for a carrier decision. No waybill exists and
-  // nothing has been picked, so this is one of the cheapest points in
-  // the lifecycle for a seller to change their mind.
-  OrderStatus.AWAITING_COURIER,
-  OrderStatus.CONFIRMED,
-  OrderStatus.OUT_OF_STOCK,
-  OrderStatus.PENDING_PICK,
-  OrderStatus.PICKED,
-  OrderStatus.PACK_FAILED,
-  OrderStatus.PACKED,
-  OrderStatus.PENDING_DISPATCH,
-  OrderStatus.PENDING_MANUAL_PLACEMENT,
-]);
+// VOIDABLE_TERMINAL_STATES / REFUNDABLE_FROM_STATES moved to
+// order-post-commit-hooks.service.ts (2026-09-12) with the hooks that
+// read them, which both transitionStatus and god mode now run.
 
 /**
  * How far a SELLER may cancel their own order.
@@ -114,34 +64,6 @@ const SELLER_CANCELLABLE_STATES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.PACK_FAILED,
   OrderStatus.PENDING_MANUAL_PLACEMENT,
 ]);
-
-/** Structural shape the shipment-provision hook needs from the loaded
- *  order — kept local + decoupled from the Prisma payload type so the
- *  helper signature reads at the call site. */
-interface ProvisionableOrder {
-  readonly id: string;
-  readonly recipientName: string;
-  readonly recipientPhoneE164: string;
-  readonly recipientAddressLine1: string;
-  readonly recipientAddressLine2: string | null;
-  readonly recipientLandmark: string | null;
-  readonly recipientCity: string;
-  readonly recipientStateProvince: string;
-  readonly recipientPostalCode: string;
-  readonly recipientCountryCode: string;
-  readonly declaredValueInr: Prisma.Decimal;
-  readonly codAmountInr: Prisma.Decimal | null;
-  readonly items: ReadonlyArray<{
-    readonly id: string;
-    readonly quantity: number;
-    readonly skuCode: string;
-    readonly productName: string;
-    readonly variantLabel: string | null;
-    readonly unitWeightGrams: number | null;
-    readonly unitDeclaredValueInr: Prisma.Decimal | null;
-    readonly unitPriceInr: Prisma.Decimal | null;
-  }>;
-}
 
 export type ReservationOutcome = 'RESERVED' | 'OUT_OF_STOCK' | 'RELEASED' | 'FULFILLED' | null;
 
@@ -249,20 +171,14 @@ export class OrderWriteService {
     private readonly events: OrderEventWriterService,
     private readonly audit: AuditLogService,
     private readonly reservations: StockReservationService,
-    private readonly callQueue: CallQueueService,
-    private readonly shipmentProvision: ShipmentProvisionService,
     private readonly mutation: StockMutationService,
-    // M11 (NOTIF-5): the order module emits to the R3 dependency-
-    // free bus; it has NO awareness of the notifications module. A
-    // listener that does not exist (or hasn't subscribed yet) is a
-    // SILENT no-op — emit() is best-effort by contract (NOTIF-1).
-    private readonly lifecycleBus: OrderLifecycleEventBus,
-    // Giving the delivery fee back when an order ends before it ships.
-    // An AT_AWB seller is debited at CONFIRMED (CUR-2b), days before
-    // anything moves; without this hook a cancellation quietly kept
-    // their money and only the seller noticing an odd balance would
-    // surface it.
-    private readonly chargesRefund: OrderChargesRefundService,
+    // Every NON-stock post-commit consequence of a status change — CC-6
+    // call queue, pack eligibility, shipment provision/void, the
+    // cancel-time fee refund, the lifecycle-bus emit (NOTIF-1/NOTIF-5).
+    // Shared with god mode (ORD-2) so the two writers of orders.status
+    // cannot drift; the stock saga stays HERE, because god mode opts
+    // out of it.
+    private readonly postCommit: OrderPostCommitHooksService,
   ) {}
 
   /**
@@ -420,220 +336,31 @@ export class OrderWriteService {
       result = await this.transitionPlain(order, from, to, input);
     }
 
-    // CC-6: a transition INTO PENDING_CONFIRMATION (OUT_OF_STOCK /
-    // CALL_NO_RESPONSE / CALL_RESCHEDULED → re-queue) re-joins the call
-    // queue. POST-COMMIT, idempotent (existing OPEN entry → no-op),
-    // best-effort — never undo a committed status change for this.
-    // `result.status` (not `to`) so a reserve-failed → OUT_OF_STOCK
-    // landing is NOT mis-enqueued.
-    if (result.status === OrderStatus.PENDING_CONFIRMATION) {
-      await this.enqueueForCall(order.id, input.ctx);
-    } else if (from === OrderStatus.PENDING_CONFIRMATION) {
-      // CC-6: leaving PENDING_CONFIRMATION (any non-confirm/confirm exit)
-      // closes the OPEN call-queue entry. POST-COMMIT + IDEMPOTENT — when
-      // a CallAttemptService flow already COMPLETED the entry in its own
-      // tx this is a safe no-op ({dequeued:0}); when transitionStatus is
-      // driven directly (admin sane-cancel / god-mode) it does the close.
-      await this.dequeueForExit(order.id, result.status, input.ctx);
-    }
-
-    // M8 commit 9: pack-queue eligibility hook. The pack queue is a
-    // VIRTUAL FIFO query (PackQueueService.pullNext joins on
-    // o.status='picked'), so no physical row insert is needed — entry
-    // into PICKED makes the shipment pack-eligible by construction.
-    // We emit a structured audit entry as the OBSERVABILITY HOOK +
-    // future extension point: when packer notification (BullMQ /
-    // WebSocket) lands, replace this audit call with the real
-    // enqueue/event (mirrors the CC-6 enqueueForCall shape). POST-COMMIT,
-    // best-effort, never undoes the committed status change.
-    if (result.status === OrderStatus.PICKED && from !== OrderStatus.PICKED) {
-      await this.signalPackEligible(order.id, input.ctx);
-    }
-
-    // M8 commit 16: shipment-provision wiring (R3 dual-path,
-    // mirrors CC-6 enqueueForCall/dequeueForExit).
-    //   - On entry to CONFIRMED: provisionFromSnapshot (the R3
-    //     primitive — idempotent on an existing non-CANCELLED shipment,
-    //     so a retried hook is a {created:false} no-op).
-    //   - On entry to a deliberately-ending state (CANCELLED / REJECTED
-    //     family): voidForOrder (idempotent — no CREATED shipment ⇒
-    //     {voided:0}; post-pick/pack shipments are no longer CREATED
-    //     and are naturally untouched).
-    // POST-COMMIT, best-effort, NEVER undoes the committed status
-    // change — failures here surface as warnings, the next caller's
-    // idempotent re-attempt (or out-of-band ops) reconciles.
-    if (result.status === OrderStatus.CONFIRMED && from !== OrderStatus.CONFIRMED) {
-      await this.provisionShipmentForOrder(order, input.ctx);
-    } else if (from !== result.status && VOIDABLE_TERMINAL_STATES.has(result.status)) {
-      await this.voidShipmentForOrder(order.id, result.status, input.ctx);
-      // 7th post-commit hook: return the delivery fee, if one was
-      // already taken, on an order that is ending before the courier
-      // ever had it. Runs AFTER the void so the shipment is dead first
-      // — the money step is the one whose failure we most want to be
-      // loud about, and putting it last means a failure here cannot
-      // leave a live shipment behind as well.
-      await this.refundChargesForEndedOrder(order.id, order.sellerId, from, result.status);
-    }
-
-    // M11 (NOTIF-1 / NOTIF-5): 6th post-commit hook — emit the
-    // lifecycle event to the R3 OrderLifecycleEventBus. The
-    // notifications module subscribes; the order module knows nothing
-    // about it (the bus is the dep-free shared primitive). Three
-    // layers of "never block / never rollback":
-    //   1. emit() runs AFTER all the prior post-commit hooks AND
-    //      after the transition tx committed → the transition is
-    //      durable regardless of what the bus does.
-    //   2. The bus' emit() itself wraps Subject.next() in try/catch
-    //      and never re-throws (NOTIF-1 contract guarantee).
-    //   3. We wrap it again here in try/catch for defence-in-depth —
-    //      a future bus impl with different semantics (e.g., a
-    //      Phase-2 Redis pub/sub) must not be able to leak failures
-    //      into the order transition return path either.
-    // We use result.status (NOT `to`) so a reserve-failed →
-    // OUT_OF_STOCK landing fires its OWN lifecycle event (mapping
-    // routes OUT_OF_STOCK to [] anyway, but the emit is the
-    // observable record).
-    this.emitLifecycleEvent(order.sellerId, result, input);
+    // Every NON-stock post-commit hook, in the order they always ran:
+    // CC-6 call queue → pack eligibility → shipment provision (CONFIRMED)
+    // or void + fee refund (cancel/reject family) → the lifecycle-bus
+    // emit LAST (so the AWB listener finds the shipment). `result.status`
+    // (not `to`) so a reserve-failed → OUT_OF_STOCK landing is treated as
+    // what it is. Best-effort and isolated per hook — never undoes the
+    // committed status change (NOTIF-1). God mode runs the SAME method.
+    await this.postCommit.runForStatusChange({
+      orderId: order.id,
+      sellerId: order.sellerId,
+      from,
+      landed: result.status,
+      statusEventId: result.statusEventId,
+      actor: input.actor,
+      source: 'TRANSITION',
+      // Pre-tx read is the committed truth here: recipient + items are
+      // immutable per ORD-6, so no post-commit re-load.
+      snapshot: order,
+      ...(input.ctx ? { ctx: input.ctx } : {}),
+    });
 
     // Strip the internal-only statusEventId — public callers see only
     // TransitionStatusResult.
     const { statusEventId: _unused, ...publicResult } = result;
     return publicResult;
-  }
-
-  /** M11 6th post-commit hook — best-effort, double-wrapped (the bus
-   *  also swallows). NEVER awaited: a synchronous Subject emit is
-   *  the contract, and even if a future async listener path is added
-   *  it must not block the transition. */
-  private emitLifecycleEvent(
-    sellerId: string,
-    result: InternalTransitionResult,
-    input: TransitionStatusInput,
-  ): void {
-    try {
-      this.lifecycleBus.emit({
-        orderId: result.orderId,
-        sellerId,
-        from: result.fromStatus,
-        to: result.status,
-        statusEventId: result.statusEventId,
-        actorType: input.actor.type,
-        actorId: input.actor.id ?? null,
-        occurredAt: new Date(),
-        source: 'TRANSITION',
-      });
-    } catch (err) {
-      // The bus contracts NEVER to re-throw, but defensively swallow
-      // any path that might (e.g., a future bus impl swap-in).
-      this.logger.error(
-        {
-          orderId: result.orderId,
-          from: result.fromStatus,
-          to: result.status,
-          statusEventId: result.statusEventId,
-          err: (err as Error).message,
-        },
-        'Lifecycle-event emit threw despite bus contract; swallowed (NOTIF-1)',
-      );
-    }
-  }
-
-  /** M8 pack-eligibility hook — audit-only for Phase 1A. Best-effort:
-   *  a failure here NEVER undoes the committed PICKED transition. */
-  private async signalPackEligible(orderId: string, ctx?: ClientContext): Promise<void> {
-    try {
-      await this.audit.log({
-        actorType: ActorType.SYSTEM,
-        actorId: null,
-        action: 'pack_queue.eligible',
-        entityType: 'order',
-        entityId: orderId,
-        severity: 'LOW',
-        metadata: {
-          orderId,
-          ipAddress: ctx?.ipAddress ?? null,
-          userAgent: ctx?.userAgent ?? null,
-          requestId: ctx?.requestId ?? null,
-        },
-      });
-    } catch (e) {
-      this.logger.error(
-        { orderId, err: (e as Error).message },
-        'Post-commit pack-eligibility signal failed; status persisted',
-      );
-    }
-  }
-
-  /** M8 commit 16: shipment-provision wiring on entry to CONFIRMED.
-   *  POST-COMMIT, best-effort, idempotent on existing non-CANCELLED
-   *  shipments (CC-6 dual-path — a retried hook is a {created:false}
-   *  no-op). The snapshot is built from the order we already loaded
-   *  (recipient + items immutable per ORD-6). */
-  private async provisionShipmentForOrder(
-    order: ProvisionableOrder,
-    ctx?: ClientContext,
-  ): Promise<void> {
-    try {
-      await this.shipmentProvision.provisionFromSnapshot(
-        {
-          orderId: order.id,
-          recipient: {
-            name: order.recipientName,
-            phoneE164: order.recipientPhoneE164,
-            addressLine1: order.recipientAddressLine1,
-            addressLine2: order.recipientAddressLine2,
-            landmark: order.recipientLandmark,
-            city: order.recipientCity,
-            stateProvince: order.recipientStateProvince,
-            postalCode: order.recipientPostalCode,
-            countryCode: order.recipientCountryCode,
-          },
-          declaredValueInr: order.declaredValueInr,
-          codAmountInr: order.codAmountInr,
-          items: order.items.map((i) => ({
-            orderItemId: i.id,
-            quantity: i.quantity,
-            skuCode: i.skuCode,
-            productName: i.productName,
-            variantLabel: i.variantLabel,
-            unitWeightGrams: i.unitWeightGrams,
-            unitDeclaredValueInr: i.unitDeclaredValueInr,
-            unitPriceInr: i.unitPriceInr,
-          })),
-        },
-        { type: ActorType.SYSTEM, id: null },
-        ctx,
-      );
-    } catch (e) {
-      this.logger.error(
-        { orderId: order.id, err: (e as Error).message },
-        'Post-commit shipment provision failed; order CONFIRMED persisted, supervisor/reconciler can re-trigger via OrderAdminOverrideService or a follow-up CONFIRMED→CONFIRMED matrix self-loop',
-      );
-    }
-  }
-
-  /** M8 commit 16: shipment-void wiring on entry to a deliberately
-   *  ending state. POST-COMMIT, best-effort, idempotent (no CREATED
-   *  shipment ⇒ {voided:0}). Cancellation reason is carried as the
-   *  destination status. */
-  private async voidShipmentForOrder(
-    orderId: string,
-    landed: OrderStatus,
-    ctx?: ClientContext,
-  ): Promise<void> {
-    try {
-      await this.shipmentProvision.voidForOrder(
-        orderId,
-        `Order transitioned to ${landed}`,
-        { type: ActorType.SYSTEM, id: null },
-        ctx,
-      );
-    } catch (e) {
-      this.logger.error(
-        { orderId, landed, err: (e as Error).message },
-        'Post-commit shipment void failed; order status persisted, supervisor/reconciler can re-trigger',
-      );
-    }
   }
 
   /**
@@ -725,106 +452,6 @@ export class OrderWriteService {
       reason: input.note ?? 'Cancelled by seller',
       ...(input.ctx ? { ctx: input.ctx } : {}),
     });
-  }
-
-  /**
-   * Post-commit: give back a delivery fee taken for a parcel that will
-   * now never ship.
-   *
-   * Best-effort in the sense that it cannot undo the cancellation —
-   * that is already committed and correct. But it is NOT best-effort in
-   * the sense of "quietly give up": a failure here means we are holding
-   * money for a service we are not going to perform, so it audits HIGH
-   * and names the order. The service itself is idempotent on the order,
-   * so re-running it is always safe and an operator re-triggering after
-   * a fault cannot double-credit.
-   */
-  private async refundChargesForEndedOrder(
-    orderId: string,
-    sellerId: string,
-    from: OrderStatus,
-    landed: OrderStatus,
-  ): Promise<void> {
-    // Cancelling a DISPATCHED order is a real thing an admin can do,
-    // but the courier already has the parcel — the delivery is being
-    // paid for whatever happens to it now.
-    if (!REFUNDABLE_FROM_STATES.has(from)) return;
-    try {
-      await this.chargesRefund.refundIfCharged(
-        orderId,
-        sellerId,
-        `Order ${landed.toLowerCase().replaceAll('_', ' ')} before dispatch`,
-      );
-    } catch (e) {
-      this.logger.error(
-        { orderId, sellerId, from, landed, err: (e as Error).message },
-        'Post-commit order-charges refund FAILED — the seller is still holding a charge for a parcel that will not ship',
-      );
-      await this.audit
-        .log({
-          actorType: ActorType.SYSTEM,
-          actorId: null,
-          sellerId,
-          action: 'wallet.order_charges_refund_failed',
-          entityType: 'order',
-          entityId: orderId,
-          severity: 'HIGH',
-          metadata: { fromStatus: from, landedStatus: landed, error: (e as Error).message },
-        })
-        .catch(() => undefined);
-    }
-  }
-
-  /** CC-6 post-commit call-queue dequeue (idempotent, best-effort). */
-  private async dequeueForExit(
-    orderId: string,
-    landed: OrderStatus,
-    ctx?: ClientContext,
-  ): Promise<void> {
-    try {
-      await this.callQueue.dequeueOrder(orderId, this.closureReasonFor(landed), ctx);
-    } catch (e) {
-      this.logger.error(
-        { orderId, landed, err: (e as Error).message },
-        'Post-commit call-queue dequeue failed; status persisted, entry self-heals on next dequeue',
-      );
-    }
-  }
-
-  /** Best-effort closure reason for the entry being closed on
-   *  PENDING_CONFIRMATION exit. OUT_OF_STOCK (and any other transient
-   *  non-terminal landing) has no precise QueueClosureReason value — it
-   *  re-enqueues on return to PENDING_CONFIRMATION; ADMIN_CLOSED is the
-   *  neutral system-closed fallback (debt-tracked imprecision, final
-   *  stretch). */
-  private closureReasonFor(landed: OrderStatus): QueueClosureReason {
-    switch (landed) {
-      case OrderStatus.CONFIRMED:
-        return QueueClosureReason.ORDER_CONFIRMED;
-      case OrderStatus.CANCELLED:
-      case OrderStatus.CANCELLED_BY_ADMIN:
-        return QueueClosureReason.ORDER_CANCELLED;
-      case OrderStatus.REJECTED:
-      case OrderStatus.REJECTED_BY_CUSTOMER:
-        return QueueClosureReason.ORDER_REJECTED;
-      case OrderStatus.REJECTED_NDR:
-        return QueueClosureReason.MAX_ATTEMPTS_EXCEEDED;
-      default:
-        return QueueClosureReason.ADMIN_CLOSED;
-    }
-  }
-
-  /** CC-6 post-commit call-queue enqueue (idempotent, best-effort —
-   *  mirrors the saga's post-commit discipline). */
-  private async enqueueForCall(orderId: string, ctx?: ClientContext): Promise<void> {
-    try {
-      await this.callQueue.enqueueOrder(orderId, ctx);
-    } catch (e) {
-      this.logger.error(
-        { orderId, err: (e as Error).message },
-        'Post-commit call-queue enqueue failed; status persisted, needs re-enqueue',
-      );
-    }
   }
 
   // ── RESERVE_STOCK: reserve PRE-tx, compensate on tx failure ──────────

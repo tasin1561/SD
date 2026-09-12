@@ -100,9 +100,17 @@ describe('delivery-time money follows EVERY writer of orders.status', () => {
   });
 
   it('transitionStatus emits every committed transition to the lifecycle bus', () => {
+    // Via the post-commit hooks it shares with god mode (2026-09-12),
+    // whose LAST step is the emit.
     const src = readFileSync(join(SRC, 'modules/order/services/order-write.service.ts'), 'utf8');
-    expect(src).toMatch(/this\.emitLifecycleEvent\(order\.sellerId, result, input\)/);
-    expect(src).toMatch(/this\.lifecycleBus\.emit\(/);
+    expect(src).toMatch(/this\.postCommit\.runForStatusChange\(/);
+    expect(src).toMatch(/source: 'TRANSITION'/);
+    const hooks = readFileSync(
+      join(SRC, 'modules/order/services/order-post-commit-hooks.service.ts'),
+      'utf8',
+    );
+    expect(hooks).toMatch(/this\.lifecycleBus\.emit\(/);
+    expect(hooks).toMatch(/source: input\.source/);
   });
 
   it('the bus listener hands DELIVERED to the shared accrual', () => {
@@ -125,8 +133,8 @@ describe('delivery-time money follows EVERY writer of orders.status', () => {
       join(SRC, 'modules/order/services/order-admin-override.service.ts'),
       'utf8',
     );
-    expect(src).toMatch(/this\.lifecycleBus\.emit\(/);
-    expect(src).toMatch(/source: ADMIN_OVERRIDE/);
+    expect(src).toMatch(/this\.postCommit\.runForStatusChange\(/);
+    expect(src).toMatch(/source: ADMIN_OVERRIDE_SOURCE/);
   });
 
   it('there is ONE path to the delivery money: nothing but the bus listener calls it', () => {

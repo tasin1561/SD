@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ActorType, OrderStatus, QueueClosureReason } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
+import { OrderPostCommitHooksService } from '../../src/modules/order/services/order-post-commit-hooks.service';
 import { InsufficientStockError } from '../../src/modules/inventory-stock/services/stock-reservation.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
@@ -131,6 +132,17 @@ function makeService(
   const refundIfCharged = jest.fn(async () => null);
   const chargesRefund = { refundIfCharged };
 
+  // The non-stock post-commit hooks live in the shared service god mode
+  // also runs (2026-09-12); built here from the same mocks, so every
+  // hook assertion below is unchanged.
+  const postCommit = new OrderPostCommitHooksService(
+    { client } as unknown as PrismaService,
+    audit as never,
+    callQueue as never,
+    shipmentProvision as never,
+    chargesRefund as never,
+    lifecycleBus as never,
+  );
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,
     // Not on hold — see seller-restriction.service.spec.
@@ -139,11 +151,8 @@ function makeService(
     events as never,
     audit as never,
     reservations as never,
-    callQueue as never,
-    shipmentProvision as never,
     mutation as never,
-    lifecycleBus as never,
-    chargesRefund as never,
+    postCommit,
   );
   return {
     svc,

@@ -1,5 +1,11 @@
 import request from 'supertest';
-import { ActorType, BulkUploadStatus, OrderStatus, ReservationStatus } from '@skydrop/db';
+import {
+  ActorType,
+  BulkUploadStatus,
+  OrderStatus,
+  ReservationStatus,
+  ShipmentStatus,
+} from '@skydrop/db';
 import { SpacesService } from '../../src/infrastructure/spaces/spaces.service';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import {
@@ -7,6 +13,7 @@ import {
   createTestStaff,
   flushTestRedis,
   resetAuthState,
+  settleAwb,
   waitFor,
   type AppHarness,
 } from './app-harness';
@@ -343,6 +350,42 @@ describe('Order flow (e2e)', () => {
       .set(staffAuth)
       .send({ targetStatus: 'DELIVERED', reason, acknowledgeDataIntegrityRisk: false })
       .expect(400);
+  });
+
+  it('god mode runs the same post-commit hooks: a forced CONFIRMED leaves the call queue and gets a shipment; a forced cancel voids it', async () => {
+    const orderId = await createSubmitted(2); // PENDING_CONFIRMATION, queued for a call
+    const reason = 'E2E god-mode: confirm and then cancel through the override path';
+
+    await request(h.baseUrl)
+      .post(`/admin/orders/${orderId}/force-mutation`)
+      .set(staffAuth)
+      .send({ targetStatus: 'CONFIRMED', reason, acknowledgeDataIntegrityRisk: true })
+      .expect(200);
+
+    // CC-6: nobody is handed a confirmed order to ring.
+    expect(
+      await h.prisma.callQueueEntry.count({
+        where: { orderId, status: { in: ['PENDING', 'ASSIGNED'] } },
+      }),
+    ).toBe(0);
+    // A shipment exists, so the order can be picked and booked (CUR-2b).
+    const link = await h.prisma.orderShipment.findFirst({
+      where: { orderId },
+      include: { shipment: true },
+    });
+    expect(link).not.toBeNull();
+    expect(link!.shipment.status).toBe(ShipmentStatus.CREATED);
+    // The AWB listener heard CONFIRMED; let its row lock clear.
+    await settleAwb(h.prisma, link!.shipmentId);
+
+    await request(h.baseUrl)
+      .post(`/admin/orders/${orderId}/force-mutation`)
+      .set(staffAuth)
+      .send({ targetStatus: 'CANCELLED_BY_ADMIN', reason, acknowledgeDataIntegrityRisk: true })
+      .expect(200);
+
+    const voided = await h.prisma.shipment.findUniqueOrThrow({ where: { id: link!.shipmentId } });
+    expect(voided.status).toBe(ShipmentStatus.CANCELLED);
   });
 
   it('admin release-reservations: confirmed order → manual release', async () => {
