@@ -21,6 +21,7 @@ import {
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { OrderEventWriterService } from './order-event-writer.service';
 import type { ForceMutationFieldsDto } from '../dto/force-mutation.dto';
+import { DeliveredAccrualService } from '../../seller-wallet-accrual/services/delivered-accrual.service';
 
 const DEFAULT_WAREHOUSE_SETTING_KEY = 'ops.default_warehouse_id';
 const MIN_REASON_LEN = 30;
@@ -158,6 +159,7 @@ export class OrderAdminOverrideService {
     private readonly events: OrderEventWriterService,
     private readonly audit: AuditLogService,
     private readonly reservations: StockReservationService,
+    private readonly deliveredAccrual: DeliveredAccrualService,
   ) {}
 
   async forceMutate(input: ForceMutateInput): Promise<ForceMutateResult> {
@@ -278,6 +280,20 @@ export class OrderAdminOverrideService {
       );
     });
 
+    // ── The money a delivery owes — POST-COMMIT, and billed on purpose ──
+    // God mode emits no lifecycle event, so the bus listener that bills a
+    // delivery never hears about this one. It used to mean an order forced
+    // to DELIVERED was carried for free until somebody ran the backfill
+    // (SD-TEST-SR-9711128000, 2026-09-11: seven hours). God mode opts out
+    // of STOCK compensation, not of money: a delivered parcel owes its
+    // carriage whoever marked it delivered, and the backfill would take
+    // exactly this charge later anyway — so take it now, on the right day.
+    // Idempotent on the accrual's own gates, so forcing an order the
+    // listener already billed charges nothing twice.
+    if (to === OrderStatus.DELIVERED && from !== OrderStatus.DELIVERED) {
+      await this.accrueDelivered(order.id, order.sellerId);
+    }
+
     return {
       orderId: order.id,
       fromStatus: from,
@@ -287,6 +303,37 @@ export class OrderAdminOverrideService {
       shipmentsSynced,
       reserveOutcomes,
     };
+  }
+
+  /**
+   * Best-effort in the sense that it cannot undo the override — that is
+   * committed and audited CRITICAL already. NOT best-effort in the sense
+   * of "quietly give up": a failure means a delivered order carrying no
+   * charge, so it audits HIGH and names the order. "Bill unbilled orders"
+   * on /wallets is the catch-up, and it bills on the same gate.
+   */
+  private async accrueDelivered(orderId: string, sellerId: string): Promise<void> {
+    try {
+      await this.deliveredAccrual.accrueForDelivered(orderId);
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      this.logger.error(
+        { orderId, sellerId, err: error },
+        'Delivery-time accrual after a god-mode DELIVERED FAILED — the order is delivered and unbilled',
+      );
+      await this.audit
+        .log({
+          actorType: ActorType.SYSTEM,
+          actorId: null,
+          sellerId,
+          action: 'wallet.delivered_accrual_failed',
+          entityType: 'order',
+          entityId: orderId,
+          severity: 'HIGH',
+          metadata: { trigger: 'force_mutation', error },
+        })
+        .catch(() => undefined);
+    }
   }
 
   /**

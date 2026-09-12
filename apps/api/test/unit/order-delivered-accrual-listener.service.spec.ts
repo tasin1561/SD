@@ -4,12 +4,7 @@ import type {
   OrderLifecycleEvent,
   OrderLifecycleEventBus,
 } from '../../src/modules/lifecycle-events/order-lifecycle-event-bus.service';
-import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
-import type { AccrualExecutionService } from '../../src/modules/seller-wallet-accrual/services/accrual-execution.service';
-import type { PendingAccrualSchedulerService } from '../../src/modules/seller-wallet-accrual/services/pending-accrual-scheduler.service';
-import type { SettingsResolverService } from '../../src/modules/settings/services/settings-resolver.service';
-
-type AnyArgs = Record<string, unknown>;
+import type { DeliveredAccrualService } from '../../src/modules/seller-wallet-accrual/services/delivered-accrual.service';
 
 function lifecycleEvent(to: OrderStatus, orderId = 'order-1'): OrderLifecycleEvent {
   return {
@@ -24,75 +19,31 @@ function lifecycleEvent(to: OrderStatus, orderId = 'order-1'): OrderLifecycleEve
   };
 }
 
-function makeService(
-  opts: {
-    order?: AnyArgs | null;
-    tier?: string;
-  } = {},
-) {
-  const orderFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
-    opts.order === undefined ? { id: 'order-1', sellerId: 'seller-1' } : opts.order,
-  );
-  const client = { order: { findUnique: orderFindUnique } };
-  const prisma = { client } as unknown as PrismaService;
-
+function makeListener() {
+  const accrueForDelivered = jest.fn(async () => 'EXECUTED' as const);
   const bus = { subscribe: jest.fn() } as unknown as OrderLifecycleEventBus;
-
-  const resolve = jest.fn(async () => ({
-    key: 'wallet.accrual_timing_tier',
-    valueType: 'STRING',
-    // Mirrors the seeded system default (T_PLUS_N since 2026-07-26).
-    value: opts.tier ?? 'T_PLUS_N',
-    source: 'SYSTEM_DEFAULT' as const,
-  }));
-  const settings = { resolve };
-
-  const executeAccrual = jest.fn(async () => undefined);
-  const execution = { executeAccrual };
-
-  const scheduleIfNeeded = jest.fn(async () => undefined);
-  const scheduler = { scheduleIfNeeded };
-
-  const listener = new OrderDeliveredAccrualListener(
-    bus,
-    prisma,
-    settings as unknown as SettingsResolverService,
-    execution as unknown as AccrualExecutionService,
-    scheduler as unknown as PendingAccrualSchedulerService,
-  );
-  return { listener, orderFindUnique, resolve, executeAccrual, scheduleIfNeeded };
+  const listener = new OrderDeliveredAccrualListener(bus, {
+    accrueForDelivered,
+  } as unknown as DeliveredAccrualService);
+  return { listener, accrueForDelivered };
 }
 
+// The tier dispatch itself is pinned in delivered-accrual.service.spec.ts;
+// this is the BUS half — every matrix transition to DELIVERED reaches it.
 describe('OrderDeliveredAccrualListener.handle', () => {
   it('ignores every transition except DELIVERED', async () => {
-    const { listener, executeAccrual, scheduleIfNeeded } = makeService();
+    const { listener, accrueForDelivered } = makeListener();
     await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED));
     await listener.handle(lifecycleEvent(OrderStatus.OUT_FOR_DELIVERY));
-    expect(executeAccrual).not.toHaveBeenCalled();
-    expect(scheduleIfNeeded).not.toHaveBeenCalled();
+    // A lost parcel is not charged (TRE-6, the founder 2026-09-12).
+    await listener.handle(lifecycleEvent(OrderStatus.LOST_IN_TRANSIT));
+    expect(accrueForDelivered).not.toHaveBeenCalled();
   });
 
-  it('INSTANT tier (per-seller opt-in): DELIVERED executes the accrual immediately', async () => {
-    const { listener, executeAccrual, scheduleIfNeeded, resolve } = makeService({
-      tier: 'INSTANT',
-    });
+  it('DELIVERED hands the order to the shared delivery-time accrual', async () => {
+    const { listener, accrueForDelivered } = makeListener();
     await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
-    expect(resolve).toHaveBeenCalledWith('seller-1', 'wallet.accrual_timing_tier');
-    expect(executeAccrual).toHaveBeenCalledWith('order-1');
-    expect(scheduleIfNeeded).not.toHaveBeenCalled();
-  });
-
-  it('T_PLUS_N tier: DELIVERED schedules a PendingAccrual instead of executing', async () => {
-    const { listener, executeAccrual, scheduleIfNeeded } = makeService({ tier: 'T_PLUS_N' });
-    await listener.handle(lifecycleEvent(OrderStatus.DELIVERED));
-    expect(scheduleIfNeeded).toHaveBeenCalledWith('order-1', 'seller-1');
-    expect(executeAccrual).not.toHaveBeenCalled();
-  });
-
-  it('order vanished between emit and handle: logs + returns, no writes, no throw', async () => {
-    const { listener, executeAccrual, scheduleIfNeeded } = makeService({ order: null });
-    await expect(listener.handle(lifecycleEvent(OrderStatus.DELIVERED))).resolves.toBeUndefined();
-    expect(executeAccrual).not.toHaveBeenCalled();
-    expect(scheduleIfNeeded).not.toHaveBeenCalled();
+    expect(accrueForDelivered).toHaveBeenCalledTimes(1);
+    expect(accrueForDelivered).toHaveBeenCalledWith('order-1');
   });
 });

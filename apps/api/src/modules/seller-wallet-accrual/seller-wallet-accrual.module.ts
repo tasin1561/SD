@@ -11,6 +11,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { PendingAccrualQueue } from './queue/pending-accrual.queue';
 import { PendingAccrualWorker } from './queue/pending-accrual.worker';
 import { AccrualExecutionService } from './services/accrual-execution.service';
+import { DeliveredAccrualService } from './services/delivered-accrual.service';
 import { CourierFeeAccrualService } from './services/courier-fee-accrual.service';
 import { OrderChargesAccrualService } from './services/order-charges-accrual.service';
 import { OrderChargesRefundService } from './services/order-charges-refund.service';
@@ -79,12 +80,16 @@ import { TreasuryModule } from '../treasury/treasury.module';
     CodCreditService,
     CourierFeeAccrualService,
     AccrualExecutionService,
+    DeliveredAccrualService,
     PendingAccrualSchedulerService,
     PendingAccrualSweepService,
     PendingAccrualQueue,
     PendingAccrualWorker,
   ],
   exports: [
+    // The delivery-time money, for the one writer of DELIVERED that does
+    // not emit to the lifecycle bus — god mode (ORD-2).
+    DeliveredAccrualService,
     OrderChargesAccrualService,
     // Given back when an order is cancelled before it ships — consumed
     // by OrderWriteService's post-commit cancel hook.

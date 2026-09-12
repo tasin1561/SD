@@ -78,15 +78,19 @@ function makeService(
   }));
   const listActiveForOrder = jest.fn(async () => opts.active ?? []);
   const reservations = { reserve, release, listActiveForOrder };
+  const accrueForDelivered = jest.fn(async () => 'EXECUTED');
+  const deliveredAccrual = { accrueForDelivered };
 
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,
     events as never,
     audit as never,
     reservations as never,
+    deliveredAccrual as never,
   );
   return {
     svc,
+    accrueForDelivered,
     orderUpdate,
     shipmentUpdateMany,
     orderFindFirst,
@@ -416,5 +420,61 @@ describe('OrderAdminOverrideService.restoreReservations', () => {
     expect(res.shortfall).toMatch(/only 0 available/i);
     expect(release).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledWith('r-oi1', expect.anything(), expect.anything());
+  });
+});
+
+// God mode is the one writer of DELIVERED that emits NO lifecycle event,
+// so the bus listener that bills a delivery never hears about it. Before
+// this, SD-TEST-SR-9711128000 (forced dispatched → delivered, 2026-09-11)
+// sat unbilled for seven hours until the backfill happened to run.
+describe('forceMutate — a god-mode DELIVERED takes the delivery-time money', () => {
+  const dispatched = {
+    id: 'o1',
+    sellerId: 's1',
+    orderNumber: 'SD-TEST-SR-9711128000',
+    status: OrderStatus.DISPATCHED,
+    items: [{ id: 'oi1', variantId: 'v1', quantity: 1 }],
+  };
+
+  it('forced to DELIVERED: runs the shared accrual once, AFTER the override commits', async () => {
+    const { svc, accrueForDelivered, orderUpdate } = makeService({ order: dispatched });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.DELIVERED });
+    expect(accrueForDelivered).toHaveBeenCalledTimes(1);
+    expect(accrueForDelivered).toHaveBeenCalledWith('o1');
+    // Post-commit: the status write happened first.
+    expect(orderUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      accrueForDelivered.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('any other target — including LOST_IN_TRANSIT, which is not charged — takes nothing', async () => {
+    for (const target of [
+      OrderStatus.OUT_FOR_DELIVERY,
+      OrderStatus.LOST_IN_TRANSIT,
+      OrderStatus.CANCELLED_BY_ADMIN,
+    ]) {
+      const { svc, accrueForDelivered } = makeService({ order: dispatched });
+      await svc.forceMutate({ ...baseInput, targetStatus: target });
+      expect(accrueForDelivered).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a field-only edit on an order already DELIVERED does not re-run it', async () => {
+    const { svc, accrueForDelivered } = makeService({
+      order: { ...dispatched, status: OrderStatus.DELIVERED },
+    });
+    await svc.forceMutate({ ...baseInput, fieldChanges: { recipientName: 'Corrected Name' } });
+    expect(accrueForDelivered).not.toHaveBeenCalled();
+  });
+
+  it('an accrual failure never undoes the override — it audits HIGH and names the order', async () => {
+    const { svc, accrueForDelivered, audit } = makeService({ order: dispatched });
+    accrueForDelivered.mockRejectedValueOnce(new Error('wallet down'));
+    const res = await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.DELIVERED });
+    expect(res.status).toBe(OrderStatus.DELIVERED);
+    const failed = audit.log.mock.calls.find(
+      ([a]) => (a as { action?: string }).action === 'wallet.delivered_accrual_failed',
+    );
+    expect(failed?.[0]).toMatchObject({ severity: 'HIGH', entityId: 'o1', sellerId: 's1' });
   });
 });

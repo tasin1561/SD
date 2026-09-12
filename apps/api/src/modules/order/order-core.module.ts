@@ -16,6 +16,7 @@ import { SellerCreditModule } from '../seller-credit/seller-credit.module';
 import { OrderService } from './services/order.service';
 import { OrderAdminOverrideService } from './services/order-admin-override.service';
 import { SellerStoreModule } from '../seller-store/seller-store.module';
+import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 
 /**
  * Module 6 — INTERNAL core (the Module-5 `inventory-shared` analogue).
@@ -55,6 +56,11 @@ import { SellerStoreModule } from '../seller-store/seller-store.module';
     // A wallet too deep in the red stops new orders, checked beside the
     // restriction so the CSV path is covered by the same line.
     SellerCreditModule,
+    // God mode can force an order to DELIVERED without the lifecycle bus
+    // (ORD-2 emits nothing), so it reaches the delivery-time money
+    // directly. No cycle: seller-wallet-accrual imports neither order
+    // module — OrderModule already imports it for the cancel refund.
+    SellerWalletAccrualModule,
   ],
   providers: [
     OrderNumberingService,

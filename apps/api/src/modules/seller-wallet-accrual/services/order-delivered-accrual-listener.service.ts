@@ -6,19 +6,19 @@ import {
 } from '@nestjs/common';
 import { OrderStatus } from '@skydrop/db';
 import type { Subscription } from 'rxjs';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import {
   OrderLifecycleEventBus,
   type OrderLifecycleEvent,
 } from '../../lifecycle-events/order-lifecycle-event-bus.service';
-import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
-import { AccrualExecutionService } from './accrual-execution.service';
-import { PendingAccrualSchedulerService } from './pending-accrual-scheduler.service';
-
-const ACCRUAL_TIMING_TIER_KEY = 'wallet.accrual_timing_tier';
-const T_PLUS_N = 'T_PLUS_N';
+import { DeliveredAccrualService } from './delivered-accrual.service';
 
 /**
+ * The BUS half of the delivery-time money. The work itself — tier
+ * dispatch, the charges debit, the Instant Pay COD credit, the freight
+ * share — is `DeliveredAccrualService`, which god mode also calls
+ * directly, because god mode writes DELIVERED without emitting to this
+ * bus. See that service for why the two must share one dispatch.
+ *
  * Phase 1B M22 — COD accrual on DELIVERED. R2b extended this to a
  * per-seller TIMING TIER dispatcher:
  *   INSTANT (a per-seller opt-in since 2026-07-26; was the default) →
@@ -51,10 +51,7 @@ export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, On
 
   constructor(
     private readonly bus: OrderLifecycleEventBus,
-    private readonly prisma: PrismaService,
-    private readonly settings: SettingsResolverService,
-    private readonly execution: AccrualExecutionService,
-    private readonly scheduler: PendingAccrualSchedulerService,
+    private readonly delivered: DeliveredAccrualService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -99,29 +96,6 @@ export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, On
    *  doubles as a manual re-trigger. */
   async handle(event: OrderLifecycleEvent): Promise<void> {
     if (event.to !== OrderStatus.DELIVERED) return;
-
-    const order = await this.prisma.client.order.findUnique({
-      where: { id: event.orderId },
-      select: { id: true, sellerId: true },
-    });
-    if (!order) {
-      this.logger.warn(
-        { orderId: event.orderId },
-        'Order vanished between lifecycle emit and accrual handler; skipping',
-      );
-      return;
-    }
-
-    const tier = await this.settings.resolve(order.sellerId, ACCRUAL_TIMING_TIER_KEY);
-    if (tier.value === T_PLUS_N) {
-      await this.scheduler.scheduleIfNeeded(order.id, order.sellerId);
-      return;
-    }
-
-    // INSTANT — execute immediately (pre-R2b behaviour). No longer the
-    // system default: crediting at DELIVERED means Skydrop fronts the
-    // money until the courier settles, so this is now an explicit
-    // per-seller choice.
-    await this.execution.executeAccrual(order.id);
+    await this.delivered.accrueForDelivered(event.orderId);
   }
 }
