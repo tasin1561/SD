@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Button, FormField, Input, Modal, ModalFooter, Select } from '@skydrop/ui/components';
 import { useRecordInvestmentReturn } from '@/lib/ops-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
@@ -38,6 +38,12 @@ export function InvestmentReturnModal({
   const [receivedAt, setReceivedAt] = useState(localNow);
   const [close, setClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One key per opening (per investment), reused on every retry: a
+  // double-click records the return ONCE.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  useEffect(() => {
+    if (investmentId !== null) setIdempotencyKey(crypto.randomUUID());
+  }, [investmentId]);
 
   const account = (accounts.data ?? []).find((a) => a.id === toAccountId);
 
@@ -59,6 +65,7 @@ export function InvestmentReturnModal({
         amount: n.toFixed(2),
         receivedAt: new Date(receivedAt).toISOString(),
         ...(close ? { close: true } : {}),
+        idempotencyKey,
       });
       setAmount('');
       setClose(false);

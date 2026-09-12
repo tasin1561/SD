@@ -120,14 +120,16 @@ export class PayForwarderDto {
 
   @ApiPropertyOptional({
     description:
-      'What the payment cost in INR. Required when the account is not INR — read off the statement, not converted at a posted rate, so bank charges and the achieved rate are not absorbed.',
-    example: '1500.00',
+      'The client’s key for this request, generated once when the form opens. A replay with the same key returns the bill as it stands and records nothing.',
   })
   @IsOptional()
-  @Matches(/^\d{1,12}(\.\d{1,2})?$/, { message: 'Amount must be a number with up to 2 decimals' })
-  readonly costInr?: string;
+  @IsUUID('4')
+  readonly idempotencyKey?: string;
 
-  @ApiProperty({ description: 'When the bank actually moved it' })
+  @ApiProperty({
+    description:
+      'When the bank actually moved it. A non-INR payment is priced in rupees at the rate in force at THIS instant.',
+  })
   @IsDateString()
   readonly occurredAt!: string;
 
@@ -148,14 +150,6 @@ export class AttributeExpenseDto {
   @ApiProperty({ description: 'An expense already recorded on /expenses' })
   @IsUUID('7')
   readonly bankEntryId!: string;
-
-  @ApiPropertyOptional({
-    description:
-      'What it cost in INR. Required when the expense is not in INR — read off the statement, not converted at a posted rate.',
-  })
-  @IsOptional()
-  @Matches(/^\d{1,12}(\.\d{1,2})?$/, { message: 'Amount must be a number with up to 2 decimals' })
-  readonly costInr?: string;
 }
 
 export class WaiveInboundFreightDto {

@@ -5,7 +5,10 @@ import {
   Prisma,
   WalletEntryDirection,
 } from '@skydrop/db';
-import { InboundFreightAmortisationService } from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
+import {
+  grossLineTotals,
+  InboundFreightAmortisationService,
+} from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 
@@ -42,6 +45,8 @@ function makeSut(
         units?: number;
         unitsSettled?: number;
         lineTotalInr?: string;
+        /** Defaults to the line total — a bill with no service charge. */
+        lineGrossInr?: string;
         amountSettledInr?: string;
       }
     >;
@@ -72,6 +77,7 @@ function makeSut(
         units: alloc.units ?? 100,
         unitsSettled: alloc.unitsSettled ?? 0,
         lineTotalInr: D(alloc.lineTotalInr ?? '4500.00'),
+        lineGrossInr: D(alloc.lineGrossInr ?? alloc.lineTotalInr ?? '4500.00'),
         amountSettledInr: D(alloc.amountSettledInr ?? '0'),
         freightCharge: {
           mode: alloc.mode ?? InboundFreightMode.PAY_LATER,
@@ -500,5 +506,104 @@ describe('InboundFreightAmortisationService.debitForWrittenOffItems', () => {
     });
     expect(r.alreadyCharged).toBe(true);
     expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+});
+
+describe('once a bill is settled, nothing more is charged against it', () => {
+  it('a SETTLED bill charges nothing — the ₹10,000 bill that cost ₹18,000', async () => {
+    // Settle charged the remainder; the per-line counters kept charging
+    // every later delivery on top of it.
+    const sut = makeSut({
+      items: [{ id: 'si-1', quantity: 1, pickedBatchId: 'batch-1' }],
+      batches: { 'batch-1': { lineId: 'l-1', parentBatchId: null } },
+      allocations: {
+        'l-1': {
+          perUnitInr: '100.0000',
+          units: 100,
+          unitsSettled: 20,
+          lineTotalInr: '10000.00',
+          amountSettledInr: '2000.00',
+          status: InboundFreightStatus.SETTLED,
+        },
+      },
+    });
+    const r = await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
+    expect(r.amountInr).toBe('0');
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+    expect(sut.allocUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('the pay-later service charge is collected unit by unit', () => {
+  const one = (over: Record<string, unknown>) => ({
+    items: [{ id: 'si-1', quantity: 1, pickedBatchId: 'batch-1' }],
+    batches: { 'batch-1': { lineId: 'l-1', parentBatchId: null } },
+    allocations: { 'l-1': { perUnitInr: '500.0000', ...over } },
+  });
+
+  it('the LAST unit lands the running total on the GROSS line, service charge included', async () => {
+    // ₹1,000 invoice line + 2% = ₹1,020 over 2 units: 510 then 510.
+    const sut = makeSut(
+      one({
+        units: 2,
+        unitsSettled: 1,
+        lineTotalInr: '1000.00',
+        lineGrossInr: '1020.00',
+        amountSettledInr: '510.00',
+      }),
+    );
+    const r = await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
+    expect(r.amountInr).toBe('510');
+  });
+
+  it('an older bill charged at pre-charge rates catches its service charge up on the next unit', async () => {
+    // Two of four units went at ₹250 (no service charge). The third unit's
+    // target is ¾ of ₹1,020 = ₹765, so it charges ₹265 — ₹255 for itself
+    // and the ₹10 the first two never paid.
+    const sut = makeSut(
+      one({
+        units: 4,
+        unitsSettled: 2,
+        lineTotalInr: '1000.00',
+        lineGrossInr: '1020.00',
+        amountSettledInr: '500.00',
+      }),
+    );
+    const r = await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
+    expect(r.amountInr).toBe('265');
+  });
+
+  it('rolls the CLAMPED unit count onto the bill, never the raw item quantity', async () => {
+    const sut = makeSut({
+      items: [{ id: 'si-1', quantity: 5, pickedBatchId: 'batch-1' }],
+      batches: { 'batch-1': { lineId: 'l-1', parentBatchId: null } },
+      allocations: {
+        'l-1': { perUnitInr: '10.0000', units: 3, unitsSettled: 2, lineTotalInr: '30.00' },
+      },
+    });
+    await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
+    expect(sut.chargeUpdate.mock.calls[0]![0]['data']).toMatchObject({
+      unitsSettled: { increment: 1 },
+    });
+  });
+});
+
+describe('grossLineTotals', () => {
+  it('sums to the bill total EXACTLY, the residue on the largest line', () => {
+    const lines = [D('1000.00'), D('333.33'), D('1.00')];
+    // 1334.33 invoice + 2% = 1361.0166 → 1361.02 bill.
+    const out = grossLineTotals(lines, D('1361.02'));
+    expect(out.reduce((s, g) => s.add(g), D('0')).toFixed(2)).toBe('1361.02');
+    expect(out[1]?.toFixed(2)).toBe('340.00');
+    expect(out[2]?.toFixed(2)).toBe('1.02');
+    expect(out[0]?.toFixed(2)).toBe('1020.00');
+  });
+
+  it('is the line totals unchanged when there is no service charge', () => {
+    const lines = [D('4500.00'), D('900.00')];
+    expect(grossLineTotals(lines, D('5400.00')).map((g) => g.toFixed(2))).toEqual([
+      '4500.00',
+      '900.00',
+    ]);
   });
 });

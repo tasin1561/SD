@@ -17,6 +17,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { isUniqueViolation } from '../../../common/db/unique-violation';
 
 /**
  * The two ways a person answers the reconciliation.
@@ -284,7 +285,17 @@ export class CourierWalletRecordService {
     readonly courierAccountId: string;
     readonly staffId: string;
     readonly note?: string | null;
+    /**
+     * The client's key for this request. A replay returns the entry the
+     * first request posted and posts nothing — a double-click on "Record
+     * it" must not book the same top-up twice, which would then read as
+     * a payment that never reached the courier.
+     */
+    readonly idempotencyKey?: string | null;
   }): Promise<{ bankEntryId: string }> {
+    const replay = await this.replayPayment(input.idempotencyKey);
+    if (replay !== null) return replay;
+
     const amount = new Prisma.Decimal(input.amountInr);
     if (amount.lessThanOrEqualTo(0)) {
       throw new BadRequestException({
@@ -312,20 +323,31 @@ export class CourierWalletRecordService {
       });
     }
 
-    const entry = await this.bank.post({
-      accountId: input.bankAccountId,
-      type: BankEntryType.COURIER_WALLET_RECHARGE,
-      signedAmount: amount.negated(),
-      amountCurrency: Currency.INR,
-      owner: { kind: BankOwnerKind.CAPITAL },
-      actorType: ActorType.STAFF,
-      staffId: input.staffId,
-      occurredAt: input.occurredAt,
-      reference: input.reference.trim(),
-      note:
-        `Courier wallet recharge — ${courierAccount.label}` +
-        `${input.note == null || input.note === '' ? '' : ` — ${input.note}`}`,
-    });
+    let entry: { id: string };
+    try {
+      entry = await this.bank.post({
+        accountId: input.bankAccountId,
+        type: BankEntryType.COURIER_WALLET_RECHARGE,
+        signedAmount: amount.negated(),
+        amountCurrency: Currency.INR,
+        owner: { kind: BankOwnerKind.CAPITAL },
+        actorType: ActorType.STAFF,
+        staffId: input.staffId,
+        occurredAt: input.occurredAt,
+        reference: input.reference.trim(),
+        idempotencyKey: input.idempotencyKey ?? null,
+        note:
+          `Courier wallet recharge — ${courierAccount.label}` +
+          `${input.note == null || input.note === '' ? '' : ` — ${input.note}`}`,
+      });
+    } catch (err) {
+      // The same request racing itself: answer with the winner's entry.
+      if (input.idempotencyKey != null && isUniqueViolation(err)) {
+        const again = await this.replayPayment(input.idempotencyKey);
+        if (again !== null) return again;
+      }
+      throw err;
+    }
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -340,9 +362,33 @@ export class CourierWalletRecordService {
         bankEntryId: entry.id,
         amountInr: amount.toFixed(2),
         reference: input.reference.trim(),
+        idempotencyKey: input.idempotencyKey ?? null,
       },
     });
 
     return { bankEntryId: entry.id };
+  }
+
+  /**
+   * The entry a key already posted, or null for a new key. A key that
+   * posted something other than a courier top-up is a client bug, and is
+   * refused rather than answered with an unrelated entry.
+   */
+  private async replayPayment(
+    idempotencyKey: string | null | undefined,
+  ): Promise<{ bankEntryId: string } | null> {
+    if (idempotencyKey == null) return null;
+    const prior = await this.prisma.client.bankEntry.findUnique({
+      where: { idempotencyKey },
+      select: { id: true, type: true },
+    });
+    if (prior === null) return null;
+    if (prior.type !== BankEntryType.COURIER_WALLET_RECHARGE) {
+      throw new ConflictException({
+        code: 'IDEMPOTENCY_KEY_REUSED',
+        message: 'This request key was already used for a different entry.',
+      });
+    }
+    return { bankEntryId: prior.id };
   }
 }

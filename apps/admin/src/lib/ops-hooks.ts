@@ -374,7 +374,7 @@ export function useRecordFreight(): UseMutationResult<
 export function useAttributeExpense(): UseMutationResult<
   FreightChargeView,
   Error,
-  { freightChargeId: string; bankEntryId: string; costInr?: string }
+  { freightChargeId: string; bankEntryId: string }
 > {
   const client = useApiClient();
   const qc = useQueryClient();
@@ -414,6 +414,10 @@ export interface FreightCostBreakdownView {
     readonly occurredAt: string;
     readonly reference: string | null;
     readonly recordedByName: string | null;
+    /** In rupees at the rate in force when it moved — what our cost sums. */
+    readonly costInr: string | null;
+    readonly rateAsStored: string | null;
+    readonly rateSource: 'HISTORY' | 'CURRENT' | 'IDENTITY' | null;
   }>;
   readonly paidTotalByCurrency: ReadonlyArray<{
     readonly currency: string;
@@ -448,13 +452,14 @@ export function usePayForwarder(): UseMutationResult<
   {
     freightChargeId: string;
     bankAccountId: string;
-    /** What left the account, in the ACCOUNT's own currency. */
+    /** What left the account, in the ACCOUNT's own currency. The server
+     *  prices it in INR at the rate in force at `occurredAt`. */
     amountPaid: string;
-    /** What it cost in INR. Required when the account is not INR. */
-    costInr?: string;
     occurredAt: string;
     reference?: string;
     note?: string;
+    /** Generated once when the form opens; reused on retry. */
+    idempotencyKey?: string;
   }
 > {
   const client = useApiClient();
@@ -610,6 +615,8 @@ export interface RemittanceRow {
   readonly orderId: string | null;
   readonly orderNumber: string | null;
   readonly expectedInr: string | null;
+  /** Paid on earlier payouts, net — a part-paid order is still allocatable. */
+  readonly paidSoFarInr: string | null;
   readonly sellerName: string | null;
   readonly problem: string | null;
   readonly alreadySettled: boolean;
@@ -1349,6 +1356,8 @@ export function usePlaceInvestment(): UseMutationResult<
     amount: string;
     placedAt: string;
     note?: string;
+    /** Generated once when the form opens; reused on retry. */
+    idempotencyKey?: string;
   }
 > {
   const client = useApiClient();
@@ -1366,7 +1375,15 @@ export function usePlaceInvestment(): UseMutationResult<
 export function useRecordInvestmentReturn(): UseMutationResult<
   InvestmentView,
   Error,
-  { investmentId: string; toAccountId: string; amount: string; receivedAt: string; close?: boolean }
+  {
+    investmentId: string;
+    toAccountId: string;
+    amount: string;
+    receivedAt: string;
+    close?: boolean;
+    /** Generated once when the form opens; reused on retry. */
+    idempotencyKey?: string;
+  }
 > {
   const client = useApiClient();
   const qc = useQueryClient();
@@ -4052,6 +4069,8 @@ export function useRecordCourierPayment(): UseMutationResult<
     occurredAt: string;
     reference: string;
     note?: string;
+    /** Generated once when the form opens; reused on retry. */
+    idempotencyKey?: string;
   }
 > {
   const client = useApiClient();

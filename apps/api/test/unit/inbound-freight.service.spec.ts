@@ -65,6 +65,21 @@ function makeSut(
     bankEntry?: AnyArgs | null;
     loaded?: AnyArgs | null;
     claimCount?: number;
+    /** Payments already attached to the bill, before the one under test. */
+    linkedPayments?: Array<{
+      id: string;
+      currency: 'INR' | 'BDT';
+      signedAmount: Prisma.Decimal;
+      occurredAt: Date;
+    }>;
+    /** The rate history row in force; null = none recorded that early. */
+    fxHistory?: AnyArgs | null;
+    /** Today's rate row (fx_rates); null = no rate at all. */
+    fxCurrent?: AnyArgs | null;
+    /** What an idempotency key already created, per lookup (in order). */
+    priorByKey?: Array<AnyArgs | null>;
+    /** Thrown by the ledger's post(). */
+    postThrows?: unknown;
   } = {},
 ) {
   // The bill hangs off ONE ARRIVAL, and the consignment is derived from
@@ -112,15 +127,60 @@ function makeSut(
     async () => opts.loaded ?? chargeRow(),
   );
 
+  // Every payment attached to the bill — what our cost is recomputed
+  // from. The ledger's post() below appends to it, as the real insert
+  // would inside the same transaction.
+  const linked = [...(opts.linkedPayments ?? [])];
+  const priorByKey = [...(opts.priorByKey ?? [])];
+  const allocCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ id: 'alloc-1' }));
+  const allocUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
+  const lockTaken = jest.fn(async () => 1);
+
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
+    // WAL-7's advisory lock — settle takes the one amortisation charges under.
+    $executeRaw: lockTaken,
     goodsReceipt: { findFirst: receiptFindFirst },
-    inboundFreightAllocation: { create: jest.fn(async () => ({ id: 'alloc-1' })) },
+    inboundFreightAllocation: {
+      create: allocCreate,
+      findMany: jest.fn(async () => [
+        { id: 'alloc-1', units: 10, lineGrossInr: new Prisma.Decimal('4500.00') },
+      ]),
+      update: allocUpdate,
+    },
     // Resolved by CODE inside recordForwarderPayment — the caller never
     // picks the category, so one cost cannot be filed two ways.
     expenseCategory: { findUnique: jest.fn(async () => ({ id: 'cat-freight' })) },
-    // The expense being attributed to a bill, when a case supplies one.
-    bankEntry: { findUnique: jest.fn(async () => opts.bankEntry ?? null) },
+    bankEntry: {
+      // By idempotency key: what that key already created. By id: the
+      // expense being attributed to a bill, when a case supplies one.
+      findUnique: jest.fn(async (args: AnyArgs) =>
+        ((args['where'] as AnyArgs)['idempotencyKey'] as string | undefined) !== undefined
+          ? (priorByKey.shift() ?? null)
+          : (opts.bankEntry ?? null),
+      ),
+      findMany: jest.fn(async () => linked),
+    },
+    // The rate in force at a payment's instant: history first, then today's.
+    fxRateHistory: {
+      findFirst: jest.fn(async () =>
+        opts.fxHistory === undefined
+          ? {
+              fromCurrency: 'INR',
+              toCurrency: 'BDT',
+              rate: new Prisma.Decimal('1.23'),
+              recordedAt: new Date('2026-08-24T00:00:00Z'),
+            }
+          : opts.fxHistory,
+      ),
+    },
+    fxRate: {
+      findFirst: jest.fn(async () =>
+        opts.fxCurrent === undefined
+          ? { fromCurrency: 'BDT', toCurrency: 'INR', rate: new Prisma.Decimal('0.813008') }
+          : opts.fxCurrent,
+      ),
+    },
     // The account decides the entry's currency (TRE-2) and therefore
     // whether a separate INR figure has to be supplied.
     platformBankAccount: {
@@ -209,9 +269,19 @@ function makeSut(
    * the attribution are written together, so the cases below assert on
    * what it was handed.
    */
-  const post = jest.fn(async (_input: Record<string, unknown>, _tx?: unknown) => ({
-    id: 'be-1',
-  }));
+  const post = jest.fn(async (input: Record<string, unknown>, _tx?: unknown) => {
+    if (opts.postThrows !== undefined) throw opts.postThrows;
+    const id = `be-${linked.length + 1}`;
+    if (input['inboundFreightChargeId'] !== undefined) {
+      linked.push({
+        id,
+        currency: input['amountCurrency'] as 'INR' | 'BDT',
+        signedAmount: new Prisma.Decimal(input['signedAmount'] as Prisma.Decimal),
+        occurredAt: input['occurredAt'] as Date,
+      });
+    }
+    return { id };
+  });
   // TRE-1: bank_entries has ONE writer, and attaching an expense to a
   // freight bill is still a write to it — "it is only an attribution"
   // is the argument the second writer always makes.
@@ -228,6 +298,9 @@ function makeSut(
     chargeUpdate,
     post,
     attributeToFreightCharge,
+    allocCreate,
+    allocUpdate,
+    lockTaken,
   };
 }
 
@@ -412,6 +485,70 @@ describe('InboundFreightService.settle', () => {
     });
     expect(sut.applyEntry).not.toHaveBeenCalled();
   });
+
+  it('charges the remainder READ UNDER THE WALLET LOCK, and claims on that exact figure', async () => {
+    // A delivery charged between an outside read and the claim was billed
+    // twice: once by itself and once inside the remainder.
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.PARTIALLY_SETTLED,
+        unitsSettled: 2,
+        amountSettledInr: new Prisma.Decimal('900.00'),
+      }),
+    });
+    await sut.svc.settle(STAFF, CHARGE);
+    expect(sut.lockTaken).toHaveBeenCalled();
+    expect((sut.applyEntry.mock.calls[0]![1]['amount'] as Prisma.Decimal).toFixed(2)).toBe(
+      '3600.00',
+    );
+    expect(sut.chargeUpdateMany.mock.calls[0]![0]['where']).toMatchObject({
+      amountSettledInr: new Prisma.Decimal('900.00'),
+    });
+  });
+
+  it('marks every line FULLY CHARGED in the same transaction', async () => {
+    // Left at their old counters the lines kept charging every later
+    // delivery on top of the remainder: ₹10,000 billed ₹18,000.
+    const sut = makeSut({ loaded: chargeRow() });
+    await sut.svc.settle(STAFF, CHARGE);
+    expect(sut.allocUpdate.mock.calls[0]![0]).toMatchObject({
+      where: { id: 'alloc-1' },
+      data: { unitsSettled: 10, amountSettledInr: new Prisma.Decimal('4500.00') },
+    });
+  });
+
+  it('refuses when nothing is outstanding by the time the lock is held', async () => {
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.PARTIALLY_SETTLED,
+        amountSettledInr: new Prisma.Decimal('4500.00'),
+      }),
+    });
+    await expect(sut.svc.settle(STAFF, CHARGE)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_NOTHING_OUTSTANDING' },
+    });
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+});
+
+describe('the pay-later service charge is actually collected', () => {
+  it('writes each line’s GROSS total — the service charge included — summing to the bill', async () => {
+    const sut = makeSut({ mode: 'PAY_LATER', servicePercent: '2.00' });
+    await sut.svc.record(STAFF, {
+      goodsReceiptId: RECEIPT,
+      lines: [
+        {
+          goodsReceiptLineId: 'grl-1',
+          basis: InboundFreightBasis.PER_KG,
+          rateInr: '900',
+          chargeableWeightKg: '5',
+        },
+      ],
+    });
+    const data = sut.allocCreate.mock.calls[0]![0]['data'] as AnyArgs;
+    expect((data['lineTotalInr'] as Prisma.Decimal).toFixed(2)).toBe('4500.00');
+    expect((data['lineGrossInr'] as Prisma.Decimal).toFixed(2)).toBe('4590.00');
+  });
 });
 
 describe('InboundFreightService.waive', () => {
@@ -453,6 +590,12 @@ describe('InboundFreightService.recordForwarderPayment', () => {
     amountPaid: '2000.00',
     occurredAt: new Date('2026-09-01T00:00:00Z'),
   };
+  const ourCostWritten = (u: jest.Mock): string | undefined =>
+    (
+      (u.mock.calls.at(-1)?.[0] as AnyArgs | undefined)?.['data'] as
+        | { ourCostInr?: Prisma.Decimal }
+        | undefined
+    )?.ourCostInr?.toFixed(2);
 
   it('posts the cash NEGATIVE, as capital, LINKED to the bill', async () => {
     // The link is the whole point: without it the same rupees are
@@ -480,22 +623,29 @@ describe('InboundFreightService.recordForwarderPayment', () => {
     expect(call.occurredAt.toISOString()).toBe('2026-09-01T00:00:00.000Z');
   });
 
-  it('fills in our cost when it was unset', async () => {
+  it('our cost is the payment when it is the first', async () => {
     const { svc, chargeUpdate } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
     await svc.recordForwarderPayment('st-1', 'fc-1', payment);
-    const data = chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
-    expect(data.ourCostInr?.toFixed(2)).toBe('2000.00');
+    expect(ourCostWritten(chargeUpdate)).toBe('2000.00');
   });
 
-  it('does NOT rewrite a known cost down to a part payment', async () => {
-    // What the forwarder BILLED and what has CLEARED are different
-    // questions. A ₹2,000 instalment against a ₹5,000 invoice must not
-    // restate the invoice — the P&L recognises the cost once, in full.
+  it('a SECOND payment adds to our cost — ₹30,000 then ₹20,000 is ₹50,000', async () => {
+    // It used to be filled in only when unset, so the second instalment
+    // reached no line of the P&L at all: a linked payment is excluded
+    // from operating expenses, and the leg's cost still read ₹30,000.
     const { svc, chargeUpdate } = makeSut({
-      loaded: chargeRow({ ourCostInr: new Prisma.Decimal('5000.00') }),
+      loaded: chargeRow({ ourCostInr: new Prisma.Decimal('30000.00') }),
+      linkedPayments: [
+        {
+          id: 'be-0',
+          currency: 'INR',
+          signedAmount: new Prisma.Decimal('-30000.00'),
+          occurredAt: new Date('2026-08-20T00:00:00Z'),
+        },
+      ],
     });
-    await svc.recordForwarderPayment('st-1', 'fc-1', payment);
-    expect(chargeUpdate.mock.calls[0]?.[0]?.['data']).toEqual({});
+    await svc.recordForwarderPayment('st-1', 'fc-1', { ...payment, amountPaid: '20000.00' });
+    expect(ourCostWritten(chargeUpdate)).toBe('50000.00');
   });
 
   it('refuses a zero or negative payment', async () => {
@@ -518,14 +668,65 @@ describe('InboundFreightService.recordForwarderPayment', () => {
     expect(entry.severity).toBe('HIGH');
     expect(entry.metadata.amountPaid).toBe('2000.00');
   });
+
+  it('a replay with the same key records NOTHING and returns the bill', async () => {
+    const { svc, post, chargeUpdate } = makeSut({
+      loaded: chargeRow({ ourCostInr: new Prisma.Decimal('2000.00') }),
+      priorByKey: [{ inboundFreightChargeId: 'fc-1' }],
+    });
+    const view = await svc.recordForwarderPayment('st-1', 'fc-1', {
+      ...payment,
+      idempotencyKey: '4f1c2c1e-4e7a-4b59-9d0e-3a2f5b1c8d11',
+    });
+    expect(post).not.toHaveBeenCalled();
+    expect(chargeUpdate).not.toHaveBeenCalled();
+    expect(view.ourCostInr).toBe('2000');
+  });
+
+  it('two copies racing: the loser hits the unique key and answers with the winner', async () => {
+    const { svc } = makeSut({
+      loaded: chargeRow({ ourCostInr: new Prisma.Decimal('2000.00') }),
+      // First lookup: nothing yet. After the insert fails: the winner's row.
+      priorByKey: [null, { inboundFreightChargeId: 'fc-1' }],
+      postThrows: new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    });
+    const view = await svc.recordForwarderPayment('st-1', 'fc-1', {
+      ...payment,
+      idempotencyKey: '4f1c2c1e-4e7a-4b59-9d0e-3a2f5b1c8d11',
+    });
+    expect(view.id).toBe(CHARGE);
+  });
+
+  it('refuses a key that created something else rather than pretending', async () => {
+    const { svc, post } = makeSut({
+      loaded: chargeRow(),
+      priorByKey: [{ inboundFreightChargeId: 'fc-other' }],
+    });
+    await expect(
+      svc.recordForwarderPayment('st-1', 'fc-1', {
+        ...payment,
+        idempotencyKey: '4f1c2c1e-4e7a-4b59-9d0e-3a2f5b1c8d11',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    expect(post).not.toHaveBeenCalled();
+  });
 });
 
 describe('paying the forwarder from a BDT account', () => {
   const bdtPayment = {
     bankAccountId: 'ba-1',
-    amountPaid: '2500.00',
+    amountPaid: '2000.00',
     occurredAt: new Date('2026-09-01T00:00:00Z'),
   };
+  const ourCostWritten = (u: jest.Mock): string | undefined =>
+    (
+      (u.mock.calls.at(-1)?.[0] as AnyArgs | undefined)?.['data'] as
+        | { ourCostInr?: Prisma.Decimal }
+        | undefined
+    )?.ourCostInr?.toFixed(2);
 
   it('stamps the entry in the ACCOUNT’s currency, not INR', async () => {
     // TRE-2: the entry takes the account's currency whatever arrives,
@@ -536,46 +737,96 @@ describe('paying the forwarder from a BDT account', () => {
       bankCurrency: 'BDT',
       loaded: chargeRow({ ourCostInr: null }),
     });
-    await svc.recordForwarderPayment('st-1', 'fc-1', { ...bdtPayment, costInr: '1800.00' });
+    await svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment);
     const call = post.mock.calls[0]?.[0] as unknown as {
       amountCurrency: string;
       signedAmount: Prisma.Decimal;
     };
     expect(call.amountCurrency).toBe('BDT');
-    expect(call.signedAmount.toFixed(2)).toBe('-2500.00');
+    expect(call.signedAmount.toFixed(2)).toBe('-2000.00');
   });
 
-  it('records the INR cost given, NOT the BDT amount', async () => {
-    // `our_cost_inr` is the P&L's cost side. A BDT figure in it is
-    // wrong by the exchange rate and nothing downstream would notice.
+  it('prices it at the rate IN FORCE at the payment’s instant — ৳2,000 at 1.23 is ₹1,626.02', async () => {
+    // The one production payment was typed at 1.20 and read ₹1,666.67
+    // while every recorded rate said 1.23.
+    const { svc, chargeUpdate, auditLog } = makeSut({
+      bankCurrency: 'BDT',
+      loaded: chargeRow({ ourCostInr: null }),
+    });
+    await svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment);
+    expect(ourCostWritten(chargeUpdate)).toBe('1626.02');
+    // Which rate, and from where, is on the record.
+    const meta = (auditLog.mock.calls.at(-1)?.[0] as AnyArgs)['metadata'] as AnyArgs;
+    expect(meta['rate']).toMatchObject({ asStored: 'INR→BDT 1.23', source: 'HISTORY' });
+  });
+
+  it('falls back to today’s rate when none was recorded that early', async () => {
     const { svc, chargeUpdate } = makeSut({
       bankCurrency: 'BDT',
       loaded: chargeRow({ ourCostInr: null }),
+      fxHistory: null,
     });
-    await svc.recordForwarderPayment('st-1', 'fc-1', { ...bdtPayment, costInr: '1800.00' });
-    const data = chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
-    expect(data.ourCostInr?.toFixed(2)).toBe('1800.00');
+    await svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment);
+    // 2000 × 0.813008 = 1626.016
+    expect(ourCostWritten(chargeUpdate)).toBe('1626.02');
   });
 
-  it('refuses a non-INR payment with no INR cost — it will not guess a rate', async () => {
-    // TRE-5: deriving it would silently absorb every bank charge and
-    // the gap between the rate quoted and the rate achieved. Both
-    // figures come off the two statements.
+  it('sums each payment at ITS OWN rate', async () => {
+    // An earlier ৳1,000 at 1.20 (₹833.33) plus today's ৳2,000 at 1.23.
+    const { svc, chargeUpdate } = makeSut({
+      bankCurrency: 'BDT',
+      loaded: chargeRow({ ourCostInr: null }),
+      linkedPayments: [
+        {
+          id: 'be-0',
+          currency: 'BDT',
+          signedAmount: new Prisma.Decimal('-1000.00'),
+          occurredAt: new Date('2026-07-01T00:00:00Z'),
+        },
+      ],
+    });
+    let calls = 0;
+    const hist = (
+      svc as unknown as {
+        prisma: { client: { fxRateHistory: { findFirst: jest.Mock } } };
+      }
+    ).prisma.client.fxRateHistory.findFirst;
+    hist.mockImplementation(async (args: AnyArgs) => {
+      calls += 1;
+      const at = ((args['where'] as AnyArgs)['recordedAt'] as { lte: Date }).lte;
+      return {
+        fromCurrency: 'INR',
+        toCurrency: 'BDT',
+        rate: new Prisma.Decimal(at < new Date('2026-08-01T00:00:00Z') ? '1.20' : '1.23'),
+        recordedAt: at,
+      };
+    });
+    await svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment);
+    expect(calls).toBeGreaterThan(0);
+    expect(ourCostWritten(chargeUpdate)).toBe('2459.35');
+  });
+
+  it('refuses when no rate exists at all — it will not guess', async () => {
     const { svc, post } = makeSut({
       bankCurrency: 'BDT',
       loaded: chargeRow({ ourCostInr: null }),
+      fxHistory: null,
+      fxCurrent: null,
     });
-    await expect(svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_FX_RATE_MISSING' },
+    });
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('an INR account needs no second figure', async () => {
-    const { svc, chargeUpdate } = makeSut({ loaded: chargeRow({ ourCostInr: null }) });
-    await svc.recordForwarderPayment('st-1', 'fc-1', bdtPayment);
-    const data = chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
-    expect(data.ourCostInr?.toFixed(2)).toBe('2500.00');
+  it('an INR account needs no rate', async () => {
+    const { svc, chargeUpdate } = makeSut({
+      loaded: chargeRow({ ourCostInr: null }),
+      fxHistory: null,
+      fxCurrent: null,
+    });
+    await svc.recordForwarderPayment('st-1', 'fc-1', { ...bdtPayment, amountPaid: '2500.00' });
+    expect(ourCostWritten(chargeUpdate)).toBe('2500.00');
   });
 });
 
@@ -598,23 +849,47 @@ describe('InboundFreightService.attributeExistingPayment', () => {
     expect(ctx.attributeToFreightCharge).toHaveBeenCalled();
   });
 
-  it('fills in our cost from an INR expense', async () => {
-    const ctx = makeSut({ loaded: chargeRow({ ourCostInr: null }), bankEntry: entry() });
+  it('recomputes our cost from every payment on the bill, this one included', async () => {
+    // The fake's linked list stands in for the rows the ledger just linked.
+    const ctx = makeSut({
+      loaded: chargeRow({ ourCostInr: new Prisma.Decimal('1000.00') }),
+      bankEntry: entry(),
+      linkedPayments: [
+        {
+          id: 'be-0',
+          currency: 'INR',
+          signedAmount: new Prisma.Decimal('-1000.00'),
+          occurredAt: new Date('2026-08-01T00:00:00Z'),
+        },
+        {
+          id: 'be-9',
+          currency: 'INR',
+          signedAmount: new Prisma.Decimal('-3000.00'),
+          occurredAt: new Date('2026-08-02T00:00:00Z'),
+        },
+      ],
+    });
     await ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' });
     const data = ctx.chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
-    expect(data.ourCostInr?.toFixed(2)).toBe('3000.00');
+    expect(data.ourCostInr?.toFixed(2)).toBe('4000.00');
   });
 
-  it('refuses a non-INR expense with no INR cost — it will not guess a rate', async () => {
-    // A ৳2,000 payment against a ₹3,000 bill. Converting at a posted
-    // rate would absorb the bank's charges and the rate achieved.
+  it('prices a non-INR expense at the rate in force when it moved', async () => {
     const ctx = makeSut({
       loaded: chargeRow({ ourCostInr: null }),
       bankEntry: entry({ currency: 'BDT', signedAmount: new Prisma.Decimal('-2000.00') }),
+      linkedPayments: [
+        {
+          id: 'be-9',
+          currency: 'BDT',
+          signedAmount: new Prisma.Decimal('-2000.00'),
+          occurredAt: new Date('2026-09-01T00:00:00Z'),
+        },
+      ],
     });
-    await expect(
-      ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' });
+    const data = ctx.chargeUpdate.mock.calls[0]?.[0]?.['data'] as { ourCostInr?: Prisma.Decimal };
+    expect(data.ourCostInr?.toFixed(2)).toBe('1626.02');
   });
 
   it('refuses an entry that is not an expense', async () => {

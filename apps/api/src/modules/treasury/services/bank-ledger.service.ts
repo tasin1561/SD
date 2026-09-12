@@ -56,6 +56,13 @@ export interface PostEntryInput {
    */
   readonly inboundFreightChargeId?: string | null;
   readonly staffId?: string | null;
+  /**
+   * The client's key for the request that asked for this entry (UNIQUE).
+   * A caller that accepts one looks it up first and, on a replay, returns
+   * the original result instead of posting — and treats a P2002 on it as
+   * the same replay having won a race.
+   */
+  readonly idempotencyKey?: string | null;
 }
 
 export interface AccountBalance {
@@ -205,6 +212,7 @@ export class BankLedgerService {
         note: input.note ?? null,
         occurredAt: input.occurredAt,
         createdByStaffId: input.staffId ?? null,
+        idempotencyKey: input.idempotencyKey ?? null,
       },
       select: { id: true },
     });

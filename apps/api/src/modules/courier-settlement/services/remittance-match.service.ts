@@ -15,10 +15,16 @@ export interface MatchedRemittanceRow {
   readonly orderNumber: string | null;
   /** What we expected for that order, so a shortfall is visible before recording. */
   readonly expectedInr: string | null;
+  /**
+   * What earlier payouts have paid on the order, net of reversals — null
+   * when it has never been on one. A part-paid order is still
+   * allocatable; only one paid in full is "already settled".
+   */
+  readonly paidSoFarInr: string | null;
   readonly sellerName: string | null;
   /** Why it cannot be allocated, in words an operator can act on. */
   readonly problem: string | null;
-  /** Already settled on an earlier payout — allocating again would double-pay. */
+  /** Paid IN FULL on earlier payouts — allocating again would double-pay. */
   readonly alreadySettled: boolean;
 }
 
@@ -83,20 +89,26 @@ export class RemittanceMatchService {
     });
     const byAwb = new Map(shipments.map((s) => [s.awbNumber ?? '', s]));
 
-    // Which of these orders have already been paid on some earlier
-    // payout. Allocating one twice would credit the seller twice, and
-    // the ledger is append-only, so the error would be permanent.
+    // What each of these orders has been paid NET on earlier payouts —
+    // the same figure the real settlement reads (WAL-6): an order can be
+    // paid in parts, and a reversal line is negative. "Already settled"
+    // means paid in full already; a second part of a part-paid order is
+    // allocatable, and flagging it would push the operator to allocate
+    // it by hand or drop it.
     const orderIds = shipments
       .flatMap((s) => s.orderShipments.map((os) => os.order.id))
       .filter((id): id is string => id !== undefined);
-    const settledLines =
+    const paidRows =
       orderIds.length === 0
         ? []
-        : await this.prisma.client.courierSettlementLine.findMany({
+        : await this.prisma.client.courierSettlementLine.groupBy({
+            by: ['orderId'],
             where: { orderId: { in: orderIds } },
-            select: { orderId: true },
+            _sum: { settledInr: true },
           });
-    const alreadySettled = new Set(settledLines.map((l) => l.orderId));
+    const paidSoFar = new Map(
+      paidRows.map((r) => [r.orderId, r._sum.settledInr ?? new Prisma.Decimal(0)]),
+    );
 
     let allocatable = new Prisma.Decimal(0);
     let fileTotal = new Prisma.Decimal(0);
@@ -114,7 +126,14 @@ export class RemittanceMatchService {
       else if (ship === null) problem = 'No shipment with this waybill';
       else if (order === null) problem = 'Waybill found, but it is not attached to an order';
 
-      const settledAlready = order !== null && alreadySettled.has(order.id);
+      const paid = order === null ? null : (paidSoFar.get(order.id) ?? null);
+      const expected = order?.codAmountInr ?? null;
+      // Paid in full already: net paid reaches what was expected (or, for
+      // an order with no COD figure, anything was paid at all).
+      const settledAlready =
+        paid !== null &&
+        paid.gt(0) &&
+        (expected === null ? true : paid.greaterThanOrEqualTo(expected));
       if (problem === null && settledAlready) problem = 'Already settled on an earlier payout';
 
       if (problem === null && amount !== null) allocatable = allocatable.add(amount);
@@ -129,6 +148,7 @@ export class RemittanceMatchService {
         orderId: order?.id ?? null,
         orderNumber: order?.orderNumber ?? null,
         expectedInr: order?.codAmountInr?.toFixed(2) ?? null,
+        paidSoFarInr: paid?.toFixed(2) ?? null,
         sellerName: order?.seller.companyName ?? null,
         problem,
         alreadySettled: settledAlready,

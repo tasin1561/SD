@@ -243,3 +243,70 @@ describe('CourierWalletRecordService.recordOutgoingPayment', () => {
     expect(call.reference).toBe('UTR777');
   });
 });
+
+describe('CourierWalletRecordService.recordOutgoingPayment — idempotent on the client key', () => {
+  const KEY = '9f0b1a52-2f6b-4d4e-8d8c-6d1c0a6e7b31';
+  const PAYMENT = {
+    bankAccountId: 'ba-1',
+    courierAccountId: 'ca-1',
+    amountInr: '20000.00',
+    occurredAt: new Date('2026-09-01T00:00:00Z'),
+    reference: 'UTR999',
+    staffId: 'st-1',
+    idempotencyKey: KEY,
+  };
+
+  function makeKeyed(prior: Array<Record<string, unknown> | null>, postThrows?: unknown) {
+    const queue = [...prior];
+    const post = jest.fn(async (_i: Record<string, unknown>) => {
+      if (postThrows !== undefined) throw postThrows;
+      return { id: 'be-new' };
+    });
+    const svc = new CourierWalletRecordService(
+      {
+        client: {
+          courierAccount: { findFirst: jest.fn(async () => ({ id: 'ca-1', label: 'Delhivery' })) },
+          bankEntry: { findUnique: jest.fn(async () => queue.shift() ?? null) },
+        },
+      } as never,
+      { post } as never,
+      { log: jest.fn(async () => undefined) } as never,
+      { resolveByKey: jest.fn(async () => 1) } as never,
+    );
+    return { svc, post };
+  }
+
+  it('posts the key with the entry', async () => {
+    const { svc, post } = makeKeyed([null]);
+    await svc.recordOutgoingPayment(PAYMENT);
+    expect(post.mock.calls[0]![0]).toMatchObject({ idempotencyKey: KEY });
+  });
+
+  it('a replay books nothing and returns the original entry', async () => {
+    const { svc, post } = makeKeyed([{ id: 'be-first', type: 'COURIER_WALLET_RECHARGE' }]);
+    await expect(svc.recordOutgoingPayment(PAYMENT)).resolves.toEqual({
+      bankEntryId: 'be-first',
+    });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('two copies racing: the loser answers with the winner’s entry', async () => {
+    const { svc } = makeKeyed(
+      [null, { id: 'be-first', type: 'COURIER_WALLET_RECHARGE' }],
+      new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+    await expect(svc.recordOutgoingPayment(PAYMENT)).resolves.toEqual({
+      bankEntryId: 'be-first',
+    });
+  });
+
+  it('refuses a key that posted something else', async () => {
+    const { svc } = makeKeyed([{ id: 'be-x', type: 'EXPENSE' }]);
+    await expect(svc.recordOutgoingPayment(PAYMENT)).rejects.toMatchObject({
+      response: { code: 'IDEMPOTENCY_KEY_REUSED' },
+    });
+  });
+});

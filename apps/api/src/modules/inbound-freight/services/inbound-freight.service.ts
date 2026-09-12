@@ -23,8 +23,37 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
-import { InboundFreightAmortisationService } from './inbound-freight-amortisation.service';
+import {
+  grossLineTotals,
+  InboundFreightAmortisationService,
+} from './inbound-freight-amortisation.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import { inrRateAt, toInr, type InrRateAt } from '../../../common/fx/inr-rate-at';
+import { isUniqueViolation } from '../../../common/db/unique-violation';
+
+type ChargeWithRefs = Prisma.InboundFreightChargeGetPayload<{
+  include: {
+    consignment: { select: { consignmentNumber: true } };
+    goodsReceipt: { select: { receiptNumber: true } };
+    seller: { select: { companyName: true } };
+  };
+}>;
+
+/** One forwarder payment, in rupees at the rate in force when it moved. */
+export interface ForwarderPaymentInr {
+  readonly bankEntryId: string;
+  readonly currency: Currency;
+  readonly amount: string;
+  readonly occurredAt: string;
+  readonly costInr: string;
+  /** INR per unit of the payment's currency, and where that came from. */
+  readonly inrPerUnit: string;
+  readonly rateSource: InrRateAt['source'];
+  readonly rateRecordedAt: string | null;
+  /** The stored row it was read off, e.g. "INR→BDT 1.23". */
+  readonly rateAsStored: string;
+}
 
 /**
  * Where a forwarder payment is filed. Resolved rather than asked for:
@@ -258,6 +287,14 @@ export class InboundFreightService {
     const serviceCharge =
       percent === null || percent.isZero() ? null : amount.mul(percent).div(100).toDecimalPlaces(2);
     const total = serviceCharge === null ? amount : amount.add(serviceCharge);
+    // What each line owes over its life, service charge included. These
+    // sum to `total` exactly, and amortisation charges against them — so
+    // a pay-later bill collects its service charge as its units leave
+    // rather than closing short of it.
+    const gross = grossLineTotals(
+      plan.lines.map((l) => l.lineTotalInr),
+      total,
+    );
 
     const created = await this.prisma.client.$transaction(async (tx) => {
       const settleNow = mode === InboundFreightMode.PAY_NOW;
@@ -301,7 +338,8 @@ export class InboundFreightService {
         },
       });
 
-      for (const line of plan.lines) {
+      for (const [i, line] of plan.lines.entries()) {
+        const lineGross = gross[i] ?? line.lineTotalInr;
         await tx.inboundFreightAllocation.create({
           data: {
             freightChargeId: row.id,
@@ -313,8 +351,9 @@ export class InboundFreightService {
             rateInr: line.rateInr,
             chargeableWeightKg: line.chargeableWeightKg,
             lineTotalInr: line.lineTotalInr,
+            lineGrossInr: lineGross,
             perUnitInr: line.perUnitInr,
-            ...(settleNow ? { unitsSettled: line.units, amountSettledInr: line.lineTotalInr } : {}),
+            ...(settleNow ? { unitsSettled: line.units, amountSettledInr: lineGross } : {}),
           },
         });
       }
@@ -374,16 +413,40 @@ export class InboundFreightService {
         message: `Freight bill is ${charge.status}; only an outstanding bill can be settled`,
       });
     }
-    const outstanding = charge.totalInr.sub(charge.amountSettledInr);
-    if (outstanding.lte(0)) {
-      throw new ConflictException({
-        code: 'FREIGHT_NOTHING_OUTSTANDING',
-        message: 'Every unit on this bill has already been charged',
-      });
-    }
 
     const updated = await this.prisma.client.$transaction(async (tx) => {
-      // Re-guard INSIDE the tx: two operators clicking "settle" must not
+      // The WALLET lock amortisation charges under. Taken BEFORE the
+      // outstanding figure is read, so a delivery charged at the same
+      // moment is either already in `amountSettledInr` below or runs
+      // after this commits — and then finds the bill SETTLED and
+      // charges nothing. Read outside it, a delivery landing between
+      // the read and the claim was billed twice: once by itself and
+      // once again inside this remainder.
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${charge.sellerId}|${Currency.INR}`);
+      const fresh = await tx.inboundFreightCharge.findUnique({
+        where: { id: freightChargeId },
+        select: { status: true, totalInr: true, amountSettledInr: true, unitsSettled: true },
+      });
+      if (
+        fresh === null ||
+        (fresh.status !== InboundFreightStatus.PENDING &&
+          fresh.status !== InboundFreightStatus.PARTIALLY_SETTLED)
+      ) {
+        throw new ConflictException({
+          code: 'FREIGHT_NOT_PENDING',
+          message: 'Freight bill was settled by another operator',
+        });
+      }
+      const remainder = fresh.totalInr.sub(fresh.amountSettledInr);
+      if (remainder.lte(0)) {
+        throw new ConflictException({
+          code: 'FREIGHT_NOTHING_OUTSTANDING',
+          message: 'Every unit on this bill has already been charged',
+        });
+      }
+
+      // Re-guard INSIDE the tx, on the very figure the remainder was
+      // worked out from: two operators clicking "settle" must not
       // produce two debits.
       const claimed = await tx.inboundFreightCharge.updateMany({
         where: {
@@ -391,13 +454,14 @@ export class InboundFreightService {
           status: {
             in: [InboundFreightStatus.PENDING, InboundFreightStatus.PARTIALLY_SETTLED],
           },
+          amountSettledInr: fresh.amountSettledInr,
         },
         data: {
           status: InboundFreightStatus.SETTLED,
           settledAt: new Date(),
           settledByStaffId: staffId,
           unitsSettled: charge.totalUnits,
-          amountSettledInr: charge.totalInr,
+          amountSettledInr: fresh.totalInr,
         },
       });
       if (claimed.count !== 1) {
@@ -407,12 +471,30 @@ export class InboundFreightService {
         });
       }
 
+      // Every line is now fully charged — in the SAME transaction.
+      // The status alone already stops amortisation reading the bill,
+      // but the lines are what the cost breakdown shows and what any
+      // future reader of "how much of this line is paid" will trust;
+      // leaving them at their pre-settle counters is how the bill came
+      // to be charged a second time.
+      const lines = await tx.inboundFreightAllocation.findMany({
+        where: { freightChargeId },
+        select: { id: true, units: true, lineGrossInr: true },
+      });
+      for (const line of lines) {
+        await tx.inboundFreightAllocation.update({
+          where: { id: line.id },
+          data: { unitsSettled: line.units, amountSettledInr: line.lineGrossInr },
+        });
+      }
+
       const entry = await this.wallet.applyEntry(tx, {
         sellerId: charge.sellerId,
         currency: Currency.INR,
         direction: WalletEntryDirection.INBOUND_FREIGHT,
-        // The REMAINDER: units that already left were charged as they went.
-        amount: outstanding,
+        // The REMAINDER, read under the lock: units that already left
+        // were charged as they went.
+        amount: remainder,
         actorType: ActorType.STAFF,
         actorId: staffId,
         note: `Inbound freight for ${charge.consignment.consignmentNumber}`,
@@ -438,9 +520,9 @@ export class InboundFreightService {
           entityId: freightChargeId,
           severity: 'MEDIUM',
           metadata: {
-            totalInr: charge.totalInr.toString(),
-            outstandingChargedInr: outstanding.toString(),
-            unitsAlreadySettled: charge.unitsSettled,
+            totalInr: fresh.totalInr.toString(),
+            outstandingChargedInr: remainder.toString(),
+            unitsAlreadySettled: fresh.unitsSettled,
             walletEntryId: entry.id,
             ...this.ctxMeta(ctx),
           },
@@ -482,12 +564,24 @@ export class InboundFreightService {
     }
     const existing = await this.prisma.client.inboundFreightCharge.findUnique({
       where: { id: freightChargeId },
-      select: { id: true, ourCostInr: true },
+      select: { id: true, ourCostInr: true, _count: { select: { bankEntries: true } } },
     });
     if (!existing) {
       throw new NotFoundException({
         code: 'FREIGHT_CHARGE_NOT_FOUND',
         message: 'No such freight bill',
+      });
+    }
+    // Once a payment is attached, our cost IS the sum of the payments
+    // (each at the rate in force when it moved) and is recomputed on
+    // every one. A typed figure here would be overwritten by the next
+    // payment, and until then would say something the bank book does not.
+    if (existing._count.bankEntries > 0) {
+      throw new ConflictException({
+        code: 'FREIGHT_COST_FROM_PAYMENTS',
+        message:
+          'This bill already has forwarder payments attached, so its cost is the sum of those ' +
+          'payments. Record a further payment instead of typing the cost.',
       });
     }
 
@@ -545,10 +639,22 @@ export class InboundFreightService {
    * `setOurCost` is settable after settlement), and this must not
    * disturb the amortisation.
    *
-   * `ourCostInr` is filled in only when it is UNSET. A part payment
-   * against a known invoice must not rewrite the invoice down to what
-   * has been paid so far — the cost is what they billed, not what has
-   * cleared, and the P&L recognises it once either way.
+   * ── OUR COST IS THE SUM OF THE PAYMENTS ──────────────────────────────
+   * Recomputed from every payment attached to the bill, in the same
+   * transaction, each converted to rupees at the rate in force at ITS own
+   * instant (the latest `fx_rate_history` row at or before it, else
+   * `fx_rates` — the rule the P&L converts a taka expense by). It used to
+   * be filled in only when unset, so a second instalment never reached
+   * the cost: ₹30,000 then ₹20,000 read as ₹30,000, and because a linked
+   * payment is excluded from operating expenses the ₹20,000 was on no
+   * line of the P&L at all. The rupee figure used to be typed by the
+   * operator; the one production payment (৳2,000) was typed at 1.20 and
+   * read ₹1,666.67 where every recorded rate said ₹1,626.02.
+   *
+   * ── IDEMPOTENT ON THE CLIENT'S KEY ───────────────────────────────────
+   * A replay with the same `idempotencyKey` returns the bill as it now
+   * stands and posts nothing; two racing copies are settled by the unique
+   * index on `bank_entries.idempotency_key`.
    */
   async recordForwarderPayment(
     staffId: string,
@@ -566,19 +672,10 @@ export class InboundFreightService {
        * to show it happened.
        */
       readonly amountPaid: string;
-      /**
-       * What that payment COST US in INR — the reporting currency.
-       *
-       * Entered rather than derived, for the TRE-5 reason: deriving it
-       * from a rate would silently absorb every bank charge and every
-       * gap between the rate quoted and the rate achieved. Both figures
-       * come off the two statements. Required only when the account is
-       * not already INR.
-       */
-      readonly costInr?: string | null;
       readonly occurredAt: Date;
       readonly reference?: string | null;
       readonly note?: string | null;
+      readonly idempotencyKey?: string | null;
     },
     ctx?: ClientContext,
   ): Promise<FreightChargeView> {
@@ -590,8 +687,10 @@ export class InboundFreightService {
       });
     }
 
-    // The account decides the currency of the entry (TRE-2), so it also
-    // decides whether an INR figure has to be supplied separately.
+    const replay = await this.replayForwarderPayment(input.idempotencyKey, freightChargeId);
+    if (replay !== null) return replay;
+
+    // The account decides the currency of the entry (TRE-2).
     const account = await this.prisma.client.platformBankAccount.findFirst({
       where: { id: input.bankAccountId, deletedAt: null },
       select: { id: true, currency: true, label: true },
@@ -603,28 +702,18 @@ export class InboundFreightService {
       });
     }
 
-    let costInr: Prisma.Decimal;
-    if (account.currency === Currency.INR) {
-      costInr = amount;
-    } else {
-      if (input.costInr == null || input.costInr === '') {
-        throw new BadRequestException({
-          code: 'FREIGHT_COST_INR_REQUIRED',
-          message:
-            `This account is held in ${account.currency}, and the P&L is in INR. ` +
-            'Give what the payment cost in INR as well — read off the statement rather ' +
-            'than converted at a posted rate, so bank charges and the rate actually ' +
-            'achieved are not silently absorbed.',
-        });
-      }
-      costInr = new Prisma.Decimal(input.costInr);
-      if (costInr.lessThanOrEqualTo(0)) {
-        throw new BadRequestException({
-          code: 'FREIGHT_COST_NOT_POSITIVE',
-          message: 'The INR cost of the payment must be a positive number',
-        });
-      }
+    // The rate in force at the payment's own instant — refused rather
+    // than guessed when there is none at all.
+    const rate = await inrRateAt(this.prisma.client, account.currency, input.occurredAt);
+    if (rate === null) {
+      throw new BadRequestException({
+        code: 'FREIGHT_FX_RATE_MISSING',
+        message:
+          `No ${account.currency}→INR rate is recorded, so this payment cannot be priced in ` +
+          'rupees. Record the rate on the FX page first.',
+      });
     }
+    const costInr = toInr(amount, rate);
 
     const existing = await this.prisma.client.inboundFreightCharge.findUnique({
       where: { id: freightChargeId },
@@ -649,47 +738,68 @@ export class InboundFreightService {
       select: { id: true },
     });
 
-    const row = await this.prisma.client.$transaction(async (tx) => {
-      const entry = await this.bank.post(
-        {
-          accountId: input.bankAccountId,
-          type: BankEntryType.EXPENSE,
-          // Negative: the money leaves. Unlike a courier wallet recharge
-          // this does NOT become another asset — it is spent.
-          signedAmount: amount.negated(),
-          // The ACCOUNT's currency, stated rather than assumed (TRE-2).
-          amountCurrency: account.currency,
-          // Ours. The seller is billed for freight separately, through
-          // the wallet, and attributing this to them would move their
-          // held cash for a payment they did not make.
-          owner: { kind: BankOwnerKind.CAPITAL },
-          actorType: ActorType.STAFF,
-          staffId,
-          occurredAt: input.occurredAt,
-          inboundFreightChargeId: freightChargeId,
-          ...(category === null ? {} : { expenseCategoryId: category.id }),
-          reference: input.reference ?? null,
-          note:
-            `Forwarder payment — ${existing.consignment.consignmentNumber}` +
-            (account.currency === Currency.INR ? '' : ` (₹${costInr.toFixed(2)} equivalent)`) +
-            `${input.note == null || input.note === '' ? '' : ` — ${input.note}`}`,
-        },
-        tx,
-      );
+    let row: {
+      updated: ChargeWithRefs;
+      bankEntryId: string;
+      payments: readonly ForwarderPaymentInr[];
+    };
+    try {
+      row = await this.prisma.client.$transaction(async (tx) => {
+        const entry = await this.bank.post(
+          {
+            accountId: input.bankAccountId,
+            type: BankEntryType.EXPENSE,
+            // Negative: the money leaves. Unlike a courier wallet recharge
+            // this does NOT become another asset — it is spent.
+            signedAmount: amount.negated(),
+            // The ACCOUNT's currency, stated rather than assumed (TRE-2).
+            amountCurrency: account.currency,
+            // Ours. The seller is billed for freight separately, through
+            // the wallet, and attributing this to them would move their
+            // held cash for a payment they did not make.
+            owner: { kind: BankOwnerKind.CAPITAL },
+            actorType: ActorType.STAFF,
+            staffId,
+            occurredAt: input.occurredAt,
+            inboundFreightChargeId: freightChargeId,
+            ...(category === null ? {} : { expenseCategoryId: category.id }),
+            reference: input.reference ?? null,
+            idempotencyKey: input.idempotencyKey ?? null,
+            note:
+              `Forwarder payment — ${existing.consignment.consignmentNumber}` +
+              (account.currency === Currency.INR
+                ? ''
+                : ` (₹${costInr.toFixed(2)} at ${rate.storedPair} ${rate.storedRate}, ` +
+                  `${rate.source === 'HISTORY' ? 'rate history' : 'current rate'})`) +
+              `${input.note == null || input.note === '' ? '' : ` — ${input.note}`}`,
+          },
+          tx,
+        );
 
-      const updated = await tx.inboundFreightCharge.update({
-        where: { id: freightChargeId },
-        // Always the INR figure — `our_cost_inr` is the P&L's cost side
-        // and a BDT number in it would be wrong by the exchange rate.
-        data: existing.ourCostInr === null ? { ourCostInr: costInr } : {},
-        include: {
-          consignment: { select: { consignmentNumber: true } },
-          goodsReceipt: { select: { receiptNumber: true } },
-          seller: { select: { companyName: true } },
-        },
+        const recomputed = await this.recomputeOurCost(tx, freightChargeId);
+        const updated = await tx.inboundFreightCharge.update({
+          where: { id: freightChargeId },
+          // Always INR — `our_cost_inr` is the P&L's cost side and a BDT
+          // number in it would be wrong by the exchange rate.
+          data: { ourCostInr: recomputed.total },
+          include: {
+            consignment: { select: { consignmentNumber: true } },
+            goodsReceipt: { select: { receiptNumber: true } },
+            seller: { select: { companyName: true } },
+          },
+        });
+        return { updated, bankEntryId: entry.id, payments: recomputed.payments };
       });
-      return { updated, bankEntryId: entry.id };
-    });
+    } catch (err) {
+      // Two copies of the same request racing: the loser's insert hits
+      // the unique key the winner committed. It is the same request, so
+      // it gets the same answer rather than an error.
+      if (input.idempotencyKey != null && isUniqueViolation(err)) {
+        const again = await this.replayForwarderPayment(input.idempotencyKey, freightChargeId);
+        if (again !== null) return again;
+      }
+      throw err;
+    }
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -705,8 +815,17 @@ export class InboundFreightService {
         amountPaid: amount.toFixed(2),
         paidCurrency: account.currency,
         costInr: costInr.toFixed(2),
+        rate: {
+          inrPerUnit: rate.inrPerUnit.toString(),
+          asStored: `${rate.storedPair} ${rate.storedRate}`,
+          source: rate.source,
+          recordedAt: rate.recordedAt?.toISOString() ?? null,
+        },
         ourCostWas: existing.ourCostInr?.toString() ?? null,
+        ourCostNow: row.updated.ourCostInr?.toString() ?? null,
+        payments: row.payments,
         reference: input.reference ?? null,
+        idempotencyKey: input.idempotencyKey ?? null,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,
@@ -714,6 +833,88 @@ export class InboundFreightService {
     });
 
     return this.toView(row.updated);
+  }
+
+  /**
+   * The answer to a request already made with this key: the bill as it
+   * now stands. Null when the key is new. A key that created something
+   * OTHER than a payment against this bill is refused — reusing a key
+   * across two different requests is a client bug, and answering it with
+   * the first request's result would tell the caller the second worked.
+   */
+  private async replayForwarderPayment(
+    idempotencyKey: string | null | undefined,
+    freightChargeId: string,
+  ): Promise<FreightChargeView | null> {
+    if (idempotencyKey == null) return null;
+    const prior = await this.prisma.client.bankEntry.findUnique({
+      where: { idempotencyKey },
+      select: { inboundFreightChargeId: true },
+    });
+    if (prior === null) return null;
+    if (prior.inboundFreightChargeId !== freightChargeId) {
+      throw new ConflictException({
+        code: 'IDEMPOTENCY_KEY_REUSED',
+        message: 'This request key was already used for a different payment.',
+      });
+    }
+    return this.toView(await this.load(freightChargeId));
+  }
+
+  /**
+   * Our cost for the bill: every forwarder payment attached to it, each
+   * in rupees at the rate in force at its own instant, summed. Read in
+   * the caller's transaction so it sees the payment just posted.
+   */
+  private async recomputeOurCost(
+    tx: Prisma.TransactionClient,
+    freightChargeId: string,
+  ): Promise<{ total: Prisma.Decimal; payments: ForwarderPaymentInr[] }> {
+    const entries = await tx.bankEntry.findMany({
+      where: { inboundFreightChargeId: freightChargeId, type: BankEntryType.EXPENSE },
+      select: { id: true, currency: true, signedAmount: true, occurredAt: true },
+      orderBy: { occurredAt: 'asc' },
+    });
+    const payments = await this.pricePayments(tx, entries);
+    const total = payments.reduce((sum, p) => sum.add(p.costInr), new Prisma.Decimal(0));
+    return { total, payments };
+  }
+
+  /** Each payment in rupees at its own instant's rate. Refuses on a gap. */
+  private async pricePayments(
+    db: Pick<Prisma.TransactionClient, 'fxRateHistory' | 'fxRate'>,
+    entries: ReadonlyArray<{
+      id: string;
+      currency: Currency;
+      signedAmount: Prisma.Decimal;
+      occurredAt: Date;
+    }>,
+  ): Promise<ForwarderPaymentInr[]> {
+    const out: ForwarderPaymentInr[] = [];
+    for (const e of entries) {
+      const rate = await inrRateAt(db, e.currency, e.occurredAt);
+      if (rate === null) {
+        throw new BadRequestException({
+          code: 'FREIGHT_FX_RATE_MISSING',
+          message:
+            `No ${e.currency}→INR rate is recorded, so a payment on this bill cannot be priced ` +
+            'in rupees. Record the rate on the FX page first.',
+        });
+      }
+      const abs = e.signedAmount.abs();
+      out.push({
+        bankEntryId: e.id,
+        currency: e.currency,
+        amount: abs.toFixed(2),
+        occurredAt: e.occurredAt.toISOString(),
+        costInr: toInr(abs, rate).toFixed(2),
+        inrPerUnit: rate.inrPerUnit.toString(),
+        rateSource: rate.source,
+        rateRecordedAt: rate.recordedAt?.toISOString() ?? null,
+        rateAsStored: `${rate.storedPair} ${rate.storedRate}`,
+      });
+    }
+    return out;
   }
 
   async waive(
@@ -965,15 +1166,15 @@ export class InboundFreightService {
    * on the entry is the link. That is why it does not go through
    * `BankLedgerService.post()` (TRE-1) — nothing about the cash changes.
    *
-   * ── THE INR FIGURE, AGAIN ────────────────────────────────────────────
-   * A ৳2,000 payment against a ₹3,000 bill needs its INR cost stated,
-   * for the TRE-5 reason: converting at a posted rate would absorb the
-   * bank's charges and the rate actually achieved.
+   * ── THE INR FIGURE ───────────────────────────────────────────────────
+   * Our cost becomes the sum of every payment attached to the bill, each
+   * at the rate in force at its own instant — the same recomputation
+   * `recordForwarderPayment` runs, so the two paths cannot disagree.
    */
   async attributeExistingPayment(
     staffId: string,
     freightChargeId: string,
-    input: { readonly bankEntryId: string; readonly costInr?: string | null },
+    input: { readonly bankEntryId: string },
     ctx?: ClientContext,
   ): Promise<FreightChargeView> {
     const charge = await this.prisma.client.inboundFreightCharge.findUnique({
@@ -1024,30 +1225,8 @@ export class InboundFreightService {
     }
 
     const paidAmount = entry.signedAmount.abs();
-    let costInr: Prisma.Decimal;
-    if (entry.currency === Currency.INR) {
-      costInr = paidAmount;
-    } else {
-      if (input.costInr == null || input.costInr === '') {
-        throw new BadRequestException({
-          code: 'FREIGHT_COST_INR_REQUIRED',
-          message:
-            `This expense is in ${entry.currency} and the P&L is in INR. ` +
-            'Give what it cost in INR as well — read off the statement rather than ' +
-            'converted at a posted rate, so bank charges and the rate actually ' +
-            'achieved are not silently absorbed.',
-        });
-      }
-      costInr = new Prisma.Decimal(input.costInr);
-      if (costInr.lessThanOrEqualTo(0)) {
-        throw new BadRequestException({
-          code: 'FREIGHT_COST_NOT_POSITIVE',
-          message: 'The INR cost must be a positive number',
-        });
-      }
-    }
 
-    const updated = await this.prisma.client.$transaction(async (tx) => {
+    const { updated, payments } = await this.prisma.client.$transaction(async (tx) => {
       // Through the LEDGER, which owns bank_entries (TRE-1). It writes
       // the link guarded on it still being absent, so two people
       // attributing the same expense from two screens cannot both win.
@@ -1058,18 +1237,22 @@ export class InboundFreightService {
           message: 'Somebody else attached this expense while you were on this page.',
         });
       }
-      return tx.inboundFreightCharge.update({
+      // Every payment on the bill, this one included, at its own rate.
+      const recomputed = await this.recomputeOurCost(tx, freightChargeId);
+      const row = await tx.inboundFreightCharge.update({
         where: { id: freightChargeId },
-        // Only when unset. A part payment must not restate a known
-        // invoice down to what has cleared.
-        data: charge.ourCostInr === null ? { ourCostInr: costInr } : {},
+        data: { ourCostInr: recomputed.total },
         include: {
           consignment: { select: { consignmentNumber: true } },
           goodsReceipt: { select: { receiptNumber: true } },
           seller: { select: { companyName: true } },
         },
       });
+      return { updated: row, payments: recomputed.payments };
     });
+    const costInr = new Prisma.Decimal(
+      payments.find((p) => p.bankEntryId === entry.id)?.costInr ?? '0',
+    );
 
     await this.audit.log({
       actorType: ActorType.STAFF,
@@ -1086,6 +1269,8 @@ export class InboundFreightService {
         paidCurrency: entry.currency,
         costInr: costInr.toFixed(2),
         ourCostWas: charge.ourCostInr?.toString() ?? null,
+        ourCostNow: updated.ourCostInr?.toString() ?? null,
+        payments,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,
@@ -1134,6 +1319,13 @@ export class InboundFreightService {
       occurredAt: string;
       reference: string | null;
       recordedByName: string | null;
+      /** This payment in rupees at the rate in force when it moved — the
+       *  figure our cost sums. Null when no rate is recorded at all. */
+      costInr: string | null;
+      /** The rate row it was read off, and whether it was the history or
+       *  (no history that early) today's rate. */
+      rateAsStored: string | null;
+      rateSource: InrRateAt['source'] | null;
     }>;
     ourCostInr: string | null;
     paidTotalByCurrency: ReadonlyArray<{ currency: string; amount: string }>;
@@ -1159,6 +1351,7 @@ export class InboundFreightService {
         bankEntries: {
           orderBy: { occurredAt: 'desc' },
           select: {
+            id: true,
             signedAmount: true,
             currency: true,
             occurredAt: true,
@@ -1199,14 +1392,22 @@ export class InboundFreightService {
         unitsSettled: a.unitsSettled,
         amountSettledInr: a.amountSettledInr.toFixed(2),
       })),
-      payments: charge.bankEntries.map((e) => ({
-        accountLabel: e.account.label,
-        currency: e.currency,
-        amount: e.signedAmount.abs().toFixed(2),
-        occurredAt: e.occurredAt.toISOString(),
-        reference: e.reference,
-        recordedByName: e.createdBy?.emailDisplay ?? null,
-      })),
+      payments: await Promise.all(
+        charge.bankEntries.map(async (e) => {
+          const rate = await inrRateAt(this.prisma.client, e.currency, e.occurredAt);
+          return {
+            accountLabel: e.account.label,
+            currency: e.currency,
+            amount: e.signedAmount.abs().toFixed(2),
+            occurredAt: e.occurredAt.toISOString(),
+            reference: e.reference,
+            recordedByName: e.createdBy?.emailDisplay ?? null,
+            costInr: rate === null ? null : toInr(e.signedAmount.abs(), rate).toFixed(2),
+            rateAsStored: rate === null ? null : `${rate.storedPair} ${rate.storedRate}`,
+            rateSource: rate?.source ?? null,
+          };
+        }),
+      ),
       paidTotalByCurrency: [...byCurrency.entries()].map(([currency, amount]) => ({
         currency,
         amount: amount.toFixed(2),

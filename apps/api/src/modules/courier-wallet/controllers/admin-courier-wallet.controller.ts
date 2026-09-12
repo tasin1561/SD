@@ -123,6 +123,7 @@ export class AdminCourierWalletController {
       reference: dto.reference,
       staffId: staff.id,
       ...(dto.note === undefined ? {} : { note: dto.note }),
+      ...(dto.idempotencyKey === undefined ? {} : { idempotencyKey: dto.idempotencyKey }),
     });
   }
 }

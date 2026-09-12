@@ -9,6 +9,7 @@ import { InvestmentService } from './services/investment.service';
 import { LiabilitiesService } from './services/liabilities.service';
 import { SellerCashAttributionService } from './services/seller-cash-attribution.service';
 import { ShipmentCostService } from './services/shipment-cost.service';
+import { ManualExpenseService } from './services/manual-expense.service';
 import { PnlService } from './services/pnl.service';
 import { TreasuryReadService } from './services/treasury-read.service';
 
@@ -35,6 +36,7 @@ import { TreasuryReadService } from './services/treasury-read.service';
     LiabilitiesService,
     ShipmentCostService,
     SellerCashAttributionService,
+    ManualExpenseService,
   ],
   exports: [BankLedgerService, SellerCashAttributionService],
 })

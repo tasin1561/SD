@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import {
   Button,
   FormField,
@@ -56,11 +56,13 @@ export function ExpenseModal({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [linked, setLinked] = useState<FreightChargeView | null>(null);
-  // Only asked for when it is genuinely a second fact: a freight bill
-  // paid out of a non-INR account. The P&L's cost side is INR, and
-  // deriving it from a posted rate would absorb the bank's charges and
-  // the rate actually achieved (TRE-5).
-  const [costInr, setCostInr] = useState('');
+  // One key per opening of the form, reused on every retry of it: the
+  // freight payment it sends is then recorded once however many times
+  // the button is pressed.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  useEffect(() => {
+    if (open) setIdempotencyKey(crypto.randomUUID());
+  }, [open]);
 
   const account = (accounts.data ?? []).find((a) => a.id === accountId);
   const category = (categories.data ?? []).find((c) => c.id === categoryId);
@@ -85,9 +87,10 @@ export function ExpenseModal({
       setError('Enter what was spent, as a positive number');
       return;
     }
-    const needsInr = linked !== null && account.currency !== 'INR';
-    if (needsInr && (costInr.trim() === '' || !Number.isFinite(Number(costInr)))) {
-      setError('Enter what this cost in INR — a consignment’s cost is reported in INR');
+    if (linked === null && categoryId === '') {
+      // The server refuses an uncategorised expense; saying so here is
+      // just sooner (FE-2: its verdict is still what counts).
+      setError('Choose what this was spent on');
       return;
     }
     try {
@@ -108,19 +111,17 @@ export function ExpenseModal({
           freightChargeId: linked.id,
           bankAccountId: account.id,
           amountPaid: n.toFixed(2),
-          // A non-INR account needs the INR cost as a SEPARATE figure —
-          // the same number in both would be wrong by the exchange rate,
-          // and the P&L's cost side is in INR.
-          ...(account.currency === 'INR' ? {} : { costInr: Number(costInr).toFixed(2) }),
+          // A non-INR payment is priced in rupees by the server, at the
+          // rate recorded for the moment it moved.
           occurredAt: new Date(occurredAt).toISOString(),
           ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
           ...(note.trim() === '' ? {} : { note: note.trim() }),
+          idempotencyKey,
         });
         setAmount('');
         setReference('');
         setNote('');
         setLinked(null);
-        setCostInr('');
         onOpenChange(false);
         return;
       }
@@ -131,7 +132,7 @@ export function ExpenseModal({
         type: 'EXPENSE',
         signedAmount: (-n).toFixed(2),
         ownerKind: 'CAPITAL',
-        ...(categoryId === '' ? {} : { expenseCategoryId: categoryId }),
+        expenseCategoryId: categoryId,
         occurredAt: new Date(occurredAt).toISOString(),
         ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
@@ -170,6 +171,7 @@ export function ExpenseModal({
         </FormField>
         <FormField
           label="Category"
+          required={linked === null}
           hint={
             (categories.data ?? []).length === 0
               ? 'No categories yet — add one first so this spend can be told apart later.'
@@ -177,7 +179,7 @@ export function ExpenseModal({
           }
         >
           <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">Uncategorised</option>
+            <option value="">Select a category…</option>
             {(categories.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -213,20 +215,10 @@ export function ExpenseModal({
           </FormField>
         </div>
         {linked !== null && account !== undefined && account.currency !== 'INR' && (
-          <FormField
-            label="What it cost us (₹)"
-            required
-            hint={`Paid in ${account.currency}, but a consignment's cost is reported in INR. Read this off the INR side of the statement rather than converting at a posted rate — that records the bank's charges and the rate actually achieved instead of absorbing them.`}
-          >
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={costInr}
-              onChange={(e) => setCostInr(e.target.value)}
-              placeholder="0.00"
-            />
-          </FormField>
+          <p className="text-text-muted text-xs">
+            Paid in {account.currency}. The consignment&apos;s cost is kept in rupees, priced at the
+            rate recorded for the moment this payment moved.
+          </p>
         )}
         <FormField label="Reference" hint="Invoice or transaction id, so it can be matched later">
           <Input value={reference} onChange={(e) => setReference(e.target.value)} maxLength={200} />

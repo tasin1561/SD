@@ -1688,6 +1688,14 @@ model InboundFreightAllocation {
   /// 4dp: a bill divided across many units needs more precision than the
   /// 2dp money columns, or the rounding drift becomes visible.
   perUnitInr         Decimal             @map("per_unit_inr") @db.Decimal(12, 4)
+  /// What the SELLER owes for this line over its life: `lineTotalInr` plus
+  /// this line's share of the bill's pay-later service charge. The lines'
+  /// gross totals sum to the bill's `totalInr` exactly (any rounding
+  /// residue sits on the largest line), and it is what amortisation
+  /// charges against — so the service charge is collected unit by unit
+  /// as the goods leave, rather than never (the lines used to sum to the
+  /// pre-charge figure, and a fully amortised bill closed short).
+  lineGrossInr       Decimal             @map("line_gross_inr") @db.Decimal(12, 2)
   unitsSettled       Int                 @default(0) @map("units_settled")
   amountSettledInr   Decimal             @default(0) @map("amount_settled_inr") @db.Decimal(12, 2)
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
@@ -7577,17 +7585,21 @@ model ExpenseCategory {
 /// A short-term placement of our own money. Principal out, return in —
 /// nothing more, per the founder's scope.
 model Investment {
-  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  label        String
-  counterparty String
-  currency     Currency
+  id             String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  label          String
+  counterparty   String
+  currency       Currency
   /// Sum of INVESTMENT_OUT entries; the return is whatever comes back.
-  placedInr    Decimal   @default(0) @map("placed_inr") @db.Decimal(14, 2)
-  returnedInr  Decimal   @default(0) @map("returned_inr") @db.Decimal(14, 2)
-  closedAt     DateTime? @map("closed_at") @db.Timestamptz
-  note         String?   @db.Text
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  placedInr      Decimal   @default(0) @map("placed_inr") @db.Decimal(14, 2)
+  returnedInr    Decimal   @default(0) @map("returned_inr") @db.Decimal(14, 2)
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz
+  note           String?   @db.Text
+  /// The client's key for the request that placed it. A replay with the
+  /// same key returns this row and places nothing — a double-click must
+  /// not move the principal out twice.
+  idempotencyKey String?   @unique @map("idempotency_key") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   entries BankEntry[]
 
@@ -7682,6 +7694,11 @@ model BankEntry {
   /// `createdByStaffId`.
   actorType        ActorType @default(SYSTEM) @map("actor_type")
   createdByStaffId String?   @map("created_by_staff_id") @db.Uuid
+  /// The client's key for the request that created this entry, when a
+  /// person's form created it. UNIQUE: a replay with the same key returns
+  /// the original result and posts nothing, so a double-click or a retried
+  /// request cannot move the same money twice.
+  idempotencyKey   String?   @unique @map("idempotency_key") @db.Uuid
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   account         PlatformBankAccount @relation(fields: [accountId], references: [id])

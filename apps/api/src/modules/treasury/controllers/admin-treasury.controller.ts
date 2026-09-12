@@ -39,6 +39,7 @@ import { ExpenseCategoryService } from '../services/expense-category.service';
 import { InvestmentService } from '../services/investment.service';
 import { LiabilitiesService } from '../services/liabilities.service';
 import { ShipmentCostService } from '../services/shipment-cost.service';
+import { ManualExpenseService } from '../services/manual-expense.service';
 import { PnlService } from '../services/pnl.service';
 
 /**
@@ -68,6 +69,7 @@ export class AdminTreasuryController {
     private readonly investments: InvestmentService,
     private readonly liabilities: LiabilitiesService,
     private readonly shipmentCosts: ShipmentCostService,
+    private readonly expenses: ManualExpenseService,
   ) {}
 
   @Get('overview')
@@ -245,30 +247,13 @@ export class AdminTreasuryController {
   @RequirePermissions('money.treasury.manage')
   @ApiOperation({
     summary:
-      'Record one movement — an expense, an opening balance, money in that no other flow covers.',
+      'Record an EXPENSE — our money (CAPITAL), leaving (negative), with a category. Every other movement is refused (TREASURY_ENTRY_NOT_ALLOWED) with the flow it belongs to.',
   })
   async record(
     @Body() body: RecordEntryDto,
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<{ id: string }> {
-    return this.ledger.post({
-      accountId: body.accountId,
-      type: body.type,
-      signedAmount: body.signedAmount,
-      amountCurrency: body.amountCurrency,
-      owner: {
-        kind: body.ownerKind,
-        ...(body.sellerId === undefined ? {} : { sellerId: body.sellerId }),
-      },
-      occurredAt: new Date(body.occurredAt),
-      ...(body.expenseCategoryId === undefined
-        ? {}
-        : { expenseCategoryId: body.expenseCategoryId }),
-      ...(body.investmentId === undefined ? {} : { investmentId: body.investmentId }),
-      ...(body.reference === undefined ? {} : { reference: body.reference }),
-      ...(body.note === undefined ? {} : { note: body.note }),
-      staffId: staff.id,
-    });
+    return this.expenses.record(staff.id, body);
   }
 
   @Post('accounts/:accountId/reconcile')

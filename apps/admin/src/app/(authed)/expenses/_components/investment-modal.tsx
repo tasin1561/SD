@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import {
   Button,
   FormField,
@@ -38,6 +38,12 @@ export function InvestmentModal({
   const [placedAt, setPlacedAt] = useState(localNow);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // One key per opening of the form, reused on every retry: a
+  // double-click or a retried timeout places the capital ONCE.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  useEffect(() => {
+    if (open) setIdempotencyKey(crypto.randomUUID());
+  }, [open]);
 
   const account = (accounts.data ?? []).find((a) => a.id === fromAccountId);
 
@@ -60,6 +66,7 @@ export function InvestmentModal({
         amount: n.toFixed(2),
         placedAt: new Date(placedAt).toISOString(),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
+        idempotencyKey,
       });
       setLabel('');
       setCounterparty('');
