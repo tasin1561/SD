@@ -31,7 +31,11 @@ import {
   BankLedgerService,
   idempotencyKeyReused,
 } from '../../treasury/services/bank-ledger.service';
-import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import {
+  AdvisoryLock,
+  lockAccountsForPosting,
+  takeAdvisoryLock,
+} from '../../../common/db/advisory-lock';
 import { inrRateAt, toInr, type InrRateAt } from '../../../common/fx/inr-rate-at';
 import { isUniqueViolation } from '../../../common/db/unique-violation';
 
@@ -816,6 +820,9 @@ export class InboundFreightService {
         // uncommitted entry, and the later write drops the other payment
         // from our cost — and, being linked, from operating expenses too.
         await takeAdvisoryLock(tx, AdvisoryLock.FREIGHT_COST, freightChargeId);
+        // The account's reconcile key (TRE-1): a reconcile of this account must
+        // not read its balance between our read and our post.
+        await lockAccountsForPosting(tx, [input.bankAccountId]);
         const entry = await this.bank.post(
           {
             accountId: input.bankAccountId,

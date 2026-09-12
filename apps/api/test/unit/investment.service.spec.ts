@@ -68,6 +68,8 @@ function makeSut(
       ),
     },
   };
+  // The account's reconcile key is an advisory lock (lockAccountsForPosting).
+  client['$executeRaw'] = jest.fn(async () => 1);
   client['$transaction'] = async (fn: (tx: unknown) => Promise<unknown>) => fn(client);
   const post = jest.fn(async (_i: AnyArgs, _tx?: unknown) => {
     if (opts.postThrows !== undefined) throw opts.postThrows;

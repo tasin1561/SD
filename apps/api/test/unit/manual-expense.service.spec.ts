@@ -20,13 +20,16 @@ function makeSut(
     if (opts.postThrows !== undefined) throw opts.postThrows;
     return { id: 'be-1' };
   });
+  const client: Record<string, unknown> = {
+    expenseCategory: { findFirst: jest.fn(async () => category) },
+    bankEntry: { findUnique: jest.fn(async () => queue.shift() ?? null) },
+    // The account's reconcile key is an advisory lock (lockAccountsForPosting).
+    $executeRaw: jest.fn(async () => 1),
+  };
+  // Attached after the literal (TS7024): the post runs inside a transaction.
+  client['$transaction'] = async (fn: (tx: unknown) => Promise<unknown>) => fn(client);
   const svc = new ManualExpenseService(
-    {
-      client: {
-        expenseCategory: { findFirst: jest.fn(async () => category) },
-        bankEntry: { findUnique: jest.fn(async () => queue.shift() ?? null) },
-      },
-    } as unknown as PrismaService,
+    { client } as unknown as PrismaService,
     { post } as unknown as BankLedgerService,
   );
   return { svc, post };

@@ -21,6 +21,7 @@ import {
 } from '../../treasury/services/bank-ledger.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { isUniqueViolation } from '../../../common/db/unique-violation';
+import { lockAccountsForPosting } from '../../../common/db/advisory-lock';
 
 /** The material fields a courier top-up's idempotency key vouches for. */
 interface RechargeShape {
@@ -107,6 +108,9 @@ export class CourierWalletRecordService {
     }
 
     const bankEntryId = await this.prisma.client.$transaction(async (tx) => {
+      // The account's reconcile key (TRE-1): a reconcile of this account must
+      // not read its balance between our read and our post.
+      await lockAccountsForPosting(tx, [input.bankAccountId]);
       // Claim it FIRST, guarded on the link still being absent. Two
       // operators recording the same recharge from two screens both read
       // "not recorded" above; only one of them may write the money.
@@ -343,20 +347,28 @@ export class CourierWalletRecordService {
 
     let entry: { id: string };
     try {
-      entry = await this.bank.post({
-        accountId: input.bankAccountId,
-        type: BankEntryType.COURIER_WALLET_RECHARGE,
-        signedAmount: amount.negated(),
-        amountCurrency: Currency.INR,
-        owner: { kind: BankOwnerKind.CAPITAL },
-        actorType: ActorType.STAFF,
-        staffId: input.staffId,
-        occurredAt: input.occurredAt,
-        reference: input.reference.trim(),
-        idempotencyKey: input.idempotencyKey ?? null,
-        note:
-          `Courier wallet recharge — ${courierAccount.label}` +
-          `${input.note == null || input.note === '' ? '' : ` — ${input.note}`}`,
+      entry = await this.prisma.client.$transaction(async (tx) => {
+        // The account's reconcile key (TRE-1): a reconcile of this account must
+        // not read its balance between our read and our post.
+        await lockAccountsForPosting(tx, [input.bankAccountId]);
+        return this.bank.post(
+          {
+            accountId: input.bankAccountId,
+            type: BankEntryType.COURIER_WALLET_RECHARGE,
+            signedAmount: amount.negated(),
+            amountCurrency: Currency.INR,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            actorType: ActorType.STAFF,
+            staffId: input.staffId,
+            occurredAt: input.occurredAt,
+            reference: input.reference.trim(),
+            idempotencyKey: input.idempotencyKey ?? null,
+            note:
+              `Courier wallet recharge — ${courierAccount.label}` +
+              `${input.note == null || input.note === '' ? '' : ` — ${input.note}`}`,
+          },
+          tx,
+        );
       });
     } catch (err) {
       // The same request racing itself: answer with the winner's entry.

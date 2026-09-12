@@ -7,6 +7,7 @@ import {
 import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { isUniqueViolation } from '../../../common/db/unique-violation';
+import { lockAccountsForPosting } from '../../../common/db/advisory-lock';
 import { BankLedgerService, idempotencyKeyReused } from './bank-ledger.service';
 
 /**
@@ -146,6 +147,9 @@ export class InvestmentService {
 
     try {
       return await this.prisma.client.$transaction(async (tx) => {
+        // The account's reconcile key (TRE-1): a reconcile of this account must
+        // not read its balance between our read and our post.
+        await lockAccountsForPosting(tx, [account.id]);
         const inv = await tx.investment.create({
           data: {
             label: input.label.trim(),
@@ -278,6 +282,9 @@ export class InvestmentService {
 
     try {
       return await this.prisma.client.$transaction(async (tx) => {
+        // The account's reconcile key (TRE-1): a reconcile of this account must
+        // not read its balance between our read and our post.
+        await lockAccountsForPosting(tx, [account.id]);
         // A partial return is normal — interest arrives before principal,
         // a loan repays in instalments. `returnedInr` accumulates and the
         // investment closes only when somebody says it has.

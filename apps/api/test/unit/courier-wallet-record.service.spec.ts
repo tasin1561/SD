@@ -29,6 +29,8 @@ function make(
 
   const tx = {
     courierWalletRecharge: { updateMany, update },
+    // The account's reconcile key is an advisory lock (lockAccountsForPosting).
+    $executeRaw: jest.fn(async () => 1),
   };
   const prisma = {
     client: {
@@ -267,6 +269,9 @@ describe('CourierWalletRecordService.recordOutgoingPayment — idempotent on the
         client: {
           courierAccount: { findFirst: jest.fn(async () => ({ id: 'ca-1', label: 'Delhivery' })) },
           bankEntry: { findUnique: jest.fn(async () => queue.shift() ?? null) },
+          // The post runs inside a transaction holding the account's reconcile key.
+          $transaction: async (fn: (t: unknown) => Promise<unknown>) =>
+            fn({ $executeRaw: jest.fn(async () => 1) }),
         },
       } as never,
       { post } as never,

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ActorType, BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { isUniqueViolation } from '../../../common/db/unique-violation';
+import { lockAccountsForPosting } from '../../../common/db/advisory-lock';
 import { BankLedgerService, idempotencyKeyReused } from './bank-ledger.service';
 
 /** The material fields an expense's idempotency key vouches for. */
@@ -169,19 +170,27 @@ export class ManualExpenseService {
     }
 
     try {
-      return await this.ledger.post({
-        accountId: input.accountId,
-        type: BankEntryType.EXPENSE,
-        signedAmount: amount,
-        amountCurrency: input.amountCurrency,
-        owner: { kind: BankOwnerKind.CAPITAL },
-        actorType: ActorType.STAFF,
-        staffId,
-        occurredAt: expected.occurredAt,
-        expenseCategoryId: category.id,
-        idempotencyKey: input.idempotencyKey ?? null,
-        ...(input.reference === undefined ? {} : { reference: input.reference }),
-        ...(input.note === undefined ? {} : { note: input.note }),
+      return await this.prisma.client.$transaction(async (tx) => {
+        // The account's reconcile key (TRE-1): a reconcile of this account must
+        // not read its balance between our read and our post.
+        await lockAccountsForPosting(tx, [input.accountId]);
+        return this.ledger.post(
+          {
+            accountId: input.accountId,
+            type: BankEntryType.EXPENSE,
+            signedAmount: amount,
+            amountCurrency: input.amountCurrency,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            actorType: ActorType.STAFF,
+            staffId,
+            occurredAt: expected.occurredAt,
+            expenseCategoryId: category.id,
+            idempotencyKey: input.idempotencyKey ?? null,
+            ...(input.reference === undefined ? {} : { reference: input.reference }),
+            ...(input.note === undefined ? {} : { note: input.note }),
+          },
+          tx,
+        );
       });
     } catch (err) {
       // The same request racing itself: the loser answers with the winner.
