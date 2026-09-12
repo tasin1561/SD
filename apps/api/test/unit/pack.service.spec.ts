@@ -335,6 +335,39 @@ describe('PackService.complete — the auto-pickup hook', () => {
     expect(r.alreadyComplete).toBe(false);
   });
 
+  it('fires from the supervisor force-complete path too — one method, every packing path', async () => {
+    // PackBoxService.close, the STRICT resume and force-complete all end
+    // in PackService.complete; the hook is at its tail, so a parcel
+    // forced through without a box still gets its van asked for.
+    const raiseIfDue = jest.fn(async () => ({
+      fired: true,
+      reason: 'REQUESTED',
+      requestId: 'pr-1',
+    }));
+    const { svc } = makeService({ raiseIfDue, closedBox: false });
+    const r = await svc.complete(
+      SHIP,
+      STAFF,
+      undefined,
+      undefined,
+      'label printer is broken, forcing',
+    );
+    expect(r.status).toBe(OrderStatus.PACKED);
+    expect(raiseIfDue).toHaveBeenCalledTimes(1);
+  });
+
+  it('a check that asked for no van never fails the pack either', async () => {
+    const raiseIfDue = jest.fn(async () => ({
+      fired: false,
+      reason: 'NOT_RAISED',
+      requestId: null,
+      detail: 'PICKUP_LOCATION_NOT_CONFIGURED',
+    }));
+    const { svc } = makeService({ raiseIfDue });
+    const r = await svc.complete(SHIP, STAFF);
+    expect(r.status).toBe(OrderStatus.PACKED);
+  });
+
   it('fires independently of whether the manifest auto-attach succeeded', async () => {
     // A van is asked for because a parcel is ready to leave the
     // building, not because of which paperwork it landed on.

@@ -96,6 +96,7 @@ function make(
     prisma as never,
     { log: audit } as never,
     { requestPickup } as never,
+    { raise: jest.fn(async () => null), resolveByKey: jest.fn(async () => 0) } as never,
   );
   return { svc, create, update, del, audit, requestPickup };
 }

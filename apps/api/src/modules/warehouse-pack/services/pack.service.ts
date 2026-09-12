@@ -305,14 +305,26 @@ export class PackService {
     // A manual courier has no account to ask, so it is skipped entirely
     // rather than reaching `raiseIfDue`, which would just report
     // NO_ADAPTER for the same reason.
+    //
+    // Every box packed in production since the switch went on was a
+    // MANUAL parcel (2026-09-12), so this has never once reached the
+    // courier — and `raiseIfDue` now raises a system issue for every
+    // outcome that leaves a box without a van. The line below is for
+    // whoever is reading the log beside it.
     if (!shipment.isManualCourier) {
       try {
-        await this.pickups.raiseIfDue({
+        const outcome = await this.pickups.raiseIfDue({
           warehouseId: shipment.originWarehouseId,
           courierCode: shipment.courierCode,
           courierAccountId: shipment.courierAccountId,
           triggeredByShipmentId: shipmentId,
         });
+        if (!outcome.fired && outcome.reason !== 'ALREADY_REQUESTED_TODAY') {
+          this.logger.log(
+            { shipmentId, orderId, reason: outcome.reason, detail: outcome.detail ?? null },
+            'Pack-complete auto-pickup: no van requested',
+          );
+        }
       } catch (err) {
         this.logger.warn(
           { shipmentId, orderId, err: (err as Error).message },
