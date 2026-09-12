@@ -1,5 +1,10 @@
+import { NotFoundException } from '@nestjs/common';
 import { NotificationChannel, NotificationRecipientType, NotificationStatus } from '@skydrop/db';
-import { EmailDispatchService } from '../../src/modules/email/services/email-dispatch.service';
+import {
+  EMAIL_RENDER_FAILED,
+  EMAIL_TEMPLATE_NOT_FOUND,
+  EmailDispatchService,
+} from '../../src/modules/email/services/email-dispatch.service';
 import type { TemplateRenderService } from '../../src/modules/email/services/template-render.service';
 import type {
   ResendService,
@@ -251,6 +256,88 @@ describe('EmailDispatchService', () => {
       // Legacy fire-once path unchanged: CREATE one row, no UPDATE.
       expect(captured).toHaveLength(1);
       expect(capturedUpdates).toHaveLength(0);
+    });
+  });
+
+  /**
+   * A render that throws used to leave the pre-created row untouched —
+   * QUEUED, no error, forever. That is how the 7 Sep CRITICAL alerts sat
+   * on production for five days with nothing saying why.
+   */
+  describe('a render failure is recorded on the row, not lost', () => {
+    function withRenderFailure(err: Error) {
+      const sut = makeSut({ resendResponse: { ok: true, providerMessageId: 'never' } });
+      const updateMany = jest.fn(async () => ({ count: 1 }));
+      (sut.prisma.client.notificationLog as unknown as { updateMany: jest.Mock }).updateMany =
+        updateMany;
+      sut.renderMock.mockRejectedValueOnce(err);
+      return { ...sut, updateMany };
+    }
+
+    it('writes TEMPLATE_NOT_FOUND onto the QUEUED row, keeps it QUEUED, and rethrows', async () => {
+      const { svc, updateMany, resendSendMock } = withRenderFailure(
+        new NotFoundException({ message: 'Email template not found: system_issue.money/en' }),
+      );
+
+      await expect(
+        svc.send({
+          templateCode: 'system_issue.money',
+          recipient: { type: NotificationRecipientType.STAFF, id: 's-1', email: 'ops@x.io' },
+          existingNotificationLogId: 'pre-1',
+        }),
+      ).rejects.toThrow('Email template not found');
+
+      expect(resendSendMock).not.toHaveBeenCalled();
+      expect(updateMany).toHaveBeenCalledTimes(1);
+      const args = (
+        updateMany.mock.calls[0] as unknown as [
+          { where: Record<string, unknown>; data: Record<string, unknown> },
+        ]
+      )[0];
+      // Guarded on QUEUED: never touches a row an earlier attempt sent.
+      expect(args.where).toEqual({ id: 'pre-1', status: NotificationStatus.QUEUED });
+      expect(args.data['failureCode']).toBe(EMAIL_TEMPLATE_NOT_FOUND);
+      expect(args.data['failureMessage']).toContain('system_issue.money');
+      expect(args.data['failedAt']).toBeInstanceOf(Date);
+      // BullMQ still owns the retries; the watchdog decides "never".
+      expect(args.data).not.toHaveProperty('status');
+    });
+
+    it('any other render error is RENDER_FAILED', async () => {
+      const { svc, updateMany } = withRenderFailure(new Error('unexpected token'));
+      await expect(
+        svc.send({
+          templateCode: 'seller.order_dispatched.email',
+          recipient: { type: NotificationRecipientType.SELLER, email: 's@x.io' },
+          existingNotificationLogId: 'pre-2',
+        }),
+      ).rejects.toThrow('unexpected token');
+      const args = (updateMany.mock.calls[0] as unknown as [{ data: Record<string, unknown> }])[0];
+      expect(args.data['failureCode']).toBe(EMAIL_RENDER_FAILED);
+    });
+
+    it('the legacy create path still writes nothing and rethrows', async () => {
+      const { svc, updateMany, captured } = withRenderFailure(new Error('boom'));
+      await expect(
+        svc.send({
+          templateCode: 'staff.password_reset.email',
+          recipient: { type: NotificationRecipientType.STAFF, email: 'a@x.io' },
+        }),
+      ).rejects.toThrow('boom');
+      expect(updateMany).not.toHaveBeenCalled();
+      expect(captured).toHaveLength(0);
+    });
+
+    it('a failure to record the reason does not mask the render error', async () => {
+      const { svc, updateMany } = withRenderFailure(new Error('template broke'));
+      updateMany.mockRejectedValueOnce(new Error('db down'));
+      await expect(
+        svc.send({
+          templateCode: 'x.email',
+          recipient: { type: NotificationRecipientType.STAFF, email: 'a@x.io' },
+          existingNotificationLogId: 'pre-3',
+        }),
+      ).rejects.toThrow('template broke');
     });
   });
 

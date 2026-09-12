@@ -1,10 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NotificationChannel, NotificationStatus, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { TemplateRenderService } from './template-render.service';
 import { ResendService } from './resend.service';
 import { resolveSender } from '../sender-resolver';
 import type { EmailDispatchInput, EmailSendResult } from '../email.types';
+
+/** Recorded on a still-QUEUED row whose template could not be found. */
+export const EMAIL_TEMPLATE_NOT_FOUND = 'TEMPLATE_NOT_FOUND';
+/** Recorded on a still-QUEUED row whose template threw while rendering. */
+export const EMAIL_RENDER_FAILED = 'RENDER_FAILED';
 
 /**
  * End-to-end pipeline: lookup template → render → resolve sender → send →
@@ -42,11 +47,17 @@ export class EmailDispatchService {
   ) {}
 
   async send(input: EmailDispatchInput): Promise<EmailSendResult> {
-    const rendered = await this.render.render(
-      input.templateCode,
-      input.variables ?? {},
-      input.language ?? 'en',
-    );
+    let rendered: Awaited<ReturnType<TemplateRenderService['render']>>;
+    try {
+      rendered = await this.render.render(
+        input.templateCode,
+        input.variables ?? {},
+        input.language ?? 'en',
+      );
+    } catch (err) {
+      await this.recordRenderFailure(input, err);
+      throw err;
+    }
 
     const sender = input.fromOverride
       ? { from: input.fromOverride, replyTo: 'Skydrop Support <support@skydrop.online>' }
@@ -91,6 +102,48 @@ export class EmailDispatchService {
       failureCode: sendResult.ok ? null : sendResult.code,
       failureMessage: sendResult.ok ? null : sendResult.message,
     };
+  }
+
+  /**
+   * A render that throws (no template for the code, a broken template)
+   * used to leave the pre-created row exactly as the ledger wrote it:
+   * QUEUED, no error, forever. BullMQ retried five times, gave up, and
+   * the only trace was a MEDIUM "EmailWorker gave up on a job" that
+   * notified nobody — which is how three CRITICAL system-issue emails
+   * sat QUEUED on production from 7 Sep with nothing saying why.
+   *
+   * The reason is now written ONTO the row. The status stays QUEUED on
+   * purpose: BullMQ still owns the retries (a render can fail on a
+   * database blip and succeed thirty seconds later), and the
+   * `EmailDeliveryWatchdogService` is the one place that decides a row
+   * is never going out — it carries this reason into what it reports.
+   * Guarded on QUEUED so a row an earlier attempt already sent is left
+   * alone. Best-effort: the render error is the one worth throwing.
+   *
+   * The legacy create path has no row yet and still writes none.
+   */
+  private async recordRenderFailure(input: EmailDispatchInput, err: unknown): Promise<void> {
+    if (!input.existingNotificationLogId) return;
+    const failureCode =
+      err instanceof NotFoundException ? EMAIL_TEMPLATE_NOT_FOUND : EMAIL_RENDER_FAILED;
+    try {
+      await this.prisma.client.notificationLog.updateMany({
+        where: { id: input.existingNotificationLogId, status: NotificationStatus.QUEUED },
+        data: {
+          failureCode,
+          failureMessage: err instanceof Error ? err.message : String(err),
+          failedAt: new Date(),
+        },
+      });
+    } catch (writeErr) {
+      this.logger.warn(
+        {
+          existingNotificationLogId: input.existingNotificationLogId,
+          err: writeErr instanceof Error ? writeErr.message : String(writeErr),
+        },
+        'Could not record the render failure on the notification row',
+      );
+    }
   }
 
   /**
