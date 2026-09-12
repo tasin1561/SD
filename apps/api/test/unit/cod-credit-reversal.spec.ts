@@ -104,6 +104,49 @@ describe('CodCreditService.reverseForOrder', () => {
     expect(out.sub(back).toFixed(2)).toBe('826.27');
   });
 
+  it('an Instant Pay COD carrying BOTH fees returns the tax and each fee, once each', async () => {
+    // The COD fee and the Instant Pay fee are independent entries
+    // (2026-09-12): ₹1,180, tax ₹180, COD fee ₹10, Instant Pay ₹25. Each is
+    // returned against the entry it returns, so the P&L takes each off the
+    // line that counted it — and a second run returns neither again.
+    const rows: Row[] = [
+      { id: 'cod-1', amount: D('1180.00'), direction: 'COD_COLLECTION' },
+      { id: 'gst-1', amount: D('180.00'), direction: 'GST_WITHHOLDING' },
+      { id: 'cfee-1', amount: D('10.00'), direction: 'COD_COLLECTION_FEE' },
+      { id: 'ifee-1', amount: D('25.00'), direction: 'INSTANT_PAY_FEE' },
+    ];
+    const { svc, tx, entries } = makeSut({ rows });
+    const r = await svc.reverseForOrder(tx, input);
+    expect(r).toEqual({ reversed: true, grossInr: '1180.00', returnedInr: '215.00' });
+    expect(entries).toEqual([
+      { direction: 'COD_REVERSAL', amount: D('1180.00'), linkedEntryId: 'cod-1' },
+      { direction: 'COD_DEDUCTION_REFUND', amount: D('180.00'), linkedEntryId: 'gst-1' },
+      { direction: 'COD_DEDUCTION_REFUND', amount: D('10.00'), linkedEntryId: 'cfee-1' },
+      { direction: 'COD_DEDUCTION_REFUND', amount: D('25.00'), linkedEntryId: 'ifee-1' },
+    ]);
+    // Credited 1180, deducted 215: they held 965 — exactly what goes.
+    const back = entries
+      .filter((e) => e.direction === 'COD_DEDUCTION_REFUND')
+      .reduce((t, e) => t.add(e.amount), D('0'));
+    expect(D('1180.00').sub(back).toFixed(2)).toBe('965.00');
+
+    // Re-run with what was written: nothing more is reversed or returned.
+    const again = makeSut({
+      rows: [
+        ...rows,
+        ...entries.map((e, i) => ({
+          id: `w-${i}`,
+          amount: e.amount,
+          direction: e.direction,
+          ...(e.linkedEntryId === undefined ? {} : { linkedEntryId: e.linkedEntryId }),
+        })),
+      ],
+    });
+    const r2 = await again.svc.reverseForOrder(again.tx, input);
+    expect(r2).toMatchObject({ reversed: false, reason: 'ALREADY_REVERSED' });
+    expect(again.entries).toHaveLength(0);
+  });
+
   it('is idempotent — a COD with as many reversals as credits is not reversed again', async () => {
     const { svc, tx, entries } = makeSut({
       rows: [

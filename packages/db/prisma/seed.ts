@@ -1219,7 +1219,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '0.00',
     displayName: 'COD Collection Fee (%)',
     description:
-      "What collecting COD costs the seller at all, charged on the POST-GST amount and on BOTH credit modes. Instant Pay's fee stacks on top: this is the base service, that is the premium for early access. Seeded at 0 — it changes nothing until someone decides it should. Per-seller override; the rate is negotiable, unlike the tax.",
+      'The COD fee: what handling cash-on-delivery costs the seller, charged on the POST-GST amount on EVERY COD credit, SETTLEMENT or INSTANT_PAY, as its own ledger line. Independent of wallet.instant_pay_fee_percent — an Instant Pay order pays both. 0 turns it off; seeded at 0. Per-seller override; the rate is negotiable, unlike the tax.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100',
@@ -1231,7 +1231,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '2.50',
     displayName: 'Instant Pay Fee (%)',
     description:
-      'Charged on the POST-GST amount when a seller is on INSTANT_PAY. ALL-IN: it already contains wallet.cod_collection_fee_percent rather than sitting on top of it, so an Instant Pay order carries this one fee and not both. On ₹1,000 COD: GST leaves ₹847.46, and 2.5% of that is ₹21.19 — what the seller pays to be credited now rather than waiting for the courier. Per-seller override; the rate is negotiable, unlike the tax.',
+      'The Instant Pay fee: charged on the POST-GST amount only when an order is credited under INSTANT_PAY, as its own ledger line — IN ADDITION to wallet.cod_collection_fee_percent, not instead of it. On ₹1,180 COD: GST leaves ₹1,000; a 1% COD fee is ₹10 and 2.5% Instant Pay is ₹25, so the seller is credited ₹965 (₹990 on SETTLEMENT). 0 turns it off. Per-seller override; the rate is negotiable, unlike the tax.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100',

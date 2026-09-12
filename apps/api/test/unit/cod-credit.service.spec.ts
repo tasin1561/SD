@@ -19,9 +19,9 @@ import type { WalletService } from '../../src/modules/seller-wallet/services/wal
  * include GST; the tax is already inside what the customer handed over.
  *
  * The second is netting the deductions into one credit. The seller
- * would see a number they cannot tie to their own order, and the
- * withheld tax — which we owe the government, not ourselves — would
- * vanish into the same pot as revenue.
+ * would see a number they cannot tie to their own order, and the tax
+ * (our revenue since 2026-09-07, WAL-4) and the two fees could no longer
+ * be told apart from each other or from any other charge.
  */
 
 const SELLER = '019fad84-7acd-754e-8ee4-43cf858fed82';
@@ -145,10 +145,9 @@ describe('CodCreditService — SETTLEMENT mode', () => {
     expect(r.gstWithheldInr).toBe('152.54');
     expect(r.netCreditedInr).toBe('847.46');
     expect(amountOf(entries, 'COD_COLLECTION')).toBe('1000.00');
-    // Its OWN direction, not ORDER_CHARGES. WE file this, so it is a
-    // liability we hold rather than revenue — and a note saying so
-    // cannot be grouped by, which is how summing what sellers paid us
-    // came to include the tax (WAL-4).
+    // Its OWN direction, not ORDER_CHARGES: "what did we deduct as tax"
+    // and "what did sellers pay us in charges" are different questions,
+    // and a note cannot be grouped by (WAL-4).
     expect(amountOf(entries, 'GST_WITHHOLDING')).toBe('152.54');
     expect(amountOf(entries, 'ORDER_CHARGES')).toBe('absent');
     // No instant fee: waiting for the courier to settle is what you do
@@ -158,7 +157,7 @@ describe('CodCreditService — SETTLEMENT mode', () => {
     expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('absent');
   });
 
-  it('records the withholding as a liability of its own, with the rate snapshotted', async () => {
+  it('records the deduction on its own row, with the rate snapshotted', async () => {
     const { svc, tx, withholdings } = makeSut({});
     await svc.creditForOrder(tx, {
       orderId: ORDER,
@@ -166,9 +165,8 @@ describe('CodCreditService — SETTLEMENT mode', () => {
       grossInr: new Prisma.Decimal('1000'),
       mode: 'SETTLEMENT',
     });
-    // We file this, so between collecting and filing it is money owed to
-    // the department. Netted silently into the credit it would read as
-    // revenue and be spent before the return was due.
+    // "What was deducted from THIS order" is what a seller asks when
+    // they query a credit.
     expect(withholdings).toHaveLength(1);
     expect(withholdings[0]).toMatchObject({ orderId: ORDER, sellerId: SELLER });
     // Snapshotted: a later rate change must not restate last quarter.
@@ -295,43 +293,7 @@ describe('CodCreditService — INSTANT_PAY mode', () => {
     expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('8.47');
   });
 
-  it('the Instant Pay rate is ALL-IN — the base fee is not charged on top', async () => {
-    // 2.5% already contains the 1% base. Charging both would mean a
-    // seller quoted 2.5% pays 3.5%, and no arithmetic in their ledger
-    // would match the number they agreed to.
-    const { svc, tx, entries } = makeSut({
-      collectionFeePercent: '1.00',
-      instantFeePercent: '2.50',
-    });
-    const r = await svc.creditForOrder(tx, {
-      orderId: ORDER,
-      sellerId: SELLER,
-      grossInr: new Prisma.Decimal('1000'),
-      mode: 'INSTANT_PAY',
-    });
-    expect(r.instantFeeInr).toBe('21.19'); // 2.5% of the post-GST 847.46
-    expect(r.collectionFeeInr).toBe('0.00');
-    expect(r.netCreditedInr).toBe('826.27'); // 847.46 − 21.19, not −29.66
-    // ONE fee line, reading exactly what the seller was quoted.
-    expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('absent');
-    expect(amountOf(entries, 'INSTANT_PAY_FEE')).toBe('21.19');
-  });
-
-  it('a base rate above the instant rate cannot make the premium cheaper', async () => {
-    // Guards a misconfiguration, not a normal case: if someone sets the
-    // base above the instant rate, Instant Pay would otherwise cost LESS
-    // than waiting, which is certainly not what anybody meant.
-    const { svc, tx } = makeSut({ collectionFeePercent: '3.00', instantFeePercent: '2.50' });
-    const r = await svc.creditForOrder(tx, {
-      orderId: ORDER,
-      sellerId: SELLER,
-      grossInr: new Prisma.Decimal('1000'),
-      mode: 'INSTANT_PAY',
-    });
-    expect(r.instantFeeInr).toBe('25.42'); // 3%, not 2.5%
-  });
-
-  it('a zero GST rate withholds nothing and writes no liability', async () => {
+  it('a zero GST rate deducts nothing and writes no withholding row', async () => {
     // Not the configuration today, but the rate is a setting and this is
     // what turning it off has to mean.
     const { svc, tx, entries, withholdings } = makeSut({ gstPercent: '0' });
@@ -344,5 +306,178 @@ describe('CodCreditService — INSTANT_PAY mode', () => {
     expect(r.gstWithheldInr).toBe('0.00');
     expect(withholdings).toHaveLength(0);
     expect(entries).toHaveLength(1);
+  });
+});
+
+/**
+ * The owner's decision (2026-09-12): the COD fee and the Instant Pay fee
+ * are INDEPENDENT charges. The COD fee applies to every COD credit; the
+ * Instant Pay fee only to an Instant Pay credit, ON TOP of the COD fee.
+ * Both on the post-GST amount, each its own entry, a 0% rate writing none.
+ *
+ * ₹1,180 at 18%: tax ₹180, post-GST ₹1,000 — so 1% is ₹10 and 2.5% ₹25.
+ */
+describe('CodCreditService — the COD fee and the Instant Pay fee are independent', () => {
+  const cases: Array<{
+    name: string;
+    collection: string;
+    instant: string;
+    mode: 'SETTLEMENT' | 'INSTANT_PAY';
+    codFee: string;
+    instantFee: string;
+    net: string;
+  }> = [
+    {
+      name: 'both off',
+      collection: '0',
+      instant: '0',
+      mode: 'SETTLEMENT',
+      codFee: 'absent',
+      instantFee: 'absent',
+      net: '1000.00',
+    },
+    {
+      name: 'both off',
+      collection: '0',
+      instant: '0',
+      mode: 'INSTANT_PAY',
+      codFee: 'absent',
+      instantFee: 'absent',
+      net: '1000.00',
+    },
+    {
+      name: 'COD fee only',
+      collection: '1.00',
+      instant: '0',
+      mode: 'SETTLEMENT',
+      codFee: '10.00',
+      instantFee: 'absent',
+      net: '990.00',
+    },
+    {
+      name: 'COD fee only',
+      collection: '1.00',
+      instant: '0',
+      mode: 'INSTANT_PAY',
+      codFee: '10.00',
+      instantFee: 'absent',
+      net: '990.00',
+    },
+    // A settled COD never pays the Instant Pay fee, whatever its rate.
+    {
+      name: 'Instant Pay only',
+      collection: '0',
+      instant: '2.50',
+      mode: 'SETTLEMENT',
+      codFee: 'absent',
+      instantFee: 'absent',
+      net: '1000.00',
+    },
+    {
+      name: 'Instant Pay only',
+      collection: '0',
+      instant: '2.50',
+      mode: 'INSTANT_PAY',
+      codFee: 'absent',
+      instantFee: '25.00',
+      net: '975.00',
+    },
+    {
+      name: 'both on',
+      collection: '1.00',
+      instant: '2.50',
+      mode: 'SETTLEMENT',
+      codFee: '10.00',
+      instantFee: 'absent',
+      net: '990.00',
+    },
+    // The worked example: BOTH fees, ₹965 credited — not ₹975 (all-in).
+    {
+      name: 'both on',
+      collection: '1.00',
+      instant: '2.50',
+      mode: 'INSTANT_PAY',
+      codFee: '10.00',
+      instantFee: '25.00',
+      net: '965.00',
+    },
+  ];
+
+  it.each(cases)(
+    '$name, $mode: COD fee $codFee, Instant Pay fee $instantFee, credited $net',
+    async ({ collection, instant, mode, codFee, instantFee, net }) => {
+      const { svc, tx, entries } = makeSut({
+        collectionFeePercent: collection,
+        instantFeePercent: instant,
+      });
+      const r = await svc.creditForOrder(tx, {
+        orderId: ORDER,
+        sellerId: SELLER,
+        grossInr: new Prisma.Decimal('1180'),
+        mode,
+      });
+      expect(r.gstWithheldInr).toBe('180.00');
+      expect(amountOf(entries, 'COD_COLLECTION')).toBe('1180.00');
+      expect(amountOf(entries, 'GST_WITHHOLDING')).toBe('180.00');
+      expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe(codFee);
+      expect(amountOf(entries, 'INSTANT_PAY_FEE')).toBe(instantFee);
+      expect(r.collectionFeeInr).toBe(codFee === 'absent' ? '0.00' : codFee);
+      expect(r.instantFeeInr).toBe(instantFee === 'absent' ? '0.00' : instantFee);
+      expect(r.netCreditedInr).toBe(net);
+      // What the wallet actually moved by agrees with what was reported.
+      const moved = entries.reduce(
+        (t, e) => (e.direction === 'COD_COLLECTION' ? t.add(e.amount) : t.sub(e.amount)),
+        new Prisma.Decimal(0),
+      );
+      expect(moved.toFixed(2)).toBe(net);
+    },
+  );
+
+  it('each fee is rounded to the paisa on its own, from the post-GST amount', async () => {
+    // ₹1,000 at 18% leaves ₹847.46: 1% = 8.4746 → 8.47, 2.5% = 21.1865 →
+    // 21.19. Neither is taken as a share of the other or of the gross.
+    const { svc, tx, entries } = makeSut({
+      collectionFeePercent: '1.00',
+      instantFeePercent: '2.50',
+    });
+    const r = await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1000'),
+      mode: 'INSTANT_PAY',
+    });
+    expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('8.47');
+    expect(amountOf(entries, 'INSTANT_PAY_FEE')).toBe('21.19');
+    expect(r.netCreditedInr).toBe('817.80');
+  });
+
+  it('a COD fee above the Instant Pay rate is charged as set — no rate replaces the other', async () => {
+    // The old all-in rule charged max(instant, COD) on an Instant Pay
+    // order. They are separate charges now, so each is exactly its own.
+    const { svc, tx, entries } = makeSut({
+      collectionFeePercent: '3.00',
+      instantFeePercent: '2.50',
+    });
+    await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1180'),
+      mode: 'INSTANT_PAY',
+    });
+    expect(amountOf(entries, 'COD_COLLECTION_FEE')).toBe('30.00');
+    expect(amountOf(entries, 'INSTANT_PAY_FEE')).toBe('25.00');
+  });
+
+  it('a settled COD does not even look up the Instant Pay rate', async () => {
+    const { svc, tx } = makeSut({ collectionFeePercent: '1.00', instantFeePercent: '2.50' });
+    await svc.creditForOrder(tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      grossInr: new Prisma.Decimal('1180'),
+      mode: 'SETTLEMENT',
+    });
+    const settings = (svc as unknown as { settings: { resolve: jest.Mock } }).settings;
+    const keys = settings.resolve.mock.calls.map((c: unknown[]) => c[1]);
+    expect(keys).not.toContain('wallet.instant_pay_fee_percent');
   });
 });

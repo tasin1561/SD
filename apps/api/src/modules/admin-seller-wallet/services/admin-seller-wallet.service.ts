@@ -60,14 +60,18 @@ const WALLET_SETTINGS = [
   [
     'wallet.instant_pay_fee_percent',
     'Instant-pay fee %',
-    'Charged on the post-GST amount when fronting COD.',
+    'On the post-GST amount, only on Instant Pay credits — on top of the COD fee.',
   ],
   [
     'wallet.cod_gst_percent',
     'GST withheld on COD %',
     'Extracted from a tax-inclusive price, never added on top.',
   ],
-  ['wallet.cod_collection_fee_percent', 'COD collection fee %', ''],
+  [
+    'wallet.cod_collection_fee_percent',
+    'COD collection fee %',
+    'On the post-GST amount of every COD credit, either mode. 0 = off.',
+  ],
   ['wallet.courier_fee_deduction_timing', 'Courier fee charged', 'AT_AWB or AT_DELIVERY.'],
   [
     'wallet.inbound_freight_mode',

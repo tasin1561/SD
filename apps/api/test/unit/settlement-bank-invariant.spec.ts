@@ -53,7 +53,11 @@ interface Topup {
   credited: Prisma.Decimal;
 }
 
-function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>) {
+function makeWorld(
+  orders: Array<{ id: string; sellerId: string; cod: string }>,
+  /** The two independent COD fees, as percents. Both off by default. */
+  fees: { collection?: string; instant?: string } = {},
+) {
   const wallet: WalletRow[] = [];
   const bank: BankRow[] = [];
   // Accepted top-ups: what arrived in the account, what the wallet was credited.
@@ -266,7 +270,13 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
   };
   const settings = {
     resolve: jest.fn(async (_s: string, key: string) => ({
-      value: key.includes('gst') ? '18.00' : key.includes('fee') ? '0.00' : 'SETTLEMENT',
+      value: key.includes('gst')
+        ? '18.00'
+        : key.includes('instant_pay_fee')
+          ? (fees.instant ?? '0.00')
+          : key.includes('cod_collection_fee')
+            ? (fees.collection ?? '0.00')
+            : 'SETTLEMENT',
     })),
   };
   const codCredit = new CodCreditService(settings as never, walletService as never);
@@ -385,7 +395,53 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
           }),
     });
   };
-  return { pay, owe, topUp, refund, held, units, owed, accountTotal, capital };
+  /**
+   * Delivered under Instant Pay, as `AccrualExecutionService` does it: the
+   * COD is fronted from capital (less any part that repays a debt), THEN
+   * credited, so its tax and both fees find cash to make ours.
+   */
+  const deliverInstantPay = async (orderId: string): Promise<void> => {
+    const o = orders.find((x) => x.id === orderId);
+    if (o === undefined) throw new Error(`no order ${orderId}`);
+    const gross = D(o.cod);
+    if (!(await codCredit.isCredited(tx as never, orderId))) {
+      const split = await attribution.debtSplit(tx as never, o.sellerId, gross);
+      await attribution.front(tx as never, {
+        sellerId: o.sellerId,
+        amount: split.toSeller,
+        accountId: 'hdfc',
+        reference: orderId,
+      });
+    }
+    await codCredit.creditForOrder(tx as never, {
+      orderId,
+      sellerId: o.sellerId,
+      grossInr: gross,
+      mode: 'INSTANT_PAY',
+    });
+  };
+  /** The raw wallet balance — owed() clamps at zero and would hide a debt. */
+  const balance = (sellerId: string): string =>
+    (wallet.filter((r) => r.sellerId === sellerId).at(-1)?.runningBalanceAfter ?? ZERO).toFixed(2);
+  /** Every wallet entry on an order, as `direction amount`. */
+  const entriesOf = (orderId: string): string[] =>
+    wallet
+      .filter((r) => r.linkedOrderId === orderId)
+      .map((r) => `${r.direction} ${r.amount.toFixed(2)}`);
+  return {
+    pay,
+    owe,
+    topUp,
+    refund,
+    held,
+    units,
+    owed,
+    accountTotal,
+    capital,
+    deliverInstantPay,
+    balance,
+    entriesOf,
+  };
 }
 
 type World = ReturnType<typeof makeWorld>;
@@ -591,6 +647,87 @@ describe('the bank book holds each seller exactly what their wallet owes them', 
       expect(w.owed('s')).toBe('0.00');
       expect(w.held('s')).toBe('0.00');
     });
+  });
+});
+
+/**
+ * The COD fee and the Instant Pay fee are INDEPENDENT (2026-09-12): the COD
+ * fee on every COD credit, the Instant Pay fee on top of it for an Instant
+ * Pay credit. Each is a charge, so each makes the seller's cash ours — and
+ * the book must still hold exactly what the wallet owes after every step.
+ * ₹1,180 at 18%: tax ₹180; 1% COD fee ₹10; 2.5% Instant Pay ₹25.
+ */
+describe('both COD fees keep the book equal to the wallet', () => {
+  const FEES = { collection: '1.00', instant: '2.50' };
+
+  it('a settled COD pays the COD fee only, and it is ours', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1180' }], FEES);
+    await w.pay('1180', [['a', '1180']]);
+    expect(w.owed('s')).toBe('990.00');
+    expect(w.held('s')).toBe('990.00');
+    expect(w.accountTotal()).toBe('1180.00');
+    expect(w.capital()).toBe('190.00'); // tax 180 + COD fee 10
+    expect(w.entriesOf('a')).toEqual([
+      'COD_COLLECTION 1180.00',
+      'GST_WITHHOLDING 180.00',
+      'COD_COLLECTION_FEE 10.00',
+    ]);
+  });
+
+  it('an Instant Pay COD is fronted, pays BOTH fees, and the payout repays the front', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1180' }], FEES);
+    await w.deliverInstantPay('a');
+    expect(w.owed('s')).toBe('965.00');
+    expect(w.held('s')).toBe('965.00');
+    // Fronting is a zero-sum pair: nothing has arrived yet.
+    expect(w.accountTotal()).toBe('0.00');
+    expect(w.entriesOf('a')).toEqual([
+      'COD_COLLECTION 1180.00',
+      'GST_WITHHOLDING 180.00',
+      'COD_COLLECTION_FEE 10.00',
+      'INSTANT_PAY_FEE 25.00',
+    ]);
+    // The courier pays: the order is already credited, so the cash is
+    // capital's, repaying what we fronted. The seller is untouched.
+    await w.pay('1180', [['a', '1180']]);
+    expect(w.owed('s')).toBe('965.00');
+    expect(w.held('s')).toBe('965.00');
+    expect(w.accountTotal()).toBe('1180.00');
+    expect(w.capital()).toBe('215.00'); // tax 180 + COD fee 10 + Instant Pay 25
+  });
+
+  it('an Instant Pay COD with a debt behind it: the debt is repaid first, fees still ours', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1180' }], FEES);
+    await w.owe('s', '300');
+    await w.deliverInstantPay('a');
+    expect(w.owed('s')).toBe('665.00'); // 965 − 300
+    expect(w.held('s')).toBe('665.00');
+  });
+
+  it('reversing an Instant Pay COD returns the tax and BOTH fees, once each', async () => {
+    const w = makeWorld(
+      [
+        { id: 'a', sellerId: 's', cod: '1180' },
+        { id: 'b', sellerId: 't', cod: '2000' },
+      ],
+      FEES,
+    );
+    await w.deliverInstantPay('a');
+    await w.pay('1180', [['a', '1180']]);
+    // Payout 2 pays b (settled: tax 305.08, COD fee 16.95) and claws back a.
+    await w.pay('820', [['b', '2000']], [['a', '1180']]);
+    // 965 − 1180 + 180 + 10 + 25 = 0 — not −25 or −10, which a fee left
+    // unreturned would leave (owed() would clamp that to 0 and hide it).
+    expect(w.balance('s')).toBe('0.00');
+    expect(w.held('s')).toBe('0.00');
+    expect(w.entriesOf('a').filter((e) => e.startsWith('COD_DEDUCTION_REFUND'))).toEqual([
+      'COD_DEDUCTION_REFUND 180.00',
+      'COD_DEDUCTION_REFUND 10.00',
+      'COD_DEDUCTION_REFUND 25.00',
+    ]);
+    expect(w.owed('t')).toBe('1677.97'); // 2000 − 305.08 − 16.95
+    expect(w.held('t')).toBe('1677.97');
+    expect(w.accountTotal()).toBe('2000.00');
   });
 });
 

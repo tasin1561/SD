@@ -16,37 +16,42 @@ import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock
  *                 percentage fee. We front the money until the courier
  *                 pays, and the fee is what that costs.
  *
- * Both withhold GST first, and both then carry ONE fee off the post-GST
- * amount:
+ * Both withhold GST first. Then TWO independent fees come off the
+ * post-GST amount (the owner's decision, 2026-09-12), each its own
+ * ledger line, each switched off by a rate of 0:
  *
- *   SETTLEMENT  — `wallet.cod_collection_fee_percent`, what handling
- *                 cash-on-delivery costs at all. Seeded at 0.
- *   INSTANT_PAY — `wallet.instant_pay_fee_percent`, which is ALL-IN: it
- *                 already contains that base charge rather than sitting
- *                 on top of it.
+ *   COD fee      — `wallet.cod_collection_fee_percent`, what handling
+ *                  cash-on-delivery costs at all. EVERY COD credit, on
+ *                  either mode. A `COD_COLLECTION_FEE` entry.
+ *   Instant Pay  — `wallet.instant_pay_fee_percent`, the price of being
+ *                  paid before the courier settles. Only an order credited
+ *                  under INSTANT_PAY, and IN ADDITION to the COD fee — it
+ *                  is not all-in. An `INSTANT_PAY_FEE` entry.
  *
- * One line in the ledger either way, reading exactly the percentage the
- * seller was quoted. Splitting the instant rate into "base + premium"
- * would total the same and match nothing anyone was told.
- * Both land here so the arithmetic exists once:
- * two call sites doing their own tax maths is how a quarter's filing
- * stops reconciling.
+ * ₹1,180 COD at 18%: tax ₹180, post-GST ₹1,000; COD fee 1% = ₹10,
+ * Instant Pay 2.5% = ₹25. Credited ₹990 on SETTLEMENT, ₹965 on
+ * INSTANT_PAY. Two lines rather than one blended rate, so each reads
+ * exactly the percentage the seller was quoted for it.
+ * Both land here so the arithmetic exists once: two call sites doing
+ * their own tax maths is how the figures stop agreeing.
  *
  * ── GST is EXTRACTED, not added ───────────────────────────────────────
  * An Indian retail price is tax-inclusive — the customer paying ₹1,000
- * has already paid the tax inside it. So the withholding is
+ * has already paid the tax inside it. So the deduction is
  *
  *     cod × rate / (100 + rate)      →  ₹152.54 at 18%
  *
- * NOT `cod × rate`, which would take ₹180 and over-withhold by ₹27.46 on
- * every ₹1,000 — roughly 2.75% of GMV, and a number that would never
- * reconcile against a return.
+ * NOT `cod × rate`, which would take ₹180 and over-deduct by ₹27.46 on
+ * every ₹1,000 — roughly 2.75% of GMV.
  *
- * ── The withheld money is a LIABILITY ─────────────────────────────────
- * We file it, so between collecting and filing it is money owed to the
- * department, not margin. It gets its own `gst_withholdings` row for
- * exactly that reason: netted silently into a credit it would sit in the
- * same pot as revenue and be spent before the return is due.
+ * ── The deducted tax is OUR REVENUE, not a liability ──────────────────
+ * WAL-4 (amended 2026-09-07, confirmed by the founder 2026-09-11): we
+ * file no return against it — the courier bills and remits GST on the
+ * carriage — so the P&L reports it on its own "COD tax deduction" line.
+ * It still gets its own `GST_WITHHOLDING` direction and `gst_withholdings`
+ * row: netted silently into the credit, the seller could not tie their
+ * credit to their order, and "what did we deduct as tax" could not be
+ * told apart from any other charge.
  */
 
 const MODE_KEY = 'wallet.cod_credit_mode';
@@ -165,40 +170,26 @@ export class CodCreditService {
       .toDecimalPlaces(2);
     const postGst = grossInr.minus(gst);
 
-    // The base charge for handling COD. Seeded at 0, so today this is a
-    // no-op — which is exactly when to get the shape right rather than
-    // while money is moving through it.
+    // The COD fee: what handling cash-on-delivery costs at all, on EVERY
+    // COD credit whichever mode credited it. Seeded at 0 — off until
+    // somebody decides otherwise.
     const collectionPercent = await this.sellerDecimal(
       sellerId,
       COLLECTION_FEE_KEY,
       DEFAULT_COLLECTION_FEE_PERCENT,
     );
+    const collectionFee = postGst.times(collectionPercent).dividedBy(100).toDecimalPlaces(2);
 
-    let collectionFee = new Prisma.Decimal(0);
-    let instantFee = new Prisma.Decimal(0);
-
-    if (mode === 'SETTLEMENT') {
-      collectionFee = postGst.times(collectionPercent).dividedBy(100).toDecimalPlaces(2);
-    } else {
-      const feePercent = await this.sellerDecimal(
-        sellerId,
-        INSTANT_FEE_KEY,
-        DEFAULT_INSTANT_FEE_PERCENT,
-      );
-      // The Instant Pay rate is ALL-IN: it already contains the base
-      // collection charge. So this replaces that fee rather than adding
-      // to it, and the ledger carries ONE line reading exactly the
-      // percentage the seller was quoted. Splitting 2.5% into "1%
-      // collection + 1.5% instant" would total the same and match
-      // nothing the seller was told.
-      //
-      // The max() guards a misconfiguration rather than a normal case:
-      // if the base rate were ever set above the instant rate, the
-      // premium product would cost LESS than the standard one, which is
-      // certainly not what anybody meant.
-      const effective = feePercent.greaterThan(collectionPercent) ? feePercent : collectionPercent;
-      instantFee = postGst.times(effective).dividedBy(100).toDecimalPlaces(2);
-    }
+    // The Instant Pay fee: the price of being paid before the courier
+    // settles, so only when THIS credit is an Instant Pay one — and ON
+    // TOP of the COD fee, not instead of it (2026-09-12). The two are
+    // independent charges for independent services, and a seller on
+    // Instant Pay still had their COD handled.
+    const instantPercent =
+      mode === 'INSTANT_PAY'
+        ? await this.sellerDecimal(sellerId, INSTANT_FEE_KEY, DEFAULT_INSTANT_FEE_PERCENT)
+        : new Prisma.Decimal(0);
+    const instantFee = postGst.times(instantPercent).dividedBy(100).toDecimalPlaces(2);
 
     // The full COD is credited, and the deductions are their own
     // entries. Netting them into one credit would hide both the tax and
@@ -273,7 +264,7 @@ export class CodCreditService {
         amount: instantFee,
         linkedOrderId: orderId,
         actorType: ActorType.SYSTEM,
-        note: 'Instant Pay — credited at delivery rather than at settlement',
+        note: `Instant Pay fee at ${instantPercent.toFixed(2)}% — credited at delivery rather than at settlement`,
       });
     }
 
@@ -308,7 +299,8 @@ export class CodCreditService {
    * paid out on turned into a return, and it clawed the money back out of
    * a later payout. The seller never really got paid by that customer, so
    * they must not keep the credit; and what we deducted from it (the tax
-   * and the COD / Instant Pay fee) was never earned, so it goes back.
+   * and the COD and Instant Pay fees, each its own entry) was never
+   * earned, so each goes back.
    *
    * The WHOLE credit is taken back: the seller was credited the order's
    * COD whatever the courier paid (WAL-6), so that is what reverses. The

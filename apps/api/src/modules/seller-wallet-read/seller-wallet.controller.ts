@@ -74,7 +74,7 @@ const SELLER_WALLET_TERMS = [
     'wallet.instant_pay_fee_percent',
     'Instant-pay fee',
     'PERCENT',
-    'Only if you are on instant COD credit.',
+    'On top of the COD fee, only when a COD is credited at delivery.',
   ],
   [
     'wallet.cod_gst_percent',
@@ -82,7 +82,12 @@ const SELLER_WALLET_TERMS = [
     'PERCENT',
     'Taken out of the collected amount, not added on top.',
   ],
-  ['wallet.cod_collection_fee_percent', 'COD collection fee', 'PERCENT', ''],
+  [
+    'wallet.cod_collection_fee_percent',
+    'COD collection fee',
+    'PERCENT',
+    'On every COD credit, after the tax is taken out.',
+  ],
   [
     'wallet.courier_fee_deduction_timing',
     'Delivery fee charged',
