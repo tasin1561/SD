@@ -3389,6 +3389,15 @@ model Shipment {
   supersedesShipmentId     String?          @map("supersedes_shipment_id") @db.Uuid
   supersededAt             DateTime?        @map("superseded_at") @db.Timestamptz
   supersedeReason          SupersedeReason? @map("supersede_reason")
+  /// When the courier ACCEPTED a cancellation of this waybill, whoever
+  /// asked (operator, seller return, voided-order clean-up). Stamped by
+  /// `CourierShipmentActionService.cancelWithCourier` on a successful
+  /// reply only. The courier books and charges a waybill at confirmation
+  /// (CUR-2b) and credits it back only once it is cancelled with THEM, so
+  /// a voided shipment whose waybill has no stamp here is money still
+  /// sitting on the courier account — `OrderAttentionService` raises it.
+  /// Recording the fact does not move the order (CUR-11).
+  courierCancelledAt       DateTime?        @map("courier_cancelled_at") @db.Timestamptz
   podPhotoSpacesKeys       String[]         @default([]) @map("pod_photo_spaces_keys")
   podSignatureSpacesKey    String?          @map("pod_signature_spaces_key")
   podRecipientName         String?          @map("pod_recipient_name")
@@ -5592,6 +5601,11 @@ enum SystemIssueKind {
   /// fixes an API_ERROR, whereas somebody in finance has to go and look
   /// at what did or did not happen to a real payment.
   MONEY                    @map("money")
+  /// A cancelled or rejected order's shipment was voided locally, but its
+  /// waybill is still live with the courier. Its own kind because the
+  /// person who can close it is whoever may cancel with the courier, and
+  /// because each one is a booking charge not yet credited back.
+  LIVE_WAYBILL             @map("live_waybill")
   OTHER                    @map("other")
 
   @@map("system_issue_kind")

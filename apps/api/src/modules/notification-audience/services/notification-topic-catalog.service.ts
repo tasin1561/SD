@@ -120,6 +120,13 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     group: 'Orders',
   },
   {
+    topic: topicForIssue(SystemIssueKind.LIVE_WAYBILL),
+    label: 'A cancelled order still has a live waybill',
+    description:
+      'The order was cancelled but its waybill was never cancelled with the courier, so the booking charge has not been credited back.',
+    group: 'Couriers',
+  },
+  {
     topic: topicForIssue(SystemIssueKind.COURIER_DECISION),
     label: 'We picked a courier because nobody did',
     description:

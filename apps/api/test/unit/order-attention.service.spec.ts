@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
 import { TrackingStatusMappingService } from '../../src/modules/tracking-events/services/tracking-status-mapping.service';
 import { OrderAttentionService } from '../../src/modules/order-attention/services/order-attention.service';
@@ -106,6 +108,12 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     orderAfter?: string;
     /** Rows for the unreceived-returns sweep (RTO_DELIVERED, unreceived). */
     unreceived?: unknown[];
+    /** Voided shipments of cancelled orders whose waybill is still live. */
+    liveWaybills?: Array<{ id: string; voidedAt: Date }>;
+    /** Open live-waybill issue keys. */
+    openLiveWaybillKeys?: string[];
+    /** Shipments whose issue is open but which dropped out of the query. */
+    droppedOut?: Array<{ id: string; courierCancelledAt: Date | null }>;
     /** Parcels for the stranded-tracking check: what the courier says
      *  vs what the order says. */
     stranded?: Array<{
@@ -119,6 +127,39 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     const processOrder = jest.fn(async () => ({ result: 'ERROR' }));
     const raise = jest.fn(async () => undefined);
     const resolveByKey = jest.fn(async () => undefined);
+    const openDedupeKeys = jest.fn(async (prefix: string) =>
+      prefix === 'live-waybill:' ? (opts.openLiveWaybillKeys ?? []) : [],
+    );
+    // Three checks share shipment.findMany; the where-clause tells them
+    // apart — the live-waybill candidates (status CANCELLED), its
+    // dropped-out lookup (id IN …), and the unreceived-returns sweep.
+    const shipmentFindMany = jest.fn(async (args: { where?: Record<string, unknown> }) => {
+      const where = args?.where ?? {};
+      if (where.status === 'CANCELLED') {
+        return (opts.liveWaybills ?? []).map((s) => ({
+          id: s.id,
+          shipmentNumber: `SH-${s.id}`,
+          awbNumber: `AWB-${s.id}`,
+          courierCode: 'delhivery',
+          deletedAt: s.voidedAt,
+          updatedAt: new Date('2026-09-12T11:59:00Z'),
+          orderShipments: [
+            {
+              order: {
+                id: `ord-${s.id}`,
+                orderNumber: `SD-${s.id}`,
+                status: 'CANCELLED',
+                sellerId: 'sel-1',
+              },
+            },
+          ],
+        }));
+      }
+      if ((where.id as { in?: unknown } | undefined)?.in !== undefined) {
+        return opts.droppedOut ?? [];
+      }
+      return opts.unreceived ?? [];
+    });
 
     const client = {
       systemSetting: {
@@ -182,7 +223,7 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
         // The unreceived-returns sweep. Empty by default: these cases
         // are about the AWB watchdog, and a return sitting unreceived is
         // a different fact with its own tests.
-        findMany: jest.fn(async () => opts.unreceived ?? []),
+        findMany: shipmentFindMany,
       },
       orderDeliveryActionRequest: { findMany: jest.fn(async () => []) },
     };
@@ -192,7 +233,7 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       { log: jest.fn() } as never,
       {} as never,
       {} as never,
-      { raise, resolveByKey } as never,
+      { raise, resolveByKey, openDedupeKeys } as never,
       { processOrder } as never,
       // The real mapping: this watchdog asks it what the order SHOULD
       // be, and a fake would let the two drift apart silently — which
@@ -208,7 +249,7 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       // that was set by hand.
       { reachedStatusAt: async () => new Map<string, Date>() } as never,
     );
-    return { svc, processOrder, raise, resolveByKey };
+    return { svc, processOrder, raise, resolveByKey, shipmentFindMany };
   }
 
   it('asks the courier again BEFORE raising anything', async () => {
@@ -422,6 +463,89 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       });
       await svc.sweep(AT);
       expect(raise).toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * A cancelled order whose waybill is still live with the courier. The
+   * courier charged it at booking and credits it back only once it is
+   * cancelled with them; this names each one and never calls anybody.
+   */
+  describe('OrderAttentionService — a cancelled order’s waybill left live', () => {
+    const NOW = new Date('2026-09-12T12:00:00Z');
+    const hoursAgo = (h: number): Date => new Date(NOW.getTime() - h * 3_600_000);
+    const liveIssues = (raise: jest.Mock): unknown[][] =>
+      raise.mock.calls.filter(
+        (c: unknown[]) => (c[0] as { kind?: string } | undefined)?.kind === 'LIVE_WAYBILL',
+      );
+
+    it('raises a HIGH issue once the waybill has stayed live past the threshold', async () => {
+      const { svc, raise, shipmentFindMany } = makeService({
+        liveWaybills: [{ id: 's1', voidedAt: hoursAgo(3) }],
+      });
+      const summary = await svc.sweep(NOW);
+      expect(summary.liveWaybills).toBe(1);
+      expect(liveIssues(raise)).toHaveLength(1);
+      expect(liveIssues(raise)[0]?.[0]).toMatchObject({
+        severity: 'HIGH',
+        dedupeKey: 'live-waybill:s1',
+        metadata: expect.objectContaining({
+          orderId: 'ord-s1',
+          shipmentId: 's1',
+          awbNumber: 'AWB-s1',
+          courierCode: 'delhivery',
+        }),
+      });
+      // Only integrated couriers' waybills, and only ones not yet cancelled.
+      expect(shipmentFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'CANCELLED',
+            isManualCourier: false,
+            courierCancelledAt: null,
+          }),
+        }),
+      );
+    });
+
+    it('stays quiet before the threshold — a fresh cancel gets time to be closed', async () => {
+      const { svc, raise } = makeService({
+        liveWaybills: [{ id: 's1', voidedAt: hoursAgo(1) }],
+      });
+      await svc.sweep(NOW);
+      expect(liveIssues(raise)).toHaveLength(0);
+    });
+
+    it('clears itself once the waybill is cancelled with the courier', async () => {
+      const { svc, raise, resolveByKey } = makeService({
+        openLiveWaybillKeys: ['live-waybill:s9'],
+        droppedOut: [{ id: 's9', courierCancelledAt: hoursAgo(0.5) }],
+      });
+      await svc.sweep(NOW);
+      expect(resolveByKey).toHaveBeenCalledWith(
+        'live-waybill:s9',
+        expect.stringMatching(/cancelled with the courier/),
+      );
+      expect(liveIssues(raise)).toHaveLength(0);
+    });
+
+    it('leaves the issue open while the waybill is still live', async () => {
+      const { svc, resolveByKey } = makeService({
+        liveWaybills: [{ id: 's1', voidedAt: hoursAgo(5) }],
+        openLiveWaybillKeys: ['live-waybill:s1'],
+      });
+      await svc.sweep(NOW);
+      expect(resolveByKey).not.toHaveBeenCalledWith('live-waybill:s1', expect.anything());
+    });
+
+    it('can never call a courier — the service holds no courier client (CUR-10)', () => {
+      // Structural rather than behavioural: the property is that nothing
+      // here COULD cancel a waybill, which a mock cannot show.
+      const src = readFileSync(
+        join(__dirname, '../../src/modules/order-attention/services/order-attention.service.ts'),
+        'utf8',
+      );
+      expect(src).not.toMatch(/courier-ops|courier-delhivery|courier-shiprocket/);
     });
   });
 });

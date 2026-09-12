@@ -29,6 +29,7 @@ function ctx(over: Partial<ShipmentCourierContext> = {}): ShipmentCourierContext
       email: null,
     },
     currentNslCode: null,
+    courierCancelledAt: null,
     status: ShipmentStatus.OUT_FOR_DELIVERY,
     originPin: '110042',
     destinationPin: '560001',
@@ -51,6 +52,10 @@ interface Deps {
   ndrTakeAction: jest.Mock;
   ewaybillUpdate: jest.Mock;
   audit: jest.Mock;
+  /** shipment.updateMany — the courier-cancel stamp. */
+  stamp: jest.Mock;
+  /** The context resolver, to see whether voided shipments were asked for. */
+  resolve: jest.Mock;
 }
 
 function make(
@@ -92,8 +97,12 @@ function make(
 
   const deliveryAttemptFindFirst = jest.fn(async () => opts.latestAttempt ?? null);
 
+  const stamp = jest.fn(async () => ({ count: 1 }));
   const prisma = {
-    client: { deliveryAttempt: { findFirst: deliveryAttemptFindFirst } },
+    client: {
+      deliveryAttempt: { findFirst: deliveryAttemptFindFirst },
+      shipment: { updateMany: stamp },
+    },
   };
   const contextSvc = { resolve: jest.fn(async () => ctx(opts.context ?? {})) };
 
@@ -135,7 +144,16 @@ function make(
     { requiresEwaybill: (v: number) => v > 50_000, update: ewaybillUpdate } as never,
     ndr as never,
   );
-  return { svc, edit, cancel, ndrTakeAction, ewaybillUpdate, audit };
+  return {
+    svc,
+    edit,
+    cancel,
+    ndrTakeAction,
+    ewaybillUpdate,
+    audit,
+    stamp,
+    resolve: contextSvc.resolve,
+  };
 }
 
 const CLIENT = { ipAddress: '1.2.3.4', userAgent: 'jest', requestId: 'req-1' };
@@ -302,6 +320,127 @@ describe('CourierShipmentActionService — guards before the wire', () => {
     expect(call.metadata.fieldsChanged).toEqual(['address', 'phone']);
     expect(JSON.stringify(call.metadata)).not.toContain('Residency Road');
     expect(JSON.stringify(call.metadata)).not.toContain('9812345678');
+  });
+});
+
+/** The refusal's `code`, or null when the call did not throw. */
+async function refusalCode(p: Promise<unknown>): Promise<unknown> {
+  try {
+    await p;
+    return null;
+  } catch (e) {
+    return (e as BadRequestException).getResponse();
+  }
+}
+
+/**
+ * A cancelled order's shipment is VOIDED locally, but its waybill —
+ * booked and charged at confirmation (CUR-2b) — stays live with the
+ * courier until it is cancelled with them, and only then is the charge
+ * credited back. Cancelling it is the one courier action a voided
+ * shipment still accepts, and a success is RECORDED so the sweep can
+ * tell done from not done.
+ */
+describe('CourierShipmentActionService — a voided shipment’s waybill', () => {
+  const VOIDED = { status: ShipmentStatus.CANCELLED };
+
+  it('cancels the live waybill of a shipment voided with its order, and records it', async () => {
+    const { svc, cancel, stamp, resolve, audit } = make({ context: VOIDED });
+    const r = await svc.cancelWithCourier(
+      courierActor.operator('staff-1'),
+      SHIPMENT_ID,
+      'order cancelled before pickup',
+      CLIENT,
+    );
+    expect(r.success).toBe(true);
+    // It had to ask for voided shipments — the ordinary lookup hides them.
+    expect(resolve).toHaveBeenCalledWith(SHIPMENT_ID, { includeVoided: true });
+    expect(cancel).toHaveBeenCalledWith(AWB, expect.anything());
+    // Guarded on the stamp being empty, so a second success cannot move it.
+    expect(stamp).toHaveBeenCalledWith({
+      where: { id: SHIPMENT_ID, courierCancelledAt: null },
+      data: { courierCancelledAt: expect.any(Date) },
+    });
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'courier.shipment.cancelled',
+        severity: 'HIGH',
+        metadata: expect.objectContaining({
+          voidedShipment: true,
+          courierCancelRecorded: true,
+          orderId: 'order-1',
+        }),
+      }),
+    );
+  });
+
+  it('records nothing when the courier refuses — the waybill is still live', async () => {
+    const { svc, cancel, stamp } = make({ context: VOIDED });
+    cancel.mockResolvedValueOnce({ success: false, message: 'Shipment already manifested' });
+    const r = await svc.cancelWithCourier(
+      courierActor.operator('staff-1'),
+      SHIPMENT_ID,
+      'order cancelled before pickup',
+      CLIENT,
+    );
+    expect(r.success).toBe(false);
+    expect(stamp).not.toHaveBeenCalled();
+  });
+
+  it('refuses a voided shipment that never had a waybill — nothing at the courier', async () => {
+    const { svc, cancel } = make({ context: { ...VOIDED, awbNumber: null } });
+    expect(
+      await refusalCode(
+        svc.cancelWithCourier(
+          courierActor.operator('staff-1'),
+          SHIPMENT_ID,
+          'x'.repeat(12),
+          CLIENT,
+        ),
+      ),
+    ).toMatchObject({ code: 'SHIPMENT_HAS_NO_AWB' });
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('refuses a waybill already cancelled with the courier rather than asking again', async () => {
+    const { svc, cancel } = make({
+      context: { ...VOIDED, courierCancelledAt: new Date('2026-09-12T10:00:00Z') },
+    });
+    expect(
+      await refusalCode(
+        svc.cancelWithCourier(
+          courierActor.operator('staff-1'),
+          SHIPMENT_ID,
+          'x'.repeat(12),
+          CLIENT,
+        ),
+      ),
+    ).toMatchObject({ code: 'WAYBILL_ALREADY_CANCELLED' });
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('refuses a manual courier waybill — there is no courier account to cancel it on', async () => {
+    const { svc, cancel } = make({ context: { ...VOIDED, isManualCourier: true } });
+    expect(
+      await refusalCode(
+        svc.cancelWithCourier(
+          courierActor.operator('staff-1'),
+          SHIPMENT_ID,
+          'x'.repeat(12),
+          CLIENT,
+        ),
+      ),
+    ).toMatchObject({ code: 'MANUAL_COURIER_SHIPMENT' });
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('every OTHER action still refuses a voided shipment', async () => {
+    const { svc, edit, resolve } = make({ context: VOIDED });
+    expect(
+      await refusalCode(svc.editDestination('staff-1', SHIPMENT_ID, { name: 'New' }, CLIENT)),
+    ).toMatchObject({ code: 'SHIPMENT_CANCELLED' });
+    expect(resolve).toHaveBeenCalledWith(SHIPMENT_ID, { includeVoided: false });
+    expect(edit).not.toHaveBeenCalled();
   });
 });
 

@@ -92,6 +92,8 @@ export function OrderShipmentsSection({
                   shipmentId={s.id}
                   awbNumber={s.awbNumber ?? null}
                   isManualCourier={s.isManualCourier}
+                  status={s.status}
+                  courierCancelledAt={s.courierCancelledAt}
                 />
                 {/* The recovery path when a courier webhook never arrived. */}
                 <ManualScanPanel shipmentId={s.id} />

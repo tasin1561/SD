@@ -51,10 +51,15 @@ export function CourierOpsPanel({
   shipmentId,
   awbNumber,
   isManualCourier,
+  status,
+  courierCancelledAt,
 }: {
   readonly shipmentId: string;
   readonly awbNumber: string | null;
   readonly isManualCourier: boolean;
+  /** CANCELLED = voided with its order; only the waybill cancel applies. */
+  readonly status: string;
+  readonly courierCancelledAt: string | null;
 }): ReactElement {
   const [open, setOpen] = useState(false);
 
@@ -63,6 +68,15 @@ export function CourierOpsPanel({
       <p className="text-text-faint text-xs">
         Placed manually with a non-integrated courier — arrange any change directly with them.
       </p>
+    );
+  }
+  if (status === 'CANCELLED') {
+    return (
+      <VoidedWaybill
+        shipmentId={shipmentId}
+        awbNumber={awbNumber}
+        courierCancelledAt={courierCancelledAt}
+      />
     );
   }
   if (awbNumber === null) {
@@ -310,6 +324,98 @@ function CourierOpsBody({
         }
       />
     </Card>
+  );
+}
+
+/**
+ * A shipment voided because its order was cancelled or rejected.
+ *
+ * Its waybill was booked (and charged) at confirmation and stays live
+ * with the courier until it is cancelled with them — only then is the
+ * charge credited back. Cancelling it is the one courier action left, so
+ * it is the only one offered; insight, NDR and edits make no sense on a
+ * parcel that is not going anywhere. The server decides whether it is
+ * allowed (FE-2) and its refusal is shown verbatim.
+ */
+function VoidedWaybill({
+  shipmentId,
+  awbNumber,
+  courierCancelledAt,
+}: {
+  readonly shipmentId: string;
+  readonly awbNumber: string | null;
+  readonly courierCancelledAt: string | null;
+}): ReactElement {
+  const toast = useToast();
+  const cancel = useCancelWithCourier();
+  const [confirming, setConfirming] = useState(false);
+  const [reason, setReason] = useState('');
+
+  if (awbNumber === null) {
+    return (
+      <p className="text-text-faint text-xs">
+        Voided with its order. It never had a waybill, so there is nothing at the courier.
+      </p>
+    );
+  }
+  if (courierCancelledAt !== null) {
+    return (
+      <p className="text-text-faint text-xs">
+        Voided with its order. Waybill cancelled with the courier on{' '}
+        {new Date(courierCancelledAt).toISOString().slice(0, 16).replace('T', ' ')} UTC.
+      </p>
+    );
+  }
+
+  async function doCancel(): Promise<void> {
+    try {
+      const r = await cancel.mutateAsync({ shipmentId, reason: reason.trim() });
+      if (r.success) {
+        toast.success('The courier accepted the cancellation. The waybill is closed.');
+      } else {
+        toast.error(r.message ?? 'The courier did not accept the cancellation.');
+      }
+      setConfirming(false);
+      setReason('');
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="text-xs text-[var(--color-warning)]">
+        Voided with its order, but waybill <Ident value={awbNumber} /> is still live with the
+        courier. Cancel it so the booking charge is credited back.
+      </p>
+      <Button variant="destructive" size="sm" onClick={() => setConfirming(true)}>
+        Cancel waybill with courier
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Cancel this waybill with the courier?"
+        confirmVariant="destructive"
+        confirmLabel={cancel.isPending ? 'Cancelling…' : 'Cancel waybill'}
+        disabled={cancel.isPending || reason.trim().length < MIN_CANCEL_REASON}
+        onConfirm={() => void doCancel()}
+        description={
+          <div className="space-y-2">
+            <p>
+              The order is already cancelled. This asks the courier to close the waybill it booked,
+              which is what credits the booking charge back. The order does not change.
+            </p>
+            <Textarea
+              rows={2}
+              placeholder="Why? e.g. order cancelled before pickup"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+        }
+      />
+    </div>
   );
 }
 

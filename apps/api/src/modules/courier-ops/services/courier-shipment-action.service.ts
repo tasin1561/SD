@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ActorType, ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -76,6 +76,8 @@ export interface NdrReadiness {
  */
 @Injectable()
 export class CourierShipmentActionService {
+  private readonly logger = new Logger(CourierShipmentActionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
@@ -178,13 +180,29 @@ export class CourierShipmentActionService {
    * is unchanged and still applies — it sits inside the dispatcher, so
    * it does not care who asked.
    */
+  /**
+   * ── A VOIDED SHIPMENT'S WAYBILL ──────────────────────────────────────
+   * Cancelling an order voids its shipment locally, but a waybill booked
+   * at confirmation (CUR-2b) stays live with the courier: they charged it
+   * at booking and credit it back only when it is cancelled with THEM.
+   * So this is the one courier action a voided shipment still accepts —
+   * same permission, same live-write guard (inside the dispatcher), same
+   * audit, and the reply moves no order (CUR-11). Never fired from the
+   * cancel transition itself (CUR-10): an operator does it, prompted by
+   * `OrderAttentionService`'s live-waybill issue.
+   *
+   * A successful reply is STAMPED on `shipments.courier_cancelled_at` —
+   * on every shipment, not only voided ones, because it is true either
+   * way — and that stamp is what tells the sweep done from not done. A
+   * voided shipment already stamped is refused rather than re-sent.
+   */
   async cancelWithCourier(
     actor: CourierCredentialActor,
     shipmentId: string,
     reason: string,
     ctx: ClientInfoPayload,
   ): Promise<ActionOutcome> {
-    const shipment = await this.requireAwb(shipmentId);
+    const shipment = await this.requireAwb(shipmentId, { allowVoided: true });
 
     const result = await this.opsDispatch.cancel(
       shipment.courierCode,
@@ -192,6 +210,31 @@ export class CourierShipmentActionService {
       shipment.awbNumber,
       actor,
     );
+
+    // The courier's acceptance is the fact; our stamp records it. A
+    // failed stamp after an accepted cancel is logged loudly rather than
+    // thrown: the courier call already happened and the audit row below
+    // must still be written. The sweep will keep asking about it, which
+    // is the visible failure (the silent one would be losing the audit).
+    let recorded = false;
+    if (result.success) {
+      try {
+        await this.prisma.client.shipment.updateMany({
+          where: { id: shipment.shipmentId, courierCancelledAt: null },
+          data: { courierCancelledAt: new Date() },
+        });
+        recorded = true;
+      } catch (err) {
+        this.logger.error(
+          {
+            shipmentId: shipment.shipmentId,
+            awbNumber: shipment.awbNumber,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          'Courier accepted the cancellation but it could not be recorded on the shipment',
+        );
+      }
+    }
 
     const isStaff = actor.type === ActorType.STAFF;
     await this.audit.log({
@@ -211,7 +254,13 @@ export class CourierShipmentActionService {
       metadata: {
         awbNumber: shipment.awbNumber,
         reason,
+        // A voided shipment is a cancelled order's waybill being closed
+        // out, not a moving parcel being turned round.
+        voidedShipment: shipment.voided,
+        orderId: shipment.orderId,
+        courierCode: shipment.courierCode,
         success: result.success,
+        courierCancelRecorded: recorded,
         courierMessage: result.message,
         ipAddress: ctx.ipAddress ?? null,
         userAgent: ctx.userAgent ?? null,
@@ -412,9 +461,15 @@ export class CourierShipmentActionService {
 
   // ── internal ────────────────────────────────────────────────────────
 
-  private async requireAwb(shipmentId: string): Promise<{
+  private async requireAwb(
+    shipmentId: string,
+    opts: { readonly allowVoided?: boolean } = {},
+  ): Promise<{
     shipmentId: string;
     awbNumber: string;
+    /** Voided with its order (status CANCELLED). Only the cancel admits one. */
+    voided: boolean;
+    orderId: string | null;
     declaredValueInr: string;
     // Who actually has the parcel — required now that a second courier
     // exists and the two are addressed differently.
@@ -427,7 +482,8 @@ export class CourierShipmentActionService {
     courierOrderId: string | null;
     destination: ShipmentCourierContext['destination'];
   }> {
-    const shipment = await this.context.resolve(shipmentId);
+    const allowVoided = opts.allowVoided === true;
+    const shipment = await this.context.resolve(shipmentId, { includeVoided: allowVoided });
     if (shipment.awbNumber === null) {
       throw new BadRequestException({
         code: 'SHIPMENT_HAS_NO_AWB',
@@ -441,15 +497,25 @@ export class CourierShipmentActionService {
           'This parcel was placed manually with a non-integrated courier. Arrange the change directly with them.',
       });
     }
-    if (shipment.status === ShipmentStatus.CANCELLED) {
+    const voided = shipment.status === ShipmentStatus.CANCELLED;
+    if (voided && !allowVoided) {
       throw new BadRequestException({
         code: 'SHIPMENT_CANCELLED',
-        message: 'This shipment is already cancelled.',
+        message:
+          'This shipment was voided when its order was cancelled. The only courier action left on it is cancelling its waybill.',
+      });
+    }
+    if (voided && shipment.courierCancelledAt !== null) {
+      throw new BadRequestException({
+        code: 'WAYBILL_ALREADY_CANCELLED',
+        message: `This waybill was already cancelled with the courier on ${shipment.courierCancelledAt.toISOString().slice(0, 16).replace('T', ' ')} UTC.`,
       });
     }
     return {
       shipmentId: shipment.shipmentId,
       awbNumber: shipment.awbNumber,
+      voided,
+      orderId: shipment.orderId,
       courierCode: shipment.courierCode,
       courierAccountId: shipment.courierAccountId,
       courierShipmentId: shipment.courierShipmentId,

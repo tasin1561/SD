@@ -102,7 +102,13 @@ export interface NsaSweepSummary {
   readonly strandedTracking: number;
   /** Returns the courier handed back that nobody has received. */
   readonly unreceivedReturns: number;
+  /** Voided shipments of cancelled orders whose waybill is still live
+   *  with the courier past the grace window. */
+  readonly liveWaybills: number;
 }
+
+/** One issue per voided shipment; the suffix is the shipment id. */
+const LIVE_WAYBILL_KEY_PREFIX = 'live-waybill:';
 
 /**
  * NSA — Needs Seller Attention.
@@ -215,6 +221,7 @@ export class OrderAttentionService {
       awbless: 0,
       strandedTracking: 0,
       unreceivedReturns: 0,
+      liveWaybills: 0,
     };
 
     // Runs even when the NSA half is switched off, and before the
@@ -234,6 +241,10 @@ export class OrderAttentionService {
     // Also unconditional: a return sitting at our own door, unreceived,
     // is a seller being told their goods are still travelling.
     summary.unreceivedReturns = await this.checkUnreceivedReturns(now);
+
+    // Also unconditional: a cancelled order's waybill left live with the
+    // courier is a booking charge not credited back, whatever NSA says.
+    summary.liveWaybills = await this.checkLiveWaybills(now);
 
     if (!enabled) return summary;
 
@@ -812,6 +823,124 @@ export class OrderAttentionService {
       });
     }
     return unreceived;
+  }
+
+  /**
+   * A cancelled order whose waybill is still live with the courier.
+   *
+   * A waybill is booked, and charged, at confirmation (CUR-2b). When the
+   * order is then cancelled or rejected, `voidForOrder` retires the
+   * shipment HERE — status CANCELLED, `deletedAt` set — but nothing tells
+   * the courier. They credit the booking charge back only once the
+   * waybill is cancelled with them, and a live waybill can still be
+   * collected and manifested. Every such waybill was money left on the
+   * courier account with nothing anywhere to say so.
+   *
+   * ── IT NEVER CALLS THE COURIER ───────────────────────────────────────
+   * CUR-10: a lifecycle transition is a forbidden trigger for a courier
+   * write, and a sweep acting on one is the same thing one step removed.
+   * This names the waybill and stops; an operator cancels it from the
+   * order's courier panel, which stamps `courier_cancelled_at`.
+   *
+   * The age is read from `deletedAt`, which `voidForOrder` sets once at
+   * the void and nothing else writes — never `updatedAt` (rule 4b).
+   * A MANUAL courier waybill is excluded: there is no courier account
+   * for us to cancel it on or to be credited from, so an issue about it
+   * could never be cleared through the system.
+   *
+   * Clears itself when the waybill is cancelled with the courier, or the
+   * shipment stops being voided.
+   */
+  private async checkLiveWaybills(now: Date): Promise<number> {
+    const hours = await this.globalInt('ops.cancelled_waybill_alert_hours', 2);
+    const cutoff = new Date(now.getTime() - hours * 3_600_000);
+
+    const live = await this.prisma.client.shipment.findMany({
+      where: {
+        status: ShipmentStatus.CANCELLED,
+        awbNumber: { not: null },
+        isManualCourier: false,
+        courierCancelledAt: null,
+      },
+      select: {
+        id: true,
+        shipmentNumber: true,
+        awbNumber: true,
+        courierCode: true,
+        deletedAt: true,
+        updatedAt: true,
+        orderShipments: {
+          take: 1,
+          select: {
+            order: { select: { id: true, orderNumber: true, status: true, sellerId: true } },
+          },
+        },
+      },
+    });
+    const liveIds = new Set(live.map((s) => s.id));
+
+    // Clear what dropped out of the candidate set. Reached through the
+    // open issues rather than the shipments, because a cancelled waybill
+    // is no longer in the query above.
+    const openKeys = await this.issues.openDedupeKeys(LIVE_WAYBILL_KEY_PREFIX);
+    const gone = openKeys
+      .map((k) => k.slice(LIVE_WAYBILL_KEY_PREFIX.length))
+      .filter((id) => !liveIds.has(id));
+    if (gone.length > 0) {
+      const rows = await this.prisma.client.shipment.findMany({
+        where: { id: { in: gone } },
+        select: { id: true, courierCancelledAt: true },
+      });
+      const cancelledAt = new Map(rows.map((r) => [r.id, r.courierCancelledAt]));
+      for (const id of gone) {
+        const at = cancelledAt.get(id) ?? null;
+        await this.issues.resolveByKey(
+          `${LIVE_WAYBILL_KEY_PREFIX}${id}`,
+          at !== null
+            ? `The waybill was cancelled with the courier on ${at.toISOString().slice(0, 16)}.`
+            : 'The shipment is no longer voided.',
+        );
+      }
+    }
+
+    let raised = 0;
+    for (const ship of live) {
+      const voidedAt = ship.deletedAt ?? ship.updatedAt;
+      if (voidedAt >= cutoff) continue;
+      const order = ship.orderShipments[0]?.order ?? null;
+      const label = order?.orderNumber ?? ship.shipmentNumber;
+      const awb = ship.awbNumber ?? '';
+
+      raised += 1;
+      await this.issues.raise({
+        kind: SystemIssueKind.LIVE_WAYBILL,
+        severity: SystemIssueSeverity.HIGH,
+        title: `${label}: cancelled, but ${ship.courierCode} waybill ${awb} is still live`,
+        detail:
+          `${order === null ? 'This order' : `The order (now ${order.status.toLowerCase().replaceAll('_', ' ')})`} ` +
+          `was called off and its shipment ${ship.shipmentNumber} voided on ` +
+          `${voidedAt.toISOString().slice(0, 16)}, but waybill ${awb} was never cancelled with ` +
+          `${ship.courierCode}. The courier charged it when it was booked at confirmation and ` +
+          'credits it back only once it is cancelled with them — until then it is money on the ' +
+          'courier account, and a live waybill can still be collected.\n\n' +
+          'Open the order, expand the courier panel on the voided shipment and cancel the waybill. ' +
+          'This clears itself once the courier accepts. Nothing here calls the courier on its own.',
+        source: 'OrderAttentionService',
+        dedupeKey: `${LIVE_WAYBILL_KEY_PREFIX}${ship.id}`,
+        metadata: {
+          orderId: order?.id ?? null,
+          orderNumber: order?.orderNumber ?? null,
+          sellerId: order?.sellerId ?? null,
+          orderStatus: order?.status ?? null,
+          shipmentId: ship.id,
+          shipmentNumber: ship.shipmentNumber,
+          awbNumber: ship.awbNumber,
+          courierCode: ship.courierCode,
+          voidedAt: voidedAt.toISOString(),
+        },
+      });
+    }
+    return raised;
   }
 
   private async clearMoved(): Promise<number> {

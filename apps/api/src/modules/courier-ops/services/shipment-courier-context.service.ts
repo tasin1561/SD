@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 const ORIGIN_PIN_SETTING = 'courier.delhivery_origin_pincode';
@@ -49,6 +50,9 @@ export interface ShipmentCourierContext {
    * attempt row.
    */
   readonly currentNslCode: string | null;
+  /** When the courier accepted a cancellation of this waybill; null if
+   *  nobody has cancelled it with them. */
+  readonly courierCancelledAt: Date | null;
   readonly status: string;
   readonly originPin: string | null;
   readonly destinationPin: string;
@@ -90,9 +94,25 @@ export interface ShipmentCourierContext {
 export class ShipmentCourierContextService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async resolve(shipmentId: string): Promise<ShipmentCourierContext> {
+  /**
+   * `includeVoided` also finds a shipment `voidForOrder` retired when its
+   * order was cancelled (status CANCELLED + `deletedAt` set). Only the
+   * waybill cancel asks for it: a voided shipment's waybill can still be
+   * live with the courier, and cancelling it is the one courier action
+   * that makes sense on it. Every other caller keeps seeing it as gone.
+   */
+  async resolve(
+    shipmentId: string,
+    opts: { readonly includeVoided?: boolean } = {},
+  ): Promise<ShipmentCourierContext> {
     const shipment = await this.prisma.client.shipment.findFirst({
-      where: { id: shipmentId, deletedAt: null },
+      where:
+        opts.includeVoided === true
+          ? {
+              id: shipmentId,
+              OR: [{ deletedAt: null }, { status: ShipmentStatus.CANCELLED }],
+            }
+          : { id: shipmentId, deletedAt: null },
       select: {
         id: true,
         shipmentNumber: true,
@@ -109,6 +129,7 @@ export class ShipmentCourierContextService {
         destCity: true,
         destStateProvince: true,
         courierNslCode: true,
+        courierCancelledAt: true,
         status: true,
         destPostalCode: true,
         totalWeightGrams: true,
@@ -152,6 +173,7 @@ export class ShipmentCourierContextService {
         email: null,
       },
       currentNslCode: shipment.courierNslCode,
+      courierCancelledAt: shipment.courierCancelledAt,
       status: shipment.status,
       originPin,
       destinationPin: shipment.destPostalCode,

@@ -265,6 +265,11 @@ export function permissionsFor(kind: SystemIssueKind): readonly string[] {
       // response — "is MANUAL earning its keep for this seller" — is
       // theirs to make.
       return [RESOLVER, 'orders.view'];
+    case SystemIssueKind.LIVE_WAYBILL:
+      // A cancelled order whose waybill is still open with the courier.
+      // The only fix is a courier cancel, so it goes to whoever may make
+      // one — the same permission the cancel endpoint carries.
+      return [RESOLVER, 'courier.ops.write'];
     case SystemIssueKind.MONEY:
       // A payment that half-happened. Whoever watches the treasury sees
       // the consequence — a request that never closed, an order never

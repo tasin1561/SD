@@ -578,6 +578,15 @@ const systemSettings: SystemSettingSeed[] = [
       'A seller asks for a parcel back and the courier accepts, then no return scan ever arrives. After this many hours the order is raised on the system issues board, because the seller believes their goods are on the way back and nothing else in the system notices they are not.',
   },
   {
+    key: 'ops.cancelled_waybill_alert_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 2,
+    displayName: 'Cancelled order, waybill still live — hours before we flag it',
+    description:
+      'A waybill is booked (and charged) when an order is confirmed. If the order is then cancelled or rejected, its shipment is voided here but the waybill stays live with the courier until somebody cancels it with them — and the courier credits the charge back only then. After this many hours each such waybill is raised on the system issues board. The sweep never cancels anything itself; an operator does it from the order’s courier panel.',
+  },
+  {
     key: 'ops.rto_receipt_alert_hours',
     category: 'ops',
     valueType: SettingValueType.INT,
