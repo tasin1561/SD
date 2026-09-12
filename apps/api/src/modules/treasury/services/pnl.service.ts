@@ -11,6 +11,7 @@ import {
   Prisma,
   WalletEntryDirection,
 } from '@skydrop/db';
+import { inrRateAt } from '../../../common/fx/inr-rate-at';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 const ZERO = new Prisma.Decimal(0);
@@ -92,21 +93,18 @@ export const RETURN_REVENUE_TYPES: readonly ChargeType[] = Object.values(ChargeT
 );
 
 /**
- * Where a parcel's order has to have got to for its fate to be KNOWN
- * on the DELIVERY side: delivered, or lost on the way. A LOST parcel is
- * on the delivery line for its courier cost only — nothing ever bills a
- * lost parcel (the founder, 2026-09-12), so it earns nothing.
+ * What a seller is actually DEBITED for moving a parcel — the delivery
+ * fee, the return fee, the customer-return fee. Revenue on the delivery
+ * and returns lines is these debits on the order, less any
+ * ORDER_CHARGES_REFUND: what was BILLED, never the charge lines, which
+ * are a quote until the wallet is debited (a line added after the debit,
+ * or a fee on AT_DELIVERY timing that never came due, was never paid).
  */
-const DELIVERED_FATES: OrderStatus[] = [OrderStatus.DELIVERED, OrderStatus.LOST_IN_TRANSIT];
-
-/**
- * …and on the RETURNS side: received back. `RTO_RESTOCKED` is listed
- * because an order can reach it without an `RTO_RECEIVED` event of its
- * own (the receipt was skipped or recorded outside the transition);
- * normally RECEIVED comes first, so the earliest of the two is the day
- * the parcel was back.
- */
-const RETURNED_FATES: OrderStatus[] = [OrderStatus.RTO_RECEIVED, OrderStatus.RTO_RESTOCKED];
+const BILLED_DIRECTIONS: readonly WalletEntryDirection[] = [
+  WalletEntryDirection.ORDER_CHARGES,
+  WalletEntryDirection.RTO_FEE,
+  WalletEntryDirection.CUSTOMER_RETURN_FEE,
+];
 
 /** A courier-account adjustment that still moves money. */
 const ADJUSTMENT_BASE = {
@@ -159,8 +157,9 @@ const COD_SERVICE_FEE_DIRECTIONS: WalletEntryDirection[] = [
  * exactly once, which is what proves no charged or costed order falls
  * between the lines:
  *
- *  - `delivered`: DELIVERED, and LOST_IN_TRANSIT (its cost, no revenue).
- *    The delivery line, dated by the first of those events.
+ *  - `delivered`: DELIVERED, and LOST_IN_TRANSIT (its cost, and only
+ *    whatever fee is still held on it). The delivery line, dated by the
+ *    first event of the final stretch in that fate (see `walkFate`).
  *  - `returned`: received back — RTO_RECEIVED and what follows it
  *    (RESTOCKED, DAMAGED). The returns line, dated by the receipt.
  *  - `called_off`: cancelled or rejected. Such an order can still carry
@@ -222,15 +221,116 @@ export function orderFate(status: OrderStatus): 'delivered' | 'returned' | 'call
   }
 }
 
-/** Cancelled or rejected (see `orderFate`). */
-const CALLED_OFF_STATUSES: OrderStatus[] = Object.values(OrderStatus).filter(
-  (s) => orderFate(s) === 'called_off',
-);
+type Fate = ReturnType<typeof orderFate>;
+
+/**
+ * Every status `orderFate` places on `fate`. Each cohort selects with
+ * this, never with a list of its own: a hand-written list had drifted
+ * (RTO_DAMAGED was a returned fate that the returns cohort did not
+ * select, so an order forced straight to it was on no line).
+ */
+function statusesOf(fate: Fate): OrderStatus[] {
+  return Object.values(OrderStatus).filter((s) => orderFate(s) === fate);
+}
 
 /** Fate not yet known: on no line (see `orderFate`). */
-const OPEN_STATUSES: OrderStatus[] = Object.values(OrderStatus).filter(
-  (s) => orderFate(s) === 'open',
-);
+const OPEN_STATUSES = statusesOf('open');
+
+/**
+ * The return leg of a parcel that WAS delivered — a customer return on
+ * its way back. It keeps the order's delivered fate until the parcel is
+ * received (then returns) or lost (still delivery, labelled): the
+ * delivery happened, and it is restated only when the parcel is back.
+ * After anything but a delivery these statuses are open (an RTO after a
+ * failed delivery).
+ */
+const RETURN_LEG_AFTER_DELIVERY: readonly OrderStatus[] = [
+  OrderStatus.RTO_INITIATED,
+  OrderStatus.RTO_IN_TRANSIT,
+];
+
+/**
+ * Where an order's lifecycle SETTLED, read from its status events in
+ * order: the fate it is in, and the first event of the final unbroken
+ * stretch in that fate — the instant it got there and stayed.
+ *
+ * A stretch is broken by any event into a different fate, so an order
+ * forced to DELIVERED by mistake, corrected back to IN_TRANSIT and truly
+ * delivered later is dated by the REAL delivery; a rejection that was
+ * reopened and rejected again, by the final rejection. The one exception
+ * is `RETURN_LEG_AFTER_DELIVERY`, which continues a delivered stretch.
+ *
+ * The flags describe the final stretch only.
+ */
+interface FateWalk {
+  readonly fate: Fate;
+  readonly start: Date | null;
+  /** DELIVERED is in the stretch. */
+  readonly delivered: boolean;
+  /** LOST_IN_TRANSIT is in the stretch. */
+  readonly lost: boolean;
+  /** Lost, then found and delivered. */
+  readonly found: boolean;
+  /** Delivered, then lost. */
+  readonly lostAfterDelivery: boolean;
+  /** The parcel was on its way back after the delivery (a customer return). */
+  readonly onReturnLeg: boolean;
+  /** Delivered at some point BEFORE the stretch began. */
+  readonly deliveredBefore: boolean;
+}
+
+const OPEN_WALK: FateWalk = {
+  fate: 'open',
+  start: null,
+  delivered: false,
+  lost: false,
+  found: false,
+  lostAfterDelivery: false,
+  onReturnLeg: false,
+  deliveredBefore: false,
+};
+
+function walkFate(events: ReadonlyArray<{ toStatus: OrderStatus; createdAt: Date }>): FateWalk {
+  let w = { ...OPEN_WALK };
+  let everDelivered = false;
+  for (const e of events) {
+    const f = orderFate(e.toStatus);
+    if (
+      f === 'open' &&
+      w.fate === 'delivered' &&
+      w.delivered &&
+      RETURN_LEG_AFTER_DELIVERY.includes(e.toStatus)
+    ) {
+      w = { ...w, onReturnLeg: true };
+      continue;
+    }
+    if (f !== w.fate) {
+      w = { ...OPEN_WALK, fate: f, start: e.createdAt, deliveredBefore: everDelivered };
+    }
+    if (e.toStatus === OrderStatus.DELIVERED) {
+      w = { ...w, delivered: true, found: w.found || w.lost };
+      everDelivered = true;
+    } else if (e.toStatus === OrderStatus.LOST_IN_TRANSIT) {
+      w = { ...w, lost: true, lostAfterDelivery: w.lostAfterDelivery || w.delivered };
+    }
+  }
+  return w;
+}
+
+/**
+ * The fate an order is in NOW, by its current status — a parcel on its
+ * way back after a delivery still counting as delivered (see
+ * `RETURN_LEG_AFTER_DELIVERY`). A cohort counts an order only when this
+ * agrees with its events' `walkFate`: the events date it, the status
+ * says it is still there.
+ */
+function currentFate(status: OrderStatus | null, w: FateWalk): Fate {
+  if (status === null) return 'open';
+  const f = orderFate(status);
+  return f === 'open' && w.fate === 'delivered' && RETURN_LEG_AFTER_DELIVERY.includes(status)
+    ? 'delivered'
+    : f;
+}
 
 /** Every line the report carries, in order. A drill-down exists for each. */
 export const PNL_LINE_KEYS = [
@@ -413,16 +513,35 @@ export interface PnlLineItem {
 interface FateOrder {
   readonly orderId: string;
   readonly orderNumber: string;
+  /** When it reached the fate it is in (see `walkFate`). */
   readonly at: Date;
-  /** Lost in transit and never delivered: counted for its cost, never billed. */
+  /**
+   * Lost in transit and never delivered. On the delivery line for its
+   * courier cost; its revenue is whatever fee is still HELD on it — ₹0
+   * once refunded (a lost parcel is not charged, the founder 2026-09-12),
+   * the real figure while it is not.
+   */
   readonly lost: boolean;
+  /** Delivered, then lost; `onReturnLeg` when it was a return on its way back. */
+  readonly lostAfterDelivery: boolean;
+  readonly onReturnLeg: boolean;
+  /** Lost, then found and delivered. */
+  readonly found: boolean;
+  /** Delivered before it came back (returns). */
+  readonly deliveredFirst: boolean;
   /**
    * Cancelled or rejected (the status it is in), for an order on the
    * delivery line because it still carries money (see `orderFate`).
    */
   readonly calledOff: OrderStatus | null;
-  /** Charges less refunds; null for a lost parcel (never billed). */
-  readonly billed: Prisma.Decimal | null;
+  /** The BILLED_DIRECTIONS debits on the order. */
+  readonly debits: ReadonlyArray<{ direction: WalletEntryDirection; amount: Prisma.Decimal }>;
+  /** ORDER_CHARGES_REFUNDs on the order. */
+  readonly refunds: readonly Prisma.Decimal[];
+  /** Debits less refunds: what the order earned us. */
+  readonly billed: Prisma.Decimal;
+  /** Charge lines beyond what was debited — quoted, never billed, not counted. */
+  readonly unbilled: Prisma.Decimal;
   /** Sum of what is recorded on its live shipments; null when nothing is. */
   readonly cost: Prisma.Decimal | null;
   readonly priced: boolean;
@@ -431,33 +550,20 @@ interface FateOrder {
 
 interface FateCohort {
   readonly orders: readonly FateOrder[];
-  readonly chargesByType: ReadonlyMap<ChargeType, { amount: Prisma.Decimal; count: number }>;
-  readonly refunds: { amount: Prisma.Decimal; count: number };
   /**
-   * Fate-based recognition RESTATES a window in two cases, by design
-   * (TRE-6). They are counted so the notes can say so when it happens:
+   * Fate-based recognition RESTATES a window, by design (TRE-6). Counted
+   * so the notes can say so when it happens:
    *
-   *  - `leftForReturns` (delivery): first delivered in this window and
+   *  - `leftForReturns` (delivery): reached delivery in this window and
    *    since received back — on the returns line of the window it came
    *    back in, and no longer here.
-   *  - `foundAfterLoss` (delivery): lost in this window and later found
-   *    and delivered — still dated by the loss, so this window now
-   *    carries its revenue.
-   *  - `deliveredFirst` (returns): received back in this window after
-   *    having been delivered — the window it was delivered in no longer
-   *    counts it.
+   *  - `movedOn`: reached this fate in this window and has since left it
+   *    — reopened, cancelled, returned (returns: forced elsewhere), or
+   *    delivered again later — so it is counted where its current fate
+   *    began, and not here.
    */
   readonly leftForReturns: number;
-  readonly foundAfterLoss: number;
-  readonly deliveredFirst: number;
-}
-
-/** The orders called off with money still on them (see `calledOffCohort`). */
-interface CalledOffCohort {
-  readonly orders: readonly FateOrder[];
-  /** ORDER_CHARGES debits on them, and the ORDER_CHARGES_REFUNDs that came off. */
-  readonly debited: { amount: Prisma.Decimal; count: number };
-  readonly refunded: { amount: Prisma.Decimal; count: number };
+  readonly movedOn: number;
 }
 
 /** A courier charge on a waybill that is no live Skydrop parcel. */
@@ -467,6 +573,52 @@ interface UnmatchedCharge {
   readonly at: Date;
   /** `dead`: a voided or replaced Skydrop parcel. `stray`: nobody's we know. */
   readonly kind: 'dead' | 'stray';
+}
+
+/** The labels of one group's billed parts (see `billedParts`). */
+interface BilledLabels {
+  readonly charges: string;
+  readonly returnFee: string;
+  readonly customerReturnFee: string;
+  readonly refunded: string;
+}
+
+const BILLED_LABELS = {
+  delivered: {
+    charges: 'Delivery fees debited to sellers',
+    returnFee: 'Return fees debited',
+    customerReturnFee: 'Customer-return fees debited',
+    refunded: 'Refunded to the seller on these orders',
+  },
+  lost: {
+    charges: 'Fees debited on parcels lost in transit',
+    returnFee: 'Return fees debited on parcels lost in transit',
+    customerReturnFee: 'Customer-return fees debited on parcels lost in transit',
+    refunded: 'Refunded on parcels lost in transit',
+  },
+  calledOff: {
+    charges: 'Delivery fee taken on orders since called off',
+    returnFee: 'Return fee taken on orders since called off',
+    customerReturnFee: 'Customer-return fee taken on orders since called off',
+    refunded: 'Refunded to the seller on those orders',
+  },
+  returned: {
+    charges: 'Delivery fees debited on returned parcels',
+    returnFee: 'Return fees debited',
+    customerReturnFee: 'Customer-return fees debited',
+    refunded: 'Refunded to the seller on these orders',
+  },
+} as const satisfies Record<string, BilledLabels>;
+
+function group<T>(xs: readonly T[], key: (x: T) => string): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const x of xs) {
+    const k = key(x);
+    const list = out.get(k);
+    if (list === undefined) out.set(k, [x]);
+    else list.push(x);
+  }
+  return out;
 }
 
 /** The half-open window `[from, to)`. Every query in this report uses it. */
@@ -526,6 +678,7 @@ export class PnlService {
       investment,
       expenses,
       unattributed,
+      freightAtTodaysRate,
     ] = await Promise.all([
       this.inboundFreight(from, to),
       this.delivery(from, to),
@@ -542,6 +695,7 @@ export class PnlService {
       this.investmentIncome(from, to, rates),
       this.expenses(from, to, rates),
       this.unattributedLegCosts(from, to, rates),
+      this.freightPaymentsAtTodaysRate(from, to),
     ]);
 
     const lines = [
@@ -581,6 +735,16 @@ export class PnlService {
           'on /fx-rates for an exact figure.',
       );
     }
+    // The same, inside a freight bill's cost: the bill stores its cost
+    // already in rupees (FRT-4), so the report would otherwise pass on an
+    // approximation as if it were exact.
+    if (freightAtTodaysRate > 0) {
+      warnings.push(
+        `${freightAtTodaysRate} forwarder payment(s) on freight bills raised in this window had ` +
+          "no exchange rate recorded at or before the payment, so the bill's cost used today's " +
+          'rate. Record the rate for those days on /fx-rates for an exact figure.',
+      );
+    }
 
     return {
       from: from.toISOString(),
@@ -590,7 +754,9 @@ export class PnlService {
       operatingExpensesInr: expenses.total.toFixed(2),
       netInr: gross.sub(expenses.total).toFixed(2),
       complete:
-        expenses.unconverted === 0 && lines.every((l) => l.coverage.priced === l.coverage.total),
+        expenses.unconverted === 0 &&
+        freightAtTodaysRate === 0 &&
+        lines.every((l) => l.coverage.priced === l.coverage.total),
       warnings,
       unattributedLegCosts:
         unattributed === null
@@ -661,6 +827,32 @@ export class PnlService {
   }
 
   /**
+   * How many forwarder payments on the window's freight bills (the bills
+   * the inbound line counts) were put in rupees at TODAY's rate because no
+   * rate was recorded at or before the payment. The bill's `our_cost_inr`
+   * is stamped by the freight service with the same rule (`inrRateAt`), so
+   * asking the same question here says exactly which figures are
+   * approximate. A payment with no rate at all cannot be attached — the
+   * freight service refuses it — but is counted too, rather than assumed.
+   */
+  private async freightPaymentsAtTodaysRate(from: Date, to: Date): Promise<number> {
+    const payments = await this.prisma.client.bankEntry.findMany({
+      where: {
+        type: BankEntryType.EXPENSE,
+        currency: { not: Currency.INR },
+        inboundFreightCharge: { createdAt: win(from, to) },
+      },
+      select: { currency: true, occurredAt: true },
+    });
+    let approximate = 0;
+    for (const p of payments) {
+      const rate = await inrRateAt(this.prisma.client, p.currency, p.occurredAt);
+      if (rate === null || rate.source === 'CURRENT') approximate += 1;
+    }
+    return approximate;
+  }
+
+  /**
    * What a freight bill EARNS: a WAIVED bill only what was charged before
    * it was forgiven — counting its full total would book income nobody
    * will ever pay. One place, so the total and its rows cannot disagree.
@@ -674,286 +866,98 @@ export class PnlService {
   }
 
   /**
-   * The orders whose parcel's FATE was settled in the window, one entry
-   * per ORDER, with its revenue and cost already worked out — the ONE
-   * computation both the line total and its drill-down read, so the rows
+   * The orders whose parcel's FATE settled in the window, one entry per
+   * ORDER, with its revenue and cost already worked out — the ONE
+   * computation both a line's total and its drill-down read, so the rows
    * always add up to the figure above them.
    *
-   * DELIVERY: the order's FIRST transition to DELIVERED or LOST_IN_TRANSIT
-   * falls in the window. An order that has EVER reached RTO_RECEIVED /
-   * RTO_RESTOCKED belongs to returns alone — dropped here, so a delivered
-   * month restates in that one rare case (a courier reversing a delivery)
-   * rather than count the parcel twice. An order that was lost and never
-   * delivered is here for its COST, with no revenue: nothing ever bills
-   * a lost parcel.
+   * WHICH: an order is in a cohort when its CURRENT fate (`currentFate`)
+   * is the cohort's, and the final stretch of its events in that fate
+   * (`walkFate`) began in the window — `delivery`: delivered or lost;
+   * `rto`: received back; `called_off`: cancelled or rejected, and only
+   * with money on it. Each order has exactly one such (fate, instant), so
+   * it is in one window of one cohort and adjacent windows tile. An order
+   * whose fate is later corrected leaves the window that first counted it
+   * — said in the notes.
    *
-   * RETURNS: the order's FIRST transition to RTO_RECEIVED or RTO_RESTOCKED
-   * falls in the window — the ORDER's fate, like delivery, not
-   * `shipments.rto_received_at`, which a receipt recorded outside the
-   * warehouse flow never stamps (SD-2026-QA-498051 has an rto_received
-   * event on 29 Jul and no rto_received_at, and was on no line at all).
+   * Dated by `order_events`: written for every transition however it
+   * happened — a courier scan, a manual scan, god mode. The statuses each
+   * cohort selects come from `orderFate` (`statusesOf`).
    *
-   * Dated by `order_events`: it is written for every transition however it
-   * happened — a courier scan, a manual scan, god mode.
+   * REVENUE is what was BILLED: the order's BILLED_DIRECTIONS debits less
+   * its ORDER_CHARGES_REFUNDs — the same rule in every cohort, so an order
+   * moving between them never changes what it earned. A charge line with
+   * no debit behind it is a quote, not revenue (`unbilled`, named in the
+   * notes). A lost parcel earns only the fee still held on it.
    *
-   * Classification (returned? lost?) reads ALL of an order's events, not
-   * just those in the window, so it cannot change with the window: that is
-   * what makes two adjacent reports add up to the report over both.
-   *
-   * Cost is summed over the order's LIVE shipments (not deleted, never
-   * replaced — a superseded one's charges are on the no-parcel line),
-   * both columns added. An order with no such shipment, or one whose
-   * parcel never got a waybill, has nothing recorded and is UNCOVERED.
+   * COST is summed over the order's LIVE shipments (not deleted, never
+   * replaced — a voided or superseded one's charges are on the
+   * no-live-parcel line), both columns added. An order with no such
+   * shipment, or one whose parcel never got a waybill, has nothing
+   * recorded and is UNCOVERED.
    */
-  private async fateCohort(kind: 'delivery' | 'rto', from: Date, to: Date): Promise<FateCohort> {
-    const statuses = kind === 'delivery' ? DELIVERED_FATES : RETURNED_FATES;
-    const empty: FateCohort = {
-      orders: [],
-      chargesByType: new Map(),
-      refunds: { amount: ZERO, count: 0 },
-      leftForReturns: 0,
-      foundAfterLoss: 0,
-      deliveredFirst: 0,
-    };
-    const first = await this.prisma.client.orderEvent.groupBy({
-      by: ['orderId'],
-      where: { toStatus: { in: statuses }, createdAt: { lt: to } },
-      _min: { createdAt: true },
-      having: { createdAt: { _min: { gte: from } } },
-    });
-    const at = new Map<string, Date>();
-    for (const e of first) {
-      if (e._min.createdAt !== null) at.set(e.orderId, e._min.createdAt);
-    }
-    if (at.size === 0) return empty;
-
-    const lost = new Set<string>();
-    let leftForReturns = 0;
-    let foundAfterLoss = 0;
-    let deliveredFirst = 0;
-    // Every fate each order has EVER reached, not just in the window, so
-    // the classification cannot change with the window.
-    const seen = await this.prisma.client.orderEvent.findMany({
-      where: {
-        orderId: { in: [...at.keys()] },
-        toStatus: { in: [...DELIVERED_FATES, ...RETURNED_FATES] },
-      },
-      select: { orderId: true, toStatus: true },
-      distinct: ['orderId', 'toStatus'],
-    });
-    const reached = new Map<string, Set<OrderStatus>>();
-    for (const e of seen) {
-      if (e.toStatus === null) continue;
-      const s = reached.get(e.orderId) ?? new Set<OrderStatus>();
-      s.add(e.toStatus);
-      reached.set(e.orderId, s);
-    }
-    if (kind === 'delivery') {
-      for (const id of [...at.keys()]) {
-        const s = reached.get(id) ?? new Set<OrderStatus>();
-        if (RETURNED_FATES.some((r) => s.has(r))) {
-          at.delete(id);
-          leftForReturns += 1;
-        } else if (!s.has(OrderStatus.DELIVERED)) {
-          lost.add(id);
-        } else if (s.has(OrderStatus.LOST_IN_TRANSIT)) {
-          // LOST is terminal and DELIVERED leads only to a return, so an
-          // order that reached both was lost first and found.
-          foundAfterLoss += 1;
-        }
-      }
-      if (at.size === 0) return { ...empty, leftForReturns };
-    } else {
-      for (const id of at.keys()) {
-        if (reached.get(id)?.has(OrderStatus.DELIVERED) === true) deliveredFirst += 1;
-      }
-    }
-
-    const ids = [...at.keys()];
-    const billable = ids.filter((id) => !lost.has(id));
-    const types = kind === 'delivery' ? DELIVERY_REVENUE_TYPES : RETURN_REVENUE_TYPES;
-    const [orders, links, charges, refunds] = await Promise.all([
-      this.prisma.client.order.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, orderNumber: true },
-      }),
-      this.prisma.client.orderShipment.findMany({
-        where: { orderId: { in: ids } },
-        select: { orderId: true, shipmentId: true },
-      }),
-      billable.length === 0
-        ? []
-        : this.prisma.client.orderCharge.findMany({
-            where: { deletedAt: null, orderId: { in: billable }, type: { in: [...types] } },
-            select: { orderId: true, type: true, amountInr: true },
-          }),
-      // A fee handed back on one of these orders (a waived or mistaken
-      // charge) comes off here, or it is income twice.
-      billable.length === 0
-        ? []
-        : this.prisma.client.sellerWalletEntry.findMany({
-            where: {
-              direction: WalletEntryDirection.ORDER_CHARGES_REFUND,
-              currency: Currency.INR,
-              linkedOrderId: { in: billable },
-            },
-            select: { linkedOrderId: true, amount: true },
-          }),
-    ]);
-    const shipmentIds = [...new Set(links.map((l) => l.shipmentId))];
-    const shipments =
-      shipmentIds.length === 0
-        ? []
-        : await this.prisma.client.shipment.findMany({
-            where: { id: { in: shipmentIds }, deletedAt: null, supersededAt: null },
-            select: {
-              id: true,
-              shipmentNumber: true,
-              awbNumber: true,
-              actualCourierCostInr: true,
-              actualRtoCostInr: true,
-            },
-          });
-    const shipmentById = new Map(shipments.map((s) => [s.id, s]));
-
-    const chargesByType = new Map<ChargeType, { amount: Prisma.Decimal; count: number }>();
-    const billedBy = new Map<string, Prisma.Decimal>();
-    for (const c of charges) {
-      const t = chargesByType.get(c.type) ?? { amount: ZERO, count: 0 };
-      chargesByType.set(c.type, { amount: t.amount.add(c.amountInr), count: t.count + 1 });
-      billedBy.set(c.orderId, (billedBy.get(c.orderId) ?? ZERO).add(c.amountInr));
-    }
-    let refundAmount = ZERO;
-    for (const r of refunds) {
-      if (r.linkedOrderId === null) continue;
-      refundAmount = refundAmount.add(r.amount);
-      billedBy.set(r.linkedOrderId, (billedBy.get(r.linkedOrderId) ?? ZERO).sub(r.amount));
-    }
-
-    const numberOf = new Map(orders.map((o) => [o.id, o.orderNumber]));
-    const out: FateOrder[] = ids.map((id) => {
-      const mine = links
-        .filter((l) => l.orderId === id)
-        .map((l) => shipmentById.get(l.shipmentId))
-        .filter((s): s is NonNullable<typeof s> => s !== undefined);
-      const recorded = mine.filter(
-        (s) => s.actualCourierCostInr !== null || s.actualRtoCostInr !== null,
-      );
-      const cost =
-        recorded.length === 0
-          ? null
-          : sum(recorded.flatMap((s) => [s.actualCourierCostInr, s.actualRtoCostInr]));
-      // MEASURED: delivery once every live parcel carries a figure; a
-      // return only once the RETURN itself has been billed — until then
-      // the forward figure is all we know, and it is not the whole cost.
-      const priced =
-        mine.length > 0 &&
-        mine.every((s) =>
-          kind === 'delivery'
-            ? s.actualCourierCostInr !== null || s.actualRtoCostInr !== null
-            : s.actualRtoCostInr !== null,
-        );
-      return {
-        orderId: id,
-        orderNumber: numberOf.get(id) ?? id,
-        at: at.get(id) ?? from,
-        lost: lost.has(id),
-        calledOff: null,
-        billed: lost.has(id) ? null : (billedBy.get(id) ?? ZERO),
-        cost,
-        priced,
-        parcels: mine.map((s) => s.awbNumber ?? s.shipmentNumber),
-      };
-    });
-    out.sort((a, b) => b.at.getTime() - a.at.getTime());
-    return {
-      orders: out,
-      chargesByType,
-      refunds: {
-        amount: refundAmount,
-        count: refunds.filter((r) => r.linkedOrderId !== null).length,
-      },
-      leftForReturns,
-      foundAfterLoss,
-      deliveredFirst,
-    };
-  }
-
-  /**
-   * Orders CALLED OFF in the window that still carry money — the ONE
-   * computation the delivery line's called-off part and its rows read.
-   *
-   * Which: an order whose CURRENT status is cancelled or rejected (see
-   * `orderFate`), dated by its LAST event into such a status, read over
-   * its whole history (never "last before `to`") — so a rejection that
-   * was reopened and rejected again is in one window only, the final
-   * one, and adjacent windows still tile. An order that ever reached a
-   * delivered or returned fate is left to those lines.
-   *
-   * Only orders with money on them: a delivery fee kept (ORDER_CHARGES
-   * debited, net of any ORDER_CHARGES_REFUND — `OrderChargesRefundService`
-   * gives it back on a cancel before dispatch and refuses after, so a
-   * cancel after DISPATCHED keeps it), or a LIVE shipment with a waybill.
-   * A shipment voided at the cancel is soft-deleted, and its courier
-   * charge is on the "no live Skydrop parcel" line; only LIVE parcels —
-   * the ones that had left us, which the void does not touch — are
-   * costed here, so nothing is counted twice.
-   *
-   * Revenue is the wallet debit, not `order_charges`: on the default
-   * AT_DELIVERY timing a cancelled order was never billed, and its charge
-   * lines are a quote nobody paid.
-   */
-  private async calledOffCohort(from: Date, to: Date): Promise<CalledOffCohort> {
-    const empty: CalledOffCohort = {
-      orders: [],
-      debited: { amount: ZERO, count: 0 },
-      refunded: { amount: ZERO, count: 0 },
-    };
-    const last = await this.prisma.client.orderEvent.groupBy({
-      by: ['orderId'],
-      where: {
-        toStatus: { in: CALLED_OFF_STATUSES },
-        order: { status: { in: CALLED_OFF_STATUSES } },
-      },
-      _max: { createdAt: true },
-      having: { createdAt: { _max: { gte: from, lt: to } } },
-    });
-    const at = new Map<string, Date>();
-    for (const e of last) {
-      if (e._max.createdAt !== null) at.set(e.orderId, e._max.createdAt);
-    }
-    if (at.size === 0) return empty;
-    // God mode can cancel a delivered or returned order; those lines own it.
-    const claimed = await this.prisma.client.orderEvent.findMany({
-      where: {
-        orderId: { in: [...at.keys()] },
-        toStatus: { in: [...DELIVERED_FATES, ...RETURNED_FATES] },
-      },
+  private async fateCohort(
+    kind: 'delivery' | 'rto' | 'called_off',
+    from: Date,
+    to: Date,
+  ): Promise<FateCohort> {
+    const fate: Fate =
+      kind === 'delivery' ? 'delivered' : kind === 'rto' ? 'returned' : 'called_off';
+    const empty: FateCohort = { orders: [], leftForReturns: 0, movedOn: 0 };
+    // Every order with an event into this fate in the window. A stretch
+    // always begins with such an event, so none is missed.
+    const hits = await this.prisma.client.orderEvent.findMany({
+      where: { toStatus: { in: statusesOf(fate) }, createdAt: win(from, to) },
       select: { orderId: true },
       distinct: ['orderId'],
     });
-    for (const c of claimed) at.delete(c.orderId);
-    if (at.size === 0) return empty;
-
-    const ids = [...at.keys()];
-    const [orders, links, entries] = await Promise.all([
+    if (hits.length === 0) return empty;
+    const candidates = hits.map((h) => h.orderId);
+    const [walks, rows] = await Promise.all([
+      this.fateWalks(candidates),
       this.prisma.client.order.findMany({
-        where: { id: { in: ids } },
+        where: { id: { in: candidates } },
         select: { id: true, orderNumber: true, status: true },
       }),
+    ]);
+    const orderById = new Map(rows.map((o) => [o.id, o]));
+
+    const included = new Map<string, { walk: FateWalk; at: Date }>();
+    let leftForReturns = 0;
+    let movedOn = 0;
+    for (const id of candidates) {
+      const walk = walks.get(id) ?? OPEN_WALK;
+      const now = currentFate(orderById.get(id)?.status ?? null, walk);
+      const start = walk.start;
+      if (walk.fate === fate && now === fate && start !== null && start.getTime() < to.getTime()) {
+        if (start.getTime() >= from.getTime()) included.set(id, { walk, at: start });
+        // Otherwise its stretch began in an earlier window, which counts
+        // it — this is a second event of the same fate (restocked after
+        // received, found after lost).
+        continue;
+      }
+      if (kind === 'delivery' && now === 'returned') leftForReturns += 1;
+      else movedOn += 1;
+    }
+    if (included.size === 0) return { ...empty, leftForReturns, movedOn };
+
+    const ids = [...included.keys()];
+    const [links, entries, charges] = await Promise.all([
       this.prisma.client.orderShipment.findMany({
         where: { orderId: { in: ids } },
         select: { orderId: true, shipmentId: true },
       }),
       this.prisma.client.sellerWalletEntry.findMany({
         where: {
-          direction: {
-            in: [WalletEntryDirection.ORDER_CHARGES, WalletEntryDirection.ORDER_CHARGES_REFUND],
-          },
+          direction: { in: [...BILLED_DIRECTIONS, WalletEntryDirection.ORDER_CHARGES_REFUND] },
           currency: Currency.INR,
           linkedOrderId: { in: ids },
         },
         select: { linkedOrderId: true, direction: true, amount: true },
+      }),
+      this.prisma.client.orderCharge.findMany({
+        where: { deletedAt: null, orderId: { in: ids } },
+        select: { orderId: true, type: true, amountInr: true },
       }),
     ]);
     const shipmentIds = [...new Set(links.map((l) => l.shipmentId))];
@@ -971,140 +975,221 @@ export class PnlService {
             },
           });
     const shipmentById = new Map(shipments.map((s) => [s.id, s]));
-    const billedBy = new Map<string, Prisma.Decimal>();
-    const debitsBy = new Map<string, Array<Prisma.Decimal>>();
-    const refundsBy = new Map<string, Array<Prisma.Decimal>>();
-    for (const e of entries) {
-      if (e.linkedOrderId === null) continue;
-      const credit = e.direction === WalletEntryDirection.ORDER_CHARGES_REFUND;
-      const bucket = credit ? refundsBy : debitsBy;
-      bucket.set(e.linkedOrderId, [...(bucket.get(e.linkedOrderId) ?? []), e.amount]);
-      billedBy.set(
-        e.linkedOrderId,
-        (billedBy.get(e.linkedOrderId) ?? ZERO)[credit ? 'sub' : 'add'](e.amount),
-      );
-    }
+    const linksOf = group(links, (l) => l.orderId);
+    const entriesOf = group(entries, (e) => e.linkedOrderId ?? '');
+    const chargesOf = group(charges, (c) => c.orderId);
+    const hasCost = (s: {
+      actualCourierCostInr: Prisma.Decimal | null;
+      actualRtoCostInr: Prisma.Decimal | null;
+    }): boolean => s.actualCourierCostInr !== null || s.actualRtoCostInr !== null;
 
-    const statusOf = new Map(orders.map((o) => [o.id, o]));
     const out: FateOrder[] = [];
-    let debited = ZERO;
-    let debitCount = 0;
-    let refunded = ZERO;
-    let refundCount = 0;
-    for (const id of ids) {
-      const mine = links
-        .filter((l) => l.orderId === id)
+    for (const [id, { walk, at }] of included) {
+      const mine = (linksOf.get(id) ?? [])
         .map((l) => shipmentById.get(l.shipmentId))
         .filter((s): s is NonNullable<typeof s> => s !== undefined);
-      const recorded = mine.filter(
-        (s) => s.actualCourierCostInr !== null || s.actualRtoCostInr !== null,
-      );
+      const recorded = mine.filter(hasCost);
       const waybilled = mine.filter((s) => s.awbNumber !== null);
-      const billed = billedBy.get(id) ?? ZERO;
-      if (billed.isZero() && waybilled.length === 0 && recorded.length === 0) continue;
-      const order = statusOf.get(id);
-      for (const a of debitsBy.get(id) ?? []) {
-        debited = debited.add(a);
-        debitCount += 1;
+      const own = entriesOf.get(id) ?? [];
+      const debits = own
+        .filter((e) => e.direction !== WalletEntryDirection.ORDER_CHARGES_REFUND)
+        .map((e) => ({ direction: e.direction, amount: e.amount }));
+      const refunds = own
+        .filter((e) => e.direction === WalletEntryDirection.ORDER_CHARGES_REFUND)
+        .map((e) => e.amount);
+      const debited = sum(debits.map((d) => d.amount));
+      const billed = debited.sub(sum(refunds));
+      // A cancelled order with nothing on it — a quote never billed, no
+      // parcel that left us — is no row at all.
+      if (
+        kind === 'called_off' &&
+        billed.isZero() &&
+        waybilled.length === 0 &&
+        recorded.length === 0
+      ) {
+        continue;
       }
-      for (const a of refundsBy.get(id) ?? []) {
-        refunded = refunded.add(a);
-        refundCount += 1;
-      }
+      const lost = walk.lost && !walk.delivered;
+      const quoted = sum(
+        (chargesOf.get(id) ?? [])
+          .filter((c) => chargeLeg(c.type) !== 'excluded')
+          .map((c) => c.amountInr),
+      );
+      // A settled delivery or return is owed its fee; a lost parcel or a
+      // called-off order is not, so a quote on those is no gap.
+      const unbilled =
+        kind !== 'called_off' && !lost && quoted.gt(debited) ? quoted.sub(debited) : ZERO;
       out.push({
         orderId: id,
-        orderNumber: order?.orderNumber ?? id,
-        at: at.get(id) ?? from,
-        lost: false,
-        calledOff: order?.status ?? OrderStatus.CANCELLED,
+        orderNumber: orderById.get(id)?.orderNumber ?? id,
+        at,
+        lost,
+        lostAfterDelivery: walk.lostAfterDelivery,
+        onReturnLeg: walk.onReturnLeg,
+        found: walk.found,
+        deliveredFirst: walk.deliveredBefore,
+        calledOff: kind === 'called_off' ? (orderById.get(id)?.status ?? null) : null,
+        debits,
+        refunds,
         billed,
+        unbilled,
         cost:
           recorded.length === 0
             ? null
             : sum(recorded.flatMap((s) => [s.actualCourierCostInr, s.actualRtoCostInr])),
-        // Measured once every parcel that had a waybill has been billed.
-        // A called-off order with no live waybill has nothing to price.
-        priced: waybilled.every(
-          (s) => s.actualCourierCostInr !== null || s.actualRtoCostInr !== null,
-        ),
+        // MEASURED: delivery once every live parcel carries a figure; a
+        // return only once the RETURN itself has been billed — until then
+        // the forward figure is all we know, and it is not the whole cost;
+        // a called-off order once every parcel that had a waybill is
+        // billed (one with no live waybill has nothing to price).
+        priced:
+          kind === 'called_off'
+            ? waybilled.every(hasCost)
+            : mine.length > 0 &&
+              mine.every((s) => (kind === 'delivery' ? hasCost(s) : s.actualRtoCostInr !== null)),
         parcels: mine.map((s) => s.awbNumber ?? s.shipmentNumber),
       });
     }
     out.sort((a, b) => b.at.getTime() - a.at.getTime());
-    return {
-      orders: out,
-      debited: { amount: debited, count: debitCount },
-      refunded: { amount: refunded, count: refundCount },
-    };
+    return { orders: out, leftForReturns, movedOn };
   }
 
   /**
-   * Parcels on orders whose fate is not yet known (`orderFate` = open),
-   * and the courier cost already recorded on them. A snapshot for the
-   * delivery note — these are on no line — not a figure in any total.
+   * Each order's `walkFate` over its status events — all of them, or only
+   * those before `before` (the fate it was in at that instant).
    */
-  private async openParcels(): Promise<{
+  private async fateWalks(ids: readonly string[], before?: Date): Promise<Map<string, FateWalk>> {
+    if (ids.length === 0) return new Map();
+    const events = await this.prisma.client.orderEvent.findMany({
+      where: {
+        orderId: { in: [...ids] },
+        toStatus: { not: null },
+        ...(before === undefined ? {} : { createdAt: { lt: before } }),
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { orderId: true, toStatus: true, createdAt: true },
+    });
+    const byOrder = new Map<string, Array<{ toStatus: OrderStatus; createdAt: Date }>>();
+    for (const e of events) {
+      if (e.toStatus === null) continue;
+      const list = byOrder.get(e.orderId) ?? [];
+      list.push({ toStatus: e.toStatus, createdAt: e.createdAt });
+      byOrder.set(e.orderId, list);
+    }
+    return new Map([...byOrder].map(([id, evs]) => [id, walkFate(evs)]));
+  }
+
+  /**
+   * Parcels on orders whose fate was NOT YET KNOWN at the end of the
+   * window (`walkFate` over the events before `to` says open), and the
+   * courier cost recorded on them. For the delivery note — these are on
+   * no line — not a figure in any total.
+   *
+   * As of `to`, so a past month says what was still moving THEN: a parcel
+   * booked before `to` and not voided or replaced by then. Candidates are
+   * orders open now, or with an event at or after `to` (anything else was
+   * already settled at `to` and still is). The courier cost is the figure
+   * recorded today — the import stamps it when the courier bills, which
+   * can be after the window closed.
+   */
+  private async openParcels(to: Date): Promise<{
     parcels: number;
     costed: number;
     cost: Prisma.Decimal;
   }> {
-    const base = {
-      deletedAt: null,
-      supersededAt: null,
-      orderShipments: { some: { order: { status: { in: OPEN_STATUSES } } } },
-    };
-    const [withWaybill, costed] = await Promise.all([
-      this.prisma.client.shipment.count({ where: { ...base, awbNumber: { not: null } } }),
-      this.prisma.client.shipment.aggregate({
-        where: {
-          ...base,
-          OR: [{ actualCourierCostInr: { not: null } }, { actualRtoCostInr: { not: null } }],
+    const shipments = await this.prisma.client.shipment.findMany({
+      where: {
+        createdAt: { lt: to },
+        AND: [
+          { OR: [{ deletedAt: null }, { deletedAt: { gte: to } }] },
+          { OR: [{ supersededAt: null }, { supersededAt: { gte: to } }] },
+          {
+            OR: [
+              { awbNumber: { not: null } },
+              { actualCourierCostInr: { not: null } },
+              { actualRtoCostInr: { not: null } },
+            ],
+          },
+        ],
+        orderShipments: {
+          some: {
+            order: {
+              OR: [
+                { status: { in: OPEN_STATUSES } },
+                { events: { some: { createdAt: { gte: to } } } },
+              ],
+            },
+          },
         },
-        _count: { _all: true },
-        _sum: { actualCourierCostInr: true, actualRtoCostInr: true },
-      }),
-    ]);
+      },
+      select: {
+        awbNumber: true,
+        actualCourierCostInr: true,
+        actualRtoCostInr: true,
+        orderShipments: { select: { orderId: true } },
+      },
+    });
+    // An order with no event before `to` is not in the map: open.
+    const asOf = await this.fateWalks(
+      [...new Set(shipments.flatMap((s) => s.orderShipments.map((l) => l.orderId)))],
+      to,
+    );
+    const open = shipments.filter((s) =>
+      s.orderShipments.some((l) => (asOf.get(l.orderId) ?? OPEN_WALK).fate === 'open'),
+    );
+    const costed = open.filter(
+      (s) => s.actualCourierCostInr !== null || s.actualRtoCostInr !== null,
+    );
     return {
-      parcels: withWaybill,
-      costed: costed._count._all,
-      cost: (costed._sum.actualCourierCostInr ?? ZERO).add(costed._sum.actualRtoCostInr ?? ZERO),
+      parcels: open.filter((s) => s.awbNumber !== null).length,
+      costed: costed.length,
+      cost: sum(costed.flatMap((s) => [s.actualCourierCostInr, s.actualRtoCostInr])),
     };
   }
 
   /**
-   * The Indian delivery leg. What we bill for carriage, less what the
-   * courier charged, for every order DELIVERED (or lost) in the window.
+   * The Indian delivery leg. What we billed for carriage, less what the
+   * courier charged, for every order DELIVERED (or lost), and every order
+   * called off with money on it, in the window (see `fateCohort`).
    *
-   * BOTH sides are anchored on the same ORDERS (see `fateCohort`), so a
-   * parcel's revenue and its cost can never land in different reports.
-   *
-   * Revenue is every charge we billed for carriage — base, surcharges AND
-   * the GST on them (we file no return against it; it is ours,
-   * DELIVERY_REVENUE_TYPES), without the RTO fee, which prices a second
-   * movement and is on the returns line. The cost is BOTH columns added:
-   * the importer nets refunds (COST-1), so the sum is what the parcel
-   * cost whichever leg it was billed on.
+   * BOTH sides are anchored on the same ORDERS, so a parcel's revenue and
+   * its cost can never land in different reports. Revenue is what the
+   * seller was DEBITED, net of refunds — base, surcharges and the GST on
+   * them (we file no return against it; it is ours). The cost is BOTH
+   * columns added: the importer nets refunds (COST-1), so the sum is what
+   * the parcel cost whichever leg it was billed on.
    */
   private async delivery(from: Date, to: Date): Promise<PnlLine> {
     const [cohort, calledOff, open] = await Promise.all([
       this.fateCohort('delivery', from, to),
-      this.calledOffCohort(from, to),
-      // Orders whose fate is not known yet — waiting on a call, in the
-      // warehouse or with the courier — are on no line. Counted, with the
-      // courier cost already on their parcels, so the report says so.
-      this.openParcels(),
+      this.fateCohort('called_off', from, to),
+      // Orders whose fate was not known at the end of the window are on no
+      // line. Counted, with the courier cost on their parcels, so the
+      // report says so.
+      this.openParcels(to),
     ]);
     const orders = cohort.orders;
     const delivered = orders.filter((o) => !o.lost);
     const lost = orders.filter((o) => o.lost);
     const off = calledOff.orders;
-    const offRevenue = sum(off.map((o) => o.billed));
-    const revenue = sum(orders.map((o) => o.billed)).add(offRevenue);
+    const all = [...orders, ...off];
+    const revenue = sum(all.map((o) => o.billed));
     const deliveredCost = sum(delivered.map((o) => o.cost));
     const lostCost = sum(lost.map((o) => o.cost));
     const offCost = sum(off.map((o) => o.cost));
-    const priced = [...orders, ...off].filter((o) => o.priced).length;
-    const total = orders.length + off.length;
+    const offRevenue = sum(off.map((o) => o.billed));
+    const priced = all.filter((o) => o.priced).length;
+    const total = all.length;
+    const lostHeld = sum(lost.map((o) => o.billed));
+    const lostDebited = sum(lost.flatMap((o) => o.debits.map((d) => d.amount)));
+    const lostRefunded = sum(lost.flatMap((o) => o.refunds));
+    const lostOnTheWayBack = delivered.filter((o) => o.lostAfterDelivery);
+    const found = delivered.filter((o) => o.found);
+    const lostParts = this.billedParts(
+      lost,
+      BILLED_LABELS.lost,
+      'lost in transit in window, never delivered',
+    );
 
     const notes = [
       ...(priced < total
@@ -1115,22 +1200,43 @@ export class PnlService {
               'order; and an order whose parcel never got a waybill has nothing to price.',
           ]
         : []),
+      // What happened to a lost parcel's fee, whichever way it went: it
+      // should have come back (a lost parcel is not charged), and until it
+      // does it is real money on this line.
       ...(lost.length > 0
         ? [
             `${lost.length} parcel(s) were lost in transit: their courier cost ` +
-              `(₹${lostCost.toFixed(2)}) is counted here and nothing is billed for them.`,
+              `(₹${lostCost.toFixed(2)}) is counted here` +
+              (lostHeld.gt(0)
+                ? `; ₹${lostHeld.toFixed(2)} of fees debited on them is still held — a lost ` +
+                  'parcel is not charged, so it is owed back to the seller'
+                : lostDebited.isZero()
+                  ? ' and nothing was billed for them'
+                  : '') +
+              (lostRefunded.gt(0) ? `; ₹${lostRefunded.toFixed(2)} was refunded` : '') +
+              '.',
           ]
         : []),
+      ...(lostOnTheWayBack.length > 0
+        ? [
+            `${lostOnTheWayBack.length} order(s) were delivered and then lost` +
+              (lostOnTheWayBack.every((o) => o.onReturnLeg)
+                ? ' on their way back (a customer return lost in transit)'
+                : '') +
+              ': billed as delivered, dated by the delivery, with their courier cost counted here.',
+          ]
+        : []),
+      ...this.unbilledNote(orders),
       ...(off.length > 0
         ? [
             `${off.length} order(s) were called off (cancelled or rejected) with money still on ` +
-              `them: the delivery fee we kept (₹${offRevenue.toFixed(2)}) and the courier cost on ` +
+              `them: the fee we kept (₹${offRevenue.toFixed(2)}) and the courier cost on ` +
               `parcels that had left us (₹${offCost.toFixed(2)}) are counted here, dated by the ` +
               'cancellation. A parcel voided before it left is on the "no live Skydrop parcel" ' +
               'line instead.',
           ]
         : []),
-      // Fate-based recognition restates a window in these two cases, by
+      // Fate-based recognition restates a window in these cases, by
       // design (TRE-6). Said, so a figure that moved is seen to have.
       ...(cohort.leftForReturns > 0
         ? [
@@ -1139,21 +1245,28 @@ export class PnlService {
               'longer here, so this window reads lower than it did when they were delivered.',
           ]
         : []),
-      ...(cohort.foundAfterLoss > 0
+      ...(cohort.movedOn > 0
         ? [
-            `${cohort.foundAfterLoss} order(s) were lost in transit in this window and later ` +
+            `${cohort.movedOn} order(s) delivered or lost in this window have since left that ` +
+              'fate — reopened, cancelled, or delivered again later — and are counted where the ' +
+              'fate they are in now began, not here.',
+          ]
+        : []),
+      ...(found.length > 0
+        ? [
+            `${found.length} order(s) were lost in transit in this window and later ` +
               'found and delivered: they stay dated by the loss, so this window now carries their ' +
               'revenue.',
           ]
         : []),
       ...(open.parcels > 0 || open.costed > 0
         ? [
-            `${open.parcels} parcel(s) on orders not yet delivered, returned or called off hold ` +
-              'a waybill' +
+            `At the end of this window ${open.parcels} parcel(s) on orders not yet delivered, ` +
+              'returned or called off hold a waybill' +
               (open.costed > 0
                 ? ` and ${open.costed} already carry ₹${open.cost.toFixed(2)} of courier cost ` +
-                  '(a waybill is charged when it is booked, so a parcel still in the warehouse ' +
-                  'can carry one)'
+                  '(as recorded today; a waybill is charged when it is booked, so a parcel still ' +
+                  'in the warehouse can carry one)'
                 : '') +
               '. They are on no line until their fate is known.',
           ]
@@ -1169,24 +1282,20 @@ export class PnlService {
       total,
       note: notes.length === 0 ? null : notes.join(' '),
       basis: {
-        // Broken out by CHARGE TYPE, because "shipping revenue" is four
-        // different prices added together and only one of them is the
-        // base rate. A total that cannot be split cannot be checked
-        // against a rate card.
+        // By wallet DIRECTION — what was debited — and what came back.
         revenue: [
-          ...this.chargeParts(cohort, 'delivered or lost in window, first fate'),
-          ...(lost.length === 0
-            ? []
+          ...this.billedParts(delivered, BILLED_LABELS.delivered, 'delivered in window'),
+          ...(lost.length === 0 || lostParts.length > 0
+            ? lostParts
             : [
                 {
                   label: 'Lost in transit — never billed',
-                  source:
-                    'orders first LOST_IN_TRANSIT and never DELIVERED: none of their order_charges count',
+                  source: 'orders LOST_IN_TRANSIT and never DELIVERED, with no fee debited',
                   count: lost.length,
                   amountInr: '0.00',
                 },
               ]),
-          ...this.calledOffParts(calledOff),
+          ...this.billedParts(off, BILLED_LABELS.calledOff, 'orders now cancelled or rejected'),
         ],
         cost: [
           {
@@ -1200,7 +1309,7 @@ export class PnlService {
             ? []
             : [
                 {
-                  label: 'Courier cost on parcels lost in transit (no revenue)',
+                  label: 'Courier cost on parcels lost in transit',
                   source:
                     'shipments.actual_courier_cost_inr + actual_rto_cost_inr, orders LOST_IN_TRANSIT and never DELIVERED',
                   count: lost.filter((o) => o.cost !== null).length,
@@ -1229,60 +1338,62 @@ export class PnlService {
       : { ...built, coverage: { ...built.coverage, note: notes.join(' ') } };
   }
 
-  /** The called-off orders' kept fees, as basis parts that add up to their revenue. */
-  private calledOffParts(c: CalledOffCohort): PnlBasisPart[] {
-    if (c.orders.length === 0) return [];
+  /** Charge lines on settled orders that no debit covers — quoted, never billed. */
+  private unbilledNote(orders: readonly FateOrder[]): string[] {
+    const gaps = orders.filter((o) => o.unbilled.gt(0));
+    if (gaps.length === 0) return [];
     return [
-      {
-        label: 'Delivery fee taken on orders since called off',
-        source:
-          'seller_wallet_entries.amount WHERE direction=ORDER_CHARGES, orders now cancelled or rejected (dated by the cancellation)',
-        count: c.debited.count,
-        amountInr: c.debited.amount.toFixed(2),
-      },
-      ...(c.refunded.count === 0
-        ? []
-        : [
-            {
-              label: 'Refunded to the seller on those orders',
-              source: 'seller_wallet_entries.amount WHERE direction=ORDER_CHARGES_REFUND',
-              count: c.refunded.count,
-              amountInr: c.refunded.amount.negated().toFixed(2),
-            },
-          ]),
+      `${gaps.length} order(s) carry ₹${sum(gaps.map((o) => o.unbilled)).toFixed(2)} of charge ` +
+        'lines that were never debited to the seller — quoted, not billed — and are not counted.',
     ];
   }
 
-  /** A cohort's charges by type, and the refunds that came off them, as basis parts. */
-  private chargeParts(cohort: FateCohort, filter: string): PnlBasisPart[] {
-    return [
-      ...[...cohort.chargesByType.entries()].map(([type, t]) => ({
-        label: this.chargeTypeLabel(type),
-        source: `order_charges.amount_inr WHERE type=${type} (${filter})`,
-        count: t.count,
-        amountInr: t.amount.toFixed(2),
-      })),
-      ...(cohort.refunds.count === 0
-        ? []
-        : [
-            {
-              label: 'Refunded to the seller on these orders',
-              source: 'seller_wallet_entries.amount WHERE direction=ORDER_CHARGES_REFUND',
-              count: cohort.refunds.count,
-              amountInr: cohort.refunds.amount.negated().toFixed(2),
-            },
-          ]),
-    ];
+  /**
+   * What a group of orders was debited, by wallet direction, and the
+   * refunds that came off — basis parts that add up to their revenue.
+   */
+  private billedParts(
+    orders: readonly FateOrder[],
+    labels: BilledLabels,
+    filter: string,
+  ): PnlBasisPart[] {
+    const parts: PnlBasisPart[] = [];
+    const push = (label: string, direction: string, amounts: Prisma.Decimal[], sign = 1): void => {
+      if (amounts.length === 0) return;
+      const total = sum(amounts);
+      parts.push({
+        label,
+        source: `seller_wallet_entries.amount WHERE direction=${direction} (${filter})`,
+        count: amounts.length,
+        amountInr: (sign < 0 ? total.negated() : total).toFixed(2),
+      });
+    };
+    const debited = (d: WalletEntryDirection): Prisma.Decimal[] =>
+      orders.flatMap((o) => o.debits.filter((x) => x.direction === d).map((x) => x.amount));
+    push(labels.charges, 'ORDER_CHARGES', debited(WalletEntryDirection.ORDER_CHARGES));
+    push(labels.returnFee, 'RTO_FEE', debited(WalletEntryDirection.RTO_FEE));
+    push(
+      labels.customerReturnFee,
+      'CUSTOMER_RETURN_FEE',
+      debited(WalletEntryDirection.CUSTOMER_RETURN_FEE),
+    );
+    push(
+      labels.refunded,
+      'ORDER_CHARGES_REFUND',
+      orders.flatMap((o) => o.refunds),
+      -1,
+    );
+    return parts;
   }
 
   /**
    * Returns — every order whose parcel came BACK in the window (see
    * `fateCohort`).
    *
-   * Revenue is what the seller is billed for a parcel that came back: its
-   * delivery fee AND its return fee (RETURN_REVENUE_TYPES), less anything
-   * refunded on the order — exactly as delivery nets its refunds, or a
-   * refunded fee is income twice.
+   * Revenue is what the seller was debited for a parcel that came back:
+   * its delivery fee AND its return fee, less anything refunded on the
+   * order — exactly as delivery nets its refunds, or a refunded fee is
+   * income twice.
    *
    * The cost is everything the courier charged for the parcel, both
    * columns added. Delhivery refunds the delivery charge on a return and
@@ -1297,17 +1408,25 @@ export class PnlService {
     const revenue = sum(orders.map((o) => o.billed));
     const cost = sum(orders.map((o) => o.cost));
     const priced = orders.filter((o) => o.priced).length;
+    const deliveredFirst = orders.filter((o) => o.deliveredFirst).length;
     const notes = [
       ...(priced < orders.length
         ? [
             `${orders.length - priced} returns have no return cost recorded, so this margin is flattering.`,
           ]
         : []),
-      // A restatement, by design (TRE-6): said so the moved figure is seen.
-      ...(cohort.deliveredFirst > 0
+      ...this.unbilledNote(orders),
+      // Restatements, by design (TRE-6): said so the moved figure is seen.
+      ...(deliveredFirst > 0
         ? [
-            `${cohort.deliveredFirst} of these had been delivered first: the window they were ` +
+            `${deliveredFirst} of these had been delivered first: the window they were ` +
               'delivered in no longer counts them on its delivery line.',
+          ]
+        : []),
+      ...(cohort.movedOn > 0
+        ? [
+            `${cohort.movedOn} order(s) received back in this window have since left that state ` +
+              'and are counted where the fate they are in now began, not here.',
           ]
         : []),
     ];
@@ -1320,7 +1439,7 @@ export class PnlService {
       total: orders.length,
       note: notes.length === 0 ? null : notes.join(' '),
       basis: {
-        revenue: this.chargeParts(cohort, 'received back in window, first fate'),
+        revenue: this.billedParts(orders, BILLED_LABELS.returned, 'received back in window'),
         cost: [
           {
             label: 'Courier cost to bring parcels back',
@@ -2226,14 +2345,26 @@ export class PnlService {
    * matcher the no-live-parcel line and the adjustments line share, so
    * "ours" cannot mean two things on one report.
    *
-   * A parcel is ours when a shipment of the SAME courier as the charging
-   * account (a waybill is unique only within a courier) carries the
-   * waybill forward or as its return waybill (`reverse_awb_number` — a
-   * customer-return pickup), or, for Shiprocket, sits under the charge's
-   * courier ORDER id (a waybill Shiprocket replaced is still that
-   * order's). `live`: a live shipment carries it. `dead`: only a voided
-   * or replaced one does — booked through us all the same. Null: nobody
-   * we know.
+   * It answers with the shipment the IMPORTER nets the charge onto
+   * (`WalletImportService`: the parcel lookup, then `waybillAliases` and
+   * `dropTaken`), in the same order, so every charge lands on exactly one
+   * line — a charge netted onto a voided shipment is read by no cohort,
+   * and must not be excused from this line by some OTHER live shipment
+   * that merely shares its order id. In scope: shipments of the SAME
+   * courier as the charging account (a waybill is unique only within a
+   * courier) on that account or on none.
+   *
+   *  1. A shipment holding the waybill as its OWN — whatever else matches.
+   *  2. A waybill some other shipment holds as its own is never netted as
+   *     an alias: nobody we know.
+   *  3. A shipment holding it as its return waybill (`reverse_awb_number`
+   *     — a customer-return pickup).
+   *  4. For Shiprocket, shipments under the charge's courier ORDER id (a
+   *     waybill Shiprocket replaced is still that order's), the live one
+   *     preferred as the importer prefers it.
+   *
+   * `live`: the parcel it nets onto is live. `dead`: only a voided or
+   * replaced one — booked through us all the same. Null: nobody we know.
    */
   private async parcelMatcher(
     keys: ReadonlyArray<{ accountId: string; awb: string | null; ref: string | null }>,
@@ -2264,23 +2395,39 @@ export class PnlService {
           reverseAwbNumber: true,
           courierOrderId: true,
           courierCode: true,
+          courierAccountId: true,
           deletedAt: true,
           supersededAt: true,
         },
       }),
     ]);
     const courierOf = new Map(accounts.map((a) => [a.id, a.courier.code]));
+    type Held = (typeof shipments)[number];
+    const verdict = (held: readonly Held[]): 'live' | 'dead' | null =>
+      held.length === 0
+        ? null
+        : held.some((s) => s.deletedAt === null && s.supersededAt === null)
+          ? 'live'
+          : 'dead';
     return (k) => {
       const code = courierOf.get(k.accountId);
       if (code === undefined) return null;
-      const mine = shipments.filter(
+      const inScope = shipments.filter(
         (s) =>
           s.courierCode === code &&
-          ((k.awb !== null && (s.awbNumber === k.awb || s.reverseAwbNumber === k.awb)) ||
-            (k.ref !== null && s.courierOrderId === k.ref)),
+          (s.courierAccountId === null || s.courierAccountId === k.accountId),
       );
-      if (mine.length === 0) return null;
-      return mine.some((s) => s.deletedAt === null && s.supersededAt === null) ? 'live' : 'dead';
+      if (k.awb !== null) {
+        const own = inScope.filter((s) => s.awbNumber === k.awb);
+        if (own.length > 0) return verdict(own);
+        if (shipments.some((s) => s.awbNumber === k.awb)) return null;
+        const reverse = inScope.filter((s) => s.reverseAwbNumber === k.awb && s.awbNumber !== null);
+        if (reverse.length > 0) return verdict(reverse);
+      }
+      if (k.ref !== null) {
+        return verdict(inScope.filter((s) => s.courierOrderId === k.ref && s.awbNumber !== null));
+      }
+      return null;
     };
   }
 
@@ -2651,23 +2798,37 @@ export class PnlService {
 
       case 'delivery':
       case 'rto': {
-        // One row per ORDER — its charges once, its cost summed over its
-        // live shipments — from the very cohorts the total is built from.
+        // One row per ORDER — what it was billed once, its cost summed over
+        // its live shipments — from the very cohorts the total is built from.
         const [cohort, calledOff] = await Promise.all([
           this.fateCohort(key, from, to),
-          key === 'delivery' ? this.calledOffCohort(from, to) : Promise.resolve(null),
+          key === 'delivery' ? this.fateCohort('called_off', from, to) : Promise.resolve(null),
         ]);
         return capped(
           [...cohort.orders, ...(calledOff?.orders ?? [])].map((o) => ({
             ref: o.orderNumber,
             subRef:
               (o.parcels.length === 0 ? 'no live parcel' : o.parcels.join(', ')) +
-              (o.lost ? ' · lost in transit — never billed' : '') +
+              (o.lost
+                ? ' · lost in transit — ' +
+                  (o.billed.gt(0)
+                    ? `₹${o.billed.toFixed(2)} fee still held`
+                    : o.refunds.length > 0
+                      ? 'fee refunded'
+                      : 'never billed')
+                : '') +
+              (o.lostAfterDelivery
+                ? o.onReturnLeg
+                  ? ' · delivered, then lost on its way back'
+                  : ' · delivered, then lost'
+                : '') +
+              (o.found ? ' · lost, then found and delivered' : '') +
+              (o.unbilled.gt(0) ? ` · ₹${o.unbilled.toFixed(2)} quoted, never billed` : '') +
               (o.calledOff === null
                 ? ''
                 : ` · called off (${o.calledOff.toLowerCase()}) — fee kept, dated by the cancellation`),
             at: o.at.toISOString(),
-            revenueInr: o.billed?.toFixed(2) ?? null,
+            revenueInr: o.billed.toFixed(2),
             costInr: o.cost?.toFixed(2) ?? null,
           })),
         );
@@ -2891,42 +3052,6 @@ export class PnlService {
       default: {
         const unreachable: never = key;
         return { key: unreachable, items: [], truncated: false };
-      }
-    }
-  }
-
-  /**
-   * A charge type in the words a person uses. Exhaustive, like
-   * `chargeLeg`: a new type gets a label in the same change that decides
-   * its line.
-   */
-  private chargeTypeLabel(type: ChargeType): string {
-    switch (type) {
-      case ChargeType.BASE_SHIPPING:
-        return 'Base shipping';
-      case ChargeType.COD_FEE:
-        return 'COD collection fee';
-      case ChargeType.FUEL_SURCHARGE:
-        return 'Fuel surcharge';
-      case ChargeType.REMOTE_AREA_FEE:
-        return 'Remote-area fee';
-      case ChargeType.WEIGHT_DISPUTE_FEE:
-        return 'Weight dispute';
-      case ChargeType.RESHIPMENT_FEE:
-        return 'Reshipment fee';
-      case ChargeType.GST:
-        return 'GST on our fees';
-      case ChargeType.ADJUSTMENT:
-        return 'Charge adjustment';
-      case ChargeType.OTHER:
-        return 'Other charge';
-      case ChargeType.RTO_FEE:
-        return 'Return fee';
-      case ChargeType.REFUND:
-        return 'Refund line (not billed)';
-      default: {
-        const unlabelled: never = type;
-        return unlabelled;
       }
     }
   }

@@ -54,6 +54,7 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
     transfer: one('bankTransfer', 'transferId'),
     expenseCategory: one('expenseCategory', 'expenseCategoryId'),
     remittance: one('remittance', 'remittanceId'),
+    inboundFreightCharge: one('inboundFreightCharge', 'inboundFreightChargeId'),
   },
   courierSettlementLine: {
     order: one('order', 'orderId'),
@@ -70,6 +71,7 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
   order: {
     orderShipments: { model: 'orderShipment', local: 'id', foreign: 'orderId', many: true },
     charges: { model: 'orderCharge', local: 'id', foreign: 'orderId', many: true },
+    events: { model: 'orderEvent', local: 'id', foreign: 'orderId', many: true },
   },
   courierAccount: { courier: one('courier', 'courierId') },
 };
