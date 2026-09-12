@@ -149,7 +149,19 @@ export class ChargesBillingBackfillService {
     // older than the fee — owes it and was never asked. The live path
     // and its own gate (a prior RTO_FEE / CUSTOMER_RETURN_FEE entry), so
     // a second run charges nobody twice.
-    const returns = await this.prisma.client.order.findMany({
+    //
+    // A seller given FREE returns (their fee resolves to 0) owes nothing,
+    // and `chargeOnReceive` rightly writes nothing — which also means no
+    // fee entry ever appears to take the order off this list. Listed as-is
+    // they came back on every run as "NO_RETURN_FEE" and, oldest first,
+    // filled the `limit` so real misses behind them were never reached.
+    // So each order's fee is resolved first (cached per seller and kind —
+    // settings, not per order) and a free one is dropped silently, BEFORE
+    // the limit is applied. The simplest correct option: it reads every
+    // received return without a fee entry, a set that only grows by free
+    // sellers' returns and is cheap to scan; recording "resolved free" on
+    // the order would need a column for a fact the settings already hold.
+    const allReturns = await this.prisma.client.order.findMany({
       where: {
         deletedAt: null,
         status: { in: [...RETURN_TERMINALS] },
@@ -161,10 +173,31 @@ export class ChargesBillingBackfillService {
           },
         },
       },
-      select: { id: true, orderNumber: true, status: true, sellerId: true },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        sellerId: true,
+        customerReturnRequestedAt: true,
+      },
       orderBy: { createdAt: 'asc' },
-      take: opts.limit,
     });
+    const feeCache = new Map<string, boolean>();
+    const owesFee = async (o: (typeof allReturns)[number]): Promise<boolean> => {
+      const customer = o.customerReturnRequestedAt != null;
+      const key = `${o.sellerId}|${customer ? 'customer' : 'rto'}`;
+      let owes = feeCache.get(key);
+      if (owes === undefined) {
+        owes = (await this.rtoFees.returnFeeFor(o.sellerId, customer)).greaterThan(0);
+        feeCache.set(key, owes);
+      }
+      return owes;
+    };
+    const returns: typeof allReturns = [];
+    for (const o of allReturns) {
+      if (returns.length >= opts.limit) break;
+      if (await owesFee(o)) returns.push(o);
+    }
     const feeCharged: string[] = [];
     for (const o of returns) {
       if (opts.dryRun) {

@@ -8,13 +8,22 @@ interface Created {
   ownerKind: string;
   sellerId: string | null;
   type: string;
+  currency: string;
+  note: string;
 }
 
 function makeTx(opts: {
-  held?: Array<{ accountId: string; amount: Prisma.Decimal }>;
+  held?: Array<{ accountId: string; amount: Prisma.Decimal; currency?: Currency }>;
   anyAccount?: string | null;
-  /** The seller's wallet balance before the cash arrives; absent = no entries. */
+  /**
+   * The seller's wallet balance — before the cash arrives for debtSplit,
+   * after the entry for apply; absent = no entries.
+   */
   balance?: Prisma.Decimal;
+  /** The latest accepted top-up into a taka account: what arrived, what was credited. */
+  topup?: { amount: string; credited: string } | null;
+  /** Today's rate row, "1 fromCurrency = rate toCurrency". */
+  fx?: { fromCurrency: Currency; rate: string } | null;
 }) {
   const created: Created[] = [];
   const tx = {
@@ -27,8 +36,19 @@ function makeTx(opts: {
       groupBy: async () =>
         (opts.held ?? []).map((h) => ({
           accountId: h.accountId,
+          currency: h.currency ?? Currency.INR,
           _sum: { signedAmount: h.amount },
         })),
+    },
+    walletTopupRequest: {
+      findFirst: async () =>
+        opts.topup
+          ? { amount: D(opts.topup.amount), walletEntry: { amount: D(opts.topup.credited) } }
+          : null,
+    },
+    fxRate: {
+      findFirst: async () =>
+        opts.fx ? { fromCurrency: opts.fx.fromCurrency, rate: D(opts.fx.rate) } : null,
     },
     platformBankAccount: {
       findFirst: async () =>
@@ -56,12 +76,16 @@ function makeLedger(created: Created[]) {
       signedAmount: Prisma.Decimal;
       owner: { kind: string; sellerId?: string };
       type: string;
+      amountCurrency: string;
+      note?: string | null;
     }) => {
       created.push({
         signedAmount: input.signedAmount,
         ownerKind: input.owner.kind,
         sellerId: input.owner.sellerId ?? null,
         type: input.type,
+        currency: input.amountCurrency,
+        note: input.note ?? '',
       });
       return { id: `be-${created.length}` };
     },
@@ -137,8 +161,9 @@ describe('SellerCashAttributionService', () => {
   });
 
   it('a refund gives the cash back — the pair runs the other way', async () => {
+    // In credit either side of it: ₹1,000 → ₹1,200.
     const created = await run(
-      { held: [{ accountId: 'acc-1', amount: D('1000') }] },
+      { held: [{ accountId: 'acc-1', amount: D('1000') }], balance: D('1200') },
       WalletEntryDirection.ORDER_CHARGES_REFUND,
       '200',
     );
@@ -245,5 +270,105 @@ describe('SellerCashAttributionService', () => {
       '50',
     );
     expect(created).toHaveLength(2);
+  });
+
+  describe('a seller whose money is partly in taka', () => {
+    const summary = (c: Created[]): string[][] =>
+      c.map((x) => [x.ownerKind, x.signedAmount.toString(), x.currency]);
+
+    it('a charge beyond their rupees continues into their taka, at their last top-up rate', async () => {
+      // ₹100 at HDFC, ৳10,000 at Tasin credited at ₹8,000 (₹0.80 a taka).
+      // A ₹300 charge takes the ₹100, then ₹200 of taka = ৳250.
+      const created = await run(
+        {
+          held: [
+            { accountId: 'tasin', amount: D('10000'), currency: Currency.BDT },
+            { accountId: 'hdfc', amount: D('100') },
+          ],
+          topup: { amount: '10000', credited: '8000' },
+        },
+        WalletEntryDirection.ORDER_CHARGES,
+        '300',
+      );
+      expect(summary(created)).toEqual([
+        ['SELLER', '-100', 'INR'],
+        ['CAPITAL', '100', 'INR'],
+        ['SELLER', '-250', 'BDT'],
+        ['CAPITAL', '250', 'BDT'],
+      ]);
+      expect(created[2]?.note).toContain('last top-up');
+    });
+
+    it('with no top-up into that account, values it at today’s rate — and says so', async () => {
+      // 1 INR = 1.25 BDT, so a taka is ₹0.80 either way.
+      const created = await run(
+        {
+          held: [{ accountId: 'tasin', amount: D('10000'), currency: Currency.BDT }],
+          fx: { fromCurrency: Currency.INR, rate: '1.25' },
+        },
+        WalletEntryDirection.RTO_FEE,
+        '200',
+      );
+      expect(summary(created)).toEqual([
+        ['SELLER', '-250', 'BDT'],
+        ['CAPITAL', '250', 'BDT'],
+      ]);
+      expect(created[0]?.note).toContain('today');
+    });
+
+    it('never takes more than they hold, and says how much it took', async () => {
+      const { tx, created } = makeTx({
+        held: [{ accountId: 'tasin', amount: D('100'), currency: Currency.BDT }],
+        topup: { amount: '1000', credited: '800' },
+      });
+      const svc = new SellerCashAttributionService(makeLedger(created) as never);
+      const moved = await svc.takeToCapital(tx as never, {
+        sellerId: 's1',
+        amount: D('500'),
+        reference: 'r',
+        note: 'n',
+      });
+      // ৳100 at ₹0.80 is all there is: ₹80 moved, ₹420 stays a receivable.
+      expect(moved.toString()).toBe('80');
+      expect(summary(created)).toEqual([
+        ['SELLER', '-100', 'BDT'],
+        ['CAPITAL', '100', 'BDT'],
+      ]);
+    });
+
+    it('leaves a holding it cannot value alone rather than guess a rate', async () => {
+      const created = await run(
+        { held: [{ accountId: 'tasin', amount: D('1000'), currency: Currency.BDT }], fx: null },
+        WalletEntryDirection.ORDER_CHARGES,
+        '100',
+      );
+      expect(created).toHaveLength(0);
+    });
+  });
+
+  describe('a refund to a seller who owes us', () => {
+    it('moves nothing while they are still in debt after it — it repaid the debt', async () => {
+      // −₹300 → −₹100: nothing of it is theirs yet.
+      const created = await run(
+        { held: [], balance: D('-100') },
+        WalletEntryDirection.ORDER_CHARGES_REFUND,
+        '200',
+      );
+      expect(created).toHaveLength(0);
+    });
+
+    it('moves only the part that lifts them above zero', async () => {
+      // −₹150 → +₹50: ₹150 repays the debt (ours), ₹50 is theirs.
+      const created = await run(
+        { held: [], balance: D('50') },
+        WalletEntryDirection.SCRAP_REFUND,
+        '200',
+      );
+      expect(created.map((c) => [c.ownerKind, c.signedAmount.toString()])).toEqual([
+        ['SELLER', '50'],
+        ['CAPITAL', '-50'],
+      ]);
+      expect(created[0]?.note).toContain('repaid their debt');
+    });
   });
 });

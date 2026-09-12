@@ -436,6 +436,9 @@ export class WalletImportService {
           {
             OR: [
               { awbNumber: { in: [...awbs] } },
+              // A reverse pickup's waybill is the return leg of the parcel
+              // that holds it (see waybillAliases).
+              { reverseAwbNumber: { in: [...awbs] } },
               ...(fileOrderRefs.size > 0 ? [{ courierOrderId: { in: [...fileOrderRefs] } }] : []),
             ],
           },
@@ -446,6 +449,9 @@ export class WalletImportService {
         id: true,
         awbNumber: true,
         courierOrderId: true,
+        reverseAwbNumber: true,
+        supersededAt: true,
+        deletedAt: true,
         actualCourierCostInr: true,
         actualRtoCostInr: true,
         courierAccountId: true,
@@ -464,7 +470,14 @@ export class WalletImportService {
     // this its charges matched no shipment and fell to the P&L's "no
     // Skydrop parcel" line, leaving the parcel's own cost too low.
     const aliasOf = await this.waybillAliases(courierAccountId, shipments, input.txns);
-    for (const alias of aliasOf.keys()) awbs.add(alias);
+    // The alias AND its parcel's own waybill are netted together: a file
+    // naming only the alias would otherwise net the alias alone, and the
+    // merge below would then write that as the parcel's whole cost —
+    // dropping every charge filed under the parcel's own waybill.
+    for (const [alias, a] of aliasOf) {
+      awbs.add(alias);
+      awbs.add(a.primary);
+    }
 
     /*
       ── STEP 2: THE COST, NETTED FROM OUR OWN LEDGER ──────────────────
@@ -501,17 +514,19 @@ export class WalletImportService {
       ? this.netFromFile(input.txns)
       : await this.netFromLedger(courierAccountId, [...awbs]);
     // One parcel, one net — whichever of its waybills a charge was filed under.
-    for (const [alias, primary] of aliasOf) {
+    // A reverse-pickup alias is the parcel coming back, so its parcel is
+    // RETURNED whatever leg the courier filed the charge under.
+    for (const [alias, { primary, returned }] of aliasOf) {
       const a = netByAwb.get(alias);
       if (a === undefined) continue;
       const p = netByAwb.get(primary);
       netByAwb.set(
         primary,
         p === undefined
-          ? a
+          ? { ...a, returned: a.returned || returned }
           : {
               total: p.total.add(a.total),
-              returned: p.returned || a.returned,
+              returned: p.returned || a.returned || returned,
               latestAt: p.latestAt.getTime() >= a.latestAt.getTime() ? p.latestAt : a.latestAt,
             },
       );
@@ -891,24 +906,49 @@ export class WalletImportService {
   }
 
   /**
-   * Waybills that are another name for one of `shipments`: filed under the
-   * same courier ORDER id, but not the waybill the shipment holds. Returns
-   * alias → the shipment's own waybill. A waybill that is itself some
-   * shipment's is never an alias — that is two parcels, not one.
+   * Waybills that are another name for one of `shipments`. Returns alias →
+   * the shipment's own waybill, and whether the alias is its return leg.
+   *
+   *   - Filed under the same courier ORDER id, but not the waybill the
+   *     shipment holds (Shiprocket reassigning a parcel). When an order id
+   *     is on more than one of our shipments, the LIVE one (not superseded,
+   *     not deleted) is the parcel — a superseded row is a booking that was
+   *     retired, and netting its replacement's charges onto it hides them.
+   *   - A shipment's `reverseAwbNumber`: Delhivery books a reverse pickup
+   *     on its OWN waybill, and every charge under it is that parcel
+   *     coming back — so it also marks the parcel returned.
+   *
+   * A waybill that is itself some shipment's is never an alias — that is
+   * two parcels, not one.
    */
   private async waybillAliases(
     courierAccountId: string,
-    shipments: ReadonlyArray<{ awbNumber: string | null; courierOrderId: string | null }>,
+    shipments: ReadonlyArray<{
+      awbNumber: string | null;
+      courierOrderId: string | null;
+      reverseAwbNumber: string | null;
+      supersededAt: Date | null;
+      deletedAt: Date | null;
+    }>,
     fileTxns: readonly LedgerTxn[],
-  ): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
-    const primaryByRef = new Map<string, string>();
+  ): Promise<Map<string, { primary: string; returned: boolean }>> {
+    const out = new Map<string, { primary: string; returned: boolean }>();
+    const isLive = (s: { supersededAt: Date | null; deletedAt: Date | null }): boolean =>
+      s.supersededAt == null && s.deletedAt == null;
+    const primaryByRef = new Map<string, { awb: string; live: boolean }>();
     for (const s of shipments) {
-      if (typeof s.courierOrderId === 'string' && typeof s.awbNumber === 'string') {
-        primaryByRef.set(s.courierOrderId, s.awbNumber);
+      if (typeof s.awbNumber !== 'string') continue;
+      if (typeof s.reverseAwbNumber === 'string' && s.reverseAwbNumber !== s.awbNumber) {
+        out.set(s.reverseAwbNumber, { primary: s.awbNumber, returned: true });
+      }
+      if (typeof s.courierOrderId !== 'string') continue;
+      const held = primaryByRef.get(s.courierOrderId);
+      // First seen, unless a live one turns up later: live beats retired.
+      if (held === undefined || (!held.live && isLive(s))) {
+        primaryByRef.set(s.courierOrderId, { awb: s.awbNumber, live: isLive(s) });
       }
     }
-    if (primaryByRef.size === 0) return out;
+    if (primaryByRef.size === 0) return this.dropTaken(out);
 
     const filed = await this.prisma.client.courierWalletTransaction.findMany({
       where: {
@@ -927,12 +967,18 @@ export class WalletImportService {
     ];
     for (const p of pairs) {
       if (p.awbNumber === null || p.courierOrderRef === null) continue;
-      const primary = primaryByRef.get(p.courierOrderRef);
+      const primary = primaryByRef.get(p.courierOrderRef)?.awb;
       if (primary === undefined || primary === p.awbNumber) continue;
-      out.set(p.awbNumber, primary);
+      // A reverse-pickup alias already says more (it is the return leg).
+      if (out.has(p.awbNumber)) continue;
+      out.set(p.awbNumber, { primary, returned: false });
     }
+    return this.dropTaken(out);
+  }
+
+  /** Never merge a waybill some shipment holds as its own. */
+  private async dropTaken<T>(out: Map<string, T>): Promise<Map<string, T>> {
     if (out.size === 0) return out;
-    // Never merge a waybill some shipment holds as its own.
     const taken = await this.prisma.client.shipment.findMany({
       where: { awbNumber: { in: [...out.keys()] } },
       select: { awbNumber: true },

@@ -85,6 +85,19 @@ export class CreateRemittanceDto {
   @IsDateString()
   paidAt!: string;
 
+  @ApiProperty({
+    required: false,
+    minimum: 0,
+    description:
+      'What the bank charged to send it, in `currency` — booked as our expense ' +
+      '(bank_charges), never taken from the seller.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  bankFee?: number;
+
   @ApiProperty({ required: false, maxLength: 2000 })
   @IsOptional()
   @IsString()

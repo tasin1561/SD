@@ -1,10 +1,21 @@
+import { Prisma } from '@skydrop/db';
 import { ChargesBillingBackfillService } from '../../src/modules/seller-wallet-accrual/services/charges-billing-backfill.service';
 
 type AnyArgs = Record<string, unknown>;
 
 type Candidate = { id: string; orderNumber: string; status: string; sellerId: string };
 
-function makeService(candidates: Candidate[], returns: Candidate[] = []) {
+function makeService(
+  candidates: Candidate[],
+  returns: Candidate[] = [],
+  /** Sellers whose return fee resolves to 0 — given free returns. */
+  freeReturns: string[] = [],
+) {
+  // The fee the receive step would charge, resolved from settings.
+  const returnFeeFor = jest.fn(
+    async (sellerId: string, _customer: boolean) =>
+      new Prisma.Decimal(freeReturns.includes(sellerId) ? '0' : '30'),
+  );
   // Two queries: the unbilled orders, and received returns with no return
   // fee (told apart by the fee directions in their filter).
   const findMany = jest.fn<Promise<Candidate[]>, [AnyArgs]>(async (args) =>
@@ -31,10 +42,10 @@ function makeService(candidates: Candidate[], returns: Candidate[] = []) {
     },
     charges: { persistForOrderSystem },
     accrual: { debitIfNeeded },
-    rtoFees: { chargeOnReceive },
+    rtoFees: { chargeOnReceive, returnFeeFor },
     logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
   });
-  return { svc, findMany, debitIfNeeded, persistForOrderSystem, chargeOnReceive };
+  return { svc, findMany, debitIfNeeded, persistForOrderSystem, chargeOnReceive, returnFeeFor };
 }
 
 const CANDIDATES: Candidate[] = [
@@ -74,6 +85,39 @@ describe('ChargesBillingBackfillService.run — return fees never taken', () => 
     expect(chargeOnReceive).toHaveBeenCalledTimes(1);
     expect(chargeOnReceive).toHaveBeenCalledWith(expect.anything(), 'r1', 's1');
     expect(report.returnFeesCharged).toBe(1);
+  });
+
+  it('stops listing a seller given free returns — and they no longer crowd out the rest', async () => {
+    // Oldest first, the free seller's two returns used to fill a limit of
+    // one on every run, reported as NO_RETURN_FEE, and the real miss behind
+    // them was never reached.
+    const { svc, chargeOnReceive } = makeService(
+      [],
+      [
+        { id: 'f1', orderNumber: 'SD-F1', status: 'RTO_RECEIVED', sellerId: 'free' },
+        { id: 'f2', orderNumber: 'SD-F2', status: 'RTO_RESTOCKED', sellerId: 'free' },
+        { id: 'r1', orderNumber: 'SD-R1', status: 'RTO_RESTOCKED', sellerId: 's1' },
+      ],
+      ['free'],
+    );
+    const report = await svc.run({ dryRun: false, limit: 1 });
+    expect(chargeOnReceive).toHaveBeenCalledTimes(1);
+    expect(chargeOnReceive).toHaveBeenCalledWith(expect.anything(), 'r1', 's1');
+    expect(report.orders.map((o) => o.orderNumber)).toEqual(['SD-R1']);
+  });
+
+  it('asks the fee once per seller and kind, not once per order', async () => {
+    const { svc, returnFeeFor } = makeService(
+      [],
+      [
+        { id: 'f1', orderNumber: 'SD-F1', status: 'RTO_RECEIVED', sellerId: 'free' },
+        { id: 'f2', orderNumber: 'SD-F2', status: 'RTO_RECEIVED', sellerId: 'free' },
+      ],
+      ['free'],
+    );
+    const report = await svc.run({ dryRun: true, limit: 100 });
+    expect(returnFeeFor).toHaveBeenCalledTimes(1);
+    expect(report.orders).toHaveLength(0);
   });
 });
 

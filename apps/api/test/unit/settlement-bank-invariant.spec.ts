@@ -17,7 +17,12 @@ import { SellerCashAttributionService } from '../../src/modules/treasury/service
 
 const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
 const ZERO = D('0');
-const CREDITS = new Set(['COD_COLLECTION', 'COD_DEDUCTION_REFUND', 'TOPUP']);
+const CREDITS = new Set([
+  'COD_COLLECTION',
+  'COD_DEDUCTION_REFUND',
+  'TOPUP',
+  'ORDER_CHARGES_REFUND',
+]);
 
 interface WalletRow {
   id: string;
@@ -31,14 +36,24 @@ interface WalletRow {
 }
 interface BankRow {
   accountId: string;
+  currency: string;
   ownerKind: string;
   sellerId: string | null;
   signedAmount: Prisma.Decimal;
+}
+interface Topup {
+  sellerId: string;
+  bankAccountId: string;
+  currency: string;
+  amount: Prisma.Decimal;
+  credited: Prisma.Decimal;
 }
 
 function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>) {
   const wallet: WalletRow[] = [];
   const bank: BankRow[] = [];
+  // Accepted top-ups: what arrived in the account, what the wallet was credited.
+  const topups: Topup[] = [];
   const lines: Array<{
     orderId: string;
     settledInr: Prisma.Decimal;
@@ -63,10 +78,12 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
       async (input: {
         accountId: string;
         signedAmount: Prisma.Decimal;
+        amountCurrency: string;
         owner: { kind: string; sellerId?: string };
       }) => {
         bank.push({
           accountId: input.accountId,
+          currency: input.amountCurrency,
           ownerKind: input.owner.kind,
           sellerId: input.owner.sellerId ?? null,
           signedAmount: input.signedAmount,
@@ -96,15 +113,39 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
     },
     gstWithholding: { upsert: jest.fn(async () => ({})) },
     bankEntry: {
-      groupBy: jest.fn(async (a: { where: { sellerId: string } }) => {
-        const by = new Map<string, Prisma.Decimal>();
+      // By account, or by account AND currency — as the real one is asked.
+      groupBy: jest.fn(async (a: { by: string[]; where: { sellerId: string } }) => {
+        const withCurrency = a.by.includes('currency');
+        const by = new Map<string, { accountId: string; currency: string; sum: Prisma.Decimal }>();
         for (const b of bank) {
           if (b.ownerKind !== 'SELLER' || b.sellerId !== a.where.sellerId) continue;
-          by.set(b.accountId, (by.get(b.accountId) ?? ZERO).add(b.signedAmount));
+          const key = withCurrency ? `${b.accountId}|${b.currency}` : b.accountId;
+          const cur = by.get(key) ?? { accountId: b.accountId, currency: b.currency, sum: ZERO };
+          by.set(key, { ...cur, sum: cur.sum.add(b.signedAmount) });
         }
-        return [...by].map(([accountId, s]) => ({ accountId, _sum: { signedAmount: s } }));
+        return [...by.values()].map((v) => ({
+          accountId: v.accountId,
+          ...(withCurrency ? { currency: v.currency } : {}),
+          _sum: { signedAmount: v.sum },
+        }));
       }),
     },
+    walletTopupRequest: {
+      findFirst: jest.fn(
+        async (a: { where: { sellerId: string; bankAccountId: string; currency: string } }) => {
+          const t = topups
+            .filter(
+              (x) =>
+                x.sellerId === a.where.sellerId &&
+                x.bankAccountId === a.where.bankAccountId &&
+                x.currency === a.where.currency,
+            )
+            .at(-1);
+          return t === undefined ? null : { amount: t.amount, walletEntry: { amount: t.credited } };
+        },
+      ),
+    },
+    fxRate: { findFirst: jest.fn(async () => null) },
     platformBankAccount: { findFirst: jest.fn(async () => ({ id: 'hdfc' })) },
     courierSettlementLine: {
       groupBy: jest.fn(async (a: { where: { orderId: { in: string[] } } }) => {
@@ -229,16 +270,72 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
       amount: D(amount),
     });
   };
+  /**
+   * A top-up in taka into our Tasin account, as `WalletTopupService.accept`
+   * does it: the wallet is credited the rupees, the taka lands as theirs,
+   * and the share of it that repays a debt becomes ours in proportion.
+   */
+  const topUp = async (sellerId: string, taka: string, inr: string): Promise<void> => {
+    const amount = D(taka);
+    const credited = D(inr);
+    const split = await attribution.debtSplit(tx as never, sellerId, credited);
+    const entry = await walletService.applyEntry(null, {
+      sellerId,
+      currency: Currency.INR,
+      direction: 'TOPUP',
+      amount: credited,
+    });
+    topups.push({ sellerId, bankAccountId: 'tasin', currency: 'BDT', amount, credited });
+    await ledger.post({
+      accountId: 'tasin',
+      signedAmount: amount,
+      amountCurrency: 'BDT',
+      owner: { kind: 'SELLER', sellerId },
+    });
+    await attribution.repayDebt(tx as never, {
+      sellerId,
+      accountId: 'tasin',
+      currency: Currency.BDT,
+      amount: amount.mul(split.toCapital).div(credited).toDecimalPlaces(2),
+      reference: entry.id,
+    });
+  };
+  /** A charge given back (ORDER_CHARGES_REFUND): TO_SELLER, clamped by debt. */
+  const refund = async (sellerId: string, amount: string): Promise<void> => {
+    await walletService.applyEntry(null, {
+      sellerId,
+      currency: Currency.INR,
+      direction: 'ORDER_CHARGES_REFUND',
+      amount: D(amount),
+    });
+  };
+  /** Rupees per unit of a seller's money in an account: their last top-up there. */
+  const rateFor = (sellerId: string, accountId: string, currency: string): Prisma.Decimal => {
+    if (currency === 'INR') return D('1');
+    const t = topups.filter((x) => x.sellerId === sellerId && x.bankAccountId === accountId).at(-1);
+    return t === undefined ? ZERO : t.credited.div(t.amount);
+  };
+  /** What the book holds for them, every currency valued in rupees. */
   const held = (sellerId: string): string =>
     bank
       .filter((b) => b.ownerKind === 'SELLER' && b.sellerId === sellerId)
+      .reduce((t, b) => t.add(b.signedAmount.mul(rateFor(sellerId, b.accountId, b.currency))), ZERO)
+      .toFixed(2);
+  /** Our own rupees across the book. */
+  const capital = (): string =>
+    bank
+      .filter((b) => b.ownerKind === 'CAPITAL' && b.currency === 'INR')
       .reduce((t, b) => t.add(b.signedAmount), ZERO)
       .toFixed(2);
   const owed = (sellerId: string): string => {
     const bal = wallet.filter((r) => r.sellerId === sellerId).at(-1)?.runningBalanceAfter ?? ZERO;
     return (bal.lessThan(0) ? ZERO : bal).toFixed(2);
   };
-  const accountTotal = (): string => bank.reduce((t, b) => t.add(b.signedAmount), ZERO).toFixed(2);
+  const accountTotal = (): string =>
+    bank
+      .filter((b) => b.currency === 'INR')
+      .reduce((t, b) => t.add(b.signedAmount), ZERO)
+      .toFixed(2);
   let n = 0;
   const pay = async (
     amountInr: string,
@@ -261,7 +358,7 @@ function makeWorld(orders: Array<{ id: string; sellerId: string; cod: string }>)
           }),
     });
   };
-  return { pay, owe, held, owed, accountTotal };
+  return { pay, owe, topUp, refund, held, owed, accountTotal, capital };
 }
 
 describe('the bank book holds each seller exactly what their wallet owes them', () => {
@@ -335,5 +432,65 @@ describe('the bank book holds each seller exactly what their wallet owes them', 
     expect(w.owed('s')).toBe('2542.38'); // 1694.92 + 847.46
     expect(w.held('s')).toBe('2542.38');
     expect(w.accountTotal()).toBe('3000.00');
+  });
+
+  it('a taka top-up is theirs, and a charge beyond their rupees takes it at the top-up rate', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    // ৳10,000 credited as ₹8,000: ₹0.80 a taka.
+    await w.topUp('s', '10000', '8000');
+    expect(w.owed('s')).toBe('8847.46');
+    expect(w.held('s')).toBe('8847.46');
+    // ₹1,047.46 of charges: the ₹847.46 of rupees, then ₹200 = ৳250. It
+    // used to stop at the rupees and leave the ₹200 "theirs" in taka.
+    await w.owe('s', '1047.46');
+    expect(w.owed('s')).toBe('7800.00');
+    expect(w.held('s')).toBe('7800.00');
+  });
+
+  it('a taka top-up while in debt repays the debt first, in proportion', async () => {
+    const w = makeWorld([]);
+    await w.owe('s', '300');
+    // ₹800 credited: ₹300 repays the debt (৳375 is ours), ₹500 is theirs (৳625).
+    await w.topUp('s', '1000', '800');
+    expect(w.owed('s')).toBe('500.00');
+    expect(w.held('s')).toBe('500.00');
+  });
+
+  it('a refund while in debt repays the debt before any of it is theirs', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    await w.owe('s', '1000'); // 847.46 taken, 152.54 owed
+    expect(w.held('s')).toBe('0.00');
+    await w.refund('s', '100'); // still 52.54 in debt: nothing is theirs
+    expect(w.owed('s')).toBe('0.00');
+    expect(w.held('s')).toBe('0.00');
+    await w.refund('s', '200'); // 52.54 repays the debt, 147.46 is theirs
+    expect(w.owed('s')).toBe('147.46');
+    expect(w.held('s')).toBe('147.46');
+    expect(w.accountTotal()).toBe('1000.00');
+  });
+
+  it('a short-paid reversal takes the whole credit back — and capital recovers the gap it absorbed', async () => {
+    // G = ₹1,000 credited on a COD the courier paid ₹950 for (capital
+    // absorbed ₹50), tax ₹152.54. The courier then takes its ₹950 back on
+    // a payout that also pays another seller's ₹2,000.
+    const w = makeWorld([
+      { id: 'a', sellerId: 's', cod: '1000' },
+      { id: 'b', sellerId: 't', cod: '2000' },
+    ]);
+    await w.pay('950', [['a', '950']]);
+    expect(w.held('s')).toBe('847.46');
+    expect(w.capital()).toBe('102.54'); // 152.54 of tax less the 50 absorbed
+    await w.pay('1050', [['b', '2000']], [['a', '950']]);
+    // The seller is owed nothing and holds nothing: capped at the courier's
+    // ₹950, ₹50 used to stay "theirs" for a wallet at zero.
+    expect(w.owed('s')).toBe('0.00');
+    expect(w.held('s')).toBe('0.00');
+    expect(w.owed('t')).toBe('1694.92');
+    expect(w.held('t')).toBe('1694.92');
+    expect(w.accountTotal()).toBe('2000.00');
+    // All that is left ours is t's tax: the ₹50 absorbed on a came back.
+    expect(w.capital()).toBe('305.08');
   });
 });

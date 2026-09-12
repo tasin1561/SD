@@ -37,7 +37,7 @@ function makeSut(
     /** The shortfall already recognised on each order by earlier lines. */
     priorRecognised?: Record<string, string>;
     /** What reverseForOrder answers for a reversed order. */
-    reverse?: { reversed: boolean; reason?: string };
+    reverse?: { reversed: boolean; reason?: string; grossInr?: string };
     /** Cash the reversed order's seller holds with us, across accounts. */
     sellerHeld?: string;
     /** What each seller owes us before this payout (a positive number). */
@@ -153,8 +153,11 @@ function makeSut(
     returnedInr: '0.00',
     ...(opts.reverse ?? { reversed: true }),
   }));
+  // No longer asked by the recorder: an uncredited order is credited
+  // whatever the seller's mode is now. Kept so a test can prove that.
+  const resolveMode = jest.fn<Promise<string>, [string]>(async () => 'SETTLEMENT');
   const codCredit = {
-    resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+    resolveMode,
     isCredited: jest.fn(async (_tx: unknown, orderId: string) =>
       (opts.alreadyCredited ?? []).includes(orderId),
     ),
@@ -176,7 +179,17 @@ function makeSut(
   // The real split is pinned in seller-cash-attribution.service.spec and
   // end to end in settlement-bank-invariant.spec.
   const debt = new Map(Object.entries(opts.debt ?? {}).map(([k, v]) => [k, D(v)]));
+  // A reversed credit's cash stops being the seller's: up to the amount
+  // asked, capped at what they hold (pinned for real in
+  // seller-cash-attribution.service.spec and settlement-bank-invariant.spec).
+  const takeToCapital = jest.fn(
+    async (_tx: unknown, input: { sellerId: string; amount: Prisma.Decimal }) => {
+      const held = D(opts.sellerHeld ?? '0');
+      return held.lt(input.amount) ? held : input.amount;
+    },
+  );
   const attribution = {
+    takeToCapital,
     sellerHeld: jest.fn(async () => ({
       total: D(opts.sellerHeld ?? '0'),
       accountId: 'bank-inr-1',
@@ -193,6 +206,8 @@ function makeSut(
     svc: new CourierSettlementService(prisma, audit, codCredit, wallet, bank, attribution),
     creditForOrder,
     reverseForOrder,
+    resolveMode,
+    takeToCapital,
     bankPost,
     auditLog,
     created,
@@ -683,6 +698,7 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
       orders: withReversed,
       priorSettled: { 'o-9': '300.00' },
       sellerHeld: '5000',
+      reverse: { reversed: true, grossInr: '300.00' },
     });
     await sut.svc.record(STAFF, {
       ...BASE,
@@ -700,12 +716,17 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
       expect.anything(),
       expect.objectContaining({ orderId: 'o-9', sellerId: 's-rto' }),
     );
-    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
-    const clawback = posts.filter(
-      (p) => ownerKind(p) === 'SELLER' && (p['owner'] as AnyArgs)['sellerId'] === 's-rto',
+    // Their part stops being theirs WHEREVER they hold it (up to the
+    // reversed credit's gross), and the cash leaves as ours from this
+    // account — one clawback entry, capital's.
+    expect(sut.takeToCapital).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sellerId: 's-rto', amount: D('300.00') }),
     );
-    expect(clawback.map((p) => String(p['signedAmount']))).toEqual(['-300']);
-    expect(posts.filter((p) => ownerKind(p) === 'CAPITAL')).toHaveLength(0);
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    expect(
+      posts.filter((p) => ownerKind(p) === 'CAPITAL').map((p) => String(p['signedAmount'])),
+    ).toEqual(['-300']);
     const net = posts.reduce((t, p) => t.add(p['signedAmount'] as Prisma.Decimal), D('0'));
     expect(net.toString()).toBe('700');
     expect(sut.created[0]?.['rtoReversalInr']).toEqual(D('300.00'));
@@ -725,6 +746,7 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
       orders: withReversed,
       priorSettled: { 'o-9': '300.00' },
       sellerHeld: '250',
+      reverse: { reversed: true, grossInr: '300.00' },
     });
     await sut.svc.record(STAFF, {
       ...BASE,
@@ -737,10 +759,63 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     });
     const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
     const rto = posts.filter((p) => String(p['note']).startsWith('COD reversed'));
+    // ₹250 of their cash became ours (all they hold); the ₹300 leaves as
+    // ours, and the note says how much of it they held.
     expect(rto.map((p) => [ownerKind(p), String(p['signedAmount'])])).toEqual([
-      ['SELLER', '-250'],
-      ['CAPITAL', '-50'],
+      ['CAPITAL', '-300'],
     ]);
+    expect(String(rto[0]?.['note'])).toContain('held 250.00');
+  });
+
+  it('a short-paid reversal takes up to the credit’s GROSS from the seller, not the courier’s figure', async () => {
+    // o-9 (COD 300) was paid 250; the courier takes the 250 back. The whole
+    // ₹300 credit went, so up to ₹300 of their cash stops being theirs —
+    // capped at the courier's 250, ₹50 stayed "theirs" for a wallet owing
+    // nothing. Worked end to end in settlement-bank-invariant.spec.
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '250.00' },
+      priorRecognised: { 'o-9': '50.00' },
+      sellerHeld: '5000',
+      reverse: { reversed: true, grossInr: '300.00' },
+    });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '750.00',
+      deductions: { rtoReversals: [{ orderId: 'o-9', amountInr: '250.00' }] },
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    expect(sut.takeToCapital).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sellerId: 's-rto', amount: D('300.00') }),
+    );
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    const rto = posts.filter((p) => String(p['note']).startsWith('COD reversed'));
+    expect(rto.map((p) => [ownerKind(p), String(p['signedAmount'])])).toEqual([
+      ['CAPITAL', '-250'],
+    ]);
+  });
+
+  it('credits an order nobody has credited yet, whatever the seller’s mode is now', async () => {
+    // A seller switched to Instant Pay after o-1 was delivered: its credit
+    // never ran at delivery, so this payout owes it. o-2 WAS credited at
+    // delivery and is left alone — its cash repays our front.
+    const sut = makeSut({ orders, alreadyCredited: ['o-2'] });
+    sut.resolveMode.mockResolvedValue('INSTANT_PAY');
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    expect(
+      sut.creditForOrder.mock.calls.map((c) => [c[1].orderId, (c[1] as AnyArgs)['mode']]),
+    ).toEqual([['o-1', 'SETTLEMENT']]);
+    expect(sut.resolveMode).not.toHaveBeenCalled();
   });
 
   it('a reversal of an order never credited comes out of capital', async () => {
