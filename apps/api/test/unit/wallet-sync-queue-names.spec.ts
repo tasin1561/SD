@@ -1,8 +1,13 @@
 import { readFileSync } from 'node:fs';
 import {
+  JOB_DELHIVERY_BILLING_PROBE,
   JOB_WALLET_SYNC,
   WALLET_SYNC_QUEUE,
 } from '../../src/modules/courier-cost-sync/services/wallet-sync-trigger.service';
+import {
+  ACTION_DELHIVERY_BILLING_PROBED,
+  DELHIVERY_BILLING_PROBE_PREFIX,
+} from '../../src/modules/courier-cost-sync/services/delhivery-billing-probe-reader.service';
 
 /**
  * The API and the portal worker must agree on where the job goes.
@@ -44,4 +49,23 @@ describe('the API enqueues where the portal worker listens', () => {
     // mismatch here is silent in exactly the same way.
     expect(JOB_WALLET_SYNC).toBe(constantIn(WORKER, 'JOB_WALLET_SYNC'));
   });
+
+  it('agrees on the billing probe job name', () => {
+    // Same silence: the probe button would return a runId whose findings
+    // never arrive.
+    expect(JOB_DELHIVERY_BILLING_PROBE).toBe(constantIn(WORKER, 'JOB_DELHIVERY_BILLING_PROBE'));
+  });
+
+  it('reads the audit action and bucket prefix the probe writes', () => {
+    // The reader pairs a request with its result by these two strings; a
+    // drift reads as "QUEUED" forever with the files sitting unlinked.
+    expect(ACTION_DELHIVERY_BILLING_PROBED).toBe(
+      constantIn(PROBE, 'ACTION_DELHIVERY_BILLING_PROBED'),
+    );
+    expect(DELHIVERY_BILLING_PROBE_PREFIX).toBe(
+      `${constantIn(PROBE, 'DELHIVERY_BILLING_PROBE_PREFIX')}/`,
+    );
+  });
 });
+
+const PROBE = 'src/modules/courier-portal/services/delhivery-billing-probe.service.ts';

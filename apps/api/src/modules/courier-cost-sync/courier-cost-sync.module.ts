@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AdminWalletSyncController } from './controllers/admin-wallet-sync.controller';
+import { AdminDelhiveryBillingProbeController } from './controllers/admin-delhivery-billing-probe.controller';
 import { WalletSyncHistoryService } from './services/wallet-sync-history.service';
 import { WalletSyncTriggerService } from './services/wallet-sync-trigger.service';
+import { DelhiveryBillingProbeReaderService } from './services/delhivery-billing-probe-reader.service';
 
 /**
  * The cost sync, as seen from the API.
@@ -20,7 +22,11 @@ import { WalletSyncTriggerService } from './services/wallet-sync-trigger.service
  * imports it, and it imports nothing but the globals.
  */
 @Module({
-  controllers: [AdminWalletSyncController],
-  providers: [WalletSyncHistoryService, WalletSyncTriggerService],
+  controllers: [AdminWalletSyncController, AdminDelhiveryBillingProbeController],
+  providers: [
+    WalletSyncHistoryService,
+    WalletSyncTriggerService,
+    DelhiveryBillingProbeReaderService,
+  ],
 })
 export class CourierCostSyncModule {}

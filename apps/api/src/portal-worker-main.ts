@@ -3,6 +3,8 @@ import { Logger, Module } from '@nestjs/common';
 import { ConfigModule } from './config/config.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
+// The Delhivery billing probe stores what it downloads in our private bucket.
+import { SpacesModule } from './infrastructure/spaces/spaces.module';
 import { CourierPortalModule } from './modules/courier-portal/courier-portal.module';
 import { SystemIssuesModule } from './modules/system-issues/system-issues.module';
 
@@ -27,7 +29,14 @@ import { SystemIssuesModule } from './modules/system-issues/system-issues.module
  * caught on 2026-08-06.
  */
 @Module({
-  imports: [ConfigModule, PrismaModule, RedisModule, SystemIssuesModule, CourierPortalModule],
+  imports: [
+    ConfigModule,
+    PrismaModule,
+    RedisModule,
+    SpacesModule,
+    SystemIssuesModule,
+    CourierPortalModule,
+  ],
 })
 export class PortalWorkerRootModule {}
 

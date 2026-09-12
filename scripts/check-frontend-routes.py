@@ -291,6 +291,11 @@ EXPECTED_ORPHANS = {
     # sweep already retries pre-dispatch parcels on its own, so there is
     # no everyday reason for a screen to call it.
     'admin/courier/awb-labels/backfill',
+    # A one-off, read-only look at Delhivery's billing pages, run from a
+    # terminal while the Delhivery invoice check is designed (POST queues
+    # it, GET reads what it found). It answers a question once; a screen
+    # would be a button for something nobody needs to press twice.
+    'admin/courier-portal/delhivery-billing-probe',
     # Called, but deliberately not through `request()`: the single-flight
     # refresh in packages/api-client uses the raw `fetchImpl` (a 401 from
     # inside request() would recurse), and it composes the path from
