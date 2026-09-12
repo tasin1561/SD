@@ -321,6 +321,88 @@ describe('BankTransferService — the quoted rate is a promise', () => {
   });
 });
 
+describe('BankTransferService — a quote into rupees is refused', () => {
+  it('refuses a quoted seller transfer from taka into rupees, and moves nothing', async () => {
+    // ৳2,000 held at an average ₹0.75 is worth ₹1,500 to their wallet. A
+    // quote of 0.80 credited ₹1,600 — held ₹100 more than the wallet owes,
+    // with nothing in the wallet to show for it.
+    const { svc, posted, created } = make(Currency.BDT, Currency.INR, '2000', {
+      inrPerUnit: '0.75',
+    });
+    await expect(
+      svc.transfer({
+        ...BASE,
+        amountOut: '2000',
+        amountIn: '1480',
+        quotedRate: '0.80',
+        sellerId: 'seller-a',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'TRANSFER_QUOTE_INTO_WALLET_CURRENCY' } });
+    expect(posted).toHaveLength(0);
+    expect(created).toHaveLength(0);
+  });
+
+  it('refuses a quote on a seller’s same-currency rupee move too — there is nothing to quote', async () => {
+    const { svc, posted } = make(Currency.INR, Currency.INR);
+    await expect(
+      svc.transfer({
+        ...BASE,
+        amountOut: '300',
+        amountIn: '300',
+        quotedRate: '1',
+        sellerId: 'seller-a',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'TRANSFER_QUOTE_INTO_WALLET_CURRENCY' } });
+    expect(posted).toHaveLength(0);
+  });
+
+  it('does not refuse a quote on OUR money into rupees — there is no wallet for it to disagree with', async () => {
+    const { svc, posted } = make(Currency.BDT, Currency.INR);
+    const r = await svc.transfer({
+      ...BASE,
+      amountOut: '1000',
+      amountIn: '750',
+      quotedRate: '0.80',
+    });
+    expect(r.creditedToSeller).toBe('750.00');
+    expect(r.fxSpread).toBeNull();
+    expect(posted.map((p) => p.ownerKind)).toEqual(['CAPITAL', 'CAPITAL']);
+  });
+
+  it('a retry of a quoted transfer into rupees recorded before the rule is answered, not refused', async () => {
+    // The replay reads what was written; refusing it would leave the
+    // operator unable to learn whether their first attempt landed.
+    const prior: PriorTransfer = {
+      id: 't0',
+      fromAccountId: 'from',
+      toAccountId: 'to',
+      amountOut: D('2000'),
+      amountIn: D('1480'),
+      currencyOut: Currency.BDT,
+      currencyIn: Currency.INR,
+      sellerId: 'seller-a',
+      quotedRate: D('0.80'),
+      achievedRate: D('0.74'),
+      entries: [
+        { type: 'TRANSFER_OUT', signedAmount: D('-2000') },
+        { type: 'TRANSFER_IN', signedAmount: D('1600') },
+        { type: 'FX_SPREAD', signedAmount: D('-120') },
+      ],
+    };
+    const { svc, posted } = make(Currency.BDT, Currency.INR, '0', { prior });
+    const r = await svc.transfer({
+      ...BASE,
+      amountOut: '2000',
+      amountIn: '1480',
+      quotedRate: '0.80',
+      sellerId: 'seller-a',
+      idempotencyKey: '7f3a2c1e-5b6d-4e8f-9a0b-1c2d3e4f5a6b',
+    });
+    expect(r).toMatchObject({ transferId: 't0', creditedToSeller: '1600.00', fxSpread: '-120.00' });
+    expect(posted).toHaveLength(0);
+  });
+});
+
 describe("BankTransferService — you cannot move more of a seller's money than they have", () => {
   it("refuses a transfer larger than the seller's holding in that account", async () => {
     // "Whose money" is a CHOICE on the form, not a fact off a statement.

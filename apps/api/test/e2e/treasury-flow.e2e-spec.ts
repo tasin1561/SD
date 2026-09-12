@@ -319,6 +319,41 @@ describe('Treasury (e2e)', () => {
       expect(bdt?.total).toBe('1250.00');
     });
 
+    it('refuses a quote on a seller’s money moving INTO rupees, and records nothing', async () => {
+      // Their wallet is in rupees: they are credited the book value of what
+      // left and the gap against what arrived is our FX. A quote there would
+      // move what the book holds for them away from what the wallet owes.
+      await post({
+        accountId: bdtAccount,
+        type: BankEntryType.OPENING_BALANCE,
+        signedAmount: '2000',
+        amountCurrency: Currency.BDT,
+        ownerKind: BankOwnerKind.SELLER,
+        sellerId: sellerA,
+      });
+
+      await request(h.baseUrl)
+        .post('/admin/treasury/transfers')
+        .set(auth)
+        .send({
+          fromAccountId: bdtAccount,
+          toAccountId: inrAccount,
+          amountOut: '2000',
+          amountIn: '1480',
+          quotedRate: '0.80',
+          sellerId: sellerA,
+          movedAt: new Date().toISOString(),
+        })
+        .expect(400)
+        .expect((r) => expect(r.body.code).toBe('TRANSFER_QUOTE_INTO_WALLET_CURRENCY'));
+
+      expect(
+        await h.prisma.bankTransfer.count({
+          where: { sellerId: sellerA, currencyIn: Currency.INR },
+        }),
+      ).toBe(0);
+    });
+
     it('books what a same-currency transfer loses on the way as a bank charge', async () => {
       // A bank fee is an expense with a name, not a quiet shortfall — and
       // not a refusal that leaves the real transfer unrecorded.

@@ -36,7 +36,9 @@ function localNow(): string {
  * rate is a promise: they are credited at the rate they were shown, and
  * the difference between that and what we actually achieved is booked as
  * ours — positive or negative. Honouring a quote that moved against us
- * is a real cost and it is recorded as one.
+ * is a real cost and it is recorded as one. Only INTO another currency:
+ * into rupees there is nothing to quote (their wallet is in rupees), and
+ * the server refuses one.
  */
 export function TransferModal({
   open,
@@ -90,6 +92,14 @@ export function TransferModal({
   }, [overview.data, fromAccountId, sellerId]);
   const to = list.find((a) => a.id === toAccountId);
   const crossCurrency = from !== undefined && to !== undefined && from.currency !== to.currency;
+  // A quote only means something when a seller's money leaves rupees for
+  // another currency. INTO rupees the server refuses one
+  // (TRANSFER_QUOTE_INTO_WALLET_CURRENCY) — they are credited what the money
+  // was worth to their wallet and the gap is ours — so the field is hidden
+  // and its value never sent: it is seeded from the system rate, and a
+  // hidden seed would turn every such transfer into that refusal.
+  const intoWalletCurrency = sellerId !== '' && crossCurrency && to?.currency === 'INR';
+  const quoteApplies = sellerId !== '' && crossCurrency && !intoWalletCurrency;
 
   // The rate the SYSTEM holds for this direction — what the seller would
   // have been quoted. Seeded into the field rather than left blank,
@@ -141,7 +151,9 @@ export function TransferModal({
         toAccountId,
         amountOut: o.toFixed(2),
         amountIn: i.toFixed(2),
-        ...(quotedRate.trim() === '' ? {} : { quotedRate: Number(quotedRate).toFixed(6) }),
+        ...(intoWalletCurrency || quotedRate.trim() === ''
+          ? {}
+          : { quotedRate: Number(quotedRate).toFixed(6) }),
         ...(sellerId === '' ? {} : { sellerId }),
         movedAt: new Date(movedAt).toISOString(),
         ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
@@ -252,7 +264,15 @@ export function TransferModal({
           </Select>
         </FormField>
 
-        {sellerId !== '' && crossCurrency && (
+        {intoWalletCurrency && (
+          <p className="text-text-muted text-xs">
+            Into rupees there is no quote: the seller is credited what this money was worth to their
+            wallet (their average rate in {from?.label ?? 'the sending account'}), and the
+            difference against what arrived is booked as ours.
+          </p>
+        )}
+
+        {quoteApplies && (
           <FormField
             label="Rate quoted to the seller"
             hint={
@@ -295,7 +315,7 @@ export function TransferModal({
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
         </FormField>
 
-        {sellerId !== '' && crossCurrency && quotedRate.trim() !== '' && amountOut !== '' && (
+        {quoteApplies && quotedRate.trim() !== '' && amountOut !== '' && (
           <p
             className={
               Number(quotedRate) > 0

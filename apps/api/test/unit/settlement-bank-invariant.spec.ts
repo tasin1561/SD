@@ -1,6 +1,8 @@
-import { Currency, Prisma } from '@skydrop/db';
+import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { CourierSettlementService } from '../../src/modules/courier-settlement/services/courier-settlement.service';
 import { CodCreditService } from '../../src/modules/seller-wallet-accrual/services/cod-credit.service';
+import { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
+import { BankTransferService } from '../../src/modules/treasury/services/bank-transfer.service';
 import { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
 
 /**
@@ -589,5 +591,233 @@ describe('the bank book holds each seller exactly what their wallet owes them', 
       expect(w.owed('s')).toBe('0.00');
       expect(w.held('s')).toBe('0.00');
     });
+  });
+});
+
+/**
+ * A transfer between our own accounts MOVES a seller's money and never
+ * changes what their wallet owes them. The REAL BankLedgerService and
+ * BankTransferService run here over an in-memory book: the wallet is
+ * whatever they were credited before the move (a transfer never writes
+ * one), and after every move the book must still equal it while each
+ * account moves by exactly what its statement shows.
+ */
+function makeBook() {
+  const ACCOUNTS: Record<string, Currency> = { hdfc: Currency.INR, tasin: Currency.BDT };
+  const rows: BankRow[] = [];
+  let wallet = ZERO;
+  let seq = 0;
+  const sum = (xs: Prisma.Decimal[]): Prisma.Decimal => xs.reduce((t, x) => t.add(x), ZERO);
+
+  const db: Record<string, unknown> = {
+    $executeRaw: jest.fn(async () => 1),
+    platformBankAccount: {
+      findUnique: jest.fn(async (a: { where: { id: string } }) => {
+        const currency = ACCOUNTS[a.where.id];
+        return currency === undefined
+          ? null
+          : { id: a.where.id, label: a.where.id, currency, deletedAt: null };
+      }),
+    },
+    bankEntry: {
+      create: jest.fn(
+        async (a: {
+          data: {
+            accountId: string;
+            currency: string;
+            ownerKind: string;
+            sellerId: string | null;
+            signedAmount: Prisma.Decimal;
+            inrBookValue: Prisma.Decimal | null;
+          };
+        }) => {
+          rows.push({
+            accountId: a.data.accountId,
+            currency: a.data.currency,
+            ownerKind: a.data.ownerKind,
+            sellerId: a.data.sellerId,
+            signedAmount: a.data.signedAmount,
+            inrBookValue: a.data.inrBookValue,
+          });
+          return { id: `be-${(seq += 1)}` };
+        },
+      ),
+      aggregate: jest.fn(
+        async (a: { where: { accountId: string; ownerKind: string; sellerId?: string } }) => {
+          const hit = rows.filter(
+            (r) =>
+              r.accountId === a.where.accountId &&
+              r.ownerKind === a.where.ownerKind &&
+              (a.where.sellerId === undefined || r.sellerId === a.where.sellerId),
+          );
+          return {
+            _sum: {
+              signedAmount: sum(hit.map((r) => r.signedAmount)),
+              inrBookValue: sum(hit.map((r) => r.inrBookValue ?? ZERO)),
+            },
+          };
+        },
+      ),
+    },
+    bankTransfer: {
+      findUnique: jest.fn(async () => null),
+      create: jest.fn(async () => ({ id: `t-${(seq += 1)}` })),
+    },
+    expenseCategory: { upsert: jest.fn(async () => ({ id: 'cat-bank' })) },
+    // 1 INR = 1.25 BDT today — reached only by a row nobody valued.
+    fxRate: { findFirst: jest.fn(async () => ({ fromCurrency: Currency.INR, rate: D('1.25') })) },
+  };
+  db['$transaction'] = async (fn: (t: unknown) => unknown) => fn(db);
+  const audit = { log: jest.fn(async () => 'a1') };
+  const ledger = new BankLedgerService({ client: db } as never, audit as never);
+  const transfers = new BankTransferService({ client: db } as never, ledger, audit as never);
+
+  /** Money that arrived as theirs, and the rupees their wallet was credited for it. */
+  const fund = async (
+    sellerId: string,
+    accountId: string,
+    units: string,
+    credited: string,
+  ): Promise<void> => {
+    wallet = wallet.add(D(credited));
+    await ledger.post({
+      accountId,
+      type: BankEntryType.SELLER_TOPUP,
+      signedAmount: units,
+      amountCurrency: ACCOUNTS[accountId] ?? Currency.INR,
+      owner: { kind: BankOwnerKind.SELLER, sellerId },
+      occurredAt: new Date(),
+      inrBookValue: D(credited),
+    });
+  };
+  const move = (input: {
+    fromAccountId: string;
+    toAccountId: string;
+    amountOut: string;
+    amountIn: string;
+    quotedRate?: string;
+    sellerId: string;
+  }) => transfers.transfer({ ...input, movedAt: new Date(), staffId: 'staff-1' });
+  const mine = (sellerId: string, accountId?: string): BankRow[] =>
+    rows.filter(
+      (r) =>
+        r.ownerKind === 'SELLER' &&
+        r.sellerId === sellerId &&
+        (accountId === undefined || r.accountId === accountId),
+    );
+  /** Rupees at face, anything else at its book value — what the invariant compares. */
+  const held = (sellerId: string): string =>
+    sum(
+      mine(sellerId).map((r) => (r.currency === 'INR' ? r.signedAmount : (r.inrBookValue ?? ZERO))),
+    ).toFixed(2);
+  const units = (sellerId: string, accountId: string): string =>
+    sum(mine(sellerId, accountId).map((r) => r.signedAmount)).toFixed(2);
+  const book = (sellerId: string, accountId: string): string =>
+    sum(mine(sellerId, accountId).map((r) => r.inrBookValue ?? ZERO)).toFixed(2);
+  /** Everything in the account, every owner: what its statement shows. */
+  const total = (accountId: string): string =>
+    sum(rows.filter((r) => r.accountId === accountId).map((r) => r.signedAmount)).toFixed(2);
+  const owed = (): string => (wallet.lessThan(0) ? ZERO : wallet).toFixed(2);
+  return { fund, move, held, units, book, total, owed, rows };
+}
+
+describe('a transfer moves a seller’s money and never changes what their wallet owes them', () => {
+  it('quoted rupees → taka: the quoted taka carry the rupees that left; the gap is our FX', async () => {
+    const b = makeBook();
+    await b.fund('s', 'hdfc', '1000', '1000');
+    const r = await b.move({
+      fromAccountId: 'hdfc',
+      toAccountId: 'tasin',
+      amountOut: '1000',
+      amountIn: '1350',
+      quotedRate: '1.30',
+      sellerId: 's',
+    });
+    expect(r.creditedToSeller).toBe('1300.00');
+    expect(r.fxSpread).toBe('50.00');
+    expect(b.held('s')).toBe(b.owed());
+    expect(b.held('s')).toBe('1000.00');
+    expect(b.units('s', 'tasin')).toBe('1300.00');
+    expect(b.book('s', 'tasin')).toBe('1000.00');
+    expect(b.total('hdfc')).toBe('0.00');
+    expect(b.total('tasin')).toBe('1350.00');
+  });
+
+  it('unquoted taka → rupees at a rate off their average: credited the book, the gap is ours', async () => {
+    // ৳2,000 credited ₹1,500 (average 0.75); the bank gives 0.74.
+    const b = makeBook();
+    await b.fund('s', 'tasin', '2000', '1500');
+    const r = await b.move({
+      fromAccountId: 'tasin',
+      toAccountId: 'hdfc',
+      amountOut: '2000',
+      amountIn: '1480',
+      sellerId: 's',
+    });
+    expect(r.creditedToSeller).toBe('1500.00');
+    expect(r.fxSpread).toBe('-20.00');
+    expect(b.held('s')).toBe(b.owed());
+    expect(b.units('s', 'tasin')).toBe('0.00');
+    expect(b.book('s', 'tasin')).toBe('0.00');
+    expect(b.total('hdfc')).toBe('1480.00');
+    expect(b.total('tasin')).toBe('0.00');
+  });
+
+  it('quoted taka → rupees is REFUSED and the book is untouched', async () => {
+    // Obeyed, a 0.80 quote held them ₹1,600 against a ₹1,500 wallet:
+    // (quote − average) × units = 0.05 × 2,000 = ₹100 of cash that is theirs
+    // in the book and in no wallet.
+    const b = makeBook();
+    await b.fund('s', 'tasin', '2000', '1500');
+    const before = b.rows.length;
+    await expect(
+      b.move({
+        fromAccountId: 'tasin',
+        toAccountId: 'hdfc',
+        amountOut: '2000',
+        amountIn: '1480',
+        quotedRate: '0.80',
+        sellerId: 's',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'TRANSFER_QUOTE_INTO_WALLET_CURRENCY' } });
+    expect(b.rows).toHaveLength(before);
+    expect(b.held('s')).toBe('1500.00');
+    expect(b.held('s')).toBe(b.owed());
+  });
+
+  it('two taka lots at different rates, moved to rupees in parts, go at the average', async () => {
+    // ৳1,000 credited ₹700 and ৳1,000 credited ₹800: ৳2,000 worth ₹1,500.
+    const b = makeBook();
+    await b.fund('s', 'tasin', '1000', '700');
+    await b.fund('s', 'tasin', '1000', '800');
+    const first = await b.move({
+      fromAccountId: 'tasin',
+      toAccountId: 'hdfc',
+      amountOut: '1000',
+      amountIn: '770',
+      sellerId: 's',
+    });
+    expect(first.creditedToSeller).toBe('750.00');
+    expect(first.fxSpread).toBe('20.00');
+    expect(b.held('s')).toBe(b.owed());
+    // What stays behind keeps the same average.
+    expect(b.units('s', 'tasin')).toBe('1000.00');
+    expect(b.book('s', 'tasin')).toBe('750.00');
+
+    const rest = await b.move({
+      fromAccountId: 'tasin',
+      toAccountId: 'hdfc',
+      amountOut: '1000',
+      amountIn: '740',
+      sellerId: 's',
+    });
+    expect(rest.creditedToSeller).toBe('750.00');
+    expect(rest.fxSpread).toBe('-10.00');
+    expect(b.held('s')).toBe(b.owed());
+    expect(b.held('s')).toBe('1500.00');
+    expect(b.units('s', 'tasin')).toBe('0.00');
+    expect(b.book('s', 'tasin')).toBe('0.00');
+    expect(b.total('hdfc')).toBe('1510.00');
+    expect(b.total('tasin')).toBe('0.00');
   });
 });

@@ -60,6 +60,15 @@ export interface TransferResult {
  * is the business we are in, and posting it as its own FX_SPREAD entry
  * is what makes it countable rather than lost inside a balance.
  *
+ * A quote is honoured only INTO ANOTHER CURRENCY. The taka credited
+ * carry, as their book, exactly the rupees that left — so promising
+ * ৳1,300 for ₹1,000 costs their wallet nothing and the book still equals
+ * it. INTO RUPEES a quote is REFUSED (TRANSFER_QUOTE_INTO_WALLET_CURRENCY):
+ * a rupee is worth a rupee to an INR wallet, so crediting the quoted
+ * rupees instead of the book value that left moved what the book holds
+ * for them by (quote − average) × units while the wallet — which a
+ * transfer never touches — stood still.
+ *
  * With NO quote the seller's money simply moved. Into taka they are
  * credited what actually arrived, carrying the rupee BOOK value of what
  * left, so their wallet's worth in the book does not change and there is
@@ -106,6 +115,32 @@ export class BankTransferService {
     ]);
 
     const crossCurrency = from.currency !== to.currency;
+    const quoted = input.quotedRate ? new Prisma.Decimal(input.quotedRate) : null;
+
+    // A QUOTE INTO RUPEES HAS NOTHING TO SET, so it is refused — neither
+    // obeyed nor silently ignored.
+    //
+    // A transfer moves a seller's money between our accounts; it never
+    // changes what their wallet owes them. Their wallet is in rupees, so
+    // money arriving in rupees must be held at exactly the rupee BOOK value
+    // of what left (their average in the sending account) — which the
+    // no-quote path below does, booking the gap against what arrived as our
+    // FX. Obeyed, a quote credits (quote − average) × units more or less
+    // than the wallet says and the book stops equalling it (TRE-8). Ignored,
+    // an operator believes a promise was honoured that was not. Into taka a
+    // quote stays meaningful: the taka carry the rupees that left as their
+    // book, so the promise costs the wallet nothing (TRE-5).
+    if (input.sellerId && quoted !== null && to.currency === Currency.INR) {
+      throw new BadRequestException({
+        code: 'TRANSFER_QUOTE_INTO_WALLET_CURRENCY',
+        message:
+          'A seller’s money moving INTO rupees takes no quoted rate. Their wallet is in rupees, ' +
+          'so they are credited exactly what the money that left was worth to it (their average ' +
+          'rate in the sending account), and the difference against what arrived is booked as ' +
+          'our FX. Leave the quote empty.',
+      });
+    }
+
     // Same currency: more arriving than left is not a fee, it is a mistake
     // on the form, and is refused.
     if (!crossCurrency && inn.gt(out)) {
@@ -136,8 +171,6 @@ export class BankTransferService {
     const owner = input.sellerId
       ? { kind: BankOwnerKind.SELLER, sellerId: input.sellerId }
       : { kind: BankOwnerKind.CAPITAL };
-
-    const quoted = input.quotedRate ? new Prisma.Decimal(input.quotedRate) : null;
 
     try {
       return await this.prisma.client.$transaction(async (tx) => {
@@ -209,7 +242,9 @@ export class BankTransferService {
         // What the owner is credited on the far side.
         //   - Same currency: everything that left (the bank's charge is ours).
         //   - A seller's money with a quote: the QUOTED amount (TRE-5); the
-        //     gap against what arrived is FX_SPREAD, ours either way.
+        //     gap against what arrived is FX_SPREAD, ours either way. Only
+        //     ever into another currency — a quote into rupees was refused
+        //     above, so this never credits rupees off a rate.
         //   - A seller's money, no quote, arriving in RUPEES: what it was
         //     worth to their wallet (valueOut) — a rupee holding is its own
         //     book, so crediting fewer rupees than that would leave the

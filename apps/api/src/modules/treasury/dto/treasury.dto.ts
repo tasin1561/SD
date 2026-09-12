@@ -26,7 +26,12 @@ export class RecordTransferDto {
   @IsOptional()
   @IsUUID('7')
   sellerId?: string;
-  @ApiPropertyOptional({ description: 'The rate the seller was shown' })
+  @ApiPropertyOptional({
+    description:
+      'The rate the seller was shown, for their money moving INTO another currency. Refused ' +
+      '(TRANSFER_QUOTE_INTO_WALLET_CURRENCY) when the money arrives in rupees: they are ' +
+      'credited its book value and the gap is our FX.',
+  })
   @IsOptional()
   @IsNumberString()
   quotedRate?: string;
