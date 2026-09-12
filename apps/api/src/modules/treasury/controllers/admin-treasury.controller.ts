@@ -99,28 +99,8 @@ export class AdminTreasuryController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ): ReturnType<PnlService['report']> {
-    // A bad date silently becoming "now" would report the wrong window
-    // as confidently as the right one.
-    const parse = (v: string | undefined, fallback: Date): Date => {
-      if (v === undefined || v === '') return fallback;
-      const d = new Date(v);
-      if (Number.isNaN(d.getTime())) {
-        throw new BadRequestException({
-          code: 'INVALID_DATE',
-          message: `"${v}" is not a date`,
-        });
-      }
-      return d;
-    };
-    const toDate = parse(to, new Date());
-    const fromDate = parse(from, new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000));
-    if (fromDate > toDate) {
-      throw new BadRequestException({
-        code: 'INVALID_RANGE',
-        message: 'The window starts after it ends',
-      });
-    }
-    return this.pnl.report(fromDate, toDate);
+    const w = pnlWindow(from, to);
+    return this.pnl.report(w.from, w.to);
   }
 
   @Get('pnl/lines/:key/items')
@@ -128,21 +108,31 @@ export class AdminTreasuryController {
     summary:
       'EVERY row behind one P&L line, so the total can be ticked off by hand. Capped, and the cap is reported rather than silently applied.',
   })
+  @ApiQuery({ name: 'from', required: false, description: 'As for the report: INCLUSIVE start' })
+  @ApiQuery({ name: 'to', required: false, description: 'As for the report: EXCLUSIVE end' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Rows to return, 1–1000 (500)' })
   pnlLineItems(
     @Param('key') key: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('limit') limit?: string,
   ): ReturnType<PnlService['lineItems']> {
-    const toDate = to === undefined ? new Date() : new Date(to);
-    const fromDate =
-      from === undefined ? new Date(toDate.getTime() - 30 * 86_400_000) : new Date(from);
-    return this.pnl.lineItems(
-      key,
-      fromDate,
-      toDate,
-      limit === undefined ? undefined : Number(limit),
-    );
+    // Validated exactly as the report is: the rows must cover the window
+    // the total above them covers, and `new Date('x')` is an Invalid Date
+    // every comparison is false against — it answered with no rows, which
+    // reads as "nothing behind this line" rather than "bad request".
+    const w = pnlWindow(from, to);
+    let take: number | undefined;
+    if (limit !== undefined && limit !== '') {
+      take = Number(limit);
+      if (!Number.isInteger(take) || take < 1) {
+        throw new BadRequestException({
+          code: 'INVALID_LIMIT',
+          message: `"${limit}" is not a whole number of rows`,
+        });
+      }
+    }
+    return this.pnl.lineItems(key, w.from, w.to, take);
   }
 
   @Get('liabilities')
@@ -413,6 +403,42 @@ export class AdminTreasuryController {
   ): ReturnType<InvestmentService['recordReturn']> {
     return this.investments.recordReturn(staff.id, investmentId, body);
   }
+}
+
+/**
+ * The P&L window `[from, to)` from two query strings — the ONE parser the
+ * report and its drill-down share, so they cannot come to accept
+ * different windows.
+ *
+ * A bad date silently becoming "now" (or an Invalid Date, which every
+ * comparison is false against) would report the wrong window as
+ * confidently as the right one, so it is refused, as is a window that
+ * starts after it ends.
+ */
+export function pnlWindow(
+  from: string | undefined,
+  to: string | undefined,
+): { from: Date; to: Date } {
+  const parse = (v: string | undefined, fallback: Date): Date => {
+    if (v === undefined || v === '') return fallback;
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestException({
+        code: 'INVALID_DATE',
+        message: `"${v}" is not a date`,
+      });
+    }
+    return d;
+  };
+  const toDate = parse(to, new Date());
+  const fromDate = parse(from, new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000));
+  if (fromDate > toDate) {
+    throw new BadRequestException({
+      code: 'INVALID_RANGE',
+      message: 'The window starts after it ends',
+    });
+  }
+  return { from: fromDate, to: toDate };
 }
 
 export { BankEntryType, BankOwnerKind };

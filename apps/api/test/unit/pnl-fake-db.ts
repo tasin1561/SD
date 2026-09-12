@@ -62,6 +62,7 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
     order: one('order', 'orderId'),
     shipment: one('shipment', 'shipmentId'),
   },
+  orderEvent: { order: one('order', 'orderId') },
   shipment: {
     orderShipments: { model: 'orderShipment', local: 'id', foreign: 'shipmentId', many: true },
   },
