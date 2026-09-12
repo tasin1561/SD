@@ -4,6 +4,7 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { CourierOutboxDispatcherService } from '../services/courier-outbox-dispatcher.service';
 import { CourierOutboxReconcilerService } from '../services/courier-outbox-reconciler.service';
+import { CourierEscalationWatchService } from '../services/courier-escalation-watch.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 export const COURIER_OUTBOX_QUEUE = 'courier-outbox';
@@ -33,6 +34,7 @@ export class CourierOutboxQueue implements OnModuleInit, OnModuleDestroy {
     private readonly workerRole: WorkerRoleService,
     private readonly dispatcher: CourierOutboxDispatcherService,
     private readonly reconciler: CourierOutboxReconcilerService,
+    private readonly watch: CourierEscalationWatchService,
     private readonly issues: SystemIssueService,
   ) {}
 
@@ -71,6 +73,16 @@ export class CourierOutboxQueue implements OnModuleInit, OnModuleDestroy {
         }
         if (job.name === JOB_RECONCILE) {
           await this.reconciler.reconcile();
+          // Separately guarded: a failed stall check must not mark a
+          // reconcile that succeeded as failed, and vice versa.
+          try {
+            await this.watch.checkStalledOutbox();
+          } catch (err) {
+            this.logger.warn(
+              { err: err instanceof Error ? err.message : String(err) },
+              'Courier send-queue stall check failed',
+            );
+          }
           return;
         }
       },

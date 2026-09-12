@@ -45,6 +45,9 @@ function make(
 
   const prisma = {
     client: {
+      // `openForTicket` resolves the carrying courier from the ticket's
+      // parcel when the caller does not say; no parcel here.
+      ticket: { findUnique: jest.fn().mockResolvedValue(null) },
       courierEscalation: {
         findUnique: jest.fn().mockImplementation((args: { where: Record<string, unknown> }) => {
           // `openForTicket` looks up by ticketId; `thread` by id.

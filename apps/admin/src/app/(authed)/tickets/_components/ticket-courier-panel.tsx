@@ -23,7 +23,8 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 
 /**
- * The Delhivery conversation for this ticket, on the ticket.
+ * The courier conversation for this ticket, on the ticket — whichever
+ * courier carried the parcel (Delhivery, Shiprocket), worked identically.
  *
  * Ops works the ticket queue. Reaching the courier only from the
  * threads list meant a ticket nobody had already opened a thread on —
@@ -113,6 +114,9 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
   }
 
   const messages = thread.data?.messages ?? [];
+  // WHICH courier's desk — the one that carried the parcel. Shown so
+  // the operator raises it with the right company, by hand.
+  const desk = thread.data?.desk ?? null;
 
   const send = (): void => {
     const body = outbound.trim();
@@ -146,6 +150,29 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
 
   return (
     <div className="border-border space-y-3 rounded-lg border p-3">
+      {desk !== null ? (
+        <div className="text-xs">
+          <p className="text-text-bright font-semibold">
+            {desk.courierName} support
+            {desk.canSendAutomatically ? '' : ' — sent by hand'}
+          </p>
+          <p className="text-text-muted mt-0.5">{desk.howTo}</p>
+          <p className="text-text-muted mt-0.5">
+            {desk.ticketUrl !== null || desk.panelUrl !== null ? (
+              <a
+                href={desk.ticketUrl ?? desk.panelUrl ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent"
+              >
+                {desk.ticketUrl !== null ? 'Open their ticket' : `Open ${desk.courierName}`}
+              </a>
+            ) : null}
+            {' · '}
+            {desk.supportEmail ?? `No support email — set ${desk.supportEmailSettingKey}`}
+          </p>
+        </div>
+      ) : null}
       {thread.isLoading ? (
         <SkeletonRows rows={2} cols={1} />
       ) : messages.length === 0 ? (

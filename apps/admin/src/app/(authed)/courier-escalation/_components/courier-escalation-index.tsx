@@ -313,7 +313,9 @@ export function CourierEscalationIndex(): ReactElement {
                 <Tr key={item.id}>
                   <Td>
                     <div className="font-medium">{item.awbNumber ?? 'No AWB'}</div>
-                    <div className="text-text-muted text-xs">{item.sellerName ?? '—'}</div>
+                    <div className="text-text-muted text-xs">
+                      {item.courierName} · {item.sellerName ?? '—'}
+                    </div>
                     <a
                       href={item.deepLink}
                       target="_blank"
@@ -325,6 +327,20 @@ export function CourierEscalationIndex(): ReactElement {
                         : `Ticket ${item.externalTicketId}`}
                       <ExternalLink size={11} />
                     </a>
+                    {item.supportPanelUrl !== null && item.supportPanelUrl !== item.deepLink ? (
+                      <a
+                        href={item.supportPanelUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent mt-1 flex items-center gap-1 text-xs"
+                      >
+                        {item.courierName} support
+                        <ExternalLink size={11} />
+                      </a>
+                    ) : null}
+                    <div className="text-text-muted mt-1 text-xs">
+                      {item.supportEmail ?? `No support email — set ${item.supportEmailSettingKey}`}
+                    </div>
                   </Td>
                   <Td>
                     {/* Verbatim. Never truncated in a way that changes it —

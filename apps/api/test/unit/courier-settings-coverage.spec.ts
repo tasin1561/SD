@@ -52,6 +52,12 @@ describe('every integrated courier has its settings seeded', () => {
     it(`${code} has a base URL, so stub vs real is a setting not a deploy`, () => {
       expect(SEED).toContain(`key: 'courier.${code}_api_base_url'`);
     });
+
+    it(`${code} has a support-desk email an admin can fill in`, () => {
+      // Shown beside every message waiting to be sent to that courier by
+      // hand; a courier with no row would show "set …" with nothing to set.
+      expect(SEED).toContain(`key: 'courier.${code}_support_email'`);
+    });
   }
 
   it('every live-writes switch defaults to OFF', () => {

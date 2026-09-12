@@ -65,7 +65,7 @@ export function CourierThreadsIndex(): ReactElement {
     <div>
       <PageHeader
         title="Courier conversations"
-        subtitle="What Delhivery has told us, per parcel, in their words. Replies you send here queue for delivery — Delhivery has no reply API."
+        subtitle="What each courier has told us, per parcel, in their words. Replies you send here queue for a person to send — no courier has a reply API."
       />
       <EscalationTabs />
 
@@ -96,7 +96,10 @@ export function CourierThreadsIndex(): ReactElement {
           <TBody>
             {rows.map((r) => (
               <Tr key={r.id}>
-                <Td>{r.sellerName ?? <span className="text-text-faint">—</span>}</Td>
+                <Td>
+                  {r.sellerName ?? <span className="text-text-faint">—</span>}
+                  <div className="text-text-muted text-xs">{r.courierName}</div>
+                </Td>
                 <Td>
                   {r.awbNumber === null ? (
                     <span className="text-text-faint">—</span>

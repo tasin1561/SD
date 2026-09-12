@@ -98,9 +98,38 @@ export class CourierCapabilityUnsupportedError extends Error {
   }
 }
 
+/**
+ * Where a PERSON takes an escalation for this courier, by hand.
+ *
+ * Every write capability is false for every courier today, so each
+ * escalation is carried by an operator — and an operator told "raise
+ * this with the courier" without being told WHERE does the lookup
+ * themselves, which is most of the work. This is the courier-specific
+ * half of that answer, declared by the adapter so the console never
+ * branches on a courier code (CUR-12). The support EMAIL is not here: it
+ * is an address we may not be sure of, so it is the editable setting
+ * `courier.<code>_support_email` rather than a constant in code.
+ */
+export interface CourierSupportDesk {
+  /** The courier's name as an operator knows it. */
+  readonly displayName: string;
+  /** Their own panel page where a ticket is raised or found by hand. */
+  readonly panelUrl: string;
+  /**
+   * A direct link to one of their tickets, with `{ticketId}` standing in
+   * for their number — or null when their panel has no stable per-ticket
+   * URL, in which case the console links the panel instead.
+   */
+  readonly ticketUrlTemplate: string | null;
+  /** One sentence: how a person raises it there, and what to bring back. */
+  readonly howTo: string;
+}
+
 export interface CourierSupportAdapter {
   readonly courierCode: string;
   capabilities(): CapabilityFlags;
+  /** Where a person raises this courier's tickets by hand. */
+  supportDesk(): CourierSupportDesk;
 
   getTaxonomy(ctx?: { awb: string }): Promise<readonly IssueCategory[]>;
   raiseTicket(req: RaiseTicketRequest): Promise<RaiseTicketOutcome>;

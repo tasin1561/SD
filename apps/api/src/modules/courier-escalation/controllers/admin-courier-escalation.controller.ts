@@ -18,6 +18,10 @@ import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { CourierSupportRegistryService } from '../services/courier-support-registry.service';
+import {
+  CourierSupportDeskService,
+  type SupportDeskView,
+} from '../services/courier-support-desk.service';
 import type { CapabilityFlags } from '../../courier-shared/services/courier-support-adapter';
 import {
   ConfirmModeChangeDto,
@@ -88,7 +92,15 @@ export class AdminCourierEscalationController {
     private readonly escalations: CourierEscalationService,
     private readonly templates: CourierTemplateReviewService,
     private readonly prisma: PrismaService,
+    private readonly desks: CourierSupportDeskService,
   ) {}
+
+  /** A thread, with WHICH courier's desk it belongs to and how to reach it. */
+  private async withDesk(
+    view: EscalationView,
+  ): Promise<EscalationView & { readonly desk: SupportDeskView }> {
+    return { ...view, desk: await this.desks.describe(view.courierCode, view.externalTicketId) };
+  }
 
   // ── the queue ───────────────────────────────────────────────────────
 
@@ -179,11 +191,20 @@ export class AdminCourierEscalationController {
     /** Every courier's, so the console can say which desk is readable
      *  rather than implying one answer covers both. */
     readonly capabilitiesByCourier: Readonly<Record<string, CapabilityFlags | null>>;
+    /** Every courier's support desk — where a person raises its tickets by hand. */
+    readonly desks: readonly SupportDeskView[];
     readonly lockedCategoryLabels: readonly string[];
     readonly counts: OpsQueueCounts;
   }> {
-    const [settings, counts] = await Promise.all([this.settings.get(), this.queue.counts()]);
+    const [settings, counts, desks] = await Promise.all([
+      this.settings.get(),
+      this.queue.counts(),
+      this.desks.describeMany(
+        this.registry.known().map((courierCode) => ({ courierCode, externalTicketId: null })),
+      ),
+    ]);
     return {
+      desks,
       settings,
       // Surfaced so the console can explain WHY nothing is automated:
       // with every write capability false, AUTO would change nothing.
@@ -311,6 +332,8 @@ export class AdminCourierEscalationController {
       id: string;
       awbNumber: string | null;
       externalTicketId: string | null;
+      courierCode: string;
+      courierName: string;
       state: string | null;
       lastMessageAt: Date | null;
       needsReviewAt: Date | null;
@@ -318,6 +341,8 @@ export class AdminCourierEscalationController {
       messageCount: number;
     }[]
   > {
+    // Every courier's conversations in one list — no courier filter: a
+    // Shiprocket escalation is worked from the same place as Delhivery's.
     const rows = await this.prisma.client.courierEscalation.findMany({
       orderBy: [{ needsReviewAt: 'desc' }, { lastMessageAt: 'desc' }],
       take: 100,
@@ -325,6 +350,7 @@ export class AdminCourierEscalationController {
         id: true,
         awbNumber: true,
         externalTicketId: true,
+        courierCode: true,
         state: true,
         lastMessageAt: true,
         needsReviewAt: true,
@@ -332,10 +358,15 @@ export class AdminCourierEscalationController {
         _count: { select: { messages: true } },
       },
     });
-    return rows.map((r) => ({
+    const desks = await this.desks.describeMany(
+      rows.map((r) => ({ courierCode: r.courierCode, externalTicketId: r.externalTicketId })),
+    );
+    return rows.map((r, i) => ({
       id: r.id,
       awbNumber: r.awbNumber,
       externalTicketId: r.externalTicketId,
+      courierCode: r.courierCode,
+      courierName: desks[i]?.courierName ?? r.courierCode,
       state: r.state,
       lastMessageAt: r.lastMessageAt,
       needsReviewAt: r.needsReviewAt,
@@ -347,11 +378,11 @@ export class AdminCourierEscalationController {
   @Get('escalations/:escalationId')
   @RequirePermissions('courier.ops.view')
   @ApiOperation({ summary: 'The full thread — verbatim, oldest first.' })
-  escalationThread(
+  async escalationThread(
     @Param('escalationId', new ParseUUIDPipe({ version: '7' })) escalationId: string,
-  ): Promise<EscalationView> {
+  ): Promise<EscalationView & { readonly desk: SupportDeskView }> {
     // No sellerId: an operator sees every conversation.
-    return this.escalations.thread(escalationId);
+    return this.withDesk(await this.escalations.thread(escalationId));
   }
 
   @Post('escalations/:escalationId/reply')
@@ -372,11 +403,12 @@ export class AdminCourierEscalationController {
     summary:
       'The courier conversation for a ticket, or null if none has been opened. Ops works the ticket queue, so this is how the conversation is reached from there rather than from the threads list.',
   })
-  byTicket(
+  async byTicket(
     @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
-  ): Promise<EscalationView | null> {
+  ): Promise<(EscalationView & { readonly desk: SupportDeskView }) | null> {
     // No seller scope: an operator sees every conversation.
-    return this.escalations.forTicket(ticketId);
+    const view = await this.escalations.forTicket(ticketId);
+    return view === null ? null : this.withDesk(view);
   }
 
   @Post('escalations/:escalationId/inbound')

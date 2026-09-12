@@ -1,6 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { SystemIssueKind, SystemIssueSeverity, TicketHandling } from '@skydrop/db';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { CourierEscalationService } from './courier-escalation.service';
 import { TicketHandlingService } from '../../ticket-handling/services/ticket-handling.service';
@@ -70,7 +69,6 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
   }
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly escalations: CourierEscalationService,
     private readonly issues: SystemIssueService,
     private readonly handling: TicketHandlingService,
@@ -104,7 +102,7 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
     description: string | null;
   }): Promise<void> {
     try {
-      const parcel = await this.resolveParcel(input.ticketId);
+      const parcel = await this.escalations.parcelForTicket(input.ticketId);
       const awbNumber = parcel?.awbNumber ?? null;
 
       /*
@@ -158,6 +156,7 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
       const escalation = await this.escalations.openForTicket({
         ticketId: input.ticketId,
         awbNumber,
+        ...(parcel?.courierCode ? { courierCode: parcel.courierCode } : {}),
         // The account that actually carried it (CACC-1), so the raise
         // lands on the panel that can see this waybill. Null only when
         // the shipment predates account tracking — the dispatcher then
@@ -212,54 +211,5 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
         // Already inside a failure path; the log line above stands.
       }
     }
-  }
-
-  /**
-   * The waybill this issue is about, and whose account carried it.
-   *
-   * Read from the ticket's own shipment, and from the ORDER's live
-   * shipment when the ticket names no parcel — a seller raising an issue
-   * from an order page has an order id and no shipment id, which is the
-   * common shape. `awbNumber` rather than shipment status (CUR-2b): the
-   * waybill is the authoritative fact that a parcel exists on their
-   * system, and the status says only where it physically is.
-   */
-  private async resolveParcel(ticketId: string): Promise<{
-    awbNumber: string | null;
-    courierAccountId: string | null;
-    courierCode: string | null;
-  } | null> {
-    const pick = { awbNumber: true, courierAccountId: true, courierCode: true } as const;
-    const ticket = await this.prisma.client.ticket.findUnique({
-      where: { id: ticketId },
-      select: {
-        shipment: { select: pick },
-        order: {
-          select: {
-            orderShipments: {
-              where: { shipment: { awbNumber: { not: null } } },
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: { shipment: { select: pick } },
-            },
-          },
-        },
-      },
-    });
-    if (ticket === null) return null;
-    // The waybill AND the account come from the SAME shipment row. Read
-    // separately they could disagree — a ticket naming one parcel and an
-    // order whose latest is another — and the raise would go to a panel
-    // that cannot see the waybill it was given.
-    const from = ticket.shipment ?? ticket.order?.orderShipments[0]?.shipment ?? null;
-    if (from === null) return null;
-    // The courier is returned even with no waybill yet: WHO would carry
-    // this is knowable before the parcel is booked, and it is what
-    // decides whether the ticket is labelled AUTO or MANUAL.
-    return {
-      awbNumber: from.awbNumber,
-      courierAccountId: from.courierAccountId,
-      courierCode: from.courierCode,
-    };
   }
 }
