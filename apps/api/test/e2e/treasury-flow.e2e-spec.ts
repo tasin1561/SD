@@ -738,7 +738,9 @@ describe('Treasury (e2e)', () => {
           counterparty: 'HDFC Bank',
           fromAccountId: inrAccount,
           amount: '50000',
-          placedAt: new Date().toISOString(),
+          // Placed BEFORE the close below: a close dated before its own
+          // placement is refused (INVESTMENT_CLOSE_BEFORE_PLACEMENT, TRE-10).
+          placedAt: '2026-08-01T00:00:00.000Z',
         })
         .expect(201);
       const id = inv.body.id as string;
