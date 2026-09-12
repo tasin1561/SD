@@ -51,7 +51,19 @@ function makeSut(
       }
     >;
     existingEntry?: boolean;
-    chargeAfterUpdate?: { unitsSettled: number; totalUnits: number; status: InboundFreightStatus };
+    /** The bill after the roll-up's increment — status is decided on its MONEY. */
+    chargeAfterUpdate?: {
+      amountSettledInr: string;
+      totalInr: string;
+      status: InboundFreightStatus;
+    };
+    /** The bill before this charge; defaults to one far from its last unit. */
+    billBefore?: {
+      totalInr: string;
+      amountSettledInr: string;
+      unitsSettled: number;
+      totalUnits: number;
+    };
   } = {},
 ) {
   const lineFindMany = jest.fn<Promise<LineSeed[]>, [AnyArgs]>(async () => opts.lines ?? []);
@@ -97,10 +109,24 @@ function makeSut(
 
   const allocUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
   const chargeUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({
-    unitsSettled: opts.chargeAfterUpdate?.unitsSettled ?? 1,
-    totalUnits: opts.chargeAfterUpdate?.totalUnits ?? 100,
+    amountSettledInr: D(opts.chargeAfterUpdate?.amountSettledInr ?? '45.00'),
+    totalInr: D(opts.chargeAfterUpdate?.totalInr ?? '4500.00'),
     status: opts.chargeAfterUpdate?.status ?? InboundFreightStatus.PENDING,
   }));
+  const chargeFindUnique = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => {
+    const b = opts.billBefore ?? {
+      totalInr: '4500.00',
+      amountSettledInr: '0',
+      unitsSettled: 0,
+      totalUnits: 1000,
+    };
+    return {
+      totalInr: D(b.totalInr),
+      amountSettledInr: D(b.amountSettledInr),
+      unitsSettled: b.unitsSettled,
+      totalUnits: b.totalUnits,
+    };
+  });
   const walletFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.existingEntry ? { id: 'entry-old' } : null,
   );
@@ -109,8 +135,8 @@ function makeSut(
   const client = {
     goodsReceiptLine: { findMany: lineFindMany, findFirst: lineFindFirst },
     stockBatch: { findUnique: batchFindUnique },
-    inboundFreightAllocation: { update: allocUpdate },
-    inboundFreightCharge: { update: chargeUpdate },
+    inboundFreightAllocation: { update: allocUpdate, findMany: jest.fn(async () => []) },
+    inboundFreightCharge: { update: chargeUpdate, findUnique: chargeFindUnique },
     // The wallet advisory lock (WAL-7). Recorded rather than stubbed
     // away: a guard that reads the ledger before writing must serialise
     // against a concurrent one, and a fake with no $executeRaw would let
@@ -425,12 +451,12 @@ describe('InboundFreightAmortisationService.debitForDeliveredOrder', () => {
     expect(r.amountInr).toBe('45');
   });
 
-  it('marks the bill SETTLED once its last unit is charged', async () => {
+  it('marks the bill SETTLED once all of its MONEY has come in', async () => {
     const sut = makeSut({
       ...base,
       chargeAfterUpdate: {
-        unitsSettled: 100,
-        totalUnits: 100,
+        amountSettledInr: '4500.00',
+        totalInr: '4500.00',
         status: InboundFreightStatus.PARTIALLY_SETTLED,
       },
     });
@@ -439,13 +465,29 @@ describe('InboundFreightAmortisationService.debitForDeliveredOrder', () => {
     expect(statusUpdate['status']).toBe(InboundFreightStatus.SETTLED);
   });
 
-  it('marks the bill PARTIALLY_SETTLED while units remain', async () => {
+  it('marks the bill PARTIALLY_SETTLED while money is outstanding', async () => {
     const sut = makeSut({
       ...base,
       chargeAfterUpdate: {
-        unitsSettled: 1,
-        totalUnits: 100,
+        amountSettledInr: '45.00',
+        totalInr: '4500.00',
         status: InboundFreightStatus.PENDING,
+      },
+    });
+    await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
+    const statusUpdate = sut.chargeUpdate.mock.calls[1]![0]['data'] as AnyArgs;
+    expect(statusUpdate['status']).toBe(InboundFreightStatus.PARTIALLY_SETTLED);
+  });
+
+  it('a bill short of its money is NOT settled, whatever its unit count says', async () => {
+    // ₹1,050 bill at ₹1,020: the old rule closed it on units and `settle`
+    // then refused it, so the last ₹30 could never be collected.
+    const sut = makeSut({
+      ...base,
+      chargeAfterUpdate: {
+        amountSettledInr: '1020.00',
+        totalInr: '1050.00',
+        status: InboundFreightStatus.PARTIALLY_SETTLED,
       },
     });
     await sut.svc.debitForDeliveredOrder(sut.tx, ORDER, SELLER);
@@ -457,8 +499,8 @@ describe('InboundFreightAmortisationService.debitForDeliveredOrder', () => {
     const sut = makeSut({
       ...base,
       chargeAfterUpdate: {
-        unitsSettled: 5,
-        totalUnits: 100,
+        amountSettledInr: '225.00',
+        totalInr: '4500.00',
         status: InboundFreightStatus.SETTLED,
       },
     });

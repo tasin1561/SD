@@ -57,8 +57,8 @@ export function ExpenseModal({
   const [error, setError] = useState<string | null>(null);
   const [linked, setLinked] = useState<FreightChargeView | null>(null);
   // One key per opening of the form, reused on every retry of it: the
-  // freight payment it sends is then recorded once however many times
-  // the button is pressed.
+  // expense (or the freight payment) it sends is then recorded once
+  // however many times the button is pressed.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   useEffect(() => {
     if (open) setIdempotencyKey(crypto.randomUUID());
@@ -136,6 +136,7 @@ export function ExpenseModal({
         occurredAt: new Date(occurredAt).toISOString(),
         ...(reference.trim() === '' ? {} : { reference: reference.trim() }),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
+        idempotencyKey,
       });
       setAmount('');
       setReference('');

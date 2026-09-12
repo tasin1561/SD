@@ -69,6 +69,14 @@ export class RecordEntryDto {
   @IsDateString() occurredAt!: string;
   @IsOptional() @IsString() @Length(1, 200) reference?: string;
   @IsOptional() @IsString() @Length(1, 2000) note?: string;
+  @ApiPropertyOptional({
+    description:
+      'One key per opening of the form. A retry with the same key returns the original ' +
+      'entry and posts nothing; the same key with a different expense is 409 IDEMPOTENCY_KEY_REUSED.',
+  })
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }
 
 export class ReconcileAccountDto {

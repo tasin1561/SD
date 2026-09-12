@@ -1599,6 +1599,11 @@ model InboundFreightCharge {
   /// on the BD→India leg, and without this column that margin is
   /// unknowable rather than merely unreported.
   ourCostInr           Decimal?             @map("our_cost_inr") @db.Decimal(12, 2)
+  /// Each forwarder payment's rupee figure (and the rate it was priced at),
+  /// stamped together with `our_cost_inr` whenever that is re-summed. The
+  /// page's per-payment breakdown reads it, so the rows always add up to
+  /// the stamped total; null for a bill last re-summed before it existed.
+  ourCostPayments      Json?                @map("our_cost_payments")
   mode                 InboundFreightMode
   /// Snapshotted at record time (NOT re-read at settlement): the seller
   /// agreed to the rate that applied when the consignment landed.

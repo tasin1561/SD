@@ -1,4 +1,4 @@
-import { BankEntryType, BankOwnerKind, Currency } from '@skydrop/db';
+import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import {
   ManualExpenseService,
   type ManualEntryInput,
@@ -11,11 +11,21 @@ import type { BankLedgerService } from '../../src/modules/treasury/services/bank
  * it a way round every guard the purpose-built flows carry. It is now the
  * one thing the admin screen sends: our money, leaving, with a category.
  */
-function makeSut(category: { id: string } | null = { id: 'cat-1' }) {
-  const post = jest.fn(async (_i: Record<string, unknown>) => ({ id: 'be-1' }));
+function makeSut(
+  category: { id: string } | null = { id: 'cat-1' },
+  opts: { prior?: Array<Record<string, unknown> | null>; postThrows?: unknown } = {},
+) {
+  const queue = [...(opts.prior ?? [])];
+  const post = jest.fn(async (_i: Record<string, unknown>) => {
+    if (opts.postThrows !== undefined) throw opts.postThrows;
+    return { id: 'be-1' };
+  });
   const svc = new ManualExpenseService(
     {
-      client: { expenseCategory: { findFirst: jest.fn(async () => category) } },
+      client: {
+        expenseCategory: { findFirst: jest.fn(async () => category) },
+        bankEntry: { findUnique: jest.fn(async () => queue.shift() ?? null) },
+      },
     } as unknown as PrismaService,
     { post } as unknown as BankLedgerService,
   );
@@ -93,5 +103,63 @@ describe('ManualExpenseService.record', () => {
     await expect(svc.record('st-1', { ...EXPENSE, investmentId: 'inv-1' })).rejects.toMatchObject({
       response: { code: 'TREASURY_ENTRY_NOT_ALLOWED' },
     });
+  });
+});
+
+describe('ManualExpenseService.record — idempotent on the client key (IDEM-1)', () => {
+  const KEY = '7c1b1f0e-3d9a-4a51-8a3e-2f0d6b9c1e42';
+  const prior = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'be-first',
+    type: 'EXPENSE',
+    accountId: 'ba-1',
+    signedAmount: new Prisma.Decimal('-1500.00'),
+    currency: 'INR',
+    occurredAt: new Date('2026-09-10T00:00:00Z'),
+    expenseCategoryId: 'cat-1',
+    reference: null,
+    ...over,
+  });
+
+  it('posts the key with the entry', async () => {
+    const { svc, post } = makeSut(undefined, { prior: [null] });
+    await svc.record('st-1', { ...EXPENSE, idempotencyKey: KEY });
+    expect(post.mock.calls[0]![0]).toMatchObject({ idempotencyKey: KEY });
+  });
+
+  it('a replay posts nothing and returns the original entry', async () => {
+    const { svc, post } = makeSut(undefined, { prior: [prior()] });
+    await expect(svc.record('st-1', { ...EXPENSE, idempotencyKey: KEY })).resolves.toEqual({
+      id: 'be-first',
+    });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('two copies racing: the loser answers with the winner', async () => {
+    const { svc } = makeSut(undefined, {
+      prior: [null, prior()],
+      postThrows: new Prisma.PrismaClientKnownRequestError('duplicate', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    });
+    await expect(svc.record('st-1', { ...EXPENSE, idempotencyKey: KEY })).resolves.toEqual({
+      id: 'be-first',
+    });
+  });
+
+  it.each([
+    ['amount', { signedAmount: new Prisma.Decimal('-1600.00') }],
+    ['account', { accountId: 'ba-2' }],
+    ['currency', { currency: 'BDT' }],
+    ['date', { occurredAt: new Date('2026-09-11T00:00:00Z') }],
+    ['category', { expenseCategoryId: 'cat-2' }],
+    ['reference', { reference: 'INV-9' }],
+    ['entry type', { type: 'COURIER_WALLET_RECHARGE' }],
+  ])('the same key on an expense with a different %s is 409', async (_what, over) => {
+    const { svc, post } = makeSut(undefined, { prior: [prior(over)] });
+    await expect(svc.record('st-1', { ...EXPENSE, idempotencyKey: KEY })).rejects.toMatchObject({
+      response: { code: 'IDEMPOTENCY_KEY_REUSED' },
+    });
+    expect(post).not.toHaveBeenCalled();
   });
 });

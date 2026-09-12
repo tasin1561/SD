@@ -7,7 +7,23 @@ import {
 import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { isUniqueViolation } from '../../../common/db/unique-violation';
-import { BankLedgerService } from './bank-ledger.service';
+import { BankLedgerService, idempotencyKeyReused } from './bank-ledger.service';
+
+/**
+ * How far past the server's clock a close may be dated. A form's
+ * "now" can lead the server by a clock's drift; a close dated next week
+ * is a typo, and it would recognise the investment's income in a month
+ * that has not happened.
+ */
+const CLOSE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+function isClosedConflict(err: unknown): boolean {
+  if (!(err instanceof ConflictException)) return false;
+  const body = err.getResponse();
+  return typeof body === 'object' && body !== null && 'code' in body
+    ? body.code === 'INVESTMENT_CLOSED'
+    : false;
+}
 
 export interface InvestmentView {
   readonly id: string;
@@ -107,7 +123,14 @@ export class InvestmentService {
       });
     }
 
-    const replay = await this.replayPlacement(input.idempotencyKey);
+    const expected = {
+      label: input.label.trim(),
+      counterparty: input.counterparty.trim(),
+      fromAccountId: input.fromAccountId,
+      amount,
+      placedAt: new Date(input.placedAt),
+    };
+    const replay = await this.replayPlacement(input.idempotencyKey, expected);
     if (replay !== null) return replay;
 
     const account = await this.prisma.client.platformBankAccount.findFirst({
@@ -156,7 +179,7 @@ export class InvestmentService {
       // The same request racing itself: the loser answers with the
       // winner's investment rather than an error.
       if (input.idempotencyKey !== undefined && isUniqueViolation(err)) {
-        const again = await this.replayPlacement(input.idempotencyKey);
+        const again = await this.replayPlacement(input.idempotencyKey, expected);
         if (again !== null) return again;
       }
       throw err;
@@ -182,7 +205,13 @@ export class InvestmentService {
       });
     }
 
-    const replay = await this.replayReturn(input.idempotencyKey, investmentId);
+    const expected = {
+      accountId: input.toAccountId,
+      amount,
+      receivedAt: new Date(input.receivedAt),
+      close: input.close === true,
+    };
+    const replay = await this.replayReturn(input.idempotencyKey, investmentId, expected);
     if (replay !== null) return replay;
 
     const inv = await this.prisma.client.investment.findUnique({ where: { id: investmentId } });
@@ -216,6 +245,35 @@ export class InvestmentService {
           `Record the return into a ${inv.currency} account, then move it with a transfer — ` +
           'otherwise the two currencies are added together in one figure.',
       });
+    }
+    if (expected.close) {
+      // `closed_at` decides the month the P&L recognises the income in,
+      // and it is set once. A date in the future recognises it in a month
+      // that has not happened; one before the money was even placed
+      // recognises it in a month already reported, on a deposit that did
+      // not exist yet.
+      if (expected.receivedAt.getTime() > Date.now() + CLOSE_CLOCK_SKEW_MS) {
+        throw new BadRequestException({
+          code: 'INVESTMENT_CLOSE_IN_FUTURE',
+          message:
+            'A closing return cannot be dated in the future — the investment would be closed ' +
+            'in a month that has not happened. Record it on the day the money arrived.',
+        });
+      }
+      const placedEntry = await this.prisma.client.bankEntry.findFirst({
+        where: { investmentId, type: BankEntryType.INVESTMENT_OUT },
+        orderBy: { occurredAt: 'asc' },
+        select: { occurredAt: true },
+      });
+      const placedAt = placedEntry?.occurredAt ?? inv.createdAt;
+      if (expected.receivedAt.getTime() < placedAt.getTime()) {
+        throw new BadRequestException({
+          code: 'INVESTMENT_CLOSE_BEFORE_PLACEMENT',
+          message:
+            `This investment was placed on ${placedAt.toISOString().slice(0, 10)}; it cannot ` +
+            'close before the money went out.',
+        });
+      }
     }
 
     try {
@@ -259,45 +317,97 @@ export class InvestmentService {
         return this.toView(updated);
       });
     } catch (err) {
-      if (input.idempotencyKey !== undefined && isUniqueViolation(err)) {
-        const again = await this.replayReturn(input.idempotencyKey, investmentId);
+      // The same request racing itself. A non-closing copy loses on the
+      // entry's unique key; a CLOSING copy loses earlier, on the
+      // `closedAt: null` claim, because its twin closed the investment
+      // first. Either way the winner recorded exactly this return, so the
+      // loser answers with it — never INVESTMENT_CLOSED for its own click.
+      if (input.idempotencyKey !== undefined && (isUniqueViolation(err) || isClosedConflict(err))) {
+        const again = await this.replayReturn(input.idempotencyKey, investmentId, expected);
         if (again !== null) return again;
       }
       throw err;
     }
   }
 
-  /** The investment a key already placed, or null for a new key. */
-  private async replayPlacement(idempotencyKey?: string): Promise<InvestmentView | null> {
+  /**
+   * The investment a key already placed, or null for a new key. A key that
+   * placed a DIFFERENT investment — label, counterparty, account, amount
+   * or date — is refused (IDEM-1) rather than answered with it.
+   */
+  private async replayPlacement(
+    idempotencyKey: string | undefined,
+    expected: {
+      label: string;
+      counterparty: string;
+      fromAccountId: string;
+      amount: Prisma.Decimal;
+      placedAt: Date;
+    },
+  ): Promise<InvestmentView | null> {
     if (idempotencyKey === undefined) return null;
     const prior = await this.prisma.client.investment.findUnique({ where: { idempotencyKey } });
-    return prior === null ? null : this.toView(prior);
+    if (prior === null) return null;
+    const out = await this.prisma.client.bankEntry.findFirst({
+      where: { investmentId: prior.id, type: BankEntryType.INVESTMENT_OUT },
+      orderBy: { occurredAt: 'asc' },
+      select: { accountId: true, occurredAt: true },
+    });
+    if (
+      !prior.placedInr.equals(expected.amount) ||
+      prior.label !== expected.label ||
+      prior.counterparty !== expected.counterparty ||
+      out === null ||
+      out.accountId !== expected.fromAccountId ||
+      out.occurredAt.getTime() !== expected.placedAt.getTime()
+    ) {
+      throw idempotencyKeyReused('investment');
+    }
+    return this.toView(prior);
   }
 
   /**
-   * The investment as it stands, when this key already recorded a return
-   * against it. A key that created something else is a client bug, and
-   * answering it with this investment would say the second request worked.
+   * The investment as it stands, when this key already recorded THIS
+   * return against it. A key that created something else — another
+   * investment, account, amount or date, or a non-closing return replayed
+   * as a closing one — is refused: answering it with this investment would
+   * say the second request worked.
    */
   private async replayReturn(
     idempotencyKey: string | undefined,
     investmentId: string,
+    expected: { accountId: string; amount: Prisma.Decimal; receivedAt: Date; close: boolean },
   ): Promise<InvestmentView | null> {
     if (idempotencyKey === undefined) return null;
     const prior = await this.prisma.client.bankEntry.findUnique({
       where: { idempotencyKey },
-      select: { investmentId: true, type: true },
+      select: {
+        investmentId: true,
+        type: true,
+        accountId: true,
+        signedAmount: true,
+        occurredAt: true,
+      },
     });
     if (prior === null) return null;
-    if (prior.investmentId !== investmentId || prior.type !== BankEntryType.INVESTMENT_RETURN) {
-      throw new ConflictException({
-        code: 'IDEMPOTENCY_KEY_REUSED',
-        message: 'This request key was already used for a different entry.',
-      });
-    }
+    const sameEntry =
+      prior.investmentId === investmentId &&
+      prior.type === BankEntryType.INVESTMENT_RETURN &&
+      prior.accountId === expected.accountId &&
+      prior.signedAmount.equals(expected.amount) &&
+      prior.occurredAt.getTime() === expected.receivedAt.getTime();
+    if (!sameEntry) throw idempotencyKeyReused('investment return');
     const inv = await this.prisma.client.investment.findUniqueOrThrow({
       where: { id: investmentId },
     });
+    // A closing request is the same request only if the return it names
+    // is the one that closed the investment.
+    if (
+      expected.close &&
+      (inv.closedAt === null || inv.closedAt.getTime() !== expected.receivedAt.getTime())
+    ) {
+      throw idempotencyKeyReused('investment return');
+    }
     return this.toView(inv);
   }
 

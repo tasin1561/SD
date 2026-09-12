@@ -31,6 +31,10 @@ function makeSut(
     priorEntry?: Array<AnyArgs | null>;
     priorInvestment?: Array<AnyArgs | null>;
     postThrows?: unknown;
+    /** The INVESTMENT_OUT entry — where and when the money was placed. */
+    placedEntry?: AnyArgs | null;
+    /** The investment as it stands after a return (what a replay reads). */
+    afterReturn?: AnyArgs;
   } = {},
 ) {
   const priorEntry = [...(opts.priorEntry ?? [])];
@@ -46,14 +50,23 @@ function makeSut(
             ? inv()
             : opts.investment,
       ),
-      findUniqueOrThrow: jest.fn(async () => inv({ returnedInr: D('8000.00') })),
+      findUniqueOrThrow: jest.fn(
+        async () => opts.afterReturn ?? inv({ returnedInr: D('8000.00') }),
+      ),
       create,
       updateMany,
     },
     platformBankAccount: {
       findFirst: jest.fn(async () => ({ id: 'ba-1', currency: opts.accountCurrency ?? 'INR' })),
     },
-    bankEntry: { findUnique: jest.fn(async () => priorEntry.shift() ?? null) },
+    bankEntry: {
+      findUnique: jest.fn(async () => priorEntry.shift() ?? null),
+      findFirst: jest.fn(async () =>
+        opts.placedEntry === undefined
+          ? { accountId: 'ba-1', occurredAt: new Date('2026-09-01T00:00:00Z') }
+          : opts.placedEntry,
+      ),
+    },
   };
   client['$transaction'] = async (fn: (tx: unknown) => Promise<unknown>) => fn(client);
   const post = jest.fn(async (_i: AnyArgs, _tx?: unknown) => {
@@ -69,7 +82,28 @@ function makeSut(
 
 const RETURN = { toAccountId: 'ba-1', amount: '8000', receivedAt: '2026-09-10T00:00:00Z' };
 
+/** What a key's first return posted — the entry a replay is compared to. */
+function priorReturn(over: AnyArgs = {}): AnyArgs {
+  return {
+    investmentId: 'inv-1',
+    type: 'INVESTMENT_RETURN',
+    accountId: 'ba-1',
+    signedAmount: D('8000.00'),
+    occurredAt: new Date(RETURN.receivedAt),
+    ...over,
+  };
+}
+
 describe('InvestmentService.recordReturn', () => {
+  // The close-date guard reads the clock; pin it so these do not depend
+  // on the machine's date.
+  beforeEach(() => {
+    jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-09-12T12:00:00Z').getTime());
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('refuses a return into an account of ANOTHER currency', async () => {
     // returnedInr accumulates in the investment's currency; taka added to
     // rupees in one column is wrong by the exchange rate.
@@ -115,9 +149,7 @@ describe('InvestmentService.recordReturn', () => {
   });
 
   it('a replay with the same key records nothing and returns the investment', async () => {
-    const { svc, post, updateMany } = makeSut({
-      priorEntry: [{ investmentId: 'inv-1', type: 'INVESTMENT_RETURN' }],
-    });
+    const { svc, post, updateMany } = makeSut({ priorEntry: [priorReturn()] });
     const view = await svc.recordReturn('st-1', 'inv-1', { ...RETURN, idempotencyKey: KEY });
     expect(post).not.toHaveBeenCalled();
     expect(updateMany).not.toHaveBeenCalled();
@@ -125,10 +157,85 @@ describe('InvestmentService.recordReturn', () => {
   });
 
   it('refuses a key that was used for something else', async () => {
-    const { svc } = makeSut({ priorEntry: [{ investmentId: 'inv-2', type: 'INVESTMENT_RETURN' }] });
+    const { svc } = makeSut({ priorEntry: [priorReturn({ investmentId: 'inv-2' })] });
     await expect(
       svc.recordReturn('st-1', 'inv-1', { ...RETURN, idempotencyKey: KEY }),
     ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+  });
+
+  it.each([
+    ['amount', { signedAmount: D('9000.00') }],
+    ['account', { accountId: 'ba-2' }],
+    ['date', { occurredAt: new Date('2026-09-11T00:00:00Z') }],
+  ])('the same key on a return with a different %s is 409', async (_what, over) => {
+    const { svc, post } = makeSut({ priorEntry: [priorReturn(over)] });
+    await expect(
+      svc.recordReturn('st-1', 'inv-1', { ...RETURN, idempotencyKey: KEY }),
+    ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('a closing replay of a return that did NOT close the investment is 409', async () => {
+    const { svc } = makeSut({ priorEntry: [priorReturn()] });
+    await expect(
+      svc.recordReturn('st-1', 'inv-1', { ...RETURN, close: true, idempotencyKey: KEY }),
+    ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+  });
+
+  it('two identical CLOSING returns at once: the loser replays the winner, not INVESTMENT_CLOSED', async () => {
+    // Both pass the pre-checks; the twin closes it first, so this copy's
+    // claim on `closedAt: null` finds nothing. It is the same request, so
+    // it answers with what the twin recorded.
+    const closedAt = new Date(RETURN.receivedAt);
+    const { svc, post } = makeSut({
+      claimCount: 0,
+      priorEntry: [null, priorReturn()],
+      afterReturn: inv({ returnedInr: D('8000.00'), closedAt }),
+    });
+    const view = await svc.recordReturn('st-1', 'inv-1', {
+      ...RETURN,
+      close: true,
+      idempotencyKey: KEY,
+    });
+    expect(view.closedAt).toBe(closedAt.toISOString());
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('without a key, losing the close race is still INVESTMENT_CLOSED', async () => {
+    const { svc } = makeSut({ claimCount: 0 });
+    await expect(
+      svc.recordReturn('st-1', 'inv-1', { ...RETURN, close: true }),
+    ).rejects.toMatchObject({ response: { code: 'INVESTMENT_CLOSED' } });
+  });
+
+  it('refuses a close dated in the future', async () => {
+    const { svc, updateMany } = makeSut();
+    await expect(
+      svc.recordReturn('st-1', 'inv-1', {
+        ...RETURN,
+        receivedAt: '2026-09-20T00:00:00Z',
+        close: true,
+      }),
+    ).rejects.toMatchObject({ response: { code: 'INVESTMENT_CLOSE_IN_FUTURE' } });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses a close dated before the money was placed', async () => {
+    const { svc, updateMany } = makeSut({
+      placedEntry: { accountId: 'ba-1', occurredAt: new Date('2026-09-11T00:00:00Z') },
+    });
+    await expect(
+      svc.recordReturn('st-1', 'inv-1', { ...RETURN, close: true }),
+    ).rejects.toMatchObject({ response: { code: 'INVESTMENT_CLOSE_BEFORE_PLACEMENT' } });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('a partial return is not held to the close-date rules', async () => {
+    const { svc, post } = makeSut({
+      placedEntry: { accountId: 'ba-1', occurredAt: new Date('2026-09-11T00:00:00Z') },
+    });
+    await svc.recordReturn('st-1', 'inv-1', RETURN);
+    expect(post).toHaveBeenCalled();
   });
 });
 
@@ -165,5 +272,19 @@ describe('InvestmentService.place', () => {
     });
     const view = await svc.place('st-1', { ...PLACE, idempotencyKey: KEY });
     expect(view.id).toBe('inv-1');
+  });
+
+  it.each([
+    ['amount', { amount: '250000' }],
+    ['account', { fromAccountId: 'ba-2' }],
+    ['date', { placedAt: '2026-09-02T00:00:00Z' }],
+    ['counterparty', { counterparty: 'ICICI Bank' }],
+  ])('the same key on a placement with a different %s is 409', async (_what, over) => {
+    const { svc, create, post } = makeSut({ priorInvestment: [inv()] });
+    await expect(
+      svc.place('st-1', { ...PLACE, ...over, idempotencyKey: KEY }),
+    ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    expect(create).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
   });
 });
