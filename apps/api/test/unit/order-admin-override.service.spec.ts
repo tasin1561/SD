@@ -116,6 +116,13 @@ function makeService(
 
   // The REAL shared hooks service — the one transitionStatus runs — over
   // the same mocks, so what is asserted is what god mode actually does.
+  // SET-1: the provisioned courier is resolved per seller.
+  const settingsResolve = jest.fn(async (_sellerId: string, key: string) => ({
+    key,
+    valueType: 'STRING',
+    value: 'delhivery' as unknown,
+    source: 'SYSTEM_DEFAULT' as 'SYSTEM_DEFAULT' | 'SELLER_OVERRIDE',
+  }));
   const postCommit = new OrderPostCommitHooksService(
     { client } as unknown as PrismaService,
     audit as never,
@@ -123,6 +130,7 @@ function makeService(
     { provisionFromSnapshot, voidForOrder } as never,
     { refundIfCharged } as never,
     { emit } as never,
+    { resolve: settingsResolve } as never,
   );
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,
@@ -133,6 +141,7 @@ function makeService(
   );
   return {
     svc,
+    settingsResolve,
     refundIfCharged,
     emit,
     enqueueOrder,
@@ -685,6 +694,25 @@ describe('forceMutate — the post-commit hooks a matrix transition runs', () =>
     expect(provisionFromSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
       emit.mock.invocationCallOrder[0] ?? 0,
     );
+  });
+
+  it("→ CONFIRMED (god mode) provisions with the SELLER's default courier — the same shared hook", async () => {
+    const { svc, provisionFromSnapshot, settingsResolve } = makeService({
+      order: at(OrderStatus.OUT_OF_STOCK),
+    });
+    settingsResolve.mockResolvedValueOnce({
+      key: 'ops.default_courier_code',
+      valueType: 'STRING',
+      value: 'manual',
+      source: 'SELLER_OVERRIDE',
+    });
+    await svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.CONFIRMED });
+
+    expect(settingsResolve).toHaveBeenCalledWith('s1', 'ops.default_courier_code');
+    expect(provisionFromSnapshot.mock.calls[0]![0]).toMatchObject({
+      orderId: 'o1',
+      courierCode: 'manual',
+    });
   });
 
   it('→ PENDING_CONFIRMATION puts the order back in the call queue (CC-6)', async () => {

@@ -412,7 +412,14 @@ export class AwbGenerationService {
     //
     // CUR-13's distinction is about a CARRIER's answer. There is no
     // carrier here to have answered.
-    const noCarrierToAsk = dispatched.errorCode === 'NO_ADAPTER';
+    //
+    // Also keyed on the SHIPMENT's courier, not only the answer's code:
+    // whatever the dispatcher reports for a courier with no adapter
+    // (e.g. COURIER_DISABLED if the checks were ever reordered), a
+    // parcel provisioned with `manual` — a seller pinned to it via
+    // `ops.default_courier_code` — is never failed over to a live one.
+    const noCarrierToAsk =
+      dispatched.errorCode === 'NO_ADAPTER' || !this.dispatch.hasAdapter(shipment.courierCode);
     if (!dispatched.ok && !dispatched.serviceable && !noCarrierToAsk && sellerId !== null) {
       const alternate = await this.alternateAccount(shipment, sellerId);
 

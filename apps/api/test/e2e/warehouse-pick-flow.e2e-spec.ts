@@ -153,6 +153,9 @@ describe('Warehouse pick flow (e2e)', () => {
     });
     const r = await h.app.get(ShipmentProvisionService).provisionFromSnapshot({
       orderId,
+      // Resolved per seller by the post-commit hook in production (SET-1);
+      // this suite calls the primitive directly, with the seeded default.
+      courierCode: 'delhivery',
       recipient: {
         name: order.recipientName,
         phoneE164: order.recipientPhoneE164,

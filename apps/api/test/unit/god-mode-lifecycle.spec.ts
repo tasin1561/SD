@@ -81,6 +81,7 @@ function makeGodMode(bus: OrderLifecycleEventBus, initial: OrderStatus) {
     { provisionFromSnapshot, voidForOrder: jest.fn(async () => ({ voided: 0 })) } as never,
     { refundIfCharged } as never,
     bus,
+    { resolve: jest.fn(async () => ({ value: 'delhivery', source: 'SYSTEM_DEFAULT' })) } as never,
   );
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,

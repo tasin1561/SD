@@ -5,7 +5,6 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { ShipmentNumberingService } from './shipment-numbering.service';
 
-const SETTING_DEFAULT_COURIER = 'ops.default_courier_code';
 const SETTING_DEFAULT_WAREHOUSE = 'ops.default_warehouse_id';
 
 type DecimalIn = Prisma.Decimal | string | number;
@@ -30,6 +29,16 @@ export interface ProvisionShipmentItemInput {
  */
 export interface ProvisionShipmentInput {
   orderId: string;
+  /**
+   * The courier this parcel is provisioned with — resolved by the CALLER,
+   * per seller, through SettingsResolverService (`ops.default_courier_code`
+   * is seller-overridable, 2026-09-12). Required, and deliberately not
+   * re-read here: this primitive has no seller context and must stay
+   * dependency-free (R3), and a global fallback in here would be a second
+   * reader of the key that silently ignores a seller pinned to `manual`
+   * — i.e. a live waybill booked for a seller who asked for none.
+   */
+  courierCode: string;
   recipient: {
     name: string;
     phoneE164: string;
@@ -63,9 +72,9 @@ export interface ProvisionResult {
  * (same R3 spirit as M7's `call-queue`, but DTO-in rather than
  * orderId-in because shipment construction needs full order data).
  *
- * courierCode / originWarehouseId are resolved from system_settings
- * here (shared infra, not an Order dependency — mirrors how
- * OrderWriteService / WarehouseResolverService read ops.* settings).
+ * originWarehouseId is resolved from system_settings here (shared
+ * infra, not an Order dependency). courierCode is NOT — it is
+ * per-seller (SET-1) and arrives in the DTO, marshalled by the caller.
  * Both mutators are idempotent + best-effort-safe (CC-6 dual-path).
  */
 @Injectable()
@@ -95,10 +104,14 @@ export class ShipmentProvisionService {
       return { shipmentId: existing.shipmentId, created: false };
     }
 
-    const [courierCode, originWarehouseId] = await Promise.all([
-      this.resolveSetting(SETTING_DEFAULT_COURIER),
-      this.resolveSetting(SETTING_DEFAULT_WAREHOUSE),
-    ]);
+    const courierCode = input.courierCode.trim();
+    if (!courierCode) {
+      throw new InternalServerErrorException({
+        code: 'SHIPMENT_PROVISION_COURIER_MISSING',
+        message: 'provisionFromSnapshot requires the caller to resolve a courier code',
+      });
+    }
+    const originWarehouseId = await this.resolveSetting(SETTING_DEFAULT_WAREHOUSE);
 
     const totalWeightGrams =
       input.totalWeightGrams ??
