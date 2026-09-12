@@ -55,7 +55,7 @@ function LineTable({
         {lines.length === 0 ? (
           <TableEmpty colSpan={3}>{emptyText}</TableEmpty>
         ) : (
-          lines.map((l) => (
+          lines.flatMap((l) => [
             <Tr key={l.key}>
               <Td>
                 <div className="font-medium">{l.label}</div>
@@ -67,8 +67,32 @@ function LineTable({
               <Td align="right" className="tabular-nums">
                 {l.count}
               </Td>
-            </Tr>
-          ))
+            </Tr>,
+            // The halves of a line that need different responses. They add
+            // up to the line above and are already inside its total.
+            ...(l.parts ?? []).map((p) => (
+              <Tr key={p.key}>
+                <Td className="pl-8">
+                  <div className="text-sm">
+                    {p.key === 'courier_float_instant_pay' ? (
+                      <Link href="/liabilities/instant-pay" className="text-accent hover:underline">
+                        {p.label} →
+                      </Link>
+                    ) : (
+                      p.label
+                    )}
+                  </div>
+                  <div className="text-text-faint mt-0.5 text-xs">{p.meaning}</div>
+                </Td>
+                <Td align="right" className="text-text-muted">
+                  <Money amount={p.amountInr} currency="INR" convert={false} />
+                </Td>
+                <Td align="right" className="text-text-muted tabular-nums">
+                  {p.count}
+                </Td>
+              </Tr>
+            )),
+          ])
         )}
       </TBody>
     </Table>

@@ -38,6 +38,7 @@ import {
 import { ExpenseCategoryService } from '../services/expense-category.service';
 import { InvestmentService } from '../services/investment.service';
 import { LiabilitiesService } from '../services/liabilities.service';
+import { InstantPayAdvanceService } from '../services/instant-pay-advance.service';
 import { ShipmentCostService } from '../services/shipment-cost.service';
 import { ManualExpenseService } from '../services/manual-expense.service';
 import { PnlService } from '../services/pnl.service';
@@ -70,6 +71,7 @@ export class AdminTreasuryController {
     private readonly liabilities: LiabilitiesService,
     private readonly shipmentCosts: ShipmentCostService,
     private readonly expenses: ManualExpenseService,
+    private readonly advances: InstantPayAdvanceService,
   ) {}
 
   @Get('overview')
@@ -144,6 +146,23 @@ export class AdminTreasuryController {
   })
   liabilitiesReport(): ReturnType<LiabilitiesService['report']> {
     return this.liabilities.report();
+  }
+
+  @Get('instant-pay-advances')
+  @ApiOperation({
+    summary:
+      'Orders credited to sellers under Instant Pay that the courier has not yet paid us for — the fronted half of the courier float, per order.',
+  })
+  @ApiQuery({ name: 'sellerId', required: false })
+  @ApiQuery({ name: 'courierAccountId', required: false })
+  instantPayAdvances(
+    @Query('sellerId') sellerId?: string,
+    @Query('courierAccountId') courierAccountId?: string,
+  ): ReturnType<InstantPayAdvanceService['report']> {
+    return this.advances.report({
+      sellerId: optionalUuid('sellerId', sellerId),
+      courierAccountId: optionalUuid('courierAccountId', courierAccountId),
+    });
   }
 
   @Post('shipments/:shipmentId/cost')
@@ -427,6 +446,15 @@ export function pnlWindow(
     });
   }
   return { from: fromDate, to: toDate };
+}
+
+/** An optional id filter: absent or blank means "all", anything else must be a uuid. */
+function optionalUuid(name: string, v: string | undefined): string | undefined {
+  if (v === undefined || v === '') return undefined;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) {
+    throw new BadRequestException({ code: 'INVALID_ID', message: `${name} must be a uuid` });
+  }
+  return v;
 }
 
 export { BankEntryType, BankOwnerKind };

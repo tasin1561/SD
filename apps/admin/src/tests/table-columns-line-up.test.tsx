@@ -43,7 +43,9 @@ function mismatches(): string[] {
         const head = table[1] ?? '';
         const body = table[2] ?? '';
         if (head.includes('colSpan')) continue;
-        const headerCount = (head.match(/<Th[\s/>]/g) ?? []).length;
+        // A SortableTh renders a <th> too; not counting it would report a
+        // sortable table as having fewer headers than it shows.
+        const headerCount = (head.match(/<(?:Sortable)?Th[\s/>]/g) ?? []).length;
         if (headerCount === 0) continue;
         for (const row of body.matchAll(/<Tr[^>]*>(.*?)<\/Tr>/gs)) {
           const cells = row[1] ?? '';

@@ -7,6 +7,7 @@ import {
   WithdrawalRequestStatus,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { InstantPayAdvanceService } from './instant-pay-advance.service';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -51,6 +52,12 @@ export interface LedgerLine {
   readonly count: number;
   /** What this is, and what happens if it is ignored. */
   readonly meaning: string;
+  /**
+   * What the line is made of, when its halves need different responses.
+   * The parts sum EXACTLY to the line and are never counted in a total
+   * themselves — the line is.
+   */
+  readonly parts?: ReadonlyArray<LedgerLine>;
 }
 
 export interface SellerDebt {
@@ -119,10 +126,13 @@ export interface LiabilitiesReport {
  */
 @Injectable()
 export class LiabilitiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly advances: InstantPayAdvanceService,
+  ) {}
 
   async report(): Promise<LiabilitiesReport> {
-    const [walletBalances, pendingWithdrawals, outstandingFreight, courierFloat] =
+    const [walletBalances, pendingWithdrawals, outstandingFreight, courierFloat, instantPay] =
       await Promise.all([
         this.prisma.client.sellerWalletBalance.findMany({
           where: { currency: Currency.INR },
@@ -144,7 +154,31 @@ export class LiabilitiesService {
           select: { totalInr: true, amountSettledInr: true },
         }),
         this.codFloat(),
+        this.advances.summary(),
       ]);
+
+    // The float, split by whose money it is. Instant Pay orders are a
+    // subset of the float by construction (same "no payout line"
+    // predicate), and the settlement half is the remainder, so the two
+    // add up to the line exactly.
+    const floatParts: LedgerLine[] = [
+      {
+        key: 'courier_float_instant_pay',
+        label: 'Instant Pay: advanced to sellers, awaiting courier',
+        amountInr: instantPay.amount.toFixed(2),
+        count: instantPay.count,
+        meaning:
+          'Already credited to the seller and fronted from our money. The courier owes it to US now — this is our cash at risk if they never pay.',
+      },
+      {
+        key: 'courier_float_settlement',
+        label: 'Settlement mode: not yet credited to sellers',
+        amountInr: courierFloat.amount.sub(instantPay.amount).toFixed(2),
+        count: courierFloat.count - instantPay.count,
+        meaning:
+          'Credited to the seller only when the courier pays (also any Instant Pay order whose credit has not run yet). Theirs when it lands; nothing of ours is out.',
+      },
+    ];
 
     // A wallet balance is a liability when positive and a receivable
     // when negative. Summing them into one number would let a seller who
@@ -212,6 +246,7 @@ export class LiabilitiesService {
         count: courierFloat.count,
         meaning:
           'Cash the courier holds for delivered orders. Arrives on their cycle, not ours — the largest thing standing between profit and liquidity.',
+        parts: floatParts,
       },
       {
         key: 'freight_outstanding',
