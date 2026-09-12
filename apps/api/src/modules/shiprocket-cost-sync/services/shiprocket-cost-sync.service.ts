@@ -277,6 +277,35 @@ export class ShiprocketCostSyncService {
         continue;
       }
 
+      // Shiprocket can move a parcel to a new waybill — a courier that will
+      // not pick it up is swapped for another. Our shipment keeps the
+      // waybill it was booked with, so tracking polls a number that no
+      // longer moves and a label printed before the change names it. Its
+      // charges follow the ORDER id and are counted correctly; the parcel
+      // itself needs a person, so this says so rather than re-pointing it.
+      if (reading.awbNumber !== null && s.awbNumber !== null && reading.awbNumber !== s.awbNumber) {
+        const orderNumber = s.orderShipments[0]?.order.orderNumber ?? courierOrderId;
+        await this.issues.raise({
+          kind: SystemIssueKind.TRACKING_STALLED,
+          severity: SystemIssueSeverity.HIGH,
+          title: `Shiprocket moved ${orderNumber} to a new waybill`,
+          detail:
+            `Shiprocket now shows waybill ${reading.awbNumber} for this parcel; we booked it as ` +
+            `${s.awbNumber}. Tracking still follows ${s.awbNumber}, and a label printed before the ` +
+            'change carries it. If the parcel has not been picked up, reprint its label from ' +
+            'Shiprocket. Its courier charges are matched by Shiprocket’s order id and are counted ' +
+            'correctly either way.',
+          source: 'ShiprocketCostSyncService',
+          dedupeKey: `shiprocket-awb-swapped:${s.id}`,
+          metadata: {
+            shipmentId: s.id,
+            ourAwb: s.awbNumber,
+            theirAwb: reading.awbNumber,
+            courierOrderId,
+          },
+        });
+      }
+
       const last = await this.prisma.client.courierCostReading.findFirst({
         where: { shipmentId: s.id },
         orderBy: { readAt: 'desc' },
@@ -328,7 +357,11 @@ export class ShiprocketCostSyncService {
       // includes those — it is what the parcel cost us — but comparing the
       // bill with it would flag every parcel by ₹10.02 the day they bill.
       const billed = new Prisma.Decimal(reading.billedInr);
-      const recorded = await this.ledgerFreightInr(account.id, reading.awbNumber ?? s.awbNumber);
+      const recorded = await this.ledgerFreightInr(
+        account.id,
+        reading.awbNumber ?? s.awbNumber,
+        s.courierOrderId,
+      );
       if (recorded === null) {
         ledgerUncovered += 1;
         continue;
@@ -418,13 +451,19 @@ export class ShiprocketCostSyncService {
   private async ledgerFreightInr(
     courierAccountId: string,
     awbNumber: string | null,
+    courierOrderId: string | null,
   ): Promise<Prisma.Decimal | null> {
-    if (awbNumber === null) return null;
+    if (awbNumber === null && courierOrderId === null) return null;
     const rows = await this.prisma.client.courierWalletTransaction.groupBy({
       by: ['kind'],
       where: {
         courierAccountId,
-        awbNumber,
+        // By waybill OR by their order id: freight booked under a waybill
+        // they have since replaced is still this parcel's.
+        OR: [
+          ...(awbNumber === null ? [] : [{ awbNumber }]),
+          ...(courierOrderId === null ? [] : [{ courierOrderRef: courierOrderId }]),
+        ],
         category: CourierWalletTxnCategory.PARCEL,
         missingFromExportAt: null,
         detail: { path: ['transactionType'], equals: 'Freight Charges' },

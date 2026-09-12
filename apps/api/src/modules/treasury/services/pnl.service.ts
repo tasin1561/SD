@@ -1299,7 +1299,7 @@ export class PnlService {
       return net;
     };
     const windowRows = await this.prisma.client.courierWalletTransaction.groupBy({
-      by: ['courierAccountId', 'awbNumber', 'kind'],
+      by: ['courierAccountId', 'awbNumber', 'courierOrderRef', 'kind'],
       where: { ...parcelWhere, occurredAt: { gte: from, lte: to } },
       _sum: { amountInr: true },
     });
@@ -1309,7 +1309,7 @@ export class PnlService {
       sinceCutoverNet = new Map<string, Prisma.Decimal>();
     } else if (cutoverFrom.getTime() !== from.getTime()) {
       const cutoverRows = await this.prisma.client.courierWalletTransaction.groupBy({
-        by: ['courierAccountId', 'awbNumber', 'kind'],
+        by: ['courierAccountId', 'awbNumber', 'courierOrderRef', 'kind'],
         where: { ...parcelWhere, occurredAt: { gte: cutoverFrom, lte: to } },
         _sum: { amountInr: true },
       });
@@ -1319,6 +1319,16 @@ export class PnlService {
     const keys = [...windowNet.keys()];
     const accountIds = [...new Set(keys.map((k) => k.slice(0, k.indexOf('|'))))];
     const awbs = [...new Set(keys.map((k) => k.slice(k.indexOf('|') + 1)))];
+    // A Shiprocket charge's ORDER id: a waybill Shiprocket has since
+    // replaced still belongs to the parcel that order is, and that
+    // parcel's cost already carries it (the importer nets by order id).
+    const refOf = new Map<string, string>();
+    for (const r of windowRows) {
+      if (r.awbNumber !== null && typeof r.courierOrderRef === 'string') {
+        refOf.set(`${r.courierAccountId}|${r.awbNumber}`, r.courierOrderRef);
+      }
+    }
+    const refs = [...new Set(refOf.values())];
     const [accounts, shipments] =
       keys.length === 0
         ? [[], []]
@@ -1330,8 +1340,19 @@ export class PnlService {
             // Every shipment that ever carried one of these waybills —
             // voided and replaced ones included, which is the point.
             this.prisma.client.shipment.findMany({
-              where: { awbNumber: { in: awbs } },
-              select: { awbNumber: true, courierCode: true, deletedAt: true, supersededAt: true },
+              where: {
+                OR: [
+                  { awbNumber: { in: awbs } },
+                  ...(refs.length > 0 ? [{ courierOrderId: { in: refs } }] : []),
+                ],
+              },
+              select: {
+                awbNumber: true,
+                courierOrderId: true,
+                courierCode: true,
+                deletedAt: true,
+                supersededAt: true,
+              },
             }),
           ]);
     const courierOf = new Map(accounts.map((a) => [a.id, a.courier.code]));
@@ -1344,7 +1365,12 @@ export class PnlService {
       const bar = key.indexOf('|');
       const code = courierOf.get(key.slice(0, bar));
       const awb = key.slice(bar + 1);
-      const mine = shipments.filter((s) => s.awbNumber === awb && s.courierCode === code);
+      const ref = refOf.get(key);
+      const mine = shipments.filter(
+        (s) =>
+          s.courierCode === code &&
+          (s.awbNumber === awb || (ref !== undefined && s.courierOrderId === ref)),
+      );
       if (mine.some((s) => s.deletedAt === null && s.supersededAt === null)) continue;
       if (mine.length > 0) {
         deadCost = deadCost.add(windowNet.get(key) ?? ZERO);

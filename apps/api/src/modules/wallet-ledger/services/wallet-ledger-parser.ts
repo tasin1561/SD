@@ -6,6 +6,12 @@ export interface LedgerTxn {
   readonly txnId: string;
   /** Absent only on a ledger-level entry that names no parcel. */
   readonly awbNumber: string | null;
+  /**
+   * The courier's own order id, where it keeps one apart from the waybill
+   * (Shiprocket). Survives the waybill being reassigned, so it is what
+   * ties a charge to its parcel when the two disagree.
+   */
+  readonly courierOrderRef?: string | null;
   readonly kind: 'DEBIT' | 'CREDIT';
   readonly category: 'PARCEL' | 'ADJUSTMENT';
   readonly leg: 'FORWARD' | 'RTO';

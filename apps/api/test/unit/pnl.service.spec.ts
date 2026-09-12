@@ -75,7 +75,9 @@ function makeSut(opts: {
   /** Early-COD fees booked against payouts (EXPENSE entries WITH a settlement). */
   codFees?: Prisma.Decimal | null;
   /** Courier PARCEL transactions in the window, grouped by waybill. */
-  parcelTxns?: Array<{ awbNumber: string; kind: string; amount: Prisma.Decimal }>;
+  parcelTxns?: Array<{ awbNumber: string; kind: string; amount: Prisma.Decimal; ref?: string }>;
+  /** Live shipments found by their courier ORDER id, holding a different waybill. */
+  liveOrderRefs?: Array<{ ref: string; awb: string }>;
   /** Waybills that belong to a live Skydrop shipment. */
   liveAwbs?: string[];
   reconciliation?: Array<{
@@ -148,6 +150,7 @@ function makeSut(opts: {
           return (opts.parcelTxns ?? []).map((t) => ({
             courierAccountId: 'acct-1',
             awbNumber: t.awbNumber,
+            courierOrderRef: t.ref ?? null,
             kind: t.kind,
             _sum: { amountInr: t.amount },
           }));
@@ -183,24 +186,34 @@ function makeSut(opts: {
     shipment: {
       findMany: async (args: { where: Record<string, unknown> }) => {
         // The no-Skydrop-parcel line asks which waybills are live parcels.
-        if (args.where['awbNumber'] !== undefined && typeof args.where['awbNumber'] === 'object') {
-          const inList = (args.where['awbNumber'] as { in?: string[] }).in;
-          if (inList !== undefined) {
-            // Every shipment that ever carried the waybill: live ones of
-            // the account's courier, voided ones, and live ones of ANOTHER
-            // courier that merely share the number.
-            const row = (a: string, courierCode: string, deletedAt: Date | null) => ({
-              awbNumber: a,
-              courierCode,
-              deletedAt,
-              supersededAt: null,
-            });
-            return [
-              ...(opts.liveAwbs ?? []).map((a) => row(a, 'delhivery', null)),
-              ...(opts.deadAwbs ?? []).map((a) => row(a, 'delhivery', FROM)),
-              ...(opts.otherCourierAwbs ?? []).map((a) => row(a, 'shiprocket', null)),
-            ].filter((s) => inList.includes(s.awbNumber));
-          }
+        const ors =
+          (args.where['OR'] as Array<Record<string, { in?: string[] }>> | undefined) ?? [];
+        const inList =
+          (args.where['awbNumber'] as { in?: string[] } | undefined)?.in ??
+          ors.find((o) => o['awbNumber'] !== undefined)?.['awbNumber']?.in;
+        if (inList !== undefined) {
+          // Every shipment that ever carried the waybill — live ones of the
+          // account's courier, voided ones, live ones of ANOTHER courier
+          // that merely share the number — or that is the order a charge
+          // names under a waybill since replaced.
+          const refList =
+            ors.find((o) => o['courierOrderId'] !== undefined)?.['courierOrderId']?.in ?? [];
+          const row = (
+            a: string,
+            courierCode: string,
+            deletedAt: Date | null,
+            courierOrderId: string | null = null,
+          ) => ({ awbNumber: a, courierOrderId, courierCode, deletedAt, supersededAt: null });
+          return [
+            ...(opts.liveAwbs ?? []).map((a) => row(a, 'delhivery', null)),
+            ...(opts.deadAwbs ?? []).map((a) => row(a, 'delhivery', FROM)),
+            ...(opts.otherCourierAwbs ?? []).map((a) => row(a, 'shiprocket', null)),
+            ...(opts.liveOrderRefs ?? []).map((o) => row(o.awb, 'delhivery', null, o.ref)),
+          ].filter(
+            (s) =>
+              inList.includes(s.awbNumber) ||
+              (s.courierOrderId !== null && refList.includes(s.courierOrderId)),
+          );
         }
         // BOTH cohort queries mention rtoReceivedAt — the delivery line
         // filters it to null, the returns line uses a date range.
@@ -870,6 +883,18 @@ describe('the P&L counts what it used to miss', () => {
     const svc = makeSut({ damage: D('1250') });
     const r = await svc.report(FROM, TO);
     expect(line(r, 'damage_refunds')).toMatchObject({ costInr: '1250.00', marginInr: '-1250.00' });
+  });
+
+  it('a charge under a waybill Shiprocket replaced is that parcel’s, not “no Skydrop parcel”', async () => {
+    // Filed under the old waybill, naming the order our live parcel is.
+    // The importer nets it into that parcel's cost, so counting it here as
+    // well would count it twice — and before this it was counted ONLY here.
+    const svc = makeSut({
+      parcelTxns: [{ awbNumber: 'OLD-AWB', kind: 'DEBIT', amount: D('60'), ref: 'SR-ORDER-1' }],
+      liveOrderRefs: [{ ref: 'SR-ORDER-1', awb: 'NEW-AWB' }],
+    });
+    const r = await svc.report(FROM, TO);
+    expect(r.lines.find((l) => l.key === 'courier_unmatched')?.costInr).toBe('0.00');
   });
 
   it('counts courier charges on a waybill that is no live Skydrop parcel — and only those', async () => {

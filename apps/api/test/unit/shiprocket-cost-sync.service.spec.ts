@@ -34,16 +34,20 @@ function makeSut(opts: {
   const readings: Array<Record<string, unknown>> = [];
   const snapshots: Array<Record<string, unknown>> = [];
   const held = { ...(opts.heldReadings ?? {}) };
-  const freightGroupBy = jest.fn(async ({ where }: { where: { awbNumber: string } }) => {
-    const f = opts.freight?.[where.awbNumber];
-    if (f === undefined) return [];
-    const rows: Array<{ kind: string; _sum: { amountInr: Prisma.Decimal } }> = [];
-    if (f.debit !== undefined)
-      rows.push({ kind: 'DEBIT', _sum: { amountInr: new Prisma.Decimal(f.debit) } });
-    if (f.credit !== undefined)
-      rows.push({ kind: 'CREDIT', _sum: { amountInr: new Prisma.Decimal(f.credit) } });
-    return rows;
-  });
+  // The ledger check asks by waybill OR by their order id.
+  const freightGroupBy = jest.fn(
+    async ({ where }: { where: { OR?: Array<{ awbNumber?: string }> } }) => {
+      const awb = (where.OR ?? []).find((o) => o.awbNumber !== undefined)?.awbNumber ?? '';
+      const f = opts.freight?.[awb];
+      if (f === undefined) return [];
+      const rows: Array<{ kind: string; _sum: { amountInr: Prisma.Decimal } }> = [];
+      if (f.debit !== undefined)
+        rows.push({ kind: 'DEBIT', _sum: { amountInr: new Prisma.Decimal(f.debit) } });
+      if (f.credit !== undefined)
+        rows.push({ kind: 'CREDIT', _sum: { amountInr: new Prisma.Decimal(f.credit) } });
+      return rows;
+    },
+  );
   const client = {
     systemSetting: {
       findUnique: async () => ({ valueBoolean: opts.enabled ?? true }),
@@ -114,9 +118,16 @@ function makeSut(opts: {
   return { svc, updates, readings, snapshots, audit, issues, freightGroupBy };
 }
 
-const ship = (id: string, fwd: string | null = null, rto: string | null = null): Ship => ({
+const ship = (
+  id: string,
+  fwd: string | null = null,
+  rto: string | null = null,
+  // The waybill we hold — the same one `srOrder` reports unless a test
+  // is about Shiprocket having moved the parcel to another.
+  awbNumber = 'AWB',
+): Ship => ({
   id,
-  awbNumber: `AWB-${id}`,
+  awbNumber,
   courierOrderId: `SR-${id}`,
   actualCourierCostInr: fwd === null ? null : new Prisma.Decimal(fwd),
   actualRtoCostInr: rto === null ? null : new Prisma.Decimal(rto),
@@ -203,6 +214,27 @@ describe('ShiprocketCostSyncService', () => {
     expect(s.issues.raise).not.toHaveBeenCalled();
   });
 
+  it('says so when Shiprocket has moved a parcel to a new waybill — and changes nothing itself', async () => {
+    // We booked it as OLD-AWB; their order now shows AWB. Tracking polls
+    // by waybill and the printed label carries the old one, so a person
+    // has to look — the sync must not re-point the parcel on its own.
+    const s = makeSut({
+      shipments: [ship('m', null, null, 'OLD-AWB')],
+      orders: {
+        'SR-m': srOrder('IN TRANSIT', { freight_charges: '90.00', billing_amount: '' }),
+      },
+    });
+    await s.svc.sync('MANUAL');
+    expect(s.issues.raise).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dedupeKey: 'shiprocket-awb-swapped:m',
+        severity: 'HIGH',
+        metadata: expect.objectContaining({ ourAwb: 'OLD-AWB', theirAwb: 'AWB' }),
+      }),
+    );
+    expect(s.updates).toHaveLength(0);
+  });
+
   it('the extras their wallet charged beside freight are not a disagreement', async () => {
     // WhatsApp (₹5.90) and RTO scoring (₹4.12) are in the parcel's recorded
     // cost — they are what it cost us — but billed on their VAS invoices,
@@ -220,7 +252,9 @@ describe('ShiprocketCostSyncService', () => {
     expect(s.freightGroupBy.mock.calls[0]?.[0]).toMatchObject({
       where: {
         courierAccountId: 'acct-sr',
-        awbNumber: 'AWB',
+        // By waybill OR their order id: freight booked under a waybill
+        // Shiprocket has since replaced is still this parcel's.
+        OR: [{ awbNumber: 'AWB' }, { courierOrderRef: 'SR-p' }],
         missingFromExportAt: null,
         detail: { path: ['transactionType'], equals: 'Freight Charges' },
       },

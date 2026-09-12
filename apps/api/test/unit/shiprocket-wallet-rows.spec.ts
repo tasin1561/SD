@@ -205,6 +205,14 @@ describe('parsePassbook', () => {
     expect(lost).toMatchObject({ kind: 'CREDIT', amountInr: '460.00' });
   });
 
+  it('keeps their order id on each charge — it outlives a reassigned waybill', () => {
+    const parcels = pb.txns.filter((t) => t.category === 'PARCEL');
+    expect(parcels.length).toBeGreaterThan(0);
+    for (const t of parcels) {
+      expect(t.courierOrderRef ?? '').toBe(String(t.detail?.['orderId'] ?? ''));
+    }
+  });
+
   it('files carriage per waybill, on the return leg when it is RTO freight', () => {
     const parcel = pb.txns.filter((t) => t.category === 'PARCEL');
     expect(parcel.map((t) => [t.awbNumber, t.leg, t.kind, t.amountInr])).toEqual([

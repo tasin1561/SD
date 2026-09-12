@@ -405,9 +405,17 @@ export class WalletImportService {
       missing.map((m) => m.awbNumber).filter((a): a is string => a !== null),
     );
     const awbs = new Set([...fileAwbs, ...vanishedAwbs]);
+    // A Shiprocket charge also names the parcel's ORDER id, which — unlike
+    // the waybill — survives Shiprocket reassigning the parcel to another
+    // courier. A parcel is found by either.
+    const fileOrderRefs = new Set(
+      input.txns
+        .filter((t) => t.category === 'PARCEL')
+        .map((t) => t.courierOrderRef ?? null)
+        .filter((r): r is string => r !== null),
+    );
     const shipments = await this.prisma.client.shipment.findMany({
       where: {
-        awbNumber: { in: [...awbs] },
         // The courier that carried it (CUR-14 rewrites this on failover).
         // A waybill is only unique within a courier.
         courierCode: input.courierCode,
@@ -424,11 +432,20 @@ export class WalletImportService {
         // BACKFILLED below — the courier's own ledger is the authority
         // on whose account carried a parcel, which is what CACC-1 wants
         // recorded.
-        OR: [{ courierAccountId }, { courierAccountId: null }],
+        AND: [
+          {
+            OR: [
+              { awbNumber: { in: [...awbs] } },
+              ...(fileOrderRefs.size > 0 ? [{ courierOrderId: { in: [...fileOrderRefs] } }] : []),
+            ],
+          },
+          { OR: [{ courierAccountId }, { courierAccountId: null }] },
+        ],
       },
       select: {
         id: true,
         awbNumber: true,
+        courierOrderId: true,
         actualCourierCostInr: true,
         actualRtoCostInr: true,
         courierAccountId: true,
@@ -440,6 +457,14 @@ export class WalletImportService {
       },
     });
     const byAwb = new Map(shipments.map((s) => [s.awbNumber ?? '', s]));
+
+    // Every OTHER waybill filed under one of these parcels' order ids —
+    // the one it had before Shiprocket reassigned it, or the new one when
+    // we still hold the first — is netted as part of that parcel. Without
+    // this its charges matched no shipment and fell to the P&L's "no
+    // Skydrop parcel" line, leaving the parcel's own cost too low.
+    const aliasOf = await this.waybillAliases(courierAccountId, shipments, input.txns);
+    for (const alias of aliasOf.keys()) awbs.add(alias);
 
     /*
       ── STEP 2: THE COST, NETTED FROM OUR OWN LEDGER ──────────────────
@@ -475,6 +500,23 @@ export class WalletImportService {
     const netByAwb = dryRun
       ? this.netFromFile(input.txns)
       : await this.netFromLedger(courierAccountId, [...awbs]);
+    // One parcel, one net — whichever of its waybills a charge was filed under.
+    for (const [alias, primary] of aliasOf) {
+      const a = netByAwb.get(alias);
+      if (a === undefined) continue;
+      const p = netByAwb.get(primary);
+      netByAwb.set(
+        primary,
+        p === undefined
+          ? a
+          : {
+              total: p.total.add(a.total),
+              returned: p.returned || a.returned,
+              latestAt: p.latestAt.getTime() >= a.latestAt.getTime() ? p.latestAt : a.latestAt,
+            },
+      );
+      netByAwb.delete(alias);
+    }
 
     let forwardWritten = 0;
     let rtoWritten = 0;
@@ -782,6 +824,7 @@ export class WalletImportService {
             courierAccountId,
             txnId: t.txnId,
             awbNumber: t.awbNumber,
+            courierOrderRef: t.courierOrderRef ?? null,
             kind: t.kind,
             category: t.category,
             leg: t.leg,
@@ -844,6 +887,57 @@ export class WalletImportService {
         });
       }
     }
+    return out;
+  }
+
+  /**
+   * Waybills that are another name for one of `shipments`: filed under the
+   * same courier ORDER id, but not the waybill the shipment holds. Returns
+   * alias → the shipment's own waybill. A waybill that is itself some
+   * shipment's is never an alias — that is two parcels, not one.
+   */
+  private async waybillAliases(
+    courierAccountId: string,
+    shipments: ReadonlyArray<{ awbNumber: string | null; courierOrderId: string | null }>,
+    fileTxns: readonly LedgerTxn[],
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const primaryByRef = new Map<string, string>();
+    for (const s of shipments) {
+      if (typeof s.courierOrderId === 'string' && typeof s.awbNumber === 'string') {
+        primaryByRef.set(s.courierOrderId, s.awbNumber);
+      }
+    }
+    if (primaryByRef.size === 0) return out;
+
+    const filed = await this.prisma.client.courierWalletTransaction.findMany({
+      where: {
+        courierAccountId,
+        category: CourierWalletTxnCategory.PARCEL,
+        courierOrderRef: { in: [...primaryByRef.keys()] },
+      },
+      select: { awbNumber: true, courierOrderRef: true },
+      distinct: ['awbNumber'],
+    });
+    const pairs = [
+      ...fileTxns
+        .filter((t) => t.category === 'PARCEL')
+        .map((t) => ({ awbNumber: t.awbNumber, courierOrderRef: t.courierOrderRef ?? null })),
+      ...filed,
+    ];
+    for (const p of pairs) {
+      if (p.awbNumber === null || p.courierOrderRef === null) continue;
+      const primary = primaryByRef.get(p.courierOrderRef);
+      if (primary === undefined || primary === p.awbNumber) continue;
+      out.set(p.awbNumber, primary);
+    }
+    if (out.size === 0) return out;
+    // Never merge a waybill some shipment holds as its own.
+    const taken = await this.prisma.client.shipment.findMany({
+      where: { awbNumber: { in: [...out.keys()] } },
+      select: { awbNumber: true },
+    });
+    for (const t of taken) if (t.awbNumber !== null) out.delete(t.awbNumber);
     return out;
   }
 

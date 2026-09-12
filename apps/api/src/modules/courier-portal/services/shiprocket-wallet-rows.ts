@@ -277,6 +277,9 @@ export function parsePassbook(rows: readonly (readonly string[])[]): PassbookRea
       // An adjustment names no parcel even when its text mentions one:
       // a lost-shipment credit is account money, not a refund of carriage.
       awbNumber: category === 'PARCEL' ? awb : null,
+      // Their order id outlives the waybill: a parcel Shiprocket moves to
+      // another courier gets a new waybill under the same order.
+      courierOrderRef: orderIdRaw === '' || orderIdRaw === 'NA' ? null : orderIdRaw,
       kind: credit ? 'CREDIT' : 'DEBIT',
       category,
       leg: sub === 'Freight RTO' ? 'RTO' : 'FORWARD',
