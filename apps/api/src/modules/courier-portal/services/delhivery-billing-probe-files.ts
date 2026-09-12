@@ -301,6 +301,189 @@ export function pickInvoiceRows(
   return picks;
 }
 
+// ── Reading a list the portal draws late ────────────────────────────────
+
+/** Which of Delhivery's billing lists a row came from. */
+export type ListKind = 'invoices' | 'creditNotes' | 'debitNotes';
+
+export interface ListColumns {
+  readonly id: number;
+  readonly date: number;
+  readonly gst: number;
+  readonly type: number;
+  readonly amount: number;
+}
+
+/** Column indexes by header; -1 when a list has no such column. */
+export function listColumns(headers: readonly string[]): ListColumns {
+  const find = (rx: RegExp, not?: RegExp): number =>
+    headers.findIndex((h) => rx.test(h) && !(not?.test(h) ?? false));
+  return {
+    id: find(/\b(id|no\.?|number)\b/i, /gst|awb|order|waybill/i),
+    date: find(/date/i),
+    gst: find(/gst/i),
+    type: find(/type|service|category/i),
+    amount: find(/amount|total|value/i),
+  };
+}
+
+const EMPTY_MESSAGE =
+  /\bno\s+(data|records?|results?|invoices?|(credit|debit)\s*notes?|entries|items)\b|nothing\s+(found|to\s+show)|not\s+found/i;
+
+const filled = (cells: readonly string[]): number => cells.filter((c) => c.trim() !== '').length;
+
+/**
+ * What a table's rows ARE, before anybody reads them as invoices.
+ *
+ * Their list draws twenty grey placeholder rows while it loads — real
+ * `<tr>`s with empty cells. The first probe run read those as the invoice
+ * list (20 rows, no text, "no date could be read") and downloaded nothing.
+ * A row is DATA only when it carries text in at least two cells and, where
+ * the list has an id column, an id. An all-empty row is a SKELETON — still
+ * loading, never data. A lone cell saying "no data" is the list saying it
+ * is empty.
+ */
+export function classifyListRows(
+  headers: readonly string[],
+  rows: readonly (readonly string[])[],
+): { readonly real: readonly number[]; readonly skeleton: number; readonly emptyMessage: boolean } {
+  const { id } = listColumns(headers);
+  const real: number[] = [];
+  let skeleton = 0;
+  let emptyMessage = false;
+  rows.forEach((cells, i) => {
+    const n = filled(cells);
+    if (n === 0) {
+      skeleton += 1;
+      return;
+    }
+    if (n === 1 && EMPTY_MESSAGE.test(cells.join(' '))) {
+      emptyMessage = true;
+      return;
+    }
+    if (n >= 2 && (id < 0 || (cells[id] ?? '').trim() !== '')) real.push(i);
+  });
+  return { real, skeleton, emptyMessage };
+}
+
+/** "₹1,28,909.20" → "128909.20"; null when it is not a number. */
+export function parseInr(raw: string): string | null {
+  const p = moneyToPaise(raw);
+  return p === null ? null : paiseToString(p);
+}
+
+export interface ParsedListRow {
+  /** The text that finds the row again on the page — its id, else its first filled cell. */
+  readonly key: string;
+  readonly invoiceId: string | null;
+  /** YYYY-MM-DD, read day-first from the date column. */
+  readonly date: string | null;
+  readonly dateText: string | null;
+  readonly gstNumber: string | null;
+  readonly serviceType: string | null;
+  readonly amountInr: string | null;
+  readonly amountText: string | null;
+  readonly cells: readonly string[];
+}
+
+/** The DATA rows of a list (skeletons and empty-state rows dropped), parsed. */
+export function parseListRows(
+  headers: readonly string[],
+  rows: readonly (readonly string[])[],
+): ParsedListRow[] {
+  const col = listColumns(headers);
+  const at = (cells: readonly string[], i: number): string | null => {
+    if (i < 0) return null;
+    const v = (cells[i] ?? '').trim();
+    return v === '' ? null : v;
+  };
+  return classifyListRows(headers, rows).real.map((i) => {
+    const cells = rows[i] ?? [];
+    const invoiceId = at(cells, col.id);
+    const dateText = at(cells, col.date);
+    const d = dateText === null ? null : latestDateIn(dateText);
+    const amountText = at(cells, col.amount);
+    return {
+      key: invoiceId ?? cells.find((c) => c.trim() !== '')?.trim() ?? '',
+      invoiceId,
+      date: d === null ? null : new Date(d).toISOString().slice(0, 10),
+      dateText,
+      gstNumber: at(cells, col.gst),
+      serviceType: at(cells, col.type),
+      amountInr: amountText === null ? null : parseInr(amountText),
+      amountText,
+      cells,
+    };
+  });
+}
+
+export interface ListPick {
+  readonly key: string;
+  readonly rowIndex: number;
+  readonly serviceType: string | null;
+  readonly reason: string;
+}
+
+const byDateDesc = (
+  a: { r: ParsedListRow; i: number },
+  b: { r: ParsedListRow; i: number },
+): number => (b.r.date ?? '').localeCompare(a.r.date ?? '') || a.i - b.i;
+
+/**
+ * The LATEST row of EACH service type ("Domestic", "Communication VAS"…),
+ * newest first. A type's file format is what the checker has to be written
+ * against, so one of each is worth more than the two newest of one kind.
+ */
+export function latestPerServiceType(rows: readonly ParsedListRow[]): ListPick[] {
+  const groups = new Map<string, { r: ParsedListRow; i: number }[]>();
+  rows.forEach((r, i) => {
+    const t = (r.serviceType ?? '').toLowerCase();
+    groups.set(t, [...(groups.get(t) ?? []), { r, i }]);
+  });
+  return [...groups.values()]
+    .map((g) => [...g].sort(byDateDesc)[0])
+    .filter((x): x is { r: ParsedListRow; i: number } => x !== undefined)
+    .sort(byDateDesc)
+    .map(({ r, i }) => ({
+      key: r.key,
+      rowIndex: i,
+      serviceType: r.serviceType,
+      reason:
+        r.date === null
+          ? `no date could be read for "${r.serviceType ?? 'untyped'}" — took the first listed`
+          : `latest "${r.serviceType ?? 'untyped'}" (${r.date})`,
+    }));
+}
+
+/** The single latest row, whatever its type. */
+export function latestRow(rows: readonly ParsedListRow[]): ListPick | null {
+  const x = rows.map((r, i) => ({ r, i })).sort(byDateDesc)[0];
+  return x === undefined
+    ? null
+    : {
+        key: x.r.key,
+        rowIndex: x.i,
+        serviceType: x.r.serviceType,
+        reason: x.r.date === null ? 'no date could be read — first listed' : `latest (${x.r.date})`,
+      };
+}
+
+/** "Showing 1 - 4 of 4" → the page's place in the list. */
+export function showingRange(
+  text: string,
+): { readonly from: number; readonly to: number; readonly total: number } | null {
+  const m = /showing\s+(\d+)\s*[-–]\s*(\d+)\s+of\s+(\d+)/i.exec(text);
+  if (m === null) return null;
+  return { from: Number(m[1]), to: Number(m[2]), total: Number(m[3]) };
+}
+
+/** Whether a download-menu option names a FILE worth fetching. */
+export function namesAFile(label: string): boolean {
+  return /pdf|excel|xlsx?|csv|annexure|details?|invoice|zip|report|summary|statement|break-?up|itemi[sz]ed|sheet|download/i.test(
+    label,
+  );
+}
+
 // ── Keeping session material out of what is stored ─────────────────────
 
 const SENSITIVE_KEY =

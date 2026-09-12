@@ -8,7 +8,9 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
   DelhiveryBillingPage,
   type Attempt,
+  type DownloadMenuFinding,
   type InvoiceListFinding,
+  type NoteListFinding,
   type PageFinding,
   type RawExploration,
 } from '../pages/delhivery-billing.page';
@@ -17,6 +19,7 @@ import {
   scrubText,
   summariseFile,
   type FileSummary,
+  type ListKind,
 } from './delhivery-billing-probe-files';
 import { ProbeBudget, type BudgetKind, type ProbeLimits } from './portal-read-only-guard';
 import { PortalSessionService } from './portal-session.service';
@@ -26,7 +29,13 @@ export const ACTION_DELHIVERY_BILLING_PROBED = 'courier.delhivery_billing.probed
 /** Private by construction: nothing in the bucket is public (SpacesService). */
 export const DELHIVERY_BILLING_PROBE_PREFIX = 'courier-probes/delhivery-billing';
 
-export const PROBE_LIMITS: ProbeLimits = { maxPages: 14, maxDownloads: 8 };
+/**
+ * Downloads raised 8 → 12 (2026-09-12): each row's "Download ⌄" is a menu,
+ * so one invoice is up to three files (its PDF, its itemized file, one more
+ * format). The latest of each service type (Domestic, Communication VAS) is
+ * six, and the latest credit note and debit note up to six more.
+ */
+export const PROBE_LIMITS: ProbeLimits = { maxPages: 14, maxDownloads: 12 };
 /** The whole run, every account. Past it, what was gathered is stored. */
 export const PROBE_DEADLINE_MS = 10 * 60_000;
 /** The session raises this key on an OTP/captcha (PortalSessionService). */
@@ -55,6 +64,21 @@ export interface ProbeDownloadFinding {
   /** Null when it was over the size cap, or the upload failed. */
   readonly key: string | null;
   readonly summary: FileSummary | null;
+  readonly forInvoice: string | null;
+  readonly list: ListKind | null;
+  readonly option: string | null;
+}
+
+/** One file fetched from an invoice's (or note's) download menu, described. */
+export interface ProbeFileFinding {
+  readonly list: ListKind | null;
+  readonly invoiceId: string;
+  /** The menu option that produced it. */
+  readonly option: string;
+  readonly fileName: string;
+  readonly bytes: number;
+  readonly key: string | null;
+  readonly summary: FileSummary | null;
 }
 
 export interface ProbeAccountFindings {
@@ -69,6 +93,12 @@ export interface ProbeAccountFindings {
     readonly textKey: string | null;
   })[];
   readonly invoiceList: InvoiceListFinding | null;
+  /** Per invoice / note: the options its "Download ⌄" menu offered. */
+  readonly downloadMenus: readonly DownloadMenuFinding[];
+  /** Per invoice / note and option: the file it produced, described. */
+  readonly files: readonly ProbeFileFinding[];
+  readonly creditNotes: NoteListFinding | null;
+  readonly debitNotes: NoteListFinding | null;
   readonly downloads: readonly ProbeDownloadFinding[];
   readonly attempts: readonly Attempt[];
   readonly refusedClicks: readonly { readonly label: string; readonly reason: string }[];
@@ -299,8 +329,26 @@ export class DelhiveryBillingProbeService {
           bytes: d.bytes,
           key,
           summary: d.body === null ? null : summariseFile(d.fileName, d.body),
+          forInvoice: d.forInvoice,
+          list: d.list,
+          option: d.option,
         });
       }
+      const files: ProbeFileFinding[] = downloads.flatMap((d) =>
+        d.forInvoice === null
+          ? []
+          : [
+              {
+                list: d.list,
+                invoiceId: d.forInvoice,
+                option: d.option ?? d.control,
+                fileName: d.fileName,
+                bytes: d.bytes,
+                key: d.key,
+                summary: d.summary,
+              },
+            ],
+      );
 
       return {
         courierAccountId: a.id,
@@ -311,6 +359,10 @@ export class DelhiveryBillingProbeService {
         used: budget.used(),
         pages,
         invoiceList: raw.invoiceList,
+        downloadMenus: raw.downloadMenus,
+        files,
+        creditNotes: raw.creditNotes,
+        debitNotes: raw.debitNotes,
         downloads,
         attempts: raw.attempts,
         refusedClicks: raw.refused,
@@ -364,6 +416,10 @@ export class DelhiveryBillingProbeService {
       used: null,
       pages: [],
       invoiceList: null,
+      downloadMenus: [],
+      files: [],
+      creditNotes: null,
+      debitNotes: null,
       downloads: [],
       attempts: [],
       refusedClicks: [],

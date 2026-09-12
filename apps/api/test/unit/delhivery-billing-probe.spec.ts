@@ -146,16 +146,30 @@ describe('DelhiveryBillingProbeService', () => {
           },
         ],
         invoiceList: null,
+        downloadMenus: [
+          {
+            list: 'invoices',
+            invoiceId: 'EPH26281228',
+            trigger: 'Download fal fa-download',
+            options: ['Invoice PDF', 'Annexure', 'Raise dispute'],
+            note: null,
+          },
+        ],
+        creditNotes: null,
+        debitNotes: null,
         downloads: [
           {
             forRow: 0,
             control: 'Download',
-            via: 'href',
+            via: 'menu',
             fileName: 'annexure.csv',
             contentType: 'text/csv',
             sourceUrl: 'https://x.s3.amazonaws.com/a.csv?X-Amz-Signature=secret-sig',
             body: Buffer.from('AWB,Freight Charge\n1,10.00\n'),
             bytes: 27,
+            forInvoice: 'EPH26281228',
+            list: 'invoices',
+            option: 'Annexure',
           },
         ],
         attempts: [],
@@ -200,6 +214,17 @@ describe('DelhiveryBillingProbeService', () => {
     expect(acc?.outcome).toBe('READ');
     expect(acc?.downloads[0]?.summary?.kind).toBe('csv');
     expect(acc?.refusedClicks).toEqual([{ label: 'Pay Now', reason: expect.any(String) }]);
+    // Each file is filed under the invoice and the menu option that produced it.
+    expect(acc?.files).toEqual([
+      expect.objectContaining({
+        list: 'invoices',
+        invoiceId: 'EPH26281228',
+        option: 'Annexure',
+        key: expect.stringContaining(`courier-probes/delhivery-billing/${RUN_ID}/`),
+        summary: expect.objectContaining({ kind: 'csv' }),
+      }),
+    ]);
+    expect(acc?.downloadMenus[0]?.options).toEqual(['Invoice PDF', 'Annexure', 'Raise dispute']);
   });
 
   it('opens nothing while a sign-in challenge is open', async () => {
