@@ -65,6 +65,12 @@ const SELLER_WALLET_TERMS = [
   ],
   ['wallet.auto_withdraw_hour_local', 'Automatic withdrawal hour', 'HOUR', 'In your own timezone.'],
   [
+    'wallet.auto_reject_unpayable_withdrawals',
+    'Unpayable requests rejected',
+    'BOOL',
+    'If charges leave your wallet below a pending request, we reject it and you can ask again.',
+  ],
+  [
     'wallet.cod_credit_mode',
     'COD credited',
     'TEXT',

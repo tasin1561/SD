@@ -6,6 +6,8 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { SettingsModule } from '../settings/settings.module';
 import { FxModule } from '../fx/fx.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
+import { UnpayableWithdrawalService } from './services/unpayable-withdrawal.service';
 import { AdminWithdrawalRequestController } from './controllers/admin-withdrawal-request.controller';
 import { SellerWithdrawalScheduleController } from './controllers/seller-withdrawal-schedule.controller';
 import { SellerWithdrawalRequestController } from './controllers/seller-withdrawal-request.controller';
@@ -26,6 +28,7 @@ import { WithdrawalRequestService } from './services/withdrawal-request.service'
     SettingsModule,
     SellerRestrictionModule,
     FxModule,
+    NotificationAudienceModule,
   ],
   controllers: [
     SellerWithdrawalRequestController,
@@ -35,6 +38,7 @@ import { WithdrawalRequestService } from './services/withdrawal-request.service'
   providers: [
     WithdrawalRequestService,
     AutoWithdrawalSweepService,
+    UnpayableWithdrawalService,
     AutoWithdrawalQueue,
     SellerJwtGuard,
     StaffJwtGuard,

@@ -50,6 +50,11 @@ const WALLET_SETTINGS = [
     'Auto withdrawal hour',
     "In the SELLER's timezone, not ours.",
   ],
+  [
+    'wallet.auto_reject_unpayable_withdrawals',
+    'Auto-reject unpayable withdrawals',
+    'A pending request the balance no longer covers is rejected for them.',
+  ],
   ['wallet.accrual_timing_tier', 'COD credit timing', 'INSTANT, or T+N days after delivery.'],
   ['wallet.accrual_delay_days', 'Credit delay (days)', 'The N in T+N.'],
   [

@@ -1342,6 +1342,16 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxInt: 23,
   },
   {
+    key: 'wallet.auto_reject_unpayable_withdrawals',
+    category: 'wallet',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Auto-reject withdrawal requests the wallet no longer covers',
+    description:
+      'A withdrawal request holds its amount out of what the seller may withdraw until somebody decides it. When charges land after it was raised and the balance falls below it, nobody can pay it — approval and payout both refuse — yet it keeps blocking every new request and the automatic sweep, and sits in the liabilities as money asked for. When on, a PENDING request the balance no longer covers is rejected automatically (every 15 minutes) with the numbers in the reason, and the seller is told they can ask again. APPROVED requests are never auto-rejected — they may already be mid-payout — they are raised on the system issues board instead. Per-seller override.',
+    sellerOverridable: true,
+  },
+  {
     key: 'wallet.withdrawal_sla_hours',
     category: 'wallet',
     valueType: SettingValueType.INT,

@@ -96,6 +96,15 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
     description: 'A returned parcel came back and was checked in.',
     group: 'Returns',
   },
+  {
+    // Not a NOTIF-4 leg: sent by UnpayableWithdrawalService. The spec
+    // pins this key to that service's exported constant.
+    topic: 'wallet.withdrawal_auto_rejected',
+    label: 'Withdrawal rejected automatically',
+    description:
+      'Charges left your wallet below a pending withdrawal, so we rejected it — you can ask again.',
+    group: 'Wallet',
+  },
 ];
 
 /**

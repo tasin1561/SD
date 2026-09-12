@@ -12,6 +12,7 @@ import {
 } from '../../src/modules/notification-audience/services/notification-topic-catalog.service';
 import { NotificationEventMappingService } from '../../src/modules/notifications/services/notification-event-mapping.service';
 import { permissionsFor } from '../../src/modules/system-issues/services/system-issue-notifier.service';
+import { WITHDRAWAL_AUTO_REJECTED_TOPIC } from '../../src/modules/seller-wallet-withdrawal/services/unpayable-withdrawal.service';
 
 /**
  * The catalogue is a list of words, and words drift.
@@ -51,8 +52,15 @@ describe('NotificationTopicCatalogService', () => {
     // nothing behind it — the same defect as the preferences screen
     // that stored settings nobody read.
     const sent = sellerTopicsTheListenerSends();
+    // The seller topics sent by something other than the lifecycle
+    // listener, each named by its sender's own constant.
+    sent.add(WITHDRAWAL_AUTO_REJECTED_TOPIC);
     const orphaned = SELLER_TOPICS.map((t) => t.topic).filter((t) => !sent.has(t));
     expect(orphaned).toEqual([]);
+  });
+
+  it('the automatic withdrawal rejection can be silenced under the key it is sent on', () => {
+    expect(SELLER_TOPICS.map((t) => t.topic)).toContain(WITHDRAWAL_AUTO_REJECTED_TOPIC);
   });
 
   it('every in-app notification a seller receives is one they can silence', () => {

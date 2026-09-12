@@ -3,6 +3,7 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { Queue, Worker, type Job, type JobsOptions } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { AutoWithdrawalSweepService } from '../services/auto-withdrawal-sweep.service';
+import { UnpayableWithdrawalService } from '../services/unpayable-withdrawal.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 export const AUTO_WITHDRAWAL_QUEUE = 'wallet-auto-withdrawal';
@@ -13,6 +14,14 @@ export const JOB_SWEEP = 'sweep-auto-withdrawals';
  * could only ever be right for one zone.
  */
 export const AUTO_WITHDRAWAL_CRON = '5 * * * *';
+/**
+ * Rejecting requests the wallet can no longer pay. Every 15 minutes: a
+ * stale request blocks the seller from asking for anything else, so it
+ * should not wait an hour. The hourly sweep also runs it FIRST, so the
+ * fresh request for what is actually available is raised in the same run.
+ */
+export const JOB_REJECT_UNPAYABLE = 'reject-unpayable-withdrawals';
+export const REJECT_UNPAYABLE_CRON = '*/15 * * * *';
 
 const DEFAULT_JOB_OPTIONS: JobsOptions = {
   attempts: 3,
@@ -30,6 +39,7 @@ export class AutoWithdrawalQueue implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly sweep: AutoWithdrawalSweepService,
+    private readonly unpayable: UnpayableWithdrawalService,
     private readonly workerRole: WorkerRoleService,
     private readonly issues: SystemIssueService,
   ) {}
@@ -51,6 +61,17 @@ export class AutoWithdrawalQueue implements OnModuleInit, OnModuleDestroy {
         removeOnFail: { age: 7 * 24 * 60 * 60 },
       },
     );
+    await this.queue.add(
+      JOB_REJECT_UNPAYABLE,
+      {},
+      {
+        repeat: { pattern: REJECT_UNPAYABLE_CRON },
+        jobId: 'wallet-unpayable-withdrawal-sweep',
+        attempts: 1,
+        removeOnComplete: true,
+        removeOnFail: { age: 7 * 24 * 60 * 60 },
+      },
+    );
 
     // Only the queue-owning instance starts workers; every other
     // API instance serves HTTP only. See WorkerRoleService (SCALE-1).
@@ -59,7 +80,20 @@ export class AutoWithdrawalQueue implements OnModuleInit, OnModuleDestroy {
       AUTO_WITHDRAWAL_QUEUE,
       async (job: Job): Promise<void> => {
         if (job.name === JOB_SWEEP) {
+          // Stale requests out first, so the fresh one for what is
+          // actually available can be raised in this same run. Its own
+          // failure must not cost anybody their automatic withdrawal.
+          await this.unpayable.sweep().catch((err: unknown) => {
+            this.logger.warn(
+              { err: err instanceof Error ? err.message : String(err) },
+              'Unpayable-withdrawal pass failed before the auto-withdrawal sweep',
+            );
+          });
           await this.sweep.sweep();
+          return;
+        }
+        if (job.name === JOB_REJECT_UNPAYABLE) {
+          await this.unpayable.sweep();
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown auto-withdrawal job; ignoring');

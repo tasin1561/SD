@@ -112,6 +112,16 @@ const RESOLVED_STATUSES: WithdrawalRequestStatus[] = [
   WithdrawalRequestStatus.REJECTED,
 ];
 
+/**
+ * Excludes requests the system rejected on its own (REJECTED with no
+ * staff member — only `UnpayableWithdrawalService` writes that shape; a
+ * person's rejection always records who) from the daily and monthly
+ * request counts.
+ */
+const NOT_AUTO_REJECTED: Prisma.WithdrawalRequestWhereInput = {
+  NOT: { status: WithdrawalRequestStatus.REJECTED, resolvedByStaffId: null },
+};
+
 /** Someone is still waiting for money in either of these. */
 const UNPAID_STATUSES: WithdrawalRequestStatus[] = [
   WithdrawalRequestStatus.PENDING,
@@ -165,6 +175,14 @@ export class WithdrawalRequestService {
     currency: Currency,
     knownBalance?: Prisma.Decimal,
     tx?: Prisma.TransactionClient,
+    /**
+     * A pending request to leave OUT of the held sum. Asking "can this
+     * request still be paid?" must not count its own amount against it —
+     * it would block itself. Every OTHER pending request still counts.
+     * Used only by the unpayable-request sweep; the number is otherwise
+     * exactly the one the guard, the seller and the auto-sweep read.
+     */
+    excludeRequestId?: string,
   ): Promise<Prisma.Decimal> {
     const balance = knownBalance ?? (await this.wallet.balanceLive(sellerId, currency));
     if (currency !== Currency.INR) return balance;
@@ -186,7 +204,12 @@ export class WithdrawalRequestService {
     // the balance until an operator has seen it.
     const db = tx ?? this.prisma.client;
     const pending = await db.withdrawalRequest.aggregate({
-      where: { sellerId, currency, status: WithdrawalRequestStatus.PENDING },
+      where: {
+        sellerId,
+        currency,
+        status: WithdrawalRequestStatus.PENDING,
+        ...(excludeRequestId === undefined ? {} : { id: { not: excludeRequestId } }),
+      },
       _sum: { amountRequested: true },
     });
     const held = pending._sum.amountRequested ?? new Prisma.Decimal(0);
@@ -345,8 +368,13 @@ export class WithdrawalRequestService {
       // governed by the balance floor below.
       const maxPerDay = await this.settings.resolve(sellerId, MAX_PER_DAY_KEY);
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // A request WE rejected automatically because the balance fell
+      // (UnpayableWithdrawalService — REJECTED with no staff member) does
+      // not use up the seller's allowance: they did not over-ask, their
+      // wallet moved, and the rejection tells them they can ask again.
+      // Counting it would make that sentence false for a day.
       const todayCount = await tx.withdrawalRequest.count({
-        where: { sellerId, createdAt: { gte: since } },
+        where: { sellerId, createdAt: { gte: since }, ...NOT_AUTO_REJECTED },
       });
       if (todayCount >= Number(maxPerDay.value)) {
         throw new ConflictException({
@@ -358,7 +386,7 @@ export class WithdrawalRequestService {
       const maxPerMonth = await this.settings.resolve(sellerId, MAX_PER_MONTH_KEY);
       const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const monthCount = await tx.withdrawalRequest.count({
-        where: { sellerId, createdAt: { gte: monthAgo } },
+        where: { sellerId, createdAt: { gte: monthAgo }, ...NOT_AUTO_REJECTED },
       });
       if (monthCount >= Number(maxPerMonth.value)) {
         throw new ConflictException({

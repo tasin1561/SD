@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { ActorType, ChargeType, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
+import {
+  ActorType,
+  ChargeType,
+  Currency,
+  OrderChargeStatus,
+  Prisma,
+  WalletEntryDirection,
+} from '@skydrop/db';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
@@ -43,8 +50,9 @@ export class OrderChargesAccrualService {
 
     const charges = await tx.orderCharge.findMany({
       where: { orderId, deletedAt: null },
-      select: { type: true, amountInr: true },
+      select: { id: true, type: true, amountInr: true, status: true },
     });
+    const billedIds: string[] = [];
     let total = new Prisma.Decimal(0);
     // What the total is MADE OF, in the seller's own ledger.
     //
@@ -63,6 +71,7 @@ export class OrderChargesAccrualService {
       // buried inside an ORDER_CHARGES total.
       if (c.type === ChargeType.RTO_FEE) continue;
       total = total.add(c.amountInr);
+      if (c.status === OrderChargeStatus.ESTIMATED) billedIds.push(c.id);
       parts.push(`${c.type.toLowerCase().replaceAll('_', ' ')} ${c.amountInr.toFixed(2)}`);
     }
     if (total.lte(0)) return false;
@@ -76,6 +85,19 @@ export class OrderChargesAccrualService {
       actorType: ActorType.SYSTEM,
       note: `Order charges — ${parts.join(', ')}`,
     });
+
+    // The lines just billed are no longer an estimate. CONFIRMED is what
+    // the RTO fee is written as at the moment it is billed, and these
+    // stayed ESTIMATED after the wallet had been debited for them — the
+    // order page read "base shipping · estimated" on a fee the seller had
+    // paid. Same transaction as the debit, so the two cannot disagree;
+    // exactly the rows summed above; status only, no amount moves.
+    if (billedIds.length > 0) {
+      await tx.orderCharge.updateMany({
+        where: { id: { in: billedIds }, status: OrderChargeStatus.ESTIMATED },
+        data: { status: OrderChargeStatus.CONFIRMED },
+      });
+    }
     return true;
   }
 }

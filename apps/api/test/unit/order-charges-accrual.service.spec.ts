@@ -38,6 +38,59 @@ function makeService(
 }
 
 describe('OrderChargesAccrualService.debitIfNeeded', () => {
+  it('confirms exactly the ESTIMATED lines it billed, in the same transaction', async () => {
+    const { svc, tx, applyEntry } = makeService({
+      charges: [
+        {
+          id: 'c-base',
+          type: ChargeType.BASE_SHIPPING,
+          amountInr: new Prisma.Decimal('200'),
+          status: 'ESTIMATED',
+        },
+        {
+          id: 'c-gst',
+          type: ChargeType.GST,
+          amountInr: new Prisma.Decimal('0'),
+          status: 'ESTIMATED',
+        },
+        // Already CONFIRMED / not part of this debit: left alone.
+        {
+          id: 'c-rto',
+          type: ChargeType.RTO_FEE,
+          amountInr: new Prisma.Decimal('30'),
+          status: 'CONFIRMED',
+        },
+        {
+          id: 'c-refund',
+          type: ChargeType.REFUND,
+          amountInr: new Prisma.Decimal('50'),
+          status: 'ESTIMATED',
+        },
+      ],
+    });
+    const updateMany = jest.fn(async () => ({ count: 2 }));
+    (tx.orderCharge as AnyArgs).updateMany = updateMany;
+
+    await svc.debitIfNeeded(tx as unknown as Prisma.TransactionClient, 'order-1', 'seller-1');
+
+    expect(applyEntry).toHaveBeenCalledTimes(1);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['c-base', 'c-gst'] }, status: 'ESTIMATED' },
+      data: { status: 'CONFIRMED' },
+    });
+    // The amount is untouched by the status change.
+    const amount = (applyEntry.mock.calls[0]![1] as AnyArgs).amount as Prisma.Decimal;
+    expect(amount.toString()).toBe('200');
+  });
+
+  it('confirms nothing when nothing was billed (already debited)', async () => {
+    const { svc, tx } = makeService({ existingEntry: { id: 'e' } });
+    const updateMany = jest.fn(async () => ({ count: 0 }));
+    (tx.orderCharge as AnyArgs).updateMany = updateMany;
+    await svc.debitIfNeeded(tx as unknown as Prisma.TransactionClient, 'order-1', 'seller-1');
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it('sums non-refund charges and debits ORDER_CHARGES', async () => {
     const { svc, tx, applyEntry } = makeService({
       charges: [
