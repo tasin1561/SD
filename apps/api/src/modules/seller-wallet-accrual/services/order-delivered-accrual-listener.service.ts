@@ -4,20 +4,31 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { OrderStatus } from '@skydrop/db';
+import { ActorType, OrderStatus } from '@skydrop/db';
 import type { Subscription } from 'rxjs';
 import {
   OrderLifecycleEventBus,
   type OrderLifecycleEvent,
 } from '../../lifecycle-events/order-lifecycle-event-bus.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { DeliveredAccrualService } from './delivered-accrual.service';
 
 /**
- * The BUS half of the delivery-time money. The work itself — tier
+ * The ONE path by which a delivery is billed. The work itself — tier
  * dispatch, the charges debit, the Instant Pay COD credit, the freight
- * share — is `DeliveredAccrualService`, which god mode also calls
- * directly, because god mode writes DELIVERED without emitting to this
- * bus. See that service for why the two must share one dispatch.
+ * share — is `DeliveredAccrualService`. Both writers of DELIVERED reach
+ * it through here: a matrix transition, and god mode (ORD-2), which since
+ * 2026-09-12 emits the same lifecycle event (`source: ADMIN_OVERRIDE`)
+ * instead of calling the accrual itself. God mode bills on purpose — it
+ * opts out of stock compensation, not money — so the source is not
+ * consulted here. Exactly-once rests on the accrual's own
+ * in-transaction gates, so a second event for one order (a forced
+ * DELIVERED → CANCELLED → DELIVERED, a replay) charges nothing twice.
+ *
+ * A failure cannot undo the status change that prompted it, but it is
+ * NOT quiet: it audits HIGH `wallet.delivered_accrual_failed`, naming the
+ * order and which writer delivered it. "Bill unbilled orders" on /wallets
+ * is the catch-up and bills on the same gates.
  *
  * Phase 1B M22 — COD accrual on DELIVERED. R2b extended this to a
  * per-seller TIMING TIER dispatcher:
@@ -52,6 +63,7 @@ export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, On
   constructor(
     private readonly bus: OrderLifecycleEventBus,
     private readonly delivered: DeliveredAccrualService,
+    private readonly audit: AuditLogService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -96,6 +108,32 @@ export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, On
    *  doubles as a manual re-trigger. */
   async handle(event: OrderLifecycleEvent): Promise<void> {
     if (event.to !== OrderStatus.DELIVERED) return;
-    await this.delivered.accrueForDelivered(event.orderId);
+    try {
+      await this.delivered.accrueForDelivered(event.orderId);
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      const trigger = event.source === 'ADMIN_OVERRIDE' ? 'force_mutation' : 'lifecycle_transition';
+      this.logger.error(
+        { orderId: event.orderId, sellerId: event.sellerId, trigger, err: error },
+        'Delivery-time accrual FAILED — the order is delivered and unbilled',
+      );
+      await this.audit
+        .log({
+          actorType: ActorType.SYSTEM,
+          actorId: null,
+          sellerId: event.sellerId,
+          action: 'wallet.delivered_accrual_failed',
+          entityType: 'order',
+          entityId: event.orderId,
+          severity: 'HIGH',
+          metadata: {
+            trigger,
+            fromStatus: event.from,
+            statusEventId: event.statusEventId,
+            error,
+          },
+        })
+        .catch(() => undefined);
+    }
   }
 }

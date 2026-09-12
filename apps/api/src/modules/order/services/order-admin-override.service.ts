@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
+  OrderEventType,
   OrderStatus,
   Prisma,
   ReservationReleaseReason,
@@ -21,10 +22,51 @@ import {
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { OrderEventWriterService } from './order-event-writer.service';
 import type { ForceMutationFieldsDto } from '../dto/force-mutation.dto';
-import { DeliveredAccrualService } from '../../seller-wallet-accrual/services/delivered-accrual.service';
+import { OrderChargesRefundService } from '../../seller-wallet-accrual/services/order-charges-refund.service';
+import { OrderLifecycleEventBus } from '../../lifecycle-events/order-lifecycle-event-bus.service';
+import { REFUNDABLE_FROM_STATES, VOIDABLE_TERMINAL_STATES } from './order-write.service';
 
 const DEFAULT_WAREHOUSE_SETTING_KEY = 'ops.default_warehouse_id';
 const MIN_REASON_LEN = 30;
+
+/** Marks god mode's own STATUS_CHANGED rows and its lifecycle events. */
+const ADMIN_OVERRIDE = 'ADMIN_OVERRIDE' as const;
+
+/**
+ * Statuses that mean the courier HAD the parcel: everything outside the
+ * normal cancel's refundable allow-list and outside the cancel family
+ * itself. DERIVED from the same two sets `transitionStatus` uses, so a
+ * god-mode cancel refunds exactly when a normal cancel would, and a
+ * status added later lands on the no-refund side until somebody puts it
+ * on the allow-list.
+ */
+const PAST_THE_DIVIDING_LINE: readonly OrderStatus[] = Object.values(OrderStatus).filter(
+  (s) => !REFUNDABLE_FROM_STATES.has(s) && !VOIDABLE_TERMINAL_STATES.has(s),
+);
+
+/** A shipment in one of these was physically with a courier at some point. */
+const SHIPMENT_STATUSES_WITH_COURIER: readonly ShipmentStatus[] = [
+  ShipmentStatus.HANDED_TO_COURIER,
+  ShipmentStatus.IN_TRANSIT,
+  ShipmentStatus.AT_HUB,
+  ShipmentStatus.OUT_FOR_DELIVERY,
+  ShipmentStatus.DELIVERY_ATTEMPTED,
+  ShipmentStatus.DELIVERED,
+  ShipmentStatus.RTO_INITIATED,
+  ShipmentStatus.RTO_IN_TRANSIT,
+  ShipmentStatus.RTO_DELIVERED,
+  ShipmentStatus.LOST,
+  ShipmentStatus.DAMAGED,
+];
+
+function isAdminOverrideEvent(data: Prisma.JsonValue): boolean {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    !Array.isArray(data) &&
+    (data as Record<string, unknown>).source === ADMIN_OVERRIDE
+  );
+}
 
 /** The ONLY god-mode-mutable scalar columns. Identity / system-managed
  *  fields are absent by construction (see ForceMutationFieldsDto). */
@@ -149,6 +191,23 @@ const RESTORABLE_STATUSES: readonly OrderStatus[] = [
  *  - hasAdminOverride is set true and is NEVER cleared by any path.
  *  - audit_logs severity = CRITICAL; order_events records the reason +
  *    every side-effect attempt outcome.
+ *
+ * ── A FORCED STATUS IS STILL ANNOUNCED (2026-09-12) ─────────────────
+ * God mode bypasses the MATRIX, not the consequences of where the order
+ * lands. A status change writes a real STATUS_CHANGED row (from → to,
+ * `data.source = ADMIN_OVERRIDE`) in the same tx as the note, and emits
+ * the SAME lifecycle event a matrix transition emits, post-commit, with
+ * that row's id as `statusEventId` — so NOTIF-2's `order_status:<id>`
+ * dedup, the seller timeline, outbound webhooks, invoices and the
+ * delivery-time money all treat it like any other change. It used to
+ * emit nothing, and each of those had to be remembered separately; the
+ * delivery money was, the rest were not.
+ *
+ * The one post-commit hook of `transitionStatus` that is not a bus
+ * subscriber — returning a delivery fee when an order is called off
+ * before it ships — is mirrored here, judged on the order's HISTORY
+ * rather than the forced `from` (see `refundChargesForGodModeCancel`).
+ * Stock stays opted out, exactly as before.
  */
 @Injectable()
 export class OrderAdminOverrideService {
@@ -159,7 +218,10 @@ export class OrderAdminOverrideService {
     private readonly events: OrderEventWriterService,
     private readonly audit: AuditLogService,
     private readonly reservations: StockReservationService,
-    private readonly deliveredAccrual: DeliveredAccrualService,
+    private readonly chargesRefund: OrderChargesRefundService,
+    // NOTIF-5 still holds: the order module publishes to the R3 bus and
+    // knows nothing about who listens.
+    private readonly lifecycleBus: OrderLifecycleEventBus,
   ) {}
 
   async forceMutate(input: ForceMutateInput): Promise<ForceMutateResult> {
@@ -213,8 +275,12 @@ export class OrderAdminOverrideService {
     const { data, applied } = this.buildUpdate(input.fieldChanges, input.targetStatus);
     const destData = this.buildShipmentDestUpdate(input.fieldChanges);
 
+    // A status CHANGE, not merely a status supplied: forcing an order to
+    // where it already is announces nothing and refunds nothing.
+    const statusChanges = input.targetStatus !== undefined && to !== from;
+
     let shipmentsSynced = 0;
-    await this.prisma.client.$transaction(async (tx) => {
+    const statusEventId = await this.prisma.client.$transaction(async (tx) => {
       await tx.order.update({ where: { id: order.id }, data });
 
       // Same tx as the order write: a corrected recipient and the copy
@@ -233,7 +299,7 @@ export class OrderAdminOverrideService {
         shipmentsSynced = synced.count;
       }
 
-      await this.events.adminAction(tx, {
+      const note = await this.events.adminAction(tx, {
         orderId: order.id,
         action: 'admin_force_mutation',
         reason: input.reason.trim(),
@@ -250,6 +316,25 @@ export class OrderAdminOverrideService {
           requestId: input.ctx?.requestId ?? null,
         },
       });
+
+      // The change itself, as the same kind of row every matrix
+      // transition writes (ORD-4: still an insert, still through the one
+      // writer). The note above keeps the reason and the side-effect
+      // outcomes, which are staff-only; this row is what templates, the
+      // seller's timeline and NOTIF-2's dedup key read. `source` is how
+      // anything judging an order's HISTORY tells a forced status from
+      // one the parcel actually reached.
+      let changedId: string | null = null;
+      if (statusChanges) {
+        const changed = await this.events.statusChanged(tx, {
+          orderId: order.id,
+          from,
+          to,
+          actor: { type: ActorType.STAFF, id: input.actorStaffId },
+          data: { source: ADMIN_OVERRIDE, adminActionEventId: note.id },
+        });
+        changedId = changed.id;
+      }
 
       await this.audit.log(
         {
@@ -278,20 +363,32 @@ export class OrderAdminOverrideService {
         },
         tx,
       );
+      return changedId;
     });
 
-    // ── The money a delivery owes — POST-COMMIT, and billed on purpose ──
-    // God mode emits no lifecycle event, so the bus listener that bills a
-    // delivery never hears about this one. It used to mean an order forced
-    // to DELIVERED was carried for free until somebody ran the backfill
-    // (SD-TEST-SR-9711128000, 2026-09-11: seven hours). God mode opts out
-    // of STOCK compensation, not of money: a delivered parcel owes its
-    // carriage whoever marked it delivered, and the backfill would take
-    // exactly this charge later anyway — so take it now, on the right day.
-    // Idempotent on the accrual's own gates, so forcing an order the
-    // listener already billed charges nothing twice.
-    if (to === OrderStatus.DELIVERED && from !== OrderStatus.DELIVERED) {
-      await this.accrueDelivered(order.id, order.sellerId);
+    // ── POST-COMMIT: the consequences of where the order now is ────────
+    // Both are best-effort and NEITHER can undo the override, which is
+    // committed and audited CRITICAL already (NOTIF-1).
+    if (statusEventId !== null) {
+      // Same order as transitionStatus: the money step, then the emit.
+      if (VOIDABLE_TERMINAL_STATES.has(to)) {
+        await this.refundChargesForGodModeCancel(order.id, order.sellerId, from, to);
+      }
+      // Every bus subscriber — notifications, outbound webhooks, the
+      // delivery invoice, the delivery-time money (WAL-8), the AWB booking
+      // at CONFIRMED, the call after a failed delivery — hears this
+      // exactly as it hears a matrix transition. The delivery money used
+      // to be called from here directly because nothing else would; it now
+      // arrives by the one path, and its exactly-once rests on the
+      // accrual's own in-transaction gates.
+      this.emitLifecycleEvent({
+        orderId: order.id,
+        sellerId: order.sellerId,
+        from,
+        to,
+        statusEventId,
+        actorStaffId: input.actorStaffId,
+      });
     }
 
     return {
@@ -306,34 +403,128 @@ export class OrderAdminOverrideService {
   }
 
   /**
-   * Best-effort in the sense that it cannot undo the override — that is
-   * committed and audited CRITICAL already. NOT best-effort in the sense
-   * of "quietly give up": a failure means a delivered order carrying no
-   * charge, so it audits HIGH and names the order. "Bill unbilled orders"
-   * on /wallets is the catch-up, and it bills on the same gate.
+   * NOTIF-1: never awaited, double-wrapped (the bus swallows too). A
+   * listener fault cannot reach the override's return path.
    */
-  private async accrueDelivered(orderId: string, sellerId: string): Promise<void> {
+  private emitLifecycleEvent(args: {
+    orderId: string;
+    sellerId: string;
+    from: OrderStatus;
+    to: OrderStatus;
+    statusEventId: string;
+    actorStaffId: string;
+  }): void {
     try {
-      await this.deliveredAccrual.accrueForDelivered(orderId);
+      this.lifecycleBus.emit({
+        orderId: args.orderId,
+        sellerId: args.sellerId,
+        from: args.from,
+        to: args.to,
+        statusEventId: args.statusEventId,
+        actorType: ActorType.STAFF,
+        actorId: args.actorStaffId,
+        occurredAt: new Date(),
+        source: ADMIN_OVERRIDE,
+      });
+    } catch (err) {
+      this.logger.error(
+        {
+          orderId: args.orderId,
+          from: args.from,
+          to: args.to,
+          statusEventId: args.statusEventId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        'God-mode lifecycle emit threw despite the bus contract; swallowed (NOTIF-1)',
+      );
+    }
+  }
+
+  /**
+   * The delivery fee goes back on a god-mode cancel EXACTLY when it goes
+   * back on a normal one: when the parcel never left with a courier.
+   *
+   * `transitionStatus` answers that from `from`, which a matrix transition
+   * makes trustworthy — an order in PACKED really is packed. A forced
+   * `from` proves nothing: an order god mode pushed PENDING_CONFIRMATION →
+   * DELIVERED was never carried, and one that genuinely delivered and is
+   * now being forced to CANCELLED_BY_ADMIN was. So this asks the order's
+   * history instead (`parcelLeftWithCourier`). Carriage that happened is
+   * never refunded; carriage that did not always is.
+   *
+   * Exactly once rests on `refundIfCharged`'s own gate (one
+   * ORDER_CHARGES_REFUND per order, read under the WALLET lock), so a
+   * second forced cancel, or a normal cancel landing too, converges. A
+   * failure audits HIGH and names the order, as the normal hook does.
+   */
+  private async refundChargesForGodModeCancel(
+    orderId: string,
+    sellerId: string,
+    from: OrderStatus,
+    landed: OrderStatus,
+  ): Promise<void> {
+    try {
+      if (await this.parcelLeftWithCourier(orderId)) return;
+      await this.chargesRefund.refundIfCharged(
+        orderId,
+        sellerId,
+        `Order ${landed.toLowerCase().replaceAll('_', ' ')} by admin override before it left with a courier`,
+      );
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       this.logger.error(
-        { orderId, sellerId, err: error },
-        'Delivery-time accrual after a god-mode DELIVERED FAILED — the order is delivered and unbilled',
+        { orderId, sellerId, from, landed, err: error },
+        'Order-charges refund after a god-mode cancel FAILED — the seller is still holding a charge for a parcel that will not ship',
       );
       await this.audit
         .log({
           actorType: ActorType.SYSTEM,
           actorId: null,
           sellerId,
-          action: 'wallet.delivered_accrual_failed',
+          action: 'wallet.order_charges_refund_failed',
           entityType: 'order',
           entityId: orderId,
           severity: 'HIGH',
-          metadata: { trigger: 'force_mutation', error },
+          metadata: { trigger: 'force_mutation', fromStatus: from, landedStatus: landed, error },
         })
         .catch(() => undefined);
     }
+  }
+
+  /**
+   * Did this order's parcel ever leave with a courier?
+   *
+   * Two independent facts, either one enough:
+   *  - a shipment on the order was handed over (scanned at the handover
+   *    bench, or in any status only a courier puts it in). God mode never
+   *    touches shipments, so this is physical evidence it cannot fake.
+   *  - the order reached a status past the dividing line through a REAL
+   *    transition — a STATUS_CHANGED row not stamped `source:
+   *    ADMIN_OVERRIDE`. God mode's own rows are skipped: a status it
+   *    forced is exactly the claim under suspicion. (Its older NOTE_ADDED
+   *    rows are skipped by type.)
+   */
+  private async parcelLeftWithCourier(orderId: string): Promise<boolean> {
+    const handedOver = await this.prisma.client.shipment.count({
+      where: {
+        orderShipments: { some: { orderId } },
+        OR: [
+          { handoverScannedAt: { not: null } },
+          { status: { in: [...SHIPMENT_STATUSES_WITH_COURIER] } },
+        ],
+      },
+    });
+    if (handedOver > 0) return true;
+
+    const reached = await this.prisma.client.orderEvent.findMany({
+      where: {
+        orderId,
+        type: OrderEventType.STATUS_CHANGED,
+        toStatus: { in: [...PAST_THE_DIVIDING_LINE] },
+      },
+      select: { data: true },
+    });
+    return reached.some((e) => !isAdminOverrideEvent(e.data));
   }
 
   /**

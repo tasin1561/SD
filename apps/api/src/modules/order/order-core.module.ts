@@ -17,6 +17,7 @@ import { OrderService } from './services/order.service';
 import { OrderAdminOverrideService } from './services/order-admin-override.service';
 import { SellerStoreModule } from '../seller-store/seller-store.module';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
+import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 
 /**
  * Module 6 — INTERNAL core (the Module-5 `inventory-shared` analogue).
@@ -56,11 +57,15 @@ import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-walle
     // A wallet too deep in the red stops new orders, checked beside the
     // restriction so the CSV path is covered by the same line.
     SellerCreditModule,
-    // God mode can force an order to DELIVERED without the lifecycle bus
-    // (ORD-2 emits nothing), so it reaches the delivery-time money
-    // directly. No cycle: seller-wallet-accrual imports neither order
-    // module — OrderModule already imports it for the cancel refund.
+    // God mode mirrors transitionStatus's cancel-time refund of the
+    // delivery fee (OrderChargesRefundService). No cycle:
+    // seller-wallet-accrual imports neither order module — OrderModule
+    // already imports it for the same refund.
     SellerWalletAccrualModule,
+    // God mode emits the same lifecycle event a matrix transition does
+    // (ORD-2, 2026-09-12). The R3 bus is dependency-free, so this is the
+    // same edge OrderModule already has.
+    LifecycleEventsModule,
   ],
   providers: [
     OrderNumberingService,

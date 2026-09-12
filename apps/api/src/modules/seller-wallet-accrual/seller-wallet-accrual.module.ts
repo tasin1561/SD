@@ -87,12 +87,13 @@ import { TreasuryModule } from '../treasury/treasury.module';
     PendingAccrualWorker,
   ],
   exports: [
-    // The delivery-time money, for the one writer of DELIVERED that does
-    // not emit to the lifecycle bus — god mode (ORD-2).
-    DeliveredAccrualService,
+    // DeliveredAccrualService is NOT exported any more: god mode emits
+    // to the lifecycle bus like every other writer of DELIVERED, so the
+    // listener in this module is the only caller (WAL-8, 2026-09-12).
     OrderChargesAccrualService,
     // Given back when an order is cancelled before it ships — consumed
-    // by OrderWriteService's post-commit cancel hook.
+    // by OrderWriteService's post-commit cancel hook and by god mode's
+    // mirror of it (OrderAdminOverrideService).
     OrderChargesRefundService,
     CourierFeeAccrualService,
     RtoFeeAccrualService,

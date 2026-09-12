@@ -28,11 +28,13 @@ export type DeliveredAccrualOutcome = 'EXECUTED' | 'SCHEDULED' | 'ORDER_NOT_FOUN
  * happened to be run. A path that reaches DELIVERED without the money is
  * a parcel carried for free, and nothing fails to say so.
  *
- * So the dispatch lives here, exported, and BOTH writers of DELIVERED call
- * it: the bus listener for every matrix transition, and god mode directly,
- * post-commit. `delivered-money-paths.spec.ts` pins that the set of
- * `orders.status` writers is exactly those, so a third one fails the build
- * until somebody decides what it owes.
+ * So the dispatch lives here. Since 2026-09-12 god mode emits the same
+ * lifecycle event as a matrix transition (`source: ADMIN_OVERRIDE`), so
+ * BOTH writers of DELIVERED reach it through ONE path — the bus listener —
+ * rather than god mode calling it directly as it did for a day.
+ * `delivered-money-paths.spec.ts` pins that the set of `orders.status`
+ * writers is exactly those two (plus create), and that both emit, so a
+ * third fails the build until somebody decides what it owes.
  *
  * Idempotent by the gates it already had, each read inside the accrual's
  * transaction under the WALLET advisory lock (WAL-7): a prior
