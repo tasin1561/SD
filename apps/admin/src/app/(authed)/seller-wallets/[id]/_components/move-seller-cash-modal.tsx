@@ -42,12 +42,19 @@ export function MoveSellerCashModal({
   const [direction, setDirection] = useState<'TO_CAPITAL' | 'TO_SELLER'>('TO_CAPITAL');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
+  // Their money in a taka account carries a rupee value (what it is worth
+  // to their wallet). The server requires it moving toward the seller and
+  // refuses it on a rupee account; the field only appears where it means
+  // something.
+  const [inrValue, setInrValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const foreign = holding !== null && holding.currency !== 'INR';
 
   function reset(): void {
     setDirection('TO_CAPITAL');
     setAmount('');
     setReason('');
+    setInrValue('');
     setError(null);
   }
 
@@ -61,6 +68,7 @@ export function MoveSellerCashModal({
         direction,
         amount: amount.trim(),
         reason: reason.trim(),
+        ...(foreign && inrValue.trim() !== '' ? { inrValue: inrValue.trim() } : {}),
       });
       reset();
       onClose();
@@ -116,6 +124,26 @@ export function MoveSellerCashModal({
             autoFocus
           />
         </FormField>
+        {foreign && (
+          <FormField
+            label="Worth to their wallet (INR)"
+            htmlFor="move-cash-inr-value"
+            hint={
+              direction === 'TO_SELLER'
+                ? 'Required: the rupees this cash is worth to their wallet — usually what they were credited for it.'
+                : 'Optional: leave empty to take it at their average rate in this account.'
+            }
+            required={direction === 'TO_SELLER'}
+          >
+            <Input
+              id="move-cash-inr-value"
+              inputMode="decimal"
+              value={inrValue}
+              onChange={(e) => setInrValue(e.target.value)}
+              placeholder="0.00"
+            />
+          </FormField>
+        )}
         <FormField
           label="Why the bank book was wrong"
           htmlFor="move-cash-reason"

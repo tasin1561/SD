@@ -24,7 +24,11 @@ import {
 import { BANK_CHARGES_CATEGORY } from '../../treasury/services/bank-transfer.service';
 import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
-import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import {
+  AdvisoryLock,
+  lockAccountsForPosting,
+  takeAdvisoryLock,
+} from '../../../common/db/advisory-lock';
 
 const ZERO = new Prisma.Decimal(0);
 const PAISA = new Prisma.Decimal('0.01');
@@ -72,7 +76,15 @@ export class RemittanceService {
    * direct API call.
    *
    * ONLY when it is unambiguous: exactly one approved request for that
-   * seller, and its amount equals what was sent. Two open requests, or
+   * seller, and its amount equals what was sent — or, when the seller has
+   * NO approved request, exactly one PENDING one of that amount. The
+   * pending case is the operator paying straight from the request list:
+   * left open, the wallet has already fallen by the payout, so the
+   * unpayable-withdrawal sweep would reject it telling the seller "a new
+   * request can be made" for money they have just been sent. Approval
+   * exists to re-check the balance before money moves; here the payout
+   * itself was checked under the wallet lock and the money has moved.
+   * Two open requests, or
    * an amount that does not match, is a judgement about which debt was
    * settled and by how much — that belongs to a person. Guessing would
    * mark a request paid against money that did not pay it, and the
@@ -89,16 +101,34 @@ export class RemittanceService {
     staffId: string,
   ): Promise<void> {
     try {
-      const approved = await this.prisma.client.withdrawalRequest.findMany({
-        where: { sellerId, status: WithdrawalRequestStatus.APPROVED },
-        select: { id: true, amountRequested: true },
-        take: 2,
-      });
-      if (approved.length !== 1) return;
-      const only = approved[0];
-      if (only === undefined || !only.amountRequested.equals(amountSent)) return;
+      // The same rule for each status in turn: exactly one candidate, and
+      // its amount is what was sent. APPROVED first — a decided request is
+      // the one a payout pays; a PENDING one is considered only when no
+      // request was approved at all.
+      let only: { id: string; amountRequested: Prisma.Decimal } | null = null;
+      let fromPending = false;
+      for (const status of [WithdrawalRequestStatus.APPROVED, WithdrawalRequestStatus.PENDING]) {
+        const open = await this.prisma.client.withdrawalRequest.findMany({
+          where: { sellerId, status },
+          select: { id: true, amountRequested: true },
+          take: 2,
+        });
+        if (open.length === 0) continue;
+        const first = open[0];
+        if (open.length === 1 && first !== undefined && first.amountRequested.equals(amountSent)) {
+          only = first;
+          fromPending = status === WithdrawalRequestStatus.PENDING;
+        }
+        break;
+      }
+      if (only === null) return;
 
-      await this.withdrawals.markPaid(only.id, staffId, remittanceId);
+      await this.withdrawals.markPaid(
+        only.id,
+        staffId,
+        remittanceId,
+        fromPending ? { allowPending: true } : undefined,
+      );
       this.logger.log(
         `remittance ${remittanceId} closed withdrawal request ${only.id} for seller ${sellerId}`,
       );
@@ -215,17 +245,35 @@ export class RemittanceService {
           sellerId: true,
           currency: true,
           amount: true,
+          sourceCurrency: true,
           sourceAmount: true,
+          fxRateSnapshot: true,
           paidFromAccountId: true,
+          paidAt: true,
+          bankReference: true,
+          // The fee is not a column: it is the EXPENSE the payout posted.
+          bankEntries: {
+            where: { type: BankEntryType.EXPENSE },
+            select: { signedAmount: true },
+          },
         },
       });
       if (prior === null) return null;
+      const priorFee = prior.bankEntries.reduce((t, e) => t.sub(e.signedAmount), ZERO);
+      // Every material field: the rate decides what their money elsewhere
+      // is worth, the fee what we spent, the date which month it lands in,
+      // the reference what it is matched against on the statement.
       if (
         prior.sellerId !== input.sellerId ||
         prior.currency !== input.currency ||
         !prior.amount.equals(amount) ||
+        prior.sourceCurrency !== input.sourceCurrency ||
         !prior.sourceAmount.equals(sourceAmount) ||
-        prior.paidFromAccountId !== input.paidFromAccountId
+        !prior.fxRateSnapshot.equals(fxRate) ||
+        !priorFee.equals(bankFee) ||
+        prior.paidFromAccountId !== input.paidFromAccountId ||
+        prior.paidAt.getTime() !== new Date(input.paidAt).getTime() ||
+        prior.bankReference !== input.bankReference.trim()
       ) {
         throw idempotencyKeyReused('remittance');
       }
@@ -233,6 +281,22 @@ export class RemittanceService {
     };
     const prior = await replay();
     if (prior !== null) return prior;
+
+    // The wallet is INR-canonical (a top-up is credited in rupees; nothing
+    // writes a taka wallet entry), so a payout debiting a taka wallet has
+    // no balance behind it — and its seller row in the bank book would go
+    // out with no rupee value to take from their book (TRE-8). Refused
+    // rather than half-made exact: nothing can reach it today, and the day
+    // something can, it needs its own valuation, not this one guessed.
+    if (input.sourceCurrency !== Currency.INR) {
+      throw new BadRequestException({
+        code: 'REMITTANCE_SOURCE_CURRENCY_UNSUPPORTED',
+        message:
+          'A payout is debited from the seller’s RUPEE wallet (sourceCurrency INR). Their wallet ' +
+          'holds nothing in any other currency — say what was sent in the destination currency ' +
+          'and the rate.',
+      });
+    }
 
     let result: { id: string };
     try {
@@ -245,6 +309,12 @@ export class RemittanceService {
           AdvisoryLock.WALLET,
           `${input.sellerId}|${input.sourceCurrency}`,
         );
+        // The paying account's reconcile key, right after the wallet lock
+        // and before anything that takes the attribution key (the
+        // takeToCapital pair below): a reconcile of this account must not
+        // read its balance with the payout half-posted. The order is on
+        // `accountReconcileKey`.
+        await lockAccountsForPosting(tx, [input.paidFromAccountId]);
         const balance = await this.wallet.balanceLive(input.sellerId, input.sourceCurrency, tx);
         if (balance.lt(sourceAmount)) {
           throw new BadRequestException({
@@ -329,12 +399,7 @@ export class RemittanceService {
         const reference = input.bankReference.trim();
         const sellerOwner = { kind: BankOwnerKind.SELLER, sellerId: input.sellerId } as const;
         const onPayout = { remittanceId: remittance.id } as const;
-        await takeAdvisoryLock(
-          tx,
-          AdvisoryLock.BANK_RECONCILE,
-          `${input.paidFromAccountId}|${BankOwnerKind.SELLER}|${input.sellerId}`,
-        );
-        if (input.sourceCurrency === Currency.INR) {
+        {
           const here = await this.bank.sellerBook(
             input.sellerId,
             input.paidFromAccountId,
@@ -430,47 +495,6 @@ export class RemittanceService {
               reference: remittance.id,
               note: `Paid out from our money on remittance ${reference} — this was theirs`,
             });
-          }
-        } else {
-          // A wallet in the paying currency itself: no rupee anchor to value
-          // by, so the seller's part is simply what they hold here, and the
-          // rest is ours.
-          const heldHere = await this.bank.ownerBalance(input.paidFromAccountId, sellerOwner, tx);
-          const sellerUnits = heldHere.lt(amount) ? (heldHere.lt(0) ? ZERO : heldHere) : amount;
-          const capitalUnits = amount.sub(sellerUnits);
-          if (sellerUnits.gt(0)) {
-            await this.bank.post(
-              {
-                accountId: input.paidFromAccountId,
-                type: BankEntryType.SELLER_WITHDRAWAL,
-                signedAmount: sellerUnits.neg(),
-                amountCurrency: input.currency,
-                owner: sellerOwner,
-                occurredAt: paidAt,
-                reference,
-                staffId: actor.staffId,
-                note: 'Paid out to the seller',
-                ...onPayout,
-              },
-              tx,
-            );
-          }
-          if (capitalUnits.gt(0)) {
-            await this.bank.post(
-              {
-                accountId: input.paidFromAccountId,
-                type: BankEntryType.SELLER_WITHDRAWAL,
-                signedAmount: capitalUnits.neg(),
-                amountCurrency: input.currency,
-                owner: { kind: BankOwnerKind.CAPITAL },
-                occurredAt: paidAt,
-                reference,
-                staffId: actor.staffId,
-                note: 'Paid out to the seller from our money here',
-                ...onPayout,
-              },
-              tx,
-            );
           }
         }
 

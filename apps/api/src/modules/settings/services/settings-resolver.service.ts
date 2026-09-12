@@ -9,6 +9,58 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 
 /**
+ * The two COD fees (WAL-5): each is a percent of the same post-GST
+ * amount, so together they must not pass 100 — past it the seller would
+ * be credited a NEGATIVE net for a parcel their customer paid for.
+ * `CodCreditService` caps the second fee regardless; this refuses the
+ * setting that would need the cap.
+ */
+export const COD_FEE_KEYS = [
+  'wallet.cod_collection_fee_percent',
+  'wallet.instant_pay_fee_percent',
+] as const;
+
+/**
+ * Refuse a COD-fee value whose sum with its sibling passes 100%.
+ * `sellerId` null checks the GLOBAL pair; a seller id checks what that
+ * seller would resolve (their override of the sibling, else the global).
+ * A global change is checked against the global sibling only — a seller
+ * override that combines badly with a later global value is left to the
+ * credit-time cap.
+ */
+export async function assertCodFeesWithinLimit(
+  tx: Prisma.TransactionClient,
+  key: string,
+  value: Prisma.Decimal,
+  sellerId: string | null,
+): Promise<void> {
+  const [a, b] = COD_FEE_KEYS;
+  if (key !== a && key !== b) return;
+  const sibling = key === a ? b : a;
+  const override =
+    sellerId === null
+      ? null
+      : await tx.sellerSettingOverride.findUnique({
+          where: { sellerId_key: { sellerId, key: sibling } },
+          select: { valueDecimal: true },
+        });
+  const system = await tx.systemSetting.findUnique({
+    where: { key: sibling },
+    select: { valueDecimal: true },
+  });
+  const other = override?.valueDecimal ?? system?.valueDecimal ?? new Prisma.Decimal(0);
+  if (value.add(other).greaterThan(100)) {
+    throw new BadRequestException({
+      code: 'COD_FEES_EXCEED_100',
+      message:
+        `The COD fee and the Instant Pay fee are both taken from the same post-tax amount; ` +
+        `${value.toString()}% here with ${other.toString()}% on '${sibling}' comes to more ` +
+        `than 100%, which would credit the seller less than nothing.`,
+    });
+  }
+}
+
+/**
  * Generic per-seller settings override — the R0 foundation of the
  * revised-plan roadmap. Replaces the pattern of hand-adding a bespoke
  * nullable column to `Seller` for every new per-seller-configurable
@@ -188,6 +240,9 @@ export class SettingsResolverService {
         key,
         this.parseAndClamp(system, input.value, key),
       );
+      if ((COD_FEE_KEYS as readonly string[]).includes(key)) {
+        await assertCodFeesWithinLimit(tx, key, new Prisma.Decimal(String(parsed)), sellerId);
+      }
 
       const updated = await tx.sellerSettingOverride.upsert({
         where: { sellerId_key: { sellerId, key } },

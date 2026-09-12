@@ -1,5 +1,5 @@
 import { Currency, Prisma } from '@skydrop/db';
-import { AdvisoryLock } from '../../src/common/db/advisory-lock';
+import { AdvisoryLock, accountReconcileKey, advisoryKey } from '../../src/common/db/advisory-lock';
 import { BankTransferService } from '../../src/modules/treasury/services/bank-transfer.service';
 
 const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
@@ -16,6 +16,9 @@ interface PriorTransfer {
   quotedRate: Prisma.Decimal | null;
   achievedRate: Prisma.Decimal | null;
   entries: Array<{ type: string; signedAmount: Prisma.Decimal }>;
+  /** Defaulted to the request's own (BASE) when a test does not set them. */
+  movedAt?: Date;
+  reference?: string | null;
 }
 
 function make(
@@ -33,8 +36,9 @@ function make(
   // The rupee book value each entry carried, in the same order as `posted`.
   const books: Array<string | null> = [];
   const notes: string[] = [];
-  // The advisory-lock namespaces taken, in order.
+  // The advisory-lock namespaces taken, in order, and their keys.
   const locks: number[] = [];
+  const lockKeys: number[] = [];
   const created: unknown[] = [];
   const ledger = {
     post: jest.fn(
@@ -79,7 +83,11 @@ function make(
           deletedAt: null,
         })),
       },
-      bankTransfer: { findUnique: jest.fn(async () => opts.prior ?? null) },
+      bankTransfer: {
+        findUnique: jest.fn(async () =>
+          opts.prior ? { movedAt: BASE.movedAt, reference: null, ...opts.prior } : null,
+        ),
+      },
       $transaction: async (fn: (tx: unknown) => unknown) =>
         fn({
           bankTransfer: {
@@ -93,8 +101,9 @@ function make(
           // The holding guard takes the same advisory lock reconcile
           // does; a mocked tx has to answer it or the whole transfer
           // fails for the wrong reason.
-          $executeRaw: async (_s: TemplateStringsArray, ns: number) => {
+          $executeRaw: async (_s: TemplateStringsArray, ns: number, key: number) => {
             locks.push(ns);
+            lockKeys.push(key);
             return 1;
           },
         }),
@@ -105,7 +114,7 @@ function make(
     ledger as never,
     { log: jest.fn() } as never,
   );
-  return { svc, posted, books, notes, locks, created, ledger };
+  return { svc, posted, books, notes, locks, lockKeys, created, ledger };
 }
 
 const BASE = { fromAccountId: 'from', toAccountId: 'to', movedAt: new Date(), staffId: 's1' };
@@ -155,10 +164,29 @@ describe('BankTransferService — a seller’s money moved with no quote', () =>
     expect(books[0]).toBe('-1500.00');
   });
 
-  it('takes the seller’s wallet lock before the reconcile lock', async () => {
-    const { svc, locks } = make(Currency.INR, Currency.INR);
+  it('takes the seller’s wallet lock, then BOTH accounts’ reconcile keys, sorted', async () => {
+    // The arriving row lands in the RECEIVING account. Locking only the
+    // sender's seller key let a reconcile of the receiver read its balance
+    // before the arrival and post a correction after it.
+    const { svc, locks, lockKeys } = make(Currency.INR, Currency.INR);
     await svc.transfer({ ...BASE, amountOut: '100', amountIn: '100', sellerId: 'seller-a' });
-    expect(locks).toEqual([AdvisoryLock.WALLET, AdvisoryLock.BANK_RECONCILE]);
+    expect(locks).toEqual([
+      AdvisoryLock.WALLET,
+      AdvisoryLock.BANK_RECONCILE,
+      AdvisoryLock.BANK_RECONCILE,
+    ]);
+    expect(lockKeys.slice(1)).toEqual(
+      ['from', 'to'].sort().map((id) => advisoryKey(accountReconcileKey(id))),
+    );
+  });
+
+  it('our own money locks both accounts too — no wallet lock, nothing to take it for', async () => {
+    const { svc, locks, lockKeys } = make(Currency.INR, Currency.INR);
+    await svc.transfer({ ...BASE, amountOut: '100', amountIn: '100' });
+    expect(locks).toEqual([AdvisoryLock.BANK_RECONCILE, AdvisoryLock.BANK_RECONCILE]);
+    expect(lockKeys).toEqual(
+      ['from', 'to'].sort().map((id) => advisoryKey(accountReconcileKey(id))),
+    );
   });
 });
 
@@ -207,6 +235,48 @@ describe('BankTransferService — a retried request is recorded once', () => {
       svc.transfer({ ...BASE, amountOut: '300', amountIn: '290', idempotencyKey: KEY }),
     ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
     expect(posted).toHaveLength(0);
+  });
+
+  it('refuses the same key with a different date or reference — never answers with the first', async () => {
+    for (const change of [
+      { movedAt: new Date(BASE.movedAt.getTime() + 86_400_000) },
+      { reference: 'NEFT-OTHER' },
+    ]) {
+      const { svc, posted } = make(Currency.INR, Currency.INR, '0', { prior: PRIOR });
+      await expect(
+        svc.transfer({
+          ...BASE,
+          amountOut: '300',
+          amountIn: '295',
+          idempotencyKey: KEY,
+          ...change,
+        }),
+      ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+      expect(posted).toHaveLength(0);
+    }
+  });
+
+  it('refuses the same key with a different quote — the quote decides what the seller was credited', async () => {
+    const quotedPrior: PriorTransfer = {
+      ...PRIOR,
+      currencyIn: Currency.BDT,
+      sellerId: 'seller-a',
+      quotedRate: D('1.30'),
+    };
+    for (const quotedRate of ['1.25', undefined]) {
+      const { svc, posted } = make(Currency.INR, Currency.BDT, '0', { prior: quotedPrior });
+      await expect(
+        svc.transfer({
+          ...BASE,
+          amountOut: '300',
+          amountIn: '295',
+          sellerId: 'seller-a',
+          ...(quotedRate === undefined ? {} : { quotedRate }),
+          idempotencyKey: KEY,
+        }),
+      ).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+      expect(posted).toHaveLength(0);
+    }
   });
 
   it('stores the key on the transfer it records', async () => {

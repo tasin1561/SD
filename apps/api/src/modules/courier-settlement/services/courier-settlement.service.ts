@@ -21,7 +21,11 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
 import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
-import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import {
+  AdvisoryLock,
+  lockAccountsForPosting,
+  takeAdvisoryLock,
+} from '../../../common/db/advisory-lock';
 
 export interface SettlementLineInput {
   readonly orderId: string;
@@ -397,6 +401,11 @@ export class CourierSettlementService {
       for (const s of sellers) {
         await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${s}|${Currency.INR}`);
       }
+      // The receiving account's reconcile key, after every wallet lock and
+      // before the first credit (whose attribution pair takes the
+      // attribution key): a reconcile of this account must not read its
+      // balance with the payout half-landed. Order on `accountReconcileKey`.
+      await lockAccountsForPosting(tx, [receivingAccount.id]);
 
       let allocated = ZERO;
       const lineData = parsedLines.map((line) => {
@@ -1071,6 +1080,8 @@ export class CourierSettlementService {
       for (const s of sellers) {
         await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${s}|${Currency.INR}`);
       }
+      // As in `record`: the receiving account's key before any pair.
+      await lockAccountsForPosting(tx, [receivingAccount.id]);
       const lineData = parsedLines.map((line) => {
         const expected = byId.get(line.orderId)?.codAmountInr ?? ZERO;
         const p = prior.get(line.orderId) ?? NO_PRIOR;

@@ -132,7 +132,7 @@ export class LiabilitiesService {
   ) {}
 
   async report(): Promise<LiabilitiesReport> {
-    const [walletBalances, pendingWithdrawals, outstandingFreight, courierFloat, instantPay] =
+    const [walletBalances, pendingWithdrawals, outstandingFreight, deliveredFloat, instantPay] =
       await Promise.all([
         this.prisma.client.sellerWalletBalance.findMany({
           where: { currency: Currency.INR },
@@ -157,10 +157,26 @@ export class LiabilitiesService {
         this.advances.summary(),
       ]);
 
+    // The float: COD on orders DELIVERED now with no payout line, PLUS the
+    // Instant Pay advances on orders that were delivered and have since
+    // turned into a return (DELIVERED → RTO_* is a real edge) with the
+    // courier neither paying nor reversing yet. Our cash is out on those
+    // until a payout line or a reversal closes them; counting the current
+    // status alone reported it nowhere. A SETTLEMENT-mode order returned
+    // after delivery is deliberately NOT added back: nothing was credited
+    // or fronted, and a delivered-then-returned parcel is usually a scan
+    // the courier corrected — if they did collect, their payout line
+    // records it.
+    const courierFloat = {
+      amount: deliveredFloat.amount.add(instantPay.notDeliveredNow.amount),
+      count: deliveredFloat.count + instantPay.notDeliveredNow.count,
+    };
+
     // The float, split by whose money it is. Instant Pay orders are a
     // subset of the float by construction (same "no payout line"
-    // predicate), and the settlement half is the remainder, so the two
-    // add up to the line exactly.
+    // predicate, and the returned ones are added above), and the
+    // settlement half is the remainder, so the two add up to the line
+    // exactly.
     const floatParts: LedgerLine[] = [
       {
         key: 'courier_float_instant_pay',

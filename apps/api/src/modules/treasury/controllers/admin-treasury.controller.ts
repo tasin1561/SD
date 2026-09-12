@@ -26,6 +26,7 @@ import { TreasuryReadService } from '../services/treasury-read.service';
 import {
   CreateExpenseCategoryDto,
   CreateInvestmentDto,
+  MarkOpeningBalanceDto,
   OwnerMoneyDto,
   ReclassifySellerCashDto,
   ReconcileAccountDto,
@@ -288,7 +289,23 @@ export class AdminTreasuryController {
       reason: body.reason,
       staffId: staff.id,
       ...(body.isOpeningBalance === undefined ? {} : { isOpeningBalance: body.isOpeningBalance }),
+      ...(body.inrValue === undefined ? {} : { inrValue: body.inrValue }),
     });
+  }
+
+  @Post('entries/:entryId/mark-opening-balance')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('money.treasury.manage')
+  @ApiOperation({
+    summary:
+      "Mark an existing capital reconciliation or opening-balance entry as the account's opening balance — money the business already had, left off the P&L. Once per account; audited HIGH.",
+  })
+  markOpeningBalance(
+    @Param('entryId', new ParseUUIDPipe({ version: '7' })) entryId: string,
+    @Body() body: MarkOpeningBalanceDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<BankLedgerService['markOpeningBalance']> {
+    return this.ledger.markOpeningBalance({ entryId, reason: body.reason, staffId: staff.id });
   }
 
   @Post('accounts/:accountId/owner-money')
@@ -334,6 +351,7 @@ export class AdminTreasuryController {
       amount: body.amount,
       reason: body.reason,
       staffId: staff.id,
+      ...(body.inrValue === undefined ? {} : { inrValue: body.inrValue }),
     });
   }
 

@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType, BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
-import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import {
+  AdvisoryLock,
+  lockAccountsForPosting,
+  takeAdvisoryLock,
+} from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { BankLedgerService, idempotencyKeyReused, isUniqueViolation } from './bank-ledger.service';
@@ -180,6 +184,12 @@ export class BankTransferService {
         if (input.sellerId) {
           await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${input.sellerId}|${Currency.INR}`);
         }
+        // BOTH accounts' reconcile keys, sorted. The arriving row lands in
+        // the receiving account; with only the sending account locked, a
+        // reconcile of the receiving one could read its balance before the
+        // arrival and post a correction after it — folding the transfer
+        // into an "error". Our own money needs this as much as a seller's.
+        await lockAccountsForPosting(tx, [from.id, to.id]);
 
         /*
           YOU CANNOT MOVE MORE OF SOMEBODY'S MONEY THAN THEY HAVE HERE.
@@ -214,8 +224,6 @@ export class BankTransferService {
         // for them, only where and in what.
         let valueOut: Prisma.Decimal | null = null;
         if (input.sellerId) {
-          const ownerKey = `${from.id}|${BankOwnerKind.SELLER}|${input.sellerId}`;
-          await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, ownerKey);
           const held = await this.ledger.ownerBalance(
             from.id,
             { kind: BankOwnerKind.SELLER, sellerId: input.sellerId },
@@ -437,16 +445,28 @@ export class BankTransferService {
         sellerId: true,
         quotedRate: true,
         achievedRate: true,
+        movedAt: true,
+        reference: true,
         entries: { select: { type: true, signedAmount: true } },
       },
     });
     if (prior === null) return null;
+    // Every field that changes what was recorded: the quote decides what
+    // the seller was credited, the date which month it lands in, the
+    // reference what it is matched against. A different value under the
+    // same key is a different transfer, answered with a refusal — never
+    // with the first one's result.
+    const quote = input.quotedRate ? new Prisma.Decimal(input.quotedRate) : null;
     if (
       prior.fromAccountId !== input.fromAccountId ||
       prior.toAccountId !== input.toAccountId ||
       !prior.amountOut.equals(out) ||
       !prior.amountIn.equals(inn) ||
-      (prior.sellerId ?? null) !== (input.sellerId ?? null)
+      (prior.sellerId ?? null) !== (input.sellerId ?? null) ||
+      (prior.quotedRate === null) !== (quote === null) ||
+      (prior.quotedRate !== null && quote !== null && !prior.quotedRate.equals(quote)) ||
+      prior.movedAt.getTime() !== input.movedAt.getTime() ||
+      (prior.reference ?? null) !== (input.reference ?? null)
     ) {
       throw idempotencyKeyReused('transfer');
     }

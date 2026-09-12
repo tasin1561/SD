@@ -179,10 +179,19 @@ export class WithdrawalRequestService {
      * A pending request to leave OUT of the held sum. Asking "can this
      * request still be paid?" must not count its own amount against it —
      * it would block itself. Every OTHER pending request still counts.
-     * Used only by the unpayable-request sweep; the number is otherwise
-     * exactly the one the guard, the seller and the auto-sweep read.
+     * Used by approval, the unpayable-request sweep and the approved-
+     * uncovered flag; the number is otherwise exactly the one the guard,
+     * the seller and the auto-sweep read.
      */
     excludeRequestId?: string,
+    /**
+     * `countOtherPending: false` holds only APPROVED requests — "can this
+     * be paid on its own?". Approval asks it (an older request must not be
+     * blocked by a newer claim; the newer one becomes unpayable and the
+     * sweep rejects it), and so does the sweep's first pass. Default: every
+     * unpaid request is held.
+     */
+    opts?: { readonly countOtherPending?: boolean },
   ): Promise<Prisma.Decimal> {
     const balance = knownBalance ?? (await this.wallet.balanceLive(sellerId, currency));
     if (currency !== Currency.INR) return balance;
@@ -202,12 +211,23 @@ export class WithdrawalRequestService {
     // and debiting one would take money from a seller for a transfer
     // nobody has made — the same reasoning that keeps a top-up out of
     // the balance until an operator has seen it.
+    //
+    // APPROVED is held too, and more firmly than PENDING: somebody has
+    // said yes and a transfer may be on its way. Holding only PENDING let
+    // a seller raise a second request against money already approved, and
+    // the sweep then flagged the APPROVED one as uncovered — a false HIGH
+    // issue about a payout nobody had done anything wrong with.
     const db = tx ?? this.prisma.client;
     const pending = await db.withdrawalRequest.aggregate({
       where: {
         sellerId,
         currency,
-        status: WithdrawalRequestStatus.PENDING,
+        status: {
+          in:
+            opts?.countOtherPending === false
+              ? [WithdrawalRequestStatus.APPROVED]
+              : [WithdrawalRequestStatus.PENDING, WithdrawalRequestStatus.APPROVED],
+        },
         ...(excludeRequestId === undefined ? {} : { id: { not: excludeRequestId } }),
       },
       _sum: { amountRequested: true },
@@ -243,8 +263,14 @@ export class WithdrawalRequestService {
       where: { id: sellerId },
       select: { bankAccountNumber: true },
     });
+    // Every unpaid request, approved ones included — the same set
+    // `withdrawableBalance` holds out, so the two figures explain each other.
     const pending = await this.prisma.client.withdrawalRequest.aggregate({
-      where: { sellerId, currency: Currency.INR, status: WithdrawalRequestStatus.PENDING },
+      where: {
+        sellerId,
+        currency: Currency.INR,
+        status: { in: [WithdrawalRequestStatus.PENDING, WithdrawalRequestStatus.APPROVED] },
+      },
       _sum: { amountRequested: true },
     });
 
@@ -609,6 +635,14 @@ export class WithdrawalRequestService {
     requestId: string,
     staffId: string,
     linkedRemittanceId: string,
+    /**
+     * `allowPending`: ONLY from `RemittanceService.closeMatchingWithdrawal`,
+     * after the payout committed. The approval step re-checks the balance
+     * before money moves; the remittance already did that under the
+     * wallet lock and the money has moved, so a matching PENDING request
+     * is closed rather than left to be auto-rejected as unpayable.
+     */
+    opts?: { readonly allowPending?: boolean },
   ): Promise<WithdrawalRequestView> {
     const existing = await this.prisma.client.withdrawalRequest.findUnique({
       where: { id: requestId },
@@ -634,7 +668,9 @@ export class WithdrawalRequestService {
     // could rest on a figure that had moved. Two steps, in order, and
     // the queue on the remittances page is exactly the approved ones
     // waiting for money.
-    if (existing.status !== WithdrawalRequestStatus.APPROVED) {
+    const fromPending =
+      opts?.allowPending === true && existing.status === WithdrawalRequestStatus.PENDING;
+    if (existing.status !== WithdrawalRequestStatus.APPROVED && !fromPending) {
       throw new ConflictException({
         code: 'WITHDRAWAL_REQUEST_NOT_APPROVED',
         message: `Approve request ${requestId} before recording the payment.`,
@@ -710,7 +746,7 @@ export class WithdrawalRequestService {
       action: 'staff.withdrawal_request.paid',
       entityType: 'withdrawal_request',
       entityId: requestId,
-      metadata: { linkedRemittanceId },
+      metadata: { linkedRemittanceId, ...(fromPending ? { closedFromPending: true } : {}) },
       severity: 'MEDIUM',
     });
 
@@ -765,8 +801,20 @@ export class WithdrawalRequestService {
     // a return fee, freight. Approving on the old number is promising
     // money that is no longer there, and the seller has by then been
     // told yes. Same subtraction the request guard and the auto-sweep
-    // use (WAL-3), so the three cannot disagree.
-    const available = await this.withdrawableBalance(existing.sellerId, existing.currency);
+    // use (WAL-3), so the three cannot disagree — with THIS request left
+    // out (it was counting its own amount against itself, so a ₹1,000
+    // request on a ₹1,000 wallet could never be approved) and only
+    // APPROVED requests held: a newer pending claim must not block an
+    // older one being decided; once this is approved the newer one is
+    // unpayable and the sweep rejects it.
+    const available = await this.withdrawableBalance(
+      existing.sellerId,
+      existing.currency,
+      undefined,
+      undefined,
+      requestId,
+      { countOtherPending: false },
+    );
     if (available.lt(existing.amountRequested)) {
       throw new ConflictException({
         code: 'WITHDRAWAL_BALANCE_NO_LONGER_COVERS',

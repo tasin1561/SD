@@ -22,7 +22,8 @@ import {
   Th,
   Tr,
 } from '@skydrop/ui/components';
-import { useBankEntries, useTreasuryOverview } from '@/lib/ops-hooks';
+import { useBankEntries, useMarkOpeningBalance, useTreasuryOverview } from '@/lib/ops-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { OwnerMoneyModal } from './owner-money-modal';
 import { ReconcileModal } from './reconcile-modal';
@@ -78,6 +79,25 @@ export function TreasuryIndex(): ReactElement {
   } | null>(null);
   const [openAccount, setOpenAccount] = useState<string | null>(null);
   const entries = useBankEntries({ limit: 50 }, true);
+  const markOpening = useMarkOpeningBalance();
+  const [markError, setMarkError] = useState<string | null>(null);
+
+  // An account whose real opening balance was written before the mark
+  // existed (or by a flow) counts it as income on the P&L. The operator
+  // says which entry it was; the server checks it is eligible, that the
+  // account has none marked yet, and audits it.
+  async function markAsOpening(entryId: string): Promise<void> {
+    setMarkError(null);
+    const reason = window.prompt(
+      'Why is this the money the account already had when the book started? (at least 10 characters)',
+    );
+    if (reason === null) return;
+    try {
+      await markOpening.mutateAsync({ entryId, reason: reason.trim() });
+    } catch (err) {
+      setMarkError(serverVerdict(err));
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -310,6 +330,7 @@ export function TreasuryIndex(): ReactElement {
             title="Recent movements"
             subtitle="Append-only. A correction is a new entry saying who corrected it and by how much — never an edit."
           >
+            {markError !== null && <p className="text-danger mb-2 text-sm">{markError}</p>}
             {entries.isError ? (
               <ErrorState
                 message={entries.error?.message ?? 'Could not read the ledger.'}
@@ -324,11 +345,12 @@ export function TreasuryIndex(): ReactElement {
                     <Th>What</Th>
                     <Th>Whose</Th>
                     <Th>Amount</Th>
+                    <Th align="right">Opening balance</Th>
                   </Tr>
                 </THead>
                 <TBody>
                   {(entries.data?.items ?? []).length === 0 ? (
-                    <TableEmpty colSpan={5}>
+                    <TableEmpty colSpan={6}>
                       Nothing recorded yet. Settlements, top-ups and payouts will appear here as
                       they are wired in.
                     </TableEmpty>
@@ -352,6 +374,23 @@ export function TreasuryIndex(): ReactElement {
                           {/* Sign carries the direction, so a debit and a
                               credit cannot be told apart by colour alone. */}
                           <Money amount={e.signedAmount} currency={e.currency} convert={false} />
+                        </Td>
+                        <Td align="right">
+                          {e.isOpeningBalance ? (
+                            <StatusBadge kind="confirmed" label="Opening balance" />
+                          ) : canManage &&
+                            e.ownerKind === 'CAPITAL' &&
+                            (e.type === 'RECONCILIATION_ADJUSTMENT' ||
+                              e.type === 'OPENING_BALANCE') ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={markOpening.isPending}
+                              onClick={() => void markAsOpening(e.id)}
+                            >
+                              Mark as opening balance
+                            </Button>
+                          ) : null}
                         </Td>
                       </Tr>
                     ))

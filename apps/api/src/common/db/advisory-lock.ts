@@ -86,6 +86,59 @@ export const AdvisoryLock = {
 export const ATTRIBUTION_RECONCILE_KEY = '*|attribution';
 
 /**
+ * The `BANK_RECONCILE` key for ONE account — every owner in it.
+ *
+ * `reconcile()` reads an owner's balance in an account and posts the
+ * difference. A row landing in that account between the read and the
+ * post (a transfer arriving, a payout leaving, a settlement landing) was
+ * folded into the correction as though it were an error. So every writer
+ * that posts a non-pair row into an account takes that account's key,
+ * and `reconcile()` takes it before reading.
+ *
+ * ── THE LOCK ORDER, and why it cannot cycle ──────────────────────────
+ *
+ *   WALLET (per seller, sorted)  <  ACCOUNT keys (sorted by id)  <  ATTRIBUTION
+ *
+ * Every transaction acquires in that order and never goes back down:
+ *   - a wallet charge:            WALLET → ATTRIBUTION (its pair)
+ *   - reconcile:                  ACCOUNT → ATTRIBUTION        (no WALLET)
+ *   - reclassify:                 WALLET → ACCOUNT
+ *   - transfer:                   WALLET → ACCOUNT(from, to)
+ *   - remittance:                 WALLET → ACCOUNT(paying) → ATTRIBUTION
+ *   - settlement / allocateMore:  WALLET(all) → ACCOUNT(receiving) → ATTRIBUTION
+ *   - top-up acceptance:          WALLET → ACCOUNT → ATTRIBUTION
+ *   - owner money:                ACCOUNT
+ * A cycle needs some transaction to hold a higher-ranked lock while
+ * waiting on a lower one; none does, because each writer takes its
+ * account keys UP FRONT (before any wallet entry whose attribution pair
+ * takes ATTRIBUTION) and pairs never take an account key — they are
+ * fenced from reconcile by ATTRIBUTION alone.
+ *
+ * One key per ACCOUNT, not per owner: a transfer's arriving row and a
+ * seller's holding in the same account are sums reconcile reads, and a
+ * per-owner key left the arriving row unfenced.
+ */
+export function accountReconcileKey(accountId: string): string {
+  return `${accountId}|account`;
+}
+
+/**
+ * Take the reconcile key of every account a transaction will post into,
+ * de-duplicated and SORTED — two writers touching the same two accounts
+ * in opposite orders would otherwise each hold one and wait on the other.
+ * Call after the transaction's WALLET locks and before anything that
+ * takes `ATTRIBUTION_RECONCILE_KEY`.
+ */
+export async function lockAccountsForPosting(
+  tx: Prisma.TransactionClient,
+  accountIds: readonly string[],
+): Promise<void> {
+  for (const id of [...new Set(accountIds)].sort()) {
+    await takeAdvisoryLock(tx, AdvisoryLock.BANK_RECONCILE, accountReconcileKey(id));
+  }
+}
+
+/**
  * 32-bit FNV-1a, returned signed so it fits `pg_advisory_xact_lock`'s
  * `int` parameter.
  *

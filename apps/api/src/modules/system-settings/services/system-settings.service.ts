@@ -7,6 +7,10 @@ import {
 import { ActorType, Prisma, SettingValueType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import {
+  assertCodFeesWithinLimit,
+  COD_FEE_KEYS,
+} from '../../settings/services/settings-resolver.service';
 
 /**
  * System Settings — admin CRUD over `system_settings`. The schema has
@@ -159,6 +163,9 @@ export class SystemSettingsService {
         });
       }
       const parsed = this.parseValue(input.valueType, input.value, key);
+      if ((COD_FEE_KEYS as readonly string[]).includes(key)) {
+        await assertCodFeesWithinLimit(tx, key, new Prisma.Decimal(String(parsed)), null);
+      }
       const oldValue = this.extractValue(existing);
 
       const updated = await tx.systemSetting.update({

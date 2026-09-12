@@ -82,11 +82,17 @@ function money(currency: Currency, amount: Prisma.Decimal): string {
  * guarded claim on `status = PENDING`: a request approved (or rejected by
  * a person) between our read and our write is left alone.
  *
- * ── NEWEST FIRST ─────────────────────────────────────────────────────
- * With two pending requests that together exceed the balance, each alone
- * looks unpayable while the other is held. Judging the newest first, one
- * at a time, rejects it and lets the older one — the person who has
- * waited longest — be re-judged against the freed balance.
+ * ── TWO PASSES: ALONE, THEN NEWEST FIRST ─────────────────────────────
+ * First, every request the balance cannot cover ON ITS OWN — every other
+ * pending request left out, approved ones still held — is rejected: no
+ * ordering of the others can make it payable. Only then are the rest
+ * judged newest-first with the other pending ones counted. Newest-first
+ * alone got it wrong: ₹500 in the wallet, an older ₹1,000 request and a
+ * newer ₹100 one — the ₹100 was judged first with the ₹1,000 still held,
+ * rejected, and then the ₹1,000 was rejected too; the ₹100 alone was
+ * payable all along. With two pending requests that are each payable
+ * alone but not together, newest-first still rejects the newer and keeps
+ * the older — the person who has waited longest.
  */
 @Injectable()
 export class UnpayableWithdrawalService {
@@ -110,31 +116,39 @@ export class UnpayableWithdrawalService {
     });
 
     const enabledBySeller = new Map<string, boolean>();
+    const failed = new Set<string>();
     let rejected = 0;
-    let failures = 0;
-    for (const r of pending) {
-      try {
-        let enabled = enabledBySeller.get(r.sellerId);
-        if (enabled === undefined) {
-          enabled = await this.isEnabled(r.sellerId);
-          enabledBySeller.set(r.sellerId, enabled);
+    // Pass 1 judges each request ALONE; pass 2 the survivors newest-first
+    // with the other pending ones counted. A request rejected in pass 1 is
+    // no longer PENDING, so pass 2 skips it by construction.
+    for (const alone of [true, false]) {
+      for (const r of pending) {
+        if (failed.has(r.id)) continue;
+        try {
+          let enabled = enabledBySeller.get(r.sellerId);
+          if (enabled === undefined) {
+            enabled = await this.isEnabled(r.sellerId);
+            enabledBySeller.set(r.sellerId, enabled);
+          }
+          if (!enabled) continue;
+          const outcome = await this.rejectIfUnpayable(r.id, now, alone);
+          if (outcome === null) continue;
+          rejected += 1;
+          await this.tellSeller(outcome);
+        } catch (err) {
+          // One request's failure must not stop the rest. A setting that
+          // cannot be read lands here too, and the request is LEFT PENDING:
+          // not rejecting on doubt is the safe direction. Not retried in
+          // the second pass — one failure, counted once.
+          failed.add(r.id);
+          this.logger.warn(
+            { requestId: r.id, err: err instanceof Error ? err.message : String(err) },
+            'Unpayable-withdrawal check failed for this request',
+          );
         }
-        if (!enabled) continue;
-        const outcome = await this.rejectIfUnpayable(r.id, now);
-        if (outcome === null) continue;
-        rejected += 1;
-        await this.tellSeller(outcome);
-      } catch (err) {
-        // One request's failure must not stop the rest. A setting that
-        // cannot be read lands here too, and the request is LEFT PENDING:
-        // not rejecting on doubt is the safe direction.
-        failures += 1;
-        this.logger.warn(
-          { requestId: r.id, err: err instanceof Error ? err.message : String(err) },
-          'Unpayable-withdrawal check failed for this request',
-        );
       }
     }
+    const failures = failed.size;
 
     const flaggedApproved = await this.flagApprovedUncovered();
 
@@ -157,10 +171,13 @@ export class UnpayableWithdrawalService {
    * Rejects ONE request if, right now and under the wallet lock, the
    * balance no longer covers it. Returns what it did, or null when the
    * request is payable, no longer PENDING, or somebody else moved it first.
+   * `alone`: judge it with every OTHER pending request left out (approved
+   * ones still held) — "could it be paid at all?".
    */
   async rejectIfUnpayable(
     requestId: string,
     now: Date = new Date(),
+    alone = false,
   ): Promise<AutoRejection | null> {
     return this.prisma.client.$transaction(async (tx) => {
       const row = await tx.withdrawalRequest.findUnique({
@@ -177,14 +194,16 @@ export class UnpayableWithdrawalService {
         balance,
         tx,
         row.id,
+        { countOtherPending: !alone },
       );
       if (withdrawable.gte(row.amountRequested)) return null;
 
       const reason =
         `Asked for ${money(row.currency, row.amountRequested)}, only ` +
         `${money(row.currency, withdrawable)} is withdrawable now (wallet balance ` +
-        `${money(row.currency, balance)}, less the minimum balance and any other pending ` +
-        `requests) — rejected automatically because charges since the request left the ` +
+        `${money(row.currency, balance)}, less the minimum balance and ` +
+        (alone ? 'any approved withdrawals' : 'any other withdrawals still waiting') +
+        `) — rejected automatically because charges since the request left the ` +
         `wallet unable to pay it. A new request can be made for what is available.`;
 
       // Guarded on PENDING: approved or decided by a person since the read
@@ -275,7 +294,18 @@ export class UnpayableWithdrawalService {
       const stillApproved = new Set(approved.map((a) => a.id));
       for (const a of approved) {
         const key = `${APPROVED_UNCOVERED_PREFIX}${a.id}`;
-        const available = await this.withdrawals.withdrawableBalance(a.sellerId, a.currency);
+        // Its own amount left out (approved requests are held now, so it
+        // would otherwise count against itself) and pending claims too: a
+        // newer pending request does not make an approved one uncovered —
+        // it is the pending one that is unpayable, and pass 1 rejects it.
+        const available = await this.withdrawals.withdrawableBalance(
+          a.sellerId,
+          a.currency,
+          undefined,
+          undefined,
+          a.id,
+          { countOtherPending: false },
+        );
         if (available.lt(a.amountRequested)) {
           flagged += 1;
           await this.issues.raise({

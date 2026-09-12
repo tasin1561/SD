@@ -21,7 +21,12 @@ function makeSut(opts: {
   paidSince?: Prisma.Decimal | null;
   causes?: Array<{ direction: string; _sum: { amount: Prisma.Decimal | null } }>;
   /** The Instant Pay part of the float, as InstantPayAdvanceService reports it. */
-  instantPay?: { amount: Prisma.Decimal; count: number };
+  instantPay?: {
+    amount: Prisma.Decimal;
+    count: number;
+    /** The part on orders returned after delivery — outside the delivered-now aggregate. */
+    notDeliveredNow?: { amount: Prisma.Decimal; count: number };
+  };
 }) {
   const client = {
     sellerWalletBalance: { findMany: async () => opts.balances ?? [] },
@@ -60,7 +65,12 @@ function makeSut(opts: {
     stockLevel: { findMany: async () => opts.stock ?? [] },
   };
   const advances = {
-    summary: async () => opts.instantPay ?? { amount: new Prisma.Decimal(0), count: 0 },
+    summary: async () => ({
+      amount: new Prisma.Decimal(0),
+      count: 0,
+      notDeliveredNow: { amount: new Prisma.Decimal(0), count: 0 },
+      ...opts.instantPay,
+    }),
   };
   return new LiabilitiesService(
     { client } as unknown as PrismaService,
@@ -184,6 +194,31 @@ describe('LiabilitiesService', () => {
     // Parts explain a line; they are not extra lines in the total.
     expect(r.dueTotalInr).toBe('2480.55');
     expect(r.due.some((l) => l.key.startsWith('courier_float_'))).toBe(false);
+  });
+
+  it('keeps an Instant Pay advance on an order RETURNED after delivery in the float, and the parts still add up', async () => {
+    // Delivered now: ₹1,180 (Instant Pay) and ₹500 (settlement). Returned
+    // after delivery, the courier neither paying nor reversing yet: ₹800
+    // we fronted. Selected on the current status alone, the ₹800 was on
+    // no line at all.
+    const r = await makeSut({
+      cod: [{ codAmountInr: D('1180') }, { codAmountInr: D('500') }],
+      instantPay: {
+        amount: D('1980'),
+        count: 2,
+        notDeliveredNow: { amount: D('800'), count: 1 },
+      },
+    }).report();
+    const line = r.due.find((l) => l.key === 'courier_float');
+    expect([line?.amountInr, line?.count]).toEqual(['2480.00', 3]);
+    const parts = line?.parts ?? [];
+    expect(parts.map((p) => [p.key, p.amountInr, p.count])).toEqual([
+      ['courier_float_instant_pay', '1980.00', 2],
+      ['courier_float_settlement', '500.00', 1],
+    ]);
+    const sum = parts.reduce((a, p) => a.add(D(p.amountInr)), D('0'));
+    expect(sum.toFixed(2)).toBe(line?.amountInr);
+    expect(parts.reduce((a, p) => a + p.count, 0)).toBe(line?.count);
   });
 
   it('every line carries what it means — a bare number moves the problem to the reader', async () => {

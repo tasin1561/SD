@@ -1,4 +1,10 @@
 import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
+import {
+  AdvisoryLock,
+  ATTRIBUTION_RECONCILE_KEY,
+  accountReconcileKey,
+  advisoryKey,
+} from '../../src/common/db/advisory-lock';
 import { CourierSettlementService } from '../../src/modules/courier-settlement/services/courier-settlement.service';
 import { CodCreditService } from '../../src/modules/seller-wallet-accrual/services/cod-credit.service';
 import { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
@@ -429,6 +435,8 @@ function makeWorld(
       .filter((r) => r.linkedOrderId === orderId)
       .map((r) => `${r.direction} ${r.amount.toFixed(2)}`);
   return {
+    /** Every advisory lock the payout path took: (strings, namespace, key). */
+    locks: tx['$executeRaw'] as jest.Mock,
     pay,
     owe,
     topUp,
@@ -445,6 +453,43 @@ function makeWorld(
 }
 
 type World = ReturnType<typeof makeWorld>;
+
+describe('a payout takes its locks in the one order that cannot cycle', () => {
+  it('every seller WALLET, then the receiving account’s key, then the attribution key', async () => {
+    // WALLET < ACCOUNT < ATTRIBUTION, never going back down on a FIRST
+    // acquisition (re-taking a lock already held never waits). reconcile()
+    // takes ACCOUNT → ATTRIBUTION and no WALLET, so with this order no
+    // payout and no reconcile can each hold what the other waits for.
+    const w = makeWorld([
+      { id: 'a', sellerId: 's', cod: '1000' },
+      { id: 'b', sellerId: 't', cod: '500' },
+    ]);
+    await w.owe('s', '100');
+    w.locks.mockClear();
+    await w.pay('1500', [
+      ['a', '1000'],
+      ['b', '500'],
+    ]);
+    const attribution = advisoryKey(ATTRIBUTION_RECONCILE_KEY);
+    const account = advisoryKey(accountReconcileKey('hdfc'));
+    const seen = new Set<string>();
+    const ranks: number[] = [];
+    for (const c of w.locks.mock.calls as Array<[unknown, number, number]>) {
+      const [, ns, key] = c;
+      const id = `${ns}|${key}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (ns === AdvisoryLock.WALLET) ranks.push(0);
+      else if (ns === AdvisoryLock.BANK_RECONCILE) ranks.push(key === attribution ? 2 : 1);
+    }
+    expect(seen.has(`${AdvisoryLock.BANK_RECONCILE}|${account}`)).toBe(true);
+    expect(ranks).toEqual([...ranks].sort((x, y) => x - y));
+    expect(ranks.filter((r) => r === 0)).toHaveLength(2);
+    // And the invariant still holds.
+    expect(w.held('s')).toBe(w.owed('s'));
+    expect(w.held('t')).toBe(w.owed('t'));
+  });
+});
 
 describe('the bank book holds each seller exactly what their wallet owes them', () => {
   it('a seller in credit: held the COD less the tax on it', async () => {

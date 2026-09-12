@@ -26,6 +26,12 @@ export interface InstantPayAdvanceRow {
   readonly orderNumber: string;
   readonly sellerId: string;
   readonly sellerName: string;
+  /**
+   * Where the order is NOW. Usually DELIVERED; an RTO status means it
+   * was returned after delivery and the courier has neither paid nor
+   * reversed it — our cash is still out.
+   */
+  readonly currentStatus: OrderStatus;
   /** First DELIVERED order event. Null only for an order forced there with no event. */
   readonly deliveredAt: string | null;
   /** The unreversed COD credit that advanced the money. */
@@ -96,22 +102,54 @@ export interface InstantPayAdvanceFilter {
  * Instant Pay sub-line there is a SUBSET of the float by construction and
  * the two halves add up to it.
  *
+ * ── EVER delivered, not delivered NOW ────────────────────────────────
+ * DELIVERED → RTO_INITIATED is a real edge. Selected on the CURRENT
+ * status, an Instant Pay order returned before the courier paid dropped
+ * out of this list and out of the float at once, and the cash we fronted
+ * was reported nowhere. So an order qualifies once it has EVER reached
+ * DELIVERED (an `order_events` row) and stays until a payout line or a
+ * COD reversal closes it: the credit stands and our cash is out whether
+ * the courier eventually pays, or reverses it on a later payout.
+ * `notDeliveredNow` names those orders so the liabilities float can
+ * include exactly them (see `LiabilitiesService`).
+ *
  * Derived on every read from append-only ledgers; nothing is stored.
  */
 @Injectable()
 export class InstantPayAdvanceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** The liabilities sub-line: how much, and on how many orders. */
-  async summary(): Promise<{ amount: Prisma.Decimal; count: number }> {
+  /**
+   * The liabilities sub-line: how much, and on how many orders — and the
+   * part of it on orders no longer DELIVERED (returned after delivery),
+   * which the float's own delivered-now aggregate cannot see.
+   */
+  async summary(): Promise<{
+    amount: Prisma.Decimal;
+    count: number;
+    notDeliveredNow: { amount: Prisma.Decimal; count: number };
+  }> {
     const ids = await this.outstandingOrderIds(undefined);
-    if (ids.length === 0) return { amount: ZERO, count: 0 };
-    const agg = await this.prisma.client.order.aggregate({
-      where: { id: { in: ids } },
-      _sum: { codAmountInr: true },
-      _count: { _all: true },
-    });
-    return { amount: agg._sum.codAmountInr ?? ZERO, count: agg._count._all };
+    if (ids.length === 0) {
+      return { amount: ZERO, count: 0, notDeliveredNow: { amount: ZERO, count: 0 } };
+    }
+    const [agg, moved] = await Promise.all([
+      this.prisma.client.order.aggregate({
+        where: { id: { in: ids } },
+        _sum: { codAmountInr: true },
+        _count: { _all: true },
+      }),
+      this.prisma.client.order.aggregate({
+        where: { id: { in: ids }, status: { not: OrderStatus.DELIVERED } },
+        _sum: { codAmountInr: true },
+        _count: { _all: true },
+      }),
+    ]);
+    return {
+      amount: agg._sum.codAmountInr ?? ZERO,
+      count: agg._count._all,
+      notDeliveredNow: { amount: moved._sum.codAmountInr ?? ZERO, count: moved._count._all },
+    };
   }
 
   async report(
@@ -155,7 +193,9 @@ export class InstantPayAdvanceService {
         direction: { in: [WalletEntryDirection.COD_COLLECTION, WalletEntryDirection.COD_REVERSAL] },
         ...(sellerId === undefined ? {} : { sellerId }),
         linkedOrder: {
-          status: OrderStatus.DELIVERED,
+          // EVER delivered — see the class comment. The payout-line
+          // predicate is the float's, unchanged.
+          events: { some: { toStatus: OrderStatus.DELIVERED } },
           codAmountInr: { gt: 0 },
           courierSettlementLines: { none: {} },
         },
@@ -179,6 +219,7 @@ export class InstantPayAdvanceService {
           id: true,
           orderNumber: true,
           sellerId: true,
+          status: true,
           codAmountInr: true,
           seller: { select: { companyName: true } },
           orderShipments: {
@@ -288,6 +329,7 @@ export class InstantPayAdvanceService {
         orderNumber: o.orderNumber,
         sellerId: o.sellerId,
         sellerName: o.seller.companyName,
+        currentStatus: o.status,
         deliveredAt: deliveredAt?.toISOString() ?? null,
         creditedAt: (creditedAt ?? now).toISOString(),
         codInr: (o.codAmountInr ?? ZERO).toFixed(2),

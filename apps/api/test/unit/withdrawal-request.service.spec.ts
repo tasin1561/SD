@@ -625,6 +625,69 @@ describe('the withdrawal queue measures the promise it makes', () => {
  * The decision and the payment are different acts — often different
  * people, often a day apart — and this is the first of them.
  */
+describe('WithdrawalRequestService — an APPROVED request holds its money (WAL-3)', () => {
+  it('withdrawableBalance holds PENDING and APPROVED requests alike', async () => {
+    // Holding only PENDING let a seller raise a second request against
+    // money already approved, and the sweep then flagged the approved one
+    // as uncovered — a false HIGH issue.
+    const { svc, aggregate } = makeService({
+      balance: '1000',
+      minBalance: '0',
+      pendingWithdrawals: '900',
+    });
+    expect((await svc.withdrawableBalance('seller-1', Currency.INR)).toFixed(2)).toBe('100.00');
+    expect(aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ['PENDING', 'APPROVED'] } }),
+      }),
+    );
+  });
+
+  it('what the seller is shown as already asked for is the same set', async () => {
+    const { svc, aggregate } = makeService({ balance: '1000', pendingWithdrawals: '300' });
+    const e = await svc.eligibility('seller-1');
+    expect(e.pendingWithdrawalInr).toBe('300.00');
+    for (const call of aggregate.mock.calls) {
+      expect((call[0]['where'] as Record<string, unknown>)['status']).toEqual({
+        in: ['PENDING', 'APPROVED'],
+      });
+    }
+  });
+
+  it('approval leaves the request itself out and holds only APPROVED requests', async () => {
+    // It counted its own amount against itself, so a ₹1,000 request on a
+    // ₹1,000 wallet could never be approved; and a newer pending claim
+    // must not block an older request being decided.
+    const { svc, aggregate } = makeService({
+      existingRequest: makeRow({ status: 'PENDING', amountRequested: new Prisma.Decimal('1000') }),
+      balance: '1000',
+    });
+    await svc.approve('wr-1', 'staff-1');
+    expect(aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ['APPROVED'] }, id: { not: 'wr-1' } }),
+      }),
+    );
+  });
+
+  it('a PENDING request is paid only when the remittance that paid it says so', async () => {
+    const { svc, claim, auditLog } = makeService({
+      existingRequest: makeRow({ status: 'PENDING' }),
+    });
+    await svc.markPaid('wr-1', 'staff-1', 'rem-1', { allowPending: true });
+    expect(claim).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'PAID', linkedRemittanceId: 'rem-1' }),
+      }),
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ closedFromPending: true }),
+      }),
+    );
+  });
+});
+
 describe('WithdrawalRequestService.approve', () => {
   it('moves a PENDING request to APPROVED and audits it', async () => {
     const { svc, claim, auditLog } = makeService({
