@@ -75,6 +75,9 @@ function makeService(
 
 const SNAPSHOT = {
   orderId: 'o1',
+  // Resolved per seller by the CALLER (SET-1) — see
+  // order-post-commit-hooks / order-write specs.
+  courierCode: 'delhivery',
   recipient: {
     name: 'Asha Verma',
     phoneE164: '+919876543210',
@@ -135,9 +138,28 @@ describe('ShipmentProvisionService.provisionFromSnapshot', () => {
     expect((shipmentCreate.mock.calls[0]![0].data as AnyArgs).totalWeightGrams).toBe(999);
   });
 
-  it('throws SHIPMENT_PROVISION_SETTING_MISSING when default courier is unset', async () => {
+  it('provisions with the courier the CALLER resolved, never re-reading the global setting', async () => {
+    // The primitive has no seller context. If it fell back to the global
+    // default it would silently undo a seller pinned to `manual` — a live
+    // waybill for a seller who asked for none.
+    const { svc, shipmentCreate } = makeService({
+      settings: { 'ops.default_courier_code': 'delhivery', 'ops.default_warehouse_id': 'wh-1' },
+    });
+    await svc.provisionFromSnapshot({ ...SNAPSHOT, courierCode: ' manual ' });
+    expect((shipmentCreate.mock.calls[0]![0].data as AnyArgs).courierCode).toBe('manual');
+  });
+
+  it('refuses an empty courier code rather than guessing one', async () => {
+    const { svc, shipmentCreate } = makeService();
+    await expect(
+      svc.provisionFromSnapshot({ ...SNAPSHOT, courierCode: '  ' }),
+    ).rejects.toMatchObject({ response: { code: 'SHIPMENT_PROVISION_COURIER_MISSING' } });
+    expect(shipmentCreate).not.toHaveBeenCalled();
+  });
+
+  it('throws SHIPMENT_PROVISION_SETTING_MISSING when the default warehouse is unset', async () => {
     const { svc } = makeService({
-      settings: { 'ops.default_courier_code': null, 'ops.default_warehouse_id': 'wh-1' },
+      settings: { 'ops.default_warehouse_id': null },
     });
     await expect(svc.provisionFromSnapshot(SNAPSHOT)).rejects.toMatchObject({
       response: { code: 'SHIPMENT_PROVISION_SETTING_MISSING' },

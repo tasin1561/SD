@@ -174,7 +174,10 @@ function makeService(
   const isStubMode = jest.fn(async (courierCode: string) =>
     (opts.stubCouriers ?? []).includes(courierCode),
   );
-  const dispatch = { generate, fetchLabel: dispatchFetchLabel, isStubMode };
+  // Mirrors the dispatcher's own list: anything else is a manual courier.
+  const hasAdapter = (courierCode: string): boolean =>
+    courierCode === 'delhivery' || courierCode === 'shiprocket';
+  const dispatch = { generate, fetchLabel: dispatchFetchLabel, isStubMode, hasAdapter };
 
   const pickAlternate = jest.fn(async () => opts.alternate ?? null);
   const distribution = { pickAlternate };
@@ -809,6 +812,46 @@ describe('AwbGenerationService — a manual courier is a destination, not a refu
       // Still routes to a person, which is the whole point of manual.
       expect(res.serviceable).toBe(false);
     }
+  });
+
+  it('a MANUAL shipment never fails over even when the answer is COURIER_DISABLED', async () => {
+    // The hazard behind a seller pinned to manual via
+    // ops.default_courier_code: `manual` is routinely is_active=false,
+    // and CUR-16's COURIER_DISABLED is a refusal that FAILS OVER. The
+    // dispatcher now answers NO_ADAPTER first, but the saga must not
+    // depend on that ordering: a courier with no adapter is never one to
+    // fail over FROM, whatever code came back.
+    const { svc, generate, pickAlternate } = makeService({
+      shipment: { ...shipmentRow(), courierCode: 'manual' },
+      dispatchByCourier: {
+        manual: {
+          ok: false,
+          awbNumber: null,
+          courierShipmentId: null,
+          courierOrderId: null,
+          serviceable: false,
+          errorCode: 'COURIER_DISABLED',
+          errorMessage: 'manual is switched off for new parcels',
+        },
+        delhivery: {
+          ok: true,
+          awbNumber: 'DLV99999999',
+          courierShipmentId: '777',
+          courierOrderId: null,
+          serviceable: true,
+          errorCode: null,
+          errorMessage: null,
+        },
+      },
+      alternate: { courierCode: 'delhivery', courierAccountId: 'dlv-acc-1' },
+    });
+
+    const res = await svc.generateForShipment(SHIP);
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(pickAlternate).not.toHaveBeenCalled();
+    expect(res.status).toBe('FAILED');
+    if (res.status === 'FAILED') expect(res.serviceable).toBe(false);
   });
 
   it('a REAL carrier refusal still fails over — the narrowing is only about NO_ADAPTER', async () => {

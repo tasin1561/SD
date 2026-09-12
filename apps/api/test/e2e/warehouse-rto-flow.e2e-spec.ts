@@ -177,6 +177,9 @@ describe('Warehouse RTO flow (e2e)', () => {
     // commit-16 auto-provisions; redundant call is idempotent.
     await h.app.get(ShipmentProvisionService).provisionFromSnapshot({
       orderId,
+      // Resolved per seller by the post-commit hook in production (SET-1);
+      // this suite calls the primitive directly, with the seeded default.
+      courierCode: 'delhivery',
       recipient: {
         name: order.recipientName,
         phoneE164: order.recipientPhoneE164,

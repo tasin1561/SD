@@ -385,7 +385,8 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'delhivery',
     displayName: 'Default Courier Code',
     description:
-      'Courier assigned to a shipment at provisioning (FK couriers.code). Hardcoded in Phase 1A; Module 9 introduces serviceability/multi-courier routing',
+      'Courier assigned to a new shipment at provisioning (FK couriers.code). Seller-overridable (2026-09-12): a seller set to `manual` gets parcels no integrated courier is asked to book — they route straight to manual placement and never fail over. An override must name an existing courier.',
+    sellerOverridable: true,
   },
   {
     key: 'ops.pack_box_timeout_minutes',

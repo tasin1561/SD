@@ -182,6 +182,23 @@ describe('CourierAwbDispatchService — the intake switch', () => {
     expect(r.errorCode).toBe('COURIER_DISABLED');
   });
 
+  it('a switched-off MANUAL courier is still NO_ADAPTER, never COURIER_DISABLED (which fails over)', async () => {
+    // `manual` is routinely is_active=false. Answering COURIER_DISABLED
+    // for it made the saga fail over and book a live waybill for a
+    // seller pinned to manual — the one outcome the pin exists to stop.
+    const { svc, delhiveryGenerate, shiprocketGenerate } = makeService({
+      disabledCouriers: ['manual'],
+    });
+    const r = await svc.generate(input({ courierCode: 'manual' }), ACTOR);
+
+    expect(delhiveryGenerate).not.toHaveBeenCalled();
+    expect(shiprocketGenerate).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ ok: false, serviceable: false, errorCode: 'NO_ADAPTER' });
+    expect(svc.hasAdapter('manual')).toBe(false);
+    expect(svc.hasAdapter('delhivery')).toBe(true);
+    expect(svc.hasAdapter('shiprocket')).toBe(true);
+  });
+
   it('reports it as NOT serviceable, so it reaches a human instead of retrying', async () => {
     const { svc } = makeService({ disabledCouriers: ['shiprocket'] });
     const r = await svc.generate(input({ courierCode: 'shiprocket' }), ACTOR);

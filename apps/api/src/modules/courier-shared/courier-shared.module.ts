@@ -1,6 +1,7 @@
 import { CourierEnablementService } from './services/courier-enablement.service';
 import { CourierWriteGuardService } from './services/courier-write-guard.service';
 import { Module } from '@nestjs/common';
+import { SettingsModule } from '../settings/settings.module';
 import { CourierAccountRoutingService } from './services/courier-account-routing.service';
 import { CourierCredentialService } from './services/courier-credential.service';
 import { CourierMcpReaderService } from './services/courier-mcp-reader.service';
@@ -24,6 +25,9 @@ import { CourierDistributionService } from './services/courier-distribution.serv
  * PrismaService / EnvService / AuditLogService are global.
  */
 @Module({
+  // CourierSelectionService's last-resort default courier is per seller
+  // (SET-1). SettingsModule is a dependency-free primitive — no cycle.
+  imports: [SettingsModule],
   providers: [
     CourierOptionSelectionService,
     CourierCredentialService,

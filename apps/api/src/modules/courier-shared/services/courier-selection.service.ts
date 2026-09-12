@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { CredentialEnvironment, PaymentMode } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CourierAccountRoutingService } from './courier-account-routing.service';
+import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 
 export interface SelectedCourier {
   readonly courierCode: string;
@@ -51,6 +52,7 @@ export class CourierSelectionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accounts: CourierAccountRoutingService,
+    private readonly settings: SettingsResolverService,
   ) {}
 
   async selectForSeller(
@@ -133,11 +135,10 @@ export class CourierSelectionService {
     //    all, which is a configuration problem rather than a routing
     //    one — but returning the configured default keeps the parcel
     //    moving instead of failing the provision.
-    const setting = await this.prisma.client.systemSetting.findUnique({
-      where: { key: SETTING_DEFAULT_COURIER },
-      select: { valueString: true },
-    });
-    const code = (setting?.valueString ?? 'delhivery').trim();
+    //    Per seller (SET-1): a seller pinned to `manual` must not be
+    //    handed the global default here either.
+    const resolved = await this.settings.resolve(sellerId, SETTING_DEFAULT_COURIER);
+    const code = (typeof resolved.value === 'string' ? resolved.value : 'delhivery').trim();
     const courier = await this.prisma.client.courier.findUnique({
       where: { code },
       select: { id: true, code: true },

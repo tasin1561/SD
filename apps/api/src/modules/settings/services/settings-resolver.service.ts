@@ -183,7 +183,11 @@ export class SettingsResolverService {
           message: `Setting '${key}' expects ${system.valueType}, got ${input.valueType}`,
         });
       }
-      const parsed = this.parseAndClamp(system, input.value, key);
+      const parsed = await this.assertReferencesExist(
+        tx,
+        key,
+        this.parseAndClamp(system, input.value, key),
+      );
 
       const updated = await tx.sellerSettingOverride.upsert({
         where: { sellerId_key: { sellerId, key } },
@@ -375,6 +379,42 @@ export class SettingsResolverService {
         throw new Error(`Unhandled valueType: ${String(exhaustive)}`);
       }
     }
+  }
+
+  /**
+   * An override whose value NAMES a row must name one that exists.
+   *
+   * `ops.default_courier_code` is a free STRING, and the settings model
+   * has no allowed-values list (`validationSchema` is unread) — while the
+   * valid set is data, not a constant: the `couriers` table. A typo'd
+   * code would save, show on the seller's screen, and then fail every
+   * provision for that seller (couriers.code is an FK) with nothing
+   * pointing back at the override. So it is checked against the table
+   * here, at the one writer, and stored trimmed. A courier switched off
+   * (`isActive=false`) is still a valid value: the intake switch is
+   * CUR-16's to enforce at booking, and `manual` is routinely off.
+   */
+  private async assertReferencesExist(
+    tx: Prisma.TransactionClient,
+    key: string,
+    parsed: string | number | boolean | Date | object,
+  ): Promise<string | number | boolean | Date | object> {
+    if (key !== 'ops.default_courier_code' || typeof parsed !== 'string') return parsed;
+    const code = parsed.trim();
+    const known = await tx.courier.findMany({
+      where: { deletedAt: null },
+      select: { code: true },
+      orderBy: { code: 'asc' },
+    });
+    if (!known.some((c) => c.code === code)) {
+      throw new BadRequestException({
+        code: 'UNKNOWN_COURIER_CODE',
+        message: `Setting '${key}': '${code}' is not a courier. Known couriers: ${known
+          .map((c) => c.code)
+          .join(', ')}`,
+      });
+    }
+    return code;
   }
 
   private toOverrideView(

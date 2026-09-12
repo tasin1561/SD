@@ -9,6 +9,10 @@ import type { ShiprocketAwbRequest } from '../../courier-shiprocket/types/shipro
 import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
 import { CourierEnablementService } from '../../courier-shared/services/courier-enablement.service';
 
+/** Courier codes with an integration behind them — every case of the
+ *  `generate` switch. Anything else is a manual courier (CUR-8). */
+const ADAPTER_COURIERS: ReadonlySet<string> = new Set(['delhivery', 'shiprocket']);
+
 export interface DispatchAwbInput {
   readonly courierCode: string;
   readonly courierAccountId: string;
@@ -144,6 +148,18 @@ export class CourierAwbDispatchService {
     // courier that will not carry a parcel: offer it to another, then
     // route it to a human. NOT as a transient failure, which would
     // retry a switch somebody turned off on purpose.
+    // ── NO ADAPTER FIRST, BEFORE THE INTAKE SWITCH ───────────────────
+    // A courier with no integration (`manual`) is a DESTINATION, never a
+    // carrier to book (CUR-8). Checked ahead of `isActive` because the
+    // two answers route differently in the saga: COURIER_DISABLED is a
+    // refusal and FAILS OVER (CUR-16), NO_ADAPTER never does. `manual`
+    // is routinely switched off, so with the old order a seller pinned
+    // to manual had their parcel failed over and booked with a live
+    // courier — the one outcome that pin exists to prevent.
+    if (!this.hasAdapter(input.courierCode)) {
+      return this.noAdapter(input);
+    }
+
     if (!(await this.enablement.canTakeNewParcels(input.courierCode))) {
       this.logger.warn(
         { courierCode: input.courierCode, shipmentId: input.shipmentId },
@@ -166,24 +182,39 @@ export class CourierAwbDispatchService {
       case 'delhivery':
         return this.viaDelhivery(input, actor);
       default:
-        // A courier with no adapter is a MANUAL courier by definition
-        // (CUR-8) — somebody books it by hand. Reported as
-        // not-serviceable-by-us so the saga routes it to a person
-        // rather than retrying an integration that does not exist.
-        this.logger.warn(
-          { courierCode: input.courierCode, shipmentId: input.shipmentId },
-          'No adapter for this courier; routing to manual placement',
-        );
-        return {
-          ok: false,
-          awbNumber: null,
-          courierShipmentId: null,
-          courierOrderId: null,
-          serviceable: false,
-          errorCode: 'NO_ADAPTER',
-          errorMessage: `${input.courierCode} has no integration — book it by hand`,
-        };
+        return this.noAdapter(input);
     }
+  }
+
+  /**
+   * Is there an integration behind this courier code at all? The ONE
+   * place that knows (CUR-12) — the saga asks this rather than testing
+   * for `'manual'`, so a second manual carrier inherits the rule.
+   */
+  hasAdapter(courierCode: string): boolean {
+    return ADAPTER_COURIERS.has(courierCode);
+  }
+
+  /**
+   * A courier with no adapter is a MANUAL courier by definition (CUR-8)
+   * — somebody books it by hand. Reported as not-serviceable-by-us so
+   * the saga routes it to a person rather than retrying an integration
+   * that does not exist, and as NO_ADAPTER so it never fails over.
+   */
+  private noAdapter(input: DispatchAwbInput): DispatchAwbResult {
+    this.logger.warn(
+      { courierCode: input.courierCode, shipmentId: input.shipmentId },
+      'No adapter for this courier; routing to manual placement',
+    );
+    return {
+      ok: false,
+      awbNumber: null,
+      courierShipmentId: null,
+      courierOrderId: null,
+      serviceable: false,
+      errorCode: 'NO_ADAPTER',
+      errorMessage: `${input.courierCode} has no integration — book it by hand`,
+    };
   }
 
   /**

@@ -33,6 +33,8 @@ function makeSut(
     linked?: Courier[];
     active?: Array<{ id: string; code: string }>;
     defaultCode?: string;
+    /** Per-seller override of ops.default_courier_code (SET-1). */
+    overrideFor?: Record<string, string>;
   } = {},
 ) {
   const client = {
@@ -54,7 +56,19 @@ function makeSut(
       source: 'SELLER_LINK' as const,
     }),
   } as unknown as CourierAccountRoutingService;
-  return new CourierSelectionService({ client } as unknown as PrismaService, accounts);
+  const settings = {
+    resolve: async (sellerId: string) => {
+      const o = opts.overrideFor?.[sellerId];
+      return o !== undefined
+        ? { value: o, source: 'SELLER_OVERRIDE' }
+        : { value: opts.defaultCode ?? 'delhivery', source: 'SYSTEM_DEFAULT' };
+    },
+  };
+  return new CourierSelectionService(
+    { client } as unknown as PrismaService,
+    accounts,
+    settings as never,
+  );
 }
 
 describe('CourierSelectionService', () => {
@@ -107,5 +121,14 @@ describe('CourierSelectionService', () => {
     const svc = makeSut({ linked: [], active: [] });
     const r = await svc.selectForSeller('s1', { paymentMode: 'COD' as never });
     expect(r).toMatchObject({ courierCode: 'delhivery', reason: 'DEFAULT' });
+  });
+
+  it("the default is the SELLER's (SET-1): a seller pinned to manual is not handed the global", async () => {
+    const svc = makeSut({ linked: [], active: [], overrideFor: { s1: 'manual' } });
+    const r = await svc.selectForSeller('s1', { paymentMode: 'COD' as never });
+    expect(r).toMatchObject({ courierCode: 'manual', reason: 'DEFAULT' });
+
+    const other = await svc.selectForSeller('s2', { paymentMode: 'COD' as never });
+    expect(other).toMatchObject({ courierCode: 'delhivery', reason: 'DEFAULT' });
   });
 });

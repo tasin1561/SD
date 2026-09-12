@@ -51,8 +51,13 @@ function makeService(
     overrideRow?: AnyArgs | null;
     overridableRows?: AnyArgs[];
     overrideRows?: AnyArgs[];
+    /** Non-deleted courier codes, for reference validation. */
+    couriers?: string[];
   } = {},
 ) {
+  const courierFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () =>
+    (opts.couriers ?? ['delhivery', 'manual', 'shiprocket']).map((code) => ({ code })),
+  );
   const systemFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.systemRow === undefined ? makeSystemRow() : opts.systemRow,
   );
@@ -80,6 +85,7 @@ function makeService(
         upsert: overrideUpsert,
         delete: overrideDelete,
       },
+      courier: { findMany: courierFindMany },
     }),
   );
   const client = {
@@ -161,6 +167,58 @@ describe('SettingsResolverService.setOverride', () => {
     const auditCall = auditLog.mock.calls[0]![0]!;
     expect(auditCall.action).toBe('staff.seller_setting_override.set');
     expect(auditCall.severity).toBe('MEDIUM');
+  });
+
+  describe('ops.default_courier_code — the override must name a real courier', () => {
+    const courierRow = makeSystemRow({
+      key: 'ops.default_courier_code',
+      valueType: SettingValueType.STRING,
+      valueString: 'delhivery',
+      valueInt: null,
+      overrideMinInt: null,
+      overrideMaxInt: null,
+    });
+
+    it('accepts an existing courier (switched-off manual included) and stores it trimmed', async () => {
+      const { svc, overrideUpsert } = makeService({ systemRow: courierRow });
+      const r = await svc.setOverride(
+        'seller-qa',
+        'ops.default_courier_code',
+        { valueType: SettingValueType.STRING, value: ' manual ' },
+        'staff-1',
+      );
+      expect((overrideUpsert.mock.calls[0]![0].create as AnyArgs).valueString).toBe('manual');
+      expect(r.value).toBe('manual');
+    });
+
+    it('refuses an unknown courier code with UNKNOWN_COURIER_CODE and writes nothing', async () => {
+      const { svc, overrideUpsert } = makeService({ systemRow: courierRow });
+      await expect(
+        svc.setOverride(
+          'seller-qa',
+          'ops.default_courier_code',
+          { valueType: SettingValueType.STRING, value: 'manaul' },
+          'staff-1',
+        ),
+      ).rejects.toMatchObject({ response: { code: 'UNKNOWN_COURIER_CODE' } });
+      expect(overrideUpsert).not.toHaveBeenCalled();
+    });
+
+    it('resolve: the seller override beats the global default', async () => {
+      const { svc } = makeService({
+        systemRow: courierRow,
+        overrideRow: makeOverrideRow({
+          key: 'ops.default_courier_code',
+          valueType: SettingValueType.STRING,
+          valueString: 'manual',
+          valueInt: null,
+        }),
+      });
+      await expect(svc.resolve('seller-qa', 'ops.default_courier_code')).resolves.toMatchObject({
+        value: 'manual',
+        source: 'SELLER_OVERRIDE',
+      });
+    });
   });
 
   it('rejects NOT_SELLER_OVERRIDABLE with LOW audit + no upsert', async () => {

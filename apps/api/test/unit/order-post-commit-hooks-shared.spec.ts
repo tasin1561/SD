@@ -63,7 +63,9 @@ describe('both writers of orders.status share ONE set of post-commit hooks', () 
     const src = read('order-post-commit-hooks.service.ts');
     expect(src).not.toMatch(/inventory-stock|inventory-shared/);
     expect(src).not.toMatch(/StockReservationService|StockMutationService/);
-    // prisma, audit, callQueue, shipmentProvision, chargesRefund, bus.
-    expect(OrderPostCommitHooksService.length).toBe(6);
+    // prisma, audit, callQueue, shipmentProvision, chargesRefund, bus,
+    // settings (the per-seller default courier for the provision, SET-1 —
+    // a settings read, not a stock collaborator).
+    expect(OrderPostCommitHooksService.length).toBe(7);
   });
 });

@@ -19,6 +19,7 @@ import { SellerStoreModule } from '../seller-store/seller-store.module';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
+import { SettingsModule } from '../settings/settings.module';
 import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.service';
 
 /**
@@ -71,6 +72,9 @@ import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.
     SellerWalletAccrualModule,
     LifecycleEventsModule,
     ShipmentProvisionModule,
+    //  - SettingsModule: the per-seller default courier resolved for the
+    //    provision (SET-1). Dependency-free R3 primitive.
+    SettingsModule,
   ],
   providers: [
     OrderNumberingService,

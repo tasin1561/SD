@@ -132,6 +132,15 @@ function makeService(
   const refundIfCharged = jest.fn(async () => null);
   const chargesRefund = { refundIfCharged };
 
+  // SET-1: the provisioned courier is resolved per seller. Defaults to
+  // the global value; a test overrides it with mockResolvedValueOnce.
+  const settingsResolve = jest.fn(async (_sellerId: string, key: string) => ({
+    key,
+    valueType: 'STRING',
+    value: 'delhivery' as unknown,
+    source: 'SYSTEM_DEFAULT' as 'SYSTEM_DEFAULT' | 'SELLER_OVERRIDE',
+  }));
+
   // The non-stock post-commit hooks live in the shared service god mode
   // also runs (2026-09-12); built here from the same mocks, so every
   // hook assertion below is unchanged.
@@ -142,6 +151,7 @@ function makeService(
     shipmentProvision as never,
     chargesRefund as never,
     lifecycleBus as never,
+    { resolve: settingsResolve } as never,
   );
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,
@@ -176,6 +186,7 @@ function makeService(
     voidForOrder,
     refundIfCharged,
     packBoxFindFirst,
+    settingsResolve,
   };
 }
 
@@ -193,6 +204,46 @@ describe('OrderWriteService.transitionStatus', () => {
     expect(data.status).toBe(OrderStatus.CONFIRMED);
     expect(data.confirmedAt).toBeInstanceOf(Date);
     expect(events.stockReserved).toHaveBeenCalledTimes(1);
+  });
+
+  it("→ CONFIRMED provisions with the SELLER's default courier (SET-1 override wins)", async () => {
+    const { svc, provisionFromSnapshot, settingsResolve } = makeService();
+    settingsResolve.mockResolvedValueOnce({
+      key: 'ops.default_courier_code',
+      valueType: 'STRING',
+      value: 'manual',
+      source: 'SELLER_OVERRIDE',
+    });
+    await svc.transitionStatus({ orderId: 'o1', to: OrderStatus.CONFIRMED, actor: ACTOR });
+
+    expect(settingsResolve).toHaveBeenCalledWith('s1', 'ops.default_courier_code');
+    expect(provisionFromSnapshot).toHaveBeenCalledTimes(1);
+    expect((provisionFromSnapshot.mock.calls[0] as unknown[])[0]).toMatchObject({
+      orderId: 'o1',
+      courierCode: 'manual',
+    });
+  });
+
+  it('→ CONFIRMED without an override provisions with the global default', async () => {
+    const { svc, provisionFromSnapshot } = makeService();
+    await svc.transitionStatus({ orderId: 'o1', to: OrderStatus.CONFIRMED, actor: ACTOR });
+    expect((provisionFromSnapshot.mock.calls[0] as unknown[])[0]).toMatchObject({
+      courierCode: 'delhivery',
+    });
+  });
+
+  it('a failed courier resolution provisions NOTHING rather than guessing the global default', async () => {
+    // Fail closed: provisioning a pinned-to-manual seller with the global
+    // default would book a live waybill for a seller who asked for none.
+    const { svc, provisionFromSnapshot, settingsResolve } = makeService();
+    settingsResolve.mockRejectedValueOnce(new Error('db blip'));
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CONFIRMED,
+      actor: ACTOR,
+    });
+    expect(res.status).toBe(OrderStatus.CONFIRMED); // the transition still stands
+    expect(provisionFromSnapshot).not.toHaveBeenCalled();
   });
 
   it('lands OUT_OF_STOCK on InsufficientStockError and rolls back partials', async () => {

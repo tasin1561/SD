@@ -12,6 +12,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { ShipmentProvisionService } from '../../shipment-provision/services/shipment-provision.service';
+import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import {
   OrderLifecycleEventBus,
   type OrderLifecycleEventSource,
@@ -238,6 +239,8 @@ export class OrderPostCommitHooksService {
     // NOTIF-5: the order module publishes to the R3 bus and knows nothing
     // about who listens.
     private readonly lifecycleBus: OrderLifecycleEventBus,
+    // SET-1 — the courier a new parcel is provisioned with is per seller.
+    private readonly settings: SettingsResolverService,
   ) {}
 
   async runForStatusChange(input: StatusChangeHookInput): Promise<void> {
@@ -349,9 +352,11 @@ export class OrderPostCommitHooksService {
         );
         return;
       }
+      const courierCode = await this.resolveCourierCode(input.sellerId);
       await this.shipmentProvision.provisionFromSnapshot(
         {
           orderId: order.id,
+          courierCode,
           recipient: {
             name: order.recipientName,
             phoneE164: order.recipientPhoneE164,
@@ -385,6 +390,28 @@ export class OrderPostCommitHooksService {
         'Post-commit shipment provision failed; order CONFIRMED persisted, supervisor/reconciler can re-trigger via OrderAdminOverrideService or a follow-up CONFIRMED→CONFIRMED matrix self-loop',
       );
     }
+  }
+
+  /**
+   * Which courier this seller's new parcel is provisioned with:
+   * `ops.default_courier_code`, per seller (SET-1, 2026-09-12). A seller
+   * pinned to `manual` gets parcels no integrated courier is ever asked
+   * to book — the AWB saga routes them straight to manual placement and
+   * never fails over from a courier with no adapter.
+   *
+   * FAILS CLOSED, unlike most settings reads: an error here propagates
+   * into the provision's own catch, so the order stays CONFIRMED with no
+   * shipment (visible — the AWB listener and the watchdog find it)
+   * rather than being provisioned with the global default. Falling back
+   * would book a real waybill for a seller who asked for none.
+   */
+  private async resolveCourierCode(sellerId: string): Promise<string> {
+    const resolved = await this.settings.resolve(sellerId, 'ops.default_courier_code');
+    const code = typeof resolved.value === 'string' ? resolved.value.trim() : '';
+    if (!code) {
+      throw new Error(`ops.default_courier_code resolved empty for seller ${sellerId}`);
+    }
+    return code;
   }
 
   /** Voids CREATED shipments only — INCLUDING one that already carries a
