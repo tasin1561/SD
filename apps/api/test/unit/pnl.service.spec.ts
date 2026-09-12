@@ -1,486 +1,433 @@
 import { Prisma } from '@skydrop/db';
-import { PnlService } from '../../src/modules/treasury/services/pnl.service';
+import { PNL_LINE_KEYS, PnlService } from '../../src/modules/treasury/services/pnl.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import { ShipmentCostService } from '../../src/modules/treasury/services/shipment-cost.service';
+import { FakeDb, type Row, type Tables } from './pnl-fake-db';
+
+/*
+  The P&L is run here against an in-memory database that EVALUATES its
+  filters (./pnl-fake-db). A fake that answered every query the same way
+  cannot tell a window that tiles from one that leaks, or a drill-down
+  whose rows add up from one that does not — which are exactly the
+  defects this report has had.
+*/
 
 const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
+const T = (iso: string): Date => new Date(iso);
 
-/** The filter the COUNTED courier-adjustments query was called with, last time. */
-let adjustmentWhere: Record<string, unknown> | undefined;
-/** The filter of the query that measures what the cutover left out, if it ran. */
-let excludedWhere: Record<string, unknown> | undefined;
-/** The filter the OPERATING-expenses aggregate was called with, last time. */
-let expensesWhere: Record<string, unknown> | undefined;
-/** The filter of the delivery-fee refunds query, last time. */
-let refundWhere: Record<string, unknown> | undefined;
-/** The filter of the bank-reconciliation query, last time. */
-let reconciliationWhere: Record<string, unknown> | undefined;
+/** August, HALF-OPEN: [1 Aug, 1 Sep). */
+const FROM = T('2026-08-01T00:00:00.000Z');
+const TO = T('2026-09-01T00:00:00.000Z');
+const IN = T('2026-08-10T06:00:00.000Z');
+/** 1 Oct 2026, 00:00 IST. */
+const CUTOVER = T('2026-09-30T18:30:00.000Z');
 
-type Grouped = { kind: string; _sum: { amountInr: Prisma.Decimal }; _count: { _all: number } };
+let seq = 0;
+/** Ids sort in creation order, as uuidv7 ids do. */
+const nextId = (p: string): string => `${p}-${String(++seq).padStart(5, '0')}`;
 
-function makeSut(opts: {
-  freight?: Array<{
-    totalInr: Prisma.Decimal;
-    ourCostInr: Prisma.Decimal | null;
-    status?: string;
-    amountSettledInr?: Prisma.Decimal;
-  }>;
-  /** Grouped adjustment rows, as the ledger would return them. */
-  courierAdjustments?: Grouped[];
-  /** Adjustments dated before the cutover, as the second query returns them. */
-  preCutoverAdjustments?: Grouped[];
-  /** `pnl.courier_adjustments_from`; absent = the setting is cleared. */
-  cutover?: Date | null;
-  /** Delivery-cohort order charges (parcels NOT received back). */
-  shippingRevenue?: Prisma.Decimal | null;
-  shipments?: Array<{
-    actualCourierCostInr: Prisma.Decimal | null;
-    actualRtoCostInr?: Prisma.Decimal | null;
-  }>;
-  /** Returns-cohort order charges: the delivery fee AND the return fee of parcels received back. */
-  rtoFees?: Prisma.Decimal | null;
-  /** Tax deducted from CODs — OUR revenue since 2026-09-07, not a liability. */
-  codTax?: Prisma.Decimal | null;
-  /** Delivery fees refunded on cancelled orders still in the delivery cohort. */
-  refunds?: Prisma.Decimal | null;
-  /** Damage / loss refunds paid to sellers. */
-  damage?: Prisma.Decimal | null;
-  /** Instant Pay / COD collection fees, grouped by direction. */
-  codServiceFees?: Array<{ direction: string; amount: Prisma.Decimal }>;
-  returned?: Array<{
-    actualRtoCostInr: Prisma.Decimal | null;
-    actualCourierCostInr?: Prisma.Decimal | null;
-  }>;
-  /** FX spread, in rupees (one entry). */
-  fxSpread?: Prisma.Decimal | null;
-  /** FX spread entries in full — currency and the transfer behind each. */
-  fxEntries?: Array<{
-    signedAmount: Prisma.Decimal;
-    currency: string;
-    occurredAt: Date;
-    transfer: {
-      amountOut: Prisma.Decimal;
-      currencyOut: string;
-      amountIn: Prisma.Decimal;
-      currencyIn: string;
-    } | null;
-  }>;
-  /** INR operating expenses, summed (posted negative). */
-  expenses?: Prisma.Decimal | null;
-  /** Operating expenses in another currency, one row each. */
-  foreignExpenses?: Array<{ signedAmount: Prisma.Decimal; currency: string; occurredAt: Date }>;
-  /** A rate row, as fx_rate_history / fx_rates would return it. */
-  rate?: { fromCurrency: string; rate: Prisma.Decimal } | null;
-  /** Early-COD fees booked against payouts (EXPENSE entries WITH a settlement). */
-  codFees?: Prisma.Decimal | null;
-  /** Courier PARCEL transactions in the window, grouped by waybill. */
-  parcelTxns?: Array<{ awbNumber: string; kind: string; amount: Prisma.Decimal; ref?: string }>;
-  /** Live shipments found by their courier ORDER id, holding a different waybill. */
-  liveOrderRefs?: Array<{ ref: string; awb: string }>;
-  /** Waybills that belong to a live Skydrop shipment. */
-  liveAwbs?: string[];
-  reconciliation?: Array<{
-    id?: string;
-    signedAmount: Prisma.Decimal;
-    currency: string;
-    occurredAt: Date;
-  }>;
-  /** Reconciliation entries that are their account's FIRST entry (opening balances). */
-  openingIds?: string[];
-  /** Closed investments; `currency` defaults to INR, as the account's currency. */
-  investments?: Array<{
-    placedInr: Prisma.Decimal;
-    returnedInr: Prisma.Decimal;
-    currency?: string;
-  }>;
-  /**
-   * EXPENSE entries filed under a leg category with no consignment
-   * behind them — reported rather than moved, because we cannot know
-   * which consignment they were for.
-   */
-  unattributed?: Array<{ signedAmount: Prisma.Decimal }>;
-  /** Orders first delivered or lost in the window; default one order. */
-  fates?: Array<{ orderId: string; _min: { createdAt: Date } }>;
-  /** Of those, orders whose parcel came back anyway. */
-  cameBack?: Array<{ orderId: string }>;
-  /** Parcels with the courier right now. */
-  moving?: number;
-  /** Waybills of VOIDED Skydrop shipments (same courier). */
-  deadAwbs?: string[];
-  /** Waybills of live shipments of ANOTHER courier. */
-  otherCourierAwbs?: string[];
-  /** Today's rate, used when a day has none recorded. */
-  todayRate?: { fromCurrency: string; rate: Prisma.Decimal } | null;
-  /** Shortfalls recognised on payout lines (negative = a recovery). */
-  shortfalls?: Prisma.Decimal[];
-  /** Deductions returned on reversed CODs: the tax, and the fees. */
-  taxReturned?: Prisma.Decimal | null;
-  feesReturned?: Prisma.Decimal | null;
-}) {
-  adjustmentWhere = undefined;
-  excludedWhere = undefined;
-  expensesWhere = undefined;
-  refundWhere = undefined;
-  reconciliationWhere = undefined;
-  // Delivery reads its orders by id (the fate cohort); returns reaches
-  // them through a shipment received back in the window.
-  const cohort = (where: Record<string, unknown>): 'delivery' | 'returns' =>
-    where['orderId'] !== undefined ? 'delivery' : 'returns';
-  const chargeSum = (where: Record<string, unknown>): Prisma.Decimal | null =>
-    cohort(where) === 'delivery' ? (opts.shippingRevenue ?? null) : (opts.rtoFees ?? null);
-  const client = {
-    systemSetting: {
-      findUnique: async () => (opts.cutover == null ? null : { valueDate: opts.cutover }),
-    },
-    inboundFreightCharge: {
-      findMany: async () =>
-        (opts.freight ?? []).map((f) => ({
-          status: 'PENDING',
-          amountSettledInr: D('0'),
-          ...f,
-        })),
-    },
-    // Courier ledger reads: account adjustments (counted window with lte,
-    // and what a cutover left out with lt), and PARCEL charges grouped by
-    // waybill for the no-Skydrop-parcel line.
-    courierWalletTransaction: {
-      groupBy: async (args: { where: Record<string, unknown> }) => {
-        if (args.where['category'] === 'PARCEL') {
-          return (opts.parcelTxns ?? []).map((t) => ({
-            courierAccountId: 'acct-1',
-            awbNumber: t.awbNumber,
-            courierOrderRef: t.ref ?? null,
-            kind: t.kind,
-            _sum: { amountInr: t.amount },
-          }));
-        }
-        const window = args.where['occurredAt'] as Record<string, unknown>;
-        if ('lt' in window) {
-          excludedWhere = args.where;
-          return opts.preCutoverAdjustments ?? [];
-        }
-        adjustmentWhere = args.where;
-        return opts.courierAdjustments ?? [];
-      },
-    },
+type Report = Awaited<ReturnType<PnlService['report']>>;
+const line = (r: Report, key: string): Report['lines'][number] | undefined =>
+  r.lines.find((l) => l.key === key);
+const total = (xs: ReadonlyArray<string | null>): string =>
+  xs.reduce((t, x) => (x === null ? t : t.add(D(x))), D('0')).toFixed(2);
 
-    orderCharge: {
-      aggregate: async (args: { where: Record<string, unknown> }) => ({
-        _sum: { amountInr: chargeSum(args.where) },
-      }),
-      // The same revenue, split by charge type for the line's basis.
-      groupBy: async (args: { where: Record<string, unknown> }) => {
-        const sum = chargeSum(args.where);
-        return sum == null
-          ? []
-          : [
-              {
-                type: cohort(args.where) === 'delivery' ? 'BASE_SHIPPING' : 'RTO_FEE',
-                _sum: { amountInr: sum },
-                _count: { _all: 1 },
-              },
-            ];
-      },
-    },
-    shipment: {
-      findMany: async (args: { where: Record<string, unknown> }) => {
-        // The no-Skydrop-parcel line asks which waybills are live parcels.
-        const ors =
-          (args.where['OR'] as Array<Record<string, { in?: string[] }>> | undefined) ?? [];
-        const inList =
-          (args.where['awbNumber'] as { in?: string[] } | undefined)?.in ??
-          ors.find((o) => o['awbNumber'] !== undefined)?.['awbNumber']?.in;
-        if (inList !== undefined) {
-          // Every shipment that ever carried the waybill — live ones of the
-          // account's courier, voided ones, live ones of ANOTHER courier
-          // that merely share the number — or that is the order a charge
-          // names under a waybill since replaced.
-          const refList =
-            ors.find((o) => o['courierOrderId'] !== undefined)?.['courierOrderId']?.in ?? [];
-          const row = (
-            a: string,
-            courierCode: string,
-            deletedAt: Date | null,
-            courierOrderId: string | null = null,
-          ) => ({ awbNumber: a, courierOrderId, courierCode, deletedAt, supersededAt: null });
-          return [
-            ...(opts.liveAwbs ?? []).map((a) => row(a, 'delhivery', null)),
-            ...(opts.deadAwbs ?? []).map((a) => row(a, 'delhivery', FROM)),
-            ...(opts.otherCourierAwbs ?? []).map((a) => row(a, 'shiprocket', null)),
-            ...(opts.liveOrderRefs ?? []).map((o) => row(o.awb, 'delhivery', null, o.ref)),
-          ].filter(
-            (s) =>
-              inList.includes(s.awbNumber) ||
-              (s.courierOrderId !== null && refList.includes(s.courierOrderId)),
-          );
-        }
-        // BOTH cohort queries mention rtoReceivedAt — the delivery line
-        // filters it to null, the returns line uses a date range.
-        return args.where['rtoReceivedAt'] === null
-          ? (opts.shipments ?? [])
-          : (opts.returned ?? []);
-      },
-      // Parcels still with the courier — on no line yet.
-      count: async () => opts.moving ?? 0,
-    },
-    // The fate cohort: orders first delivered (or lost) in the window.
-    orderEvent: {
-      groupBy: async () => opts.fates ?? [{ orderId: 'o-del', _min: { createdAt: FROM } }],
-    },
-    // Orders of that cohort whose parcel came back anyway.
-    orderShipment: { findMany: async () => opts.cameBack ?? [] },
-    courierAccount: {
-      findMany: async () => [{ id: 'acct-1', courier: { code: 'delhivery' } }],
-    },
-    sellerWalletEntry: {
-      // Keyed on DIRECTION, never answered the same way twice: several
-      // lines read this table, and a fake that ignored the filter would
-      // feed one line's money into another — the double count the report
-      // exists to avoid.
-      aggregate: async (args: { where: Record<string, unknown> }) => {
-        const dir = args.where['direction'];
-        if (dir === 'ORDER_CHARGES_REFUND') refundWhere = args.where;
-        if (dir === 'COD_DEDUCTION_REFUND') {
-          const linked = (
-            (args.where['linkedEntry'] as Record<string, unknown>)['direction'] as { in: string[] }
-          ).in;
-          const amt = linked.includes('GST_WITHHOLDING')
-            ? (opts.taxReturned ?? null)
-            : (opts.feesReturned ?? null);
-          return { _sum: { amount: amt }, _count: { _all: amt === null ? 0 : 1 } };
-        }
-        const amount =
-          dir === 'GST_WITHHOLDING'
-            ? (opts.codTax ?? null)
-            : dir === 'ORDER_CHARGES_REFUND'
-              ? (opts.refunds ?? null)
-              : dir === 'SCRAP_REFUND'
-                ? (opts.damage ?? null)
-                : null;
-        return { _sum: { amount }, _count: { _all: amount === null ? 0 : 1 } };
-      },
-      groupBy: async () =>
-        (opts.codServiceFees ?? []).map((f) => ({
-          direction: f.direction,
-          _sum: { amount: f.amount },
-          _count: { _all: 1 },
-        })),
-    },
-    bankEntry: {
-      // Operating expenses in rupees (EXPENSE linked to nothing), and the
-      // COD-fee line (EXPENSE linked to a settlement).
-      aggregate: async (args: { where: Record<string, unknown> }) => {
-        if (args.where['settlementId'] !== null && args.where['settlementId'] !== undefined) {
-          return {
-            _sum: { signedAmount: opts.codFees ?? null },
-            _count: { _all: opts.codFees == null ? 0 : 1 },
-          };
-        }
-        expensesWhere = args.where;
-        return { _sum: { signedAmount: opts.expenses ?? null }, _count: { _all: 1 } };
-      },
-      findMany: async (args: { where: Record<string, unknown> }) => {
-        const type = args.where['type'];
-        if (type === 'FX_SPREAD') {
-          if (opts.fxEntries !== undefined) return opts.fxEntries;
-          return opts.fxSpread == null
-            ? []
-            : [
-                {
-                  signedAmount: opts.fxSpread,
-                  currency: 'INR',
-                  occurredAt: FROM,
-                  transfer: null,
-                },
-              ];
-        }
-        if (type === 'RECONCILIATION_ADJUSTMENT') {
-          reconciliationWhere = args.where;
-          return (opts.reconciliation ?? []).map((r, i) => ({
-            id: `rec-${i}`,
-            accountId: 'acct-1',
-            ...r,
-          }));
-        }
-        if (args.where['expenseCategory'] !== undefined) {
-          return (opts.unattributed ?? []).map((u) => ({
-            currency: 'INR',
-            occurredAt: FROM,
-            ...u,
-          }));
-        }
-        // Operating expenses in another currency.
-        return opts.foreignExpenses ?? [];
-      },
-      // Is there an earlier entry on this account? None ⇒ an opening balance.
-      findFirst: async (args: { where: { id: { lt: string } } }) =>
-        (opts.openingIds ?? []).includes(args.where.id.lt) ? null : { id: 'earlier' },
-    },
-    // Payout lines' recognised shortfalls, split by sign as the line asks.
-    courierSettlementLine: {
-      aggregate: async (args: { where: Record<string, unknown> }) => {
-        const positive = 'gt' in (args.where['shortfallInr'] as Record<string, unknown>);
-        const rows = (opts.shortfalls ?? []).filter((s) => (positive ? s.gt(0) : s.lt(0)));
-        return {
-          _sum: { shortfallInr: rows.length === 0 ? null : rows.reduce((t, s) => t.add(s)) },
-          _count: { _all: rows.length },
-        };
-      },
-    },
-    investment: {
-      findMany: async () =>
-        (opts.investments ?? []).map((i) => ({ currency: 'INR', closedAt: FROM, ...i })),
-    },
-    fxRateHistory: { findFirst: async () => opts.rate ?? null },
-    // Today's rate — the fallback when nothing was recorded for a day.
-    fxRate: { findFirst: async () => opts.todayRate ?? null },
-  };
-  return new PnlService({ client } as unknown as PrismaService);
+interface ShipmentSpec {
+  awb?: string | null;
+  reverseAwb?: string | null;
+  courierCode?: string;
+  courierOrderId?: string | null;
+  fwd?: string | null;
+  rto?: string | null;
+  deleted?: boolean;
+  superseded?: boolean;
+  rtoReceivedAt?: Date | null;
 }
 
-const FROM = new Date('2026-08-01T00:00:00.000Z');
-const TO = new Date('2026-08-31T23:59:59.999Z');
+class World {
+  readonly t: Tables = {
+    platformBankAccount: [
+      { id: 'acct-inr', label: 'HDFC current' },
+      { id: 'acct-bdt', label: 'City Bank taka' },
+    ],
+    courier: [
+      { id: 'c-dlv', code: 'delhivery' },
+      { id: 'c-sr', code: 'shiprocket' },
+    ],
+    courierAccount: [
+      { id: 'ca-dlv', courierId: 'c-dlv' },
+      { id: 'ca-sr', courierId: 'c-sr' },
+    ],
+    seller: [{ id: 's-1', companyName: 'Menev Store' }],
+    expenseCategory: [
+      { id: 'cat-fwd', code: 'freight_forwarder' },
+      { id: 'cat-rent', code: 'rent' },
+    ],
+  };
+
+  add(model: string, row: Row): Row {
+    (this.t[model] ??= []).push(row);
+    return row;
+  }
+
+  svc(): PnlService {
+    return new PnlService({ client: new FakeDb(this.t).client() } as unknown as PrismaService);
+  }
+
+  cutover(at: Date): this {
+    this.add('systemSetting', { key: 'pnl.courier_adjustments_from', valueDate: at });
+    return this;
+  }
+
+  /** An order, its lifecycle events, charges, refunds and parcels. */
+  order(spec: {
+    events?: Array<[string, Date]>;
+    status?: string;
+    charges?: Array<[string, string]>;
+    refunds?: string[];
+    shipments?: ShipmentSpec[];
+    number?: string;
+  }): string {
+    const id = nextId('ord');
+    const events = spec.events ?? [];
+    this.add('order', {
+      id,
+      orderNumber: spec.number ?? `SD-${id}`,
+      status: spec.status ?? events[events.length - 1]?.[0] ?? 'CONFIRMED',
+    });
+    for (const [toStatus, createdAt] of events) {
+      this.add('orderEvent', { id: nextId('ev'), orderId: id, toStatus, createdAt });
+    }
+    for (const [type, amount] of spec.charges ?? []) {
+      this.add('orderCharge', {
+        id: nextId('chg'),
+        orderId: id,
+        type,
+        amountInr: D(amount),
+        deletedAt: null,
+      });
+    }
+    for (const amount of spec.refunds ?? []) {
+      this.wallet('ORDER_CHARGES_REFUND', amount, IN, { linkedOrderId: id });
+    }
+    for (const s of spec.shipments ?? []) {
+      const sid = nextId('shp');
+      this.add('shipment', {
+        id: sid,
+        shipmentNumber: `SH-${sid}`,
+        courierCode: s.courierCode ?? 'delhivery',
+        awbNumber: s.awb === undefined ? `AWB-${sid}` : s.awb,
+        reverseAwbNumber: s.reverseAwb ?? null,
+        courierOrderId: s.courierOrderId ?? null,
+        deletedAt: s.deleted === true ? IN : null,
+        supersededAt: s.superseded === true ? IN : null,
+        rtoReceivedAt: s.rtoReceivedAt ?? null,
+        actualCourierCostInr: s.fwd == null ? null : D(s.fwd),
+        actualRtoCostInr: s.rto == null ? null : D(s.rto),
+      });
+      this.add('orderShipment', { id: nextId('os'), orderId: id, shipmentId: sid });
+    }
+    return id;
+  }
+
+  /** A shipment on no order of interest — a voided or foreign one. */
+  shipment(s: ShipmentSpec): void {
+    this.order({ shipments: [s] });
+  }
+
+  wallet(direction: string, amount: string, at: Date, extra: Row = {}): Row {
+    return this.add('sellerWalletEntry', {
+      id: nextId('we'),
+      direction,
+      currency: 'INR',
+      amount: D(amount),
+      createdAt: at,
+      sellerId: 's-1',
+      linkedOrderId: null,
+      linkedEntryId: null,
+      ...extra,
+    });
+  }
+
+  bank(spec: {
+    type: string;
+    amount: string;
+    at: Date;
+    currency?: string;
+    accountId?: string;
+    ownerKind?: string;
+    transferId?: string | null;
+    settlementId?: string | null;
+    inboundFreightChargeId?: string | null;
+    expenseCategoryId?: string | null;
+    reference?: string | null;
+  }): Row {
+    return this.add('bankEntry', {
+      id: nextId('be'),
+      accountId: spec.accountId ?? (spec.currency === 'BDT' ? 'acct-bdt' : 'acct-inr'),
+      type: spec.type,
+      signedAmount: D(spec.amount),
+      currency: spec.currency ?? 'INR',
+      ownerKind: spec.ownerKind ?? 'CAPITAL',
+      occurredAt: spec.at,
+      transferId: spec.transferId ?? null,
+      settlementId: spec.settlementId ?? null,
+      inboundFreightChargeId: spec.inboundFreightChargeId ?? null,
+      expenseCategoryId: spec.expenseCategoryId ?? null,
+      reference: spec.reference ?? null,
+    });
+  }
+
+  transfer(out: string, outCcy: string, inn: string, inCcy: string): string {
+    const id = nextId('tr');
+    this.add('bankTransfer', {
+      id,
+      amountOut: D(out),
+      currencyOut: outCcy,
+      amountIn: D(inn),
+      currencyIn: inCcy,
+    });
+    return id;
+  }
+
+  txn(spec: {
+    kind: 'DEBIT' | 'CREDIT';
+    amount: string;
+    at: Date;
+    category?: 'PARCEL' | 'ADJUSTMENT';
+    awb?: string | null;
+    ref?: string | null;
+    account?: string;
+    status?: string;
+    missing?: boolean;
+  }): void {
+    const id = nextId('tx');
+    this.add('courierWalletTransaction', {
+      id,
+      txnId: `MTX-${id}`,
+      courierAccountId: spec.account ?? 'ca-dlv',
+      awbNumber: spec.awb === undefined ? null : spec.awb,
+      courierOrderRef: spec.ref ?? null,
+      kind: spec.kind,
+      category: spec.category ?? 'ADJUSTMENT',
+      amountInr: D(spec.amount),
+      occurredAt: spec.at,
+      status: spec.status ?? 'success',
+      shipmentStatus: null,
+      missingFromExportAt: spec.missing === true ? IN : null,
+    });
+  }
+
+  freight(total: string, cost: string | null, at: Date, extra: Row = {}): void {
+    this.add('inboundFreightCharge', {
+      id: nextId('ifc'),
+      totalInr: D(total),
+      ourCostInr: cost === null ? null : D(cost),
+      status: 'PENDING',
+      amountSettledInr: D('0'),
+      createdAt: at,
+      consignmentId: null,
+      sellerId: 's-1',
+      ...extra,
+    });
+  }
+
+  settlement(receivedAt: Date, shortfalls: string[]): void {
+    const sid = nextId('set');
+    this.add('courierSettlement', { id: sid, reference: `UTR-${sid}`, receivedAt });
+    for (const s of shortfalls) {
+      const orderId = this.order({});
+      this.add('courierSettlementLine', {
+        id: nextId('sl'),
+        settlementId: sid,
+        orderId,
+        shortfallInr: D(s),
+      });
+    }
+  }
+
+  investment(placed: string, returned: string, closedAt: Date, currency = 'INR'): void {
+    this.add('investment', {
+      id: nextId('inv'),
+      label: `FD ${currency}`,
+      counterparty: 'HDFC',
+      currency,
+      placedInr: D(placed),
+      returnedInr: D(returned),
+      closedAt,
+    });
+  }
+
+  /** "1 INR = `bdtPerInr` BDT", recorded at `at`. */
+  rateHistory(bdtPerInr: string, at: Date): void {
+    this.add('fxRateHistory', {
+      id: nextId('fxh'),
+      fromCurrency: 'INR',
+      toCurrency: 'BDT',
+      rate: D(bdtPerInr),
+      recordedAt: at,
+    });
+  }
+
+  todayRate(bdtPerInr: string): void {
+    this.add('fxRate', { fromCurrency: 'INR', toCurrency: 'BDT', rate: D(bdtPerInr) });
+  }
+}
+
+async function drill(
+  svc: PnlService,
+  key: string,
+  from = FROM,
+  to = TO,
+): Promise<{
+  items: Awaited<ReturnType<PnlService['lineItems']>>['items'];
+  revenue: string;
+  cost: string;
+}> {
+  const { items, truncated } = await svc.lineItems(key, from, to, 1000);
+  expect(truncated).toBe(false);
+  return {
+    items,
+    revenue: total(items.map((i) => i.revenueInr)),
+    cost: total(items.map((i) => i.costInr)),
+  };
+}
 
 describe('PnlService', () => {
   it('reports an unpriced cost as UNCOVERED, never as profit', async () => {
-    // The failure this guards: two consignments billed, one forwarder
-    // invoice recorded. Treating the missing one as zero would report a
-    // 100% margin on it and quietly overstate the business.
-    const svc = makeSut({
-      freight: [
-        { totalInr: D('10000'), ourCostInr: D('7000') },
-        { totalInr: D('10000'), ourCostInr: null },
-      ],
-    });
-    const r = await svc.report(FROM, TO);
-    const line = r.lines.find((l) => l.key === 'inbound_freight');
-
-    expect(line?.revenueInr).toBe('20000.00');
-    expect(line?.costInr).toBe('7000.00');
-    expect(line?.coverage).toMatchObject({ priced: 1, total: 2 });
-    expect(line?.coverage.note).not.toBeNull();
+    // Two consignments billed, one forwarder invoice recorded. Treating
+    // the missing one as zero would report a 100% margin on it.
+    const w = new World();
+    w.freight('10000', '7000', IN);
+    w.freight('10000', null, IN);
+    const r = await w.svc().report(FROM, TO);
+    const l = line(r, 'inbound_freight');
+    expect(l?.revenueInr).toBe('20000.00');
+    expect(l?.costInr).toBe('7000.00');
+    expect(l?.coverage).toMatchObject({ priced: 1, total: 2 });
+    expect(l?.coverage.note).not.toBeNull();
     expect(r.complete).toBe(false);
   });
 
   it('says it is complete only when every line is fully measured', async () => {
-    const svc = makeSut({
-      freight: [{ totalInr: D('100'), ourCostInr: D('60') }],
-      shippingRevenue: D('500'),
-      shipments: [{ actualCourierCostInr: D('300') }],
-      rtoFees: D('30'),
-      returned: [{ actualRtoCostInr: D('20') }],
+    const w = new World();
+    w.freight('100', '60', IN);
+    w.order({
+      events: [['DELIVERED', IN]],
+      charges: [['BASE_SHIPPING', '500']],
+      shipments: [{ fwd: '300' }],
     });
-    const r = await svc.report(FROM, TO);
+    w.order({
+      events: [['RTO_RECEIVED', IN]],
+      charges: [['RTO_FEE', '30']],
+      shipments: [{ rto: '20' }],
+    });
+    const r = await w.svc().report(FROM, TO);
     expect(r.complete).toBe(true);
     expect(r.lines.every((l) => l.coverage.note === null)).toBe(true);
   });
 
-  it('nets the four sources into gross margin and subtracts expenses', async () => {
-    const svc = makeSut({
-      freight: [{ totalInr: D('1000'), ourCostInr: D('600') }], // +400
-      shippingRevenue: D('2000'),
-      shipments: [{ actualCourierCostInr: D('1500') }], // +500
-      rtoFees: D('200'),
-      returned: [{ actualRtoCostInr: D('150') }], // +50
-      fxSpread: D('75'), // +75
-      expenses: D('-325'),
-    });
-    const r = await svc.report(FROM, TO);
+  it('nets the sources into gross margin and subtracts expenses', async () => {
+    const w = new World();
+    w.freight('1000', '600', IN); // +400
+    w.order({
+      events: [['DELIVERED', IN]],
+      charges: [['BASE_SHIPPING', '2000']],
+      shipments: [{ fwd: '1500' }],
+    }); // +500
+    w.order({
+      events: [['RTO_RECEIVED', IN]],
+      charges: [['RTO_FEE', '200']],
+      shipments: [{ rto: '150' }],
+    }); // +50
+    w.bank({ type: 'FX_SPREAD', amount: '75', at: IN }); // +75
+    w.bank({ type: 'EXPENSE', amount: '-325', at: IN, expenseCategoryId: 'cat-rent' });
+    const r = await w.svc().report(FROM, TO);
     expect(r.grossMarginInr).toBe('1025.00');
     expect(r.operatingExpensesInr).toBe('325.00');
     expect(r.netInr).toBe('700.00');
   });
 
   it('carries a negative FX spread through as a loss, not an absolute', async () => {
-    // We honour a quote the market moved against; that is a real cost
-    // and flipping its sign would turn a loss into earnings.
-    const svc = makeSut({ fxSpread: D('-120') });
-    const r = await svc.report(FROM, TO);
-    expect(r.lines.find((l) => l.key === 'fx')?.marginInr).toBe('-120.00');
+    const w = new World();
+    w.bank({ type: 'FX_SPREAD', amount: '-120', at: IN });
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'fx')?.marginInr).toBe('-120.00');
     expect(r.grossMarginInr).toBe('-120.00');
   });
 
   it('reports no percentage where there is no revenue to take one of', async () => {
-    const svc = makeSut({});
-    const r = await svc.report(FROM, TO);
+    const r = await new World().svc().report(FROM, TO);
     for (const l of r.lines) expect(l.marginPercent).toBeNull();
   });
 
-  it('never charges a returned parcel twice — the delivery line excludes it', async () => {
-    // A parcel received back belongs to the returns line alone. The
-    // `rtoReceivedAt: null` filter is what keeps the two lines disjoint,
-    // so the fake distinguishes the two queries.
-    const svc = makeSut({
-      shippingRevenue: D('1000'),
-      shipments: [{ actualCourierCostInr: D('700') }], // the ones that stayed delivered
-      rtoFees: D('230'),
-      returned: [{ actualRtoCostInr: D('180') }],
-    });
-    const r = await svc.report(FROM, TO);
-
-    expect(r.lines.find((l) => l.key === 'delivery')?.costInr).toBe('700.00');
-    expect(r.lines.find((l) => l.key === 'rto')?.costInr).toBe('180.00');
-    // 300 on delivery + 50 on returns. If the return's forward cost had
-    // leaked into the delivery line this would be lower.
-    expect(r.grossMarginInr).toBe('350.00');
-  });
-
-  it('a parcel on its way BACK still costs something on the delivery line', async () => {
-    // Delhivery has turned it round and netted the refund (COST-1): ₹0
-    // forward, the whole ₹151.91 on the return column — and we have not
-    // received it. Reading the forward column alone showed it as free,
-    // and a parcel LOST on the way back never showed up anywhere.
-    const svc = makeSut({
-      shipments: [{ actualCourierCostInr: D('0'), actualRtoCostInr: D('151.91') }],
-    });
-    const r = await svc.report(FROM, TO);
-
-    expect(r.lines.find((l) => l.key === 'delivery')?.costInr).toBe('151.91');
-  });
-
-  it('a returned parcel billed on BOTH legs counts both on the returns line', async () => {
-    // A manual courier bills the delivery and the return and refunds
-    // neither. The return column alone dropped the ₹62 from every line.
-    const svc = makeSut({
-      returned: [{ actualCourierCostInr: D('62'), actualRtoCostInr: D('48') }],
-    });
-    const r = await svc.report(FROM, TO);
-
-    expect(r.lines.find((l) => l.key === 'rto')?.costInr).toBe('110.00');
-  });
-
   it('an empty window is zero everywhere, and complete', async () => {
-    const svc = makeSut({});
-    const r = await svc.report(FROM, TO);
+    const r = await new World().svc().report(FROM, TO);
     expect(r.grossMarginInr).toBe('0.00');
     expect(r.netInr).toBe('0.00');
     expect(r.complete).toBe(true);
+    expect(r.lines.map((l) => l.key)).toEqual([...PNL_LINE_KEYS]);
+  });
+
+  it('never charges a returned parcel twice — a delivered-then-returned order is on RETURNS only', async () => {
+    const w = new World();
+    w.order({
+      events: [['DELIVERED', IN]],
+      charges: [['BASE_SHIPPING', '1000']],
+      shipments: [{ fwd: '700' }],
+    });
+    w.order({
+      events: [
+        ['DELIVERED', T('2026-08-05T00:00:00Z')],
+        ['RTO_RECEIVED', T('2026-08-20T00:00:00Z')],
+      ],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['RTO_FEE', '30'],
+      ],
+      shipments: [{ fwd: '0', rto: '180' }],
+    });
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'delivery')).toMatchObject({ revenueInr: '1000.00', costInr: '700.00' });
+    expect(line(r, 'rto')).toMatchObject({ revenueInr: '230.00', costInr: '180.00' });
+    expect(r.grossMarginInr).toBe('350.00');
+  });
+
+  it('a returned parcel billed on BOTH legs counts both on the returns line', async () => {
+    // A manual courier bills the delivery and the return and refunds neither.
+    const w = new World();
+    w.order({ events: [['RTO_RECEIVED', IN]], shipments: [{ fwd: '62', rto: '48' }] });
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'rto')?.costInr).toBe('110.00');
   });
 });
 
 describe('COD the courier short-paid or reversed', () => {
   it('a short-payment we absorbed is a cost, and a later recovery comes back off it', async () => {
-    const svc = makeSut({ shortfalls: [D('50'), D('30'), D('-20')] });
-    const r = await svc.report(FROM, TO);
-    const line = r.lines.find((l) => l.key === 'cod_shortfall');
-    expect(line).toMatchObject({ revenueInr: '0.00', costInr: '60.00' });
+    const w = new World();
+    w.settlement(IN, ['50', '30', '-20']);
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'cod_shortfall')).toMatchObject({ revenueInr: '0.00', costInr: '60.00' });
     expect(r.grossMarginInr).toBe('-60.00');
   });
 
   it('tax withheld on a COD the courier reversed is not revenue', async () => {
-    const svc = makeSut({ codTax: D('152.54'), taxReturned: D('152.54') });
-    const r = await svc.report(FROM, TO);
-    expect(r.lines.find((l) => l.key === 'cod_tax')?.revenueInr).toBe('0.00');
+    const w = new World();
+    const tax = w.wallet('GST_WITHHOLDING', '152.54', IN);
+    w.wallet('COD_DEDUCTION_REFUND', '152.54', IN, { linkedEntryId: tax['id'] });
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'cod_tax')?.revenueInr).toBe('0.00');
   });
 
-  it('a fee taken on a reversed COD comes off the COD handling fees', async () => {
-    const svc = makeSut({
-      codServiceFees: [{ direction: 'INSTANT_PAY_FEE', amount: D('50.00') }],
-      feesReturned: D('21.19'),
-    });
-    const r = await svc.report(FROM, TO);
-    expect(r.lines.find((l) => l.key === 'cod_service_fees')?.revenueInr).toBe('28.81');
+  it('a fee taken on a reversed COD comes off the COD handling fees — and not off the tax', async () => {
+    const w = new World();
+    const fee = w.wallet('INSTANT_PAY_FEE', '50.00', IN);
+    w.wallet('COD_DEDUCTION_REFUND', '21.19', IN, { linkedEntryId: fee['id'] });
+    w.wallet('GST_WITHHOLDING', '76.27', IN);
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'cod_service_fees')?.revenueInr).toBe('28.81');
+    expect(line(r, 'cod_tax')?.revenueInr).toBe('76.27');
   });
 });
 
@@ -511,8 +458,6 @@ describe('ShipmentCostService', () => {
   const EMPTY = { actualCourierCostInr: null, actualRtoCostInr: null };
 
   it('keeps the forward and return figures in SEPARATE columns', async () => {
-    // One column holding both would make the P&L charge the same
-    // carriage twice — once on the delivery line, again on returns.
     const sut = makeSut(EMPTY);
     await sut.svc.record('staff-1', 'sh1', { forwardCostInr: '62', rtoCostInr: '48' });
     const data = sut.update.mock.calls[0]?.[0].data;
@@ -521,8 +466,6 @@ describe('ShipmentCostService', () => {
   });
 
   it('leaves the other figure untouched when only one is given', async () => {
-    // The two arrive on different invoices weeks apart. Writing a null
-    // over the one already recorded would silently un-price a parcel.
     const sut = makeSut({ actualCourierCostInr: new Prisma.Decimal('62'), actualRtoCostInr: null });
     await sut.svc.record('staff-1', 'sh1', { rtoCostInr: '48' });
     const data = sut.update.mock.calls[0]?.[0].data;
@@ -543,438 +486,291 @@ describe('ShipmentCostService', () => {
 
 describe('a cost already counted by its leg is not counted again', () => {
   it('excludes freight payments LINKED to a bill from operating expenses', async () => {
-    /*
-      The double count this closes. `ourCostInr` is the cost side of the
-      BD→India line; the cash going out used to be recorded separately
-      as an expense, where it lands in operating expenses. Enter both —
-      which the report's own coverage note told people to do — and the
-      same rupees come off gross AND off net.
-
-      The fake asserts the QUERY, because that is where the fix lives:
-      the aggregate must be scoped to entries with no freight link.
-    */
-    let scoped: unknown;
-    const client = {
-      systemSetting: { findUnique: async () => null },
-      inboundFreightCharge: { findMany: async () => [] },
-      courierWalletTransaction: { groupBy: async () => [] },
-      orderCharge: {
-        aggregate: async () => ({ _sum: { amountInr: null } }),
-        groupBy: async () => [],
-      },
-      shipment: { findMany: async () => [], count: async () => 0 },
-      orderEvent: { groupBy: async () => [] },
-      sellerWalletEntry: {
-        aggregate: async () => ({ _sum: { amount: null }, _count: { _all: 0 } }),
-        groupBy: async () => [],
-      },
-      courierSettlementLine: {
-        aggregate: async () => ({ _sum: { shortfallInr: null }, _count: { _all: 0 } }),
-      },
-      investment: { findMany: async () => [] },
-      bankEntry: {
-        aggregate: async (args: { where: Record<string, unknown> }) => {
-          // The operating-expenses query: EXPENSE linked to no settlement
-          // (a settlement-linked one is the COD-fee line's).
-          if (args.where['type'] === 'EXPENSE' && args.where['settlementId'] === null) {
-            scoped = args.where['inboundFreightChargeId'];
-          }
-          return { _sum: { signedAmount: null }, _count: { _all: 0 } };
-        },
-        findMany: async () => [],
-      },
-    };
-    const svc = new PnlService({ client } as unknown as PrismaService);
-    await svc.report(FROM, TO);
-    expect(scoped).toBeNull();
+    // Enter the forwarder cost on the bill AND its payment as an expense,
+    // and the same rupees come off gross AND off net — unless the linked
+    // payment is left out of operating expenses.
+    const w = new World();
+    w.bank({ type: 'EXPENSE', amount: '-600', at: IN, inboundFreightChargeId: 'ifc-x' });
+    w.bank({ type: 'EXPENSE', amount: '-325', at: IN, expenseCategoryId: 'cat-rent' });
+    const r = await w.svc().report(FROM, TO);
+    expect(r.operatingExpensesInr).toBe('325.00');
   });
 
   it('REPORTS a leg cost nobody attributed rather than hiding it', async () => {
-    // Moving it would mean guessing which consignment it was for, and a
-    // real number against the wrong parcel is worse than an unassigned
-    // one. Leaving it unmentioned means the leg's margin reads better
-    // than it is while the money sits in a total nobody breaks down.
-    const svc = makeSut({
-      unattributed: [{ signedAmount: D('-2000') }, { signedAmount: D('-500') }],
+    const w = new World();
+    w.bank({ type: 'EXPENSE', amount: '-2000', at: IN, expenseCategoryId: 'cat-fwd' });
+    w.bank({ type: 'EXPENSE', amount: '-500', at: IN, expenseCategoryId: 'cat-fwd' });
+    const r = await w.svc().report(FROM, TO);
+    expect(r.unattributedLegCosts).toMatchObject({
+      amountInr: '2500.00',
+      count: 2,
+      unconverted: 0,
     });
-    const r = await svc.report(FROM, TO);
-    expect(r.unattributedLegCosts).not.toBeNull();
-    expect(r.unattributedLegCosts?.amountInr).toBe('2500.00');
-    expect(r.unattributedLegCosts?.count).toBe(2);
   });
 
   it('says nothing when there is nothing to say', async () => {
-    const svc = makeSut({});
-    const r = await svc.report(FROM, TO);
+    const r = await new World().svc().report(FROM, TO);
     expect(r.unattributedLegCosts).toBeNull();
   });
 });
 
 describe('the tax deducted from a COD is OURS', () => {
   it('reports it as revenue with no cost side', async () => {
-    /*
-      Reversed on 2026-09-07. It was reported as money held for the
-      government, on the reading that we file a return against it. We
-      do not: the courier bills GST on the shipping alongside their own
-      charge and remits it, so there is no separate filing of ours
-      behind this deduction.
-
-      Reporting it as a liability made the business look poorer than it
-      is AND implied an obligation that does not exist — the more
-      dangerous half, because a liability nobody can discharge sits on
-      the books forever.
-    */
-    const svc = makeSut({ codTax: D('608.64') });
-    const r = await svc.report(FROM, TO);
-    const line = r.lines.find((l) => l.key === 'cod_tax');
-    expect(line?.revenueInr).toBe('608.64');
-    expect(line?.costInr).toBe('0.00');
-    expect(line?.marginInr).toBe('608.64');
-    // Nothing is spent to collect it, and an empty cost basis says so
-    // more honestly than a zero would.
-    expect(line?.basis.cost).toHaveLength(0);
+    const w = new World();
+    w.wallet('GST_WITHHOLDING', '608.64', IN);
+    const r = await w.svc().report(FROM, TO);
+    const l = line(r, 'cod_tax');
+    expect(l).toMatchObject({ revenueInr: '608.64', costInr: '0.00', marginInr: '608.64' });
+    expect(l?.basis.cost).toHaveLength(0);
   });
 
-  it('does NOT take the RTO fee as its figure', async () => {
-    // Two lines read seller_wallet_entries now. Answering both from the
-    // same aggregate would count one sum twice — the exact shape of
-    // double count this report exists to avoid.
-    const svc = makeSut({ rtoFees: D('200.00'), codTax: D('608.64') });
-    const r = await svc.report(FROM, TO);
-    expect(r.lines.find((l) => l.key === 'rto')?.revenueInr).toBe('200.00');
-    expect(r.lines.find((l) => l.key === 'cod_tax')?.revenueInr).toBe('608.64');
+  it('does NOT take the return fee as its figure', async () => {
+    const w = new World();
+    w.order({ events: [['RTO_RECEIVED', IN]], charges: [['RTO_FEE', '200']] });
+    w.wallet('GST_WITHHOLDING', '608.64', IN);
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'rto')?.revenueInr).toBe('200.00');
+    expect(line(r, 'cod_tax')?.revenueInr).toBe('608.64');
   });
 });
 
 /**
- * What the courier charged the ACCOUNT rather than a parcel.
- *
- * Their ledger carries monthly reconciliations, lost-shipment
- * settlements and fraud credit notes — 37 of 23,276 rows over ninety
- * days, and 36 of those name a waybill despite having nothing to do
- * with what moving that box cost. They get their own line so a fraud
- * settlement cannot quietly make a parcel look profitable.
+ * What the courier charged the ACCOUNT rather than a parcel —
+ * reconciliations, lost-shipment settlements, fraud credit notes.
  */
-describe('PnlService — courier account adjustments', () => {
-  const adj = (kind: string, amount: string, count = 1) => ({
-    kind,
-    _sum: { amountInr: new Prisma.Decimal(amount) },
-    _count: { _all: count },
-  });
-
-  it('a debit is a cost and a credit gives it back', async () => {
-    const svc = makeSut({
-      courierAdjustments: [adj('DEBIT', '2100.00', 36), adj('CREDIT', '1290.00', 1)],
-    });
-    const out = await svc.report(new Date('2026-06-01'), new Date('2026-09-01'));
-    const line = out.lines.find((l) => l.key === 'courier_adjustments');
-    expect(line?.costInr).toBe('810.00');
-  });
-
-  it('has NO revenue — nobody was billed for any of it', async () => {
-    const svc = makeSut({ courierAdjustments: [adj('DEBIT', '500.00')] });
-    const out = await svc.report(new Date('2026-06-01'), new Date('2026-09-01'));
-    const line = out.lines.find((l) => l.key === 'courier_adjustments');
-    expect(line?.revenueInr).toBe('0.00');
-    expect(line?.marginInr).toBe('-500.00');
-  });
-
-  it('counts as fully MEASURED, because it is read from their ledger', async () => {
-    // Not an estimate and not uncovered: every row is a fact the
-    // courier stated. Reporting it as unpriced would make the P&L
-    // understate its own completeness.
-    const svc = makeSut({ courierAdjustments: [adj('DEBIT', '500.00', 3)] });
-    const out = await svc.report(new Date('2026-06-01'), new Date('2026-09-01'));
-    const line = out.lines.find((l) => l.key === 'courier_adjustments');
-    expect(line?.coverage).toMatchObject({ priced: 3, total: 3 });
+describe('courier account adjustments', () => {
+  it('a debit is a cost, a credit gives it back, there is no revenue, and all of it is measured', async () => {
+    const w = new World();
+    w.txn({ kind: 'DEBIT', amount: '1050.00', at: IN });
+    w.txn({ kind: 'DEBIT', amount: '1050.00', at: IN });
+    w.txn({ kind: 'CREDIT', amount: '1290.00', at: IN });
+    const r = await w.svc().report(FROM, TO);
+    const l = line(r, 'courier_adjustments');
+    expect(l).toMatchObject({ revenueInr: '0.00', costInr: '810.00', marginInr: '-810.00' });
+    expect(l?.coverage).toMatchObject({ priced: 3, total: 3 });
+    expect(l?.basis.cost.map((b) => b.count)).toEqual([2, 1]);
   });
 
   it('is silent when the courier made none', async () => {
-    const svc = makeSut({});
-    const out = await svc.report(new Date('2026-06-01'), new Date('2026-09-01'));
-    const line = out.lines.find((l) => l.key === 'courier_adjustments');
-    expect(line?.costInr).toBe('0.00');
-    expect(line?.coverage.note).toBeNull();
-  });
-});
-
-/**
- * Courier expenses are counted on the day they happened, once, and only
- * while they still move money.
- */
-describe('courier account adjustments — what the P&L counts', () => {
-  it('counts by the TRANSACTION date, successful only, and never a dropped one', async () => {
-    const svc = makeSut({});
-    await svc.report(FROM, TO);
-
-    expect(adjustmentWhere).toMatchObject({
-      occurredAt: { gte: FROM, lte: TO },
-      status: 'success',
-      // Kept as evidence when their ledger drops it — but it no longer
-      // moves money, so it must not move the P&L either.
-      missingFromExportAt: null,
-    });
+    const l = line(await new World().svc().report(FROM, TO), 'courier_adjustments');
+    expect(l?.costInr).toBe('0.00');
+    expect(l?.coverage.note).toBeNull();
   });
 
-  it('counts debits and credits separately, and nets them', async () => {
-    const svc = makeSut({
-      courierAdjustments: [
-        { kind: 'DEBIT', _sum: { amountInr: D('58.83') }, _count: { _all: 1 } },
-        { kind: 'CREDIT', _sum: { amountInr: D('1290') }, _count: { _all: 2 } },
-      ],
-    });
-    const r = await svc.report(FROM, TO);
-    const line = r.lines.find((l) => l.key === 'courier_adjustments');
-
-    expect(line?.costInr).toBe('-1231.17');
-    expect(line?.basis.cost.map((b) => b.count)).toEqual([1, 2]);
+  it('counts by the TRANSACTION date, successful only, never a dropped one — and the window is half-open', async () => {
+    const w = new World();
+    w.txn({ kind: 'DEBIT', amount: '100', at: IN });
+    w.txn({ kind: 'DEBIT', amount: '20', at: FROM }); // the first instant: inside
+    w.txn({ kind: 'DEBIT', amount: '30', at: TO }); // the next window's first instant
+    w.txn({ kind: 'DEBIT', amount: '50', at: IN, status: 'failed' });
+    w.txn({ kind: 'DEBIT', amount: '70', at: IN, missing: true });
+    const svc = w.svc();
+    expect(line(await svc.report(FROM, TO), 'courier_adjustments')?.costInr).toBe('120.00');
+    const rows = await drill(svc, 'courier_adjustments');
+    expect(rows.items.map((i) => i.costInr).sort()).toEqual(['100.00', '20.00']);
   });
 });
 
 /**
  * Before 1 Oct 2026 the courier accounts carried the business's parcels
- * shipped OUTSIDE Skydrop — 12,941 of 12,970 waybills in the first 90
- * days. Their costs and revenue are not in the report, so their account
- * adjustments must not be either.
+ * shipped OUTSIDE Skydrop; their account adjustments are not ours.
  */
 describe('courier account adjustments — only from the cutover', () => {
-  const CUTOVER = new Date('2026-09-30T18:30:00.000Z'); // 1 Oct 2026, 00:00 IST
-  const adj = (kind: string, amount: string, count = 1) => ({
-    kind,
-    _sum: { amountInr: D(amount) },
-    _count: { _all: count },
-  });
-
   it('counts from the cutover when it falls inside the window, and says what it left out', async () => {
-    const from = new Date('2026-09-15T00:00:00.000Z');
-    const to = new Date('2026-10-15T00:00:00.000Z');
-    const svc = makeSut({
-      cutover: CUTOVER,
-      courierAdjustments: [adj('DEBIT', '100.00')],
-      preCutoverAdjustments: [adj('DEBIT', '9206.66'), adj('CREDIT', '10560.00', 2)],
-    });
-    const r = await svc.report(from, to);
-    const line = r.lines.find((l) => l.key === 'courier_adjustments');
-
-    expect(adjustmentWhere).toMatchObject({ occurredAt: { gte: CUTOVER, lte: to } });
-    expect(excludedWhere).toMatchObject({ occurredAt: { gte: from, lt: CUTOVER } });
-    expect(line?.costInr).toBe('100.00');
-    expect(line?.coverage.note).toMatch(/3 adjustment\(s\) dated before 1 Oct 2026/);
-    expect(line?.coverage.note).toMatch(/net credit ₹1353\.34/);
+    const from = T('2026-09-15T00:00:00Z');
+    const to = T('2026-10-15T00:00:00Z');
+    const w = new World().cutover(CUTOVER);
+    w.txn({ kind: 'DEBIT', amount: '100.00', at: T('2026-10-05T00:00:00Z') });
+    w.txn({ kind: 'DEBIT', amount: '9206.66', at: T('2026-09-20T00:00:00Z') });
+    w.txn({ kind: 'CREDIT', amount: '5280.00', at: T('2026-09-25T00:00:00Z') });
+    w.txn({ kind: 'CREDIT', amount: '5280.00', at: T('2026-09-26T00:00:00Z') });
+    const l = line(await w.svc().report(from, to), 'courier_adjustments');
+    expect(l?.costInr).toBe('100.00');
+    expect(l?.coverage.note).toMatch(/3 adjustment\(s\) dated before 1 Oct 2026/);
+    expect(l?.coverage.note).toMatch(/net credit ₹1353\.34/);
   });
 
   it('a window wholly before the cutover counts nothing — and still says why', async () => {
-    const svc = makeSut({
-      cutover: CUTOVER,
-      courierAdjustments: [adj('DEBIT', '999.00')], // would be wrong to count
-      preCutoverAdjustments: [adj('CREDIT', '500.00')],
-    });
-    const r = await svc.report(FROM, TO); // August
-    const line = r.lines.find((l) => l.key === 'courier_adjustments');
-
-    expect(adjustmentWhere).toBeUndefined();
-    expect(excludedWhere).toMatchObject({ occurredAt: { gte: FROM, lt: TO } });
-    expect(line?.costInr).toBe('0.00');
-    expect(line?.coverage.note).toMatch(/not counted/);
+    const w = new World().cutover(CUTOVER);
+    w.txn({ kind: 'DEBIT', amount: '999.00', at: IN });
+    w.txn({ kind: 'CREDIT', amount: '500.00', at: IN });
+    const l = line(await w.svc().report(FROM, TO), 'courier_adjustments');
+    expect(l?.costInr).toBe('0.00');
+    expect(l?.coverage.note).toMatch(/2 adjustment\(s\).*net debit ₹499\.00.*not counted/);
   });
 
-  it('a window wholly after the cutover counts everything in it, with no second query', async () => {
-    const from = new Date('2026-11-01T00:00:00.000Z');
-    const to = new Date('2026-11-30T00:00:00.000Z');
-    const svc = makeSut({ cutover: CUTOVER, courierAdjustments: [adj('DEBIT', '40.00')] });
-    const r = await svc.report(from, to);
+  it('a window ENDING exactly at the cutover counts nothing (the cutover instant is the next window’s)', async () => {
+    const w = new World().cutover(CUTOVER);
+    w.txn({ kind: 'DEBIT', amount: '10.00', at: CUTOVER });
+    const svc = w.svc();
+    const before = await svc.report(T('2026-09-15T00:00:00Z'), CUTOVER);
+    const after = await svc.report(CUTOVER, T('2026-10-15T00:00:00Z'));
+    expect(line(before, 'courier_adjustments')?.costInr).toBe('0.00');
+    expect(line(after, 'courier_adjustments')?.costInr).toBe('10.00');
+  });
 
-    expect(adjustmentWhere).toMatchObject({ occurredAt: { gte: from, lte: to } });
-    expect(excludedWhere).toBeUndefined();
-    expect(r.lines.find((l) => l.key === 'courier_adjustments')?.costInr).toBe('40.00');
+  it('a window wholly after the cutover counts everything in it, and says nothing', async () => {
+    const w = new World().cutover(CUTOVER);
+    w.txn({ kind: 'DEBIT', amount: '40.00', at: T('2026-11-10T00:00:00Z') });
+    const l = line(
+      await w.svc().report(T('2026-11-01T00:00:00Z'), T('2026-12-01T00:00:00Z')),
+      'courier_adjustments',
+    );
+    expect(l?.costInr).toBe('40.00');
+    expect(l?.coverage.note).toBeNull();
   });
 
   it('with the setting cleared every adjustment counts', async () => {
-    const svc = makeSut({ cutover: null, courierAdjustments: [adj('DEBIT', '40.00')] });
-    await svc.report(FROM, TO);
-    expect(adjustmentWhere).toMatchObject({ occurredAt: { gte: FROM, lte: TO } });
-    expect(excludedWhere).toBeUndefined();
+    const w = new World();
+    w.txn({ kind: 'DEBIT', amount: '40.00', at: IN });
+    expect(line(await w.svc().report(FROM, TO), 'courier_adjustments')?.costInr).toBe('40.00');
   });
 });
 
-/**
- * A courier's early-COD fee never passes through its wallet — it is
- * taken out of the COD payout and invoiced separately — so the wallet
- * sync cannot see it. Recording the payout books it as an EXPENSE entry
- * linked to the settlement; the P&L counts it on its own line, and only
- * there.
- */
 describe('courier COD fees', () => {
   it('are their own cost line, and NOT also an operating expense', async () => {
-    const svc = makeSut({ codFees: D('-90'), expenses: D('-325') });
-    const r = await svc.report(FROM, TO);
-    const line = r.lines.find((l) => l.key === 'courier_cod_fees');
-
-    expect(line?.costInr).toBe('90.00');
-    expect(line?.revenueInr).toBe('0.00');
-    expect(line?.coverage).toMatchObject({ priced: 1, total: 1 });
-    // The operating-expenses query leaves settlement-linked entries out.
-    expect(expensesWhere).toMatchObject({ type: 'EXPENSE', settlementId: null });
+    const w = new World();
+    w.bank({ type: 'EXPENSE', amount: '-90', at: IN, settlementId: 'set-x' });
+    w.bank({ type: 'EXPENSE', amount: '-325', at: IN, expenseCategoryId: 'cat-rent' });
+    const r = await w.svc().report(FROM, TO);
+    const l = line(r, 'courier_cod_fees');
+    expect(l).toMatchObject({ costInr: '90.00', revenueInr: '0.00' });
+    expect(l?.coverage).toMatchObject({ priced: 1, total: 1 });
     expect(r.operatingExpensesInr).toBe('325.00');
     expect(r.grossMarginInr).toBe('-90.00');
     expect(r.netInr).toBe('-415.00');
   });
 
   it('is zero and complete when no payout carried a fee', async () => {
-    const svc = makeSut({});
-    const r = await svc.report(FROM, TO);
-    const line = r.lines.find((l) => l.key === 'courier_cod_fees');
-    expect(line?.costInr).toBe('0.00');
+    const r = await new World().svc().report(FROM, TO);
+    expect(line(r, 'courier_cod_fees')?.costInr).toBe('0.00');
     expect(r.complete).toBe(true);
   });
 });
 
-/**
- * Every rupee the business earns or spends, on some line — measured on
- * production 2026-09-11: the Returns line showed ₹30 of revenue against a
- * parcel's whole round trip, Instant Pay fees and damage refunds were on
- * no line at all, and taka amounts were added as rupees.
- */
 describe('the P&L counts what it used to miss', () => {
-  const line = (r: Awaited<ReturnType<PnlService['report']>>, key: string) =>
-    r.lines.find((l) => l.key === key);
-
   it('a returned parcel earns its delivery fee AND its return fee', async () => {
-    // ₹200 delivery + ₹30 return, both charge lines on the returned order.
-    const svc = makeSut({ rtoFees: D('230'), returned: [{ actualRtoCostInr: D('151.91') }] });
-    const r = await svc.report(FROM, TO);
+    const w = new World();
+    w.order({
+      events: [['RTO_RECEIVED', IN]],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['RTO_FEE', '30'],
+      ],
+      shipments: [{ rto: '151.91' }],
+    });
+    const r = await w.svc().report(FROM, TO);
     expect(line(r, 'rto')).toMatchObject({ revenueInr: '230.00', costInr: '151.91' });
   });
 
-  it('takes a refunded delivery fee back off delivery revenue', async () => {
-    const svc = makeSut({ shippingRevenue: D('600'), refunds: D('200') });
-    const r = await svc.report(FROM, TO);
-    expect(line(r, 'delivery')?.revenueInr).toBe('400.00');
-    // Only refunds on orders IN the delivery cohort.
-    expect(refundWhere).toMatchObject({
-      direction: 'ORDER_CHARGES_REFUND',
-      linkedOrderId: { in: ['o-del'] },
+  it('takes a refunded delivery fee back off delivery revenue — only on orders IN the cohort', async () => {
+    const w = new World();
+    w.order({
+      events: [['DELIVERED', IN]],
+      charges: [['BASE_SHIPPING', '600']],
+      refunds: ['200'],
     });
+    // A cancelled order's refund is nothing to do with this line.
+    w.order({ events: [['CANCELLED', IN]], charges: [['BASE_SHIPPING', '100']], refunds: ['100'] });
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'delivery')?.revenueInr).toBe('400.00');
   });
 
-  it('a waived freight bill earns only what was charged before the waiver', async () => {
-    const svc = makeSut({
-      freight: [
-        { totalInr: D('1000'), ourCostInr: D('600') },
-        { totalInr: D('800'), ourCostInr: D('500'), status: 'WAIVED', amountSettledInr: D('300') },
-      ],
-    });
+  it('a waived freight bill earns only what was charged before the waiver — in the total AND its rows', async () => {
+    const w = new World();
+    w.freight('1000', '600', IN);
+    w.freight('800', '500', IN, { status: 'WAIVED', amountSettledInr: D('300') });
+    const svc = w.svc();
     const r = await svc.report(FROM, TO);
     expect(line(r, 'inbound_freight')).toMatchObject({ revenueInr: '1300.00', costInr: '1100.00' });
+    expect((await drill(svc, 'inbound_freight')).revenue).toBe('1300.00');
   });
 
   it('counts Instant Pay and COD collection fees as revenue', async () => {
-    const svc = makeSut({
-      codServiceFees: [
-        { direction: 'INSTANT_PAY_FEE', amount: D('82.60') },
-        { direction: 'COD_COLLECTION_FEE', amount: D('10.00') },
-      ],
-    });
-    const r = await svc.report(FROM, TO);
+    const w = new World();
+    w.wallet('INSTANT_PAY_FEE', '82.60', IN);
+    w.wallet('COD_COLLECTION_FEE', '10.00', IN);
+    const r = await w.svc().report(FROM, TO);
     expect(line(r, 'cod_service_fees')).toMatchObject({ revenueInr: '92.60', costInr: '0.00' });
   });
 
   it('counts what we paid sellers for damaged or lost goods as a cost', async () => {
-    const svc = makeSut({ damage: D('1250') });
-    const r = await svc.report(FROM, TO);
+    const w = new World();
+    w.wallet('SCRAP_REFUND', '1250', IN);
+    const r = await w.svc().report(FROM, TO);
     expect(line(r, 'damage_refunds')).toMatchObject({ costInr: '1250.00', marginInr: '-1250.00' });
   });
 
   it('a charge under a waybill Shiprocket replaced is that parcel’s, not “no Skydrop parcel”', async () => {
-    // Filed under the old waybill, naming the order our live parcel is.
-    // The importer nets it into that parcel's cost, so counting it here as
-    // well would count it twice — and before this it was counted ONLY here.
-    const svc = makeSut({
-      parcelTxns: [{ awbNumber: 'OLD-AWB', kind: 'DEBIT', amount: D('60'), ref: 'SR-ORDER-1' }],
-      liveOrderRefs: [{ ref: 'SR-ORDER-1', awb: 'NEW-AWB' }],
+    const w = new World();
+    w.shipment({ courierCode: 'shiprocket', awb: 'NEW-AWB', courierOrderId: 'SR-ORDER-1' });
+    w.txn({
+      kind: 'DEBIT',
+      amount: '60',
+      at: IN,
+      category: 'PARCEL',
+      awb: 'OLD-AWB',
+      ref: 'SR-ORDER-1',
+      account: 'ca-sr',
     });
-    const r = await svc.report(FROM, TO);
-    expect(r.lines.find((l) => l.key === 'courier_unmatched')?.costInr).toBe('0.00');
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'courier_unmatched')?.costInr).toBe('0.00');
   });
 
   it('counts courier charges on a waybill that is no live Skydrop parcel — and only those', async () => {
-    const svc = makeSut({
-      parcelTxns: [
-        { awbNumber: 'OURS', kind: 'DEBIT', amount: D('90.36') }, // already on its parcel
-        { awbNumber: 'VOIDED', kind: 'DEBIT', amount: D('48.36') },
-        { awbNumber: 'VOIDED', kind: 'CREDIT', amount: D('10.00') },
-      ],
-      liveAwbs: ['OURS'],
-    });
-    const r = await svc.report(FROM, TO);
+    const w = new World();
+    w.shipment({ awb: 'OURS' });
+    w.shipment({ awb: 'VOIDED', deleted: true });
+    w.txn({ kind: 'DEBIT', amount: '90.36', at: IN, category: 'PARCEL', awb: 'OURS' });
+    w.txn({ kind: 'DEBIT', amount: '48.36', at: IN, category: 'PARCEL', awb: 'VOIDED' });
+    w.txn({ kind: 'CREDIT', amount: '10.00', at: IN, category: 'PARCEL', awb: 'VOIDED' });
+    const r = await w.svc().report(FROM, TO);
     expect(line(r, 'courier_unmatched')).toMatchObject({ costInr: '38.36' });
     expect(line(r, 'courier_unmatched')?.coverage).toMatchObject({ priced: 1, total: 1 });
   });
 
   it('puts a taka FX spread in rupees at its own transfer’s rate', async () => {
     // ₹10,000 sent, ৳13,200 received: a taka is 10000/13200 of a rupee.
-    const svc = makeSut({
-      fxEntries: [
-        {
-          signedAmount: D('132'),
-          currency: 'BDT',
-          occurredAt: FROM,
-          transfer: {
-            amountOut: D('10000'),
-            currencyOut: 'INR',
-            amountIn: D('13200'),
-            currencyIn: 'BDT',
-          },
-        },
-      ],
-    });
-    const r = await svc.report(FROM, TO);
-    expect(line(r, 'fx')?.revenueInr).toBe('100.00');
+    const w = new World();
+    const tr = w.transfer('10000', 'INR', '13200', 'BDT');
+    w.bank({ type: 'FX_SPREAD', amount: '132', currency: 'BDT', at: IN, transferId: tr });
+    expect(line(await w.svc().report(FROM, TO), 'fx')?.revenueInr).toBe('100.00');
   });
 
-  it('puts a taka expense in rupees at the rate that day — and leaves one out, loudly, when there is none', async () => {
-    const withRate = makeSut({
-      expenses: D('-500'),
-      foreignExpenses: [{ signedAmount: D('-1320'), currency: 'BDT', occurredAt: FROM }],
-      rate: { fromCurrency: 'INR', rate: D('1.32') }, // 1 INR = 1.32 BDT
-    });
-    const a = await withRate.report(FROM, TO);
+  it('puts a taka expense in rupees at the rate in force — and leaves one out, loudly, when there is none', async () => {
+    const withRate = new World();
+    withRate.bank({ type: 'EXPENSE', amount: '-500', at: IN, expenseCategoryId: 'cat-rent' });
+    withRate.bank({ type: 'EXPENSE', amount: '-1320', currency: 'BDT', at: IN });
+    withRate.rateHistory('1.32', T('2026-07-01T00:00:00Z'));
+    const a = await withRate.svc().report(FROM, TO);
     expect(a.operatingExpensesInr).toBe('1500.00');
     expect(a.warnings).toEqual([]);
 
-    const noRate = makeSut({
-      expenses: D('-500'),
-      foreignExpenses: [{ signedAmount: D('-1320'), currency: 'BDT', occurredAt: FROM }],
-      rate: null,
-    });
-    const b = await noRate.report(FROM, TO);
+    const noRate = new World();
+    noRate.bank({ type: 'EXPENSE', amount: '-500', at: IN, expenseCategoryId: 'cat-rent' });
+    noRate.bank({ type: 'EXPENSE', amount: '-1320', currency: 'BDT', at: IN });
+    const b = await noRate.svc().report(FROM, TO);
     expect(b.operatingExpensesInr).toBe('500.00');
     expect(b.complete).toBe(false);
     expect(b.warnings[0]).toMatch(/no exchange rate/);
   });
 
-  it('counts OUR bank reconciliation differences and investment income', async () => {
-    const svc = makeSut({
-      reconciliation: [{ signedAmount: D('-35.40'), currency: 'INR', occurredAt: FROM }],
-      investments: [{ placedInr: D('100000'), returnedInr: D('101500') }],
-    });
-    const r = await svc.report(FROM, TO);
+  it('counts OUR bank reconciliation differences, not a seller’s, and investment income', async () => {
+    const w = new World();
+    w.bank({ type: 'OWNER_CONTRIBUTION', amount: '5000', at: T('2026-07-01T00:00:00Z') });
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '-35.40', at: IN });
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '99', at: IN, ownerKind: 'SELLER' });
+    w.investment('100000', '101500', IN);
+    const r = await w.svc().report(FROM, TO);
     expect(line(r, 'bank_reconciliation')?.revenueInr).toBe('-35.40');
-    expect(reconciliationWhere).toMatchObject({ ownerKind: 'CAPITAL' });
     expect(line(r, 'investment_income')?.revenueInr).toBe('1500.00');
   });
 
   it('an account’s OPENING balance is capital put in, not income — and it says so', async () => {
-    // Production shipped with a ৳100,000 "Initial Balance" read as
-    // ₹81,300.81 of profit.
-    const svc = makeSut({
-      reconciliation: [
-        { id: 'open', signedAmount: D('100000'), currency: 'INR', occurredAt: FROM },
-        { id: 'later', signedAmount: D('-12.00'), currency: 'INR', occurredAt: FROM },
-      ],
-      openingIds: ['open'],
-    });
-    const r = await svc.report(FROM, TO);
+    const w = new World();
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '100000', at: IN });
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '-12.00', at: IN });
+    const r = await w.svc().report(FROM, TO);
     const recon = line(r, 'bank_reconciliation');
     expect(recon?.revenueInr).toBe('-12.00');
     expect(recon?.coverage).toMatchObject({ priced: 1, total: 1 });
@@ -983,82 +779,621 @@ describe('the P&L counts what it used to miss', () => {
   });
 });
 
-/**
- * A parcel's revenue and cost are recognised when its FATE is known —
- * delivered (or lost), or received back — never at booking. On production
- * the delivery line counted ₹3,800 of ₹6,000 on orders never billed:
- * cancelled ones, and parcels still moving.
- */
 describe('recognised when the parcel’s fate is known', () => {
-  const line = (r: Awaited<ReturnType<PnlService['report']>>, key: string) =>
-    r.lines.find((l) => l.key === key);
-
   it('an order not yet delivered earns nothing on the delivery line, however it was billed', async () => {
-    const svc = makeSut({
-      fates: [],
-      shippingRevenue: D('600'),
-      shipments: [{ actualCourierCostInr: D('90') }],
-      moving: 3,
-    });
-    const r = await svc.report(FROM, TO);
+    const w = new World();
+    for (let i = 0; i < 3; i++) {
+      w.order({
+        status: 'IN_TRANSIT',
+        charges: [['BASE_SHIPPING', '200']],
+        shipments: [{ fwd: '30' }],
+      });
+    }
+    const r = await w.svc().report(FROM, TO);
     expect(line(r, 'delivery')).toMatchObject({ revenueInr: '0.00', costInr: '0.00' });
     expect(line(r, 'delivery')?.coverage.note).toMatch(/3 parcels are with the courier/);
   });
 
-  it('a delivered order that came back anyway is on the RETURNS line only', async () => {
-    const svc = makeSut({
-      fates: [{ orderId: 'o-1', _min: { createdAt: FROM } }],
-      cameBack: [{ orderId: 'o-1' }],
-      shippingRevenue: D('200'),
-      shipments: [{ actualCourierCostInr: D('90') }],
-    });
-    const r = await svc.report(FROM, TO);
-    expect(line(r, 'delivery')?.revenueInr).toBe('0.00');
-  });
-
   it('charges on a VOIDED Skydrop parcel count whatever the cutover; a stranger’s only after it', async () => {
-    // August, before the 1 Oct cutover.
-    const svc = makeSut({
-      cutover: new Date('2026-09-30T18:30:00.000Z'),
-      parcelTxns: [
-        { awbNumber: 'DEAD', kind: 'DEBIT', amount: D('40.00') },
-        { awbNumber: 'STRANGER', kind: 'DEBIT', amount: D('25.00') },
-      ],
-      deadAwbs: ['DEAD'],
-    });
-    const r = await svc.report(FROM, TO);
-    expect(line(r, 'courier_unmatched')?.costInr).toBe('40.00');
+    const w = new World().cutover(CUTOVER);
+    w.shipment({ awb: 'DEAD', deleted: true });
+    w.txn({ kind: 'DEBIT', amount: '40.00', at: IN, category: 'PARCEL', awb: 'DEAD' });
+    w.txn({ kind: 'DEBIT', amount: '25.00', at: IN, category: 'PARCEL', awb: 'STRANGER' });
+    expect(line(await w.svc().report(FROM, TO), 'courier_unmatched')?.costInr).toBe('40.00');
   });
 
   it('a live parcel of ANOTHER courier sharing the waybill does not absorb the charge', async () => {
-    const svc = makeSut({
-      cutover: null,
-      parcelTxns: [{ awbNumber: 'SHARED', kind: 'DEBIT', amount: D('33.00') }],
-      otherCourierAwbs: ['SHARED'],
-    });
-    const r = await svc.report(FROM, TO);
-    expect(line(r, 'courier_unmatched')?.costInr).toBe('33.00');
+    const w = new World();
+    w.shipment({ awb: 'SHARED', courierCode: 'shiprocket' });
+    w.txn({ kind: 'DEBIT', amount: '33.00', at: IN, category: 'PARCEL', awb: 'SHARED' });
+    expect(line(await w.svc().report(FROM, TO), 'courier_unmatched')?.costInr).toBe('33.00');
   });
 
   it('investment income on a taka account is put in rupees at the rate the day it closed', async () => {
     // ৳1,500 earned; 1 INR = 1.32 BDT → ₹1,136.36, not ₹1,500.
-    const svc = makeSut({
-      investments: [{ placedInr: D('100000'), returnedInr: D('101500'), currency: 'BDT' }],
-      rate: { fromCurrency: 'INR', rate: D('1.32') },
-    });
-    const r = await svc.report(FROM, TO);
-    expect(line(r, 'investment_income')?.revenueInr).toBe('1136.36');
+    const w = new World();
+    w.investment('100000', '101500', IN, 'BDT');
+    w.rateHistory('1.32', T('2026-07-01T00:00:00Z'));
+    expect(line(await w.svc().report(FROM, TO), 'investment_income')?.revenueInr).toBe('1136.36');
   });
 
   it('an amount converted at TODAY’s rate is converted — and the report says so', async () => {
-    const svc = makeSut({
-      expenses: D('-500'),
-      foreignExpenses: [{ signedAmount: D('-1320'), currency: 'BDT', occurredAt: FROM }],
-      rate: null,
-      todayRate: { fromCurrency: 'INR', rate: D('1.32') },
-    });
-    const r = await svc.report(FROM, TO);
+    const w = new World();
+    w.bank({ type: 'EXPENSE', amount: '-500', at: IN, expenseCategoryId: 'cat-rent' });
+    w.bank({ type: 'EXPENSE', amount: '-1320', currency: 'BDT', at: IN });
+    w.todayRate('1.32');
+    const r = await w.svc().report(FROM, TO);
     expect(r.operatingExpensesInr).toBe('1500.00');
-    expect(r.warnings.some((w) => /today's rate/.test(w))).toBe(true);
+    expect(r.warnings.some((x) => /today's rate/.test(x))).toBe(true);
+  });
+});
+
+// ── The audit of 2026-09-12, item by item ──────────────────────────────
+
+describe('X1 — every line has its rows', () => {
+  it('courier account adjustments: only what the total counts, signed, from the cutover', async () => {
+    const from = T('2026-09-15T00:00:00Z');
+    const to = T('2026-10-15T00:00:00Z');
+    const w = new World().cutover(CUTOVER);
+    w.txn({ kind: 'DEBIT', amount: '100.00', at: T('2026-10-05T00:00:00Z') });
+    w.txn({ kind: 'CREDIT', amount: '40.00', at: T('2026-10-07T00:00:00Z') });
+    w.txn({ kind: 'DEBIT', amount: '9206.66', at: T('2026-09-20T00:00:00Z') }); // before cutover
+    w.txn({ kind: 'DEBIT', amount: '77.00', at: T('2026-10-06T00:00:00Z'), missing: true });
+    const svc = w.svc();
+    const l = line(await svc.report(from, to), 'courier_adjustments');
+    const rows = await drill(svc, 'courier_adjustments', from, to);
+    expect(l?.costInr).toBe('60.00');
+    expect(rows.items.map((i) => i.costInr)).toEqual(['-40.00', '100.00']);
+    expect(rows.cost).toBe('60.00');
+  });
+
+  it('courier charges on no live parcel: one row per waybill, netted, dead and stray', async () => {
+    const w = new World().cutover(T('2026-08-15T00:00:00Z'));
+    w.shipment({ awb: 'LIVE' });
+    w.shipment({ awb: 'DEAD', deleted: true });
+    w.txn({ kind: 'DEBIT', amount: '90', at: IN, category: 'PARCEL', awb: 'LIVE' });
+    w.txn({ kind: 'DEBIT', amount: '48.36', at: IN, category: 'PARCEL', awb: 'DEAD' });
+    w.txn({ kind: 'CREDIT', amount: '10', at: IN, category: 'PARCEL', awb: 'DEAD' });
+    // A stranger: only its charges from the cutover count.
+    w.txn({
+      kind: 'DEBIT',
+      amount: '11',
+      at: T('2026-08-05T00:00:00Z'),
+      category: 'PARCEL',
+      awb: 'X',
+    });
+    w.txn({
+      kind: 'DEBIT',
+      amount: '25',
+      at: T('2026-08-20T00:00:00Z'),
+      category: 'PARCEL',
+      awb: 'X',
+    });
+    const svc = w.svc();
+    const l = line(await svc.report(FROM, TO), 'courier_unmatched');
+    const rows = await drill(svc, 'courier_unmatched');
+    expect(l?.costInr).toBe('63.36');
+    expect(rows.items.map((i) => [i.ref, i.costInr])).toEqual([
+      ['X', '25.00'],
+      ['DEAD', '38.36'],
+    ]);
+    expect(rows.cost).toBe('63.36');
+  });
+
+  it('bank reconciliation: counted rows in rupees, the opening balance listed and NOT counted', async () => {
+    const w = new World();
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '100000', at: IN }); // opening
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '-12.00', at: IN });
+    w.bank({ type: 'OWNER_CONTRIBUTION', amount: '1000', currency: 'BDT', at: T('2026-07-01Z') });
+    w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '500', currency: 'BDT', at: IN });
+    w.rateHistory('1.32', T('2026-07-01T00:00:00Z'));
+    const svc = w.svc();
+    const l = line(await svc.report(FROM, TO), 'bank_reconciliation');
+    const rows = await drill(svc, 'bank_reconciliation');
+    // ৳500 at 1/1.32 = ₹378.79; −12 + 378.79.
+    expect(l?.revenueInr).toBe('366.79');
+    expect(rows.revenue).toBe('366.79');
+    const opening = rows.items.find((i) => i.subRef?.includes('opening balance'));
+    expect(opening?.revenueInr).toBeNull();
+    expect(rows.items).toHaveLength(3);
+  });
+
+  it('investment income: each investment in rupees at its close-date rate', async () => {
+    const w = new World();
+    w.investment('100000', '101500', IN);
+    w.investment('50000', '51500', T('2026-08-26T00:00:00Z'), 'BDT');
+    w.rateHistory('1.32', T('2026-07-01T00:00:00Z'));
+    const svc = w.svc();
+    const l = line(await svc.report(FROM, TO), 'investment_income');
+    const rows = await drill(svc, 'investment_income');
+    expect(l?.revenueInr).toBe('2636.36');
+    expect(rows.items.map((i) => i.revenueInr)).toEqual(['1136.36', '1500.00']);
+  });
+});
+
+describe('X2 — the FX rows are in RUPEES, as the total is', () => {
+  it('a ৳7.00 spread shows as ₹5.38 at its own transfer’s rate, not as 7.00', async () => {
+    const w = new World();
+    const tr = w.transfer('10000', 'INR', '13000', 'BDT');
+    w.bank({ type: 'FX_SPREAD', amount: '7.00', currency: 'BDT', at: IN, transferId: tr });
+    const svc = w.svc();
+    const rows = await drill(svc, 'fx');
+    expect(line(await svc.report(FROM, TO), 'fx')?.revenueInr).toBe('5.38');
+    expect(rows.items[0]?.revenueInr).toBe('5.38');
+    expect(rows.items[0]?.subRef).toContain('7.00 BDT');
+  });
+});
+
+describe('X3 — a deduction returned on a reversed COD is a row, as a negative', () => {
+  it('COD tax: the refund is listed under the deductions and the rows add up', async () => {
+    const w = new World();
+    const tax = w.wallet('GST_WITHHOLDING', '152.54', T('2026-08-03T00:00:00Z'));
+    w.wallet('GST_WITHHOLDING', '76.27', T('2026-08-16T00:00:00Z'));
+    w.wallet('COD_DEDUCTION_REFUND', '152.54', T('2026-08-20T00:00:00Z'), {
+      linkedEntryId: tax['id'],
+    });
+    const svc = w.svc();
+    const rows = await drill(svc, 'cod_tax');
+    expect(rows.items.map((i) => i.revenueInr)).toEqual(['-152.54', '76.27', '152.54']);
+    expect(rows.revenue).toBe(line(await svc.report(FROM, TO), 'cod_tax')?.revenueInr);
+    expect(rows.revenue).toBe('76.27');
+  });
+
+  it('COD handling fees: only refunds of a FEE, never of the tax', async () => {
+    const w = new World();
+    const fee = w.wallet('INSTANT_PAY_FEE', '50.00', T('2026-08-04T00:00:00Z'));
+    const tax = w.wallet('GST_WITHHOLDING', '100.00', T('2026-08-04T00:00:00Z'));
+    w.wallet('COD_DEDUCTION_REFUND', '21.19', T('2026-08-19T00:00:00Z'), {
+      linkedEntryId: fee['id'],
+    });
+    w.wallet('COD_DEDUCTION_REFUND', '100.00', T('2026-08-19T00:00:00Z'), {
+      linkedEntryId: tax['id'],
+    });
+    const svc = w.svc();
+    const rows = await drill(svc, 'cod_service_fees');
+    expect(rows.items.map((i) => i.revenueInr)).toEqual(['-21.19', '50.00']);
+    expect(rows.revenue).toBe('28.81');
+    expect(line(await svc.report(FROM, TO), 'cod_service_fees')?.revenueInr).toBe('28.81');
+  });
+});
+
+describe('X4 — a refund on a returned order comes off returns revenue', () => {
+  it('₹200 delivery + ₹30 return fee, ₹30 refunded: ₹200 in the total and in its row', async () => {
+    const w = new World();
+    w.order({
+      events: [['RTO_RECEIVED', IN]],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['RTO_FEE', '30'],
+      ],
+      refunds: ['30'],
+      shipments: [{ rto: '150' }],
+    });
+    const svc = w.svc();
+    const l = line(await svc.report(FROM, TO), 'rto');
+    expect(l?.revenueInr).toBe('200.00');
+    expect(l?.basis.revenue.find((p) => p.label.startsWith('Refunded'))?.amountInr).toBe('-30.00');
+    expect((await drill(svc, 'rto')).revenue).toBe('200.00');
+  });
+});
+
+describe('X5 — a LOST parcel costs us its carriage and earns nothing', () => {
+  it('counts the courier cost, no revenue, and says so in the basis, the note and the row', async () => {
+    const w = new World();
+    w.order({
+      events: [['LOST_IN_TRANSIT', IN]],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['GST', '36'],
+      ],
+      shipments: [{ fwd: '120' }],
+    });
+    const svc = w.svc();
+    const l = line(await svc.report(FROM, TO), 'delivery');
+    expect(l).toMatchObject({ revenueInr: '0.00', costInr: '120.00', marginInr: '-120.00' });
+    expect(l?.basis.revenue).toEqual([
+      expect.objectContaining({ label: 'Lost in transit — never billed', amountInr: '0.00' }),
+    ]);
+    expect(l?.basis.cost.find((p) => /lost in transit/.test(p.label))?.amountInr).toBe('120.00');
+    expect(l?.coverage.note).toMatch(/1 parcel\(s\) were lost in transit.*₹120\.00/);
+    const rows = await drill(svc, 'delivery');
+    expect(rows.items[0]).toMatchObject({ revenueInr: null, costInr: '120.00' });
+    expect(rows.items[0]?.subRef).toContain('lost in transit');
+  });
+
+  it('the same lost parcel on its way BACK (₹0 forward, ₹151.91 return) still costs ₹151.91', async () => {
+    const w = new World();
+    w.order({ events: [['LOST_IN_TRANSIT', IN]], shipments: [{ fwd: '0', rto: '151.91' }] });
+    expect(line(await w.svc().report(FROM, TO), 'delivery')?.costInr).toBe('151.91');
+  });
+
+  it('a parcel lost and then FOUND and delivered is billed as delivered', async () => {
+    const w = new World();
+    w.order({
+      events: [
+        ['LOST_IN_TRANSIT', T('2026-08-03T00:00:00Z')],
+        ['DELIVERED', T('2026-08-09T00:00:00Z')],
+      ],
+      charges: [['BASE_SHIPPING', '200']],
+      shipments: [{ fwd: '90' }],
+    });
+    expect(line(await w.svc().report(FROM, TO), 'delivery')?.revenueInr).toBe('200.00');
+  });
+});
+
+describe('X6 — one row per ORDER, and an order with nothing to price is UNCOVERED', () => {
+  it('a delivered order whose only parcel never got a waybill counts as uncovered, and has its row', async () => {
+    const w = new World();
+    w.order({
+      events: [['DELIVERED', IN]],
+      charges: [['BASE_SHIPPING', '200']],
+      shipments: [{ fwd: '90' }],
+    });
+    w.order({
+      number: 'SD-2026-QA-338994',
+      events: [['DELIVERED', IN]],
+      charges: [['BASE_SHIPPING', '200']],
+      shipments: [{ awb: null }],
+    });
+    const svc = w.svc();
+    const r = await svc.report(FROM, TO);
+    const l = line(r, 'delivery');
+    expect(l).toMatchObject({ revenueInr: '400.00', costInr: '90.00' });
+    expect(l?.coverage).toMatchObject({ priced: 1, total: 2 });
+    expect(l?.coverage.note).toMatch(/never got a waybill/);
+    expect(r.complete).toBe(false);
+    const rows = await drill(svc, 'delivery');
+    expect(rows.items).toHaveLength(2);
+    expect(rows.items.find((i) => i.ref === 'SD-2026-QA-338994')?.costInr).toBeNull();
+    expect(rows.revenue).toBe('400.00');
+  });
+
+  it('two parcels on one order: charged once, their costs summed, a replaced one left out', async () => {
+    const w = new World();
+    w.order({
+      events: [['DELIVERED', IN]],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['GST', '36'],
+      ],
+      shipments: [{ fwd: '60' }, { fwd: '0', rto: '30' }, { fwd: '999', superseded: true }],
+    });
+    const svc = w.svc();
+    const l = line(await svc.report(FROM, TO), 'delivery');
+    const rows = await drill(svc, 'delivery');
+    expect(l).toMatchObject({ revenueInr: '236.00', costInr: '90.00' });
+    expect(l?.coverage).toMatchObject({ priced: 1, total: 1 });
+    expect(rows.items).toHaveLength(1);
+    expect(rows.items[0]).toMatchObject({ revenueInr: '236.00', costInr: '90.00' });
+  });
+});
+
+describe('X7 — returns are the order’s fate too', () => {
+  it('an rto_received EVENT puts it on returns, with or without shipments.rto_received_at', async () => {
+    // SD-2026-QA-498051: rto_received on 29 Jul, no rto_received_at.
+    const w = new World();
+    w.order({
+      number: 'SD-2026-QA-498051',
+      events: [['RTO_RECEIVED', T('2026-07-29T10:00:00Z')]],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['RTO_FEE', '30'],
+      ],
+      shipments: [{ rto: '140', rtoReceivedAt: null }],
+    });
+    const svc = w.svc();
+    const july = line(await svc.report(T('2026-07-01T00:00:00Z'), FROM), 'rto');
+    const august = line(await svc.report(FROM, TO), 'rto');
+    expect(july).toMatchObject({ revenueInr: '230.00', costInr: '140.00' });
+    expect(august).toMatchObject({ revenueInr: '0.00', costInr: '0.00' });
+  });
+
+  it('a stamp on the shipment WITHOUT the event does not put it on returns', async () => {
+    const w = new World();
+    w.order({
+      events: [['RTO_IN_TRANSIT', IN]],
+      charges: [['RTO_FEE', '30']],
+      shipments: [{ rto: '140', rtoReceivedAt: IN }],
+    });
+    expect(line(await w.svc().report(FROM, TO), 'rto')?.revenueInr).toBe('0.00');
+  });
+
+  it('RTO_RESTOCKED counts when RTO_RECEIVED was skipped, dated by the restock', async () => {
+    const w = new World();
+    w.order({
+      events: [['RTO_RESTOCKED', T('2026-08-12T00:00:00Z')]],
+      charges: [['RTO_FEE', '30']],
+      shipments: [{ rto: '100' }],
+    });
+    expect(line(await w.svc().report(FROM, TO), 'rto')?.costInr).toBe('100.00');
+    const rows = await drill(w.svc(), 'rto');
+    expect(rows.items[0]?.at).toBe('2026-08-12T00:00:00.000Z');
+  });
+
+  it('received then restocked is ONE return, dated by the receipt', async () => {
+    const w = new World();
+    w.order({
+      events: [
+        ['RTO_RECEIVED', T('2026-07-30T00:00:00Z')],
+        ['RTO_RESTOCKED', T('2026-08-02T00:00:00Z')],
+      ],
+      charges: [['RTO_FEE', '30']],
+      shipments: [{ rto: '100' }],
+    });
+    expect(line(await w.svc().report(FROM, TO), 'rto')?.revenueInr).toBe('0.00');
+  });
+});
+
+describe('X8 — windows are half-open', () => {
+  it('the first instant is in, the first instant of the next window is out, the last millisecond is in', async () => {
+    const w = new World();
+    w.freight('1', '0', FROM);
+    w.freight('10', '0', T('2026-08-31T23:59:59.999Z'));
+    w.freight('100', '0', TO);
+    w.order({ events: [['DELIVERED', TO]], charges: [['BASE_SHIPPING', '1000']] });
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'inbound_freight')?.revenueInr).toBe('11.00');
+    expect(line(r, 'delivery')?.revenueInr).toBe('0.00');
+  });
+});
+
+describe('X9 — the rate is the latest recorded at or before the AMOUNT’s own instant', () => {
+  it('a rate recorded at noon applies at 16:00, not at 09:00 the same day', async () => {
+    const w = new World();
+    w.rateHistory('1.20', T('2026-08-10T00:00:00Z'));
+    w.rateHistory('1.32', T('2026-08-10T12:00:00Z'));
+    w.bank({ type: 'EXPENSE', amount: '-1320', currency: 'BDT', at: T('2026-08-10T09:00:00Z') });
+    w.bank({ type: 'EXPENSE', amount: '-1320', currency: 'BDT', at: T('2026-08-10T16:00:00Z') });
+    // 1320/1.20 = 1100; 1320/1.32 = 1000.
+    expect((await w.svc().report(FROM, TO)).operatingExpensesInr).toBe('2100.00');
+  });
+
+  it('counts DISTINCT amounts that fell back to today’s rate, however many lines converted them', async () => {
+    const w = new World();
+    w.todayRate('1.32');
+    // One taka forwarder expense: operating expenses AND the unattributed
+    // leg costs both convert it. It is one approximate figure, not two.
+    w.bank({
+      type: 'EXPENSE',
+      amount: '-1320',
+      currency: 'BDT',
+      at: IN,
+      expenseCategoryId: 'cat-fwd',
+    });
+    const r = await w.svc().report(FROM, TO);
+    expect(r.warnings.find((x) => /today's rate/.test(x))).toMatch(/^1 amount\(s\)/);
+  });
+});
+
+describe('X10 — an unattributed leg cost with no rate is NAMED, not silently dropped', () => {
+  it('counts it, leaves it out of the ₹ figure, and says how many', async () => {
+    const w = new World();
+    w.bank({ type: 'EXPENSE', amount: '-2000', at: IN, expenseCategoryId: 'cat-fwd' });
+    w.bank({
+      type: 'EXPENSE',
+      amount: '-1320',
+      currency: 'BDT',
+      at: IN,
+      expenseCategoryId: 'cat-fwd',
+    });
+    const r = await w.svc().report(FROM, TO);
+    expect(r.unattributedLegCosts).toMatchObject({
+      amountInr: '2000.00',
+      count: 2,
+      unconverted: 1,
+    });
+    expect(r.unattributedLegCosts?.note).toMatch(
+      /^1 of them had no exchange rate .* not in the ₹ figure/,
+    );
+  });
+});
+
+describe('X11 — a charge on a live parcel’s RETURN waybill is ours', () => {
+  it('a customer-return pickup’s charges are not “no Skydrop parcel”; a voided parcel’s return still is', async () => {
+    const w = new World();
+    w.shipment({ awb: 'FWD-1', reverseAwb: 'REV-1' });
+    w.shipment({ awb: 'FWD-2', reverseAwb: 'REV-2', deleted: true });
+    w.txn({ kind: 'DEBIT', amount: '40', at: IN, category: 'PARCEL', awb: 'REV-1' });
+    w.txn({ kind: 'DEBIT', amount: '15', at: IN, category: 'PARCEL', awb: 'REV-2' });
+    const l = line(await w.svc().report(FROM, TO), 'courier_unmatched');
+    expect(l?.costInr).toBe('15.00');
+    expect(l?.basis.cost[0]).toMatchObject({ count: 1, amountInr: '15.00' });
+  });
+});
+
+/**
+ * A world with something on every line, on BOTH sides of the middle of
+ * the month — including at exactly the middle instant.
+ */
+function richWorld(cutover: Date | null): World {
+  const w = new World();
+  if (cutover !== null) w.cutover(cutover);
+  const d = (day: number, h = 6): Date =>
+    T(`2026-08-${String(day).padStart(2, '0')}T${String(h).padStart(2, '0')}:00:00.000Z`);
+  const MIDDLE = T('2026-08-16T00:00:00.000Z');
+
+  // Opening balances first: they are their accounts' first capital entries.
+  w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '100000', at: FROM });
+  w.bank({ type: 'OWNER_CONTRIBUTION', amount: '1000', currency: 'BDT', at: T('2026-07-01Z') });
+  w.rateHistory('1.32', T('2026-07-01T00:00:00Z'));
+  w.rateHistory('1.30', MIDDLE);
+
+  w.freight('1000', '600', FROM);
+  w.freight('800', '500', MIDDLE, { status: 'WAIVED', amountSettledInr: D('300') });
+  w.freight('999', null, d(20));
+  w.freight('5', '1', TO);
+
+  const orderA = w.order({
+    events: [['DELIVERED', d(3)]],
+    charges: [
+      ['BASE_SHIPPING', '200'],
+      ['GST', '36'],
+    ],
+    shipments: [{ awb: 'A-1', fwd: '90' }],
+  });
+  w.order({
+    events: [['DELIVERED', MIDDLE]],
+    charges: [['BASE_SHIPPING', '200']],
+    refunds: ['50'],
+    shipments: [{ fwd: '60' }, { fwd: '0', rto: '30' }],
+  });
+  w.order({
+    events: [['LOST_IN_TRANSIT', d(20)]],
+    charges: [['BASE_SHIPPING', '200']],
+    shipments: [{ fwd: '120' }],
+  });
+  w.order({
+    events: [['DELIVERED', d(25)]],
+    charges: [['BASE_SHIPPING', '200']],
+    shipments: [{ awb: null }],
+  });
+  w.order({
+    events: [
+      ['DELIVERED', d(5)],
+      ['RTO_RECEIVED', d(22)],
+    ],
+    charges: [
+      ['BASE_SHIPPING', '200'],
+      ['RTO_FEE', '30'],
+    ],
+    refunds: ['30'],
+    shipments: [{ fwd: '0', rto: '150', reverseAwb: 'REV-E' }],
+  });
+  w.order({
+    events: [['RTO_RESTOCKED', d(12)]],
+    charges: [
+      ['BASE_SHIPPING', '200'],
+      ['RTO_FEE', '30'],
+    ],
+    shipments: [{ rto: '100' }],
+  });
+  w.order({ events: [['DELIVERED', TO]], charges: [['BASE_SHIPPING', '777']] });
+  w.order({ status: 'IN_TRANSIT', shipments: [{ fwd: '10' }] });
+  void orderA;
+
+  const tax = w.wallet('GST_WITHHOLDING', '152.54', d(3));
+  w.wallet('GST_WITHHOLDING', '76.27', MIDDLE);
+  w.wallet('COD_DEDUCTION_REFUND', '152.54', d(20), { linkedEntryId: tax['id'] });
+  const fee = w.wallet('INSTANT_PAY_FEE', '50', d(4));
+  w.wallet('COD_COLLECTION_FEE', '10', d(18));
+  w.wallet('COD_DEDUCTION_REFUND', '21.19', d(19), { linkedEntryId: fee['id'] });
+  w.wallet('SCRAP_REFUND', '1250', d(11));
+  w.wallet('SCRAP_REFUND', '9', TO);
+
+  const tr = w.transfer('10000', 'INR', '13000', 'BDT');
+  w.bank({ type: 'FX_SPREAD', amount: '7.00', currency: 'BDT', at: d(6), transferId: tr });
+  w.bank({ type: 'FX_SPREAD', amount: '-20', at: d(17) });
+  w.bank({ type: 'FX_SPREAD', amount: '3', currency: 'BDT', at: d(18) }); // no transfer: history
+
+  w.txn({ kind: 'DEBIT', amount: '58.83', at: d(2) });
+  w.txn({ kind: 'CREDIT', amount: '1290', at: d(20) });
+  w.txn({ kind: 'DEBIT', amount: '15', at: MIDDLE });
+  w.txn({ kind: 'DEBIT', amount: '999', at: d(21), missing: true });
+  w.txn({ kind: 'DEBIT', amount: '5', at: d(21), status: 'failed' });
+
+  w.shipment({ awb: 'DEAD-1', deleted: true });
+  w.txn({ kind: 'DEBIT', amount: '48.36', at: d(3), category: 'PARCEL', awb: 'DEAD-1' });
+  w.txn({ kind: 'CREDIT', amount: '10', at: d(18), category: 'PARCEL', awb: 'DEAD-1' });
+  w.txn({ kind: 'DEBIT', amount: '11', at: d(4), category: 'PARCEL', awb: 'STRANGER' });
+  w.txn({ kind: 'DEBIT', amount: '25', at: d(19), category: 'PARCEL', awb: 'STRANGER' });
+  w.txn({ kind: 'DEBIT', amount: '90', at: d(4), category: 'PARCEL', awb: 'A-1' });
+  w.txn({ kind: 'DEBIT', amount: '40', at: d(23), category: 'PARCEL', awb: 'REV-E' });
+
+  w.bank({ type: 'EXPENSE', amount: '-90', at: d(9), settlementId: 'set-x' });
+  w.bank({ type: 'EXPENSE', amount: '-45', at: MIDDLE, settlementId: 'set-y' });
+  w.settlement(d(7), ['50', '30']);
+  w.settlement(d(23), ['-20']);
+
+  w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '-35.40', at: d(21) });
+  w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '500', currency: 'BDT', at: d(14) });
+  w.investment('100000', '101500', d(15));
+  w.investment('50000', '51500', d(26), 'BDT');
+
+  w.bank({ type: 'EXPENSE', amount: '-325', at: d(12), expenseCategoryId: 'cat-rent' });
+  w.bank({
+    type: 'EXPENSE',
+    amount: '-1320',
+    currency: 'BDT',
+    at: d(13),
+    expenseCategoryId: 'cat-fwd',
+  });
+  w.bank({ type: 'EXPENSE', amount: '-600', at: d(13), inboundFreightChargeId: 'ifc-x' });
+  w.bank({ type: 'EXPENSE', amount: '-200', at: MIDDLE, expenseCategoryId: 'cat-rent' });
+  return w;
+}
+
+const MID = T('2026-08-16T00:00:00.000Z');
+
+describe('two adjacent windows add up to the window over both — every line', () => {
+  it.each([
+    ['with no cutover', null],
+    ['with the cutover inside the second half', T('2026-08-18T00:00:00.000Z')],
+  ])('%s', async (_label, cutover) => {
+    const svc = richWorld(cutover).svc();
+    const [a, b, whole] = await Promise.all([
+      svc.report(FROM, MID),
+      svc.report(MID, TO),
+      svc.report(FROM, TO),
+    ]);
+    for (const key of PNL_LINE_KEYS) {
+      const [la, lb, lw] = [line(a, key), line(b, key), line(whole, key)];
+      expect({ key, revenue: total([la?.revenueInr ?? null, lb?.revenueInr ?? null]) }).toEqual({
+        key,
+        revenue: lw?.revenueInr,
+      });
+      expect({ key, cost: total([la?.costInr ?? null, lb?.costInr ?? null]) }).toEqual({
+        key,
+        cost: lw?.costInr,
+      });
+    }
+    expect(total([a.operatingExpensesInr, b.operatingExpensesInr])).toBe(
+      whole.operatingExpensesInr,
+    );
+    expect(total([a.grossMarginInr, b.grossMarginInr])).toBe(whole.grossMarginInr);
+    expect(total([a.netInr, b.netInr])).toBe(whole.netInr);
+    // And the world is not trivially empty.
+    expect(whole.lines.filter((l) => l.revenueInr !== '0.00' || l.costInr !== '0.00')).toHaveLength(
+      PNL_LINE_KEYS.length,
+    );
+  });
+});
+
+describe('every line’s rows add up to its total', () => {
+  it.each([
+    ['the whole month', FROM, TO],
+    ['the first half', FROM, MID],
+    ['the second half', MID, TO],
+  ])('%s', async (_label, from, to) => {
+    const svc = richWorld(T('2026-08-18T00:00:00.000Z')).svc();
+    const r = await svc.report(from, to);
+    for (const l of r.lines) {
+      const rows = await drill(svc, l.key, from, to);
+      expect({ key: l.key, revenue: rows.revenue, cost: rows.cost }).toEqual({
+        key: l.key,
+        revenue: l.revenueInr,
+        cost: l.costInr,
+      });
+    }
+  });
+
+  it('an unknown line has no rows rather than a guess', async () => {
+    const out = await richWorld(null).svc().lineItems('nope', FROM, TO);
+    expect(out).toEqual({ key: 'nope', items: [], truncated: false });
+  });
+
+  it('worked numbers for the month, so the additivity above is not additivity of zeros', async () => {
+    const r = await richWorld(null).svc().report(FROM, TO);
+    // Delivered: A 236 (−90), B 200−50=150 (−90), D 200 (uncovered),
+    // lost C 0 (−120). E is returned — returns only.
+    expect(line(r, 'delivery')).toMatchObject({ revenueInr: '586.00', costInr: '300.00' });
+    expect(line(r, 'delivery')?.coverage).toMatchObject({ priced: 3, total: 4 });
+    // Returns: E 230−30=200 (−150), F 230 (−100).
+    expect(line(r, 'rto')).toMatchObject({ revenueInr: '430.00', costInr: '250.00' });
+    // ৳7 at 10000/13000 = 5.38; −20; ৳3 at 1/1.30 = 2.31.
+    expect(line(r, 'fx')?.revenueInr).toBe('-12.31');
+    // DEAD 38.36 + STRANGER 36; A-1 is live, REV-E is E's return waybill.
+    expect(line(r, 'courier_unmatched')?.costInr).toBe('74.36');
+    expect(line(r, 'courier_adjustments')?.costInr).toBe('-1216.17');
+    expect(line(r, 'inbound_freight')).toMatchObject({ revenueInr: '2299.00', costInr: '1100.00' });
   });
 });

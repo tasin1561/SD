@@ -84,8 +84,17 @@ export class AdminTreasuryController {
     summary:
       'Where the money is made — the four sources kept apart, each stating how much of its cost side is measured.',
   })
-  @ApiQuery({ name: 'from', required: false, description: 'ISO date; defaults to 30 days ago' })
-  @ApiQuery({ name: 'to', required: false, description: 'ISO date; defaults to now' })
+  @ApiQuery({
+    name: 'from',
+    required: false,
+    description: 'ISO instant, INCLUSIVE start of the window; defaults to 30 days before `to`',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: false,
+    description:
+      'ISO instant, EXCLUSIVE end: the window is half-open [from, to). To include a whole last day, pass the NEXT midnight. Defaults to now.',
+  })
   profitAndLoss(
     @Query('from') from?: string,
     @Query('to') to?: string,

@@ -21,7 +21,7 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { usePnl, usePnlLineItems, type PnlBasisPartView } from '@/lib/ops-hooks';
-import { istDay, istDayRange } from '@/lib/ist-day';
+import { istDateLabel, istDay, istDayRange } from '@/lib/ist-day';
 
 /**
  * Where the money is actually made.
@@ -45,9 +45,10 @@ export function PnlIndex(): ReactElement {
   // that reads worse than the summary it was meant to explain.
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  // IST days, inclusive of the closing day (see ist-day.ts). The SAME
-  // range feeds the line totals and their drilldown, so the rows under a
-  // total are always the rows that made it.
+  // IST days, the closing day included: `to` is the NEXT IST midnight and
+  // the API counts [from, to) (see ist-day.ts). The SAME range feeds the
+  // line totals and their drilldown, so the rows under a total are always
+  // the rows that made it.
   const params = useMemo(() => istDayRange(from, to), [from, to]);
   const pnl = usePnl(params);
 
@@ -362,7 +363,8 @@ function LineItems({
                   {it.subRef !== null && <div className="text-text-faint">{it.subRef}</div>}
                 </td>
                 <td className="text-text-muted py-1 pr-2 whitespace-nowrap">
-                  {new Date(it.at).toLocaleDateString('en-IN')}
+                  {/* The IST day, as the window is — not the browser's. */}
+                  {istDateLabel(it.at)}
                 </td>
                 <td className="py-1 pr-2 text-right">
                   {it.revenueInr === null ? (

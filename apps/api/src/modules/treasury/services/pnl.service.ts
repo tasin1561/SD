@@ -56,6 +56,73 @@ const DELIVERY_REVENUE_TYPES = [
 const RETURN_REVENUE_TYPES = [...DELIVERY_REVENUE_TYPES, 'RTO_FEE'] as const;
 
 /**
+ * Where a parcel's order has to have got to for its fate to be KNOWN
+ * on the DELIVERY side: delivered, or lost on the way. A LOST parcel is
+ * on the delivery line for its courier cost only — nothing ever bills a
+ * lost parcel (the founder, 2026-09-12), so it earns nothing.
+ */
+const DELIVERED_FATES: OrderStatus[] = [OrderStatus.DELIVERED, OrderStatus.LOST_IN_TRANSIT];
+
+/**
+ * …and on the RETURNS side: received back. `RTO_RESTOCKED` is listed
+ * because an order can reach it without an `RTO_RECEIVED` event of its
+ * own (the receipt was skipped or recorded outside the transition);
+ * normally RECEIVED comes first, so the earliest of the two is the day
+ * the parcel was back.
+ */
+const RETURNED_FATES: OrderStatus[] = [OrderStatus.RTO_RECEIVED, OrderStatus.RTO_RESTOCKED];
+
+/** A courier-account adjustment that still moves money. */
+const ADJUSTMENT_BASE = {
+  category: CourierWalletTxnCategory.ADJUSTMENT,
+  // `success` only. A failed line is a row about something that did not
+  // happen.
+  status: 'success',
+  // A transaction their ledger has since DROPPED is kept as evidence but
+  // moves no money: the later export still balances to the live wallet
+  // without it. Parcel costs already exclude it; so must this.
+  missingFromExportAt: null,
+} as const;
+
+/** The fees a seller pays us for COD handling. */
+const COD_SERVICE_FEE_DIRECTIONS: WalletEntryDirection[] = [
+  WalletEntryDirection.INSTANT_PAY_FEE,
+  WalletEntryDirection.COD_COLLECTION_FEE,
+];
+
+/** With the courier and not yet delivered or back — on no line yet. */
+const MOVING_STATUSES = [
+  OrderStatus.DISPATCHED,
+  OrderStatus.IN_TRANSIT,
+  OrderStatus.OUT_FOR_DELIVERY,
+  OrderStatus.DELIVERY_FAILED,
+  OrderStatus.RTO_INITIATED,
+  OrderStatus.RTO_IN_TRANSIT,
+];
+
+/** Every line the report carries, in order. A drill-down exists for each. */
+export const PNL_LINE_KEYS = [
+  'inbound_freight',
+  'delivery',
+  'rto',
+  'cod_tax',
+  'cod_service_fees',
+  'fx',
+  'courier_adjustments',
+  'courier_unmatched',
+  'courier_cod_fees',
+  'cod_shortfall',
+  'damage_refunds',
+  'bank_reconciliation',
+  'investment_income',
+] as const;
+export type PnlLineKey = (typeof PNL_LINE_KEYS)[number];
+
+function isLineKey(key: string): key is PnlLineKey {
+  return (PNL_LINE_KEYS as readonly string[]).includes(key);
+}
+
+/**
  * INR per unit of an entry's currency, from the transfer that produced
  * it — the rate that actually applied — when the transfer can say.
  */
@@ -80,37 +147,25 @@ function transferRate(
 }
 
 /**
- * One report's exchange rates, and how many amounts had to be put in
- * rupees at TODAY's rate because nothing was recorded for their date.
+ * One report's exchange rates, and WHICH amounts had to be put in rupees
+ * at TODAY's rate because nothing was recorded at or before their instant.
  * Per report, never shared: the service is a singleton and two reports
  * running at once must not count each other's fallbacks.
+ *
+ * The rates are keyed by the EXACT instant asked about, not by the day: a
+ * rate recorded at 15:00 applies to an amount at 16:00 the same day and
+ * not to one at 09:00, and a day-keyed cache served whichever of the two
+ * was asked first to both. The fallbacks are a SET of amounts, because
+ * two lines can convert the same entry (operating expenses and the
+ * unattributed leg costs both read an expense) and it is still one
+ * approximate figure, not two.
  */
 class RateBook {
   readonly rates = new Map<string, { rate: Prisma.Decimal | null; fallback: boolean }>();
-  fellBack = 0;
+  readonly fellBack = new Set<string>();
 }
 
 /**
- * Where a parcel's order has to have got to for its fate to be KNOWN:
- * delivered, or lost on the way. Revenue and carriage are recognised
- * then, not at booking.
- */
-const FATE_STATUSES = [OrderStatus.DELIVERED, OrderStatus.LOST_IN_TRANSIT];
-
-/** With the courier and not yet delivered or back — on no line yet. */
-const MOVING_STATUSES = [
-  OrderStatus.DISPATCHED,
-  OrderStatus.IN_TRANSIT,
-  OrderStatus.OUT_FOR_DELIVERY,
-  OrderStatus.DELIVERY_FAILED,
-  OrderStatus.RTO_INITIATED,
-  OrderStatus.RTO_IN_TRANSIT,
-];
-
-/**
- * One way the business makes (or loses) money, and how well we can see it.
- *
- * One term of a line's arithmetic, named well enough to be re-run by
  * One term of a line's arithmetic, named well enough to be re-run by
  * hand.
  *
@@ -175,9 +230,68 @@ export interface PnlReport {
   readonly unattributedLegCosts: {
     readonly amountInr: string;
     readonly count: number;
+    /** Of `count`, how many had no rate to rupees and are NOT in `amountInr`. */
+    readonly unconverted: number;
     readonly note: string;
   } | null;
 }
+
+/** One record behind a line. Null means NOT RECORDED / not counted — never zero. */
+export interface PnlLineItem {
+  readonly ref: string;
+  readonly subRef: string | null;
+  readonly at: string;
+  readonly revenueInr: string | null;
+  readonly costInr: string | null;
+}
+
+/**
+ * One ORDER whose parcel's fate was settled in the window.
+ *
+ * Per ORDER, not per shipment: an order's charges are billed once however
+ * many parcels carried it, so a per-shipment row repeated them (or, with
+ * `take: 1`, dropped the second parcel's cost), and an order whose only
+ * shipment never got a waybill had no row at all while its revenue was in
+ * the total. Summed over its live shipments, the cost is null only when
+ * NOTHING is recorded — which is what the drill-down shows as "not
+ * recorded" and the coverage counts as uncovered.
+ */
+interface FateOrder {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly at: Date;
+  /** Lost in transit and never delivered: counted for its cost, never billed. */
+  readonly lost: boolean;
+  /** Charges less refunds; null for a lost parcel (never billed). */
+  readonly billed: Prisma.Decimal | null;
+  /** Sum of what is recorded on its live shipments; null when nothing is. */
+  readonly cost: Prisma.Decimal | null;
+  readonly priced: boolean;
+  readonly parcels: readonly string[];
+}
+
+interface FateCohort {
+  readonly orders: readonly FateOrder[];
+  readonly chargesByType: ReadonlyMap<string, { amount: Prisma.Decimal; count: number }>;
+  readonly refunds: { amount: Prisma.Decimal; count: number };
+}
+
+/** A courier charge on a waybill that is no live Skydrop parcel. */
+interface UnmatchedCharge {
+  readonly awb: string;
+  readonly net: Prisma.Decimal;
+  readonly at: Date;
+  /** `dead`: a voided or replaced Skydrop parcel. `stray`: nobody's we know. */
+  readonly kind: 'dead' | 'stray';
+}
+
+/** The half-open window `[from, to)`. Every query in this report uses it. */
+function win(from: Date, to: Date): { gte: Date; lt: Date } {
+  return { gte: from, lt: to };
+}
+
+const sum = (xs: ReadonlyArray<Prisma.Decimal | null>): Prisma.Decimal =>
+  xs.reduce<Prisma.Decimal>((t, x) => (x === null ? t : t.add(x)), ZERO);
 
 /**
  * Where the money is actually made.
@@ -194,13 +308,22 @@ export interface PnlReport {
  * that are already append-only, so a past month cannot silently change
  * shape, and there is no cached total to fall out of date with the
  * entries underneath it.
+ *
+ * ── WINDOWS ARE HALF-OPEN: `[from, to)` ─────────────────────────────
+ * Every query is `gte: from, lt: to`. The admin sends `to` as the NEXT
+ * IST midnight. A closed window ending at 23:59:59.999 left the last
+ * half-millisecond of every day in no window at all — Postgres stores
+ * microseconds, so a charge stamped 23:59:59.9995 was in neither that
+ * day's report nor the next — and two adjacent closed windows could not
+ * be added without a gap. Half-open windows tile: two adjacent reports
+ * sum to the report over both, line by line.
  */
 @Injectable()
 export class PnlService {
   constructor(private readonly prisma: PrismaService) {}
 
   async report(from: Date, to: Date): Promise<PnlReport> {
-    // One rate cache per report: the same currency on the same day is
+    // One rate cache per report: the same currency at the same instant is
     // looked up once, whichever line asks.
     const rates = new RateBook();
     const [
@@ -264,11 +387,12 @@ export class PnlService {
           'to rupees on their date and are not counted. Set the rate on /fx-rates.',
       );
     }
-    // Converted, but at TODAY's rate: nothing was recorded for their date,
-    // so the rupee figure is an approximation and is said to be one.
-    if (rates.fellBack > 0) {
+    // Converted, but at TODAY's rate: nothing was recorded at or before
+    // their instant, so the rupee figure is an approximation and is said
+    // to be one. Counted per AMOUNT, however many lines converted it.
+    if (rates.fellBack.size > 0) {
       warnings.push(
-        `${rates.fellBack} amount(s) in another currency had no exchange rate recorded for ` +
+        `${rates.fellBack.size} amount(s) in another currency had no exchange rate recorded for ` +
           "their date and were put in rupees at today's rate. Record the rate for those days " +
           'on /fx-rates for an exact figure.',
       );
@@ -288,9 +412,14 @@ export class PnlService {
         unattributed === null
           ? null
           : {
-              amountInr: unattributed.countInr,
+              amountInr: unattributed.amountInr,
               count: unattributed.count,
+              unconverted: unattributed.unconverted,
               note:
+                (unattributed.unconverted > 0
+                  ? `${unattributed.unconverted} of them had no exchange rate to rupees on ` +
+                    'their date and are not in the ₹ figure. '
+                  : '') +
                 'Recorded as an operating expense with no consignment behind it, so the leg ' +
                 'it belongs to reads better than it is. Pay the forwarder from the freight ' +
                 'bill instead — that records the cash AND attributes it in one step.',
@@ -301,18 +430,14 @@ export class PnlService {
   /** BD → India. What the seller pays us to bring stock in, less the forwarder. */
   private async inboundFreight(from: Date, to: Date): Promise<PnlLine> {
     const charges = await this.prisma.client.inboundFreightCharge.findMany({
-      where: { createdAt: { gte: from, lte: to } },
+      where: { createdAt: win(from, to) },
       select: { totalInr: true, ourCostInr: true, status: true, amountSettledInr: true },
     });
     let revenue = ZERO;
     let cost = ZERO;
     let priced = 0;
     for (const c of charges) {
-      // A WAIVED bill earns only what was charged before it was forgiven;
-      // counting its full total would book income nobody will ever pay.
-      revenue = revenue.add(
-        c.status === InboundFreightStatus.WAIVED ? c.amountSettledInr : c.totalInr,
-      );
+      revenue = revenue.add(this.freightBilled(c));
       if (c.ourCostInr !== null) {
         cost = cost.add(c.ourCostInr);
         priced += 1;
@@ -352,152 +477,253 @@ export class PnlService {
   }
 
   /**
-   * The orders whose parcel's FATE was settled in the window: delivered,
-   * or lost on the way. Revenue and carriage are recognised THEN, not at
-   * booking — until a parcel is delivered or comes back we do not know
-   * which line it belongs to. Booked at dispatch, revenue was taken for
-   * orders never billed (two cancelled ones read ₹400 of income) and for
-   * parcels still moving, and a parcel that then came back moved from one
-   * month's delivery line to a later month's returns line, restating a
-   * month already reported.
-   *
-   * Dated by the ORDER's own event (its first transition to DELIVERED or
-   * LOST_IN_TRANSIT): order_events is written for every transition however
-   * it happened — a courier scan, a manual scan, god mode — and a shipment
-   * carries no delivered-at of its own (nothing writes `deliveredAt`).
-   *
-   * An order that was delivered and then came back anyway (a courier
-   * reversing a delivery) belongs to the RETURNS line alone, never here as
-   * well — so it is dropped from this cohort, and a delivered month does
-   * restate in that one rare case rather than count the parcel twice.
+   * What a freight bill EARNS: a WAIVED bill only what was charged before
+   * it was forgiven — counting its full total would book income nobody
+   * will ever pay. One place, so the total and its rows cannot disagree.
    */
-  private async fateCohort(
-    from: Date,
-    to: Date,
-  ): Promise<{ orderIds: string[]; at: Map<string, Date> }> {
-    const events = await this.prisma.client.orderEvent.groupBy({
+  private freightBilled(c: {
+    status: InboundFreightStatus;
+    totalInr: Prisma.Decimal;
+    amountSettledInr: Prisma.Decimal;
+  }): Prisma.Decimal {
+    return c.status === InboundFreightStatus.WAIVED ? c.amountSettledInr : c.totalInr;
+  }
+
+  /**
+   * The orders whose parcel's FATE was settled in the window, one entry
+   * per ORDER, with its revenue and cost already worked out — the ONE
+   * computation both the line total and its drill-down read, so the rows
+   * always add up to the figure above them.
+   *
+   * DELIVERY: the order's FIRST transition to DELIVERED or LOST_IN_TRANSIT
+   * falls in the window. An order that has EVER reached RTO_RECEIVED /
+   * RTO_RESTOCKED belongs to returns alone — dropped here, so a delivered
+   * month restates in that one rare case (a courier reversing a delivery)
+   * rather than count the parcel twice. An order that was lost and never
+   * delivered is here for its COST, with no revenue: nothing ever bills
+   * a lost parcel.
+   *
+   * RETURNS: the order's FIRST transition to RTO_RECEIVED or RTO_RESTOCKED
+   * falls in the window — the ORDER's fate, like delivery, not
+   * `shipments.rto_received_at`, which a receipt recorded outside the
+   * warehouse flow never stamps (SD-2026-QA-498051 has an rto_received
+   * event on 29 Jul and no rto_received_at, and was on no line at all).
+   *
+   * Dated by `order_events`: it is written for every transition however it
+   * happened — a courier scan, a manual scan, god mode.
+   *
+   * Classification (returned? lost?) reads ALL of an order's events, not
+   * just those in the window, so it cannot change with the window: that is
+   * what makes two adjacent reports add up to the report over both.
+   *
+   * Cost is summed over the order's LIVE shipments (not deleted, never
+   * replaced — a superseded one's charges are on the no-parcel line),
+   * both columns added. An order with no such shipment, or one whose
+   * parcel never got a waybill, has nothing recorded and is UNCOVERED.
+   */
+  private async fateCohort(kind: 'delivery' | 'rto', from: Date, to: Date): Promise<FateCohort> {
+    const statuses = kind === 'delivery' ? DELIVERED_FATES : RETURNED_FATES;
+    const empty: FateCohort = {
+      orders: [],
+      chargesByType: new Map(),
+      refunds: { amount: ZERO, count: 0 },
+    };
+    const first = await this.prisma.client.orderEvent.groupBy({
       by: ['orderId'],
-      where: { toStatus: { in: FATE_STATUSES }, createdAt: { lte: to } },
+      where: { toStatus: { in: statuses }, createdAt: { lt: to } },
       _min: { createdAt: true },
       having: { createdAt: { _min: { gte: from } } },
     });
     const at = new Map<string, Date>();
-    for (const e of events) {
+    for (const e of first) {
       if (e._min.createdAt !== null) at.set(e.orderId, e._min.createdAt);
     }
-    if (at.size === 0) return { orderIds: [], at };
-    const cameBack = await this.prisma.client.orderShipment.findMany({
-      where: { orderId: { in: [...at.keys()] }, shipment: { rtoReceivedAt: { not: null } } },
-      select: { orderId: true },
-    });
-    for (const c of cameBack) at.delete(c.orderId);
-    return { orderIds: [...at.keys()], at };
-  }
+    if (at.size === 0) return empty;
 
-  /**
-   * The parcels that carried a fate-settled order: live, never replaced
-   * by another shipment (a superseded one's charges are on the no-parcel
-   * line), with a waybill, and not received back.
-   */
-  private deliveryShipments(orderIds: readonly string[]): Prisma.ShipmentWhereInput {
+    const lost = new Set<string>();
+    if (kind === 'delivery') {
+      const seen = await this.prisma.client.orderEvent.findMany({
+        where: {
+          orderId: { in: [...at.keys()] },
+          toStatus: { in: [...DELIVERED_FATES, ...RETURNED_FATES] },
+        },
+        select: { orderId: true, toStatus: true },
+        distinct: ['orderId', 'toStatus'],
+      });
+      const reached = new Map<string, Set<OrderStatus>>();
+      for (const e of seen) {
+        if (e.toStatus === null) continue;
+        const s = reached.get(e.orderId) ?? new Set<OrderStatus>();
+        s.add(e.toStatus);
+        reached.set(e.orderId, s);
+      }
+      for (const id of [...at.keys()]) {
+        const s = reached.get(id) ?? new Set<OrderStatus>();
+        if (RETURNED_FATES.some((r) => s.has(r))) {
+          at.delete(id);
+        } else if (!s.has(OrderStatus.DELIVERED)) {
+          lost.add(id);
+        }
+      }
+      if (at.size === 0) return empty;
+    }
+
+    const ids = [...at.keys()];
+    const billable = ids.filter((id) => !lost.has(id));
+    const types = kind === 'delivery' ? DELIVERY_REVENUE_TYPES : RETURN_REVENUE_TYPES;
+    const [orders, links, charges, refunds] = await Promise.all([
+      this.prisma.client.order.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, orderNumber: true },
+      }),
+      this.prisma.client.orderShipment.findMany({
+        where: { orderId: { in: ids } },
+        select: { orderId: true, shipmentId: true },
+      }),
+      billable.length === 0
+        ? []
+        : this.prisma.client.orderCharge.findMany({
+            where: { deletedAt: null, orderId: { in: billable }, type: { in: [...types] } },
+            select: { orderId: true, type: true, amountInr: true },
+          }),
+      // A fee handed back on one of these orders (a waived or mistaken
+      // charge) comes off here, or it is income twice.
+      billable.length === 0
+        ? []
+        : this.prisma.client.sellerWalletEntry.findMany({
+            where: {
+              direction: WalletEntryDirection.ORDER_CHARGES_REFUND,
+              currency: Currency.INR,
+              linkedOrderId: { in: billable },
+            },
+            select: { linkedOrderId: true, amount: true },
+          }),
+    ]);
+    const shipmentIds = [...new Set(links.map((l) => l.shipmentId))];
+    const shipments =
+      shipmentIds.length === 0
+        ? []
+        : await this.prisma.client.shipment.findMany({
+            where: { id: { in: shipmentIds }, deletedAt: null, supersededAt: null },
+            select: {
+              id: true,
+              shipmentNumber: true,
+              awbNumber: true,
+              actualCourierCostInr: true,
+              actualRtoCostInr: true,
+            },
+          });
+    const shipmentById = new Map(shipments.map((s) => [s.id, s]));
+
+    const chargesByType = new Map<string, { amount: Prisma.Decimal; count: number }>();
+    const billedBy = new Map<string, Prisma.Decimal>();
+    for (const c of charges) {
+      const t = chargesByType.get(c.type) ?? { amount: ZERO, count: 0 };
+      chargesByType.set(c.type, { amount: t.amount.add(c.amountInr), count: t.count + 1 });
+      billedBy.set(c.orderId, (billedBy.get(c.orderId) ?? ZERO).add(c.amountInr));
+    }
+    let refundAmount = ZERO;
+    for (const r of refunds) {
+      if (r.linkedOrderId === null) continue;
+      refundAmount = refundAmount.add(r.amount);
+      billedBy.set(r.linkedOrderId, (billedBy.get(r.linkedOrderId) ?? ZERO).sub(r.amount));
+    }
+
+    const numberOf = new Map(orders.map((o) => [o.id, o.orderNumber]));
+    const out: FateOrder[] = ids.map((id) => {
+      const mine = links
+        .filter((l) => l.orderId === id)
+        .map((l) => shipmentById.get(l.shipmentId))
+        .filter((s): s is NonNullable<typeof s> => s !== undefined);
+      const recorded = mine.filter(
+        (s) => s.actualCourierCostInr !== null || s.actualRtoCostInr !== null,
+      );
+      const cost =
+        recorded.length === 0
+          ? null
+          : sum(recorded.flatMap((s) => [s.actualCourierCostInr, s.actualRtoCostInr]));
+      // MEASURED: delivery once every live parcel carries a figure; a
+      // return only once the RETURN itself has been billed — until then
+      // the forward figure is all we know, and it is not the whole cost.
+      const priced =
+        mine.length > 0 &&
+        mine.every((s) =>
+          kind === 'delivery'
+            ? s.actualCourierCostInr !== null || s.actualRtoCostInr !== null
+            : s.actualRtoCostInr !== null,
+        );
+      return {
+        orderId: id,
+        orderNumber: numberOf.get(id) ?? id,
+        at: at.get(id) ?? from,
+        lost: lost.has(id),
+        billed: lost.has(id) ? null : (billedBy.get(id) ?? ZERO),
+        cost,
+        priced,
+        parcels: mine.map((s) => s.awbNumber ?? s.shipmentNumber),
+      };
+    });
+    out.sort((a, b) => b.at.getTime() - a.at.getTime());
     return {
-      deletedAt: null,
-      supersededAt: null,
-      awbNumber: { not: null },
-      rtoReceivedAt: null,
-      orderShipments: { some: { orderId: { in: [...orderIds] } } },
+      orders: out,
+      chargesByType,
+      refunds: {
+        amount: refundAmount,
+        count: refunds.filter((r) => r.linkedOrderId !== null).length,
+      },
     };
   }
 
   /**
    * The Indian delivery leg. What we bill for carriage, less what the
-   * courier charged, for every parcel DELIVERED (or lost) in the window.
+   * courier charged, for every order DELIVERED (or lost) in the window.
    *
    * BOTH sides are anchored on the same ORDERS (see `fateCohort`), so a
    * parcel's revenue and its cost can never land in different reports.
+   *
+   * Revenue is every charge we billed for carriage — base, surcharges AND
+   * the GST on them (we file no return against it; it is ours,
+   * DELIVERY_REVENUE_TYPES), without the RTO fee, which prices a second
+   * movement and is on the returns line. The cost is BOTH columns added:
+   * the importer nets refunds (COST-1), so the sum is what the parcel
+   * cost whichever leg it was billed on.
    */
   private async delivery(from: Date, to: Date): Promise<PnlLine> {
-    // Revenue is every charge we billed for carriage — base, surcharges
-    // AND the GST on them (we file no return against it; it is ours,
-    // DELIVERY_REVENUE_TYPES), without the RTO fee, which prices a second
-    // movement and is on the returns line.
-    //
-    // The cost is BOTH columns added. The importer nets refunds (COST-1),
-    // so the sum is what the parcel cost whichever leg it was billed on.
-    const { orderIds } = await this.fateCohort(from, to);
-    // With the courier right now and not yet delivered or back: on no line
-    // until their fate is known. Counted so the report says so.
-    const moving = await this.prisma.client.shipment.count({
-      where: {
-        deletedAt: null,
-        supersededAt: null,
-        awbNumber: { not: null },
-        rtoReceivedAt: null,
-        orderShipments: { some: { order: { status: { in: MOVING_STATUSES } } } },
-      },
-    });
-
-    const shipments =
-      orderIds.length === 0
-        ? []
-        : await this.prisma.client.shipment.findMany({
-            where: this.deliveryShipments(orderIds),
-            select: { actualCourierCostInr: true, actualRtoCostInr: true },
-          });
-
-    const chargeWhere = {
-      deletedAt: null,
-      orderId: { in: orderIds },
-      type: { in: [...DELIVERY_REVENUE_TYPES] },
-    };
-    const revenueByType =
-      orderIds.length === 0
-        ? []
-        : await this.prisma.client.orderCharge.groupBy({
-            by: ['type'],
-            where: chargeWhere,
-            _sum: { amountInr: true },
-            _count: { _all: true },
-          });
-    const revenueAgg =
-      orderIds.length === 0
-        ? { _sum: { amountInr: null } }
-        : await this.prisma.client.orderCharge.aggregate({
-            where: chargeWhere,
-            _sum: { amountInr: true },
-          });
-    // A delivery fee handed back on one of these orders (a waived or
-    // mistaken charge) comes off here, or it is income twice.
-    const refunds =
-      orderIds.length === 0
-        ? { _sum: { amount: null }, _count: { _all: 0 } }
-        : await this.prisma.client.sellerWalletEntry.aggregate({
-            where: {
-              direction: WalletEntryDirection.ORDER_CHARGES_REFUND,
-              currency: Currency.INR,
-              linkedOrderId: { in: orderIds },
-            },
-            _sum: { amount: true },
-            _count: { _all: true },
-          });
-    const refunded = refunds._sum.amount ?? ZERO;
-
-    let cost = ZERO;
-    let priced = 0;
-    for (const s of shipments) {
-      if (s.actualCourierCostInr !== null || s.actualRtoCostInr !== null) {
-        cost = cost.add(s.actualCourierCostInr ?? ZERO).add(s.actualRtoCostInr ?? ZERO);
-        priced += 1;
-      }
-    }
+    const [cohort, moving] = await Promise.all([
+      this.fateCohort('delivery', from, to),
+      // With the courier right now and not yet delivered or back: on no
+      // line until their fate is known. Counted so the report says so.
+      this.prisma.client.shipment.count({
+        where: {
+          deletedAt: null,
+          supersededAt: null,
+          awbNumber: { not: null },
+          rtoReceivedAt: null,
+          orderShipments: { some: { order: { status: { in: MOVING_STATUSES } } } },
+        },
+      }),
+    ]);
+    const orders = cohort.orders;
+    const delivered = orders.filter((o) => !o.lost);
+    const lost = orders.filter((o) => o.lost);
+    const revenue = sum(orders.map((o) => o.billed));
+    const deliveredCost = sum(delivered.map((o) => o.cost));
+    const lostCost = sum(lost.map((o) => o.cost));
+    const priced = orders.filter((o) => o.priced).length;
 
     const notes = [
-      ...(priced < shipments.length
+      ...(priced < orders.length
         ? [
-            `${shipments.length - priced} delivered parcels have no courier cost yet. The ` +
-              'nightly wallet sync fills these in once the courier has billed them. A parcel on ' +
+            `${orders.length - priced} delivered or lost order(s) have no courier cost yet. The ` +
+              'nightly wallet sync fills these in once the courier has billed them; a parcel on ' +
               'a manual courier has no ledger at all and needs its cost recorded by hand on the ' +
-              'order.',
+              'order; and an order whose parcel never got a waybill has nothing to price.',
+          ]
+        : []),
+      ...(lost.length > 0
+        ? [
+            `${lost.length} parcel(s) were lost in transit: their courier cost ` +
+              `(₹${lostCost.toFixed(2)}) is counted here and nothing is billed for them.`,
           ]
         : []),
       ...(moving > 0
@@ -511,10 +737,10 @@ export class PnlService {
     const built = this.line({
       key: 'delivery',
       label: 'India delivery',
-      revenue: (revenueAgg._sum.amountInr ?? ZERO).sub(refunded),
-      cost,
+      revenue,
+      cost: deliveredCost.add(lostCost),
       priced,
-      total: shipments.length,
+      total: orders.length,
       note: notes.length === 0 ? null : notes.join(' '),
       basis: {
         // Broken out by CHARGE TYPE, because "shipping revenue" is four
@@ -522,121 +748,171 @@ export class PnlService {
         // base rate. A total that cannot be split cannot be checked
         // against a rate card.
         revenue: [
-          ...revenueByType.map((r) => ({
-            label: this.chargeTypeLabel(r.type),
-            source: `order_charges.amount_inr WHERE type=${r.type}`,
-            count: r._count._all,
-            amountInr: (r._sum.amountInr ?? ZERO).toFixed(2),
-          })),
-          ...(refunds._count._all === 0
+          ...this.chargeParts(cohort, 'delivered or lost in window, first fate'),
+          ...(lost.length === 0
             ? []
             : [
                 {
-                  label: 'Refunded to the seller on these orders',
-                  source: 'seller_wallet_entries.amount WHERE direction=ORDER_CHARGES_REFUND',
-                  count: refunds._count._all,
-                  amountInr: refunded.negated().toFixed(2),
+                  label: 'Lost in transit — never billed',
+                  source:
+                    'orders first LOST_IN_TRANSIT and never DELIVERED: none of their order_charges count',
+                  count: lost.length,
+                  amountInr: '0.00',
                 },
               ]),
         ],
         cost: [
           {
-            label: 'Courier cost on parcels not received back',
+            label: 'Courier cost on delivered parcels',
             source:
-              'shipments.actual_courier_cost_inr + actual_rto_cost_inr (excludes parcels received back)',
-            count: priced,
-            amountInr: cost.toFixed(2),
+              'shipments.actual_courier_cost_inr + actual_rto_cost_inr over the order’s live shipments',
+            count: delivered.filter((o) => o.cost !== null).length,
+            amountInr: deliveredCost.toFixed(2),
           },
+          ...(lost.length === 0
+            ? []
+            : [
+                {
+                  label: 'Courier cost on parcels lost in transit (no revenue)',
+                  source:
+                    'shipments.actual_courier_cost_inr + actual_rto_cost_inr, orders LOST_IN_TRANSIT and never DELIVERED',
+                  count: lost.filter((o) => o.cost !== null).length,
+                  amountInr: lostCost.toFixed(2),
+                },
+              ]),
         ],
       },
     });
     // Set on the built line: `line()` drops a note when every parcel in it
-    // is priced, and "N parcels are still moving" is true — and worth
-    // saying — even then.
+    // is priced, and "N parcels are still moving" / "N were lost" are true
+    // — and worth saying — even then.
     return notes.length === 0
       ? built
       : { ...built, coverage: { ...built.coverage, note: notes.join(' ') } };
   }
 
+  /** A cohort's charges by type, and the refunds that came off them, as basis parts. */
+  private chargeParts(cohort: FateCohort, filter: string): PnlBasisPart[] {
+    return [
+      ...[...cohort.chargesByType.entries()].map(([type, t]) => ({
+        label: this.chargeTypeLabel(type),
+        source: `order_charges.amount_inr WHERE type=${type} (${filter})`,
+        count: t.count,
+        amountInr: t.amount.toFixed(2),
+      })),
+      ...(cohort.refunds.count === 0
+        ? []
+        : [
+            {
+              label: 'Refunded to the seller on these orders',
+              source: 'seller_wallet_entries.amount WHERE direction=ORDER_CHARGES_REFUND',
+              count: cohort.refunds.count,
+              amountInr: cohort.refunds.amount.negated().toFixed(2),
+            },
+          ]),
+    ];
+  }
+
   /**
-   * Returns — every parcel RECEIVED back in the window.
+   * Returns — every order whose parcel came BACK in the window (see
+   * `fateCohort`).
    *
    * Revenue is what the seller is billed for a parcel that came back: its
-   * delivery fee AND its return fee (RETURN_REVENUE_TYPES), read from the
-   * order's charges. A shipment that was replaced by another is not the
-   * parcel that came back, so only live, non-superseded ones count.
+   * delivery fee AND its return fee (RETURN_REVENUE_TYPES), less anything
+   * refunded on the order — exactly as delivery nets its refunds, or a
+   * refunded fee is income twice.
    *
    * The cost is everything the courier charged for the parcel, both
    * columns added. Delhivery refunds the delivery charge on a return and
    * bills one combined return charge; the importer nets that (COST-1),
    * so the forward column of such a parcel is ₹0 and the sum is the true
    * figure. A manual courier bills both legs and refunds neither, and
-   * the sum is right there too — reading the return column alone lost
-   * its forward cost from every line.
+   * the sum is right there too.
    */
   private async rto(from: Date, to: Date): Promise<PnlLine> {
-    const returnedWindow = {
-      deletedAt: null,
-      supersededAt: null,
-      rtoReceivedAt: { gte: from, lte: to },
-    } as const;
-    // Revenue for exactly the parcels whose cost is on this line: their
-    // DELIVERY fee (a returned parcel never reaches the delivery line, and
-    // the fee is swept when it is received) plus the return fee — RTO or
-    // customer-requested, both written as an RTO_FEE charge line. Read
-    // from the wallet's RTO_FEE entries alone, this line showed ₹30
-    // against a parcel's whole round trip.
-    const revenueByType = await this.prisma.client.orderCharge.groupBy({
-      by: ['type'],
-      where: {
-        deletedAt: null,
-        order: { orderShipments: { some: { shipment: returnedWindow } } },
-        type: { in: [...RETURN_REVENUE_TYPES] },
-      },
-      _sum: { amountInr: true },
-      _count: { _all: true },
-    });
-    const revenue = revenueByType.reduce((t, r) => t.add(r._sum.amountInr ?? ZERO), ZERO);
-    const returned = await this.prisma.client.shipment.findMany({
-      where: returnedWindow,
-      select: { actualCourierCostInr: true, actualRtoCostInr: true },
-    });
-    let cost = ZERO;
-    let priced = 0;
-    for (const s of returned) {
-      cost = cost.add(s.actualCourierCostInr ?? ZERO).add(s.actualRtoCostInr ?? ZERO);
-      // MEASURED only once the return itself has been billed: until then
-      // the forward figure is all we know, and it is not the whole cost.
-      if (s.actualRtoCostInr !== null) priced += 1;
-    }
+    const cohort = await this.fateCohort('rto', from, to);
+    const orders = cohort.orders;
+    const revenue = sum(orders.map((o) => o.billed));
+    const cost = sum(orders.map((o) => o.cost));
+    const priced = orders.filter((o) => o.priced).length;
     return this.line({
       key: 'rto',
       label: 'Returns',
       revenue,
       cost,
       priced,
-      total: returned.length,
+      total: orders.length,
       note:
-        priced < returned.length
-          ? `${returned.length - priced} returns have no courier cost recorded, so this margin is flattering.`
+        priced < orders.length
+          ? `${orders.length - priced} returns have no return cost recorded, so this margin is flattering.`
           : null,
       basis: {
-        revenue: revenueByType.map((r) => ({
-          label: this.chargeTypeLabel(r.type),
-          source: `order_charges.amount_inr WHERE type=${r.type} (parcels received back)`,
-          count: r._count._all,
-          amountInr: (r._sum.amountInr ?? ZERO).toFixed(2),
-        })),
+        revenue: this.chargeParts(cohort, 'received back in window, first fate'),
         cost: [
           {
             label: 'Courier cost to bring parcels back',
-            source: 'shipments.actual_courier_cost_inr + actual_rto_cost_inr',
-            count: priced,
+            source:
+              'shipments.actual_courier_cost_inr + actual_rto_cost_inr over the order’s live shipments',
+            count: orders.filter((o) => o.cost !== null).length,
             amountInr: cost.toFixed(2),
           },
         ],
       },
     });
+  }
+
+  /**
+   * FX spread entries in the window, each put in rupees at its OWN
+   * transfer's rate (the one that produced it), and only failing that at
+   * the rate in force at its instant. Null `inr` = no rate at all.
+   *
+   * The spread is posted in the RECEIVING account's currency — usually
+   * taka. Summed as it stood it was taka read as rupees.
+   */
+  private async fxRows(
+    from: Date,
+    to: Date,
+    rates: RateBook,
+  ): Promise<
+    Array<{
+      ref: string;
+      subRef: string;
+      at: Date;
+      inr: Prisma.Decimal | null;
+    }>
+  > {
+    const rows = await this.prisma.client.bankEntry.findMany({
+      where: { type: BankEntryType.FX_SPREAD, occurredAt: win(from, to) },
+      orderBy: { occurredAt: 'desc' },
+      select: {
+        id: true,
+        signedAmount: true,
+        currency: true,
+        occurredAt: true,
+        reference: true,
+        account: { select: { label: true } },
+        transfer: {
+          select: { amountOut: true, currencyOut: true, amountIn: true, currencyIn: true },
+        },
+      },
+    });
+    const out: Array<{ ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }> = [];
+    for (const r of rows) {
+      const rate =
+        transferRate(r.currency, r.transfer) ??
+        (await this.inrPerUnit(r.currency, r.occurredAt, rates, `bank_entries:${r.id}`));
+      out.push({
+        ref: r.reference ?? r.account.label,
+        subRef:
+          r.currency === Currency.INR
+            ? r.account.label
+            : `${r.account.label} · ${r.signedAmount.toFixed(2)} ${r.currency}` +
+              (rate === null ? ' (no rate to rupees — not counted)' : ''),
+        at: r.occurredAt,
+        inr: rate === null ? null : r.signedAmount.mul(rate).toDecimalPlaces(2),
+      });
+    }
+    return out;
   }
 
   /**
@@ -648,33 +924,9 @@ export class PnlService {
    * quote the market moved against.
    */
   private async fx(from: Date, to: Date, rates: RateBook): Promise<PnlLine> {
-    // The spread is posted in the RECEIVING account's currency — usually
-    // taka. Summed as it stood it was taka read as rupees. Each is put in
-    // rupees at its OWN transfer's rate (the one that produced it), and
-    // only failing that at the rate in force that day.
-    const rows = await this.prisma.client.bankEntry.findMany({
-      where: { type: BankEntryType.FX_SPREAD, occurredAt: { gte: from, lte: to } },
-      select: {
-        signedAmount: true,
-        currency: true,
-        occurredAt: true,
-        transfer: {
-          select: { amountOut: true, currencyOut: true, amountIn: true, currencyIn: true },
-        },
-      },
-    });
-    let spread = ZERO;
-    let unconverted = 0;
-    for (const r of rows) {
-      const rate =
-        transferRate(r.currency, r.transfer) ??
-        (await this.inrPerUnit(r.currency, r.occurredAt, rates));
-      if (rate === null) {
-        unconverted += 1;
-        continue;
-      }
-      spread = spread.add(r.signedAmount.mul(rate).toDecimalPlaces(2));
-    }
+    const rows = await this.fxRows(from, to, rates);
+    const spread = sum(rows.map((r) => r.inr));
+    const unconverted = rows.filter((r) => r.inr === null).length;
     return {
       key: 'fx',
       label: 'FX spread',
@@ -708,6 +960,20 @@ export class PnlService {
   }
 
   /**
+   * The courier-adjustment window for `[from, to)`: counted from the
+   * cutover when it falls inside it (see `courierAdjustments`), and
+   * nothing at all when the cutover is at or after `to`.
+   */
+  private async adjustmentWindow(
+    from: Date,
+    to: Date,
+  ): Promise<{ cutover: Date | null; countFrom: Date; counts: boolean }> {
+    const cutover = await this.adjustmentsCutover();
+    const countFrom = cutover !== null && cutover.getTime() > from.getTime() ? cutover : from;
+    return { cutover, countFrom, counts: countFrom.getTime() < to.getTime() };
+  }
+
+  /**
    * What the courier charged the ACCOUNT, rather than a parcel.
    *
    * Their ledger is not only carriage. It carries monthly
@@ -738,35 +1004,23 @@ export class PnlService {
    * cleared, every adjustment counts.
    */
   private async courierAdjustments(from: Date, to: Date): Promise<PnlLine> {
-    const cutover = await this.adjustmentsCutover();
-    const countFrom = cutover !== null && cutover.getTime() > from.getTime() ? cutover : from;
-    const base = {
-      category: CourierWalletTxnCategory.ADJUSTMENT,
-      // `success` only. A failed line is a row about something that
-      // did not happen.
-      status: 'success',
-      // A transaction their ledger has since DROPPED is kept as evidence
-      // but moves no money: the later export still balances to the live
-      // wallet without it. Parcel costs already exclude it; so must this.
-      missingFromExportAt: null,
-    } as const;
-    const rows =
-      countFrom.getTime() > to.getTime()
-        ? []
-        : await this.prisma.client.courierWalletTransaction.groupBy({
-            by: ['kind'],
-            where: { ...base, occurredAt: { gte: countFrom, lte: to } },
-            _sum: { amountInr: true },
-            _count: { _all: true },
-          });
+    const { cutover, countFrom, counts } = await this.adjustmentWindow(from, to);
+    const rows = counts
+      ? await this.prisma.client.courierWalletTransaction.groupBy({
+          by: ['kind'],
+          where: { ...ADJUSTMENT_BASE, occurredAt: win(countFrom, to) },
+          _sum: { amountInr: true },
+          _count: { _all: true },
+        })
+      : [];
     // What the cutover left out of THIS window, so the line says so.
     const excluded =
       countFrom.getTime() > from.getTime()
         ? await this.prisma.client.courierWalletTransaction.groupBy({
             by: ['kind'],
             where: {
-              ...base,
-              occurredAt: { gte: from, lt: countFrom.getTime() > to.getTime() ? to : countFrom },
+              ...ADJUSTMENT_BASE,
+              occurredAt: win(from, counts ? countFrom : to),
             },
             _sum: { amountInr: true },
             _count: { _all: true },
@@ -865,7 +1119,7 @@ export class PnlService {
       where: {
         type: BankEntryType.EXPENSE,
         settlementId: { not: null },
-        occurredAt: { gte: from, lte: to },
+        occurredAt: win(from, to),
       },
       _sum: { signedAmount: true },
       _count: { _all: true },
@@ -924,7 +1178,7 @@ export class PnlService {
       where: {
         direction: WalletEntryDirection.GST_WITHHOLDING,
         currency: Currency.INR,
-        createdAt: { gte: from, lte: to },
+        createdAt: win(from, to),
       },
       _sum: { amount: true },
       _count: { _all: true },
@@ -934,8 +1188,9 @@ export class PnlService {
     const returned = await this.deductionsReturned(from, to, [
       WalletEntryDirection.GST_WITHHOLDING,
     ]);
+    const returnedSum = sum(returned.map((r) => r.amount));
     const withheld = agg._sum.amount ?? ZERO;
-    const amount = withheld.sub(returned.amount);
+    const amount = withheld.sub(returnedSum);
     return this.line({
       key: 'cod_tax',
       label: 'COD tax deduction',
@@ -954,14 +1209,14 @@ export class PnlService {
             count: agg._count._all,
             amountInr: withheld.toFixed(2),
           },
-          ...(returned.count > 0
+          ...(returned.length > 0
             ? [
                 {
                   label: 'Returned on CODs the courier reversed',
                   source:
                     'seller_wallet_entries.amount WHERE direction=COD_DEDUCTION_REFUND AND linked to GST_WITHHOLDING',
-                  count: returned.count,
-                  amountInr: returned.amount.negated().toFixed(2),
+                  count: returned.length,
+                  amountInr: returnedSum.negated().toFixed(2),
                 },
               ]
             : []),
@@ -1000,7 +1255,7 @@ export class PnlService {
   ): Promise<{ total: Prisma.Decimal; unconverted: number }> {
     const where = {
       type: BankEntryType.EXPENSE,
-      occurredAt: { gte: from, lte: to },
+      occurredAt: win(from, to),
       inboundFreightChargeId: null,
       // A courier's COD fee is its own line (courierCodFees); counted
       // here too it would come off gross and off net.
@@ -1013,15 +1268,15 @@ export class PnlService {
     // Expenses are posted negative (money leaving); a cost is its negation.
     let total = (inr._sum.signedAmount ?? ZERO).negated();
     // Rent or salaries paid from a taka account: put in rupees at the
-    // rate in force THAT day. Added as they stood, they were taka read
+    // rate in force at the time. Added as they stood, they were taka read
     // as rupees — wrong by the exchange rate, silently.
     const other = await this.prisma.client.bankEntry.findMany({
       where: { ...where, currency: { not: Currency.INR } },
-      select: { signedAmount: true, currency: true, occurredAt: true },
+      select: { id: true, signedAmount: true, currency: true, occurredAt: true },
     });
     let unconverted = 0;
     for (const o of other) {
-      const rate = await this.inrPerUnit(o.currency, o.occurredAt, rates);
+      const rate = await this.inrPerUnit(o.currency, o.occurredAt, rates, `bank_entries:${o.id}`);
       if (rate === null) {
         unconverted += 1;
         continue;
@@ -1040,29 +1295,38 @@ export class PnlService {
    * number against the wrong parcel; but leaving it unmentioned means a
    * leg's margin reads better than it is while the money hides in a
    * total nobody breaks down.
+   *
+   * An entry with no rate to rupees is counted in `count` and NOT in the
+   * rupee figure — and `unconverted` says how many, so a figure that
+   * leaves money out cannot pass for one that does not.
    */
   private async unattributedLegCosts(
     from: Date,
     to: Date,
     rates: RateBook,
-  ): Promise<{ countInr: string; count: number } | null> {
+  ): Promise<{ amountInr: string; count: number; unconverted: number } | null> {
     const rows = await this.prisma.client.bankEntry.findMany({
       where: {
         type: BankEntryType.EXPENSE,
-        occurredAt: { gte: from, lte: to },
+        occurredAt: win(from, to),
         inboundFreightChargeId: null,
         settlementId: null,
         expenseCategory: { code: { in: LEG_EXPENSE_CATEGORIES } },
       },
-      select: { signedAmount: true, currency: true, occurredAt: true },
+      select: { id: true, signedAmount: true, currency: true, occurredAt: true },
     });
     if (rows.length === 0) return null;
     let total = ZERO;
+    let unconverted = 0;
     for (const r of rows) {
-      const rate = await this.inrPerUnit(r.currency, r.occurredAt, rates);
-      if (rate !== null) total = total.add(r.signedAmount.abs().mul(rate).toDecimalPlaces(2));
+      const rate = await this.inrPerUnit(r.currency, r.occurredAt, rates, `bank_entries:${r.id}`);
+      if (rate === null) {
+        unconverted += 1;
+        continue;
+      }
+      total = total.add(r.signedAmount.abs().mul(rate).toDecimalPlaces(2));
     }
-    return { countInr: total.toFixed(2), count: rows.length };
+    return { amountInr: total.toFixed(2), count: rows.length, unconverted };
   }
 
   /**
@@ -1075,20 +1339,16 @@ export class PnlService {
     const rows = await this.prisma.client.sellerWalletEntry.groupBy({
       by: ['direction'],
       where: {
-        direction: {
-          in: [WalletEntryDirection.INSTANT_PAY_FEE, WalletEntryDirection.COD_COLLECTION_FEE],
-        },
+        direction: { in: COD_SERVICE_FEE_DIRECTIONS },
         currency: Currency.INR,
-        createdAt: { gte: from, lte: to },
+        createdAt: win(from, to),
       },
       _sum: { amount: true },
       _count: { _all: true },
     });
-    const returned = await this.deductionsReturned(from, to, [
-      WalletEntryDirection.INSTANT_PAY_FEE,
-      WalletEntryDirection.COD_COLLECTION_FEE,
-    ]);
-    const revenue = rows.reduce((t, r) => t.add(r._sum.amount ?? ZERO), ZERO).sub(returned.amount);
+    const returned = await this.deductionsReturned(from, to, COD_SERVICE_FEE_DIRECTIONS);
+    const returnedSum = sum(returned.map((r) => r.amount));
+    const revenue = rows.reduce((t, r) => t.add(r._sum.amount ?? ZERO), ZERO).sub(returnedSum);
     return this.line({
       key: 'cod_service_fees',
       label: 'COD handling fees',
@@ -1108,14 +1368,14 @@ export class PnlService {
             count: r._count._all,
             amountInr: (r._sum.amount ?? ZERO).toFixed(2),
           })),
-          ...(returned.count > 0
+          ...(returned.length > 0
             ? [
                 {
                   label: 'Returned on CODs the courier reversed',
                   source:
                     'seller_wallet_entries.amount WHERE direction=COD_DEDUCTION_REFUND AND linked to a fee',
-                  count: returned.count,
-                  amountInr: returned.amount.negated().toFixed(2),
+                  count: returned.length,
+                  amountInr: returnedSum.negated().toFixed(2),
                 },
               ]
             : []),
@@ -1126,26 +1386,45 @@ export class PnlService {
   }
 
   /**
-   * Deductions given back to sellers because the courier reversed the COD
-   * they were taken from — only those returning one of `directions`, read
-   * off the deduction each refund names (`linkedEntryId`).
+   * Deductions given back to sellers in the window because the courier
+   * reversed the COD they were taken from — only those returning one of
+   * `directions`, read off the deduction each refund names
+   * (`linkedEntryId`). Rows, not a sum: the line total and its drill-down
+   * both read this.
    */
   private async deductionsReturned(
     from: Date,
     to: Date,
     directions: WalletEntryDirection[],
-  ): Promise<{ amount: Prisma.Decimal; count: number }> {
-    const agg = await this.prisma.client.sellerWalletEntry.aggregate({
+  ): Promise<
+    Array<{
+      amount: Prisma.Decimal;
+      createdAt: Date;
+      orderNumber: string | null;
+      companyName: string | null;
+    }>
+  > {
+    const rows = await this.prisma.client.sellerWalletEntry.findMany({
       where: {
         direction: WalletEntryDirection.COD_DEDUCTION_REFUND,
         currency: Currency.INR,
-        createdAt: { gte: from, lte: to },
+        createdAt: win(from, to),
         linkedEntry: { direction: { in: directions } },
       },
-      _sum: { amount: true },
-      _count: { _all: true },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        amount: true,
+        createdAt: true,
+        linkedOrder: { select: { orderNumber: true } },
+        seller: { select: { companyName: true } },
+      },
     });
-    return { amount: agg._sum.amount ?? ZERO, count: agg._count._all };
+    return rows.map((r) => ({
+      amount: r.amount,
+      createdAt: r.createdAt,
+      orderNumber: r.linkedOrder?.orderNumber ?? null,
+      companyName: r.seller?.companyName ?? null,
+    }));
   }
 
   /**
@@ -1158,12 +1437,12 @@ export class PnlService {
   private async codShortfall(from: Date, to: Date): Promise<PnlLine> {
     const [short, recovered] = await Promise.all([
       this.prisma.client.courierSettlementLine.aggregate({
-        where: { shortfallInr: { gt: 0 }, settlement: { receivedAt: { gte: from, lte: to } } },
+        where: { shortfallInr: { gt: 0 }, settlement: { receivedAt: win(from, to) } },
         _sum: { shortfallInr: true },
         _count: { _all: true },
       }),
       this.prisma.client.courierSettlementLine.aggregate({
-        where: { shortfallInr: { lt: 0 }, settlement: { receivedAt: { gte: from, lte: to } } },
+        where: { shortfallInr: { lt: 0 }, settlement: { receivedAt: win(from, to) } },
         _sum: { shortfallInr: true },
         _count: { _all: true },
       }),
@@ -1215,7 +1494,7 @@ export class PnlService {
       where: {
         direction: WalletEntryDirection.SCRAP_REFUND,
         currency: Currency.INR,
-        createdAt: { gte: from, lte: to },
+        createdAt: win(from, to),
       },
       _sum: { amount: true },
       _count: { _all: true },
@@ -1245,31 +1524,29 @@ export class PnlService {
   }
 
   /**
-   * What a courier charged on a waybill that is no LIVE Skydrop parcel —
-   * one cancelled after its waybill was issued (its shipment voided), or
-   * one booked outside Skydrop. The wallet import stamps costs only on
-   * the parcels it can match, so these fell out of every line. Counted
-   * from the same cutover as account adjustments: before it the accounts
-   * carried the business's parcels shipped outside Skydrop.
+   * Every courier charge in `[from, to)` on a waybill that is no LIVE
+   * Skydrop parcel — the ONE computation the line total and its
+   * drill-down both read.
+   *
+   * Two kinds of waybill, counted from two different dates:
+   *
+   *  - one that WAS a Skydrop parcel and is no longer a live one (voided
+   *    when its order was cancelled, or replaced by another shipment):
+   *    OURS whatever the date, because it was booked through us — the
+   *    cutover exists for the business's parcels shipped OUTSIDE
+   *    Skydrop, and this is not one.
+   *  - one that matches no Skydrop parcel at all: counted only from the
+   *    cutover, before which the accounts carried parcels whose revenue
+   *    is not in this report.
+   *
+   * A LIVE parcel absorbs a charge on its own waybill, on its RETURN
+   * waybill (`reverse_awb_number` — a customer-return pickup, which the
+   * importer costs onto the parcel's return column), and, for Shiprocket,
+   * on any waybill filed under its courier ORDER id. A waybill is unique
+   * only within a courier, so "ours" means a shipment of the SAME courier
+   * as the account the charge was taken from.
    */
-  private async unmatchedCourierCharges(from: Date, to: Date): Promise<PnlLine> {
-    // Two kinds of waybill, counted from two different dates:
-    //
-    //  - one that WAS a Skydrop parcel and is no longer a live one (voided
-    //    when its order was cancelled, or replaced by another shipment):
-    //    OURS whatever the date, because it was booked through us — the
-    //    cutover exists for the business's parcels shipped OUTSIDE
-    //    Skydrop, and this is not one. Before this, a voided parcel's
-    //    charges before 1 Oct fell off every line.
-    //  - one that matches no Skydrop parcel at all: counted only from the
-    //    cutover, before which the accounts carried parcels whose revenue
-    //    is not in this report.
-    //
-    // A waybill is unique only within a courier, so "ours" means a
-    // shipment of the SAME courier as the account the charge was taken
-    // from — a live parcel of another courier that merely shares the
-    // number does not absorb the charge (the importer, which is scoped the
-    // same way, would never have stamped it there either).
+  private async unmatchedCharges(from: Date, to: Date): Promise<UnmatchedCharge[]> {
     const cutover = await this.adjustmentsCutover();
     const cutoverFrom = cutover !== null && cutover.getTime() > from.getTime() ? cutover : from;
     const parcelWhere = {
@@ -1278,45 +1555,52 @@ export class PnlService {
       missingFromExportAt: null,
       awbNumber: { not: null },
     } as const;
+    type Grouped = {
+      courierAccountId: string;
+      awbNumber: string | null;
+      kind: CourierWalletTxnKind;
+      _sum: { amountInr: Prisma.Decimal | null };
+      _max: { occurredAt: Date | null };
+    };
     const netOf = (
-      rows: ReadonlyArray<{
-        courierAccountId: string;
-        awbNumber: string | null;
-        kind: CourierWalletTxnKind;
-        _sum: { amountInr: Prisma.Decimal | null };
-      }>,
-    ): Map<string, Prisma.Decimal> => {
-      const net = new Map<string, Prisma.Decimal>();
+      rows: ReadonlyArray<Grouped>,
+    ): Map<string, { net: Prisma.Decimal; at: Date }> => {
+      const net = new Map<string, { net: Prisma.Decimal; at: Date }>();
       for (const r of rows) {
         if (r.awbNumber === null) continue;
         const amt = r._sum.amountInr ?? ZERO;
         const key = `${r.courierAccountId}|${r.awbNumber}`;
-        net.set(
-          key,
-          (net.get(key) ?? ZERO).add(r.kind === CourierWalletTxnKind.DEBIT ? amt : amt.negated()),
-        );
+        const prev = net.get(key) ?? { net: ZERO, at: from };
+        const at = r._max.occurredAt ?? from;
+        net.set(key, {
+          net: prev.net.add(r.kind === CourierWalletTxnKind.DEBIT ? amt : amt.negated()),
+          at: at.getTime() > prev.at.getTime() ? at : prev.at,
+        });
       }
       return net;
     };
     const windowRows = await this.prisma.client.courierWalletTransaction.groupBy({
       by: ['courierAccountId', 'awbNumber', 'courierOrderRef', 'kind'],
-      where: { ...parcelWhere, occurredAt: { gte: from, lte: to } },
+      where: { ...parcelWhere, occurredAt: win(from, to) },
       _sum: { amountInr: true },
+      _max: { occurredAt: true },
     });
     const windowNet = netOf(windowRows);
     let sinceCutoverNet = windowNet;
-    if (cutoverFrom.getTime() > to.getTime()) {
-      sinceCutoverNet = new Map<string, Prisma.Decimal>();
+    if (cutoverFrom.getTime() >= to.getTime()) {
+      sinceCutoverNet = new Map();
     } else if (cutoverFrom.getTime() !== from.getTime()) {
       const cutoverRows = await this.prisma.client.courierWalletTransaction.groupBy({
         by: ['courierAccountId', 'awbNumber', 'courierOrderRef', 'kind'],
-        where: { ...parcelWhere, occurredAt: { gte: cutoverFrom, lte: to } },
+        where: { ...parcelWhere, occurredAt: win(cutoverFrom, to) },
         _sum: { amountInr: true },
+        _max: { occurredAt: true },
       });
       sinceCutoverNet = netOf(cutoverRows);
     }
 
     const keys = [...windowNet.keys()];
+    if (keys.length === 0) return [];
     const accountIds = [...new Set(keys.map((k) => k.slice(0, k.indexOf('|'))))];
     const awbs = [...new Set(keys.map((k) => k.slice(k.indexOf('|') + 1)))];
     // A Shiprocket charge's ORDER id: a waybill Shiprocket has since
@@ -1329,38 +1613,34 @@ export class PnlService {
       }
     }
     const refs = [...new Set(refOf.values())];
-    const [accounts, shipments] =
-      keys.length === 0
-        ? [[], []]
-        : await Promise.all([
-            this.prisma.client.courierAccount.findMany({
-              where: { id: { in: accountIds } },
-              select: { id: true, courier: { select: { code: true } } },
-            }),
-            // Every shipment that ever carried one of these waybills —
-            // voided and replaced ones included, which is the point.
-            this.prisma.client.shipment.findMany({
-              where: {
-                OR: [
-                  { awbNumber: { in: awbs } },
-                  ...(refs.length > 0 ? [{ courierOrderId: { in: refs } }] : []),
-                ],
-              },
-              select: {
-                awbNumber: true,
-                courierOrderId: true,
-                courierCode: true,
-                deletedAt: true,
-                supersededAt: true,
-              },
-            }),
-          ]);
+    const [accounts, shipments] = await Promise.all([
+      this.prisma.client.courierAccount.findMany({
+        where: { id: { in: accountIds } },
+        select: { id: true, courier: { select: { code: true } } },
+      }),
+      // Every shipment that ever carried one of these waybills — voided
+      // and replaced ones included, which is the point.
+      this.prisma.client.shipment.findMany({
+        where: {
+          OR: [
+            { awbNumber: { in: awbs } },
+            { reverseAwbNumber: { in: awbs } },
+            ...(refs.length > 0 ? [{ courierOrderId: { in: refs } }] : []),
+          ],
+        },
+        select: {
+          awbNumber: true,
+          reverseAwbNumber: true,
+          courierOrderId: true,
+          courierCode: true,
+          deletedAt: true,
+          supersededAt: true,
+        },
+      }),
+    ]);
     const courierOf = new Map(accounts.map((a) => [a.id, a.courier.code]));
 
-    let deadCost = ZERO;
-    let deadCount = 0;
-    let strayCost = ZERO;
-    let strayCount = 0;
+    const out: UnmatchedCharge[] = [];
     for (const key of keys) {
       const bar = key.indexOf('|');
       const code = courierOf.get(key.slice(0, bar));
@@ -1369,26 +1649,37 @@ export class PnlService {
       const mine = shipments.filter(
         (s) =>
           s.courierCode === code &&
-          (s.awbNumber === awb || (ref !== undefined && s.courierOrderId === ref)),
+          (s.awbNumber === awb ||
+            s.reverseAwbNumber === awb ||
+            (ref !== undefined && s.courierOrderId === ref)),
       );
       if (mine.some((s) => s.deletedAt === null && s.supersededAt === null)) continue;
       if (mine.length > 0) {
-        deadCost = deadCost.add(windowNet.get(key) ?? ZERO);
-        deadCount += 1;
+        const w = windowNet.get(key);
+        if (w !== undefined) out.push({ awb, net: w.net, at: w.at, kind: 'dead' });
         continue;
       }
       const since = sinceCutoverNet.get(key);
       if (since === undefined) continue;
-      strayCost = strayCost.add(since);
-      strayCount += 1;
+      out.push({ awb, net: since.net, at: since.at, kind: 'stray' });
     }
-    const cost = deadCost.add(strayCost);
-    const count = deadCount + strayCount;
+    out.sort((a, b) => b.at.getTime() - a.at.getTime());
+    return out;
+  }
+
+  /** What a courier charged on a waybill that is no LIVE Skydrop parcel (see `unmatchedCharges`). */
+  private async unmatchedCourierCharges(from: Date, to: Date): Promise<PnlLine> {
+    const charges = await this.unmatchedCharges(from, to);
+    const dead = charges.filter((c) => c.kind === 'dead');
+    const stray = charges.filter((c) => c.kind === 'stray');
+    const deadCost = sum(dead.map((c) => c.net));
+    const strayCost = sum(stray.map((c) => c.net));
+    const count = charges.length;
     return this.line({
       key: 'courier_unmatched',
       label: 'Courier charges on no live Skydrop parcel',
       revenue: ZERO,
-      cost,
+      cost: deadCost.add(strayCost),
       priced: count,
       total: count,
       note: null,
@@ -1399,14 +1690,14 @@ export class PnlService {
             label: 'On Skydrop parcels voided or replaced by another shipment',
             source:
               "courier_wallet_transactions WHERE category='parcel' AND awb is a deleted or superseded shipment of the same courier",
-            count: deadCount,
+            count: dead.length,
             amountInr: deadCost.toFixed(2),
           },
           {
             label: 'On waybills that match no Skydrop parcel (from the cutover)',
             source:
-              "courier_wallet_transactions WHERE category='parcel' AND awb matches no shipment of that courier AND occurred_at >= pnl.courier_adjustments_from",
-            count: strayCount,
+              "courier_wallet_transactions WHERE category='parcel' AND awb matches no shipment (forward or return waybill) of that courier AND occurred_at >= pnl.courier_adjustments_from",
+            count: stray.length,
             amountInr: strayCost.toFixed(2),
           },
         ],
@@ -1415,53 +1706,97 @@ export class PnlService {
   }
 
   /**
-   * Corrections posted against a bank statement on OUR money — bank
-   * charges, interest, a difference nobody could explain. Signed: a
-   * positive one is money we did not know we had.
+   * Capital RECONCILIATION_ADJUSTMENT entries in the window, each
+   * classified — the ONE computation the line total and its drill-down
+   * both read.
+   *
+   * The account's FIRST capital entry is its OPENING balance: money the
+   * business already had when the book started — capital put in, not
+   * earned. Judged on CAPITAL entries only, so a seller top-up landing
+   * before the owner got round to entering the balance does not turn the
+   * balance into income. Money put in LATER has its own entry type
+   * (OWNER_CONTRIBUTION) and never reaches this line.
    */
-  private async bankReconciliation(from: Date, to: Date, rates: RateBook): Promise<PnlLine> {
+  private async reconciliationRows(
+    from: Date,
+    to: Date,
+    rates: RateBook,
+  ): Promise<
+    Array<{
+      ref: string;
+      subRef: string;
+      at: Date;
+      opening: boolean;
+      inr: Prisma.Decimal | null;
+    }>
+  > {
     const rows = await this.prisma.client.bankEntry.findMany({
       where: {
         type: BankEntryType.RECONCILIATION_ADJUSTMENT,
         // A correction to money held for a seller is theirs, not ours.
         ownerKind: BankOwnerKind.CAPITAL,
-        occurredAt: { gte: from, lte: to },
+        occurredAt: win(from, to),
       },
-      select: { id: true, accountId: true, signedAmount: true, currency: true, occurredAt: true },
+      orderBy: { occurredAt: 'desc' },
+      select: {
+        id: true,
+        accountId: true,
+        signedAmount: true,
+        currency: true,
+        occurredAt: true,
+        reference: true,
+        account: { select: { label: true } },
+      },
     });
-    let total = ZERO;
-    let counted = 0;
-    let unconverted = 0;
-    let opening = ZERO;
-    let openingCount = 0;
+    const out: Array<{
+      ref: string;
+      subRef: string;
+      at: Date;
+      opening: boolean;
+      inr: Prisma.Decimal | null;
+    }> = [];
     for (const r of rows) {
-      // The account's FIRST capital entry is its OPENING balance: money
-      // the business already had when the book started — capital put in,
-      // not earned. Judged on CAPITAL entries only, so a seller top-up
-      // landing before the owner got round to entering the balance does
-      // not turn the balance into income. Money put in LATER has its own
-      // entry type (OWNER_CONTRIBUTION) and never reaches this line.
       const earlier = await this.prisma.client.bankEntry.findFirst({
         where: { accountId: r.accountId, ownerKind: BankOwnerKind.CAPITAL, id: { lt: r.id } },
         select: { id: true },
       });
-      const rate = await this.inrPerUnit(r.currency, r.occurredAt, rates);
-      if (earlier === null) {
-        openingCount += 1;
-        if (rate !== null) opening = opening.add(r.signedAmount.mul(rate).toDecimalPlaces(2));
-        continue;
-      }
-      if (rate === null) {
-        unconverted += 1;
-        continue;
-      }
-      total = total.add(r.signedAmount.mul(rate).toDecimalPlaces(2));
-      counted += 1;
+      const rate = await this.inrPerUnit(r.currency, r.occurredAt, rates, `bank_entries:${r.id}`);
+      const opening = earlier === null;
+      out.push({
+        ref: r.reference ?? r.account.label,
+        subRef:
+          (r.currency === Currency.INR
+            ? r.account.label
+            : `${r.account.label} · ${r.signedAmount.toFixed(2)} ${r.currency}`) +
+          (opening
+            ? ' · opening balance — capital put in, not counted'
+            : rate === null
+              ? ' · no rate to rupees — not counted'
+              : ''),
+        at: r.occurredAt,
+        opening,
+        inr: rate === null ? null : r.signedAmount.mul(rate).toDecimalPlaces(2),
+      });
     }
+    return out;
+  }
+
+  /**
+   * Corrections posted against a bank statement on OUR money — bank
+   * charges, interest, a difference nobody could explain. Signed: a
+   * positive one is money we did not know we had.
+   */
+  private async bankReconciliation(from: Date, to: Date, rates: RateBook): Promise<PnlLine> {
+    const rows = await this.reconciliationRows(from, to, rates);
+    const openings = rows.filter((r) => r.opening);
+    const counted = rows.filter((r) => !r.opening && r.inr !== null);
+    const unconverted = rows.filter((r) => !r.opening && r.inr === null).length;
+    const total = sum(counted.map((r) => r.inr));
+    const opening = sum(openings.map((r) => r.inr));
     const notes = [
-      ...(openingCount > 0
+      ...(openings.length > 0
         ? [
-            `${openingCount} opening balance(s) (₹${opening.toFixed(2)}) are capital put in, ` +
+            `${openings.length} opening balance(s) (₹${opening.toFixed(2)}) are capital put in, ` +
               'not earned, and are not counted.',
           ]
         : []),
@@ -1478,8 +1813,8 @@ export class PnlService {
       marginPercent: null,
       coverage: {
         // An opening balance is outside the line, not unmeasured in it.
-        priced: counted,
-        total: counted + unconverted,
+        priced: counted.length,
+        total: counted.length + unconverted,
         note: notes.length === 0 ? null : notes.join(' '),
       },
       basis: {
@@ -1488,7 +1823,7 @@ export class PnlService {
             label: 'Corrections against a bank statement (charges, interest, unexplained)',
             source:
               "bank_entries.signed_amount WHERE type=RECONCILIATION_ADJUSTMENT AND owner='capital' AND not the account's first capital entry",
-            count: counted,
+            count: counted.length,
             amountInr: total.toFixed(2),
           },
         ],
@@ -1498,29 +1833,57 @@ export class PnlService {
   }
 
   /**
-   * What an investment earned: returned less placed, recognised when it
-   * closes. The principal moving out and back is not income; the
-   * difference is.
+   * Investments closed in the window, each with what it earned in rupees
+   * — returned less placed, recognised when it closes. The principal
+   * moving out and back is not income; the difference is.
+   *
+   * `placed_inr` / `returned_inr` hold the ACCOUNT's currency despite
+   * their names (InvestmentService says so): a taka deposit stores taka.
+   * Subtracted as they stood, ৳1,500 of interest read as ₹1,500. The
+   * difference is put in rupees at the rate in force when it closed.
    */
-  private async investmentIncome(from: Date, to: Date, rates: RateBook): Promise<PnlLine> {
-    // `placed_inr` / `returned_inr` hold the ACCOUNT's currency despite
-    // their names (InvestmentService says so): a taka deposit stores taka.
-    // Subtracted as they stood, ৳1,500 of interest read as ₹1,500. The
-    // difference is put in rupees at the rate on the day it closed.
+  private async investmentRows(
+    from: Date,
+    to: Date,
+    rates: RateBook,
+  ): Promise<Array<{ ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }>> {
     const rows = await this.prisma.client.investment.findMany({
-      where: { closedAt: { gte: from, lte: to } },
-      select: { placedInr: true, returnedInr: true, currency: true, closedAt: true },
+      where: { closedAt: win(from, to) },
+      orderBy: { closedAt: 'desc' },
+      select: {
+        id: true,
+        label: true,
+        counterparty: true,
+        placedInr: true,
+        returnedInr: true,
+        currency: true,
+        closedAt: true,
+      },
     });
-    let income = ZERO;
-    let unconverted = 0;
+    const out: Array<{ ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }> = [];
     for (const r of rows) {
-      const rate = await this.inrPerUnit(r.currency, r.closedAt ?? to, rates);
-      if (rate === null) {
-        unconverted += 1;
-        continue;
-      }
-      income = income.add(r.returnedInr.sub(r.placedInr).mul(rate).toDecimalPlaces(2));
+      const at = r.closedAt ?? from;
+      const rate = await this.inrPerUnit(r.currency, at, rates, `investments:${r.id}`);
+      const earned = r.returnedInr.sub(r.placedInr);
+      out.push({
+        ref: r.label,
+        subRef:
+          (r.currency === Currency.INR
+            ? r.counterparty
+            : `${r.counterparty} · ${earned.toFixed(2)} ${r.currency}`) +
+          (rate === null ? ' · no rate to rupees — not counted' : ''),
+        at,
+        inr: rate === null ? null : earned.mul(rate).toDecimalPlaces(2),
+      });
     }
+    return out;
+  }
+
+  /** What an investment earned, recognised when it closes (see `investmentRows`). */
+  private async investmentIncome(from: Date, to: Date, rates: RateBook): Promise<PnlLine> {
+    const rows = await this.investmentRows(from, to, rates);
+    const income = sum(rows.map((r) => r.inr));
+    const unconverted = rows.filter((r) => r.inr === null).length;
     return {
       key: 'investment_income',
       label: 'Investment income',
@@ -1552,17 +1915,22 @@ export class PnlService {
   }
 
   /**
-   * INR per unit of `currency` on `at`: the rate in force then (the
-   * history), else today's. Null when there is no rate at all — the
-   * caller leaves the amount out and says so rather than guessing.
+   * INR per unit of `currency` at the instant `at`: the LATEST rate
+   * recorded at or before it (the history), else today's. Null when there
+   * is no rate at all — the caller leaves the amount out and says so
+   * rather than guessing.
+   *
+   * `amountKey` names the amount being converted (`<table>:<id>`), so the
+   * report can say how many DISTINCT amounts fell back to today's rate.
    */
   private async inrPerUnit(
     currency: Currency,
     at: Date,
     book: RateBook,
+    amountKey: string,
   ): Promise<Prisma.Decimal | null> {
     if (currency === Currency.INR) return new Prisma.Decimal(1);
-    const key = `${currency}|${at.toISOString().slice(0, 10)}`;
+    const key = `${currency}|${at.getTime()}`;
     let entry = book.rates.get(key);
     if (entry === undefined) {
       const pair = [
@@ -1588,13 +1956,14 @@ export class PnlService {
           : row.fromCurrency === currency
             ? row.rate
             : new Prisma.Decimal(1).div(row.rate);
-      // TODAY's rate standing in for a day nothing was recorded for. Used,
-      // because leaving the amount out would be further from the truth —
-      // but counted, so the report says how many figures are approximate.
+      // TODAY's rate standing in for an instant nothing was recorded
+      // before. Used, because leaving the amount out would be further
+      // from the truth — but counted, so the report says how many figures
+      // are approximate.
       entry = { rate, fallback: hist === null && rate !== null };
       book.rates.set(key, entry);
     }
-    if (entry.fallback) book.fellBack += 1;
+    if (entry.fallback) book.fellBack.add(amountKey);
     return entry.rate;
   }
 
@@ -1607,6 +1976,12 @@ export class PnlService {
    * anything a person is holding. Checking means finding the parcel that
    * looks wrong, and for that you need the twelve rows.
    *
+   * Each line's rows use EXACTLY its total's filters — the same half-open
+   * window, cutover, exclusions and conversions, most by reading the same
+   * computation — so the signed rows add up to the figure above them. A
+   * null figure is one the total does not count (not recorded, lost in
+   * transit, no rate, an opening balance), never a zero.
+   *
    * Capped, and the cap is REPORTED rather than silently applied: a
    * truncated list that does not say it is truncated is worse than no
    * list, because the numbers stop adding up and nothing explains why.
@@ -1616,177 +1991,185 @@ export class PnlService {
     from: Date,
     to: Date,
     limit = 500,
-  ): Promise<{
-    key: string;
-    items: ReadonlyArray<{
-      ref: string;
-      subRef: string | null;
-      at: string;
-      revenueInr: string | null;
-      costInr: string | null;
-    }>;
-    truncated: boolean;
-  }> {
+  ): Promise<{ key: string; items: ReadonlyArray<PnlLineItem>; truncated: boolean }> {
     const take = Math.min(Math.max(limit, 1), 1000);
+    const capped = (
+      items: PnlLineItem[],
+      moreInDb = false,
+    ): { key: string; items: PnlLineItem[]; truncated: boolean } => {
+      const sorted = [...items].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+      return { key, items: sorted.slice(0, take), truncated: moreInDb || sorted.length > take };
+    };
+    if (!isLineKey(key)) return { key, items: [], truncated: false };
+    const rates = new RateBook();
+
     switch (key) {
       case 'inbound_freight': {
         const rows = await this.prisma.client.inboundFreightCharge.findMany({
-          where: { createdAt: { gte: from, lte: to } },
+          where: { createdAt: win(from, to) },
           orderBy: { createdAt: 'desc' },
           take: take + 1,
           select: {
             totalInr: true,
             ourCostInr: true,
+            status: true,
+            amountSettledInr: true,
             createdAt: true,
             consignment: { select: { consignmentNumber: true } },
             seller: { select: { companyName: true } },
           },
         });
-        return {
-          key,
-          items: rows.slice(0, take).map((r) => ({
+        return capped(
+          rows.map((r) => ({
             ref: r.consignment?.consignmentNumber ?? '—',
             subRef: r.seller?.companyName ?? null,
             at: r.createdAt.toISOString(),
-            revenueInr: r.totalInr.toFixed(2),
+            revenueInr: this.freightBilled(r).toFixed(2),
             // Null, not zero. "No forwarder cost recorded" and "the
             // forwarder charged nothing" are different facts, and only
             // one of them means somebody still has to do something.
             costInr: r.ourCostInr?.toFixed(2) ?? null,
           })),
-          truncated: rows.length > take,
-        };
+        );
       }
 
       case 'delivery':
       case 'rto': {
-        // EXACTLY the totals' cohorts: the same orders (delivery) or the
-        // same received-back window (returns), the same shipment filter,
-        // and revenue net of the same refunds — or the rows stop adding up
-        // to the figure above them.
-        const isRto = key === 'rto';
-        const fate = isRto ? null : await this.fateCohort(from, to);
-        const where: Prisma.ShipmentWhereInput = isRto
-          ? { deletedAt: null, supersededAt: null, rtoReceivedAt: { gte: from, lte: to } }
-          : this.deliveryShipments(fate?.orderIds ?? []);
-        const rows =
-          fate !== null && fate.orderIds.length === 0
-            ? []
-            : await this.prisma.client.shipment.findMany({
-                where,
-                orderBy: { createdAt: 'desc' },
-                take: take + 1,
-                select: {
-                  shipmentNumber: true,
-                  awbNumber: true,
-                  createdAt: true,
-                  rtoReceivedAt: true,
-                  actualCourierCostInr: true,
-                  actualRtoCostInr: true,
-                  orderShipments: {
-                    take: 1,
-                    select: {
-                      order: {
-                        select: {
-                          id: true,
-                          orderNumber: true,
-                          charges: {
-                            where: {
-                              deletedAt: null,
-                              type: {
-                                in: isRto ? [...RETURN_REVENUE_TYPES] : [...DELIVERY_REVENUE_TYPES],
-                              },
-                            },
-                            select: { amountInr: true },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              });
-        const refundedBy = new Map<string, Prisma.Decimal>();
-        if (!isRto && rows.length > 0) {
-          const ids = rows
-            .map((s) => s.orderShipments[0]?.order.id)
-            .filter((id): id is string => id !== undefined);
-          const refunds = await this.prisma.client.sellerWalletEntry.groupBy({
-            by: ['linkedOrderId'],
-            where: {
-              direction: WalletEntryDirection.ORDER_CHARGES_REFUND,
-              currency: Currency.INR,
-              linkedOrderId: { in: ids },
-            },
-            _sum: { amount: true },
-          });
-          for (const r of refunds) {
-            if (r.linkedOrderId !== null) refundedBy.set(r.linkedOrderId, r._sum.amount ?? ZERO);
-          }
-        }
-        return {
-          key,
-          items: rows.slice(0, take).map((s) => {
-            const order = s.orderShipments[0]?.order ?? null;
-            const billed = (order?.charges ?? [])
-              .reduce((t, c) => t.add(c.amountInr), ZERO)
-              .sub(order === null ? ZERO : (refundedBy.get(order.id) ?? ZERO));
-            // Both columns, as on the summary lines: a returned parcel's
-            // forward is ₹0 once the refund is netted, so the sum is the
-            // parcel's cost. Null only when neither has been recorded.
-            const cost =
-              s.actualCourierCostInr === null && s.actualRtoCostInr === null
-                ? null
-                : (s.actualCourierCostInr ?? ZERO).add(s.actualRtoCostInr ?? ZERO);
-            // Dated when its fate was settled — delivered / lost, or
-            // received back — which is what put it in this window.
-            const at = isRto
-              ? (s.rtoReceivedAt ?? s.createdAt)
-              : ((order === null ? undefined : fate?.at.get(order.id)) ?? s.createdAt);
-            return {
-              ref: s.shipmentNumber,
-              subRef: order?.orderNumber ?? s.awbNumber,
-              at: at.toISOString(),
-              revenueInr: billed.toFixed(2),
-              costInr: cost?.toFixed(2) ?? null,
-            };
-          }),
-          truncated: rows.length > take,
-        };
+        // One row per ORDER — its charges once, its cost summed over its
+        // live shipments — from the very cohort the total is built from.
+        const cohort = await this.fateCohort(key, from, to);
+        return capped(
+          cohort.orders.map((o) => ({
+            ref: o.orderNumber,
+            subRef:
+              (o.parcels.length === 0 ? 'no live parcel' : o.parcels.join(', ')) +
+              (o.lost ? ' · lost in transit — never billed' : ''),
+            at: o.at.toISOString(),
+            revenueInr: o.billed?.toFixed(2) ?? null,
+            costInr: o.cost?.toFixed(2) ?? null,
+          })),
+        );
       }
 
-      case 'cod_tax': {
-        const rows = await this.prisma.client.sellerWalletEntry.findMany({
-          where: {
-            direction: WalletEntryDirection.GST_WITHHOLDING,
-            currency: Currency.INR,
-            createdAt: { gte: from, lte: to },
-          },
-          orderBy: { id: 'desc' },
-          take: take + 1,
-          select: {
-            amount: true,
-            createdAt: true,
-            linkedOrder: { select: { orderNumber: true } },
-            seller: { select: { companyName: true } },
-          },
-        });
-        return {
-          key,
-          items: rows.slice(0, take).map((e) => ({
-            ref: e.linkedOrder?.orderNumber ?? '—',
-            subRef: e.seller?.companyName ?? null,
-            at: e.createdAt.toISOString(),
-            revenueInr: e.amount.toFixed(2),
-            costInr: null,
-          })),
-          truncated: rows.length > take,
-        };
+      case 'cod_tax':
+      case 'cod_service_fees': {
+        const isTax = key === 'cod_tax';
+        const directions = isTax
+          ? [WalletEntryDirection.GST_WITHHOLDING]
+          : COD_SERVICE_FEE_DIRECTIONS;
+        const [rows, returned] = await Promise.all([
+          this.prisma.client.sellerWalletEntry.findMany({
+            where: {
+              direction: { in: directions },
+              currency: Currency.INR,
+              createdAt: win(from, to),
+            },
+            orderBy: { createdAt: 'desc' },
+            take: take + 1,
+            select: {
+              amount: true,
+              createdAt: true,
+              linkedOrder: { select: { orderNumber: true } },
+              seller: { select: { companyName: true } },
+            },
+          }),
+          this.deductionsReturned(from, to, directions),
+        ]);
+        return capped(
+          [
+            ...rows.map((e) => ({
+              ref: e.linkedOrder?.orderNumber ?? '—',
+              subRef: e.seller?.companyName ?? null,
+              at: e.createdAt.toISOString(),
+              revenueInr: e.amount.toFixed(2),
+              costInr: null,
+            })),
+            // Given back on a COD the courier reversed: comes OFF the line,
+            // as it does in the total.
+            ...returned.map((r) => ({
+              ref: r.orderNumber ?? '—',
+              subRef: `${r.companyName ?? '—'} · returned on a reversed COD`,
+              at: r.createdAt.toISOString(),
+              revenueInr: r.amount.negated().toFixed(2),
+              costInr: null,
+            })),
+          ],
+          rows.length > take,
+        );
       }
 
       case 'fx': {
+        const rows = await this.fxRows(from, to, rates);
+        return capped(
+          rows.map((r) => ({
+            ref: r.ref,
+            subRef: r.subRef,
+            at: r.at.toISOString(),
+            // In RUPEES at its own transfer's rate, as the total is —
+            // signed, because a spread can go against us.
+            revenueInr: r.inr?.toFixed(2) ?? null,
+            costInr: null,
+          })),
+        );
+      }
+
+      case 'courier_adjustments': {
+        const { countFrom, counts } = await this.adjustmentWindow(from, to);
+        const rows = counts
+          ? await this.prisma.client.courierWalletTransaction.findMany({
+              where: { ...ADJUSTMENT_BASE, occurredAt: win(countFrom, to) },
+              orderBy: { occurredAt: 'desc' },
+              take: take + 1,
+              select: {
+                txnId: true,
+                awbNumber: true,
+                kind: true,
+                amountInr: true,
+                occurredAt: true,
+                shipmentStatus: true,
+              },
+            })
+          : [];
+        return capped(
+          rows.map((t) => ({
+            ref: t.txnId,
+            subRef: t.awbNumber ?? t.shipmentStatus,
+            at: t.occurredAt.toISOString(),
+            revenueInr: null,
+            // Signed: a credit reduces the cost.
+            costInr: (t.kind === CourierWalletTxnKind.DEBIT
+              ? t.amountInr
+              : t.amountInr.negated()
+            ).toFixed(2),
+          })),
+          rows.length > take,
+        );
+      }
+
+      case 'courier_unmatched': {
+        const charges = await this.unmatchedCharges(from, to);
+        return capped(
+          charges.map((c) => ({
+            ref: c.awb,
+            subRef:
+              c.kind === 'dead'
+                ? 'Skydrop parcel voided or replaced'
+                : 'matches no Skydrop parcel (from the cutover)',
+            at: c.at.toISOString(),
+            revenueInr: null,
+            costInr: c.net.toFixed(2),
+          })),
+        );
+      }
+
+      case 'courier_cod_fees': {
         const rows = await this.prisma.client.bankEntry.findMany({
-          where: { type: BankEntryType.FX_SPREAD, occurredAt: { gte: from, lte: to } },
-          orderBy: { id: 'desc' },
+          where: {
+            type: BankEntryType.EXPENSE,
+            settlementId: { not: null },
+            occurredAt: win(from, to),
+          },
+          orderBy: { occurredAt: 'desc' },
           take: take + 1,
           select: {
             signedAmount: true,
@@ -1795,64 +2178,23 @@ export class PnlService {
             account: { select: { label: true } },
           },
         });
-        return {
-          key,
-          items: rows.slice(0, take).map((e) => ({
-            ref: e.reference ?? e.account.label,
+        return capped(
+          rows.map((e) => ({
+            ref: e.reference ?? '—',
             subRef: e.account.label,
             at: e.occurredAt.toISOString(),
-            // Signed, not absolute: an FX spread can go against us, and
-            // showing the magnitude would turn a loss into a gain.
-            revenueInr: e.signedAmount.toFixed(2),
-            costInr: null,
+            revenueInr: null,
+            costInr: e.signedAmount.abs().toFixed(2),
           })),
-          truncated: rows.length > take,
-        };
-      }
-
-      case 'cod_service_fees':
-      case 'damage_refunds': {
-        const isDamage = key === 'damage_refunds';
-        const rows = await this.prisma.client.sellerWalletEntry.findMany({
-          where: {
-            direction: isDamage
-              ? WalletEntryDirection.SCRAP_REFUND
-              : {
-                  in: [
-                    WalletEntryDirection.INSTANT_PAY_FEE,
-                    WalletEntryDirection.COD_COLLECTION_FEE,
-                  ],
-                },
-            currency: Currency.INR,
-            createdAt: { gte: from, lte: to },
-          },
-          orderBy: { id: 'desc' },
-          take: take + 1,
-          select: {
-            amount: true,
-            createdAt: true,
-            linkedOrder: { select: { orderNumber: true } },
-            seller: { select: { companyName: true } },
-          },
-        });
-        return {
-          key,
-          items: rows.slice(0, take).map((e) => ({
-            ref: e.linkedOrder?.orderNumber ?? '—',
-            subRef: e.seller?.companyName ?? null,
-            at: e.createdAt.toISOString(),
-            revenueInr: isDamage ? null : e.amount.toFixed(2),
-            costInr: isDamage ? e.amount.toFixed(2) : null,
-          })),
-          truncated: rows.length > take,
-        };
+          rows.length > take,
+        );
       }
 
       case 'cod_shortfall': {
         const rows = await this.prisma.client.courierSettlementLine.findMany({
           where: {
             shortfallInr: { not: 0 },
-            settlement: { receivedAt: { gte: from, lte: to } },
+            settlement: { receivedAt: win(from, to) },
           },
           orderBy: { id: 'desc' },
           take: take + 1,
@@ -1862,9 +2204,8 @@ export class PnlService {
             settlement: { select: { reference: true, receivedAt: true } },
           },
         });
-        return {
-          key,
-          items: rows.slice(0, take).map((l) => ({
+        return capped(
+          rows.map((l) => ({
             ref: l.order.orderNumber,
             subRef: l.settlement.reference,
             at: l.settlement.receivedAt.toISOString(),
@@ -1872,41 +2213,70 @@ export class PnlService {
             // Signed: a recovery shows as a negative cost.
             costInr: l.shortfallInr.toFixed(2),
           })),
-          truncated: rows.length > take,
-        };
+          rows.length > take,
+        );
       }
 
-      case 'courier_cod_fees': {
-        const rows = await this.prisma.client.bankEntry.findMany({
+      case 'damage_refunds': {
+        const rows = await this.prisma.client.sellerWalletEntry.findMany({
           where: {
-            type: BankEntryType.EXPENSE,
-            settlementId: { not: null },
-            occurredAt: { gte: from, lte: to },
+            direction: WalletEntryDirection.SCRAP_REFUND,
+            currency: Currency.INR,
+            createdAt: win(from, to),
           },
-          orderBy: { id: 'desc' },
+          orderBy: { createdAt: 'desc' },
           take: take + 1,
           select: {
-            signedAmount: true,
-            occurredAt: true,
-            reference: true,
-            account: { select: { label: true } },
+            amount: true,
+            createdAt: true,
+            linkedOrder: { select: { orderNumber: true } },
+            seller: { select: { companyName: true } },
           },
         });
-        return {
-          key,
-          items: rows.slice(0, take).map((e) => ({
-            ref: e.reference ?? '—',
-            subRef: e.account.label,
-            at: e.occurredAt.toISOString(),
+        return capped(
+          rows.map((e) => ({
+            ref: e.linkedOrder?.orderNumber ?? '—',
+            subRef: e.seller?.companyName ?? null,
+            at: e.createdAt.toISOString(),
             revenueInr: null,
-            costInr: e.signedAmount.abs().toFixed(2),
+            costInr: e.amount.toFixed(2),
           })),
-          truncated: rows.length > take,
-        };
+          rows.length > take,
+        );
       }
 
-      default:
-        return { key, items: [], truncated: false };
+      case 'bank_reconciliation': {
+        const rows = await this.reconciliationRows(from, to, rates);
+        return capped(
+          rows.map((r) => ({
+            ref: r.ref,
+            subRef: r.subRef,
+            at: r.at.toISOString(),
+            // An opening balance is listed so it can be seen, and NOT
+            // counted — exactly as the total leaves it out.
+            revenueInr: r.opening ? null : (r.inr?.toFixed(2) ?? null),
+            costInr: null,
+          })),
+        );
+      }
+
+      case 'investment_income': {
+        const rows = await this.investmentRows(from, to, rates);
+        return capped(
+          rows.map((r) => ({
+            ref: r.ref,
+            subRef: r.subRef,
+            at: r.at.toISOString(),
+            revenueInr: r.inr?.toFixed(2) ?? null,
+            costInr: null,
+          })),
+        );
+      }
+
+      default: {
+        const unreachable: never = key;
+        return { key: unreachable, items: [], truncated: false };
+      }
     }
   }
 
@@ -1941,7 +2311,7 @@ export class PnlService {
   }
 
   private line(input: {
-    key: string;
+    key: PnlLineKey;
     label: string;
     revenue: Prisma.Decimal;
     cost: Prisma.Decimal;
