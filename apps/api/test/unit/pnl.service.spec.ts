@@ -1,5 +1,12 @@
-import { Prisma } from '@skydrop/db';
-import { PNL_LINE_KEYS, PnlService } from '../../src/modules/treasury/services/pnl.service';
+import { ChargeType, OrderStatus, Prisma } from '@skydrop/db';
+import {
+  DELIVERY_REVENUE_TYPES,
+  orderFate,
+  PNL_LINE_KEYS,
+  PnlService,
+  RETURN_REVENUE_TYPES,
+} from '../../src/modules/treasury/services/pnl.service';
+import { OrderStateMachineService } from '../../src/modules/order/services/order-state-machine.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import { ShipmentCostService } from '../../src/modules/treasury/services/shipment-cost.service';
@@ -85,6 +92,8 @@ class World {
     events?: Array<[string, Date]>;
     status?: string;
     charges?: Array<[string, string]>;
+    /** ORDER_CHARGES wallet debits actually taken. */
+    debits?: string[];
     refunds?: string[];
     shipments?: ShipmentSpec[];
     number?: string;
@@ -107,6 +116,9 @@ class World {
         amountInr: D(amount),
         deletedAt: null,
       });
+    }
+    for (const amount of spec.debits ?? []) {
+      this.wallet('ORDER_CHARGES', amount, IN, { linkedOrderId: id });
     }
     for (const amount of spec.refunds ?? []) {
       this.wallet('ORDER_CHARGES_REFUND', amount, IN, { linkedOrderId: id });
@@ -162,6 +174,8 @@ class World {
     inboundFreightChargeId?: string | null;
     expenseCategoryId?: string | null;
     reference?: string | null;
+    /** When it was written (`created_at`); defaults to `at`. */
+    recordedAt?: Date;
   }): Row {
     return this.add('bankEntry', {
       id: nextId('be'),
@@ -171,6 +185,7 @@ class World {
       currency: spec.currency ?? 'INR',
       ownerKind: spec.ownerKind ?? 'CAPITAL',
       occurredAt: spec.at,
+      createdAt: spec.recordedAt ?? spec.at,
       transferId: spec.transferId ?? null,
       settlementId: spec.settlementId ?? null,
       inboundFreightChargeId: spec.inboundFreightChargeId ?? null,
@@ -233,18 +248,47 @@ class World {
     });
   }
 
-  settlement(receivedAt: Date, shortfalls: string[]): void {
+  /**
+   * A payout, typed as received at `receivedAt` and RECORDED at
+   * `recordedAt` (default: the same instant), with one line per shortfall.
+   */
+  settlement(
+    receivedAt: Date,
+    shortfalls: string[],
+    opts: {
+      recordedAt?: Date;
+      amount?: string;
+      allocated?: string;
+      earlyFee?: string;
+      freight?: string;
+    } = {},
+  ): string {
     const sid = nextId('set');
-    this.add('courierSettlement', { id: sid, reference: `UTR-${sid}`, receivedAt });
-    for (const s of shortfalls) {
-      const orderId = this.order({});
-      this.add('courierSettlementLine', {
-        id: nextId('sl'),
-        settlementId: sid,
-        orderId,
-        shortfallInr: D(s),
-      });
-    }
+    const recordedAt = opts.recordedAt ?? receivedAt;
+    this.add('courierSettlement', {
+      id: sid,
+      reference: `UTR-${sid}`,
+      receivedAt,
+      createdAt: recordedAt,
+      amountInr: D(opts.amount ?? '0'),
+      allocatedInr: D(opts.allocated ?? '0'),
+      earlyCodFeeInr: D(opts.earlyFee ?? '0'),
+      freightDeductedInr: D(opts.freight ?? '0'),
+    });
+    for (const s of shortfalls) this.settlementLine(sid, s, recordedAt);
+    return sid;
+  }
+
+  /** A line on an existing payout, written at `recordedAt` — `allocateMore`'s shape. */
+  settlementLine(settlementId: string, shortfall: string, recordedAt: Date): void {
+    const orderId = this.order({});
+    this.add('courierSettlementLine', {
+      id: nextId('sl'),
+      settlementId,
+      orderId,
+      shortfallInr: D(shortfall),
+      createdAt: recordedAt,
+    });
   }
 
   investment(placed: string, returned: string, closedAt: Date, currency = 'INR'): void {
@@ -670,8 +714,14 @@ describe('the P&L counts what it used to miss', () => {
       charges: [['BASE_SHIPPING', '600']],
       refunds: ['200'],
     });
-    // A cancelled order's refund is nothing to do with this line.
-    w.order({ events: [['CANCELLED', IN]], charges: [['BASE_SHIPPING', '100']], refunds: ['100'] });
+    // A cancelled order's refund is nothing to do with this line: its fee
+    // was taken and given back, so it carries no money and is no row.
+    w.order({
+      events: [['CANCELLED', IN]],
+      charges: [['BASE_SHIPPING', '100']],
+      debits: ['100'],
+      refunds: ['100'],
+    });
     const r = await w.svc().report(FROM, TO);
     expect(line(r, 'delivery')?.revenueInr).toBe('400.00');
   });
@@ -791,7 +841,9 @@ describe('recognised when the parcel’s fate is known', () => {
     }
     const r = await w.svc().report(FROM, TO);
     expect(line(r, 'delivery')).toMatchObject({ revenueInr: '0.00', costInr: '0.00' });
-    expect(line(r, 'delivery')?.coverage.note).toMatch(/3 parcels are with the courier/);
+    expect(line(r, 'delivery')?.coverage.note).toMatch(
+      /3 parcel\(s\) on orders not yet delivered, returned or called off hold a waybill/,
+    );
   });
 
   it('charges on a VOIDED Skydrop parcel count whatever the cutover; a stranger’s only after it', async () => {
@@ -1244,9 +1296,35 @@ function richWorld(cutover: Date | null): World {
   });
   w.order({
     events: [['DELIVERED', d(25)]],
-    charges: [['BASE_SHIPPING', '200']],
+    charges: [
+      ['BASE_SHIPPING', '200'],
+      // Debited with the rest and on no line until 2026-09-12.
+      ['RESHIPMENT_FEE', '15'],
+      ['ADJUSTMENT', '10'],
+    ],
     shipments: [{ awb: null }],
   });
+  // Called off after it left us: the fee kept, the courier's charge.
+  w.order({
+    events: [
+      ['CONFIRMED', d(2)],
+      ['DISPATCHED', d(4)],
+      ['CANCELLED_BY_ADMIN', d(19)],
+    ],
+    debits: ['236'],
+    shipments: [{ fwd: '77' }],
+  });
+  // Called off at exactly the middle, fee part-refunded, never waybilled.
+  w.order({
+    events: [['CANCELLED', MIDDLE]],
+    debits: ['200'],
+    refunds: ['50'],
+    shipments: [{ awb: null }],
+  });
+  // Called off with nothing on it: no row.
+  w.order({ events: [['CANCELLED', d(8)]], charges: [['BASE_SHIPPING', '200']] });
+  // Still in the warehouse, already charged for its waybill: the note only.
+  w.order({ status: 'PICKED', shipments: [{ awb: 'SD-PICKED', fwd: '77.19' }] });
   w.order({
     events: [
       ['DELIVERED', d(5)],
@@ -1290,6 +1368,9 @@ function richWorld(cutover: Date | null): World {
   w.txn({ kind: 'DEBIT', amount: '15', at: MIDDLE });
   w.txn({ kind: 'DEBIT', amount: '999', at: d(21), missing: true });
   w.txn({ kind: 'DEBIT', amount: '5', at: d(21), status: 'failed' });
+  // A reconciliation on a Skydrop parcel (A-1): ours before the cutover too.
+  w.txn({ kind: 'DEBIT', amount: '89.42', at: d(9), awb: 'A-1' });
+  w.txn({ kind: 'CREDIT', amount: '88.24', at: d(10), awb: 'A-1' });
 
   w.shipment({ awb: 'DEAD-1', deleted: true });
   w.txn({ kind: 'DEBIT', amount: '48.36', at: d(3), category: 'PARCEL', awb: 'DEAD-1' });
@@ -1301,8 +1382,20 @@ function richWorld(cutover: Date | null): World {
 
   w.bank({ type: 'EXPENSE', amount: '-90', at: d(9), settlementId: 'set-x' });
   w.bank({ type: 'EXPENSE', amount: '-45', at: MIDDLE, settlementId: 'set-y' });
-  w.settlement(d(7), ['50', '30']);
+  const early = w.settlement(d(7), ['50', '30'], { amount: '1000', allocated: '900' });
   w.settlement(d(23), ['-20']);
+  // Typed as received in JULY, recorded on the 3rd: every figure it
+  // produced is in August, together.
+  w.settlement(T('2026-07-28T00:00:00.000Z'), ['40'], { recordedAt: d(3) });
+  w.bank({
+    type: 'EXPENSE',
+    amount: '-30',
+    at: T('2026-07-28T00:00:00.000Z'),
+    recordedAt: d(3),
+    settlementId: 'set-late',
+  });
+  // A line allocated later onto the payout of the 7th: recognised the 24th.
+  w.settlementLine(early, '5', d(24));
 
   w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '-35.40', at: d(21) });
   w.bank({ type: 'RECONCILIATION_ADJUSTMENT', amount: '500', currency: 'BDT', at: d(14) });
@@ -1383,17 +1476,403 @@ describe('every line’s rows add up to its total', () => {
 
   it('worked numbers for the month, so the additivity above is not additivity of zeros', async () => {
     const r = await richWorld(null).svc().report(FROM, TO);
-    // Delivered: A 236 (−90), B 200−50=150 (−90), D 200 (uncovered),
-    // lost C 0 (−120). E is returned — returns only.
-    expect(line(r, 'delivery')).toMatchObject({ revenueInr: '586.00', costInr: '300.00' });
-    expect(line(r, 'delivery')?.coverage).toMatchObject({ priced: 3, total: 4 });
+    // Delivered: A 236 (−90), B 200−50=150 (−90), D 200+15+10=225
+    // (uncovered), lost C 0 (−120); called off: G 236 (−77), H 200−50=150
+    // (no waybill, nothing to price). E is returned — returns only.
+    expect(line(r, 'delivery')).toMatchObject({ revenueInr: '997.00', costInr: '377.00' });
+    expect(line(r, 'delivery')?.coverage).toMatchObject({ priced: 5, total: 6 });
+    expect(line(r, 'delivery')?.coverage.note).toMatch(
+      /2 order\(s\) were called off.*1 order\(s\) first delivered in this window have since come back.*2 parcel\(s\) on orders not yet delivered.*₹87\.19/,
+    );
+    // 50 + 30 − 20, +40 recorded in August for July, +5 allocated later.
+    expect(line(r, 'cod_shortfall')?.costInr).toBe('105.00');
+    expect(line(r, 'cod_shortfall')?.coverage.note).toMatch(/1 payout\(s\).*₹100\.00 more/);
+    expect(line(r, 'courier_cod_fees')?.costInr).toBe('165.00');
     // Returns: E 230−30=200 (−150), F 230 (−100).
     expect(line(r, 'rto')).toMatchObject({ revenueInr: '430.00', costInr: '250.00' });
     // ৳7 at 10000/13000 = 5.38; −20; ৳3 at 1/1.30 = 2.31.
     expect(line(r, 'fx')?.revenueInr).toBe('-12.31');
     // DEAD 38.36 + STRANGER 36; A-1 is live, REV-E is E's return waybill.
     expect(line(r, 'courier_unmatched')?.costInr).toBe('74.36');
-    expect(line(r, 'courier_adjustments')?.costInr).toBe('-1216.17');
+    // + the A-1 reconciliation, net 1.18.
+    expect(line(r, 'courier_adjustments')?.costInr).toBe('-1214.99');
     expect(line(r, 'inbound_freight')).toMatchObject({ revenueInr: '2299.00', costInr: '1100.00' });
+  });
+});
+
+// ── The third audit (2026-09-12) ─────────────────────────────────────────
+
+const JULY = T('2026-07-01T00:00:00.000Z');
+const SEP_END = T('2026-10-01T00:00:00.000Z');
+
+/** Two adjacent windows add up to the window over both, for the named lines. */
+async function expectTiles(
+  svc: PnlService,
+  keys: readonly string[],
+  a: Date,
+  mid: Date,
+  b: Date,
+): Promise<void> {
+  const [x, y, whole] = await Promise.all([
+    svc.report(a, mid),
+    svc.report(mid, b),
+    svc.report(a, b),
+  ]);
+  for (const key of keys) {
+    const [lx, ly, lw] = [line(x, key), line(y, key), line(whole, key)];
+    expect({ key, revenue: total([lx?.revenueInr ?? null, ly?.revenueInr ?? null]) }).toEqual({
+      key,
+      revenue: lw?.revenueInr,
+    });
+    expect({ key, cost: total([lx?.costInr ?? null, ly?.costInr ?? null]) }).toEqual({
+      key,
+      cost: lw?.costInr,
+    });
+  }
+  for (const [from, to, r] of [
+    [a, mid, x],
+    [mid, b, y],
+    [a, b, whole],
+  ] as const) {
+    for (const key of keys) {
+      const rows = await drill(svc, key, from, to);
+      expect({ key, revenue: rows.revenue, cost: rows.cost }).toEqual({
+        key,
+        revenue: line(r, key)?.revenueInr,
+        cost: line(r, key)?.costInr,
+      });
+    }
+  }
+}
+
+describe('ONE payout, ONE date — everything it produced is dated when it was recorded', () => {
+  const PAYOUT_LINES = ['cod_tax', 'cod_service_fees', 'cod_shortfall', 'courier_cod_fees'];
+
+  it('typed as received in July, recorded in August: tax, fee, shortfall and early-COD fee are ALL in August', async () => {
+    const w = new World();
+    const received = T('2026-07-30T00:00:00.000Z');
+    const recorded = T('2026-08-02T10:00:00.000Z');
+    w.settlement(received, ['50'], { recordedAt: recorded });
+    // The credit's deductions are written in the same transaction.
+    w.wallet('GST_WITHHOLDING', '152.54', recorded);
+    w.wallet('COD_COLLECTION_FEE', '10.00', recorded);
+    w.bank({
+      type: 'EXPENSE',
+      amount: '-90',
+      at: received,
+      recordedAt: recorded,
+      settlementId: 'set-z',
+    });
+    const svc = w.svc();
+    const july = await svc.report(JULY, FROM);
+    const aug = await svc.report(FROM, TO);
+    for (const key of PAYOUT_LINES) {
+      expect({ key, r: line(july, key)?.revenueInr, c: line(july, key)?.costInr }).toEqual({
+        key,
+        r: '0.00',
+        c: '0.00',
+      });
+    }
+    expect(line(aug, 'cod_tax')?.revenueInr).toBe('152.54');
+    expect(line(aug, 'cod_service_fees')?.revenueInr).toBe('10.00');
+    expect(line(aug, 'cod_shortfall')?.costInr).toBe('50.00');
+    expect(line(aug, 'courier_cod_fees')?.costInr).toBe('90.00');
+    const rows = await drill(svc, 'cod_shortfall');
+    expect(rows.items[0]).toMatchObject({ at: recorded.toISOString(), costInr: '50.00' });
+    expect(rows.items[0]?.subRef).toMatch(/received 30 Jul 2026/);
+    expect((await drill(svc, 'courier_cod_fees')).items[0]?.at).toBe(recorded.toISOString());
+    await expectTiles(svc, PAYOUT_LINES, JULY, FROM, TO);
+  });
+
+  it('a line allocated LATER is recognised when it was added, not in the month the payout names', async () => {
+    const w = new World();
+    const sid = w.settlement(T('2026-07-15T00:00:00.000Z'), ['20']);
+    w.settlementLine(sid, '35', T('2026-08-20T00:00:00.000Z'));
+    const svc = w.svc();
+    expect(line(await svc.report(JULY, FROM), 'cod_shortfall')?.costInr).toBe('20.00');
+    expect(line(await svc.report(FROM, TO), 'cod_shortfall')?.costInr).toBe('35.00');
+    await expectTiles(svc, ['cod_shortfall'], JULY, FROM, TO);
+  });
+});
+
+describe('a courier OVERPAYMENT is named, never counted', () => {
+  it('a payout that brought in more than it was allocated to is in the shortfall note, not in any figure', async () => {
+    const w = new World();
+    w.settlement(IN, [], { amount: '1000', allocated: '900' });
+    // Fully explained: ₹950 landed + ₹50 early-COD fee = ₹1,000 allocated.
+    w.settlement(IN, [], { amount: '950', allocated: '1000', earlyFee: '50' });
+    const svc = w.svc();
+    const r = await svc.report(FROM, TO);
+    const l = line(r, 'cod_shortfall');
+    expect(l).toMatchObject({ revenueInr: '0.00', costInr: '0.00' });
+    expect(l?.coverage.note).toMatch(
+      /1 payout\(s\) recorded in this window brought in ₹100\.00 more than they were allocated/,
+    );
+    expect(l?.coverage.note).toMatch(/not income/);
+    expect(r.grossMarginInr).toBe('0.00');
+    expect(line(await svc.report(JULY, FROM), 'cod_shortfall')?.coverage.note).toBeNull();
+  });
+});
+
+describe('an order CALLED OFF with money on it is on the delivery line, dated by the cancellation', () => {
+  it('a fee kept on a cancel after dispatch, with the courier cost of the parcel that had left us', async () => {
+    const w = new World();
+    w.order({
+      number: 'SD-OFF-1',
+      events: [
+        ['CONFIRMED', T('2026-07-20T00:00:00.000Z')],
+        ['DISPATCHED', T('2026-07-25T00:00:00.000Z')],
+        ['CANCELLED_BY_ADMIN', IN],
+      ],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['GST', '36'],
+      ],
+      debits: ['236'],
+      shipments: [{ awb: 'LEFT-1', fwd: '77.19' }],
+    });
+    const svc = w.svc();
+    const l = line(await svc.report(FROM, TO), 'delivery');
+    expect(l).toMatchObject({ revenueInr: '236.00', costInr: '77.19' });
+    expect(l?.coverage).toMatchObject({ priced: 1, total: 1 });
+    expect(l?.basis.revenue.find((p) => p.label.startsWith('Delivery fee taken'))).toMatchObject({
+      count: 1,
+      amountInr: '236.00',
+    });
+    expect(l?.basis.cost.find((p) => /called off/.test(p.label))?.amountInr).toBe('77.19');
+    expect(l?.coverage.note).toMatch(/1 order\(s\) were called off/);
+    const rows = await drill(svc, 'delivery');
+    expect(rows.items).toEqual([
+      expect.objectContaining({ ref: 'SD-OFF-1', revenueInr: '236.00', costInr: '77.19' }),
+    ]);
+    expect(rows.items[0]?.subRef).toContain('called off (cancelled_by_admin)');
+    // Dispatched in July; its fate — the cancellation — is August's.
+    expect(line(await svc.report(JULY, FROM), 'delivery')?.revenueInr).toBe('0.00');
+  });
+
+  it('cancelled before it left: the refunded fee nets to nothing, and the voided parcel’s charge stays on the no-live-parcel line', async () => {
+    const w = new World();
+    w.order({
+      events: [
+        ['CONFIRMED', IN],
+        ['CANCELLED', IN],
+      ],
+      debits: ['236'],
+      refunds: ['236'],
+      shipments: [{ awb: 'VOID-1', deleted: true, fwd: '77.19' }],
+    });
+    w.txn({ kind: 'DEBIT', amount: '77.19', at: IN, category: 'PARCEL', awb: 'VOID-1' });
+    const r = await w.svc().report(FROM, TO);
+    expect(line(r, 'delivery')).toMatchObject({ revenueInr: '0.00', costInr: '0.00' });
+    expect(line(r, 'delivery')?.coverage.total).toBe(0);
+    expect(line(r, 'courier_unmatched')?.costInr).toBe('77.19');
+  });
+
+  it('a cancelled order with no money on it — a quote never billed, no waybill — is no row at all', async () => {
+    const w = new World();
+    w.order({
+      events: [['CANCELLED', IN]],
+      charges: [['BASE_SHIPPING', '200']],
+      shipments: [{ awb: null }],
+    });
+    const svc = w.svc();
+    expect(line(await svc.report(FROM, TO), 'delivery')?.coverage.total).toBe(0);
+    expect((await drill(svc, 'delivery')).items).toHaveLength(0);
+  });
+
+  it('a rejection reopened and rejected again is counted ONCE, at the final rejection — and windows tile', async () => {
+    const w = new World();
+    w.order({
+      events: [
+        ['REJECTED_BY_CUSTOMER', T('2026-08-03T00:00:00.000Z')],
+        ['PENDING_CONFIRMATION', T('2026-08-04T00:00:00.000Z')],
+        ['REJECTED_BY_CUSTOMER', T('2026-08-20T00:00:00.000Z')],
+      ],
+      debits: ['50'],
+    });
+    const svc = w.svc();
+    expect(line(await svc.report(FROM, MID), 'delivery')?.revenueInr).toBe('0.00');
+    expect(line(await svc.report(MID, TO), 'delivery')?.revenueInr).toBe('50.00');
+    await expectTiles(svc, ['delivery'], FROM, MID, TO);
+  });
+
+  it('a delivered order god-moded to cancelled stays on delivery, by its delivery — never twice', async () => {
+    const w = new World();
+    w.order({
+      events: [
+        ['DELIVERED', IN],
+        ['CANCELLED_BY_ADMIN', T('2026-08-20T00:00:00.000Z')],
+      ],
+      charges: [['BASE_SHIPPING', '200']],
+      debits: ['200'],
+      shipments: [{ fwd: '90' }],
+    });
+    const l = line(await w.svc().report(FROM, TO), 'delivery');
+    expect(l).toMatchObject({ revenueInr: '200.00', costInr: '90.00' });
+    expect(l?.coverage.total).toBe(1);
+  });
+});
+
+describe('orderFate — every status is on exactly one line, or deliberately on none', () => {
+  it('every TERMINAL status has a known fate, and no status left open is terminal', () => {
+    const sm = new OrderStateMachineService();
+    const all = Object.values(OrderStatus);
+    const terminalButOpen = all.filter((s) => sm.isTerminal(s) && orderFate(s) === 'open');
+    expect(terminalButOpen).toEqual([]);
+    // Settled, though the machine still has an edge out of them: a
+    // delivered order can come back, a received one is restocked or
+    // written off, and a rejection can be reopened by an approved request.
+    const settledNotTerminal = all
+      .filter((s) => orderFate(s) !== 'open' && !sm.isTerminal(s))
+      .sort();
+    expect(settledNotTerminal).toEqual(
+      [
+        OrderStatus.DELIVERED,
+        OrderStatus.REJECTED_BY_CUSTOMER,
+        OrderStatus.REJECTED_NDR,
+        OrderStatus.RTO_RECEIVED,
+      ].sort(),
+    );
+  });
+});
+
+describe('an order whose fate is not known is on no line — and the note says what it already cost', () => {
+  it('counts every parcel with a waybill on an open order, in the warehouse too, and the courier cost on them', async () => {
+    const w = new World();
+    // SD-2026-26-000004: PICKED, ₹77.19 debited when its waybill was booked.
+    w.order({ status: 'PICKED', shipments: [{ awb: 'SD-4', fwd: '77.19' }] });
+    w.order({ status: 'CONFIRMED', shipments: [{ awb: 'SD-5' }] });
+    w.order({ status: 'IN_TRANSIT', shipments: [{ fwd: '30' }] });
+    // Neither of these is open: one is on the line, one was voided.
+    w.order({ events: [['DELIVERED', IN]], shipments: [{ fwd: '90' }] });
+    w.order({ status: 'PENDING_PICK', shipments: [{ awb: 'SD-6', fwd: '5', deleted: true }] });
+    const l = line(await w.svc().report(FROM, TO), 'delivery');
+    expect(l).toMatchObject({ costInr: '90.00' });
+    expect(l?.coverage.note).toMatch(
+      /3 parcel\(s\) on orders not yet delivered, returned or called off hold a waybill and 2 already carry ₹107\.19 of courier cost/,
+    );
+  });
+});
+
+describe('every charge the seller is debited is revenue on some line', () => {
+  it('delivery is every charge type but the return fee and a REFUND line; returns add the return fee', () => {
+    const all = Object.values(ChargeType);
+    expect([...DELIVERY_REVENUE_TYPES].sort()).toEqual(
+      all.filter((t) => t !== ChargeType.RTO_FEE && t !== ChargeType.REFUND).sort(),
+    );
+    expect([...RETURN_REVENUE_TYPES].sort()).toEqual(
+      all.filter((t) => t !== ChargeType.REFUND).sort(),
+    );
+  });
+
+  it('a reshipment fee, an adjustment and an "other" line are billed revenue — in the total and its rows', async () => {
+    const w = new World();
+    w.order({
+      events: [['DELIVERED', IN]],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['RESHIPMENT_FEE', '50'],
+        ['ADJUSTMENT', '-10'],
+        ['OTHER', '5'],
+        ['REFUND', '20'],
+      ],
+      shipments: [{ fwd: '90' }],
+    });
+    w.order({
+      events: [['RTO_RECEIVED', IN]],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['RESHIPMENT_FEE', '50'],
+        ['RTO_FEE', '30'],
+        ['REFUND', '99'],
+      ],
+      shipments: [{ rto: '100' }],
+    });
+    const svc = w.svc();
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'delivery')?.revenueInr).toBe('245.00');
+    expect(line(r, 'rto')?.revenueInr).toBe('280.00');
+    const labels = line(r, 'delivery')?.basis.revenue.map((p) => p.label) ?? [];
+    expect(labels).toEqual(
+      expect.arrayContaining(['Reshipment fee', 'Charge adjustment', 'Other charge']),
+    );
+    expect(labels).not.toContain('Refund line (not billed)');
+    expect((await drill(svc, 'delivery')).revenue).toBe('245.00');
+    expect((await drill(svc, 'rto')).revenue).toBe('280.00');
+  });
+});
+
+describe('a restatement is SAID — and windows still tile', () => {
+  it('delivered in August and back in September; lost in August and found in September', async () => {
+    const w = new World();
+    w.order({
+      events: [
+        ['DELIVERED', T('2026-08-05T00:00:00.000Z')],
+        ['RTO_RECEIVED', T('2026-09-10T00:00:00.000Z')],
+      ],
+      charges: [
+        ['BASE_SHIPPING', '200'],
+        ['RTO_FEE', '30'],
+      ],
+      shipments: [{ fwd: '0', rto: '150' }],
+    });
+    w.order({
+      events: [
+        ['LOST_IN_TRANSIT', T('2026-08-03T00:00:00.000Z')],
+        ['DELIVERED', T('2026-09-09T00:00:00.000Z')],
+      ],
+      charges: [['BASE_SHIPPING', '200']],
+      shipments: [{ fwd: '90' }],
+    });
+    const svc = w.svc();
+    const aug = await svc.report(FROM, TO);
+    const sep = await svc.report(TO, SEP_END);
+    // Found: dated by the loss, so August carries it. Returned: on
+    // September's returns, not August's delivery.
+    expect(line(aug, 'delivery')).toMatchObject({ revenueInr: '200.00', costInr: '90.00' });
+    expect(line(aug, 'delivery')?.coverage.note).toMatch(
+      /1 order\(s\) first delivered in this window have since come back/,
+    );
+    expect(line(aug, 'delivery')?.coverage.note).toMatch(
+      /1 order\(s\) were lost in transit in this window and later found and delivered/,
+    );
+    expect(line(sep, 'delivery')?.revenueInr).toBe('0.00');
+    expect(line(sep, 'rto')).toMatchObject({ revenueInr: '230.00', costInr: '150.00' });
+    expect(line(sep, 'rto')?.coverage.note).toMatch(/1 of these had been delivered first/);
+    await expectTiles(svc, ['delivery', 'rto'], FROM, TO, SEP_END);
+  });
+});
+
+describe('an adjustment on a SKYDROP parcel counts whatever the cutover', () => {
+  it('Monthly Recon on 38061110523994 (₹89.42 − ₹88.24 = ₹1.18) is on the line; a stranger’s stays out and is named', async () => {
+    const w = new World().cutover(CUTOVER);
+    w.shipment({ awb: '38061110523994' });
+    w.shipment({ awb: 'DEAD-ADJ', deleted: true });
+    w.shipment({ awb: 'FWD-9', reverseAwb: 'REV-9' });
+    w.shipment({ awb: 'SR-ONLY', courierCode: 'shiprocket' });
+    w.shipment({ awb: 'NEW', courierCode: 'shiprocket', courierOrderId: 'SR-1' });
+    const late = T('2026-08-31T20:00:00.000Z');
+    w.txn({ kind: 'DEBIT', amount: '89.42', at: late, awb: '38061110523994' });
+    w.txn({ kind: 'CREDIT', amount: '88.24', at: late, awb: '38061110523994' });
+    w.txn({ kind: 'DEBIT', amount: '12.00', at: IN, awb: 'DEAD-ADJ' }); // voided: ours
+    w.txn({ kind: 'DEBIT', amount: '3.00', at: IN, awb: 'REV-9' }); // its return waybill: ours
+    // Shiprocket replaced the waybill; the ORDER id is still ours.
+    w.txn({ kind: 'DEBIT', amount: '7.00', at: IN, awb: 'OLD', ref: 'SR-1', account: 'ca-sr' });
+    // Another courier's parcel on this account's waybill: not ours.
+    w.txn({ kind: 'DEBIT', amount: '500.00', at: IN, awb: 'SR-ONLY' });
+    w.txn({ kind: 'CREDIT', amount: '1290.00', at: IN, awb: 'STRANGER' });
+    const svc = w.svc();
+    const l = line(await svc.report(FROM, TO), 'courier_adjustments');
+    expect(l?.costInr).toBe('23.18');
+    expect(l?.coverage.note).toMatch(
+      /2 adjustment\(s\) dated before 1 Oct 2026 \(net credit ₹790\.00\) are not counted/,
+    );
+    expect(l?.coverage.note).toMatch(
+      /5 adjustment\(s\) dated before 1 Oct 2026 \(net ₹23\.18\) name a Skydrop parcel and ARE counted/,
+    );
+    const rows = await drill(svc, 'courier_adjustments');
+    expect(rows.items).toHaveLength(5);
+    expect(rows.items.every((i) => i.subRef?.includes('Skydrop parcel') === true)).toBe(true);
+    await expectTiles(svc, ['courier_adjustments'], FROM, MID, TO);
   });
 });
