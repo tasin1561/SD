@@ -4,9 +4,20 @@ import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { WalletSyncService } from '../services/wallet-sync.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { DelhiveryBillingProbeService } from '../services/delhivery-billing-probe.service';
 
+/**
+ * Restated in `courier-cost-sync/services/wallet-sync-trigger.service.ts`;
+ * `wallet-sync-queue-names.spec.ts` fails if the copies drift.
+ */
 export const WALLET_SYNC_QUEUE = 'courier-wallet-sync';
 export const JOB_WALLET_SYNC = 'sync-delhivery-wallet';
+/**
+ * The one-off read-only look at Delhivery's billing pages. On THIS queue on
+ * purpose: its worker runs one job at a time, so the probe and the nightly
+ * sync can never be signed in to the same Delhivery login at once.
+ */
+export const JOB_DELHIVERY_BILLING_PROBE = 'probe-delhivery-billing';
 
 /**
  * Once a night, well after the day's charges have settled.
@@ -38,6 +49,7 @@ export class WalletSyncWorker implements OnModuleInit, OnModuleDestroy {
     private readonly sync: WalletSyncService,
     private readonly workerRole: WorkerRoleService,
     private readonly issues: SystemIssueService,
+    private readonly billingProbe: DelhiveryBillingProbeService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -63,9 +75,20 @@ export class WalletSyncWorker implements OnModuleInit, OnModuleDestroy {
 
     this.worker = new Worker(
       WALLET_SYNC_QUEUE,
-      async (job: Job): Promise<void> => {
+      async (
+        job: Job<{ runId?: string; requestedByStaffId?: string; manual?: boolean }>,
+      ): Promise<void> => {
         if (job.name === JOB_WALLET_SYNC) {
           await this.sync.sync();
+          return;
+        }
+        if (job.name === JOB_DELHIVERY_BILLING_PROBE) {
+          // Regardless of portalMode, like the sync itself: CUR-18's OFF
+          // stops the escalation automation, not an operator's read.
+          await this.billingProbe.probe({
+            runId: job.data.runId ?? null,
+            requestedByStaffId: job.data.requestedByStaffId ?? null,
+          });
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown wallet-sync job; ignoring');

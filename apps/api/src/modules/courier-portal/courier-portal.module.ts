@@ -25,6 +25,7 @@ import { ShiprocketPortalProbeService } from './services/shiprocket-portal-probe
 import { ShiprocketPortalWorker } from './queue/shiprocket-portal.worker';
 import { ShiprocketWalletSyncService } from './services/shiprocket-wallet-sync.service';
 import { ShiprocketInvoiceCheckService } from './services/shiprocket-invoice-check.service';
+import { DelhiveryBillingProbeService } from './services/delhivery-billing-probe.service';
 
 /**
  * Phase 5 — browser automation of one.delhivery.com.
@@ -79,6 +80,8 @@ import { ShiprocketInvoiceCheckService } from './services/shiprocket-invoice-che
     WalletLedgerFetcherService,
     WalletSyncService,
     WalletSyncWorker,
+    // One-off read-only look at their billing pages; rides the sync's queue.
+    DelhiveryBillingProbeService,
     ConsigneeVerifyService,
     ConsigneeVerifyWorker,
     // Shiprocket's panel: its own browser, out through the Bangalore tunnel.
