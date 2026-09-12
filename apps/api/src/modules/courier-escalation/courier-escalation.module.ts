@@ -4,6 +4,8 @@ import { DelhiverySupportAdapterService } from '../courier-delhivery/services/de
 import { ShiprocketSupportAdapterService } from '../courier-shiprocket/services/shiprocket-support-adapter.service';
 import { COURIER_SUPPORT_ADAPTERS } from '../courier-shared/services/courier-support-adapter';
 import { CourierSupportRegistryService } from './services/courier-support-registry.service';
+import { CourierSupportDeskService } from './services/courier-support-desk.service';
+import { CourierEscalationWatchService } from './services/courier-escalation-watch.service';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.module';
@@ -93,6 +95,10 @@ import { TicketHandlingModule } from '../ticket-handling/ticket-handling.module'
       ) => [delhivery, shiprocket],
     },
     CourierSupportRegistryService,
+    // Where a person takes an escalation, for whichever courier carried it.
+    CourierSupportDeskService,
+    // Names every message that has waited too long to be sent by hand.
+    CourierEscalationWatchService,
     InboundEmailAuthService,
     InboundEmailGuard,
     CourierMessageClassifierService,

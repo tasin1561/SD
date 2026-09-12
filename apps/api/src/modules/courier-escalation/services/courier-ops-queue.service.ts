@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ActorType, CourierOutboxKind, CourierOutboxStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CourierOutboxService } from './courier-outbox.service';
+import { CourierSupportDeskService, type SupportDeskView } from './courier-support-desk.service';
 
 export interface OpsQueueItem {
   readonly id: string;
@@ -19,6 +20,15 @@ export interface OpsQueueItem {
   readonly sellerName: string | null;
   /** Where to go and do it — the whole point of a 20-second item. */
   readonly deepLink: string;
+  /** WHICH courier's desk — the one that carried the parcel, never a default. */
+  readonly courierCode: string;
+  readonly courierName: string;
+  /** Their panel, for when the deep link is our own order page. */
+  readonly supportPanelUrl: string | null;
+  /** Null while `supportEmailSettingKey` is unset. */
+  readonly supportEmail: string | null;
+  readonly supportEmailSettingKey: string;
+  readonly supportHowTo: string;
   readonly claimedByStaffId: string | null;
   readonly claimExpiresAt: Date | null;
   readonly createdAt: Date;
@@ -42,24 +52,28 @@ export interface OpsQueueCounts {
  * An existing ticket links straight to its thread; a new one links to the
  * order page, because that is where a ticket gets raised from.
  *
- * TODO(delhivery-api): the support deep-link path is
- * `one.delhivery.com/support/<ticketId>` per the brief and has not been
- * opened against a real ticket id. If it 404s, this is the one line to
- * change.
+ * ── WHICH DESK IS THE COURIER THAT CARRIED IT ────────────────────────
+ * The link used to be Delhivery One for every item, so a Shiprocket
+ * parcel's message sent an operator to a company that had never seen the
+ * waybill. The desk now comes from the escalation's own courier through
+ * `CourierSupportDeskService` — the courier's adapter declares its panel
+ * and ticket URL, and nothing here names a courier (CUR-12).
  */
 @Injectable()
 export class CourierOpsQueueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: CourierOutboxService,
+    private readonly desks: CourierSupportDeskService,
   ) {}
 
-  private deepLink(externalTicketId: string | null, orderId: string | null): string {
-    if (externalTicketId !== null && externalTicketId !== '') {
-      return `https://one.delhivery.com/support/${encodeURIComponent(externalTicketId)}`;
-    }
-    // No courier ticket yet: send them where one is raised FROM.
-    return orderId === null ? 'https://one.delhivery.com/support' : `/orders/${orderId}`;
+  private deepLink(desk: SupportDeskView, orderId: string | null): string {
+    if (desk.ticketUrl !== null) return desk.ticketUrl;
+    // No linkable courier ticket: the order page when there is one (a
+    // ticket is raised FROM an order, and it names the parcel), else
+    // their panel. A desk with no panel on file falls back to the order.
+    if (orderId !== null) return `/orders/${orderId}`;
+    return desk.panelUrl ?? '/courier-escalation';
   }
 
   async list(input: { status?: CourierOutboxStatus; limit?: number }): Promise<OpsQueueItem[]> {
@@ -92,6 +106,7 @@ export class CourierOpsQueueService {
           select: {
             awbNumber: true,
             externalTicketId: true,
+            courierCode: true,
             ticket: {
               select: { orderId: true, sellerId: true, seller: { select: { companyName: true } } },
             },
@@ -100,27 +115,41 @@ export class CourierOpsQueueService {
       },
     });
 
-    return rows.map((r) => ({
-      id: r.id,
-      escalationId: r.escalationId,
-      kind: r.kind,
-      status: r.status,
-      body: r.body,
-      categoryId: r.categoryId,
-      awbNumber: r.escalation.awbNumber,
-      externalTicketId: r.externalRef ?? r.escalation.externalTicketId,
-      orderId: r.escalation.ticket.orderId,
-      sellerId: r.escalation.ticket.sellerId,
-      sellerName: r.escalation.ticket.seller?.companyName ?? null,
-      deepLink: this.deepLink(
-        r.externalRef ?? r.escalation.externalTicketId,
-        r.escalation.ticket.orderId,
-      ),
-      claimedByStaffId: r.claimedByStaffId,
-      claimExpiresAt: r.claimExpiresAt,
-      createdAt: r.createdAt,
-      lastError: r.lastError,
-    }));
+    const desks = await this.desks.describeMany(
+      rows.map((r) => ({
+        courierCode: r.escalation.courierCode,
+        externalTicketId: r.externalRef ?? r.escalation.externalTicketId,
+      })),
+    );
+
+    return rows.map((r, i) => {
+      const desk = desks[i];
+      if (desk === undefined) throw new Error('support desk missing for a queue row');
+      return {
+        id: r.id,
+        escalationId: r.escalationId,
+        kind: r.kind,
+        status: r.status,
+        body: r.body,
+        categoryId: r.categoryId,
+        awbNumber: r.escalation.awbNumber,
+        externalTicketId: r.externalRef ?? r.escalation.externalTicketId,
+        orderId: r.escalation.ticket.orderId,
+        sellerId: r.escalation.ticket.sellerId,
+        sellerName: r.escalation.ticket.seller?.companyName ?? null,
+        deepLink: this.deepLink(desk, r.escalation.ticket.orderId),
+        courierCode: desk.courierCode,
+        courierName: desk.courierName,
+        supportPanelUrl: desk.panelUrl,
+        supportEmail: desk.supportEmail,
+        supportEmailSettingKey: desk.supportEmailSettingKey,
+        supportHowTo: desk.howTo,
+        claimedByStaffId: r.claimedByStaffId,
+        claimExpiresAt: r.claimExpiresAt,
+        createdAt: r.createdAt,
+        lastError: r.lastError,
+      };
+    });
   }
 
   async counts(): Promise<OpsQueueCounts> {

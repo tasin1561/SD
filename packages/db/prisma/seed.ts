@@ -673,6 +673,37 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       "OFF (where this starts): every issue a seller raises is stamped MANUAL and waits for a person to carry it to the courier — nothing is enqueued and no portal is driven, so the ticket says plainly that it is somebody's to move rather than sitting in a queue everyone assumes software is working. ON: a Delhivery parcel's issue is raised through the portal automatically, and falls back to manual by itself if that attempt fails. Only Delhivery has ticket automation at all; a Shiprocket or manually-placed parcel is manual either way. This decides the stamp AT RAISE TIME only — turning it off does not take back a ticket software has already opened, because a conversation already under way must not change hands halfway through.",
   },
+  // Each courier's support-desk email, shown beside a message waiting to
+  // be sent by hand. EMPTY on purpose: a guessed address sends a seller's
+  // parcel problem to nobody. Derived from the courier code
+  // (`courier.<code>_support_email`), so a third courier is a data change.
+  {
+    key: 'courier.delhivery_support_email',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Delhivery support desk email',
+    description:
+      'Where an operator emails Delhivery support by hand. Shown beside every Delhivery message waiting in the courier send queue. Empty until somebody copies the address off Delhivery One — nothing is emailed automatically.',
+  },
+  {
+    key: 'courier.shiprocket_support_email',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Shiprocket support desk email',
+    description:
+      "Where an operator emails Shiprocket support by hand. Shown beside every Shiprocket message waiting in the courier send queue. Empty until somebody copies the address off the Shiprocket panel's support section — nothing is emailed automatically.",
+  },
+  {
+    key: 'ops.courier_outbox_stall_alert_hours',
+    category: 'ops',
+    valueType: SettingValueType.INT,
+    valueInt: 24,
+    displayName: 'Courier message unsent — hours before we flag it',
+    description:
+      'No courier accepts support messages from software, so every message queued for Delhivery or Shiprocket waits for a person to send it on their panel. After this many hours each unsent message is raised on the system issues board, and it clears itself once sent. The check never sends anything.',
+  },
   {
     key: 'ops.tracking_stranded_alert_hours',
     category: 'ops',

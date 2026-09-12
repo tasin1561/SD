@@ -3,6 +3,7 @@ import {
   CourierCapabilityUnsupportedError,
   type CapabilityFlags,
   type CourierSupportAdapter,
+  type CourierSupportDesk,
   type CourierThreadMessage,
   type IssueCategory,
   type RaiseTicketOutcome,
@@ -49,6 +50,21 @@ export class ShiprocketSupportAdapterService implements CourierSupportAdapter {
       getTaxonomy: false,
       postComment: false,
       raiseTicket: false,
+    };
+  }
+
+  supportDesk(): CourierSupportDesk {
+    // Their seller panel is the only surface: no per-ticket URL we can
+    // stand behind, so the console links the panel. Their support email
+    // is the editable `courier.shiprocket_support_email` setting, left
+    // empty until somebody copies it off their panel — an address we
+    // guessed would send a seller's parcel problem to nobody.
+    return {
+      displayName: 'Shiprocket',
+      panelUrl: 'https://app.shiprocket.in',
+      ticketUrlTemplate: null,
+      howTo:
+        'Raise it in the Shiprocket panel’s support section (or email their support desk), paste the message exactly, then record their ticket number here.',
     };
   }
 

@@ -3,6 +3,7 @@ import {
   CourierCapabilityUnsupportedError,
   type CapabilityFlags,
   type CourierSupportAdapter,
+  type CourierSupportDesk,
   type CourierThreadMessage,
   type IssueCategory,
   type RaiseTicketOutcome,
@@ -51,6 +52,19 @@ export class DelhiverySupportAdapterService implements CourierSupportAdapter {
       // Not gated on MCP being up: MCP is read-only even when it works.
       postComment: false,
       raiseTicket: false,
+    };
+  }
+
+  supportDesk(): CourierSupportDesk {
+    // TODO(delhivery-api): the per-ticket path is per the brief and has
+    // not been opened against a real ticket id. If it 404s, this is the
+    // one line to change.
+    return {
+      displayName: 'Delhivery',
+      panelUrl: 'https://one.delhivery.com/support',
+      ticketUrlTemplate: 'https://one.delhivery.com/support/{ticketId}',
+      howTo:
+        'Raise it from the order in Delhivery One (Support → Raise a ticket), paste the message exactly, then record their ticket number here.',
     };
   }
 

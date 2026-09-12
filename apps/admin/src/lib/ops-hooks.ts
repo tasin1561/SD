@@ -2360,6 +2360,13 @@ export interface OpsQueueItem {
   readonly sellerId: string | null;
   readonly sellerName: string | null;
   readonly deepLink: string;
+  /** The courier that carried the parcel — whose desk this goes to. */
+  readonly courierCode: string;
+  readonly courierName: string;
+  readonly supportPanelUrl: string | null;
+  readonly supportEmail: string | null;
+  readonly supportEmailSettingKey: string;
+  readonly supportHowTo: string;
   readonly claimedByStaffId: string | null;
   readonly claimExpiresAt: string | null;
   readonly createdAt: string;
@@ -2609,11 +2616,26 @@ export interface CourierThreadMessage {
   readonly needsReview: boolean;
 }
 
+/** Where a person raises a courier's tickets by hand — any courier. */
+export interface CourierSupportDesk {
+  readonly courierCode: string;
+  readonly courierName: string;
+  readonly panelUrl: string | null;
+  readonly ticketUrl: string | null;
+  readonly supportEmail: string | null;
+  readonly supportEmailSettingKey: string;
+  readonly howTo: string;
+  readonly canSendAutomatically: boolean;
+}
+
 export interface CourierThread {
   readonly id: string;
   readonly ticketId: string;
   readonly externalTicketId: string | null;
   readonly awbNumber: string | null;
+  readonly courierCode: string;
+  /** The admin endpoints attach it; absent on older payloads. */
+  readonly desk?: CourierSupportDesk;
   readonly state: string | null;
   readonly lastMessageAt: string | null;
   readonly needsReviewAt: string | null;
@@ -2625,6 +2647,8 @@ export interface CourierEscalationRow {
   readonly id: string;
   readonly awbNumber: string | null;
   readonly externalTicketId: string | null;
+  readonly courierCode: string;
+  readonly courierName: string;
   readonly state: string | null;
   readonly lastMessageAt: string | null;
   readonly needsReviewAt: string | null;

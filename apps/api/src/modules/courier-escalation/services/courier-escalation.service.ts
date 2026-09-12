@@ -25,11 +25,20 @@ export interface EscalationThreadMessage {
   readonly needsReview: boolean;
 }
 
+/**
+ * Only when a ticket names no parcel at all — the same value as the
+ * `courier_escalations.courier_code` column default. Every escalation
+ * with a parcel is filed under the courier that carried it.
+ */
+const LEGACY_DEFAULT_COURIER = 'delhivery';
+
 export interface EscalationView {
   readonly id: string;
   readonly ticketId: string;
   readonly externalTicketId: string | null;
   readonly awbNumber: string | null;
+  /** Whose desk — the courier that carried the parcel. */
+  readonly courierCode: string;
   readonly state: string | null;
   readonly lastMessageAt: Date | null;
   readonly needsReviewAt: Date | null;
@@ -99,14 +108,28 @@ export class CourierEscalationService {
     });
     if (existing !== null) return { id: existing.id, created: false };
 
+    // WHOSE desk this conversation belongs to is a fact about the parcel,
+    // not a default. Every caller that did not say — the ticket panel's
+    // "Start a courier conversation", a delivery action — used to file
+    // the escalation under Delhivery whatever carried it, so a Shiprocket
+    // parcel's message was queued for Delhivery One and, the day
+    // Delhivery's reads come up, would have been read back from the wrong
+    // company. Resolved from the ticket's own parcel instead.
+    const parcel =
+      input.courierCode === undefined || (input.awbNumber ?? null) === null
+        ? await this.parcelForTicket(input.ticketId)
+        : null;
+
     try {
       const row = await this.prisma.client.courierEscalation.create({
         data: {
           ticketId: input.ticketId,
-          awbNumber: input.awbNumber ?? null,
+          awbNumber: input.awbNumber ?? parcel?.awbNumber ?? null,
           categoryId: input.categoryId ?? null,
-          courierCode: input.courierCode ?? 'delhivery',
-          courierAccountId: input.courierAccountId ?? null,
+          // Last resort only when the ticket names no parcel at all:
+          // mirrors the column's own schema default.
+          courierCode: input.courierCode ?? parcel?.courierCode ?? LEGACY_DEFAULT_COURIER,
+          courierAccountId: input.courierAccountId ?? parcel?.courierAccountId ?? null,
         },
         select: { id: true },
       });
@@ -134,6 +157,50 @@ export class CourierEscalationService {
   }
 
   /**
+   * The waybill a ticket is about, and whose account and courier carried it.
+   *
+   * Read from the ticket's own shipment, and from the ORDER's latest
+   * waybill-bearing shipment when the ticket names no parcel — a seller
+   * raising an issue from an order page has an order id and no shipment
+   * id, which is the common shape. The waybill, the account and the
+   * courier come from the SAME row: read separately they could disagree,
+   * and the raise would go to a desk that cannot see the waybill it was
+   * given. The courier is returned even with no waybill yet — who would
+   * carry it is knowable before the parcel is booked.
+   */
+  async parcelForTicket(ticketId: string): Promise<{
+    awbNumber: string | null;
+    courierAccountId: string | null;
+    courierCode: string | null;
+  } | null> {
+    const pick = { awbNumber: true, courierAccountId: true, courierCode: true } as const;
+    const ticket = await this.prisma.client.ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        shipment: { select: pick },
+        order: {
+          select: {
+            orderShipments: {
+              where: { shipment: { awbNumber: { not: null } } },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: { shipment: { select: pick } },
+            },
+          },
+        },
+      },
+    });
+    if (ticket === null) return null;
+    const from = ticket.shipment ?? ticket.order?.orderShipments[0]?.shipment ?? null;
+    if (from === null) return null;
+    return {
+      awbNumber: from.awbNumber,
+      courierAccountId: from.courierAccountId,
+      courierCode: from.courierCode,
+    };
+  }
+
+  /**
    * The thread, for a seller or an operator.
    *
    * `sellerId` scopes it when a seller is asking — ownership is checked
@@ -148,6 +215,7 @@ export class CourierEscalationService {
         ticketId: true,
         externalTicketId: true,
         awbNumber: true,
+        courierCode: true,
         state: true,
         lastMessageAt: true,
         needsReviewAt: true,
@@ -191,6 +259,7 @@ export class CourierEscalationService {
       ticketId: row.ticketId,
       externalTicketId: row.externalTicketId,
       awbNumber: row.awbNumber,
+      courierCode: row.courierCode,
       state: row.state,
       lastMessageAt: row.lastMessageAt,
       needsReviewAt: row.needsReviewAt,
