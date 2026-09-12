@@ -37,4 +37,32 @@ export class EmailQueue implements OnModuleInit, OnModuleDestroy {
     const job = await this.queue.add(EMAIL_JOB_NAME, input, opts);
     return String(job.id);
   }
+
+  /**
+   * The notification_logs rows that a job in this queue will still act
+   * on — waiting, delayed (quiet hours, NOTIF-15, or a retry backoff),
+   * running or paused.
+   *
+   * For the delivery watchdog: a QUEUED row with a live job behind it is
+   * not stuck, it is waiting on purpose, and sending it again would mail
+   * the recipient twice. Finished jobs are deliberately NOT counted — a
+   * failed one will not run again, which is exactly the row the watchdog
+   * exists to find.
+   */
+  async liveNotificationLogIds(): Promise<ReadonlySet<string>> {
+    const jobs = await this.queue.getJobs([
+      'waiting',
+      'delayed',
+      'active',
+      'prioritized',
+      'paused',
+      'waiting-children',
+    ]);
+    const ids = new Set<string>();
+    for (const job of jobs) {
+      const id = job?.data?.existingNotificationLogId;
+      if (id) ids.add(id);
+    }
+    return ids;
+  }
 }
