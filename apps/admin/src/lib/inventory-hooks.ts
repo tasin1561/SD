@@ -315,7 +315,9 @@ export interface StockMovementView {
   sellerId: string;
   variantId: string;
   warehouseId: string;
+  warehouseCode: string | null;
   binId: string | null;
+  binCode: string | null;
   batchId: string | null;
   type: StockMovementType;
   qtyChange: number;
@@ -331,6 +333,7 @@ export function useMovementsList(query: {
   sellerId?: string;
   variantId?: string;
   warehouseId?: string;
+  binId?: string;
   type?: string;
   from?: string;
   to?: string;

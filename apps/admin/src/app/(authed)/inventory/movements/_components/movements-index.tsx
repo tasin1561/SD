@@ -22,7 +22,8 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { useWarehouseOptions } from '@/lib/ops-hooks';
-import { useMovementsList } from '@/lib/inventory-hooks';
+import { useBinOptions } from '@/lib/bin-contents-hooks';
+import { useMovementsList, type StockMovementView } from '@/lib/inventory-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
 const PAGE_SIZE = 50;
@@ -37,19 +38,29 @@ const PAGE_SIZE = 50;
  * no endpoint to edit a movement and there should never be one.
  *
  * Filters exist because the unfiltered ledger is enormous and mostly
- * not about your problem. The variant filter is the one people actually
- * use — "what happened to this SKU".
+ * not about your problem. The variant filter answers "what happened to
+ * this SKU"; the bin filter answers "how did this shelf come to hold
+ * that" — reached from a bin's own page with both ids in the URL.
  */
-export function MovementsIndex(): ReactElement {
+export function MovementsIndex({
+  initialWarehouseId = '',
+  initialBinId = '',
+}: {
+  readonly initialWarehouseId?: string;
+  readonly initialBinId?: string;
+}): ReactElement {
   const warehouses = useWarehouseOptions();
   const [variantId, setVariantId] = useState('');
-  const [warehouseId, setWarehouseId] = useState('');
+  const [warehouseId, setWarehouseId] = useState(initialWarehouseId);
+  const [binId, setBinId] = useState(initialBinId);
   const [type, setType] = useState('');
   const [page, setPage] = useState(1);
+  const bins = useBinOptions(warehouseId);
 
   const list = useMovementsList({
     ...(variantId.trim() === '' ? {} : { variantId: variantId.trim() }),
     ...(warehouseId === '' ? {} : { warehouseId }),
+    ...(binId === '' ? {} : { binId }),
     ...(type === '' ? {} : { type }),
     page,
     pageSize: PAGE_SIZE,
@@ -57,6 +68,15 @@ export function MovementsIndex(): ReactElement {
 
   const items = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
+
+  // A bin arriving from the URL may not be in the options (they load per
+  // warehouse, and need warehouse.view) — keep it selectable by the code
+  // the rows themselves carry, so the filter never silently shows "All".
+  const binOptions = bins.data ?? [];
+  const selectedFromRows =
+    binId !== '' && !binOptions.some((b) => b.id === binId)
+      ? (items.find((m) => m.binId === binId)?.binCode ?? 'Selected bin')
+      : null;
 
   function change(apply: () => void): void {
     apply();
@@ -83,12 +103,35 @@ export function MovementsIndex(): ReactElement {
           <Select
             id="mv-wh"
             value={warehouseId}
-            onChange={(e) => change(() => setWarehouseId(e.target.value))}
+            onChange={(e) =>
+              change(() => {
+                setWarehouseId(e.target.value);
+                // A bin belongs to one warehouse; keeping it would filter
+                // the new warehouse down to nothing.
+                setBinId('');
+              })
+            }
           >
             <option value="">All warehouses</option>
             {(warehouses.data ?? []).map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label="Bin" htmlFor="mv-bin" className="w-48">
+          <Select
+            id="mv-bin"
+            value={binId}
+            disabled={warehouseId === '' && binId === ''}
+            onChange={(e) => change(() => setBinId(e.target.value))}
+          >
+            <option value="">{warehouseId === '' ? 'Pick a warehouse' : 'All bins'}</option>
+            {selectedFromRows !== null && <option value={binId}>{selectedFromRows}</option>}
+            {binOptions.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.code}
               </option>
             ))}
           </Select>
@@ -138,7 +181,9 @@ export function MovementsIndex(): ReactElement {
                     <Td>
                       <Ident value={m.variantId} />
                     </Td>
-                    <Td>{m.binId === null ? '—' : <Ident value={m.binId} />}</Td>
+                    <Td>
+                      <BinCell m={m} />
+                    </Td>
                     <Td align="right">
                       <span className={m.qtyChange < 0 ? 'text-[var(--color-bad)]' : ''}>
                         {m.qtyChange > 0 ? '+' : ''}
@@ -157,6 +202,18 @@ export function MovementsIndex(): ReactElement {
         )}
       </Card>
     </div>
+  );
+}
+
+/** "R-01-01 · CCU-01" — the code somebody can walk to, not a uuid. */
+function BinCell({ m }: { readonly m: StockMovementView }): ReactElement {
+  if (m.binId === null) return <span className="text-text-faint">—</span>;
+  if (m.binCode === null) return <Ident value={m.binId} />;
+  return (
+    <span>
+      <span className="font-mono">{m.binCode}</span>
+      {m.warehouseCode !== null && <span className="text-text-muted"> · {m.warehouseCode}</span>}
+    </span>
   );
 }
 
