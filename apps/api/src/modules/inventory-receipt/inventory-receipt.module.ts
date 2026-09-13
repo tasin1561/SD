@@ -9,6 +9,10 @@ import { AdminGoodsReceiptController } from './admin-goods-receipt.controller';
 import { GoodsReceiptService } from './services/goods-receipt.service';
 import { TransitArrivalService } from './services/transit-arrival.service';
 import { ConsignmentCoreModule } from '../consignment-core/consignment-core.module';
+import { TicketModule } from '../ticket/ticket.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
+import { SellerNotificationPreferenceModule } from '../seller-notification-preference/seller-notification-preference.module';
+import { ReceiptShortfallTicketService } from './services/receipt-shortfall-ticket.service';
 
 /**
  * Goods receipts — the counting station, invoked once per consignment LEG.
@@ -21,9 +25,25 @@ import { ConsignmentCoreModule } from '../consignment-core/consignment-core.modu
 @Module({
   // StockAlertService + StockCacheService come from InventorySharedModule
   // now (deviation #7) — no InventoryStockModule dependency needed.
-  imports: [InventorySharedModule, CatalogReadModule, EmailModule, ConsignmentCoreModule],
+  imports: [
+    InventorySharedModule,
+    CatalogReadModule,
+    EmailModule,
+    ConsignmentCoreModule,
+    // TKT-3: a short count opens a ticket; a surplus tells the seller.
+    // The ticket module imports nothing inventory-shaped, so no cycle.
+    TicketModule,
+    NotificationAudienceModule,
+    SellerNotificationPreferenceModule,
+  ],
   controllers: [SellerGoodsReceiptController, AdminGoodsReceiptController],
-  providers: [GoodsReceiptService, TransitArrivalService, SellerJwtGuard, StaffJwtGuard],
+  providers: [
+    GoodsReceiptService,
+    TransitArrivalService,
+    ReceiptShortfallTicketService,
+    SellerJwtGuard,
+    StaffJwtGuard,
+  ],
   exports: [GoodsReceiptService],
 })
 export class InventoryReceiptModule {}

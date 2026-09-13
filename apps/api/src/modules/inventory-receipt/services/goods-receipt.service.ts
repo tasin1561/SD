@@ -28,6 +28,7 @@ import { BinPolicyService } from '../../inventory-shared/bin-policy.service';
 import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
 import { ConsignmentStatusService } from '../../consignment-core/services/consignment-status.service';
 import { TransitArrivalService } from './transit-arrival.service';
+import { ReceiptShortfallTicketService } from './receipt-shortfall-ticket.service';
 import { StockCacheService } from '../../inventory-shared/stock-cache.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import { EnvService } from '../../../config/env.service';
@@ -159,6 +160,8 @@ export class GoodsReceiptService {
     // For the per-line thumbnail on the receiving screen; objects are
     // private, so URLs are minted per request.
     private readonly spaces: SpacesService,
+    // TKT-3: a short count opens a ticket once the count has committed.
+    private readonly shortfall: ReceiptShortfallTicketService,
   ) {}
 
   // ---------------- seller declaration ----------------
@@ -966,6 +969,12 @@ export class GoodsReceiptService {
     for (const variantId of affectedVariantIds) {
       await this.alerts.evaluate(sellerId, variantId, warehouseId);
     }
+    // TKT-3: a line counted short or arriving damaged opens a ticket; a
+    // surplus tells the seller. AFTER the count commits (visible-vs-
+    // silent — the count is the fact, the ticket its reflection), and it
+    // never throws: a completion must not fail over a ticket. A short
+    // receipt left without one is what the backfill's dry run lists.
+    await this.shortfall.afterCompletion(id);
     if (unitsRegistered > 0) {
       this.logger.log(
         { receiptId: id, unitsRegistered },

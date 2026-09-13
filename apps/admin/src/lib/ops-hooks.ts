@@ -69,6 +69,13 @@ export interface TicketView {
   readonly shipmentItemId: string | null;
   readonly courierCode: string | null;
   /**
+   * RECEIPT_SHORTFALL (TKT-3): the goods receipt it is about, by number.
+   * Optional only so fixtures written before it still type-check.
+   */
+  readonly goodsReceiptId?: string | null;
+  readonly receiptNumber?: string | null;
+  readonly consignmentNumber?: string | null;
+  /**
    * The courier's own words for the category the seller picked when
    * they raised it. Resolved server-side on read — the taxonomy is
    * re-fetched from the courier, so a label stored at create time would

@@ -105,6 +105,35 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
       'Charges left your wallet below a pending withdrawal, so we rejected it — you can ask again.',
     group: 'Wallet',
   },
+  // Not NOTIF-4 legs: sent by TicketNotifier (TKT-3). The spec pins each
+  // key to the constant its sender uses.
+  {
+    topic: 'ticket.opened_for_you',
+    label: 'We opened a ticket for you',
+    description:
+      'We found a problem with your goods — damage on a return, or a short count at the warehouse — and opened a ticket about it.',
+    group: 'Tickets',
+  },
+  {
+    topic: 'ticket.reply',
+    label: 'A reply on your ticket',
+    description: 'Somebody at Skydrop answered on one of your tickets.',
+    group: 'Tickets',
+  },
+  {
+    topic: 'ticket.resolved',
+    label: 'A ticket was closed',
+    description: 'One of your tickets was settled or closed, including any refund to your wallet.',
+    group: 'Tickets',
+  },
+  {
+    // Sent by ReceiptShortfallTicketService when a count comes up OVER.
+    topic: 'inventory.receipt_surplus',
+    label: 'More arrived than you declared',
+    description:
+      'A goods receipt counted more units than were declared. The extra units carry on with the rest of your goods; nothing to do.',
+    group: 'Inventory',
+  },
 ];
 
 /**
@@ -191,6 +220,20 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     label: 'Everything else',
     description: 'A problem that did not fit another kind.',
     group: 'System',
+  },
+  // Not system issues: a seller speaking on a ticket (TKT-3), sent by
+  // TicketNotifier to everyone who can open the tickets queue.
+  {
+    topic: 'ticket.seller_opened',
+    label: 'A seller opened a ticket',
+    description: 'A seller raised an issue about one of their parcels or orders.',
+    group: 'Tickets',
+  },
+  {
+    topic: 'ticket.seller_replied',
+    label: 'A seller replied on a ticket',
+    description: 'A seller answered on one of their tickets, and may be waiting on us.',
+    group: 'Tickets',
   },
 ];
 

@@ -178,6 +178,8 @@ function makeSut(receipt: ReturnType<typeof makeReceipt>) {
     // Only the per-line thumbnail uses this; a stub keeps the
     // receiving tests about receiving.
     { presignGetUrl: async () => 'https://example.test/img' } as unknown as SpacesService,
+    // TKT-3: the post-commit shortfall ticket; its own spec owns it.
+    { afterCompletion: async () => undefined } as never,
   );
   return { svc, receipt, applyCalls, batchCreates, emails, mutation, alerts, cache };
 }

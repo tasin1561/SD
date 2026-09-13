@@ -13,6 +13,27 @@ import {
 import { NotificationEventMappingService } from '../../src/modules/notifications/services/notification-event-mapping.service';
 import { permissionsFor } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { WITHDRAWAL_AUTO_REJECTED_TOPIC } from '../../src/modules/seller-wallet-withdrawal/services/unpayable-withdrawal.service';
+import {
+  TICKET_OPENED_FOR_YOU_TOPIC,
+  TICKET_REPLY_TOPIC,
+  TICKET_RESOLVED_TOPIC,
+  TICKET_SELLER_OPENED_TOPIC,
+  TICKET_SELLER_REPLIED_TOPIC,
+} from '../../src/modules/ticket/services/ticket-notification-plan';
+import { RECEIPT_SURPLUS_TOPIC } from '../../src/modules/inventory-receipt/services/receipt-shortfall-ticket.service';
+
+/** Seller topics sent by something other than the lifecycle listener,
+ *  each named by its sender's own constant. */
+const OTHER_SELLER_SENDERS = [
+  WITHDRAWAL_AUTO_REJECTED_TOPIC,
+  TICKET_OPENED_FOR_YOU_TOPIC,
+  TICKET_REPLY_TOPIC,
+  TICKET_RESOLVED_TOPIC,
+  RECEIPT_SURPLUS_TOPIC,
+];
+
+/** Staff topics that are not system issues (TKT-3), by their sender's constant. */
+const OTHER_STAFF_SENDERS = [TICKET_SELLER_OPENED_TOPIC, TICKET_SELLER_REPLIED_TOPIC];
 
 /**
  * The catalogue is a list of words, and words drift.
@@ -54,13 +75,20 @@ describe('NotificationTopicCatalogService', () => {
     const sent = sellerTopicsTheListenerSends();
     // The seller topics sent by something other than the lifecycle
     // listener, each named by its sender's own constant.
-    sent.add(WITHDRAWAL_AUTO_REJECTED_TOPIC);
+    for (const t of OTHER_SELLER_SENDERS) sent.add(t);
     const orphaned = SELLER_TOPICS.map((t) => t.topic).filter((t) => !sent.has(t));
     expect(orphaned).toEqual([]);
   });
 
   it('the automatic withdrawal rejection can be silenced under the key it is sent on', () => {
     expect(SELLER_TOPICS.map((t) => t.topic)).toContain(WITHDRAWAL_AUTO_REJECTED_TOPIC);
+  });
+
+  it('every ticket notice can be silenced under the key it is sent on (TKT-3)', () => {
+    const seller = SELLER_TOPICS.map((t) => t.topic);
+    for (const t of OTHER_SELLER_SENDERS) expect(seller).toContain(t);
+    const staff = STAFF_TOPICS.map((t) => t.topic);
+    for (const t of OTHER_STAFF_SENDERS) expect(staff).toContain(t);
   });
 
   it('every in-app notification a seller receives is one they can silence', () => {
@@ -78,8 +106,11 @@ describe('NotificationTopicCatalogService', () => {
       .filter((t) => !listed.has(t));
     expect(missing).toEqual([]);
     // And nothing extra: a staff topic with no issue kind behind it
-    // never fires.
-    const known = new Set(Object.values(SystemIssueKind).map(topicForIssue));
+    // never fires — unless a named sender sends it (TKT-3's tickets).
+    const known = new Set([
+      ...Object.values(SystemIssueKind).map(topicForIssue),
+      ...OTHER_STAFF_SENDERS,
+    ]);
     expect(STAFF_TOPICS.map((t) => t.topic).filter((t) => !known.has(t))).toEqual([]);
   });
 

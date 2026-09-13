@@ -60,6 +60,7 @@ function makeSut(opts: { modes?: Record<string, InventoryMode>; modeThrows?: boo
     // Only the per-line thumbnail uses this; a stub keeps the
     // receiving tests about receiving.
     { presignGetUrl: async () => 'https://example.test/img' } as unknown as SpacesService,
+    { afterCompletion: async () => undefined } as never,
   );
   return { svc, resolveForVariants, findFirst };
 }

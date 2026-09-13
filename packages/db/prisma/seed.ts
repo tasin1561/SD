@@ -3226,6 +3226,39 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ company_name }}, goods receipt {{ receipt_number }} at {{ warehouse_name }} has discrepancies between expected and received quantities and is on hold pending review. Notes: {{ discrepancy_notes }}. Our team is resolving it; questions to {{ support_email }}.',
   },
+  // ---- Tickets (TKT-3, 2026-09-13) — the COMPANY's copy of what the
+  // people at the seller also see in their inbox. `message` is composed
+  // by TicketNotifier (the opening message, our reply, the outcome), so
+  // the template only frames it. Upserted on every reseed, and deploy.sh
+  // reseeds whenever this file changes, so the deployed DB gets them
+  // with the release that first sends them (NOTIF-22).
+  {
+    code: 'seller.ticket_opened.email',
+    name: 'Ticket opened by Skydrop — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'We opened ticket {{ ticket_number }}: {{ ticket_subject }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, we opened ticket {{ ticket_number }} for you.\n\n{{ message }}\n\nSee it and reply at {{ ticket_url }}.',
+  },
+  {
+    code: 'seller.ticket_reply.email',
+    name: 'Reply on a ticket — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'New reply on ticket {{ ticket_number }}: {{ ticket_subject }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, we replied on ticket {{ ticket_number }} ({{ ticket_subject }}):\n\n{{ message }}\n\nSee the conversation and reply at {{ ticket_url }}.',
+  },
+  {
+    code: 'seller.ticket_resolved.email',
+    name: 'Ticket closed — email to seller',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Ticket {{ ticket_number }} is closed: {{ ticket_subject }}',
+    bodyTemplate:
+      'Hi {{ company_name }}, ticket {{ ticket_number }} ({{ ticket_subject }}) is closed.\n\n{{ message }}\n\nSee it at {{ ticket_url }}.',
+  },
   {
     code: 'seller.stock_adjustment_executed.email',
     name: 'Stock adjustment executed — email to seller',
