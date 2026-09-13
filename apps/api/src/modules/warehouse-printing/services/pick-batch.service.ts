@@ -56,6 +56,10 @@ export interface PickListResult {
 
 const MAX_PER_BATCH = 60;
 
+type ActiveReservations = Awaited<
+  ReturnType<StockReservationService['listActiveForOrderWithLocations']>
+>;
+
 /**
  * A batch is a walk.
  *
@@ -493,7 +497,8 @@ export class PickBatchService {
       if (orderId === undefined) continue;
 
       // STRICT is refused BY NAME rather than silently passed over.
-      const strict = await this.isStrict(orderId);
+      const active = await this.reservations.listActiveForOrderWithLocations(orderId);
+      const strict = await this.isStrict(active);
       if (strict) {
         skipped.push({
           shipmentNumber: ship.shipmentNumber,
@@ -509,6 +514,7 @@ export class PickBatchService {
           where: { id: ship.id, status: ShipmentStatus.CREATED, pickCompletedAt: null },
           data: { pickCompletedAt: now, pickExpiresAt: null },
         });
+        await this.stampPickHints(ship.id, orderId, active);
         await this.orderWrite.transitionStatus({
           orderId,
           to: OrderStatus.PICKED,
@@ -562,13 +568,62 @@ export class PickBatchService {
   }
 
   /** Does this order carry any serialised line? */
-  private async isStrict(orderId: string): Promise<boolean> {
-    const active = await this.reservations.listActiveForOrderWithLocations(orderId);
+  private async isStrict(active: ActiveReservations): Promise<boolean> {
     for (const r of active) {
       const mode = await this.modes.resolveForVariant(r.sellerId, r.variantId);
       if (mode === InventoryMode.STRICT) return true;
     }
     return false;
+  }
+
+  /**
+   * Record where each line was picked from — the WMS-9 operational hint
+   * on `shipment_items.pickedBinId/pickedBatchId` (2026-09-13).
+   *
+   * Only the per-parcel station (`PickExecutionService.recordItem`) used
+   * to write it, so every batch-picked parcel reached RTO finalize with no
+   * hint and every RESTOCK on it was refused. Finalize now reads where the
+   * stock actually left (the PACK_CONFIRM movements) and needs no hint;
+   * this keeps the hint true for everything else that reads it (return
+   * putaway's suggested shelf, the freight attribution walk).
+   *
+   * The bin/batch is the phase-2 reservation `buildList` allocated — the
+   * location printed on the sheet the picker walked. A line split across
+   * shelves gets ONE hint, its largest reservation (ties on bin then
+   * batch, so a re-run picks the same); finalize reads the movements for
+   * the split. Guarded on both columns being NULL, so a hint the picker
+   * recorded at the station is never overwritten. Touches no stock and no
+   * reservation, and is BEST-EFFORT: a hint is not worth failing the walk.
+   */
+  private async stampPickHints(
+    shipmentId: string,
+    orderId: string,
+    active: ActiveReservations,
+  ): Promise<void> {
+    const best = new Map<string, { binId: string; batchId: string; qty: number }>();
+    for (const r of active) {
+      if (r.orderItemId === null || r.binId === null || r.batchId === null) continue;
+      const prev = best.get(r.orderItemId);
+      const wins =
+        prev === undefined ||
+        r.qtyReserved > prev.qty ||
+        (r.qtyReserved === prev.qty &&
+          `${r.binId}|${r.batchId}`.localeCompare(`${prev.binId}|${prev.batchId}`) < 0);
+      if (wins) best.set(r.orderItemId, { binId: r.binId, batchId: r.batchId, qty: r.qtyReserved });
+    }
+    for (const [orderItemId, loc] of best) {
+      try {
+        await this.prisma.client.shipmentItem.updateMany({
+          where: { shipmentId, orderItemId, pickedBinId: null, pickedBatchId: null },
+          data: { pickedBinId: loc.binId, pickedBatchId: loc.batchId },
+        });
+      } catch (err) {
+        this.logger.warn(
+          { shipmentId, orderId, orderItemId, err: (err as Error).message },
+          'Batch mark-picked could not record the pick hint — finalize reads the pack movements instead',
+        );
+      }
+    }
   }
 
   /** Abandon a batch that was never printed — the parcels go back. */

@@ -13,6 +13,11 @@ import { OrderWriteService } from '../../order/services/order-write.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
 import { RtoRestockTargetService, type RestockTarget } from './rto-restock-target.service';
+import {
+  resolveRestockSources,
+  type ResolvedRestockLine,
+  type RestockSourceResolution,
+} from './rto-restock-sources';
 import { InboundFreightAmortisationService } from '../../inbound-freight/services/inbound-freight-amortisation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
@@ -25,6 +30,10 @@ export interface FinalizeRtoItemSummary {
    *  lines — no movement; and null for RESTOCK lines whose movement-gate
    *  skipped on a retry). */
   movementId: string | null;
+  /** Every RETURN_RESTOCK written for the line — more than one when the
+   *  units left from more than one (bin, batch). Empty where movementId
+   *  is null. */
+  movementIds: string[];
 }
 
 export interface FinalizeRtoResult {
@@ -78,8 +87,11 @@ export interface FinalizeRtoResult {
  * ── SAGA (movements-first, transition-last; visible-vs-silent) ─────────
  *   1. Pre-flight: gate 1 (order.status===RTO_RESTOCKED short-circuit),
  *      ORDER_NOT_RTO_READY, RTO_INSPECTION_INCOMPLETE,
- *      RTO_RESTOCK_MISSING_CONTEXT (RESTOCK lines need pickedBin/Batch —
- *      the RETURN_RESTOCK target), RTO_NO_ITEMS, and (R6)
+ *      RTO_RESTOCK_NEVER_LEFT_STOCK / RTO_RESTOCK_EXCEEDS_STOCK_LEFT
+ *      (each RESTOCK line is credited back where the order's PACK_CONFIRM
+ *      movements say it left, falling back to the pick hint; a line with
+ *      neither never left through us — rto-restock-sources.ts),
+ *      RTO_NO_ITEMS, and (R6)
  *      RTO_RESTOCK_WAREHOUSE_MISMATCH when the parcel was physically
  *      received at a warehouse other than the one it shipped from —
  *      see the inline note at that guard for why we refuse instead of
@@ -144,6 +156,7 @@ export class RtoDispositionService {
               select: {
                 id: true,
                 variantId: true,
+                skuCode: true,
                 order: { select: { sellerId: true } },
               },
             },
@@ -238,18 +251,62 @@ export class RtoDispositionService {
       (i) => i.rtoDisposition === RtoDisposition.WRITE_OFF,
     );
 
-    // RESTOCK items need pickedBin/Batch — the RETURN_RESTOCK movement
-    // targets a concrete stock_levels (bin+batch). WRITE_OFF needs no
-    // movement, so no context requirement.
-    const restockMissingContext = restockItems.filter(
-      (i) => i.pickedBinId === null || i.pickedBatchId === null,
-    );
-    if (restockMissingContext.length > 0) {
-      throw new ConflictException({
-        code: 'RTO_RESTOCK_MISSING_CONTEXT',
-        message: `${restockMissingContext.length} RESTOCK item(s) have no pickedBin/pickedBatch — restock target unknown`,
-        cause: restockMissingContext.map((i) => i.id),
-      });
+    // ── WHERE each RESTOCK line goes back to (2026-09-13).
+    //
+    // The RETURN_RESTOCK movement targets a concrete (bin, batch), and the
+    // authority on that is where the unit LEFT: the order's PACK_CONFIRM
+    // movements (DISPATCH for pre-Model-C orders), net of PACK_REVERSED,
+    // queried by ORDER — a supersede leaves them on the original shipment
+    // (CUR-3). The pick hint is used only when a line has no pack evidence
+    // at all; a line with neither never left stock through us and is
+    // refused by name. See `rto-restock-sources.ts` for the precedence
+    // argument. WRITE_OFF needs no movement, so no source.
+    const sourcesByItem = new Map<string, ResolvedRestockLine>();
+    if (restockItems.length > 0) {
+      const resolution = await this.resolveSources(
+        orderId,
+        shipment.originWarehouseId,
+        restockItems,
+      );
+      const skuOf = (id: string): string =>
+        restockItems.find((i) => i.id === id)?.orderItem.skuCode ?? id;
+      if (resolution.neverLeft.length > 0) {
+        const skus = resolution.neverLeft.map(skuOf).join(', ');
+        throw new ConflictException({
+          code: 'RTO_RESTOCK_NEVER_LEFT_STOCK',
+          message:
+            `${resolution.neverLeft.length} line(s) marked Restock never left our stock (${skus}): ` +
+            'no pick location was recorded and no pack movement took them off a shelf. ' +
+            'Restocking would add stock that was never taken out — re-inspect them as Write off instead.',
+          cause: resolution.neverLeft,
+        });
+      }
+      if (resolution.shortfalls.length > 0) {
+        const detail = resolution.shortfalls
+          .map((s) => `${skuOf(s.shipmentItemId)}: ${s.quantity} returned, ${s.leftQuantity} left`)
+          .join('; ');
+        throw new ConflictException({
+          code: 'RTO_RESTOCK_EXCEEDS_STOCK_LEFT',
+          message:
+            `More units are marked Restock than left our stock for this order (${detail}). ` +
+            'Restocking the difference would add stock that was never taken out — ' +
+            'check the inspection, and write off what did not leave through us.',
+          cause: resolution.shortfalls.map((s) => s.shipmentItemId),
+        });
+      }
+      for (const r of resolution.resolved) sourcesByItem.set(r.shipmentItemId, r);
+    }
+    const hintDisagreements = [...sourcesByItem.values()]
+      .filter((r) => r.hintDisagrees)
+      .map((r) => r.shipmentItemId);
+    const restockedFromHintOnly = [...sourcesByItem.values()]
+      .filter((r) => r.origin === 'PICK_HINT')
+      .map((r) => r.shipmentItemId);
+    if (hintDisagreements.length > 0) {
+      this.logger.warn(
+        { shipmentId, orderId, shipmentItemIds: hintDisagreements },
+        'RTO finalize: pick hint disagrees with where PACK_CONFIRM took the stock — restocking where it actually left',
+      );
     }
 
     // ── R6/R6b: CROSS-WAREHOUSE RESTOCK.
@@ -295,56 +352,66 @@ export class RtoDispositionService {
         const movementIds = await this.mutation.runWithRetry(async (tx) => {
           // Cleared per attempt: runWithRetry may re-run the whole tx.
           targetsByItem.clear();
-          const ids: Array<{ shipmentItemId: string; movementId: string }> = [];
+          const ids = new Map<string, string[]>();
           for (const item of restockItems) {
-            const binId = item.pickedBinId;
-            const batchId = item.pickedBatchId;
-            if (binId === null || batchId === null) {
-              // Pre-flighted; defensive guard for type narrowing.
+            const resolved = sourcesByItem.get(item.id);
+            if (resolved === undefined) {
+              // Pre-flighted: every RESTOCK line resolved or we refused.
               throw new ConflictException({
-                code: 'RTO_RESTOCK_MISSING_CONTEXT',
-                message: `item ${item.id} pick context vanished mid-finalize`,
+                code: 'RTO_RESTOCK_NEVER_LEFT_STOCK',
+                message: `item ${item.id} has no restock source`,
               });
             }
-            // R6b: resolve the real target (same-warehouse ⇒ the picked
-            // bin/batch unchanged; cross-warehouse ⇒ a lineage-preserving
-            // child batch + a returns bin at the receiving warehouse).
-            const target = await this.restockTargets.resolve(tx, {
-              sellerId: item.orderItem.order.sellerId,
-              variantId: item.orderItem.variantId,
-              originWarehouseId: shipment.originWarehouseId,
-              receivedWarehouseId: restockWarehouseId,
-              pickedBinId: binId,
-              pickedBatchId: batchId,
-              quantity: item.quantity,
-              staffId,
-            });
-            targetsByItem.set(item.id, target);
-            const result = await this.mutation.apply(tx, {
-              sellerId: item.orderItem.order.sellerId,
-              variantId: item.orderItem.variantId,
-              warehouseId: target.warehouseId,
-              binId: target.binId,
-              batchId: target.batchId,
-              qtyChange: item.quantity, // +qty — the unit returned
-              type: StockMovementType.RETURN_RESTOCK,
-              actorType: ActorType.STAFF,
-              actorId: staffId,
-              // RETURN_RESTOCK self-describes (INV-7 — no reasonCode req).
-              reasonCode: null,
-              reason: `RTO restock: rtoCondition=${item.rtoCondition ?? 'unknown'}`,
-              orderId,
-              orderItemId: item.orderItemId,
-              shipmentId,
-            });
-            ids.push({ shipmentItemId: item.id, movementId: result.movementId });
+            const itemIds: string[] = [];
+            // One RETURN_RESTOCK per place the unit(s) left from, so a
+            // line picked from two bins goes back as the same split.
+            for (const source of resolved.sources) {
+              // R6b: resolve the real target (same-warehouse ⇒ the source
+              // batch, into RTO_HOLD when there is one; cross-warehouse ⇒
+              // a lineage-preserving child batch + a returns bin at the
+              // receiving warehouse).
+              const target = await this.restockTargets.resolve(tx, {
+                sellerId: item.orderItem.order.sellerId,
+                variantId: item.orderItem.variantId,
+                originWarehouseId: source.warehouseId,
+                receivedWarehouseId: restockWarehouseId,
+                pickedBinId: source.binId,
+                pickedBatchId: source.batchId,
+                quantity: source.quantity,
+                staffId,
+              });
+              // The unit ledger follows the LARGEST source (first).
+              if (!targetsByItem.has(item.id)) targetsByItem.set(item.id, target);
+              const result = await this.mutation.apply(tx, {
+                sellerId: item.orderItem.order.sellerId,
+                variantId: item.orderItem.variantId,
+                warehouseId: target.warehouseId,
+                binId: target.binId,
+                batchId: target.batchId,
+                qtyChange: source.quantity, // +qty — the unit returned
+                type: StockMovementType.RETURN_RESTOCK,
+                actorType: ActorType.STAFF,
+                actorId: staffId,
+                // RETURN_RESTOCK self-describes (INV-7 — no reasonCode req).
+                reasonCode: null,
+                reason: `RTO restock: rtoCondition=${item.rtoCondition ?? 'unknown'}`,
+                orderId,
+                orderItemId: item.orderItemId,
+                shipmentId,
+                metadata: {
+                  restockSource: resolved.origin,
+                  leftFromWarehouseId: source.warehouseId,
+                  leftFromBinId: source.binId,
+                  leftFromBatchId: source.batchId,
+                },
+              });
+              itemIds.push(result.movementId);
+            }
+            ids.set(item.id, itemIds);
           }
           return ids;
         });
-        itemSummaries = this.buildItemSummaries(
-          shipment.items,
-          new Map(movementIds.map((m) => [m.shipmentItemId, m.movementId])),
-        );
+        itemSummaries = this.buildItemSummaries(shipment.items, movementIds);
       } else {
         itemSummaries = this.buildItemSummaries(shipment.items, null);
       }
@@ -487,6 +554,12 @@ export class RtoDispositionService {
         crossWarehouseRestock,
         restockWarehouseId,
         originWarehouseId: shipment.originWarehouseId,
+        // 2026-09-13: where each restocked line was taken from. A line on
+        // the hint alone had no pack evidence; a disagreement means the
+        // picker's recorded shelf is not where PACK_CONFIRM took the
+        // stock, and the restock followed the movement.
+        restockedFromHintOnly,
+        hintDisagreements,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,
@@ -509,6 +582,65 @@ export class RtoDispositionService {
 
   // ── internal ──────────────────────────────────────────────────────
 
+  /**
+   * The order's pack evidence, read by ORDER (CUR-3), then matched to the
+   * lines by the pure resolver. Read-only and outside any transaction: the
+   * ledger is append-only, so a retry computes the same answer.
+   */
+  private async resolveSources(
+    orderId: string,
+    originWarehouseId: string,
+    restockItems: ReadonlyArray<{
+      id: string;
+      orderItemId: string;
+      quantity: number;
+      pickedBinId: string | null;
+      pickedBatchId: string | null;
+      orderItem: { variantId: string };
+    }>,
+  ): Promise<RestockSourceResolution> {
+    const leftMovements = await this.prisma.client.stockMovement.findMany({
+      where: {
+        orderId,
+        type: { in: [StockMovementType.PACK_CONFIRM, StockMovementType.DISPATCH] },
+      },
+      select: {
+        id: true,
+        warehouseId: true,
+        binId: true,
+        batchId: true,
+        qtyChange: true,
+        orderItemId: true,
+        variantId: true,
+      },
+    });
+    const reversed =
+      leftMovements.length === 0
+        ? []
+        : await this.prisma.client.stockMovement.findMany({
+            where: { orderId, type: StockMovementType.PACK_REVERSED },
+            select: { metadata: true },
+          });
+    const reversedMovementIds = new Set(
+      reversed
+        .map((m) => (m.metadata as { reversesMovementId?: string } | null)?.reversesMovementId)
+        .filter((id): id is string => typeof id === 'string'),
+    );
+    return resolveRestockSources({
+      lines: restockItems.map((i) => ({
+        shipmentItemId: i.id,
+        orderItemId: i.orderItemId,
+        variantId: i.orderItem.variantId,
+        quantity: i.quantity,
+        pickedBinId: i.pickedBinId,
+        pickedBatchId: i.pickedBatchId,
+      })),
+      leftMovements,
+      reversedMovementIds,
+      originWarehouseId,
+    });
+  }
+
   private buildItemSummaries(
     items: ReadonlyArray<{
       id: string;
@@ -516,14 +648,18 @@ export class RtoDispositionService {
       quantity: number;
       rtoDisposition: RtoDisposition | null;
     }>,
-    movementIdByItem: Map<string, string> | null,
+    movementIdsByItem: Map<string, string[]> | null,
   ): FinalizeRtoItemSummary[] {
-    return items.map((i) => ({
-      shipmentItemId: i.id,
-      orderItemId: i.orderItemId,
-      disposition: i.rtoDisposition ?? RtoDisposition.WRITE_OFF,
-      quantity: i.quantity,
-      movementId: movementIdByItem?.get(i.id) ?? null,
-    }));
+    return items.map((i) => {
+      const ids = movementIdsByItem?.get(i.id) ?? [];
+      return {
+        shipmentItemId: i.id,
+        orderItemId: i.orderItemId,
+        disposition: i.rtoDisposition ?? RtoDisposition.WRITE_OFF,
+        quantity: i.quantity,
+        movementId: ids[0] ?? null,
+        movementIds: ids,
+      };
+    });
   }
 }

@@ -46,8 +46,32 @@ function item(
     orderItem: {
       id: `oi-${id}`,
       variantId: opts.variantId ?? `v-${id}`,
+      skuCode: `SKU-${id}`,
       order: { sellerId: SELLER },
     },
+  };
+}
+
+/** A PACK_CONFIRM movement for an order item (the unit leaving stock). */
+function packConfirm(
+  id: string,
+  opts: {
+    orderItemId?: string;
+    variantId?: string;
+    bin?: string;
+    batch?: string;
+    qty?: number;
+    warehouseId?: string;
+  } = {},
+): AnyArgs {
+  return {
+    id,
+    warehouseId: opts.warehouseId ?? WH,
+    binId: opts.bin ?? 'mv-bin',
+    batchId: opts.batch ?? 'mv-bat',
+    qtyChange: -(opts.qty ?? 2),
+    orderItemId: opts.orderItemId ?? 'oi-si-1',
+    variantId: opts.variantId ?? 'v-si-1',
   };
 }
 
@@ -59,6 +83,10 @@ function makeService(
     existingMovement?: AnyArgs | null;
     /** R6 — where the parcel was physically received. null = origin. */
     rtoReceivedWarehouseId?: string | null;
+    /** PACK_CONFIRM / DISPATCH movements for the order. Default: none. */
+    leftMovements?: AnyArgs[];
+    /** PACK_REVERSED movements for the order. Default: none. */
+    reversals?: AnyArgs[];
   } = {},
 ) {
   const defaultItems = opts.items ?? [item('si-1', RtoDisposition.RESTOCK)];
@@ -75,9 +103,14 @@ function makeService(
   const stockMovementFindFirst = jest.fn(async () =>
     opts.existingMovement === undefined ? null : opts.existingMovement,
   );
+  const stockMovementFindMany = jest.fn(async (args: { where: { type: unknown } }) =>
+    args.where.type === StockMovementType.PACK_REVERSED
+      ? (opts.reversals ?? [])
+      : (opts.leftMovements ?? []),
+  );
   const client = {
     shipment: { findFirst: shipmentFindFirst },
-    stockMovement: { findFirst: stockMovementFindFirst },
+    stockMovement: { findFirst: stockMovementFindFirst, findMany: stockMovementFindMany },
   };
   const getById = jest.fn(async () =>
     opts.orderStatus === 'missing'
@@ -134,6 +167,7 @@ function makeService(
   return {
     svc,
     stockMovementFindFirst,
+    stockMovementFindMany,
     transitionStatus,
     apply,
     runWithRetry,
@@ -307,6 +341,132 @@ describe('RtoDispositionService.finalize — disposition mixes (Model A)', () =>
   });
 });
 
+describe('RtoDispositionService.finalize — where a restock goes back to (2026-09-13)', () => {
+  const noHint = { pickedBin: null, pickedBatch: null } as const;
+
+  it('hint missing + one PACK_CONFIRM source → restocks where the unit left', async () => {
+    // The production bug: a batch-picked parcel has no pick hint, but its
+    // PACK_CONFIRM carries the bin and batch the stock came off.
+    const { svc, apply, transitionStatus } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, noHint)],
+      leftMovements: [packConfirm('m-1')],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![1]).toMatchObject({
+      type: StockMovementType.RETURN_RESTOCK,
+      binId: 'mv-bin',
+      batchId: 'mv-bat',
+      qtyChange: 2,
+      metadata: expect.objectContaining({ restockSource: 'PACK_MOVEMENT' }),
+    });
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.RTO_RESTOCKED }),
+    );
+    expect(r.items[0]?.movementIds).toEqual(['mv-1']);
+  });
+
+  it('hint missing + two sources → one RETURN_RESTOCK per source, summing to the line', async () => {
+    const { svc, apply, resolveTarget } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, { ...noHint, quantity: 5 })],
+      leftMovements: [
+        packConfirm('m-1', { bin: 'bin-A', batch: 'bat-A', qty: 2 }),
+        packConfirm('m-2', { bin: 'bin-B', batch: 'bat-B', qty: 3 }),
+      ],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(apply).toHaveBeenCalledTimes(2);
+    const moves = apply.mock.calls.map((c) => c[1]);
+    expect(moves).toEqual([
+      expect.objectContaining({ binId: 'bin-B', batchId: 'bat-B', qtyChange: 3 }),
+      expect.objectContaining({ binId: 'bin-A', batchId: 'bat-A', qtyChange: 2 }),
+    ]);
+    // Each source goes through the R6b resolver with its own quantity.
+    expect(resolveTarget.mock.calls.map((c) => c[1]['quantity'])).toEqual([3, 2]);
+    expect(r.items[0]?.movementIds).toEqual(['mv-1', 'mv-2']);
+    expect(r.items[0]?.movementId).toBe('mv-1');
+  });
+
+  it('a PACK_REVERSED give-back is netted (matched per movement)', async () => {
+    const { svc, apply } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, noHint)],
+      leftMovements: [
+        packConfirm('m-1', { bin: 'bin-old', batch: 'bat-old' }),
+        packConfirm('m-2', { bin: 'bin-new', batch: 'bat-new' }),
+      ],
+      reversals: [{ metadata: { reversesMovementId: 'm-1' } }],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![1]).toMatchObject({ binId: 'bin-new', batchId: 'bat-new' });
+  });
+
+  it('reads pack evidence by ORDER, so a supersede (PACK_CONFIRM on the original shipment) is still found', async () => {
+    const { svc, stockMovementFindMany, apply } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, noHint)],
+      leftMovements: [{ ...packConfirm('m-1'), shipmentId: 'ship-ORIGINAL' }],
+    });
+    await svc.finalize(SHIP, STAFF);
+    const where = (stockMovementFindMany.mock.calls[0]![0] as { where: Record<string, unknown> })
+      .where;
+    expect(where['orderId']).toBe(ORDER);
+    expect(where).not.toHaveProperty('shipmentId');
+    expect(apply).toHaveBeenCalledTimes(1);
+  });
+
+  it('a hint that disagrees with the movement loses, and the disagreement is audited', async () => {
+    const { svc, apply, auditLog } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, { pickedBin: 'bin-1', pickedBatch: 'bat-1' })],
+      leftMovements: [packConfirm('m-1')],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(apply.mock.calls[0]![1]).toMatchObject({ binId: 'mv-bin', batchId: 'mv-bat' });
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'rto.finalized',
+        metadata: expect.objectContaining({ hintDisagreements: ['si-1'] }),
+      }),
+    );
+  });
+
+  it('hint present with no pack evidence keeps the legacy hint path, flagged in the audit', async () => {
+    const { svc, apply, auditLog } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(apply.mock.calls[0]![1]).toMatchObject({
+      binId: 'bin-1',
+      batchId: 'bat-1',
+      metadata: expect.objectContaining({ restockSource: 'PICK_HINT' }),
+    });
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ restockedFromHintOnly: ['si-1'] }),
+      }),
+    );
+  });
+
+  it('more units marked Restock than left → refused for the shortfall, nothing moved', async () => {
+    const { svc, apply, transitionStatus } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, { ...noHint, quantity: 3 })],
+      leftMovements: [packConfirm('m-1', { qty: 2 })],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_RESTOCK_EXCEEDS_STOCK_LEFT' },
+    });
+    expect(apply).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('a WRITE_OFF-only parcel never asks where stock left', async () => {
+    const { svc, stockMovementFindMany } = makeService({
+      items: [item('si-1', RtoDisposition.WRITE_OFF, noHint)],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(stockMovementFindMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('RtoDispositionService.finalize — guards', () => {
   it('refuses while any item is still marked for later inspection', async () => {
     // The whole point of the disposition. Finalizing around it would
@@ -342,14 +502,21 @@ describe('RtoDispositionService.finalize — guards', () => {
     });
   });
 
-  it('RTO_RESTOCK_MISSING_CONTEXT when a RESTOCK item has no pickedBin/Batch', async () => {
-    const { svc, runWithRetry } = makeService({
-      items: [item('si-1', RtoDisposition.RESTOCK, { pickedBin: null })],
+  it('RTO_RESTOCK_NEVER_LEFT_STOCK when a RESTOCK line has no hint AND no pack movement', async () => {
+    // Seeded / imported data (SH-TEST-523902): the unit never left our
+    // stock through Skydrop, so restocking it would add stock that was
+    // never taken out. The message says so, and says what to do.
+    const { svc, runWithRetry, transitionStatus } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, { pickedBin: null, pickedBatch: null })],
     });
-    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
-      response: { code: 'RTO_RESTOCK_MISSING_CONTEXT' },
-    });
+    const err = await svc.finalize(SHIP, STAFF).catch((e: unknown) => e);
+    expect(err).toMatchObject({ response: { code: 'RTO_RESTOCK_NEVER_LEFT_STOCK' } });
+    const message = (err as { response: { message: string } }).response.message;
+    expect(message).toMatch(/never left our stock/);
+    expect(message).toMatch(/Write off/);
+    expect(message).toContain('SKU-si-1');
     expect(runWithRetry).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
   });
 
   it('WRITE_OFF item with no pickedBin/Batch is fine (no movement needed)', async () => {
@@ -464,6 +631,23 @@ describe('RtoDispositionService.finalize — guards', () => {
     expect(r.restockedCount).toBe(0);
     expect(apply).not.toHaveBeenCalled();
     expect(transitionStatus).toHaveBeenCalled();
+  });
+
+  it('R6b: a cross-warehouse restock of a batch-picked line still goes through the target resolver', async () => {
+    const { svc, apply, resolveTarget } = makeService({
+      rtoReceivedWarehouseId: 'wh-other',
+      items: [item('si-1', RtoDisposition.RESTOCK, { pickedBin: null, pickedBatch: null })],
+      leftMovements: [packConfirm('m-1')],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(resolveTarget.mock.calls[0]![1]).toMatchObject({
+      originWarehouseId: WH,
+      receivedWarehouseId: 'wh-other',
+      pickedBinId: 'mv-bin',
+      pickedBatchId: 'mv-bat',
+      quantity: 2,
+    });
+    expect(apply.mock.calls[0]![1]).toMatchObject({ warehouseId: 'wh-other' });
   });
 
   it('R6b: a MIXED cross-warehouse batch restocks one line and writes off the other', async () => {
