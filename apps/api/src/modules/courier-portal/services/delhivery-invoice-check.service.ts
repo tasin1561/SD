@@ -420,6 +420,37 @@ export class DelhiveryInvoiceCheckService {
       } else if (row.status === 'MATCHES') {
         await this.issues.resolveByKey(key, 'The invoice now matches what the wallet charged.');
       }
+
+      // An invoice whose file Delhivery will not hand over is its OWN issue,
+      // left open for somebody to take up with Delhivery: EPH26251703's
+      // "Transaction list" did nothing for us and, the owner confirmed on
+      // 13 Sep 2026, in their own panel too. Closes once the file is read.
+      const fileKey = `delhivery-invoice-file:${account.id}:${row.invoiceId}`;
+      if (row.status === 'UNREADABLE') {
+        await this.issues.raise({
+          kind: SystemIssueKind.MONEY,
+          severity: SystemIssueSeverity.MEDIUM,
+          title:
+            `Delhivery invoice ${row.invoiceId} (${row.serviceType}, ${row.invoiceDate}, ` +
+            `₹${row.totalInr}) could not be checked — its transaction list will not download`,
+          detail: unreadableDetail(row),
+          source: SOURCE,
+          dedupeKey: fileKey,
+          metadata: {
+            courierAccountId: account.id,
+            invoiceId: row.invoiceId,
+            invoiceDate: row.invoiceDate,
+            serviceType: row.serviceType,
+            totalInr: row.totalInr,
+            problem: row.problem,
+          },
+        });
+      } else {
+        await this.issues.resolveByKey(
+          fileKey,
+          'Its transaction list downloaded, and the invoice has now been checked.',
+        );
+      }
     }
 
     const un = result.uninvoiced;
@@ -457,9 +488,9 @@ export class DelhiveryInvoiceCheckService {
 
     await this.reportNotes(account, result);
 
-    const unreadable = result.rows.filter((r) => r.status === 'UNREADABLE');
+    // An unreadable invoice has its own issue (above); this one is for the
+    // run itself — a notes list it could not read, or a budget it ran out of.
     const lines = [
-      ...unreadable.map((r) => `${r.invoiceId} (${r.invoiceDate}) — ${r.problem ?? 'unreadable'}`),
       ...extra.listProblems.map((p) => `${p} could not be read`),
       ...(extra.stoppedBy === null
         ? []
@@ -480,7 +511,10 @@ export class DelhiveryInvoiceCheckService {
         metadata: { courierAccountId: account.id, problems: lines.slice(0, 50) },
       });
     } else {
-      await this.issues.resolveByKey(failureKey, 'Every Delhivery invoice was read and checked.');
+      await this.issues.resolveByKey(
+        failureKey,
+        'The run read everything it needed; an invoice whose file would not download has its own issue.',
+      );
     }
   }
 
@@ -679,6 +713,21 @@ function noteLines(notes: readonly DlvNoteResult[]): string {
     .slice(0, NAME_CAP)
     .map((n) => `${n.noteId} · ${n.issuedAt} · ₹${n.amountInr}`)
     .join('\n');
+}
+
+/** What an invoice we could not read needs from a person: the reason, and what to ask Delhivery. */
+function unreadableDetail(row: DlvInvoiceCheckRow): string {
+  return [
+    `Delhivery's itemized file for this invoice could not be had, so its lines were not ` +
+      `compared with what their wallet charged: ${row.problem ?? 'the file could not be read'}.`,
+    'To look yourself: Delhivery One → Finances → Invoices → the Download menu on ' +
+      `${row.invoiceId} → "Transaction list". If it fails there too, the fault is theirs — ask ` +
+      `Delhivery for the transaction list of invoice ${row.invoiceId} (${row.invoiceDate}, ` +
+      `₹${row.totalInr}), or to fix its download.`,
+    'Costs are unaffected: they come from the wallet, not the invoice. The check tries again ' +
+      'every night at 04:10 IST, and this closes by itself once the file downloads and the ' +
+      'invoice has been compared.',
+  ].join('\n\n');
 }
 
 function invoiceDetail(row: DlvInvoiceCheckRow, disputeDays: number): string {

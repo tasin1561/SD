@@ -227,17 +227,28 @@ describe('DelhiveryInvoiceCheckService', () => {
   it('an itemized file it could not have is recorded against that invoice, not the night', async () => {
     const r = emptyRead();
     const files = new Map(r.files);
-    files.set('EPH1', new Error('"Invoice Transaction list" for EPH1 produced no file'));
+    files.set('EPH1', new Error('"Transaction list" for EPH1 produced no file'));
     const s = makeSut({ read: { ...r, files } });
     const out = await s.svc.check('SCHEDULE', NOW);
     expect(out.accounts[0]?.outcome).toBe('CHECKED');
     expect(out.accounts[0]?.result?.rows.find((x) => x.invoiceId === 'EPH1')?.status).toBe(
       'UNREADABLE',
     );
-    const failure = raised(s.issues).find(
-      (i) => i['dedupeKey'] === 'delhivery-invoice-check:acct-d',
+    // Its own issue, left open to take up with Delhivery (owner, 13 Sep 2026)…
+    const own = raised(s.issues).find(
+      (i) => i['dedupeKey'] === 'delhivery-invoice-file:acct-d:EPH1',
     );
-    expect(String(failure?.['detail'])).toMatch(/EPH1 \(2026-08-31\) — "Invoice Transaction list"/);
+    expect(own).toMatchObject({ kind: 'MONEY', severity: 'MEDIUM' });
+    expect(String(own?.['title'])).toMatch(/EPH1 .*2026-08-31.*will not download/);
+    expect(String(own?.['detail'])).toMatch(/"Transaction list" for EPH1 produced no file/);
+    expect(String(own?.['detail'])).toMatch(/closes by itself/);
+    // …not folded into the run's own failure issue, which a clean run clears.
+    expect(raised(s.issues).map((i) => i['dedupeKey'])).not.toContain(
+      'delhivery-invoice-check:acct-d',
+    );
+    expect(resolvedKeys(s.issues)).toContain('delhivery-invoice-check:acct-d');
+    // The other invoice was read, so its file issue (if any) is cleared.
+    expect(resolvedKeys(s.issues)).toContain('delhivery-invoice-file:acct-d:EPVAS1');
   });
 
   it('a read that fails says so, still closes the page, and records a failed run', async () => {
