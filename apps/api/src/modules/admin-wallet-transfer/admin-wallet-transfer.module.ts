@@ -4,6 +4,7 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { TreasuryModule } from '../treasury/treasury.module';
 import { AdminWalletTransferController } from './controllers/admin-wallet-transfer.controller';
+import { StaffWalletTransferReadService } from './services/staff-wallet-transfer-read.service';
 import { StaffWalletTransferService } from './services/staff-wallet-transfer.service';
 
 /**
@@ -18,6 +19,6 @@ import { StaffWalletTransferService } from './services/staff-wallet-transfer.ser
 @Module({
   imports: [PrismaModule, AuthCommonModule, SellerWalletModule, TreasuryModule],
   controllers: [AdminWalletTransferController],
-  providers: [StaffWalletTransferService],
+  providers: [StaffWalletTransferService, StaffWalletTransferReadService],
 })
 export class AdminWalletTransferModule {}

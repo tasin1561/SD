@@ -20,6 +20,7 @@ import {
   StaffWalletTransferService,
   type StaffTransferInput,
 } from '../services/staff-wallet-transfer.service';
+import { StaffWalletTransferReadService } from '../services/staff-wallet-transfer-read.service';
 
 /**
  * A member of staff debiting or crediting a seller's wallet, with a reason
@@ -34,7 +35,10 @@ import {
 @RequirePermissions('money.wallet.transfer')
 @Controller('admin/wallet-transfers')
 export class AdminWalletTransferController {
-  constructor(private readonly svc: StaffWalletTransferService) {}
+  constructor(
+    private readonly svc: StaffWalletTransferService,
+    private readonly reads: StaffWalletTransferReadService,
+  ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
@@ -42,8 +46,8 @@ export class AdminWalletTransferController {
   list(
     @Query('sellerId') sellerId?: string,
     @Query('limit') limit?: string,
-  ): ReturnType<StaffWalletTransferService['list']> {
-    return this.svc.list({
+  ): ReturnType<StaffWalletTransferReadService['list']> {
+    return this.reads.list({
       ...(sellerId === undefined || sellerId === '' ? {} : { sellerId }),
       ...(limit === undefined ? {} : { limit: Number(limit) || 50 }),
     });
@@ -52,8 +56,8 @@ export class AdminWalletTransferController {
   @Get('sellers')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sellers whose wallet can be moved, by name or email' })
-  sellers(@Query('q') q?: string): ReturnType<StaffWalletTransferService['searchSellers']> {
-    return this.svc.searchSellers(q ?? '');
+  sellers(@Query('q') q?: string): ReturnType<StaffWalletTransferReadService['searchSellers']> {
+    return this.reads.searchSellers(q ?? '');
   }
 
   @Get('sellers/:sellerId/context')
@@ -63,8 +67,8 @@ export class AdminWalletTransferController {
   })
   context(
     @Param('sellerId', new ParseUUIDPipe({ version: '7' })) sellerId: string,
-  ): ReturnType<StaffWalletTransferService['context']> {
-    return this.svc.context(sellerId);
+  ): ReturnType<StaffWalletTransferReadService['context']> {
+    return this.reads.context(sellerId);
   }
 
   @Post('preview')
