@@ -4,6 +4,7 @@ import { TicketStateMachineService } from '../../src/modules/ticket/services/tic
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
+import type { TicketNotifier } from '../../src/modules/ticket/services/ticket-notifier.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -43,6 +44,8 @@ function makeService(
   opts: {
     existing?: AnyArgs | null;
     existingByItem?: AnyArgs | null;
+    /** The RECEIPT_SHORTFALL already open for a goods receipt (TKT-3). */
+    existingByReceipt?: AnyArgs | null;
     /** Simulate another request winning the guarded claim first — the
      *  guarded updateMany then matches 0 rows. */
     claimLoses?: boolean;
@@ -52,6 +55,9 @@ function makeService(
     // open() looks up by the composite (shipmentItemId, ticketType)
     if ((args.where as AnyArgs)['shipmentItemId_ticketType'] !== undefined) {
       return opts.existingByItem === undefined ? null : opts.existingByItem;
+    }
+    if ((args.where as AnyArgs)['goodsReceiptId_ticketType'] !== undefined) {
+      return opts.existingByReceipt === undefined ? null : opts.existingByReceipt;
     }
     return opts.existing === undefined ? ticketRow() : opts.existing;
   });
@@ -112,14 +118,18 @@ function makeService(
   const recomputeCacheAfterCommit = jest.fn(async () => undefined);
   const wallet = { applyEntry, recomputeCacheAfterCommit };
 
+  // TKT-3: every written event is handed to the notifier.
+  const afterEvent = jest.fn<void, [string]>();
   const svc = new TicketService(
     prisma,
     audit as unknown as AuditLogService,
     wallet as unknown as WalletService,
     new TicketStateMachineService(),
+    { afterEvent } as unknown as TicketNotifier,
   );
   return {
     svc,
+    afterEvent,
     create,
     update,
     eventCreate,
@@ -195,6 +205,75 @@ describe('TicketService.open', () => {
     );
     expect(create).not.toHaveBeenCalled();
     expect(r.id).toBe(TICKET);
+  });
+});
+
+describe('TicketService — receipt shortfall + telling the other side (TKT-3)', () => {
+  it('a RECEIPT_SHORTFALL is keyed on its goods receipt: a second open finds the first', async () => {
+    const existing = ticketRow({
+      ticketType: TicketType.RECEIPT_SHORTFALL,
+      goodsReceiptId: 'gr-1',
+    });
+    const { svc, create, afterEvent, nextval } = makeService({ existingByReceipt: existing });
+    const r = await svc.openOrFind(
+      {
+        ticketType: TicketType.RECEIPT_SHORTFALL,
+        sellerId: SELLER,
+        subject: 'CN-2026-08-000003: 2 short at DAC-01',
+        goodsReceiptId: 'gr-1',
+      },
+      { type: ActorType.SYSTEM },
+    );
+    expect(r.created).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+    // Nothing new happened, so nobody is told anything and no number burns.
+    expect(afterEvent).not.toHaveBeenCalled();
+    expect(nextval).not.toHaveBeenCalled();
+  });
+
+  it('a fresh shortfall ticket records the receipt and hands its opening event over', async () => {
+    const { svc, create, afterEvent } = makeService();
+    const r = await svc.openOrFind(
+      {
+        ticketType: TicketType.RECEIPT_SHORTFALL,
+        sellerId: SELLER,
+        subject: 'short',
+        goodsReceiptId: 'gr-1',
+      },
+      { type: ActorType.SYSTEM },
+    );
+    expect(r.created).toBe(true);
+    expect((create.mock.calls[0]?.[0]?.data as AnyArgs).goodsReceiptId).toBe('gr-1');
+    expect(afterEvent).toHaveBeenCalledWith('ev-1');
+  });
+
+  it('a note and a transition each hand their event over', async () => {
+    const note = makeService();
+    await note.svc.addNote(TICKET, 'We found two more in a second carton.', {
+      type: ActorType.STAFF,
+      staffId: STAFF,
+    });
+    expect(note.afterEvent).toHaveBeenCalledWith('ev-1');
+
+    const move = makeService();
+    await move.svc.transition(
+      TICKET,
+      { to: TicketStatus.RESOLVED_REFUND, refundAmountInr: '640' },
+      { type: ActorType.STAFF, staffId: STAFF },
+    );
+    expect(move.afterEvent).toHaveBeenCalledWith('ev-1');
+  });
+
+  it('a transition that loses the claim tells nobody', async () => {
+    const { svc, afterEvent } = makeService({ claimLoses: true });
+    await expect(
+      svc.transition(
+        TICKET,
+        { to: TicketStatus.RESOLVED_REFUND, refundAmountInr: '640' },
+        { type: ActorType.STAFF, staffId: STAFF },
+      ),
+    ).rejects.toThrow();
+    expect(afterEvent).not.toHaveBeenCalled();
   });
 });
 
@@ -403,6 +482,7 @@ describe('TicketService.markRelayed', () => {
       { log: auditLog } as unknown as AuditLogService,
       {} as unknown as WalletService,
       new TicketStateMachineService(),
+      { afterEvent: jest.fn() } as unknown as TicketNotifier,
     );
     return { svc, relayCreate, relayFindUnique, auditLog };
   }
@@ -593,6 +673,9 @@ describe('TicketService — search', () => {
       { order: { orderNumber: c } },
       { shipment: { shipmentNumber: c } },
       { shipment: { awbNumber: c } },
+      // TKT-3: a shortfall ticket is found by its receipt or consignment.
+      { goodsReceipt: { receiptNumber: c } },
+      { goodsReceipt: { consignment: { consignmentNumber: c } } },
     ]);
   });
 

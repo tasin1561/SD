@@ -1507,6 +1507,9 @@ model GoodsReceipt {
   // missing scalar, so `validate` passes on a schema no migration ever
   // created and every insert 500s at runtime.
   freightCharge InboundFreightCharge?
+  // The RECEIPT_SHORTFALL ticket opened when this count came up short
+  // (TKT-3). Declared on both sides for the reason given above.
+  tickets       Ticket[]
 
   @@index([sellerId])
   @@index([warehouseId])
@@ -6522,6 +6525,11 @@ enum TicketType {
   /// works one list, and this is the seam the courier-escalation work
   /// hangs its Delhivery conversation off (see the escalation brief).
   COURIER_NDR_ESCALATION @map("courier_ndr_escalation")
+  /// Opened by US when a goods receipt completes with a line counted
+  /// SHORT or arriving DAMAGED (TKT-3). One per goods receipt
+  /// (`goodsReceiptId`). It records the loss and asks the question; it
+  /// never blocks the count (CNS-3) and moves no money by itself.
+  RECEIPT_SHORTFALL      @map("receipt_shortfall")
 
   @@map("ticket_type")
 }
@@ -6597,6 +6605,11 @@ model Ticket {
   shipmentItemId String?      @map("shipment_item_id") @db.Uuid
   /// Denormalised courier ref for liability attribution/reporting.
   courierCode    String?      @map("courier_code")
+  /// RECEIPT_SHORTFALL: the goods receipt whose count came up short.
+  /// With `ticketType` it is the open-idempotency key, so a retried
+  /// completion or a re-run backfill finds the ticket instead of opening
+  /// a second one.
+  goodsReceiptId String?      @map("goods_receipt_id") @db.Uuid
 
   /// WHICH problem this is, in the COURIER's own vocabulary.
   ///
@@ -6649,7 +6662,11 @@ model Ticket {
   events             TicketEvent[]
   courierEscalation  CourierEscalation?
   order              Order?             @relation(fields: [orderId], references: [id])
+  goodsReceipt       GoodsReceipt?      @relation(fields: [goodsReceiptId], references: [id])
 
+  /// One RECEIPT_SHORTFALL ticket per goods receipt. NULLs are distinct
+  /// in a unique index, so every other ticket is unconstrained.
+  @@unique([goodsReceiptId, ticketType])
   /// Auto-raise idempotency: at most ONE ticket of a given type per
   /// shipment item, so re-inspecting a line (the operator may correct
   /// their judgement) never spawns duplicates. Seller-raised tickets

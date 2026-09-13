@@ -27,6 +27,7 @@ import { OutboundWebhookListener } from '../../src/modules/seller-webhook-delive
 import { OrderDeliveredInvoiceListener } from '../../src/modules/invoice/services/order-delivered-invoice-listener.service';
 import { OrderDeliveredAccrualListener } from '../../src/modules/seller-wallet-accrual/services/order-delivered-accrual-listener.service';
 import { DeliveryFailedListener } from '../../src/modules/delivery-action/services/delivery-failed-listener.service';
+import { TicketNotifier } from '../../src/modules/ticket/services/ticket-notifier.service';
 
 export interface AppHarness {
   app: NestExpressApplication;
@@ -174,6 +175,8 @@ export async function drainAll(app: NestExpressApplication): Promise<void> {
     OrderDeliveredInvoiceListener,
     OrderDeliveredAccrualListener,
     DeliveryFailedListener,
+    // TKT-3: every ticket event tells the other side after it commits.
+    TicketNotifier,
   ];
   for (const token of drainables) {
     try {

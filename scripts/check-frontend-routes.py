@@ -291,6 +291,10 @@ EXPECTED_ORPHANS = {
     # sweep already retries pre-dispatch parcels on its own, so there is
     # no everyday reason for a screen to call it.
     'admin/courier/awb-labels/backfill',
+    # TKT-3: a one-off catch-up run from a terminal (dry run first), for
+    # receipts completed before a short count opened a ticket. Every new
+    # completion opens its own, so nothing on a screen needs to call it.
+    'admin/goods-receipts/shortfall-tickets/backfill',
     # A one-off, read-only look at Delhivery's billing pages, run from a
     # terminal while the Delhivery invoice check is designed (POST queues
     # it, GET reads what it found). It answers a question once; a screen

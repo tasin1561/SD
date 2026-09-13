@@ -145,6 +145,21 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   </span>
                 ),
               },
+              ...(t.receiptNumber == null
+                ? []
+                : [
+                    {
+                      // A short-count ticket (TKT-3) is about a count,
+                      // not a parcel: name the receipt and its journey.
+                      label: 'Goods receipt',
+                      value: (
+                        <span className="font-mono text-xs">
+                          {t.receiptNumber}
+                          {t.consignmentNumber == null ? '' : ` · ${t.consignmentNumber}`}
+                        </span>
+                      ),
+                    },
+                  ]),
               {
                 label: 'Order',
                 // The NUMBER. An operator quoting a ticket to a seller

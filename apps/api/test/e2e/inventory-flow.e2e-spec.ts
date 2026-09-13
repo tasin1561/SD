@@ -185,6 +185,19 @@ describe('Inventory flow (e2e)', () => {
       }),
     );
     expect(varianceEmail).toBeTruthy();
+
+    // TKT-3: the short count opened ONE ticket, keyed on the receipt, in
+    // our words — and the count above still completed and stocked.
+    const tickets = await h.prisma.ticket.findMany({ where: { goodsReceiptId: gr.body.id } });
+    expect(tickets).toHaveLength(1);
+    expect(tickets[0]?.ticketType).toBe('RECEIPT_SHORTFALL');
+    expect(tickets[0]?.description ?? '').toContain(
+      'declared 10 · counted 7 · damaged 0 · short 3',
+    );
+    const opening = await h.prisma.ticketEvent.findFirst({
+      where: { ticketId: tickets[0]?.id ?? '', fromStatus: null },
+    });
+    expect(opening?.actorType).toBe('SYSTEM');
   });
 
   it('an OVER count is equally non-blocking — counts move in both directions', async () => {
@@ -214,6 +227,9 @@ describe('Inventory flow (e2e)', () => {
 
     const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId, binId } });
     expect(level.qtyOnHand).toBe(12);
+
+    // TKT-3: a surplus is a notice, never a ticket.
+    expect(await h.prisma.ticket.count({ where: { goodsReceiptId: gr.body.id } })).toBe(0);
   });
 
   it('multiple receipts to the same variant do not lose data (own batch + movement each)', async () => {

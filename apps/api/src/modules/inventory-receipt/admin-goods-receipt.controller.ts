@@ -28,6 +28,11 @@ import {
   type GoodsReceiptView,
 } from './services/goods-receipt.service';
 import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
+import { BackfillShortfallTicketsDto } from './dto/backfill-shortfall-tickets.dto';
+import {
+  ReceiptShortfallTicketService,
+  type ReceiptShortfallBackfillReport,
+} from './services/receipt-shortfall-ticket.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -43,7 +48,32 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @RequirePermissions('inventory.view')
 @Controller('admin/goods-receipts')
 export class AdminGoodsReceiptController {
-  constructor(private readonly svc: GoodsReceiptService) {}
+  constructor(
+    private readonly svc: GoodsReceiptService,
+    private readonly shortfall: ReceiptShortfallTicketService,
+  ) {}
+
+  /**
+   * TKT-3 catch-up: ticket every completed receipt that came up short and
+   * has no RECEIPT_SHORTFALL ticket yet, and tell the seller about any
+   * surplus not already told. Operator-run, idempotent, DRY RUN unless
+   * `dryRun: false`; audited either way (HIGH for a real run — it opens
+   * tickets and messages sellers). Same permission as completing a
+   * receipt, because a completion opens exactly these tickets today.
+   */
+  @Post('shortfall-tickets/backfill')
+  @RequirePermissions('inventory.goods_receipts.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Open the missing RECEIPT_SHORTFALL tickets (and surplus notices) for completed receipts. Dry run by default.',
+  })
+  backfillShortfallTickets(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Body() body: BackfillShortfallTicketsDto,
+  ): Promise<ReceiptShortfallBackfillReport> {
+    return this.shortfall.backfill({ dryRun: body.dryRun ?? true, staffId: staff.id });
+  }
 
   @Get()
   @ApiOperation({ summary: 'List goods receipts (filter by seller/warehouse/status)' })

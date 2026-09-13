@@ -108,6 +108,23 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
                 },
                 { label: 'Status', value: <TicketStatusBadge status={ticket.status} /> },
                 { label: 'Courier', value: ticket.courierCode ?? <Dash /> },
+                ...(ticket.receiptNumber == null
+                  ? []
+                  : [
+                      {
+                        // A short count at the warehouse (TKT-3): the
+                        // receipt and the consignment it belongs to.
+                        label: 'Goods receipt',
+                        value: (
+                          <span className="font-mono text-xs">
+                            {ticket.receiptNumber}
+                            {ticket.consignmentNumber == null
+                              ? ''
+                              : ` · ${ticket.consignmentNumber}`}
+                          </span>
+                        ),
+                      },
+                    ]),
                 {
                   label: 'Order',
                   // The NUMBER, not the uuid. A uuid cannot be read

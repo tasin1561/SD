@@ -30,6 +30,20 @@ import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 25;
 
+/** What an operator calls each kind. F2: a new type fails to compile here. */
+function ticketTypeLabel(type: TicketType): string {
+  switch (type) {
+    case TicketType.SCRAP_DAMAGE:
+      return 'Scrap / damage';
+    case TicketType.SELLER_RAISED_ISSUE:
+      return 'Seller issue';
+    case TicketType.COURIER_NDR_ESCALATION:
+      return 'Delivery escalation';
+    case TicketType.RECEIPT_SHORTFALL:
+      return 'Receipt short';
+  }
+}
+
 /**
  * The tickets queue (R7).
  *
@@ -228,7 +242,7 @@ export function TicketsIndex(): ReactElement {
               <Tr key={t.id} onActivate={() => router.push(`/tickets/${t.id}`)}>
                 <Td className="whitespace-nowrap font-mono text-xs">{t.ticketNumber}</Td>
                 <Td className="text-text-muted whitespace-nowrap text-xs">
-                  {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Scrap / damage' : 'Seller issue'}
+                  {ticketTypeLabel(t.ticketType)}
                 </Td>
                 <Td className="whitespace-nowrap">
                   <TicketHandlingBadge handling={t.handling} />

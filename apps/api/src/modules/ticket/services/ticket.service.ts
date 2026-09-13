@@ -19,6 +19,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { TicketStateMachineService } from './ticket-state-machine.service';
 import { allocateTicketNumber } from './ticket-numbering';
+import { TicketNotifier } from './ticket-notifier.service';
 
 export interface TicketActor {
   readonly type: ActorType;
@@ -51,6 +52,10 @@ const OPENING_EVENT = {
 const TICKET_NAMES = {
   order: { select: { orderNumber: true } },
   shipment: { select: { shipmentNumber: true } },
+  // RECEIPT_SHORTFALL (TKT-3): the count it is about, by number.
+  goodsReceipt: {
+    select: { receiptNumber: true, consignment: { select: { consignmentNumber: true } } },
+  },
   events: OPENING_EVENT,
 } as const;
 
@@ -97,6 +102,8 @@ function ticketSearchWhere(search: string | undefined): Prisma.TicketWhereInput 
       { order: { orderNumber: c } },
       { shipment: { shipmentNumber: c } },
       { shipment: { awbNumber: c } },
+      { goodsReceipt: { receiptNumber: c } },
+      { goodsReceipt: { consignment: { consignmentNumber: c } } },
     ],
   };
 }
@@ -143,9 +150,21 @@ export interface OpenTicketInput {
   readonly shipmentItemId?: string | null;
   readonly courierCode?: string | null;
   readonly rtoCondition?: RtoItemCondition | null;
+  /**
+   * RECEIPT_SHORTFALL: the goods receipt it is about. With the type it is
+   * the open-idempotency key, exactly as `shipmentItemId` is for scrap.
+   */
+  readonly goodsReceiptId?: string | null;
   /** The courier's own category, chosen by the seller. */
   readonly issueCategoryExternalId?: string | null;
   readonly issueSubcategoryExternalId?: string | null;
+}
+
+interface OpenResult {
+  readonly ticket: TicketView;
+  readonly created: boolean;
+  /** The "Ticket opened" event, when this call opened the ticket. */
+  readonly openingEventId: string | null;
 }
 
 export interface ResolveTicketInput {
@@ -178,6 +197,10 @@ export interface TicketView {
   readonly shipmentNumber: string | null;
   readonly shipmentItemId: string | null;
   readonly courierCode: string | null;
+  /** RECEIPT_SHORTFALL: the goods receipt, its number and its consignment's. */
+  readonly goodsReceiptId: string | null;
+  readonly receiptNumber: string | null;
+  readonly consignmentNumber: string | null;
   readonly issueCategoryExternalId: string | null;
   readonly issueSubcategoryExternalId: string | null;
   /**
@@ -225,6 +248,9 @@ export class TicketService {
     private readonly audit: AuditLogService,
     private readonly wallet: WalletService,
     private readonly stateMachine: TicketStateMachineService,
+    // TKT-3: every event this service writes is handed over for telling
+    // the other side. Fire-and-forget and post-commit — see the notifier.
+    private readonly notifier: TicketNotifier,
   ) {}
 
   /**
@@ -339,8 +365,11 @@ export class TicketService {
         actorType: actor.type,
         actorId: actor.staffId ?? actor.sellerUserId ?? null,
       },
-      select: { createdAt: true },
+      select: { id: true, createdAt: true },
     });
+    // Handed over now even inside a caller's transaction: the notifier
+    // reads the event back and sends nothing until it is committed.
+    this.notifier.afterEvent(row.id);
     return { ticketId, at: row.createdAt };
   }
 
@@ -428,17 +457,20 @@ export class TicketService {
     actor: TicketActor,
     tx?: Prisma.TransactionClient,
   ): Promise<{ ticket: TicketView; created: boolean }> {
-    const run = (
-      client: Prisma.TransactionClient,
-    ): Promise<{ ticket: TicketView; created: boolean }> => this.openIn(client, input, actor);
-    return tx === undefined ? this.prisma.client.$transaction(run) : run(tx);
+    const run = (client: Prisma.TransactionClient): Promise<OpenResult> =>
+      this.openIn(client, input, actor);
+    const result = tx === undefined ? await this.prisma.client.$transaction(run) : await run(tx);
+    // After our own transaction has committed; or, inside a caller's, as
+    // soon as it is written — the notifier waits for it to be visible.
+    if (result.openingEventId !== null) this.notifier.afterEvent(result.openingEventId);
+    return { ticket: result.ticket, created: result.created };
   }
 
   private async openIn(
     client: Prisma.TransactionClient,
     input: OpenTicketInput,
     actor: TicketActor,
-  ): Promise<{ ticket: TicketView; created: boolean }> {
+  ): Promise<OpenResult> {
     if (input.shipmentItemId) {
       const existing = await client.ticket.findUnique({
         where: {
@@ -449,7 +481,19 @@ export class TicketService {
         },
         include: { events: OPENING_EVENT },
       });
-      if (existing) return { ticket: this.toView(existing), created: false };
+      if (existing) return { ticket: this.toView(existing), created: false, openingEventId: null };
+    }
+    if (input.goodsReceiptId) {
+      const existing = await client.ticket.findUnique({
+        where: {
+          goodsReceiptId_ticketType: {
+            goodsReceiptId: input.goodsReceiptId,
+            ticketType: input.ticketType,
+          },
+        },
+        include: { events: OPENING_EVENT },
+      });
+      if (existing) return { ticket: this.toView(existing), created: false, openingEventId: null };
     }
 
     const ticketNumber = await allocateTicketNumber(client);
@@ -471,6 +515,7 @@ export class TicketService {
         shipmentItemId: input.shipmentItemId ?? null,
         courierCode: input.courierCode ?? null,
         rtoCondition: input.rtoCondition ?? null,
+        goodsReceiptId: input.goodsReceiptId ?? null,
         issueCategoryExternalId: input.issueCategoryExternalId ?? null,
         issueSubcategoryExternalId: input.issueSubcategoryExternalId ?? null,
         openedByStaffId: actor.staffId ?? null,
@@ -478,7 +523,7 @@ export class TicketService {
       },
     });
 
-    await client.ticketEvent.create({
+    const opening = await client.ticketEvent.create({
       data: {
         ticketId: created.id,
         fromStatus: null,
@@ -487,6 +532,7 @@ export class TicketService {
         actorType: actor.type,
         actorId: actor.staffId ?? actor.sellerUserId ?? null,
       },
+      select: { id: true },
     });
 
     await this.audit.log(
@@ -502,6 +548,7 @@ export class TicketService {
           ticketType: input.ticketType,
           ticketNumber,
           shipmentItemId: input.shipmentItemId ?? null,
+          goodsReceiptId: input.goodsReceiptId ?? null,
           rtoCondition: input.rtoCondition ?? null,
         },
       },
@@ -513,6 +560,7 @@ export class TicketService {
     return {
       ticket: this.toView({ ...created, events: [{ actorType: actor.type }] }),
       created: true,
+      openingEventId: opening.id,
     };
   }
 
@@ -568,76 +616,85 @@ export class TicketService {
 
     const terminal = this.stateMachine.isTerminal(input.to);
 
-    const updated = await this.prisma.client.$transaction(async (tx) => {
-      // CLAIM THE TRANSITION FIRST, guarded on the status we validated
-      // against above. Without this the check is a read outside the
-      // transaction and the write is unconditional, so two concurrent
-      // RESOLVED_REFUND requests — an impatient double-click on the admin
-      // refund button is enough — both pass the state-machine check and
-      // both credit the wallet. The seller is paid twice and the ticket
-      // records only ONE resolutionWalletEntryId, so the duplicate is
-      // invisible in the ticket itself.
-      //
-      // The guarded UPDATE takes the row lock: the second transaction
-      // blocks, then re-evaluates its WHERE against the committed status,
-      // matches nothing, and rolls back before any money moves. Claiming
-      // BEFORE the credit is what makes that ordering work — a rollback
-      // then takes the credit with it.
-      const claimed = await tx.ticket.updateMany({
-        where: { id: ticketId, status: existing.status },
-        data: {
-          status: input.to,
-          resolutionNotes: input.notes ?? existing.resolutionNotes,
-          ...(terminal ? { resolvedAt: new Date(), resolvedByStaffId: actor.staffId ?? null } : {}),
-        },
-      });
-      if (claimed.count === 0) {
-        throw new ConflictException({
-          code: 'TICKET_ALREADY_MOVED',
-          message:
-            `Ticket ${ticketId} is no longer in ${existing.status} — someone else resolved it first. ` +
-            'Reload to see where it landed; no money moved for this request.',
+    const { row: updated, eventId: transitionEventId } = await this.prisma.client.$transaction(
+      async (tx) => {
+        // CLAIM THE TRANSITION FIRST, guarded on the status we validated
+        // against above. Without this the check is a read outside the
+        // transaction and the write is unconditional, so two concurrent
+        // RESOLVED_REFUND requests — an impatient double-click on the admin
+        // refund button is enough — both pass the state-machine check and
+        // both credit the wallet. The seller is paid twice and the ticket
+        // records only ONE resolutionWalletEntryId, so the duplicate is
+        // invisible in the ticket itself.
+        //
+        // The guarded UPDATE takes the row lock: the second transaction
+        // blocks, then re-evaluates its WHERE against the committed status,
+        // matches nothing, and rolls back before any money moves. Claiming
+        // BEFORE the credit is what makes that ordering work — a rollback
+        // then takes the credit with it.
+        const claimed = await tx.ticket.updateMany({
+          where: { id: ticketId, status: existing.status },
+          data: {
+            status: input.to,
+            resolutionNotes: input.notes ?? existing.resolutionNotes,
+            ...(terminal
+              ? { resolvedAt: new Date(), resolvedByStaffId: actor.staffId ?? null }
+              : {}),
+          },
         });
-      }
+        if (claimed.count === 0) {
+          throw new ConflictException({
+            code: 'TICKET_ALREADY_MOVED',
+            message:
+              `Ticket ${ticketId} is no longer in ${existing.status} — someone else resolved it first. ` +
+              'Reload to see where it landed; no money moved for this request.',
+          });
+        }
 
-      let walletEntryId: string | null = null;
-      if (refundAmount) {
-        const entry = await this.wallet.applyEntry(tx, {
-          sellerId: existing.sellerId,
-          currency: Currency.INR,
-          direction: WalletEntryDirection.SCRAP_REFUND,
-          amount: refundAmount,
-          linkedOrderId: existing.orderId,
-          note: `Ticket ${ticketId} settled`,
-          actorType: actor.type,
-          actorId: actor.staffId ?? null,
+        let walletEntryId: string | null = null;
+        if (refundAmount) {
+          const entry = await this.wallet.applyEntry(tx, {
+            sellerId: existing.sellerId,
+            currency: Currency.INR,
+            direction: WalletEntryDirection.SCRAP_REFUND,
+            amount: refundAmount,
+            linkedOrderId: existing.orderId,
+            note: `Ticket ${ticketId} settled`,
+            actorType: actor.type,
+            actorId: actor.staffId ?? null,
+          });
+          walletEntryId = entry.id;
+        }
+
+        // Second write carries only what the wallet entry produced; the
+        // status transition itself was already claimed above.
+        const row = await tx.ticket.update({
+          where: { id: ticketId },
+          data: {
+            ...(refundAmount ? { resolutionAmountInr: refundAmount } : {}),
+            ...(walletEntryId ? { resolutionWalletEntryId: walletEntryId } : {}),
+          },
         });
-        walletEntryId = entry.id;
-      }
 
-      // Second write carries only what the wallet entry produced; the
-      // status transition itself was already claimed above.
-      const row = await tx.ticket.update({
-        where: { id: ticketId },
-        data: {
-          ...(refundAmount ? { resolutionAmountInr: refundAmount } : {}),
-          ...(walletEntryId ? { resolutionWalletEntryId: walletEntryId } : {}),
-        },
-      });
+        const event = await tx.ticketEvent.create({
+          data: {
+            ticketId,
+            fromStatus: existing.status,
+            toStatus: input.to,
+            note: input.notes ?? null,
+            actorType: actor.type,
+            actorId: actor.staffId ?? actor.sellerUserId ?? null,
+          },
+          select: { id: true },
+        });
 
-      await tx.ticketEvent.create({
-        data: {
-          ticketId,
-          fromStatus: existing.status,
-          toStatus: input.to,
-          note: input.notes ?? null,
-          actorType: actor.type,
-          actorId: actor.staffId ?? actor.sellerUserId ?? null,
-        },
-      });
+        return { row, eventId: event.id };
+      },
+    );
 
-      return row;
-    });
+    // Post-commit (TKT-3): a resolution — and any refund on it — is told
+    // to the seller only once it is true.
+    this.notifier.afterEvent(transitionEventId);
 
     if (refundAmount) {
       // Post-commit, best-effort (mirrors the accrual listener).
@@ -944,6 +1001,11 @@ export class TicketService {
       handling: TicketHandling;
       order?: { orderNumber: string } | null;
       shipment?: { shipmentNumber: string } | null;
+      goodsReceiptId?: string | null;
+      goodsReceipt?: {
+        receiptNumber: string;
+        consignment: { consignmentNumber: string } | null;
+      } | null;
     },
     /**
      * externalId → the courier's word for it. Absent on the WRITE paths
@@ -977,6 +1039,9 @@ export class TicketService {
       shipmentNumber: row.shipment?.shipmentNumber ?? null,
       shipmentItemId: row.shipmentItemId,
       courierCode: row.courierCode,
+      goodsReceiptId: row.goodsReceiptId ?? null,
+      receiptNumber: row.goodsReceipt?.receiptNumber ?? null,
+      consignmentNumber: row.goodsReceipt?.consignment?.consignmentNumber ?? null,
       subject: row.subject,
       description: row.description,
       resolutionAmountInr: row.resolutionAmountInr?.toFixed(2) ?? null,
