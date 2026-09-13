@@ -91,18 +91,23 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
     (e) => (e.note ?? '').trim() === 'Ticket opened' && e.actorType === 'SELLER',
   );
 
-  // The seller's opening message: what they raised, in their words.
+  // The opening message, on the side of WHOEVER OPENED the ticket. A
+  // seller's issue opens with their words; a ticket we opened (damage
+  // found on a return) opens with ours, and drawing that as "You" put
+  // words in the seller's mouth they had never said.
   if (ticket.description !== null && ticket.description.trim() !== '') {
+    const theirs = ticket.openedBy === 'SELLER';
     bubbles.push({
       key: 'raised',
-      side: 'SELLER',
-      who: 'You',
+      side: theirs ? 'SELLER' : 'US',
+      who: theirs ? 'You' : 'Skydrop',
       body: ticket.description,
       at: ticket.createdAt,
       // Spread rather than `: undefined` — under
       // exactOptionalPropertyTypes an optional property may be absent,
-      // not explicitly undefined.
-      ...(openingEvent === undefined ? {} : { relayedAt: openingEvent.relayedAt }),
+      // not explicitly undefined. Only a seller's own message has a
+      // relay state; ours has nowhere further to travel.
+      ...(theirs && openingEvent !== undefined ? { relayedAt: openingEvent.relayedAt } : {}),
     });
   }
 
@@ -162,16 +167,19 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
 
   if (timeline.isLoading || courier.isLoading) return <SkeletonRows rows={3} cols={1} />;
 
-  if (bubbles.length === 0) {
-    return (
-      <p className="text-text-muted text-sm">
-        Nothing said yet. We reply here once we have looked into it.
-      </p>
-    );
-  }
-
   return (
     <>
+      {/*
+        An empty thread still gets the reply box below it. This used to
+        RETURN here, before the box — so on an open ticket nobody had
+        written on yet, the seller could read "Nothing said yet" and had
+        no way to say anything themselves.
+      */}
+      {bubbles.length === 0 ? (
+        <p className="text-text-muted text-sm">
+          Nothing said yet. We reply here once we have looked into it.
+        </p>
+      ) : null}
       <ol className="space-y-3">
         {bubbles.map((b) => {
           const mine = b.side === 'SELLER';

@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { OrderStatus, RtoDisposition, RtoItemCondition } from '@skydrop/db';
+import { ActorType, OrderStatus, RtoDisposition, RtoItemCondition } from '@skydrop/db';
 import { RtoInspectionService } from '../../src/modules/warehouse-rto/services/rto-inspection.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { OrderReadService } from '../../src/modules/order/services/order-read.service';
@@ -13,38 +13,79 @@ const SHIP = 'ship-1';
 const ORDER = 'order-1';
 const STAFF = 'staff-1';
 
-function makeService(opts: { item?: AnyArgs | null; orderStatus?: OrderStatus | 'missing' } = {}) {
-  const defaultItem = {
-    id: ITEM,
-    shipmentId: SHIP,
-    skuCode: 'SKU-1',
-    productName: 'Widget',
-    shipment: { id: SHIP, courierCode: 'delhivery', orderShipments: [{ orderId: ORDER }] },
-    orderItem: { order: { sellerId: 'seller-1' } },
-  };
+/** A returned line as the inspection reads it — never inspected before. */
+const BASE_ITEM = {
+  id: ITEM,
+  shipmentId: SHIP,
+  skuCode: 'AVIATO-GREE-BLAC',
+  productName: 'Aviator OG Sunglass',
+  quantity: 1,
+  rtoCondition: null,
+  rtoDisposition: null,
+  rtoInspectionNotes: null,
+  shipment: {
+    id: SHIP,
+    courierCode: 'delhivery',
+    shipmentNumber: 'SH-TEST-524086',
+    awbNumber: '38061110524086',
+    rtoReceivedAt: new Date('2026-09-09T18:12:40.920Z'),
+    rtoReceivedWarehouseId: null,
+    originWarehouseId: 'wh-origin',
+    orderShipments: [{ orderId: ORDER }],
+  },
+  orderItem: { order: { sellerId: 'seller-1' } },
+};
+
+function makeService(
+  opts: {
+    item?: AnyArgs | null;
+    orderStatus?: OrderStatus | 'missing';
+    /** What openOrFind reports: a fresh ticket, or the existing one. */
+    ticketCreated?: boolean;
+    /** The ticket findByShipmentItem finds, for a correction to GOOD. */
+    existingTicket?: AnyArgs | null;
+  } = {},
+) {
   const shipmentItemFindUnique = jest.fn(async () =>
-    opts.item === undefined ? defaultItem : opts.item,
+    opts.item === undefined ? BASE_ITEM : opts.item,
   );
   const shipmentItemUpdate = jest.fn(async () => ({}));
   const tx = { shipmentItem: { update: shipmentItemUpdate } };
   const $transaction = jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx));
+  const warehouseFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () => ({
+    code: 'CCU-01',
+    name: 'Kolkata Main',
+    timezone: 'Asia/Kolkata',
+  }));
   const client = {
     shipmentItem: { findUnique: shipmentItemFindUnique, update: shipmentItemUpdate },
+    warehouse: { findUnique: warehouseFindUnique },
     $transaction,
   };
   const getById = jest.fn(async () =>
     opts.orderStatus === 'missing'
       ? null
-      : { orderId: ORDER, status: opts.orderStatus ?? OrderStatus.RTO_RECEIVED },
+      : {
+          orderId: ORDER,
+          orderNumber: 'SD-TEST-524086',
+          status: opts.orderStatus ?? OrderStatus.RTO_RECEIVED,
+        },
   );
   const orders = { getById };
   const auditLog = jest.fn<Promise<string | null>, [AnyArgs]>(async () => 'a');
   const audit = { log: auditLog };
 
-  const openTicket = jest.fn<Promise<AnyArgs>, [AnyArgs, AnyArgs, unknown?]>(async () => ({
-    id: 'ticket-1',
+  const openOrFind = jest.fn<Promise<AnyArgs>, [AnyArgs, AnyArgs, unknown?]>(async () => ({
+    ticket: { id: 'ticket-1', resolvedAt: null },
+    created: opts.ticketCreated ?? true,
   }));
-  const tickets = { open: openTicket };
+  const addNote = jest.fn<Promise<AnyArgs>, [string, string, AnyArgs, unknown, unknown?]>(
+    async () => ({ ticketId: 'ticket-1', at: new Date() }),
+  );
+  const findByShipmentItem = jest.fn<Promise<AnyArgs | null>, [string, unknown, unknown?]>(
+    async () => (opts.existingTicket === undefined ? null : opts.existingTicket),
+  );
+  const tickets = { openOrFind, addNote, findByShipmentItem };
 
   const svc = new RtoInspectionService(
     { client } as unknown as PrismaService,
@@ -52,7 +93,24 @@ function makeService(opts: { item?: AnyArgs | null; orderStatus?: OrderStatus | 
     audit as unknown as AuditLogService,
     tickets as unknown as TicketService,
   );
-  return { svc, shipmentItemFindUnique, shipmentItemUpdate, auditLog, openTicket };
+  return {
+    svc,
+    tx,
+    shipmentItemFindUnique,
+    shipmentItemUpdate,
+    warehouseFindUnique,
+    auditLog,
+    openOrFind,
+    addNote,
+    findByShipmentItem,
+  };
+}
+
+/** The opening description the inspection handed TicketService, for a number. */
+function openingFor(openOrFind: jest.Mock, ticketNumber: string): string {
+  const input = openOrFind.mock.calls[0]?.[0] as { descriptionFor?: (n: string) => string };
+  if (input.descriptionFor === undefined) throw new Error('no descriptionFor passed');
+  return input.descriptionFor(ticketNumber);
 }
 
 describe('RtoInspectionService.inspect', () => {
@@ -108,17 +166,9 @@ describe('RtoInspectionService.inspect', () => {
   });
 
   it('re-inspection overwrites prior values (operator correction)', async () => {
-    // Service has no special "already inspected" guard — re-inspecting
-    // simply writes new values + re-audits. Verified by ensuring update
-    // is called even when the item carries prior rto* values.
     const { svc, shipmentItemUpdate } = makeService({
       item: {
-        id: ITEM,
-        shipmentId: SHIP,
-        skuCode: 'SKU-1',
-        productName: 'Widget',
-        shipment: { id: SHIP, courierCode: 'delhivery', orderShipments: [{ orderId: ORDER }] },
-        orderItem: { order: { sellerId: 'seller-1' } },
+        ...BASE_ITEM,
         rtoCondition: RtoItemCondition.GOOD,
         rtoDisposition: RtoDisposition.RESTOCK,
         rtoInspectionNotes: 'looks fine',
@@ -167,14 +217,14 @@ describe('RtoInspectionService.inspect', () => {
   // ── R7: scrap-ticket auto-raise ──────────────────────────────────────
 
   it('R7: a DAMAGED line auto-raises a SCRAP_DAMAGE ticket inside the inspection tx', async () => {
-    const { svc, openTicket } = makeService();
+    const { svc, openOrFind, tx } = makeService();
     await svc.inspect(
       ITEM,
       { condition: RtoItemCondition.DAMAGED, disposition: RtoDisposition.WRITE_OFF },
       STAFF,
     );
-    expect(openTicket).toHaveBeenCalledTimes(1);
-    const [input, actor, tx] = openTicket.mock.calls[0]!;
+    expect(openOrFind).toHaveBeenCalledTimes(1);
+    const [input, actor, passedTx] = openOrFind.mock.calls[0] ?? [];
     expect(input).toMatchObject({
       ticketType: 'SCRAP_DAMAGE',
       sellerId: 'seller-1',
@@ -184,31 +234,162 @@ describe('RtoInspectionService.inspect', () => {
       courierCode: 'delhivery',
       rtoCondition: RtoItemCondition.DAMAGED,
     });
-    expect((actor as Record<string, unknown>).staffId).toBe(STAFF);
+    expect(actor).toEqual({ type: ActorType.STAFF, staffId: STAFF });
     // Passed the tx handle => atomic with the inspection write.
-    expect(tx).toBeDefined();
+    expect(passedTx).toBe(tx);
+  });
+
+  it('opens with OUR message stating the facts, even with no inspector notes', async () => {
+    const { svc, openOrFind, warehouseFindUnique } = makeService();
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.DAMAGED, disposition: RtoDisposition.WRITE_OFF },
+      STAFF,
+    );
+    // No receiving warehouse on the shipment ⇒ received at the origin (R6).
+    expect(warehouseFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'wh-origin' } }),
+    );
+    const msg = openingFor(openOrFind, 'TK-2026-000003');
+    expect(msg).toContain('Ticket TK-2026-000003');
+    expect(msg).toContain('Aviator OG Sunglass (AVIATO-GREE-BLAC), quantity 1: arrived damaged.');
+    expect(msg).toContain('Order SD-TEST-524086 · parcel SH-TEST-524086 · waybill 38061110524086');
+    expect(msg).toContain('Received back on 9 Sep 2026 at CCU-01 (Kolkata Main).');
+    expect(msg).toContain('writing it off');
+    expect(msg).not.toContain("Inspector's note");
+  });
+
+  it("quotes the inspector's notes inside our message rather than using them as the message", async () => {
+    const { svc, openOrFind } = makeService();
+    await svc.inspect(
+      ITEM,
+      {
+        condition: RtoItemCondition.MISSING,
+        disposition: RtoDisposition.WRITE_OFF,
+        notes: 'box arrived empty',
+      },
+      STAFF,
+    );
+    const msg = openingFor(openOrFind, 'TK-2026-000004');
+    expect(msg).toContain('was missing from the returned parcel');
+    expect(msg).toContain(`Inspector's note: "box arrived empty"`);
+    expect((openOrFind.mock.calls[0]?.[0] as AnyArgs).description).toBeUndefined();
   });
 
   it('R7: a MISSING line also auto-raises', async () => {
-    const { svc, openTicket } = makeService();
+    const { svc, openOrFind } = makeService();
     await svc.inspect(
       ITEM,
       { condition: RtoItemCondition.MISSING, disposition: RtoDisposition.WRITE_OFF },
       STAFF,
     );
-    expect(openTicket).toHaveBeenCalledTimes(1);
-    expect((openTicket.mock.calls[0]![0] as Record<string, unknown>).rtoCondition).toBe(
-      RtoItemCondition.MISSING,
-    );
+    expect(openOrFind).toHaveBeenCalledTimes(1);
+    expect((openOrFind.mock.calls[0]?.[0] as AnyArgs).rtoCondition).toBe(RtoItemCondition.MISSING);
   });
 
-  it('R7: a GOOD line raises NO ticket', async () => {
-    const { svc, openTicket } = makeService();
+  it('R7: a GOOD line raises NO ticket and says nothing', async () => {
+    const { svc, openOrFind, addNote, findByShipmentItem } = makeService();
     await svc.inspect(
       ITEM,
       { condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK },
       STAFF,
     );
-    expect(openTicket).not.toHaveBeenCalled();
+    expect(openOrFind).not.toHaveBeenCalled();
+    expect(addNote).not.toHaveBeenCalled();
+    expect(findByShipmentItem).not.toHaveBeenCalled();
+  });
+
+  // ── Re-inspection: a changed finding is SAID on the ticket ──────────
+
+  it('a fresh ticket gets no correction note — its opening message already says it', async () => {
+    const { svc, addNote } = makeService({
+      item: { ...BASE_ITEM, rtoCondition: RtoItemCondition.GOOD },
+      ticketCreated: true,
+    });
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.DAMAGED, disposition: RtoDisposition.WRITE_OFF },
+      STAFF,
+    );
+    expect(addNote).not.toHaveBeenCalled();
+  });
+
+  it('a changed finding on an existing ticket adds our note, in the inspection tx', async () => {
+    const { svc, addNote, tx } = makeService({
+      item: {
+        ...BASE_ITEM,
+        rtoCondition: RtoItemCondition.DAMAGED,
+        rtoDisposition: RtoDisposition.WRITE_OFF,
+        rtoInspectionNotes: null,
+      },
+      ticketCreated: false,
+    });
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.MISSING, disposition: RtoDisposition.WRITE_OFF },
+      STAFF,
+    );
+    expect(addNote).toHaveBeenCalledTimes(1);
+    const [ticketId, note, actor, scope, passedTx] = addNote.mock.calls[0] ?? [];
+    expect(ticketId).toBe('ticket-1');
+    expect(note).toContain('We inspected this item again');
+    expect(note).toContain('was missing from the returned parcel');
+    expect(actor).toEqual({ type: ActorType.STAFF, staffId: STAFF });
+    expect(scope).toBeUndefined();
+    expect(passedTx).toBe(tx);
+  });
+
+  it('an identical re-inspection says nothing new', async () => {
+    const { svc, addNote } = makeService({
+      item: {
+        ...BASE_ITEM,
+        rtoCondition: RtoItemCondition.DAMAGED,
+        rtoDisposition: RtoDisposition.WRITE_OFF,
+        rtoInspectionNotes: null,
+      },
+      ticketCreated: false,
+    });
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.DAMAGED, disposition: RtoDisposition.WRITE_OFF },
+      STAFF,
+    );
+    expect(addNote).not.toHaveBeenCalled();
+  });
+
+  it('a correction to GOOD tells the seller on the open ticket, and opens nothing', async () => {
+    const { svc, openOrFind, addNote, findByShipmentItem } = makeService({
+      item: {
+        ...BASE_ITEM,
+        rtoCondition: RtoItemCondition.DAMAGED,
+        rtoDisposition: RtoDisposition.WRITE_OFF,
+      },
+      existingTicket: { id: 'ticket-1', resolvedAt: null },
+    });
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK },
+      STAFF,
+    );
+    expect(openOrFind).not.toHaveBeenCalled();
+    expect(findByShipmentItem).toHaveBeenCalledWith(ITEM, 'SCRAP_DAMAGE', expect.anything());
+    expect(addNote.mock.calls[0]?.[1]).toContain('is in good condition after all');
+  });
+
+  it('a correction on a CLOSED ticket adds nothing — nobody is coming back to it', async () => {
+    const { svc, addNote } = makeService({
+      item: {
+        ...BASE_ITEM,
+        rtoCondition: RtoItemCondition.DAMAGED,
+        rtoDisposition: RtoDisposition.WRITE_OFF,
+      },
+      existingTicket: { id: 'ticket-1', resolvedAt: new Date() },
+    });
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK },
+      STAFF,
+    );
+    expect(addNote).not.toHaveBeenCalled();
   });
 });

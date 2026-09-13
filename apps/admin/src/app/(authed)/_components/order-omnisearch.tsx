@@ -4,7 +4,18 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Search } from 'lucide-react';
 import { useOrdersList } from '@/lib/api-hooks';
+import { useTicketsList } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
+
+/**
+ * A ticket number being typed — `TK-2026-000003`, or its start (`tk-2026`).
+ * Only then is the ticket list asked as well: every other search here is
+ * about a parcel, and a second query on every keystroke would be paid for
+ * nothing.
+ */
+export function looksLikeTicketNumber(term: string): boolean {
+  return /^tk-?\d/i.test(term.trim());
+}
 
 /**
  * Find a parcel from anywhere.
@@ -29,6 +40,7 @@ import { usePermission } from '@/lib/use-permission';
 export function OrderOmnisearch(): ReactElement | null {
   const router = useRouter();
   const canSee = usePermission('orders.view');
+  const canSeeTickets = usePermission('tickets.view');
   const [term, setTerm] = useState('');
   const [debounced, setDebounced] = useState('');
   const [open, setOpen] = useState(false);
@@ -52,6 +64,16 @@ export function OrderOmnisearch(): ReactElement | null {
   const enabled = canSee && debounced.length >= 2;
   const q = useOrdersList({ search: debounced, pageSize: 8 }, { enabled });
   const items = useMemo(() => q.data?.items ?? [], [q.data]);
+  // A ticket number resolves to its ticket through the same list the
+  // tickets page searches — one definition of "found", as above.
+  const tq = useTicketsList(
+    { search: debounced, pageSize: 5 },
+    { enabled: enabled && canSeeTickets && looksLikeTicketNumber(debounced) },
+  );
+  const tickets = useMemo(
+    () => (looksLikeTicketNumber(debounced) ? (tq.data?.items ?? []) : []),
+    [tq.data, debounced],
+  );
 
   // Cosmetic gate (FE-2) — the server refuses regardless. A search box
   // that returns 403s to somebody who may not read orders is worse than
@@ -62,6 +84,12 @@ export function OrderOmnisearch(): ReactElement | null {
     setOpen(false);
     setTerm('');
     router.push(`/orders/${orderId}`);
+  }
+
+  function goTicket(ticketId: string): void {
+    setOpen(false);
+    setTerm('');
+    router.push(`/tickets/${ticketId}`);
   }
 
   return (
@@ -85,8 +113,8 @@ export function OrderOmnisearch(): ReactElement | null {
           className="sd-field bg-bg border-border text-text-bright placeholder:text-text-faint focus:border-accent focus:ring-accent/25 min-h-[34px] w-full rounded-[5px] border py-1.5 pr-3 pl-8 text-sm transition-colors focus:ring-2 focus:outline-none"
           type="search"
           value={term}
-          placeholder="Order, AWB, name or phone…"
-          aria-label="Find an order"
+          placeholder="Order, AWB, ticket, name or phone…"
+          aria-label="Find an order or ticket"
           onChange={(e) => {
             setTerm(e.target.value);
             setOpen(true);
@@ -95,7 +123,10 @@ export function OrderOmnisearch(): ReactElement | null {
           onKeyDown={(e) => {
             if (e.key === 'Escape') setOpen(false);
             // One answer means the search WAS the click.
-            if (e.key === 'Enter' && items.length === 1 && items[0] !== undefined) {
+            if (e.key !== 'Enter') return;
+            if (tickets.length === 1 && items.length === 0 && tickets[0] !== undefined) {
+              goTicket(tickets[0].id);
+            } else if (items.length === 1 && tickets.length === 0 && items[0] !== undefined) {
               go(items[0].id);
             }
           }}
@@ -110,13 +141,36 @@ export function OrderOmnisearch(): ReactElement | null {
 
       {open && debounced.length >= 2 && (
         <div className="border-border bg-surface absolute right-0 z-50 mt-1 w-[22rem] max-w-[90vw] overflow-hidden rounded-md border shadow-lg">
+          {tickets.length > 0 ? (
+            <ul className="border-border border-b">
+              {tickets.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    className="hover:bg-surface-raised block w-full px-3 py-2 text-left"
+                    onClick={() => goTicket(t.id)}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-mono text-xs">{t.ticketNumber}</span>
+                      <span className="text-text-faint text-[11px] tracking-wide uppercase">
+                        ticket
+                      </span>
+                    </div>
+                    <div className="text-text-muted truncate text-xs">{t.subject}</div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {q.isFetching && items.length === 0 ? (
             <p className="text-text-muted px-3 py-2 text-xs">Searching…</p>
           ) : items.length === 0 ? (
-            <p className="text-text-muted px-3 py-2 text-xs">
-              Nothing matches that. It searches the order number, the seller’s own reference, the
-              recipient’s name and phone, and the waybill.
-            </p>
+            tickets.length > 0 ? null : (
+              <p className="text-text-muted px-3 py-2 text-xs">
+                Nothing matches that. It searches the order number, the seller’s own reference, the
+                recipient’s name and phone, the waybill, and a ticket number (TK-…).
+              </p>
+            )
           ) : (
             <ul className="max-h-80 overflow-y-auto">
               {items.map((o) => (

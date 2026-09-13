@@ -50,6 +50,8 @@ export class AdminTicketController {
     @Query('ticketType') ticketType?: TicketType,
     /** AUTO = software is carrying it to the courier; MANUAL = a person must. */
     @Query('handling') handling?: TicketHandlingFilter,
+    /** Ticket number, subject, order number, parcel number or waybill. */
+    @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<{ items: readonly TicketView[]; total: number; page: number; pageSize: number }> {
@@ -59,6 +61,7 @@ export class AdminTicketController {
       ...(stage === undefined ? {} : { stage }),
       ...(ticketType === undefined ? {} : { ticketType }),
       ...(handling === undefined ? {} : { handling }),
+      ...(search === undefined ? {} : { search }),
       ...(page === undefined ? {} : { page: Number(page) }),
       ...(pageSize === undefined ? {} : { pageSize: Number(pageSize) }),
     });

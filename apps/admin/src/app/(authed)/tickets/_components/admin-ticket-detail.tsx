@@ -115,7 +115,13 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         <ArrowLeft size={13} /> All tickets
       </Link>
 
-      <PageHeader title={t.subject} subtitle={`Raised ${new Date(t.createdAt).toLocaleString()}`} />
+      <PageHeader
+        // The number leads — it is what the seller quotes to us.
+        title={`${t.ticketNumber} · ${t.subject}`}
+        subtitle={`Raised ${new Date(t.createdAt).toLocaleString()} by ${
+          t.openedBy === 'SELLER' ? 'the seller' : 'Skydrop'
+        }`}
+      />
 
       <Card className="mt-3">
         <CardBody>

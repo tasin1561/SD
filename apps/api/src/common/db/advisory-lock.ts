@@ -78,6 +78,12 @@ export const AdvisoryLock = {
    * and both create — two parcels, and two real waybills booked.
    */
   SHIPMENT_PROVISION: 0x05350,
+  /**
+   * 'TK' — ticket number allocation per year. Covers the lazy
+   * `CREATE SEQUENCE IF NOT EXISTS`, which is not atomic against a
+   * concurrent CREATE; the `nextval` after it needs no lock.
+   */
+  TICKET_NUMBER: 0x0544b,
 } as const;
 
 /**

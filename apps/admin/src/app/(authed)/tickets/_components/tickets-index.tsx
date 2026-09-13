@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import {
   TicketHandlingBadge,
@@ -8,6 +8,7 @@ import {
   EmptyState,
   ErrorNote,
   Ident,
+  Input,
   Money,
   PageHeader,
   Select,
@@ -53,6 +54,18 @@ export function TicketsIndex(): ReactElement {
   // no way to ask it.
   const [handling, setHandling] = useState<string>('');
   const [page, setPage] = useState(1);
+  // Search by the number a seller quotes (TK-…), the subject, or the
+  // order / parcel / waybill. Waits for typing to stop; a new term goes
+  // back to page one.
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebounced(search.trim());
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [search]);
   // The row IS the link now: one way in, and it is the page rather than
   // a modal that could only ever show a summary of it.
   const router = useRouter();
@@ -61,6 +74,7 @@ export function TicketsIndex(): ReactElement {
     ...(status === '' ? {} : { stage: status }),
     ...(ticketType === '' ? {} : { ticketType }),
     ...(handling === '' ? {} : { handling }),
+    ...(debounced === '' ? {} : { search: debounced }),
     page,
     pageSize: PAGE_SIZE,
   });
@@ -159,6 +173,15 @@ export function TicketsIndex(): ReactElement {
           <option value="MANUAL">Manual — needs a person</option>
           <option value="AUTO">Auto — software is carrying it</option>
         </Select>
+
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Ticket (TK-…), order, parcel or waybill"
+          aria-label="Search tickets"
+          className="ml-2 w-72"
+        />
       </Toolbar>
 
       {list.isError ? (
@@ -190,6 +213,7 @@ export function TicketsIndex(): ReactElement {
         <Table wrapperClassName="rounded-t-none border-t-0">
           <THead>
             <Tr>
+              <Th>Ticket</Th>
               <Th>Type</Th>
               <Th>Handling</Th>
               <Th>Subject</Th>
@@ -202,6 +226,7 @@ export function TicketsIndex(): ReactElement {
           <TBody>
             {items.map((t) => (
               <Tr key={t.id} onActivate={() => router.push(`/tickets/${t.id}`)}>
+                <Td className="whitespace-nowrap font-mono text-xs">{t.ticketNumber}</Td>
                 <Td className="text-text-muted whitespace-nowrap text-xs">
                   {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Scrap / damage' : 'Seller issue'}
                 </Td>
@@ -240,7 +265,7 @@ export function TicketsIndex(): ReactElement {
           </TBody>
           <tfoot>
             <tr>
-              <td colSpan={6} className="p-0">
+              <td colSpan={8} className="p-0">
                 <TablePaginator
                   page={list.data?.page ?? page}
                   pageSize={list.data?.pageSize ?? PAGE_SIZE}
