@@ -1,9 +1,10 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { ActorType } from '@skydrop/db';
+import { ActorType, BinType, RtoDisposition } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockTransferService } from '../../inventory-transfer/services/stock-transfer.service';
 import { NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service';
+import { effectiveRows, quantitiesByDisposition } from './rto-inspection-rows';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 /**
@@ -79,8 +80,12 @@ export class RtoPutawayService {
   /**
    * What is sitting in hold for this parcel, with a suggested shelf.
    *
-   * Only RESTOCK lines appear: a written-off unit has no stock to move
-   * (the dispatch decrement stands and nothing was added back).
+   * Only RESTOCKED units appear, and only out of an RTO_HOLD bin: a
+   * written-off unit has no stock to move (the dispatch decrement stands
+   * and nothing was added back), and a unit KEPT ASIDE DAMAGED (WMS-8d)
+   * sits in the DAMAGED bin on purpose — offering to shelve it would make
+   * a damaged unit sellable with one tap. A split line offers exactly its
+   * restocked quantity, never the whole line.
    */
   async listPending(shipmentId: string): Promise<RtoPutawayPending[]> {
     const shipment = await this.prisma.client.shipment.findFirst({
@@ -93,7 +98,12 @@ export class RtoPutawayService {
           select: {
             id: true,
             quantity: true,
+            rtoCondition: true,
             rtoDisposition: true,
+            rtoInspections: {
+              select: { quantity: true, condition: true, disposition: true, notes: true },
+              orderBy: { position: 'asc' },
+            },
             pickedBinId: true,
             pickedBatchId: true,
             orderItem: {
@@ -118,18 +128,23 @@ export class RtoPutawayService {
 
     const out: RtoPutawayPending[] = [];
     for (const item of shipment.items) {
-      if (item.rtoDisposition !== 'RESTOCK') continue;
+      const restockQty = quantitiesByDisposition(effectiveRows(item))[RtoDisposition.RESTOCK];
+      if (restockQty === 0) continue;
       const variantId = item.orderItem.variantId;
       const sellerId = item.orderItem.order.sellerId;
 
       // Find the hold row this line's goods are actually sitting in.
+      // RTO_HOLD ONLY: a restock lands there (BIN-3), and the other
+      // non-pickable bins hold goods on purpose — the DAMAGED bin holds
+      // units kept aside damaged (WMS-8d), which must never be offered
+      // to a shelf.
       const holdLevel = await this.prisma.client.stockLevel.findFirst({
         where: {
           sellerId,
           variantId,
           warehouseId,
           qtyOnHand: { gt: 0 },
-          bin: { type: { in: [...NON_PICKABLE_BIN_TYPES] }, deletedAt: null },
+          bin: { type: BinType.RTO_HOLD, deletedAt: null },
         },
         select: { binId: true, batchId: true, bin: { select: { code: true } } },
       });
@@ -141,7 +156,7 @@ export class RtoPutawayService {
         variantId,
         skuCode: item.orderItem.skuCode,
         productName: item.orderItem.productName,
-        quantity: item.quantity,
+        quantity: restockQty,
         holdBinId: holdLevel.binId,
         holdBinCode: holdLevel.bin.code,
         warehouseId,

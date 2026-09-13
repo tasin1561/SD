@@ -295,10 +295,22 @@ export class InboundFreightAmortisationService {
     input: {
       readonly orderId: string;
       readonly sellerId: string;
-      readonly shipmentItemIds: readonly string[];
+      /**
+       * The written-off UNITS per line (WMS-8d). A returned line can be
+       * split — 1 written off, 1 restocked — and only the written-off units
+       * have left for good; charging the line's whole quantity would bill
+       * freight on a unit that is back on our shelf. Clamped to the line's
+       * own quantity.
+       */
+      readonly lines: ReadonlyArray<{ readonly shipmentItemId: string; readonly quantity: number }>;
     },
   ): Promise<DebitResult> {
-    if (input.shipmentItemIds.length === 0) {
+    const wanted = new Map<string, number>();
+    for (const l of input.lines) {
+      if (l.quantity > 0)
+        wanted.set(l.shipmentItemId, (wanted.get(l.shipmentItemId) ?? 0) + l.quantity);
+    }
+    if (wanted.size === 0) {
       return { amountInr: '0', unitsCharged: 0, alreadyCharged: false };
     }
     // The same WALLET lock as the delivery path and as `settle`: the
@@ -317,13 +329,17 @@ export class InboundFreightAmortisationService {
       return { amountInr: '0', unitsCharged: 0, alreadyCharged: true };
     }
 
-    const items = await tx.shipmentItem.findMany({
+    const found = await tx.shipmentItem.findMany({
       where: {
-        id: { in: [...input.shipmentItemIds] },
+        id: { in: [...wanted.keys()] },
         pickedBatchId: { not: null },
       },
       select: { id: true, quantity: true, pickedBatchId: true },
     });
+    const items = found.map((i) => ({
+      ...i,
+      quantity: Math.min(wanted.get(i.id) ?? 0, i.quantity),
+    }));
 
     return this.chargeItems(tx, {
       orderId: input.orderId,

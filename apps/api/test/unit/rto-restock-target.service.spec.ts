@@ -53,7 +53,10 @@ function makeSut(
       create: batchCreate,
       update: batchUpdate,
     },
-    warehouse: { findUniqueOrThrow: warehouseFindUniqueOrThrow },
+    warehouse: {
+      findUniqueOrThrow: warehouseFindUniqueOrThrow,
+      findUnique: jest.fn(async () => ({ code: opts.warehouseCode ?? 'DEL-01' })),
+    },
   };
 
   return {
@@ -75,6 +78,57 @@ const INPUT = {
   quantity: 2,
   staffId: 'staff-1',
 };
+
+describe('RtoRestockTargetService.resolveDamagedHold — Keep aside (damaged), WMS-8d', () => {
+  const SAME = { ...INPUT, receivedWarehouseId: ORIGIN };
+
+  it('same warehouse: the DAMAGED bin, keeping the batch the unit left from', async () => {
+    const { svc, tx, batchCreate } = makeSut({
+      bins: [
+        { id: 'bin-rto', type: BinType.RTO_HOLD },
+        { id: 'bin-dmg', type: BinType.DAMAGED },
+      ],
+    });
+    await expect(svc.resolveDamagedHold(tx, SAME)).resolves.toEqual({
+      warehouseId: ORIGIN,
+      binId: 'bin-dmg',
+      batchId: PICKED_BATCH,
+      crossWarehouse: false,
+    });
+    expect(batchCreate).not.toHaveBeenCalled();
+  });
+
+  it('no DAMAGED bin ⇒ refused by name, never the hold or storage bin', async () => {
+    const { svc, tx } = makeSut({
+      warehouseCode: 'CCU-01',
+      bins: [
+        { id: 'bin-rto', type: BinType.RTO_HOLD },
+        { id: 'bin-store', type: BinType.STORAGE },
+      ],
+    });
+    const err = await svc.resolveDamagedHold(tx, SAME).catch((e: unknown) => e);
+    expect(err).toMatchObject({ response: { code: 'RTO_NO_DAMAGED_BIN' } });
+    expect((err as { response: { message: string } }).response.message).toContain('CCU-01');
+  });
+
+  it('cross-warehouse: the receiving warehouse’s DAMAGED bin, in a lineage child batch', async () => {
+    const { svc, tx, batchCreate } = makeSut({
+      bins: [{ id: 'bin-dmg-recv', type: BinType.DAMAGED }],
+    });
+    const target = await svc.resolveDamagedHold(tx, INPUT);
+    expect(target).toEqual({
+      warehouseId: RECEIVED,
+      binId: 'bin-dmg-recv',
+      batchId: 'batch-child',
+      crossWarehouse: true,
+    });
+    expect(batchCreate.mock.calls[0]![0]['data']).toMatchObject({
+      parentBatchId: PICKED_BATCH,
+      receivingNoteId: 'gr-1',
+      status: BatchStatus.ACTIVE,
+    });
+  });
+});
 
 describe('RtoRestockTargetService.resolve — same warehouse', () => {
   it('lands in RTO_HOLD, not the picked bin, keeping the picked batch', async () => {

@@ -50,6 +50,10 @@ const REASON_CODES = [
   'FOUND_EXTRA',
   'EXPIRED',
   'RECALLED',
+  // WMS-8d: a returned unit kept aside damaged leaves the Damaged bin by a
+  // DECREASE — back to the seller (this), or scrapped (damaged in
+  // warehouse). The API always accepted it; the form never offered it.
+  'RETURNED_TO_SELLER',
   'OTHER',
 ] as const;
 

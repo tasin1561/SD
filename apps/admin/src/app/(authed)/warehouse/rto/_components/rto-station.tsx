@@ -11,10 +11,11 @@ import {
   Input,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
+import type { InspectRtoItemRequest } from '@skydrop/api-client';
 import { PutawayPanel } from './putaway-panel';
-import { RtoItemRow } from './rto-item-row';
+import { RtoItemRow, type RtoInspectPayload } from './rto-item-row';
 import type { RtoItemCondition, RtoDisposition } from '@skydrop/db';
+import { serverVerdict } from '@/lib/server-verdict';
 import { OpenReturns } from './open-returns';
 import { AtOurDoorList, StillWithCourierList } from './awaiting-returns';
 import { RtoTabPanel, RtoTabs, type RtoTab } from './rto-tabs';
@@ -33,13 +34,18 @@ import {
  *  1. Receive: enter AWB, click Receive → API stamps rtoReceivedAt and
  *     drives the order to RTO_RECEIVED.
  *  2. Inspect: for each shipment_item, pick a condition (GOOD / DAMAGED /
- *     MISSING / UNOPENED) + a disposition (RESTOCK / WRITE_OFF) + optional
- *     notes, then Save. The disposition decides what happens at finalize.
- *  3. Finalize: WMS-8 saga — RESTOCK lines get a RETURN_RESTOCK +qty
- *     movement; WRITE_OFF lines stand (no movement). Order transitions
- *     RTO_RECEIVED → RTO_RESTOCKED.
+ *     MISSING) + a disposition (put back in stock / keep aside damaged /
+ *     write off / decide later) + optional notes — once for the whole
+ *     line, or, on a line of more than one unit, split BY QUANTITY
+ *     (WMS-8d: "one good, one damaged"). The disposition decides what
+ *     happens at finalize.
+ *  3. Finalize: WMS-8 saga, per row — restocked units get a
+ *     RETURN_RESTOCK into the returns hold; kept-aside units a
+ *     RETURN_RESTOCK into the Damaged bin (never sellable); written-off
+ *     units stand (no movement). The order lands RTO_RESTOCKED when any
+ *     unit was restocked, else RTO_DAMAGED.
  *
- * FE-2 verdict surfacing on every server error.
+ * FE-2 verdict surfacing on every server error (`serverVerdict`).
  */
 const TAB_VALUES: readonly RtoTab[] = ['door', 'transit', 'bench', 'receive'];
 
@@ -107,13 +113,26 @@ export function RtoStation(): ReactElement {
   const finalize = useFinalizeRto();
 
   function fmtError(err: unknown): string {
-    if (err instanceof ApiError) {
-      const b = err.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : err.message;
-      return code ? `[${code}] ${msg}` : msg;
+    return serverVerdict(err, 'Operation failed');
+  }
+
+  /** The row's payload in the API's vocabulary (the values ARE the enum). */
+  function toRequest(payload: RtoInspectPayload): InspectRtoItemRequest {
+    if ('rows' in payload) {
+      return {
+        rows: payload.rows.map((r) => ({
+          quantity: r.quantity,
+          condition: r.condition as RtoItemCondition,
+          disposition: r.disposition as RtoDisposition,
+          ...(r.notes ? { notes: r.notes } : {}),
+        })),
+      };
     }
-    return err instanceof Error ? err.message : 'Operation failed';
+    return {
+      condition: payload.condition as RtoItemCondition,
+      disposition: payload.disposition as RtoDisposition,
+      ...(payload.notes ? { notes: payload.notes } : {}),
+    };
   }
 
   async function onReceive(): Promise<void> {
@@ -141,8 +160,10 @@ export function RtoStation(): ReactElement {
     setError(null);
     try {
       const r = await finalize.mutateAsync({ shipmentId });
+      // Units, not lines: a split line is one line and two outcomes.
       toast.success(
-        `Finalized — ${r.restockedLines} restocked, ${r.writtenOffLines} written off. Order ${r.orderStatus}.`,
+        `Finalized — ${r.restockedUnits} unit(s) put back in stock, ${r.heldDamagedUnits} kept aside damaged, ` +
+          `${r.writtenOffUnits} written off. Order ${r.status}.`,
       );
       setShipmentId(null);
       setAwb('');
@@ -248,14 +269,12 @@ export function RtoStation(): ReactElement {
                   <RtoItemRow
                     key={it.shipmentItemId}
                     item={it}
-                    onSave={async (condition, disposition, notes) => {
+                    onSave={async (payload) => {
                       setError(null);
                       try {
                         await inspect.mutateAsync({
                           shipmentItemId: it.shipmentItemId,
-                          condition: condition as RtoItemCondition,
-                          disposition: disposition as RtoDisposition,
-                          ...(notes ? { notes } : {}),
+                          ...toRequest(payload),
                         });
                         toast.success(`Line inspected.`);
                         await detail.refetch();

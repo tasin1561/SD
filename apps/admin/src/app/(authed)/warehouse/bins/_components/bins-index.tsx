@@ -73,7 +73,9 @@ const BIN_TYPES = [
   { value: 'RECEIVING', label: 'Receiving' },
   { value: 'PACKING', label: 'Packing' },
   { value: 'RTO_HOLD', label: 'Returns hold — not pickable' },
-  { value: 'DAMAGED', label: 'Damaged — not pickable' },
+  // Returns kept aside damaged land here at finalise (WMS-8d); they leave
+  // by an Inventory → Adjustments decrease from this bin.
+  { value: 'DAMAGED', label: 'Damaged — not pickable (returns kept aside go here)' },
   { value: 'QUARANTINE', label: 'Quarantine — not pickable' },
 ] as const;
 
