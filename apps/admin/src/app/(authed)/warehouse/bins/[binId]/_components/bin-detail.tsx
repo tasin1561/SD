@@ -19,6 +19,7 @@ import {
   THead,
   Tr,
 } from '@skydrop/ui/components';
+import { adjustmentHref } from '@/lib/adjustment-prefill';
 import { useBinContents } from '@/lib/bin-contents-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
@@ -37,6 +38,7 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
   const [page, setPage] = useState(1);
   const contents = useBinContents(binId, page, PAGE_SIZE);
   const canSeeMovements = usePermission('inventory.view');
+  const canAdjust = usePermission('inventory.adjustments.create');
   const bin = contents.data?.bin;
 
   return (
@@ -97,6 +99,7 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
                   <Th align="right">On hand</Th>
                   <Th align="right">Reserved</Th>
                   <Th>Last moved</Th>
+                  {canAdjust && <Th>Adjust</Th>}
                 </Tr>
               </THead>
               <TBody>
@@ -121,6 +124,25 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
                         ? '—'
                         : new Date(l.lastMovementAt).toLocaleString('en-IN')}
                     </Td>
+                    {canAdjust && (
+                      <Td>
+                        {/* The way stock leaves a bin by hand — for the
+                            Damaged bin, back to the seller or scrapped. */}
+                        <Link
+                          href={adjustmentHref({
+                            sellerId: l.sellerId,
+                            variantId: l.variantId,
+                            batchId: l.batchId,
+                            binId: bin.id,
+                            binType: bin.type,
+                          })}
+                          className="underline"
+                          aria-label={`Adjust ${l.skuCode ?? 'this line'} in bin ${bin.code}`}
+                        >
+                          {bin.type === 'DAMAGED' ? 'Return or scrap' : 'Adjust'}
+                        </Link>
+                      </Td>
+                    )}
                   </Tr>
                 ))}
               </TBody>

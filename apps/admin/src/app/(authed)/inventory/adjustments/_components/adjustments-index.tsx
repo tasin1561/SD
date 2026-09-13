@@ -34,6 +34,7 @@ import {
   useRejectAdjustment,
   type StockAdjustmentView,
 } from '@/lib/inventory-hooks';
+import type { AdjustmentPrefill } from '@/lib/adjustment-prefill';
 import { serverVerdict } from '@/lib/server-verdict';
 import { NewAdjustmentPanel } from './new-adjustment-panel';
 
@@ -54,7 +55,11 @@ const STATUSES = ['PENDING', 'APPROVED', 'EXECUTED', 'REJECTED'] as const;
  * PENDING is the default filter for that reason: everything
  * else here is history, and only this one is a job.
  */
-export function AdjustmentsIndex(): ReactElement {
+export function AdjustmentsIndex({
+  prefill = null,
+}: {
+  readonly prefill?: AdjustmentPrefill | null;
+} = {}): ReactElement {
   const [status, setStatus] = useState<string>('PENDING');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<StockAdjustmentView | null>(null);
@@ -78,7 +83,7 @@ export function AdjustmentsIndex(): ReactElement {
       <PageHeader
         title="Stock adjustments"
         subtitle="Corrections to counted stock. Anything above the value threshold waits here for a second pair of eyes before it moves inventory."
-        action={<NewAdjustmentPanel />}
+        action={<NewAdjustmentPanel prefill={prefill} />}
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">

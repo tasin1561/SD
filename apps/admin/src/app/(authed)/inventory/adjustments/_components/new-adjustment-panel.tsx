@@ -13,6 +13,7 @@ import {
   Textarea,
   useToast,
 } from '@skydrop/ui/components';
+import { ADJUSTMENT_REASON_CODES, type AdjustmentPrefill } from '@/lib/adjustment-prefill';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useCreateAdjustment } from '@/lib/inventory-hooks';
@@ -42,34 +43,30 @@ import { useCreateAdjustment } from '@/lib/inventory-hooks';
  * DECREASE means the same thing as "5", and guessing wrong moves stock
  * the wrong way.
  */
-const REASON_CODES = [
-  'COUNTING_ERROR',
-  'DAMAGED_IN_WAREHOUSE',
-  'DAMAGED_ON_ARRIVAL',
-  'LOST',
-  'FOUND_EXTRA',
-  'EXPIRED',
-  'RECALLED',
-  // WMS-8d: a returned unit kept aside damaged leaves the Damaged bin by a
-  // DECREASE — back to the seller (this), or scrapped (damaged in
-  // warehouse). The API always accepted it; the form never offered it.
-  'RETURNED_TO_SELLER',
-  'OTHER',
-] as const;
+const REASON_CODES = ADJUSTMENT_REASON_CODES;
 
-export function NewAdjustmentPanel(): ReactElement | null {
+/**
+ * `prefill` — opened from a bin's contents ("Adjust"): the line is already
+ * known, so the form opens filled and the operator states only how many
+ * and why. Every field stays editable, and the server decides (FE-2).
+ */
+export function NewAdjustmentPanel({
+  prefill = null,
+}: {
+  readonly prefill?: AdjustmentPrefill | null;
+} = {}): ReactElement | null {
   const toast = useToast();
   const mayCreate = usePermission('inventory.adjustments.create');
   const create = useCreateAdjustment();
 
-  const [open, setOpen] = useState(false);
-  const [sellerId, setSellerId] = useState('');
+  const [open, setOpen] = useState(prefill !== null);
+  const [sellerId, setSellerId] = useState(prefill?.sellerId ?? '');
   const [type, setType] = useState<'INCREASE' | 'DECREASE'>('DECREASE');
-  const [reasonCode, setReasonCode] = useState<string>('COUNTING_ERROR');
+  const [reasonCode, setReasonCode] = useState<string>(prefill?.reasonCode ?? 'COUNTING_ERROR');
   const [description, setDescription] = useState('');
-  const [variantId, setVariantId] = useState('');
-  const [binId, setBinId] = useState('');
-  const [batchId, setBatchId] = useState('');
+  const [variantId, setVariantId] = useState(prefill?.variantId ?? '');
+  const [binId, setBinId] = useState(prefill?.binId ?? '');
+  const [batchId, setBatchId] = useState(prefill?.batchId ?? '');
   const [qty, setQty] = useState('');
   const [error, setError] = useState<string | null>(null);
 
