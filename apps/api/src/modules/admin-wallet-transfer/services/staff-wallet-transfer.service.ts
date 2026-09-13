@@ -492,6 +492,11 @@ export function rupees(v: Prisma.Decimal): string {
   return v.lessThan(0) ? `−${s}` : s;
 }
 
+/** "Menev Store's", but "QA Test Traders'" — the seller reads this sentence's twin in the audit. */
+export function possessive(name: string): string {
+  return /s$/i.test(name.trim()) ? `${name.trim()}'` : `${name.trim()}'s`;
+}
+
 function describe(p: {
   direction: StaffTransferDirection;
   company: string;
@@ -507,7 +512,9 @@ function describe(p: {
   if (p.direction === 'DEBIT') {
     const parts: string[] = [];
     if (p.cashMoved.greaterThan(0)) {
-      parts.push(`${rupees(p.cashMoved)} of ${p.company}'s money ${places} becomes Skydrop's`);
+      parts.push(
+        `${rupees(p.cashMoved)} of ${possessive(p.company)} money ${places} becomes Skydrop's`,
+      );
     } else {
       parts.push(`${p.company} holds no money with us, so no cash moves`);
     }

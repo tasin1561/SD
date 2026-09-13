@@ -5,6 +5,7 @@ import { ALL_PERMISSION_KEYS } from '../../src/common/auth/permissions';
 import {
   StaffWalletTransferService,
   type StaffTransferInput,
+  possessive,
 } from '../../src/modules/admin-wallet-transfer/services/staff-wallet-transfer.service';
 
 /**
@@ -247,5 +248,12 @@ describe('the permission', () => {
     expect(src).toMatch(/@RequirePermissions\('money\.wallet\.transfer'\)\s*\n@Controller/);
     // No handler widens or narrows it.
     expect(src.match(/@RequirePermissions\(/g)).toHaveLength(1);
+  });
+});
+
+describe('the preview sentence names the seller properly', () => {
+  it("writes Traders' rather than Traders's", () => {
+    expect(possessive('QA Test Traders')).toBe("QA Test Traders'");
+    expect(possessive('Menev Store')).toBe("Menev Store's");
   });
 });
