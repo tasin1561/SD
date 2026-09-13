@@ -12,6 +12,7 @@ import {
   Input,
   LoadingState,
   Modal,
+  Num,
   PageHeader,
   Section,
   Select,
@@ -34,7 +35,10 @@ import {
   useWarehouseZones,
   type WarehouseBin,
 } from '@/lib/api-hooks';
+import Link from 'next/link';
+import { useBinOverview } from '@/lib/bin-contents-hooks';
 import { WarehouseFormPanel } from '../../_components/warehouse-form-panel';
+import { BinContentsOverview } from './bin-contents-overview';
 import { BinOpsPanel } from './bin-ops-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 import { NON_PICKABLE_BIN_TYPES as NON_PICKABLE } from '@/lib/bin-policy';
@@ -97,6 +101,13 @@ export function BinsIndex(): ReactElement {
   const createBin = useCreateBin(activeId);
   const deleteBin = useDeleteBin(activeId);
   const setTracking = useSetBinTracking(activeId);
+  // The same request the contents view above makes (one query key), read
+  // here for the per-bin total on the layout table.
+  const overview = useBinOverview();
+  const totalsByBin = useMemo(
+    () => new Map((overview.data?.warehouses ?? []).flatMap((w) => w.bins.map((b) => [b.id, b]))),
+    [overview.data],
+  );
 
   const [error, setError] = useState<string | null>(null);
   const [zoneOpen, setZoneOpen] = useState(false);
@@ -185,7 +196,7 @@ export function BinsIndex(): ReactElement {
     <div className="space-y-4">
       <PageHeader
         title="Bins"
-        subtitle="Where stock physically sits. Build the layout here; the switch below decides whether the system asks for it."
+        subtitle="Where stock physically sits and what is in each bin. The layout and the tracking switch are further down."
         action={
           <div className="flex flex-wrap items-center gap-2">
             {(warehouses.data?.length ?? 0) > 1 && (
@@ -211,6 +222,10 @@ export function BinsIndex(): ReactElement {
       />
 
       {error !== null && <ErrorNote message={error} />}
+
+      {/* The primary view: every bin, across every warehouse, with what is
+          on it. Management of the layout below is per warehouse. */}
+      <BinContentsOverview />
 
       {active !== null && (
         <Card>
@@ -375,20 +390,27 @@ export function BinsIndex(): ReactElement {
                     <Th>Zone</Th>
                     <Th>Type</Th>
                     <Th>Pickable</Th>
+                    <Th align="right">On hand</Th>
                     <Th> </Th>
                   </Tr>
                 </THead>
                 <TBody>
                   {(bins.data ?? []).length === 0 ? (
-                    <TableEmpty colSpan={5}>No bins yet.</TableEmpty>
+                    <TableEmpty colSpan={6}>No bins yet.</TableEmpty>
                   ) : (
                     (bins.data ?? []).map((b) => {
                       const zone = (zones.data ?? []).find((z) => z.id === b.zoneId);
                       const isFloor = b.code === 'FLOOR';
+                      const held = totalsByBin.get(b.id);
                       return (
                         <Tr key={b.id}>
                           <Td>
-                            <span className="font-mono">{b.code}</span>
+                            <Link
+                              href={`/warehouse/bins/${b.id}`}
+                              className="font-mono underline-offset-2 hover:underline"
+                            >
+                              {b.code}
+                            </Link>
                             {isFloor && (
                               <span className="text-text-faint ml-2 text-xs">
                                 the off-state bin — stock with no recorded location
@@ -402,6 +424,21 @@ export function BinsIndex(): ReactElement {
                               <span className="text-[var(--status-rto-fg)]">No</span>
                             ) : (
                               'Yes'
+                            )}
+                          </Td>
+                          <Td align="right">
+                            {held === undefined ? (
+                              '—'
+                            ) : held.lineCount === 0 ? (
+                              <span className="text-text-faint">Empty</span>
+                            ) : (
+                              <span data-testid={`layout-total-${b.code}`}>
+                                <Num value={held.unitsOnHand} suffix=" units" /> ·{' '}
+                                <Num
+                                  value={held.skuCount}
+                                  suffix={held.skuCount === 1 ? ' SKU' : ' SKUs'}
+                                />
+                              </span>
                             )}
                           </Td>
                           <Td>

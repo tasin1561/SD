@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { VariantStatus } from '@skydrop/db';
+import { Prisma, VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
@@ -23,6 +23,36 @@ export interface LiveVariantStock {
   qtyReservedActive: number;
   qtyAvailable: number;
 }
+
+/** Per-bin totals for the admin bin view (display only). */
+export interface BinStockTotals {
+  binId: string;
+  unitsOnHand: number;
+  /** Phase-2 only (INV-4): units allocated to a pick on this bin. */
+  unitsReserved: number;
+  /** Distinct variants holding anything in the bin. */
+  skuCount: number;
+  /** stock_levels rows holding anything (variant × batch × seller). */
+  lineCount: number;
+}
+
+/** One stock_levels row in a bin, batch resolved; names are the caller's job. */
+export interface BinStockLineRaw {
+  stockLevelId: string;
+  binId: string;
+  sellerId: string;
+  variantId: string;
+  batchId: string;
+  batchCode: string;
+  batchExpiresAt: Date | null;
+  qtyOnHand: number;
+  qtyReserved: number;
+}
+
+/** A level holds something when it has units on hand or phase-2 reserved. */
+const HOLDS_SOMETHING: Prisma.StockLevelWhereInput = {
+  OR: [{ qtyOnHand: { gt: 0 } }, { qtyReserved: { gt: 0 } }],
+};
 
 export interface StockListResult {
   items: CachedVariantStock[];
@@ -170,6 +200,115 @@ export class StockReadService {
   }
 
   // ---------- internal ----------
+
+  // ── Per-BIN display reads (admin "what is in this bin") ──────────────
+  //
+  // DISPLAY path (INV-2 naming): these read stock_levels directly rather
+  // than through the cache, because the cache is keyed per seller +
+  // warehouse and a bin view cuts across sellers. They are uncached but
+  // still display-only — nothing may decide a reservation, allocation or
+  // movement from them; that stays on getVariantStockLive /
+  // StockAvailabilityService. qtyReserved here is the PHASE-2 counter
+  // (INV-4): units already allocated to a pick on THIS bin. Phase-1 holds
+  // float with no bin and are deliberately not attributed to any bin.
+  //
+  // A row counts when it holds anything — on hand OR reserved. A level at
+  // zero on both is history, not contents.
+
+  /** Per-bin totals: units on hand, phase-2 reserved, distinct SKUs, rows. */
+  async binTotalsForDisplay(
+    binIds: readonly string[],
+  ): Promise<ReadonlyMap<string, BinStockTotals>> {
+    const out = new Map<string, BinStockTotals>();
+    if (binIds.length === 0) return out;
+    const groups = await this.prisma.client.stockLevel.groupBy({
+      by: ['binId', 'variantId'],
+      where: { binId: { in: [...binIds] }, ...HOLDS_SOMETHING },
+      _sum: { qtyOnHand: true, qtyReserved: true },
+      _count: { _all: true },
+    });
+    for (const g of groups) {
+      const prev = out.get(g.binId) ?? {
+        binId: g.binId,
+        unitsOnHand: 0,
+        unitsReserved: 0,
+        skuCount: 0,
+        lineCount: 0,
+      };
+      out.set(g.binId, {
+        binId: g.binId,
+        unitsOnHand: prev.unitsOnHand + (g._sum.qtyOnHand ?? 0),
+        unitsReserved: prev.unitsReserved + (g._sum.qtyReserved ?? 0),
+        skuCount: prev.skuCount + 1,
+        lineCount: prev.lineCount + g._count._all,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * The stock rows in one or more bins, fullest first within each bin.
+   * `take`/`skip` apply across the whole result (bins ordered by id), so a
+   * caller wanting a per-bin cap asks one bin at a time.
+   */
+  async binLinesForDisplay(
+    binIds: readonly string[],
+    page: { take: number; skip?: number },
+  ): Promise<BinStockLineRaw[]> {
+    if (binIds.length === 0) return [];
+    const rows = await this.prisma.client.stockLevel.findMany({
+      where: { binId: { in: [...binIds] }, ...HOLDS_SOMETHING },
+      orderBy: [{ binId: 'asc' }, { qtyOnHand: 'desc' }, { id: 'asc' }],
+      take: page.take,
+      skip: page.skip ?? 0,
+      select: {
+        id: true,
+        binId: true,
+        sellerId: true,
+        variantId: true,
+        batchId: true,
+        qtyOnHand: true,
+        qtyReserved: true,
+        batch: { select: { batchCode: true, expiresAt: true } },
+      },
+    });
+    return rows.map((r) => ({
+      stockLevelId: r.id,
+      binId: r.binId,
+      sellerId: r.sellerId,
+      variantId: r.variantId,
+      batchId: r.batchId,
+      batchCode: r.batch.batchCode,
+      batchExpiresAt: r.batch.expiresAt,
+      qtyOnHand: r.qtyOnHand,
+      qtyReserved: r.qtyReserved,
+    }));
+  }
+
+  /**
+   * When each (variant, batch) last moved in this bin, from the append-only
+   * ledger (never `stock_levels.updatedAt`, which a reservation touch also
+   * resets). Scoped to the variants on the page so the hypertable scan is
+   * bounded by the page, not the bin's whole history. Key: `variant|batch`.
+   */
+  async binLastMovementForDisplay(
+    binId: string,
+    variantIds: readonly string[],
+  ): Promise<ReadonlyMap<string, Date>> {
+    const out = new Map<string, Date>();
+    if (variantIds.length === 0) return out;
+    const groups = await this.prisma.client.stockMovement.groupBy({
+      by: ['variantId', 'batchId'],
+      where: { binId, variantId: { in: [...new Set(variantIds)] } },
+      _max: { createdAt: true },
+    });
+    for (const g of groups) {
+      if (g.batchId !== null && g._max.createdAt !== null) {
+        out.set(`${g.variantId}|${g.batchId}`, g._max.createdAt);
+      }
+    }
+    return out;
+  }
 
   private async getOrBuildDetail(
     sellerId: string,

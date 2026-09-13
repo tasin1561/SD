@@ -43,6 +43,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/call-center/agents', 'callcenter.queue.view'],
   ['/call-center', 'callcenter.work'],
   ['/warehouse', 'warehouse.view'],
+  // Bins, and a bin's own page (what it holds) — the same permission as
+  // the list, stated rather than inherited so a later change to the
+  // prefix above does not silently move it.
+  ['/warehouse/bins', 'warehouse.view'],
   // The whole page is pickups, so it needs the pickup permission — not
   // the warehouse one it inherited from the prefix above.
   ['/warehouse/pickups', 'courier.pickups.manage'],

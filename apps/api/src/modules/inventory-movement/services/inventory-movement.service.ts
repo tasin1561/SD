@@ -15,7 +15,11 @@ export interface MovementView {
   skuCode: string | null;
   variantLabel: string | null;
   warehouseId: string;
+  /** The warehouse's code, e.g. CCU-01 — resolved per page. */
+  warehouseCode: string | null;
   binId: string | null;
+  /** The bin's code, e.g. A-01-03 or FLOOR — resolved per page. */
+  binCode: string | null;
   batchId: string | null;
   type: StockMovementType;
   qtyChange: number;
@@ -132,7 +136,27 @@ export class InventoryMovementService {
     ]);
 
     const variantIds = [...new Set(rows.map((r) => r.variantId))];
-    const meta = await this.catalog.getVariantsByIds(variantIds);
+    const binIds = [...new Set(rows.flatMap((r) => (r.binId === null ? [] : [r.binId])))];
+    const warehouseIds = [...new Set(rows.map((r) => r.warehouseId))];
+    // One query each, per page — a bin id alone is unreadable on a
+    // screen, and "A-01-03 in CCU-01" is what somebody walks to.
+    const [meta, bins, warehouses] = await Promise.all([
+      this.catalog.getVariantsByIds(variantIds),
+      binIds.length === 0
+        ? Promise.resolve([])
+        : this.prisma.client.warehouseBin.findMany({
+            where: { id: { in: binIds } },
+            select: { id: true, code: true },
+          }),
+      warehouseIds.length === 0
+        ? Promise.resolve([])
+        : this.prisma.client.warehouse.findMany({
+            where: { id: { in: warehouseIds } },
+            select: { id: true, code: true },
+          }),
+    ]);
+    const binCode = new Map(bins.map((b) => [b.id, b.code]));
+    const warehouseCode = new Map(warehouses.map((w) => [w.id, w.code]));
 
     const items: MovementView[] = rows.map((r) => {
       const m = meta.get(r.variantId);
@@ -140,6 +164,8 @@ export class InventoryMovementService {
         ...r,
         skuCode: m?.skuCode ?? null,
         variantLabel: m?.variantLabel ?? null,
+        binCode: r.binId === null ? null : (binCode.get(r.binId) ?? null),
+        warehouseCode: warehouseCode.get(r.warehouseId) ?? null,
       };
     });
     return { items, total, page, pageSize };
