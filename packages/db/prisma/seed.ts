@@ -543,6 +543,33 @@ const systemSettings: SystemSettingSeed[] = [
       'How far back the list of invoices reaches. Wide on purpose: a VAS charge is called uninvoiced only once a LATER monthly invoice has also passed it by, and a parcel is billed a month or two after it is booked, so the check needs the invoices on both sides of a charge.',
   },
   {
+    key: 'courier.delhivery_invoice_check_enabled',
+    category: 'courier',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: true,
+    displayName: 'Delhivery invoice check — run nightly',
+    description:
+      'Each night (04:10 IST, after the wallet sync) read the Delhivery ONE invoice list, every Domestic and Communication VAS invoice’s "Invoice Transaction list", and the Credit / Debit Notes, and compare them with what their wallet charged, from our stored ledger. Names a waybill billed differently from the net of everything their wallet charged and refunded on it, a file that does not add up to its invoice, a VAS invoice with no matching wallet debit, waybills charged and never invoiced, and credit notes that match no claim payout. Reads only; changes no cost.',
+  },
+  {
+    key: 'courier.delhivery_invoice_check_window_days',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 120,
+    displayName: 'Delhivery invoice check — days of invoices to check',
+    description:
+      'Invoices dated within this many days are checked. Their list is read with its widest preset, "Last 90 days", so in practice ninety is as far back as it reaches; a larger number costs nothing. Every invoice on the list is used to tell a charged waybill that is billed from one that is not.',
+  },
+  {
+    key: 'courier.delhivery_invoice_dispute_days',
+    category: 'courier',
+    valueType: SettingValueType.INT,
+    valueInt: 15,
+    displayName: 'Delhivery invoice check — days to dispute an invoice (assumed)',
+    description:
+      'How long after the invoice date a disagreeing invoice is raised as HIGH (somebody is notified) rather than MEDIUM (recorded for the pattern). Delhivery’s own dispute window is NOT known — fifteen is our assumption, mirroring Shiprocket’s. Change it once Delhivery says.',
+  },
+  {
     key: 'courier.shiprocket_wallet_low_balance_inr',
     category: 'courier',
     valueType: SettingValueType.DECIMAL,

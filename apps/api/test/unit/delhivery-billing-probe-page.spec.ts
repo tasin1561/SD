@@ -86,6 +86,11 @@ interface Opts {
   readonly options?: readonly string[];
   readonly creditRows?: readonly string[][];
   readonly debitRows?: readonly string[][];
+  /**
+   * `byText` behaves as the first production run found the page: it hits
+   * the FIRST matching option on the page, which belongs to another row.
+   */
+  readonly byTextHitsFirstRow?: boolean;
 }
 
 function fakePortal(o: Opts = {}) {
@@ -221,8 +226,20 @@ function fakePortal(o: Opts = {}) {
     },
     newlyVisible: async () =>
       s.menuFor !== null && !s.menuSeen ? options.map((t) => register(optionEl(t))) : [],
-    byText: async (text) =>
-      s.menuFor !== null && options.includes(text) ? register(optionEl(text)) : null,
+    byText: async (text) => {
+      if (s.menuFor === null || !options.includes(text)) return null;
+      if (o.byTextHitsFirstRow !== true) return register(optionEl(text));
+      const first = drawn().rows[0]?.[0] ?? '?';
+      return register({
+        ...optionEl(text),
+        onClick: () => {
+          s.menuFor = null;
+          emit(`${first}-${text.replace(/\s+/g, '_')}.csv`);
+        },
+      });
+    },
+    menuOption: async (key, text) =>
+      s.menuFor === key && options.includes(text) ? register(optionEl(text)) : null,
   };
 
   const page = {
@@ -276,13 +293,16 @@ function fakePortal(o: Opts = {}) {
     }),
   };
 
-  const explore = () =>
+  const make = () =>
     new DelhiveryBillingPage(
       page as unknown as Page,
       new guard.ProbeBudget({ maxPages: 14, maxDownloads: 12 }, Date.now() + 60_000),
       dom,
-    ).explore();
-  return { explore, gotos, clicks, writes };
+    );
+  const explore = () => make().explore();
+  const readForCheck = (option: RegExp) =>
+    make().readForInvoiceCheck({ wanted: () => true, option });
+  return { explore, readForCheck, gotos, clicks, writes };
 }
 
 describe('DelhiveryBillingPage', () => {
@@ -384,6 +404,49 @@ describe('DelhiveryBillingPage', () => {
         .map((d) => d.option)
         .sort(),
     ).toEqual(['Annexure', 'Invoice PDF']);
+  });
+
+  it('clicks an option in THAT row’s menu, never the first match on the page', async () => {
+    // The first production run asked for credit note CD1737653806876's PDF
+    // and got CD1737653801365's: the option was found page-wide.
+    const f = fakePortal({ byTextHitsFirstRow: true });
+    const r = await f.explore();
+    const files = r.downloads.filter((d) => d.forInvoice !== null);
+    expect(files.length).toBeGreaterThan(0);
+    for (const d of files) expect(d.fileName.startsWith(`${d.forInvoice ?? ''}-`)).toBe(true);
+  });
+
+  it('reads what the nightly invoice check needs: every wanted invoice’s file by option, and the notes lists', async () => {
+    const judge = jest.spyOn(guard, 'judgeClick');
+    const f = fakePortal({
+      creditRows: [['CN2600001', '05 Sep, 2026', 'EPH26281228', '-₹1,200.00', 'Download']],
+      debitRows: [],
+    });
+    const r = await f.readForCheck(/^annexure$/i);
+
+    expect(r.found).toBe(true);
+    expect(r.error).toBeNull();
+    expect(r.invoices.map((i) => i.invoiceId)).toEqual([
+      ...OLDER_ROWS.map((row) => row[0]),
+      ...DEFAULT_ROWS.map((row) => row[0]),
+    ]);
+    for (const id of DEFAULT_ROWS.map((row) => row[0] ?? '')) {
+      const file = r.files.get(id);
+      expect(Buffer.isBuffer(file)).toBe(true);
+    }
+    // Only the option asked for: no PDF, and never the write-looking one.
+    expect(f.clicks.some((c) => /invoice pdf|raise/i.test(c))).toBe(false);
+    expect(f.writes).toEqual([]);
+    for (const label of f.clicks) expect(judge.mock.calls.map((c) => c[0].label)).toContain(label);
+    // Notes are listed, not downloaded.
+    expect(r.creditNotes?.parsedRows[0]?.amountInr).toBe('-1200.00');
+    expect(r.debitNotes?.loaded).toBe('empty');
+  });
+
+  it('an invoice whose menu offers no such option is null, not an error', async () => {
+    const f = fakePortal();
+    const r = await f.readForCheck(/^invoice transaction list$/i);
+    expect(r.files.get('EPH26281228')).toBeNull();
   });
 
   it('falls back to discovery when the known url shows no invoice table', async () => {

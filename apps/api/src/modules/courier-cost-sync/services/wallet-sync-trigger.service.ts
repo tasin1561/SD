@@ -26,6 +26,11 @@ export const JOB_WALLET_SYNC = 'sync-delhivery-wallet';
  * worker's one-at-a-time rule keeps it off the same login as the sync.
  */
 export const JOB_DELHIVERY_BILLING_PROBE = 'probe-delhivery-billing';
+/**
+ * The nightly Delhivery invoice check, run now. Same queue, so it too is
+ * never signed in alongside the wallet sync.
+ */
+export const JOB_DELHIVERY_INVOICE_CHECK = 'check-delhivery-invoices';
 
 const PORTAL_JOB_OPTIONS: JobsOptions = {
   // ONE attempt, matching the scheduled job. A retry loop that logs into
@@ -78,6 +83,23 @@ export class WalletSyncTriggerService {
       { ...PORTAL_JOB_OPTIONS, jobId: `delhivery-billing-probe-${runId}` },
     );
     this.logger.log({ jobId: res.jobId, runId }, 'Delhivery billing probe queued');
+    return res;
+  }
+
+  /**
+   * Queue the invoice check now — the same job the 04:10 IST schedule adds,
+   * by the same name, so there is one code path. Returns when QUEUED; the
+   * result lands in the audit log and on /system-issues.
+   */
+  async requestInvoiceCheck(
+    requestedByStaffId: string,
+  ): Promise<{ readonly queued: boolean; readonly jobId: string | null }> {
+    const res = await this.enqueue(
+      JOB_DELHIVERY_INVOICE_CHECK,
+      { manual: true, requestedByStaffId },
+      PORTAL_JOB_OPTIONS,
+    );
+    this.logger.log({ jobId: res.jobId }, 'Delhivery invoice check queued');
     return res;
   }
 

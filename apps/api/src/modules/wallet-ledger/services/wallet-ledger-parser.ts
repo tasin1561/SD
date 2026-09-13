@@ -73,10 +73,11 @@ const SHEET_SUMMARY = 'Summary';
  * Their parcel vocabulary. Anything else in the shipment-status column
  * is a ledger-level entry rather than carriage for a box.
  *
- * Used only as a CROSS-CHECK: the real marker is `stage`/`code` in the
- * description (see `classify`). On 23,276 rows the two agreed exactly,
- * which is why both are kept — one of them noticing something the other
- * does not is a signal worth having.
+ * Used only as a CROSS-CHECK: the real markers are `stage`/`code` and
+ * the absence of `wbn` in the description (see `classify`). Blank is in
+ * here, which is why this check alone let 18 waybill-less account rows
+ * through as carriage until 2026-09-12 — one test noticing something the
+ * others do not is the reason to keep several.
  */
 const PARCEL_STATUSES = new Set([
   'manifested',
@@ -184,24 +185,43 @@ function money(raw: string): string | null {
  *
  * A monthly reconciliation, a lost-shipment settlement or a fraud credit
  * note is an ACCOUNT-level cost, not the price of moving one box — and
- * 36 of the 37 on the 90-day sample carried an AWB, so "has a waybill"
- * is not the test. Folding a fraud credit note into a parcel would
- * quietly make that parcel look profitable.
+ * 36 of the 37 on the 90-day sample carried an AWB, so "has a waybill
+ * COLUMN" is not the test. Folding a fraud credit note into a parcel
+ * would quietly make that parcel look profitable.
  *
- * Their own marker is the test: an adjustment carries `stage` or `code`
- * in the description, which no carriage row does. The status column is
- * checked too and the two agreed on every one of 23,276 rows; when they
- * ever disagree, the row is treated as an ADJUSTMENT, because a
- * misfiled adjustment is visible on its own report line while a
- * misfiled parcel cost silently moves a margin.
+ * THREE tests, any one of which makes a row an ADJUSTMENT:
+ *
+ *   · their own marker — `stage` or `code` in the description, which no
+ *     carriage row carries;
+ *   · no `wbn` in the description (2026-09-12). Carriage is always
+ *     written against a waybill: on the production ledger every one of
+ *     23,435 carriage rows carries `wbn`, equal to its AWB column. The
+ *     18 that did not were filed as carriage and were not: 12 CREDITS of
+ *     `{"notes":"Claim settled - CMS"}` (₹16,579, 14 Jul – 10 Sep 2026 —
+ *     Delhivery paying out the VALUE of lost goods, ₹1,499 on one parcel,
+ *     which as carriage netted that parcel's cost negative) and 6 DEBITS
+ *     of one lump per "Communication VAS" invoice (`serial_number` naming
+ *     the invoice, e.g. ₹6,934.27 for EPVASH26140201 — WhatsApp messages
+ *     for the whole account, ₹41,705.92 in all). Their shipment status
+ *     was blank, and blank is in the parcel vocabulary, so the old
+ *     two-test rule (which "agreed on every one of 23,276 rows") let
+ *     them through;
+ *   · a shipment status outside the parcel vocabulary, kept as a cross-
+ *     check.
+ *
+ * When the tests disagree the row is an ADJUSTMENT, because a misfiled
+ * adjustment is visible on its own report line while a misfiled parcel
+ * cost silently moves a margin. A description that is not JSON at all
+ * names no waybill either, and lands there for the same reason.
  */
 function classify(
   shipmentStatus: string,
   detail: Record<string, unknown> | null,
 ): 'PARCEL' | 'ADJUSTMENT' {
   const marked = detail !== null && ('stage' in detail || 'code' in detail);
+  const namesNoWaybill = detail === null || !('wbn' in detail);
   const unknownStatus = !PARCEL_STATUSES.has(norm(shipmentStatus));
-  return marked || unknownStatus ? 'ADJUSTMENT' : 'PARCEL';
+  return marked || namesNoWaybill || unknownStatus ? 'ADJUSTMENT' : 'PARCEL';
 }
 
 /** Their Description column is JSON on every row that has one. A row

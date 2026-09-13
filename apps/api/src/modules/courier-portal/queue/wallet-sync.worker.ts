@@ -5,6 +5,7 @@ import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { WalletSyncService } from '../services/wallet-sync.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { DelhiveryBillingProbeService } from '../services/delhivery-billing-probe.service';
+import { DelhiveryInvoiceCheckService } from '../services/delhivery-invoice-check.service';
 
 /**
  * Restated in `courier-cost-sync/services/wallet-sync-trigger.service.ts`;
@@ -18,6 +19,18 @@ export const JOB_WALLET_SYNC = 'sync-delhivery-wallet';
  * sync can never be signed in to the same Delhivery login at once.
  */
 export const JOB_DELHIVERY_BILLING_PROBE = 'probe-delhivery-billing';
+/**
+ * The nightly Delhivery invoice check (COST-3's follow-up). On THIS queue
+ * for the same reason as the probe: one job at a time means it is never
+ * signed in to the Delhivery login alongside the wallet sync.
+ */
+export const JOB_DELHIVERY_INVOICE_CHECK = 'check-delhivery-invoices';
+/**
+ * 04:10 IST — ninety minutes after the wallet sync (02:40 IST), because the
+ * check compares every invoice against the ledger that sync has just stored.
+ */
+export const DELHIVERY_INVOICE_CRON = '10 4 * * *';
+export const DELHIVERY_INVOICE_TZ = 'Asia/Kolkata';
 
 /**
  * Once a night, well after the day's charges have settled.
@@ -50,6 +63,7 @@ export class WalletSyncWorker implements OnModuleInit, OnModuleDestroy {
     private readonly workerRole: WorkerRoleService,
     private readonly issues: SystemIssueService,
     private readonly billingProbe: DelhiveryBillingProbeService,
+    private readonly invoiceCheck: DelhiveryInvoiceCheckService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -72,6 +86,18 @@ export class WalletSyncWorker implements OnModuleInit, OnModuleDestroy {
         removeOnFail: { age: 30 * 24 * 60 * 60 },
       },
     );
+    // The invoice check: reads only, ONE attempt for the same reason.
+    await this.queue.add(
+      JOB_DELHIVERY_INVOICE_CHECK,
+      { manual: false },
+      {
+        repeat: { pattern: DELHIVERY_INVOICE_CRON, tz: DELHIVERY_INVOICE_TZ },
+        jobId: 'delhivery-invoice-check-cron',
+        attempts: 1,
+        removeOnComplete: { age: 14 * 24 * 60 * 60, count: 30 },
+        removeOnFail: { age: 30 * 24 * 60 * 60, count: 60 },
+      },
+    );
 
     this.worker = new Worker(
       WALLET_SYNC_QUEUE,
@@ -89,6 +115,12 @@ export class WalletSyncWorker implements OnModuleInit, OnModuleDestroy {
             runId: job.data.runId ?? null,
             requestedByStaffId: job.data.requestedByStaffId ?? null,
           });
+          return;
+        }
+        if (job.name === JOB_DELHIVERY_INVOICE_CHECK) {
+          // Also regardless of portalMode: it reads, like the sync. An open
+          // sign-in challenge stops it inside the service.
+          await this.invoiceCheck.check(job.data.manual === true ? 'MANUAL' : 'SCHEDULE');
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown wallet-sync job; ignoring');

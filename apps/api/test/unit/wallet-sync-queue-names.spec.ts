@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import {
   JOB_DELHIVERY_BILLING_PROBE,
+  JOB_DELHIVERY_INVOICE_CHECK,
   JOB_WALLET_SYNC,
   WALLET_SYNC_QUEUE,
 } from '../../src/modules/courier-cost-sync/services/wallet-sync-trigger.service';
@@ -54,6 +55,11 @@ describe('the API enqueues where the portal worker listens', () => {
     // Same silence: the probe button would return a runId whose findings
     // never arrive.
     expect(JOB_DELHIVERY_BILLING_PROBE).toBe(constantIn(WORKER, 'JOB_DELHIVERY_BILLING_PROBE'));
+  });
+
+  it('agrees on the invoice check job name', () => {
+    // Same silence: "Check now" would return 200 and no check would run.
+    expect(JOB_DELHIVERY_INVOICE_CHECK).toBe(constantIn(WORKER, 'JOB_DELHIVERY_INVOICE_CHECK'));
   });
 
   it('reads the audit action and bucket prefix the probe writes', () => {

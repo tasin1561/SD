@@ -61,6 +61,12 @@ const NO_TABLE_POLLS = 5;
 const MENU_WAIT_MS = 800;
 /** A shipment-level file for a month of parcels is generated on click; give it time. */
 const OPTION_DOWNLOAD_TIMEOUT_MS = 30_000;
+/**
+ * The nightly check waits longer: a half-month Domestic "Invoice Transaction
+ * list" is ~2,000 rows (1 MB) built when clicked, and a file that is simply
+ * slow must not read as one that is missing.
+ */
+const CHECK_DOWNLOAD_TIMEOUT_MS = 60_000;
 
 export interface TableFinding {
   readonly index: number;
@@ -189,6 +195,23 @@ export interface RawExploration {
   readonly error: string | null;
 }
 
+/** What the nightly invoice check reads off the billing pages. */
+export interface InvoiceCheckRead {
+  /** False when no invoice table was found at all. */
+  readonly found: boolean;
+  readonly invoices: readonly ParsedListRow[];
+  readonly range: ListRange | null;
+  readonly creditNotes: NoteListFinding | null;
+  readonly debitNotes: NoteListFinding | null;
+  /** Per invoice id: its itemized file, null when its menu offered none, or why it could not be had. */
+  readonly files: ReadonlyMap<string, Buffer | Error | null>;
+  readonly menus: readonly DownloadMenuFinding[];
+  readonly attempts: readonly Attempt[];
+  readonly refused: readonly { readonly label: string; readonly reason: string }[];
+  readonly stoppedBy: BudgetKind | null;
+  readonly error: string | null;
+}
+
 export interface Control {
   readonly id: string;
   /** What the guard judges: text, aria-label, title, icon names. */
@@ -249,6 +272,14 @@ export interface BillingDom {
   newlyVisible(cap: number): Promise<Control[]>;
   /** A visible element whose text is exactly `text` (a menu option, found again). */
   byText(text: string): Promise<Control | null>;
+  /**
+   * The option reading exactly `text` in the menu of the row whose cell
+   * reads `key` — inside that row, or (a menu drawn elsewhere on the page)
+   * one that appeared since `markSeen`. NEVER the first match anywhere:
+   * that is how the first probe run fetched credit note CD1737653801365's
+   * PDF when it had asked for CD1737653806876's.
+   */
+  menuOption(key: string, text: string): Promise<Control | null>;
 }
 
 /*
@@ -470,6 +501,55 @@ function byTextJs(text: string): string {
   })()`;
 }
 
+/**
+ * The option reading exactly `text` in ONE row's menu. First inside the row
+ * whose cell reads `key`; failing that, among elements that appeared since
+ * `markSeen` (a menu their app draws at the end of the page) and sit in no
+ * OTHER row. Hidden copies — every row's menu can be in the DOM at once,
+ * sized but invisible — are skipped by computed style, not just by size.
+ */
+function menuOptionJs(key: string, text: string): string {
+  return `(function () { ${LIB}
+    var key = ${JSON.stringify(key)};
+    var want = ${JSON.stringify(text)};
+    var shown = function (el) {
+      if (!vis(el)) return false;
+      for (var a = el, i = 0; a && i < 15; a = a.parentElement, i++) {
+        var s = getComputedStyle(a);
+        if (s.visibility === 'hidden' || s.display === 'none' || s.opacity === '0') return false;
+      }
+      return true;
+    };
+    var exact = function (el) { return clip(el.innerText, 80) === want; };
+    var deepest = function (els, ok) {
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (!ok(el) || !exact(el) || !shown(el)) continue;
+        var kids = el.querySelectorAll('*'); var deeper = false;
+        for (var k = 0; k < kids.length; k++) { if (exact(kids[k]) && shown(kids[k])) { deeper = true; break; } }
+        if (!deeper) return el;
+      }
+      return null;
+    };
+    var row = null;
+    var rows = Array.prototype.slice.call(document.querySelectorAll('tr, [role="row"]')).filter(vis);
+    for (var r = 0; r < rows.length && row === null; r++) {
+      var cells = rows[r].querySelectorAll('td, [role="cell"], [role="gridcell"]');
+      for (var c = 0; c < cells.length; c++) { if (clip(cells[c].innerText, 200) === key) { row = rows[r]; break; } }
+    }
+    if (row === null) return null;
+    var hit = deepest(row.querySelectorAll('*'), function () { return true; });
+    if (hit === null) {
+      hit = deepest(Array.prototype.slice.call(document.querySelectorAll('body *')), function (el) {
+        if (el.hasAttribute('data-sd-seen')) return false;
+        var tr = el.closest('tr, [role="row"]');
+        return !tr || tr === row;
+      });
+    }
+    return hit === null ? null : ctl(hit, want);
+  })()`;
+}
+
 /** The DOM of a live Playwright page. */
 export function pageDom(page: Page): BillingDom {
   const run = async <T>(src: string): Promise<T> => (await page.evaluate(src)) as T;
@@ -490,6 +570,7 @@ export function pageDom(page: Page): BillingDom {
     },
     newlyVisible: async (cap) => (await run<Control[] | null>(newlyVisibleJs(cap))) ?? [],
     byText: async (text) => (await run<Control | null>(byTextJs(text))) ?? null,
+    menuOption: async (key, text) => (await run<Control | null>(menuOptionJs(key, text))) ?? null,
   };
 }
 
@@ -609,7 +690,113 @@ export class DelhiveryBillingPage {
     private readonly page: Page,
     private readonly budget: ProbeBudget,
     private readonly dom: BillingDom = pageDom(page),
+    /** The nightly check keeps no screenshots or page text; the probe keeps both. */
+    private readonly opts: { readonly record?: boolean } = {},
   ) {}
+
+  /**
+   * What the nightly invoice check needs, read the probe's way: the invoice
+   * list once it has DRAWN (the 90-day preset, falling back to the default
+   * range), the itemized file of every invoice `wanted` accepts — the menu
+   * option matching `option`, clicked in that row's own menu — and the
+   * Credit / Debit Notes lists (their rows only; no note is downloaded).
+   *
+   * One file failing is recorded against that invoice, never the night; a
+   * run out of budget stops where it is and says so.
+   */
+  async readForInvoiceCheck(o: {
+    readonly wanted: (row: ParsedListRow) => boolean;
+    readonly option: RegExp;
+  }): Promise<InvoiceCheckRead> {
+    const files = new Map<string, Buffer | Error | null>();
+    let invoices: readonly ParsedListRow[] = [];
+    let range: ListRange | null = null;
+    let found = false;
+    let stoppedBy: BudgetKind | null = null;
+    let error: string | null = null;
+    try {
+      this.page.setDefaultTimeout(20_000);
+      const list = await this.openInvoiceList();
+      if (list !== null) {
+        found = true;
+        invoices = list.finding.parsedRows;
+        range = list.finding.range;
+        for (const row of invoices) {
+          if (!o.wanted(row)) continue;
+          files.set(row.key, await this.fetchMenuFile('invoices', row.key, o.option));
+        }
+        const firstKey = invoices[0]?.key ?? null;
+        await this.readNotes('creditNotes', list.url, firstKey, false);
+        await this.readNotes('debitNotes', list.url, firstKey, false);
+      }
+    } catch (err) {
+      if (err instanceof ProbeBudgetExhausted) stoppedBy = err.kind;
+      else error = (err instanceof Error ? err.message : String(err)).slice(0, 400);
+    }
+    return {
+      found,
+      invoices,
+      range,
+      creditNotes: this.notes.creditNotes,
+      debitNotes: this.notes.debitNotes,
+      files,
+      menus: this.menus,
+      attempts: this.attempts,
+      refused: this.refused,
+      stoppedBy,
+      error,
+    };
+  }
+
+  /**
+   * One row's file, by menu option: open that row's "Download ⌄", find the
+   * option matching `option` among what it offers, and click it — in that
+   * row's menu only (`menuOption`). Null when the menu offers no such
+   * option; an Error, with the reason, when it could not be had.
+   */
+  private async fetchMenuFile(
+    list: ListKind,
+    key: string,
+    option: RegExp,
+  ): Promise<Buffer | Error | null> {
+    this.current = { invoiceId: key, list, option: null };
+    try {
+      await this.page.keyboard.press('Escape').catch(() => undefined);
+      const trigger = await this.dom.rowTrigger(key);
+      if (trigger === null) return new Error(`no "Download" control on the row for ${key}`);
+      await this.dom.markSeen();
+      if (!(await this.guardedClick(trigger.id))) {
+        return new Error(`the "Download" control for ${key} could not be clicked`);
+      }
+      await this.page.waitForTimeout(MENU_WAIT_MS);
+      const texts = [
+        ...new Set((await this.dom.newlyVisible(MAX_MENU_OPTIONS)).map((c) => c.text ?? c.label)),
+      ];
+      this.menus.push({ list, invoiceId: key, trigger: trigger.label, options: texts, note: null });
+      const text = texts.find((t) => option.test(t.trim()));
+      if (text === undefined) {
+        await this.page.keyboard.press('Escape').catch(() => undefined);
+        return null;
+      }
+      const opt = await this.dom.menuOption(key, text);
+      if (opt === null) {
+        return new Error(`"${text}" for ${key} could not be found in that row's own menu`);
+      }
+      this.current = { invoiceId: key, list, option: text };
+      const before = this.downloads.length;
+      await this.dom.markSeen();
+      const got = await this.clickForFile(opt, null, 1, CHECK_DOWNLOAD_TIMEOUT_MS);
+      const file = this.downloads.slice(before).find((d) => d.forInvoice === key);
+      if (got === 0 || file === undefined)
+        return new Error(`"${text}" for ${key} produced no file`);
+      if (file.body === null) {
+        return new Error(`the file for ${key} is larger than ${MAX_FILE_BYTES} bytes`);
+      }
+      return file.body;
+    } finally {
+      this.current = null;
+    }
+  }
 
   async explore(): Promise<RawExploration> {
     let invoiceList: InvoiceListFinding | null = null;
@@ -928,6 +1115,7 @@ export class DelhiveryBillingPage {
     kind: 'creditNotes' | 'debitNotes',
     listUrl: string,
     invoiceFirstKey: string | null,
+    download = true,
   ): Promise<void> {
     const name = kind === 'creditNotes' ? 'Credit Notes' : 'Debit Notes';
     if (pathOf(this.page.url()) !== pathOf(listUrl)) {
@@ -969,7 +1157,7 @@ export class DelhiveryBillingPage {
       parsedRows: parsed.slice(0, MAX_LIST_ROWS),
       latest: latest?.key ?? null,
     };
-    if (latest !== null) await this.downloadRow(kind, latest.key);
+    if (download && latest !== null) await this.downloadRow(kind, latest.key);
   }
 
   // ── Downloading ───────────────────────────────────────────────────────
@@ -1096,10 +1284,22 @@ export class DelhiveryBillingPage {
     await this.page.waitForTimeout(300);
   }
 
-  /** Re-open the row's menu if it is shut, and click one option for its file. */
+  /**
+   * Open THIS row's menu afresh and click one option for its file.
+   *
+   * The option is looked for in this row's menu only (`menuOption`). It
+   * used to be the first element anywhere reading the option's text, and
+   * on the first production run the latest credit note's "PDF" click
+   * fetched the FIRST note's PDF (CD1737653801365 for CD1737653806876) —
+   * a file stored against the wrong document, which a checker reading it
+   * would have believed. Escape first, then open: a menu still open from
+   * before would be toggled SHUT by its trigger, so a miss is retried once.
+   */
   private async clickMenuOption(key: string, text: string): Promise<number> {
-    let opt = await this.dom.byText(text);
-    if (opt === null) {
+    let opt: Control | null = null;
+    for (let attempt = 0; attempt < 2 && opt === null; attempt += 1) {
+      await this.page.keyboard.press('Escape').catch(() => undefined);
+      await this.dom.markSeen();
       const trigger = await this.dom.rowTrigger(key);
       if (trigger === null || !(await this.guardedClick(trigger.id))) {
         this.attempts.push({
@@ -1110,7 +1310,7 @@ export class DelhiveryBillingPage {
         return 0;
       }
       await this.page.waitForTimeout(MENU_WAIT_MS);
-      opt = await this.dom.byText(text);
+      opt = await this.dom.menuOption(key, text);
     }
     if (opt === null) {
       this.attempts.push({
@@ -1423,10 +1623,11 @@ export class DelhiveryBillingPage {
     const url = this.page.url();
     const raw = await this.dom.snapshot();
     const tables = await this.dom.tables();
-    const text = await this.dom.bodyText();
-    const screenshot = await this.page
-      .screenshot({ fullPage: true, timeout: 20_000 })
-      .catch(() => null);
+    const record = this.opts.record !== false;
+    const text = record ? await this.dom.bodyText() : '';
+    const screenshot = record
+      ? await this.page.screenshot({ fullPage: true, timeout: 20_000 }).catch(() => null)
+      : null;
     const finding: PageFinding = {
       why,
       url: redactUrl(url),

@@ -296,6 +296,11 @@ EXPECTED_ORPHANS = {
     # it, GET reads what it found). It answers a question once; a screen
     # would be a button for something nobody needs to press twice.
     'admin/courier-portal/delhivery-billing-probe',
+    # Runs NOW what the portal worker runs every night at 04:10 IST (the
+    # Delhivery invoice check). Its findings are system issues and an
+    # audit row, both already on screens; the trigger is for a runbook or
+    # a terminal after their billing pages change.
+    'admin/courier-portal/delhivery-invoice-check',
     # Called, but deliberately not through `request()`: the single-flight
     # refresh in packages/api-client uses the raw `fetchImpl` (a 401 from
     # inside request() would recurse), and it composes the path from

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminWalletSyncController } from './controllers/admin-wallet-sync.controller';
 import { AdminDelhiveryBillingProbeController } from './controllers/admin-delhivery-billing-probe.controller';
+import { AdminDelhiveryInvoiceCheckController } from './controllers/admin-delhivery-invoice-check.controller';
 import { WalletSyncHistoryService } from './services/wallet-sync-history.service';
 import { WalletSyncTriggerService } from './services/wallet-sync-trigger.service';
 import { DelhiveryBillingProbeReaderService } from './services/delhivery-billing-probe-reader.service';
@@ -22,7 +23,11 @@ import { DelhiveryBillingProbeReaderService } from './services/delhivery-billing
  * imports it, and it imports nothing but the globals.
  */
 @Module({
-  controllers: [AdminWalletSyncController, AdminDelhiveryBillingProbeController],
+  controllers: [
+    AdminWalletSyncController,
+    AdminDelhiveryBillingProbeController,
+    AdminDelhiveryInvoiceCheckController,
+  ],
   providers: [
     WalletSyncHistoryService,
     WalletSyncTriggerService,
