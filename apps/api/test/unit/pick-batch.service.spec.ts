@@ -73,6 +73,7 @@ function makeService(opts: {
       update: jest.fn(async () => ({ printCount: 1 })),
     },
     stockReservation: { findMany: jest.fn(async () => opts.reservations ?? []) },
+    shipmentItem: { updateMany: jest.fn(async () => ({ count: 1 })) },
     orderShipment: { findMany: jest.fn(async () => [{ orderId: 'o1', shipmentId: 's1' }]) },
     staffUser: { findUnique: jest.fn(async () => ({ emailDisplay: 'ops', email: 'ops' })) },
     $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
@@ -307,6 +308,65 @@ describe('PickBatchService.markPicked — the picker is back with the trolley', 
     expect(r.picked).toBe(0);
     expect(r.skipped[0]?.reason).toMatch(/serialis/i);
     expect(r.skipped[0]?.shipmentNumber).toBe('SH-1');
+  });
+
+  it('records the pick hint from the allocated reservation, largest per line, never overwriting one', async () => {
+    // Only the per-parcel station used to write the hint, so every
+    // batch-picked return reached RTO finalize without one (2026-09-13).
+    const svc = printedBatch();
+    (svc.client.pickBatch.findUnique as jest.Mock).mockImplementation(async () => ({
+      id: 'b1',
+      batchNumber: 'PB-2026-09-000001',
+      status: PickBatchStatus.PRINTED,
+      shipments: [
+        {
+          id: 's1',
+          shipmentNumber: 'SH-1',
+          pickCompletedAt: null,
+          orderShipments: [{ orderId: 'o1' }],
+        },
+      ],
+    }));
+    const reservations = [
+      { orderItemId: 'oi-1', qtyReserved: 1, binId: 'bin-small', batchId: 'sb-1' },
+      { orderItemId: 'oi-1', qtyReserved: 3, binId: 'bin-big', batchId: 'sb-2' },
+      { orderItemId: 'oi-2', qtyReserved: 1, binId: null, batchId: null }, // shortfall: skipped
+    ].map((r) => ({ ...r, id: 'r', sellerId: 'sel-1', variantId: 'v1', warehouseId: 'wh-1' }));
+    const reservationsSvc = (
+      svc.svc as unknown as { reservations: { listActiveForOrderWithLocations: jest.Mock } }
+    ).reservations;
+    reservationsSvc.listActiveForOrderWithLocations.mockImplementation(async () => reservations);
+
+    await svc.svc.markPicked('b1', 'staff-1');
+
+    const stamp = svc.client.shipmentItem.updateMany as jest.Mock;
+    expect(stamp).toHaveBeenCalledTimes(1);
+    expect(stamp).toHaveBeenCalledWith({
+      where: { shipmentId: 's1', orderItemId: 'oi-1', pickedBinId: null, pickedBatchId: null },
+      data: { pickedBinId: 'bin-big', pickedBatchId: 'sb-2' },
+    });
+  });
+
+  it('a hint that cannot be written does not strand the walk', async () => {
+    const svc = printedBatch();
+    (svc.client.shipmentItem.updateMany as jest.Mock).mockRejectedValue(new Error('db down'));
+    const reservationsSvc = (
+      svc.svc as unknown as { reservations: { listActiveForOrderWithLocations: jest.Mock } }
+    ).reservations;
+    reservationsSvc.listActiveForOrderWithLocations.mockImplementation(async () => [
+      {
+        id: 'r1',
+        orderItemId: 'oi-1',
+        qtyReserved: 1,
+        sellerId: 'sel-1',
+        variantId: 'v1',
+        warehouseId: 'wh-1',
+        binId: 'bin-1',
+        batchId: 'sb-1',
+      },
+    ]);
+    const r = await svc.svc.markPicked('b1', 'staff-1');
+    expect(r.picked).toBe(1);
   });
 
   it('stamps pickCompletedAt only when it is not already set', async () => {
