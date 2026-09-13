@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
-import { themeInitScript } from '@skydrop/ui/components';
+import { cookies, headers } from 'next/headers';
+import { pinnedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
 import localFont from 'next/font/local';
 import './globals.css';
 
@@ -71,15 +71,22 @@ export default async function RootLayout({
   children: React.ReactNode;
 }): Promise<React.ReactElement> {
   const nonce = (await headers()).get('x-nonce') ?? undefined;
+  // The pinned theme is SERVER-rendered from the `sd-theme` cookie. When
+  // React 19 recovers from a hydration mismatch it resets <html>'s
+  // attributes to these server props, which used to wipe the pin the init
+  // script had stamped — a light console turning dark mid-session.
+  const theme = pinnedTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
   return (
     // `suppressHydrationWarning`: the init script below stamps
-    // `data-theme` on this element BEFORE hydration, so the server HTML
-    // and the client tree legitimately differ by that one attribute.
-    // React does not descend, so this does not mask mismatches in the
-    // app tree.
+    // `data-theme` on this element BEFORE hydration (from localStorage,
+    // which can be ahead of the cookie on a first load), so the server
+    // HTML and the client tree can legitimately differ by that one
+    // attribute. React does not descend, so this does not mask
+    // mismatches in the app tree.
     <html
       lang="en"
       suppressHydrationWarning
+      data-theme={theme}
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <head>

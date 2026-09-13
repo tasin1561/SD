@@ -47,7 +47,18 @@ export function PageHeader({
           {title}
           {help.trigger}
         </h1>
-        {help.panel && <p className="text-text-muted text-sm">{help.panel}</p>}
+        {/*
+          A <div>, NEVER a <p>. The panel is itself a <div> (the
+          grid-rows disclosure), and a subtitle is often a paragraph of
+          its own. The browser's HTML parser does not nest a block inside
+          a <p>: it closes the <p> early, so the DOM React hydrates
+          against is not the tree it rendered. That was a hydration
+          failure on EVERY page with a subtitle (React #418), and React
+          19's recovery — regenerating the tree on the client — reset
+          <html>'s attributes and dropped a pinned light theme to dark.
+          `page-header-markup.test.tsx` pins this.
+        */}
+        {help.panel && <div className="text-text-muted text-sm">{help.panel}</div>}
       </div>
       {action && (
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0">{action}</div>
@@ -82,8 +93,10 @@ export function Section({
                 {title}
                 {help.trigger}
               </h2>
+              {/* A <div> for the same reason as PageHeader's: a block
+                  inside a <p> is invalid HTML and breaks hydration. */}
               {help.panel && (
-                <p className="text-text-muted text-xs leading-relaxed">{help.panel}</p>
+                <div className="text-text-muted text-xs leading-relaxed">{help.panel}</div>
               )}
             </div>
           )}

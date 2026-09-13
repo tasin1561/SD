@@ -3,7 +3,7 @@
 import { clsx } from 'clsx';
 import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState, type ReactElement } from 'react';
-import { THEME_STORAGE_KEY } from './theme-init';
+import { pinnedTheme, THEME_STORAGE_KEY, writeThemeCookie } from './theme-init';
 
 /**
  * Dark / light switch for the admin and seller consoles.
@@ -35,7 +35,26 @@ export function ThemeToggle({ className }: { readonly className?: string }): Rea
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    const pinned = document.documentElement.getAttribute('data-theme');
+    let pinned = pinnedTheme(document.documentElement.getAttribute('data-theme'));
+
+    /*
+      BELT AND BRACES: put back a pin that was lost after load.
+
+      The init script stamps `data-theme` before hydration and the root
+      layout renders it from the cookie, but a root re-render React
+      recovers from (a hydration mismatch, in React 19) resets <html> to
+      its server props. If those somehow lacked the pin, this restores
+      it from the stored choice — the effect runs after that recovery.
+    */
+    try {
+      const stored = pinnedTheme(localStorage.getItem(THEME_STORAGE_KEY));
+      if (stored !== undefined && stored !== pinned) {
+        document.documentElement.setAttribute('data-theme', stored);
+        pinned = stored;
+      }
+    } catch {
+      // Storage unavailable — keep whatever <html> says.
+    }
     setTheme(pinned === 'light' ? 'light' : 'dark');
 
     /*
@@ -70,8 +89,11 @@ export function ThemeToggle({ className }: { readonly className?: string }): Rea
       localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
       // Private mode, or storage disabled. The theme still applies for
-      // this page; it just will not survive a reload.
+      // this page, and the cookie below still carries it.
     }
+    // The cookie is what the SERVER renders <html data-theme> from, so
+    // the pin survives React resetting the root element's attributes.
+    writeThemeCookie(next);
     setTheme(next);
   }
 
