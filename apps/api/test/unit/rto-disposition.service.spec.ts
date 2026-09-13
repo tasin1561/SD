@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   OrderStatus,
@@ -33,6 +33,13 @@ function item(
     pickedBin?: string | null;
     pickedBatch?: string | null;
     rtoCondition?: RtoItemCondition | null;
+    /** WMS-8d — the line split by quantity. Absent ⇒ the summary columns. */
+    rows?: Array<{
+      quantity: number;
+      condition: RtoItemCondition;
+      disposition: RtoDisposition;
+      notes?: string | null;
+    }>;
   } = {},
 ): AnyArgs {
   return {
@@ -41,6 +48,9 @@ function item(
     quantity: opts.quantity ?? 2,
     rtoCondition: opts.rtoCondition === undefined ? RtoItemCondition.GOOD : opts.rtoCondition,
     rtoDisposition: disposition,
+    ...(opts.rows === undefined
+      ? {}
+      : { rtoInspections: opts.rows.map((r) => ({ notes: null, ...r })) }),
     pickedBinId: opts.pickedBin === undefined ? 'bin-1' : opts.pickedBin,
     pickedBatchId: opts.pickedBatch === undefined ? 'bat-1' : opts.pickedBatch,
     orderItem: {
@@ -87,6 +97,8 @@ function makeService(
     leftMovements?: AnyArgs[];
     /** PACK_REVERSED movements for the order. Default: none. */
     reversals?: AnyArgs[];
+    /** WMS-8d — the receiving warehouse has no DAMAGED bin. */
+    noDamagedBin?: boolean;
   } = {},
 ) {
   const defaultItems = opts.items ?? [item('si-1', RtoDisposition.RESTOCK)];
@@ -111,6 +123,9 @@ function makeService(
   const client = {
     shipment: { findFirst: shipmentFindFirst },
     stockMovement: { findFirst: stockMovementFindFirst, findMany: stockMovementFindMany },
+    // The best-effort post-transition steps (unit ledger, freight debit)
+    // each open their own transaction.
+    $transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
   };
   const getById = jest.fn(async () =>
     opts.orderStatus === 'missing'
@@ -144,7 +159,20 @@ function makeService(
     batchId: i['pickedBatchId'] as string,
     crossWarehouse: i['receivedWarehouseId'] !== i['originWarehouseId'],
   }));
-  const restockTargets = { resolve: resolveTarget };
+  // WMS-8d: a kept-aside unit lands in the receiving warehouse's DAMAGED
+  // bin, keeping the source batch (same-warehouse fixture).
+  const resolveDamagedHold = jest.fn(async (_tx: unknown, i: AnyArgs) => {
+    if (opts.noDamagedBin === true) {
+      throw new ConflictException({ code: 'RTO_NO_DAMAGED_BIN', message: 'no damaged bin' });
+    }
+    return {
+      warehouseId: i['receivedWarehouseId'] as string,
+      binId: 'bin-damaged',
+      batchId: i['pickedBatchId'] as string,
+      crossWarehouse: i['receivedWarehouseId'] !== i['originWarehouseId'],
+    };
+  });
+  const restockTargets = { resolve: resolveTarget, resolveDamagedHold };
   // R3: a written-off unit's freight share. Default fixture charges
   // nothing (goods from no billed consignment), so the existing
   // assertions are unaffected.
@@ -173,7 +201,9 @@ function makeService(
     runWithRetry,
     auditLog,
     resolveTarget,
+    resolveDamagedHold,
     debitForWrittenOffItems,
+    advanceUnits: unitLedger.advanceUnitsForShipment,
   };
 }
 
@@ -464,6 +494,216 @@ describe('RtoDispositionService.finalize — where a restock goes back to (2026-
     });
     await svc.finalize(SHIP, STAFF);
     expect(stockMovementFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('RtoDispositionService.finalize — a line split by quantity (WMS-8d)', () => {
+  const noHint = { pickedBin: null, pickedBatch: null } as const;
+  const GOOD_RESTOCK = {
+    quantity: 1,
+    condition: RtoItemCondition.GOOD,
+    disposition: RtoDisposition.RESTOCK,
+  };
+  const DAMAGED_HOLD = {
+    quantity: 1,
+    condition: RtoItemCondition.DAMAGED,
+    disposition: RtoDisposition.HOLD_DAMAGED,
+  };
+  const DAMAGED_WRITE_OFF = {
+    quantity: 1,
+    condition: RtoItemCondition.DAMAGED,
+    disposition: RtoDisposition.WRITE_OFF,
+  };
+
+  it('1 RESTOCK + 1 HOLD_DAMAGED: one unit to the returns hold, one to the DAMAGED bin', async () => {
+    const {
+      svc,
+      apply,
+      resolveTarget,
+      resolveDamagedHold,
+      transitionStatus,
+      debitForWrittenOffItems,
+    } = makeService({
+      items: [
+        item('si-1', RtoDisposition.RESTOCK, {
+          ...noHint,
+          quantity: 2,
+          rows: [GOOD_RESTOCK, DAMAGED_HOLD],
+        }),
+      ],
+      leftMovements: [packConfirm('m-1', { qty: 2 })],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect(apply.mock.calls[0]![1]).toMatchObject({
+      type: StockMovementType.RETURN_RESTOCK,
+      binId: 'mv-bin',
+      batchId: 'mv-bat',
+      qtyChange: 1,
+      metadata: expect.objectContaining({ disposition: 'RESTOCK', inspectionRow: 1 }),
+    });
+    expect(apply.mock.calls[1]![1]).toMatchObject({
+      type: StockMovementType.RETURN_RESTOCK,
+      binId: 'bin-damaged',
+      batchId: 'mv-bat', // the batch the unit left from — lineage kept
+      qtyChange: 1,
+      metadata: expect.objectContaining({ disposition: 'HOLD_DAMAGED', inspectionRow: 2 }),
+    });
+    // Each row went to its own resolver, with its own quantity.
+    expect(resolveTarget.mock.calls.map((c) => c[1]['quantity'])).toEqual([1]);
+    expect(resolveDamagedHold.mock.calls.map((c) => c[1]['quantity'])).toEqual([1]);
+    // A unit came back sellable ⇒ restocked, not damaged.
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.RTO_RESTOCKED }),
+    );
+    // Nothing written off ⇒ no freight charged; the kept unit has not left.
+    expect(debitForWrittenOffItems).not.toHaveBeenCalled();
+    expect(r).toMatchObject({
+      restockedUnits: 1,
+      heldDamagedUnits: 1,
+      writtenOffUnits: 0,
+      restockedCount: 1,
+      heldDamagedCount: 1,
+    });
+    expect(r.items[0]?.rows).toEqual([
+      expect.objectContaining({ disposition: 'RESTOCK', movementIds: ['mv-1'] }),
+      expect.objectContaining({ disposition: 'HOLD_DAMAGED', movementIds: ['mv-2'] }),
+    ]);
+    expect(r.items[0]?.movementIds).toEqual(['mv-1', 'mv-2']);
+  });
+
+  it('everything kept aside damaged ⇒ RTO_DAMAGED, nothing charged', async () => {
+    const { svc, apply, transitionStatus, debitForWrittenOffItems } = makeService({
+      items: [
+        item('si-1', RtoDisposition.HOLD_DAMAGED, {
+          ...noHint,
+          rtoCondition: RtoItemCondition.DAMAGED,
+        }),
+      ],
+      leftMovements: [packConfirm('m-1', { qty: 2 })],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![1]).toMatchObject({ binId: 'bin-damaged', qtyChange: 2 });
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.RTO_DAMAGED }),
+    );
+    expect(debitForWrittenOffItems).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ status: OrderStatus.RTO_DAMAGED, heldDamagedUnits: 2 });
+  });
+
+  it('1 RESTOCK + 1 WRITE_OFF: restocks one unit, charges freight for ONE unit', async () => {
+    const { svc, apply, debitForWrittenOffItems } = makeService({
+      items: [
+        item('si-1', RtoDisposition.RESTOCK, {
+          ...noHint,
+          quantity: 2,
+          rows: [GOOD_RESTOCK, DAMAGED_WRITE_OFF],
+        }),
+      ],
+      leftMovements: [packConfirm('m-1', { qty: 2 })],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![1]).toMatchObject({ qtyChange: 1 });
+    expect(debitForWrittenOffItems).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ lines: [{ shipmentItemId: 'si-1', quantity: 1 }] }),
+    );
+  });
+
+  it('the EXCEEDS guard covers every returning row of the line together', async () => {
+    // 1 restock + 1 kept aside = 2 coming back, only 1 left through us.
+    const { svc, apply, transitionStatus } = makeService({
+      items: [
+        item('si-1', RtoDisposition.RESTOCK, {
+          ...noHint,
+          quantity: 2,
+          rows: [GOOD_RESTOCK, DAMAGED_HOLD],
+        }),
+      ],
+      leftMovements: [packConfirm('m-1', { qty: 1 })],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_RESTOCK_EXCEEDS_STOCK_LEFT' },
+    });
+    expect(apply).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('no DAMAGED bin ⇒ RTO_NO_DAMAGED_BIN, no transition (the movement tx rolls back)', async () => {
+    const { svc, transitionStatus } = makeService({
+      noDamagedBin: true,
+      items: [
+        item('si-1', RtoDisposition.RESTOCK, {
+          ...noHint,
+          quantity: 2,
+          rows: [GOOD_RESTOCK, DAMAGED_HOLD],
+        }),
+      ],
+      leftMovements: [packConfirm('m-1', { qty: 2 })],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_NO_DAMAGED_BIN' },
+    });
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('rows that do not add up to the line are refused before anything moves', async () => {
+    const { svc, apply } = makeService({
+      items: [
+        item('si-1', RtoDisposition.RESTOCK, { quantity: 3, rows: [GOOD_RESTOCK, DAMAGED_HOLD] }),
+      ],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_INSPECTION_QUANTITY_MISMATCH' },
+    });
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('one undecided unit on a split line blocks the whole finalize', async () => {
+    const { svc, apply } = makeService({
+      items: [
+        item('si-1', RtoDisposition.INSPECT_LATER, {
+          quantity: 2,
+          rows: [GOOD_RESTOCK, { ...DAMAGED_HOLD, disposition: RtoDisposition.INSPECT_LATER }],
+        }),
+      ],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_DISPOSITION_UNDECIDED' },
+    });
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('an unsplit kept-aside line moves its units IN_STOCK at the DAMAGED bin; a split line leaves the unit ledger alone', async () => {
+    const { svc, advanceUnits } = makeService({
+      items: [
+        item('si-1', RtoDisposition.HOLD_DAMAGED, {
+          ...noHint,
+          rtoCondition: RtoItemCondition.DAMAGED,
+        }),
+        item('si-2', RtoDisposition.RESTOCK, {
+          ...noHint,
+          variantId: 'v-si-2',
+          quantity: 2,
+          rows: [GOOD_RESTOCK, DAMAGED_WRITE_OFF],
+        }),
+      ],
+      leftMovements: [
+        packConfirm('m-1', { qty: 2 }),
+        packConfirm('m-2', { orderItemId: 'oi-si-2', variantId: 'v-si-2', qty: 2 }),
+      ],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(advanceUnits).toHaveBeenCalledTimes(1);
+    expect((advanceUnits.mock.calls[0] as unknown[])[1]).toMatchObject({
+      shipmentItemId: 'si-1',
+      toStatus: 'IN_STOCK',
+      gate: 'RTO_HOLD_DAMAGED',
+      binId: 'bin-damaged',
+    });
   });
 });
 

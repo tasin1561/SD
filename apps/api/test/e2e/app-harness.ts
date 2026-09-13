@@ -676,6 +676,9 @@ export async function resetWarehouseState(prisma: PrismaClient): Promise<void> {
         'ndr_action_requests',
         'tracking_events',
         'delivery_attempts',
+        // WMS-8d — FKs shipment_items (CASCADE); listed so the reset does
+        // not depend on an implicit cascade (MUST #12).
+        'shipment_item_rto_inspections',
         'shipment_items',
         'awb_labels',
         'order_shipments',

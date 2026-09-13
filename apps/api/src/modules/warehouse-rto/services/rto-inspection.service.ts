@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ActorType, OrderStatus, RtoDisposition, RtoItemCondition, TicketType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -10,38 +15,72 @@ import {
   scrapTicketOpeningMessage,
   scrapTicketReinspectionNote,
 } from './rto-scrap-ticket-message';
+import {
+  cleanNotes,
+  effectiveRows,
+  sameRows,
+  summarizeRows,
+  validateRows,
+  type InspectionRow,
+} from './rto-inspection-rows';
 
-export interface InspectRtoItemInput {
+export interface InspectRtoRowInput {
+  quantity: number;
   condition: RtoItemCondition;
   disposition: RtoDisposition;
   notes?: string | null;
+}
+
+/**
+ * Either ONE verdict for the whole line (`condition` + `disposition`), or
+ * the line split BY QUANTITY (`rows`, WMS-8d) — never both.
+ */
+export interface InspectRtoItemInput {
+  condition?: RtoItemCondition;
+  disposition?: RtoDisposition;
+  notes?: string | null;
+  rows?: readonly InspectRtoRowInput[];
 }
 
 export interface InspectRtoItemResult {
   shipmentItemId: string;
   shipmentId: string;
   orderId: string;
+  /** The line summary (`shipment_items.rto*`) — see `summarizeRows`. */
   rtoCondition: RtoItemCondition;
   rtoDisposition: RtoDisposition;
   rtoDisposedByStaffId: string;
   rtoInspectionNotes: string | null;
+  /** The line by quantity; one row covering the whole line when unsplit. */
+  rows: InspectionRow[];
 }
 
 /**
- * Module 8 — per-item RTO inspection (commit 14, WMS-8). The
- * warehouse operator records each returned line's condition + intended
- * disposition. Multiple shipment_items per parcel inspected separately;
- * finalize (commit 15) requires ALL lines inspected before atomic
- * disposition.
+ * Module 8 — per-item RTO inspection (commit 14, WMS-8), BY QUANTITY since
+ * WMS-8d (2026-09-13).
  *
- * Pick-allocation source-of-truth invariant (CP1 Option A): the
- * authoritative pick context is the phase-2 reservations; shipment_items
- * is operational metadata. RTO inspection follows the same pattern —
- * shipment_items.rto* columns are operational, NOT cross-domain authority.
+ * The operator records each returned line's condition + intended
+ * disposition. A line of qty 2 can come back one good and one damaged, so
+ * a line may be SPLIT into rows, each with its own quantity, condition,
+ * disposition and notes; the rows must add up to the line's quantity
+ * exactly. An unsplit line is one row covering the whole quantity — the
+ * single choice, which stays the default.
  *
- * Idempotent on re-inspection (operator may correct judgment); the
- * update overwrites prior values and re-audits. Gated on order.status
- * === RTO_RECEIVED so inspection can only happen on a received parcel.
+ * `shipment_item_rto_inspections` is the truth per unit and this service
+ * is its ONLY writer: a line's rows are replaced wholesale, after the
+ * shipment_items row is updated (which takes the row lock), so two
+ * inspectors saving the same line serialise instead of interleaving their
+ * rows. The `shipment_items.rto*` columns keep a SUMMARY (`summarizeRows`)
+ * for the readers that only ask "is this line decided / held / restocked".
+ *
+ * A line whose units carry serials (STRICT, UNIT-1/2) is NOT split: which
+ * serial went which way is not recorded on a row, and the unit ledger
+ * would have to guess. Refused by name (`RTO_SPLIT_SERIALIZED_LINE`); such
+ * a line is inspected with one verdict, as before.
+ *
+ * Idempotent on re-inspection (operator may correct judgment); the update
+ * overwrites prior values and re-audits. Gated on order.status ===
+ * RTO_RECEIVED so inspection can only happen on a received parcel.
  */
 @Injectable()
 export class RtoInspectionService {
@@ -72,6 +111,10 @@ export class RtoInspectionService {
         rtoCondition: true,
         rtoDisposition: true,
         rtoInspectionNotes: true,
+        rtoInspections: {
+          select: { quantity: true, condition: true, disposition: true, notes: true },
+          orderBy: { position: 'asc' },
+        },
         shipment: {
           select: {
             id: true,
@@ -120,54 +163,80 @@ export class RtoInspectionService {
       });
     }
 
-    const notes = input.notes ?? null;
+    const rows = this.rowsFrom(item.quantity, input);
+    if (rows.length > 1) {
+      const serialized = await this.prisma.client.stockUnit.count({ where: { shipmentItemId } });
+      if (serialized > 0) {
+        throw new ConflictException({
+          code: 'RTO_SPLIT_SERIALIZED_LINE',
+          message:
+            'This line carries serialised units, and a split cannot say which serial went which way. ' +
+            'Inspect it with one verdict for the whole line.',
+        });
+      }
+    }
+    const summary = summarizeRows(rows);
+    const prior = effectiveRows(item);
+
     // R7: the inspection write and the scrap ticket land in ONE tx. A
-    // DAMAGED/MISSING judgement is exactly the moment a liability claim
-    // comes into existence, so recording the judgement without the
-    // ticket would reintroduce the silent-write-off gap this closes.
-    const damaged = isClaim(input.condition);
-    // A RE-inspection that changes the finding. The ticket's opening
+    // DAMAGED/MISSING judgement on ANY unit is exactly the moment a
+    // liability claim comes into existence, so recording the judgement
+    // without the ticket would reintroduce the silent-write-off gap.
+    const damaged = rows.some((r) => isClaim(r.condition));
+    // A RE-inspection that changes the finding — a condition, a
+    // disposition, a note, or how the line is split. The ticket's opening
     // message is never edited (TKT-1 — the conversation is a record), so
     // the correction is said on it as a new message, in the same
     // transaction as the correction itself.
-    const changed =
-      item.rtoCondition !== null &&
-      (item.rtoCondition !== input.condition ||
-        item.rtoDisposition !== input.disposition ||
-        (item.rtoInspectionNotes ?? null) !== notes);
-    const correctsAClaim = !damaged && changed && isClaim(item.rtoCondition);
+    const changed = prior.length > 0 && !sameRows(prior, rows);
+    const correctsAClaim = !damaged && changed && prior.some((r) => isClaim(r.condition));
     const facts =
       damaged || correctsAClaim
-        ? await this.scrapFacts(item, order.orderNumber, input.condition, input.disposition, notes)
+        ? await this.scrapFacts(item, order.orderNumber, summary, rows)
         : null;
     const actor = { type: ActorType.STAFF, staffId };
     await this.prisma.client.$transaction(async (tx) => {
+      // FIRST: the line row — its update takes the row lock, so a second
+      // inspector saving this line waits here and then replaces what this
+      // one wrote, rather than both sets of rows landing.
       await tx.shipmentItem.update({
         where: { id: shipmentItemId },
         data: {
-          rtoCondition: input.condition,
-          rtoDisposition: input.disposition,
+          rtoCondition: summary.condition,
+          rtoDisposition: summary.disposition,
           rtoDisposedByStaffId: staffId,
-          rtoInspectionNotes: notes,
+          rtoInspectionNotes: summary.notes,
         },
+      });
+      await tx.shipmentItemRtoInspection.deleteMany({ where: { shipmentItemId } });
+      await tx.shipmentItemRtoInspection.createMany({
+        data: rows.map((r, i) => ({
+          shipmentItemId,
+          position: i + 1,
+          quantity: r.quantity,
+          condition: r.condition,
+          disposition: r.disposition,
+          notes: r.notes,
+        })),
       });
 
       if (damaged && facts !== null) {
-        // Idempotent per (shipmentItem, SCRAP_DAMAGE) — re-inspecting a
-        // line to correct a judgement returns the existing ticket rather
-        // than stacking duplicates. The ticket OPENS with our message
-        // stating the facts; an inspector's notes are quoted inside it.
+        // Idempotent per (shipmentItem, SCRAP_DAMAGE) — ONE ticket per
+        // line however it is split; re-inspecting returns the existing
+        // ticket rather than stacking duplicates. The ticket OPENS with
+        // our message stating the facts, unit-group by unit-group for a
+        // split line; an inspector's notes are quoted inside it.
         const opened = await this.tickets.openOrFind(
           {
             ticketType: TicketType.SCRAP_DAMAGE,
             sellerId: item.orderItem.order.sellerId,
-            subject: `RTO ${input.condition}: ${item.productName} (${item.skuCode})`,
+            subject: `RTO ${summary.condition}: ${item.productName} (${item.skuCode})`,
             descriptionFor: (ticketNumber) => scrapTicketOpeningMessage({ ...facts, ticketNumber }),
             orderId,
             shipmentId: item.shipmentId,
             shipmentItemId,
             courierCode: item.shipment.courierCode,
-            rtoCondition: input.condition,
+            rtoCondition: summary.condition,
           },
           actor,
           tx,
@@ -211,8 +280,14 @@ export class RtoInspectionService {
       metadata: {
         orderId,
         shipmentId: item.shipmentId,
-        condition: input.condition,
-        disposition: input.disposition,
+        condition: summary.condition,
+        disposition: summary.disposition,
+        rows: rows.map((r) => ({
+          quantity: r.quantity,
+          condition: r.condition,
+          disposition: r.disposition,
+        })),
+        split: rows.length > 1,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,
@@ -223,11 +298,76 @@ export class RtoInspectionService {
       shipmentItemId,
       shipmentId: item.shipmentId,
       orderId,
-      rtoCondition: input.condition,
-      rtoDisposition: input.disposition,
+      rtoCondition: summary.condition,
+      rtoDisposition: summary.disposition,
       rtoDisposedByStaffId: staffId,
-      rtoInspectionNotes: notes,
+      rtoInspectionNotes: summary.notes,
+      rows: [...rows],
     };
+  }
+
+  /**
+   * The rows this request means. One verdict ⇒ one row covering the whole
+   * line (the unsplit case, exactly as before). `rows` ⇒ validated to cover
+   * the line's quantity exactly. Both, or neither, is refused rather than
+   * guessed at.
+   */
+  private rowsFrom(lineQuantity: number, input: InspectRtoItemInput): InspectionRow[] {
+    const single = input.condition !== undefined || input.disposition !== undefined;
+    if (input.rows !== undefined && single) {
+      throw new BadRequestException({
+        code: 'RTO_INSPECTION_AMBIGUOUS',
+        message:
+          'Send either one condition and disposition for the whole line, or rows — not both.',
+      });
+    }
+    let rows: InspectionRow[];
+    if (input.rows !== undefined) {
+      rows = input.rows.map((r) => ({
+        quantity: r.quantity,
+        condition: r.condition,
+        disposition: r.disposition,
+        notes: cleanNotes(r.notes),
+      }));
+    } else {
+      if (input.condition === undefined || input.disposition === undefined) {
+        throw new BadRequestException({
+          code: 'RTO_INSPECTION_INCOMPLETE_INPUT',
+          message: 'A condition and a disposition are both needed.',
+        });
+      }
+      rows = [
+        {
+          quantity: lineQuantity,
+          condition: input.condition,
+          disposition: input.disposition,
+          notes: cleanNotes(input.notes),
+        },
+      ];
+    }
+    const invalid = validateRows(lineQuantity, rows);
+    if (invalid !== null) {
+      switch (invalid.code) {
+        case 'RTO_SPLIT_EMPTY':
+          throw new BadRequestException({
+            code: invalid.code,
+            message: 'A split needs at least one row.',
+          });
+        case 'RTO_SPLIT_ROW_QUANTITY_INVALID':
+          throw new BadRequestException({
+            code: invalid.code,
+            message: `Row ${invalid.position} must cover at least one whole unit.`,
+          });
+        case 'RTO_SPLIT_QUANTITY_MISMATCH':
+          throw new BadRequestException({
+            code: invalid.code,
+            message:
+              `The rows cover ${invalid.rowsQuantity} unit(s) but this line has ${invalid.lineQuantity}. ` +
+              'Every returned unit needs exactly one decision.',
+          });
+      }
+    }
+    return rows;
   }
 
   /**
@@ -250,9 +390,8 @@ export class RtoInspectionService {
       };
     },
     orderNumber: string,
-    condition: RtoItemCondition,
-    disposition: RtoDisposition,
-    notes: string | null,
+    summary: { condition: RtoItemCondition; disposition: RtoDisposition; notes: string | null },
+    rows: readonly InspectionRow[],
   ): Promise<ScrapTicketFacts> {
     const warehouseId = item.shipment.rtoReceivedWarehouseId ?? item.shipment.originWarehouseId;
     const warehouse = await this.prisma.client.warehouse.findUnique({
@@ -263,14 +402,15 @@ export class RtoInspectionService {
       productName: item.productName,
       skuCode: item.skuCode,
       quantity: item.quantity,
-      condition,
-      disposition,
+      condition: summary.condition,
+      disposition: summary.disposition,
       orderNumber,
       shipmentNumber: item.shipment.shipmentNumber,
       awbNumber: item.shipment.awbNumber,
       receivedAt: item.shipment.rtoReceivedAt,
       receivedWarehouse: warehouse,
-      notes,
+      notes: summary.notes,
+      rows,
     };
   }
 }

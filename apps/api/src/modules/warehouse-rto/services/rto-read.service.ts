@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { type OrderStatus, type RtoDisposition, type RtoItemCondition } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
+import { effectiveRows } from './rto-inspection-rows';
 
 /**
  * Read-only listing of a shipment + its items for the RTO operator UI.
@@ -26,6 +27,12 @@ export interface RtoShipmentItem {
   rtoDisposition: RtoDisposition | null;
   rtoInspectionNotes: string | null;
   /**
+   * WMS-8d — the line inspected by quantity. One row covering the whole
+   * line when it was not split (including lines inspected before rows
+   * existed); empty until inspected. The rto* fields above summarise it.
+   */
+  rtoInspections: RtoInspectionRowView[];
+  /**
    * The product's current primary picture (thumbnail preferred), as a
    * presigned URL minted for THIS response — never stored. Null when the
    * variant has no image, or when the catalogue read failed (fail-open:
@@ -35,6 +42,13 @@ export interface RtoShipmentItem {
    * before a SKU string does.
    */
   thumbnailUrl: string | null;
+}
+
+export interface RtoInspectionRowView {
+  quantity: number;
+  condition: RtoItemCondition;
+  disposition: RtoDisposition;
+  notes: string | null;
 }
 
 export interface RtoShipmentDetail {
@@ -85,6 +99,10 @@ export class RtoReadService {
             rtoCondition: true,
             rtoDisposition: true,
             rtoInspectionNotes: true,
+            rtoInspections: {
+              select: { quantity: true, condition: true, disposition: true, notes: true },
+              orderBy: { position: 'asc' },
+            },
             // The line snapshot carries no variant id; the order line it
             // was cut from does (the FK the shipment line already holds).
             orderItem: { select: { variantId: true } },
@@ -118,6 +136,12 @@ export class RtoReadService {
         rtoCondition: it.rtoCondition,
         rtoDisposition: it.rtoDisposition,
         rtoInspectionNotes: it.rtoInspectionNotes,
+        rtoInspections: effectiveRows(it).map((r) => ({
+          quantity: r.quantity,
+          condition: r.condition,
+          disposition: r.disposition,
+          notes: r.notes,
+        })),
         thumbnailUrl: thumbs.get(it.orderItem.variantId) ?? null,
       })),
     };

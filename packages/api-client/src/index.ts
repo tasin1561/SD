@@ -190,6 +190,7 @@ export type {
   PlaceManualAwbResult,
   CancelManualPlacementRequest,
   RtoShipmentItem,
+  RtoInspectionRow,
   RtoShipmentDetail,
   ReceiveRtoRequest,
   ReceiveRtoResult,

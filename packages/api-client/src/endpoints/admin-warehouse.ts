@@ -236,9 +236,19 @@ export interface RtoShipmentItem {
   readonly rtoCondition: RtoItemCondition | null;
   readonly rtoDisposition: RtoDisposition | null;
   readonly rtoInspectionNotes: string | null;
+  /** WMS-8d — the line by quantity; one row when unsplit, empty until
+   *  inspected. The rto* fields above are a one-value summary of it. */
+  readonly rtoInspections: ReadonlyArray<RtoInspectionRow>;
   /** Presigned product thumbnail, minted per response (short-lived — never
    *  store it); null when the variant has no image. */
   readonly thumbnailUrl: string | null;
+}
+
+export interface RtoInspectionRow {
+  readonly quantity: number;
+  readonly condition: RtoItemCondition;
+  readonly disposition: RtoDisposition;
+  readonly notes: string | null;
 }
 
 export interface RtoShipmentDetail {
@@ -263,23 +273,47 @@ export interface ReceiveRtoResult {
   readonly alreadyReceived: boolean;
 }
 
-export interface InspectRtoItemRequest {
-  readonly condition: RtoItemCondition;
-  readonly disposition: RtoDisposition;
-  readonly notes?: string;
-}
+/**
+ * One verdict for the whole line (`condition` + `disposition`), or `rows`
+ * splitting it by quantity (WMS-8d) — never both. Rows must add up to the
+ * line's quantity; the server refuses anything else.
+ */
+export type InspectRtoItemRequest =
+  | {
+      readonly condition: RtoItemCondition;
+      readonly disposition: RtoDisposition;
+      readonly notes?: string;
+    }
+  | {
+      readonly rows: ReadonlyArray<{
+        readonly quantity: number;
+        readonly condition: RtoItemCondition;
+        readonly disposition: RtoDisposition;
+        readonly notes?: string;
+      }>;
+    };
 
 export interface InspectRtoItemResult {
   readonly shipmentItemId: string;
-  readonly condition: RtoItemCondition;
-  readonly disposition: RtoDisposition;
+  readonly rtoCondition: RtoItemCondition;
+  readonly rtoDisposition: RtoDisposition;
+  readonly rows: ReadonlyArray<RtoInspectionRow>;
 }
 
+/** What the API returns from finalize (it used to be typed with field
+ *  names the API never sent — `orderStatus`, `restockedLines`). */
 export interface FinalizeRtoResult {
   readonly shipmentId: string;
   readonly orderId: string;
-  readonly orderStatus: OrderStatus;
-  readonly restockedLines: number;
-  readonly writtenOffLines: number;
+  readonly status: OrderStatus;
+  /** LINES with at least one unit in each outcome. */
+  readonly restockedCount: number;
+  readonly writtenOffCount: number;
+  readonly heldDamagedCount: number;
+  /** UNITS in each outcome. */
+  readonly restockedUnits: number;
+  readonly writtenOffUnits: number;
+  readonly heldDamagedUnits: number;
+  readonly movementsAlreadyApplied: boolean;
   readonly alreadyFinalized: boolean;
 }

@@ -109,7 +109,7 @@ export class WarehouseRtoController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Per-line RTO inspection: record condition + disposition + notes. Overwrites prior values (operator correction)',
+      'Per-line RTO inspection: one condition + disposition for the whole line, or `rows` splitting it by quantity (WMS-8d — rows must add up to the line quantity). Overwrites prior values (operator correction)',
   })
   inspect(
     @Param('shipmentItemId', new ParseUUIDPipe({ version: '7' }))
@@ -121,9 +121,19 @@ export class WarehouseRtoController {
     return this.inspection.inspect(
       shipmentItemId,
       {
-        condition: body.condition,
-        disposition: body.disposition,
+        ...(body.condition !== undefined ? { condition: body.condition } : {}),
+        ...(body.disposition !== undefined ? { disposition: body.disposition } : {}),
         notes: body.notes ?? null,
+        ...(body.rows !== undefined
+          ? {
+              rows: body.rows.map((r) => ({
+                quantity: r.quantity,
+                condition: r.condition,
+                disposition: r.disposition,
+                notes: r.notes ?? null,
+              })),
+            }
+          : {}),
       },
       staff.id,
       ctx,

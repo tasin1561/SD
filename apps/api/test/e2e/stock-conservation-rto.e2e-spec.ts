@@ -40,6 +40,7 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
   let staffId: string;
   let sellerAuth: { Authorization: string };
   let warehouseId: string;
+  let zoneId: string;
   let binId: string;
   let variantId: string;
 
@@ -89,6 +90,7 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       .set(staffAuth)
       .send({ code: 'A', name: 'Zone A' })
       .expect(201);
+    zoneId = zone.body.id as string;
     const bin = await request(h.baseUrl)
       .post(`/admin/warehouses/${warehouseId}/bins`)
       .set(staffAuth)
@@ -513,6 +515,159 @@ describe('Stock conservation across RTO lifecycle (commit-17 invariant)', () => 
       activeResvCount: 0,
       activeResvTotalQty: 0,
     });
+  });
+
+  // ── WMS-8d: one line of qty 2, split by quantity ─────────────────────
+
+  /** A bin of the given type in zone A (codes are composed, never typed). */
+  async function createBin(aisle: string, type: 'RTO_HOLD' | 'DAMAGED'): Promise<string> {
+    const res = await request(h.baseUrl)
+      .post(`/admin/warehouses/${warehouseId}/bins`)
+      .set(staffAuth)
+      .send({ zoneId, aisle, rack: '1', shelf: '1', type })
+      .expect(201);
+    return res.body.id as string;
+  }
+
+  /** On-hand for the variant in one bin, across batches. */
+  async function onHandIn(bin: string): Promise<number> {
+    const rows = await h.prisma.stockLevel.findMany({ where: { variantId, binId: bin } });
+    return rows.reduce((s, r) => s + r.qtyOnHand, 0);
+  }
+
+  it('WMS-8d SPLIT: qty-2 line, 1 RESTOCK + 1 HOLD_DAMAGED → storage 8 + hold 1 + damaged 1 = 10, only 8 sellable', async () => {
+    await receiveStock(10);
+    const holdBinId = await createBin('R', 'RTO_HOLD');
+    const damagedBinId = await createBin('D', 'DAMAGED');
+    const { orderId, shipmentId, shipmentItemIds } = await driveToRtoReceived(2);
+    expect(shipmentItemIds).toHaveLength(1); // ONE line of quantity 2
+    const itemId = shipmentItemIds[0] as string;
+    expect(await onHandIn(binId)).toBe(8);
+
+    await request(h.baseUrl)
+      .post(`/warehouse/rto/items/${itemId}/inspect`)
+      .set(staffAuth)
+      .send({
+        rows: [
+          { quantity: 1, condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK },
+          {
+            quantity: 1,
+            condition: RtoItemCondition.DAMAGED,
+            disposition: RtoDisposition.HOLD_DAMAGED,
+            notes: 'cracked casing',
+          },
+        ],
+      })
+      .expect(200);
+
+    // Two rows stored; the line keeps a meaningful summary.
+    const rows = await h.prisma.shipmentItemRtoInspection.findMany({
+      where: { shipmentItemId: itemId },
+      orderBy: { position: 'asc' },
+    });
+    expect(rows.map((r) => [r.quantity, r.condition, r.disposition])).toEqual([
+      [1, RtoItemCondition.GOOD, RtoDisposition.RESTOCK],
+      [1, RtoItemCondition.DAMAGED, RtoDisposition.HOLD_DAMAGED],
+    ]);
+    const line = await h.prisma.shipmentItem.findUniqueOrThrow({ where: { id: itemId } });
+    expect(line.rtoCondition).toBe(RtoItemCondition.DAMAGED);
+    expect(line.rtoDisposition).toBe(RtoDisposition.RESTOCK);
+
+    // ONE scrap ticket for the line, saying which unit and what happens.
+    const ticket = await h.prisma.ticket.findFirstOrThrow({
+      where: { shipmentItemId: itemId },
+    });
+    expect(ticket.description).toContain('1 of 2 arrived damaged');
+    expect(ticket.description).toContain('1 of 2 is in good condition');
+
+    const fin = await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(200);
+    expect(fin.body).toMatchObject({
+      status: OrderStatus.RTO_RESTOCKED,
+      restockedUnits: 1,
+      heldDamagedUnits: 1,
+      writtenOffUnits: 0,
+      alreadyFinalized: false,
+    });
+
+    // CONSERVATION, per bin: 2 left at pack, 1 came back to the returns
+    // hold, 1 to the damaged bin — 10 on hand again, nothing reserved.
+    expect(await onHandIn(binId)).toBe(8);
+    expect(await onHandIn(holdBinId)).toBe(1);
+    expect(await onHandIn(damagedBinId)).toBe(1);
+    const levels = await h.prisma.stockLevel.findMany({
+      where: { variantId },
+      include: { bin: { select: { type: true } } },
+    });
+    expect(levels.reduce((s, l) => s + l.qtyOnHand, 0)).toBe(10);
+    expect(levels.reduce((s, l) => s + l.qtyReserved, 0)).toBe(0);
+    expect(
+      await h.prisma.stockReservation.count({
+        where: { variantId, status: ReservationStatus.ACTIVE },
+      }),
+    ).toBe(0);
+    // BIN-2: neither the hold nor the damaged unit is sellable.
+    const sellable = levels
+      .filter((l) => l.bin.type !== 'RTO_HOLD' && l.bin.type !== 'DAMAGED')
+      .reduce((s, l) => s + l.qtyOnHand, 0);
+    expect(sellable).toBe(8);
+
+    // Exactly two RETURN_RESTOCK movements, one unit each, one per bin.
+    const returns = await h.prisma.stockMovement.findMany({
+      where: { orderId, type: StockMovementType.RETURN_RESTOCK },
+    });
+    expect(returns.map((m) => [m.binId, m.qtyChange]).sort()).toEqual(
+      [
+        [holdBinId, 1],
+        [damagedBinId, 1],
+      ].sort(),
+    );
+
+    // Putaway offers the RESTOCKED unit only — never the damaged one.
+    const pending = await request(h.baseUrl)
+      .get(`/warehouse/rto/shipments/${shipmentId}/putaway`)
+      .set(staffAuth)
+      .expect(200);
+    expect(pending.body).toEqual([
+      expect.objectContaining({ shipmentItemId: itemId, quantity: 1, holdBinId }),
+    ]);
+
+    // Gate 1: a re-finalize moves nothing.
+    const again = await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(200);
+    expect(again.body.alreadyFinalized).toBe(true);
+    expect(
+      await h.prisma.stockMovement.count({
+        where: { orderId, type: StockMovementType.RETURN_RESTOCK },
+      }),
+    ).toBe(2);
+  });
+
+  it('WMS-8d: Keep aside (damaged) with no DAMAGED bin is refused by name, and nothing moves', async () => {
+    await receiveStock(10);
+    const { orderId, shipmentId, shipmentItemIds } = await driveToRtoReceived(2);
+    await request(h.baseUrl)
+      .post(`/warehouse/rto/items/${shipmentItemIds[0] as string}/inspect`)
+      .set(staffAuth)
+      .send({ condition: RtoItemCondition.DAMAGED, disposition: RtoDisposition.HOLD_DAMAGED })
+      .expect(200);
+    const r = await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(409);
+    expect(r.body.code).toBe('RTO_NO_DAMAGED_BIN');
+    expect(await onHandIn(binId)).toBe(8);
+    expect(
+      await h.prisma.stockMovement.count({
+        where: { orderId, type: StockMovementType.RETURN_RESTOCK },
+      }),
+    ).toBe(0);
+    const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+    expect(order.status).toBe(OrderStatus.RTO_RECEIVED);
   });
 
   it('MODEL C GIVE-BACK: admin-cancelling an already-packed order reverses the PACK_CONFIRM decrement — 10/0 restored', async () => {

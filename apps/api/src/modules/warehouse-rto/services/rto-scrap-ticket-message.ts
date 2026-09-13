@@ -39,6 +39,22 @@ export interface ScrapTicketFacts {
     readonly timezone: string | null;
   } | null;
   readonly notes: string | null;
+  /**
+   * WMS-8d — the line inspected BY QUANTITY. When the units went more
+   * than one way (1 damaged kept aside, 1 good restocked), the message
+   * says so unit-group by unit-group, so the seller reads "1 of 2 arrived
+   * damaged; the other is going back into your stock" rather than one
+   * verdict for both. Absent, or every unit the same, ⇒ the single form
+   * above, word for word.
+   */
+  readonly rows?: readonly ScrapTicketRowFact[];
+}
+
+export interface ScrapTicketRowFact {
+  readonly quantity: number;
+  readonly condition: RtoItemCondition;
+  readonly disposition: RtoDisposition;
+  readonly notes: string | null;
 }
 
 const MONTHS = [
@@ -109,7 +125,67 @@ function dispositionPhrase(disposition: RtoDisposition): string {
       return 'writing it off — it will not go back into your sellable stock';
     case RtoDisposition.INSPECT_LATER:
       return 'holding it aside for a closer look — it stays out of your sellable stock until we decide';
+    case RtoDisposition.HOLD_DAMAGED:
+      return (
+        'keeping it aside for you in our damaged-goods area — it stays out of your sellable stock ' +
+        'until you tell us here whether to send it back to you or dispose of it'
+      );
   }
+}
+
+/** One unit-group of a split line: "1 of 2 arrived damaged". */
+function foundPhraseCounted(condition: RtoItemCondition, n: number): string {
+  switch (condition) {
+    case RtoItemCondition.DAMAGED:
+      return 'arrived damaged';
+    case RtoItemCondition.MISSING:
+      return n === 1
+        ? 'was missing from the returned parcel'
+        : 'were missing from the returned parcel';
+    case RtoItemCondition.GOOD:
+      return n === 1 ? 'is in good condition' : 'are in good condition';
+  }
+}
+
+/** What we do with a unit-group, with the right pronoun for its size. */
+function dispositionPhraseCounted(disposition: RtoDisposition, n: number): string {
+  const it = n === 1 ? 'it' : 'them';
+  switch (disposition) {
+    case RtoDisposition.RESTOCK:
+      return `we are putting ${it} back into your sellable stock`;
+    case RtoDisposition.WRITE_OFF:
+      return `we are writing ${it} off — not going back into your sellable stock`;
+    case RtoDisposition.INSPECT_LATER:
+      return `we are holding ${it} aside for a closer look, out of your sellable stock until we decide`;
+    case RtoDisposition.HOLD_DAMAGED:
+      return (
+        `we are keeping ${it} aside for you in our damaged-goods area, out of your sellable stock, ` +
+        `until you tell us here whether to send ${it} back to you or dispose of ${it}`
+      );
+  }
+}
+
+/**
+ * The line's rows merged where they say the same thing (same condition,
+ * disposition and note), in the order first seen. One group ⇒ the line
+ * was not really split and the single form is used.
+ */
+function groupRows(rows: readonly ScrapTicketRowFact[]): ScrapTicketRowFact[] {
+  const groups: ScrapTicketRowFact[] = [];
+  for (const r of rows) {
+    const notes = r.notes?.trim() ?? '';
+    const same = groups.findIndex(
+      (g) =>
+        g.condition === r.condition && g.disposition === r.disposition && (g.notes ?? '') === notes,
+    );
+    const existing = same === -1 ? undefined : groups[same];
+    if (existing !== undefined) {
+      groups[same] = { ...existing, quantity: existing.quantity + r.quantity };
+    } else {
+      groups.push({ ...r, notes: notes === '' ? null : notes });
+    }
+  }
+  return groups;
 }
 
 function nextStep(condition: RtoItemCondition): string {
@@ -125,9 +201,52 @@ function nextStep(condition: RtoItemCondition): string {
 
 /** The fact lines both messages share, blanks left out rather than printed as "—". */
 function factLines(f: ScrapTicketFacts, again: boolean): string[] {
+  const groups = f.rows === undefined ? [] : groupRows(f.rows);
+  const only = groups.length === 1 ? groups[0] : undefined;
+  // Every unit the same: the single form, with the group's own values.
+  if (only !== undefined) {
+    return singleFactLines(
+      {
+        ...f,
+        condition: only.condition,
+        disposition: only.disposition,
+        notes: only.notes,
+      },
+      again,
+    );
+  }
+  if (groups.length === 0) return singleFactLines(f, again);
+
+  const lines: string[] = [
+    `${f.productName} (${f.skuCode}), quantity ${f.quantity} — we checked each unit:`,
+  ];
+  for (const g of groups) {
+    const note = g.notes === null ? '' : ` Inspector's note: "${g.notes}"`;
+    lines.push(
+      `• ${g.quantity} of ${f.quantity} ${foundPhraseCounted(g.condition, g.quantity)}: ` +
+        `${dispositionPhraseCounted(g.disposition, g.quantity)}.${note}`,
+    );
+  }
+  lines.push(...referenceLines(f));
+  return lines;
+}
+
+function singleFactLines(f: ScrapTicketFacts, again: boolean): string[] {
   const lines: string[] = [
     `${f.productName} (${f.skuCode}), quantity ${f.quantity}: ${foundPhrase(f.condition, again)}.`,
+    ...referenceLines(f),
   ];
+  if (f.disposition !== null) {
+    lines.push(`What we are doing with it: ${dispositionPhrase(f.disposition)}.`);
+  }
+  const notes = f.notes?.trim() ?? '';
+  if (notes !== '') lines.push(`Inspector's note: "${notes}"`);
+  return lines;
+}
+
+/** Order / parcel / waybill, then when and where it came back. */
+function referenceLines(f: ScrapTicketFacts): string[] {
+  const lines: string[] = [];
   const refs = [
     f.orderNumber === null ? null : `Order ${f.orderNumber}`,
     f.shipmentNumber === null ? null : `parcel ${f.shipmentNumber}`,
@@ -143,11 +262,6 @@ function factLines(f: ScrapTicketFacts, again: boolean): string[] {
       `Received back on ${formatReceivedDate(f.receivedAt, f.receivedWarehouse?.timezone ?? null)}${where}.`,
     );
   }
-  if (f.disposition !== null) {
-    lines.push(`What we are doing with it: ${dispositionPhrase(f.disposition)}.`);
-  }
-  const notes = f.notes?.trim() ?? '';
-  if (notes !== '') lines.push(`Inspector's note: "${notes}"`);
   return lines;
 }
 

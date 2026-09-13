@@ -44,13 +44,21 @@ function makeService(
     ticketCreated?: boolean;
     /** The ticket findByShipmentItem finds, for a correction to GOOD. */
     existingTicket?: AnyArgs | null;
+    /** Serialised units on the line (STRICT mode). */
+    serializedUnits?: number;
   } = {},
 ) {
   const shipmentItemFindUnique = jest.fn(async () =>
     opts.item === undefined ? BASE_ITEM : opts.item,
   );
   const shipmentItemUpdate = jest.fn(async () => ({}));
-  const tx = { shipmentItem: { update: shipmentItemUpdate } };
+  const rowsDeleteMany = jest.fn(async () => ({ count: 0 }));
+  const rowsCreateMany = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ count: 1 }));
+  const tx = {
+    shipmentItem: { update: shipmentItemUpdate },
+    shipmentItemRtoInspection: { deleteMany: rowsDeleteMany, createMany: rowsCreateMany },
+  };
+  const stockUnitCount = jest.fn(async () => opts.serializedUnits ?? 0);
   const $transaction = jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx));
   const warehouseFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () => ({
     code: 'CCU-01',
@@ -60,6 +68,7 @@ function makeService(
   const client = {
     shipmentItem: { findUnique: shipmentItemFindUnique, update: shipmentItemUpdate },
     warehouse: { findUnique: warehouseFindUnique },
+    stockUnit: { count: stockUnitCount },
     $transaction,
   };
   const getById = jest.fn(async () =>
@@ -103,6 +112,9 @@ function makeService(
     openOrFind,
     addNote,
     findByShipmentItem,
+    rowsDeleteMany,
+    rowsCreateMany,
+    stockUnitCount,
   };
 }
 
@@ -374,6 +386,152 @@ describe('RtoInspectionService.inspect', () => {
     expect(openOrFind).not.toHaveBeenCalled();
     expect(findByShipmentItem).toHaveBeenCalledWith(ITEM, 'SCRAP_DAMAGE', expect.anything());
     expect(addNote.mock.calls[0]?.[1]).toContain('is in good condition after all');
+  });
+
+  // ── WMS-8d: a line inspected by quantity ─────────────────────────────
+
+  const QTY2 = { ...BASE_ITEM, quantity: 2 };
+  const SPLIT = [
+    { quantity: 1, condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK },
+    {
+      quantity: 1,
+      condition: RtoItemCondition.DAMAGED,
+      disposition: RtoDisposition.HOLD_DAMAGED,
+      notes: 'cracked lens',
+    },
+  ];
+
+  it('an unsplit verdict is ONE row covering the whole line, written after the line lock', async () => {
+    const { svc, shipmentItemUpdate, rowsDeleteMany, rowsCreateMany } = makeService({
+      item: QTY2,
+    });
+    const r = await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK },
+      STAFF,
+    );
+    expect(rowsCreateMany).toHaveBeenCalledWith({
+      data: [
+        {
+          shipmentItemId: ITEM,
+          position: 1,
+          quantity: 2,
+          condition: RtoItemCondition.GOOD,
+          disposition: RtoDisposition.RESTOCK,
+          notes: null,
+        },
+      ],
+    });
+    // The line update takes the row lock BEFORE the rows are replaced, so
+    // two inspectors saving one line serialise instead of interleaving.
+    const lockOrd = shipmentItemUpdate.mock.invocationCallOrder[0] ?? 0;
+    expect(lockOrd).toBeLessThan(rowsDeleteMany.mock.invocationCallOrder[0] ?? 0);
+    expect(r.rows).toHaveLength(1);
+  });
+
+  it('a split line writes one row per decision and keeps the summary columns meaningful', async () => {
+    const { svc, shipmentItemUpdate, rowsCreateMany } = makeService({ item: QTY2 });
+    const r = await svc.inspect(ITEM, { rows: SPLIT }, STAFF);
+    const created = (rowsCreateMany.mock.calls[0]?.[0] as { data: AnyArgs[] }).data;
+    expect(created).toEqual([
+      expect.objectContaining({ position: 1, quantity: 1, disposition: RtoDisposition.RESTOCK }),
+      expect.objectContaining({
+        position: 2,
+        quantity: 1,
+        disposition: RtoDisposition.HOLD_DAMAGED,
+        notes: 'cracked lens',
+      }),
+    ]);
+    // Summary: worst condition, the restock (a unit goes back to sellable).
+    expect(shipmentItemUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rtoCondition: RtoItemCondition.DAMAGED,
+          rtoDisposition: RtoDisposition.RESTOCK,
+        }),
+      }),
+    );
+    expect(r).toMatchObject({
+      rtoCondition: RtoItemCondition.DAMAGED,
+      rtoDisposition: RtoDisposition.RESTOCK,
+    });
+  });
+
+  it('a damaged unit on a split line opens ONE ticket saying which units and what happens to each', async () => {
+    const { svc, openOrFind } = makeService({ item: QTY2 });
+    await svc.inspect(ITEM, { rows: SPLIT }, STAFF);
+    expect(openOrFind).toHaveBeenCalledTimes(1);
+    expect((openOrFind.mock.calls[0]?.[0] as AnyArgs).rtoCondition).toBe(RtoItemCondition.DAMAGED);
+    const msg = openingFor(openOrFind, 'TK-2026-000010');
+    expect(msg).toContain('quantity 2 — we checked each unit:');
+    expect(msg).toContain(
+      '• 1 of 2 is in good condition: we are putting it back into your sellable stock.',
+    );
+    expect(msg).toContain('• 1 of 2 arrived damaged: we are keeping it aside for you');
+    expect(msg).toContain(`Inspector's note: "cracked lens"`);
+  });
+
+  it('rows that do not cover the line are refused before anything is written', async () => {
+    const { svc, rowsCreateMany, shipmentItemUpdate } = makeService({
+      item: { ...BASE_ITEM, quantity: 3 },
+    });
+    await expect(svc.inspect(ITEM, { rows: SPLIT }, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_SPLIT_QUANTITY_MISMATCH' },
+    });
+    expect(rowsCreateMany).not.toHaveBeenCalled();
+    expect(shipmentItemUpdate).not.toHaveBeenCalled();
+  });
+
+  it('refuses one verdict AND rows together', async () => {
+    const { svc } = makeService({ item: QTY2 });
+    await expect(
+      svc.inspect(
+        ITEM,
+        { condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK, rows: SPLIT },
+        STAFF,
+      ),
+    ).rejects.toMatchObject({ response: { code: 'RTO_INSPECTION_AMBIGUOUS' } });
+  });
+
+  it('refuses to split a line that carries serialised units (STRICT)', async () => {
+    const { svc, rowsCreateMany } = makeService({ item: QTY2, serializedUnits: 2 });
+    await expect(svc.inspect(ITEM, { rows: SPLIT }, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_SPLIT_SERIALIZED_LINE' },
+    });
+    expect(rowsCreateMany).not.toHaveBeenCalled();
+  });
+
+  it('a serialised line inspected with ONE verdict is not asked about units at all', async () => {
+    const { svc, stockUnitCount } = makeService({ item: QTY2, serializedUnits: 2 });
+    await svc.inspect(
+      ITEM,
+      { condition: RtoItemCondition.DAMAGED, disposition: RtoDisposition.HOLD_DAMAGED },
+      STAFF,
+    );
+    expect(stockUnitCount).not.toHaveBeenCalled();
+  });
+
+  it('re-inspecting with a DIFFERENT split adds our note to the open ticket', async () => {
+    const { svc, addNote } = makeService({
+      item: {
+        ...QTY2,
+        rtoCondition: RtoItemCondition.DAMAGED,
+        rtoDisposition: RtoDisposition.WRITE_OFF,
+        rtoInspections: [
+          {
+            quantity: 2,
+            condition: RtoItemCondition.DAMAGED,
+            disposition: RtoDisposition.WRITE_OFF,
+            notes: null,
+          },
+        ],
+      },
+      ticketCreated: false,
+    });
+    await svc.inspect(ITEM, { rows: SPLIT }, STAFF);
+    expect(addNote).toHaveBeenCalledTimes(1);
+    expect(addNote.mock.calls[0]?.[1]).toContain('We inspected this item again');
+    expect(addNote.mock.calls[0]?.[1]).toContain('1 of 2 arrived damaged');
   });
 
   it('a correction on a CLOSED ticket adds nothing — nobody is coming back to it', async () => {

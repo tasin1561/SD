@@ -102,6 +102,60 @@ export class RtoRestockTargetService {
     };
   }
 
+  /**
+   * WMS-8d — where a "Keep aside (damaged)" unit goes: the RECEIVING
+   * warehouse's DAMAGED bin, never anywhere else.
+   *
+   * The BATCH follows exactly the rule `resolve` uses — the source batch
+   * when the parcel came back to the building it left, else the
+   * lineage-preserving child batch at the receiving warehouse (R6b), so a
+   * unit kept aside still carries its expiry, cost and freight chain.
+   *
+   * No DAMAGED bin ⇒ REFUSED (`RTO_NO_DAMAGED_BIN`). Falling back to hold
+   * or storage would put a damaged unit where putaway offers it to a shelf
+   * (hold) or where it is sellable at once (storage) — the two outcomes
+   * this disposition exists to prevent. Thrown inside finalize's
+   * movement transaction, so nothing is half-applied.
+   */
+  async resolveDamagedHold(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly sellerId: string;
+      readonly variantId: string;
+      readonly originWarehouseId: string;
+      readonly receivedWarehouseId: string;
+      readonly pickedBinId: string;
+      readonly pickedBatchId: string;
+      readonly quantity: number;
+      readonly staffId: string;
+    },
+  ): Promise<RestockTarget> {
+    const binId = await this.findBinByTypes(tx, input.receivedWarehouseId, [BinType.DAMAGED]);
+    if (binId === null) {
+      const warehouse = await tx.warehouse.findUnique({
+        where: { id: input.receivedWarehouseId },
+        select: { code: true },
+      });
+      throw new ConflictException({
+        code: 'RTO_NO_DAMAGED_BIN',
+        message:
+          `Warehouse ${warehouse?.code ?? input.receivedWarehouseId} has no DAMAGED bin to keep ` +
+          'damaged returns aside in. Create one (Warehouse → Bins, type "Damaged — not pickable") ' +
+          'and finalise again, or re-inspect the item(s) as Write off.',
+      });
+    }
+    if (input.receivedWarehouseId === input.originWarehouseId) {
+      return {
+        warehouseId: input.originWarehouseId,
+        binId,
+        batchId: input.pickedBatchId,
+        crossWarehouse: false,
+      };
+    }
+    const batchId = await this.resolveChildBatch(tx, input);
+    return { warehouseId: input.receivedWarehouseId, binId, batchId, crossWarehouse: true };
+  }
+
   // ── internal ──────────────────────────────────────────────────────
 
   /** First live bin of any of the given types, lowest code wins. */

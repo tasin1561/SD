@@ -22,24 +22,43 @@ describe('RTO disposition labels', () => {
   it('offers every disposition the API accepts, in plain words', () => {
     // Pinned against the enum: INSPECT_LATER was accepted by the API and
     // offered nowhere, so "decide later" could not be chosen at the bench.
+    // HOLD_DAMAGED (WMS-8d) is the owner's "keep aside damaged".
     expect(DISPOSITION_OPTIONS.map((o) => o.value)).toEqual([
       'RESTOCK',
+      'HOLD_DAMAGED',
       'WRITE_OFF',
       'INSPECT_LATER',
     ]);
     render(<RtoItemRow item={item} saving={false} onSave={vi.fn()} />);
     expect(screen.getByRole('option', { name: 'Put back in stock' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Keep aside (damaged)' })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'Write off (not sellable)' })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'Decide later' })).toBeTruthy();
     expect(screen.queryByRole('option', { name: 'WRITE_OFF' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'HOLD_DAMAGED' })).toBeNull();
+  });
+
+  it('says where a kept-aside unit goes and how it leaves later', () => {
+    const keep = DISPOSITION_OPTIONS.find((o) => o.value === 'HOLD_DAMAGED');
+    expect(keep?.effect).toMatch(/Damaged bin/);
+    expect(keep?.effect).toMatch(/never sellable/);
+    expect(keep?.effect).toMatch(/Inventory → Adjustments/);
   });
 
   it('names a combination that is usually a slip, without refusing it', () => {
     expect(dispositionMismatch('DAMAGED', 'RESTOCK')).toMatch(/sold to the next customer/);
     expect(dispositionMismatch('MISSING', 'RESTOCK')).toMatch(/Write off/);
     expect(dispositionMismatch('GOOD', 'WRITE_OFF')).toMatch(/Put it back in stock/);
+    expect(dispositionMismatch('GOOD', 'HOLD_DAMAGED')).toMatch(/can never be sold/);
+    expect(dispositionMismatch('MISSING', 'HOLD_DAMAGED')).toMatch(/Write off/);
     expect(dispositionMismatch('GOOD', 'RESTOCK')).toBeNull();
     expect(dispositionMismatch('DAMAGED', 'WRITE_OFF')).toBeNull();
+    expect(dispositionMismatch('DAMAGED', 'HOLD_DAMAGED')).toBeNull();
     expect(dispositionMismatch('DAMAGED', 'INSPECT_LATER')).toBeNull();
+  });
+
+  it('a one-unit line has nothing to split', () => {
+    render(<RtoItemRow item={item} saving={false} onSave={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Split by quantity' })).toBeNull();
   });
 });

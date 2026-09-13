@@ -520,7 +520,7 @@ describe('InboundFreightAmortisationService.debitForWrittenOffItems', () => {
     const r = await sut.svc.debitForWrittenOffItems(sut.tx, {
       orderId: ORDER,
       sellerId: SELLER,
-      shipmentItemIds: ['si-1'],
+      lines: [{ shipmentItemId: 'si-1', quantity: 2 }],
     });
     expect(r.amountInr).toBe('90');
     expect(sut.applyEntry.mock.calls[0]![1]).toMatchObject({
@@ -528,12 +528,29 @@ describe('InboundFreightAmortisationService.debitForWrittenOffItems', () => {
     });
   });
 
+  it('a split line is charged for its written-off UNITS only, not the whole line (WMS-8d)', async () => {
+    // 1 of 2 written off, the other restocked: the restocked unit is back
+    // on our shelf and owes no freight yet.
+    const sut = makeSut({
+      items: [{ id: 'si-1', quantity: 2, pickedBatchId: 'batch-1' }],
+      batches: { 'batch-1': { lineId: 'l-1', parentBatchId: null } },
+      allocations: { 'l-1': { perUnitInr: '45.0000' } },
+    });
+    const r = await sut.svc.debitForWrittenOffItems(sut.tx, {
+      orderId: ORDER,
+      sellerId: SELLER,
+      lines: [{ shipmentItemId: 'si-1', quantity: 1 }],
+    });
+    expect(r.amountInr).toBe('45');
+    expect(r.unitsCharged).toBe(1);
+  });
+
   it('no items ⇒ no wallet entry at all', async () => {
     const sut = makeSut();
     const r = await sut.svc.debitForWrittenOffItems(sut.tx, {
       orderId: ORDER,
       sellerId: SELLER,
-      shipmentItemIds: [],
+      lines: [],
     });
     expect(r).toEqual({ amountInr: '0', unitsCharged: 0, alreadyCharged: false });
     expect(sut.applyEntry).not.toHaveBeenCalled();
@@ -544,7 +561,7 @@ describe('InboundFreightAmortisationService.debitForWrittenOffItems', () => {
     const r = await sut.svc.debitForWrittenOffItems(sut.tx, {
       orderId: ORDER,
       sellerId: SELLER,
-      shipmentItemIds: ['si-1'],
+      lines: [{ shipmentItemId: 'si-1', quantity: 2 }],
     });
     expect(r.alreadyCharged).toBe(true);
     expect(sut.applyEntry).not.toHaveBeenCalled();

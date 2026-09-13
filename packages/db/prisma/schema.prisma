@@ -3588,13 +3588,18 @@ model ShipmentItem {
   createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz
 
-  shipment      Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  orderItem     OrderItem     @relation(fields: [orderItemId], references: [id])
-  pickedBatch   StockBatch?   @relation(fields: [pickedBatchId], references: [id])
-  pickedBin     WarehouseBin? @relation(fields: [pickedBinId], references: [id])
-  rtoDisposedBy StaffUser?    @relation("ShipmentItemRtoDisposedBy", fields: [rtoDisposedByStaffId], references: [id])
-  tickets       Ticket[]
-  stockUnits    StockUnit[]
+  shipment       Shipment                    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  orderItem      OrderItem                   @relation(fields: [orderItemId], references: [id])
+  pickedBatch    StockBatch?                 @relation(fields: [pickedBatchId], references: [id])
+  pickedBin      WarehouseBin?               @relation(fields: [pickedBinId], references: [id])
+  rtoDisposedBy  StaffUser?                  @relation("ShipmentItemRtoDisposedBy", fields: [rtoDisposedByStaffId], references: [id])
+  tickets        Ticket[]
+  stockUnits     StockUnit[]
+  /// WMS-8d — the inspection BY QUANTITY. One row for an unsplit line;
+  /// several when the units of one line went different ways (1 good,
+  /// 1 damaged). The rto* columns above are a SUMMARY of these rows,
+  /// kept for the readers that only ask "is this line decided".
+  rtoInspections ShipmentItemRtoInspection[]
 
   @@index([shipmentId])
   @@index([orderItemId])
@@ -3602,6 +3607,35 @@ model ShipmentItem {
   @@index([pickedBinId])
   @@index([rtoDisposedByStaffId])
   @@map("shipment_items")
+}
+
+/// WMS-8d (2026-09-13) — one returned line, inspected by quantity.
+///
+/// A line of qty 2 can come back one good and one damaged. Condition and
+/// disposition used to live once per `shipment_items` row, so both units
+/// got the same choice. Each row here carries its own quantity, and the
+/// rows of a line sum to the line's quantity exactly (enforced by
+/// `RtoInspectionService`; the CHECK below only refuses a non-positive
+/// row). Written ONLY by `RtoInspectionService`, which replaces a line's
+/// rows wholesale under the shipment_items row lock; read by finalize,
+/// which applies each row's disposition to that row's units.
+model ShipmentItemRtoInspection {
+  id             String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  shipmentItemId String           @map("shipment_item_id") @db.Uuid
+  /// 1-based order on the line — what the inspector entered first comes
+  /// first, and finalize consumes restock sources in this order, so the
+  /// split is deterministic.
+  position       Int
+  quantity       Int
+  condition      RtoItemCondition
+  disposition    RtoDisposition
+  notes          String?          @db.Text
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  shipmentItem ShipmentItem @relation(fields: [shipmentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([shipmentItemId, position])
+  @@map("shipment_item_rto_inspections")
 }
 
 // Module 8 — warehouse dispatch manifest. A per-courier grouping of
@@ -5442,6 +5476,19 @@ enum RtoDisposition {
   /// Guessing at the bench is what this exists to avoid: a wrong
   /// RESTOCK sells a broken item, a wrong WRITE_OFF destroys a good one.
   INSPECT_LATER @map("inspect_later")
+  /// Keep aside (damaged) — WMS-8d, 2026-09-13.
+  ///
+  /// The unit comes back into stock, but into the receiving warehouse's
+  /// DAMAGED bin (a RETURN_RESTOCK like RESTOCK, sourced the same way),
+  /// which BIN-2 keeps out of every availability sum: it is on hand and
+  /// never sellable. It is the seller's property sitting in our building,
+  /// not a loss — so no inbound-freight share is charged (the unit has
+  /// not left), the order counts it as NOT restocked, and putaway never
+  /// offers it. Getting it out later (sent back, or scrapped) is an admin
+  /// stock adjustment DECREASE from that bin with a reason code (INV-7).
+  /// Finalize refuses (`RTO_NO_DAMAGED_BIN`) when the warehouse has no
+  /// DAMAGED bin — never a silent fallback to another bin.
+  HOLD_DAMAGED  @map("hold_damaged")
 
   @@map("rto_disposition")
 }
