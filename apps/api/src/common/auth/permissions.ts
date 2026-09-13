@@ -506,6 +506,14 @@ export const PERMISSIONS = [
     dangerous: true,
   },
   {
+    key: 'money.wallet.transfer',
+    label: "Debit or credit a seller's wallet",
+    description:
+      "Take money out of a seller's wallet into our bank, or put ours into theirs, with a reason the seller reads on their ledger. It moves real money between the seller and us — not a correction.",
+    group: 'Money',
+    dangerous: true,
+  },
+  {
     key: 'money.bank_accounts.manage',
     label: 'Manage our bank accounts',
     description: 'The accounts sellers are told to transfer their top-ups into.',

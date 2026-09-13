@@ -153,6 +153,11 @@ export function AuthedShell({
         { href: '/seller-wallets', label: 'Seller wallets', icon: <Wallet size={15} /> },
         { href: '/settlements', label: 'Settlements', icon: <Banknote size={15} /> },
         { href: '/withdrawals', label: 'Withdrawals', icon: <Wallet size={15} /> },
+        {
+          href: '/wallet-transfers',
+          label: 'Wallet transfers',
+          icon: <ArrowLeftRight size={15} />,
+        },
         { href: '/topups', label: 'Top-ups', icon: <Wallet size={15} /> },
         { href: '/treasury', label: 'Treasury', icon: <Vault size={15} /> },
         { href: '/courier-wallet', label: 'Courier wallets', icon: <Wallet size={15} /> },

@@ -1474,6 +1474,11 @@ function richWorld(cutover: Date | null): World {
   w.wallet('COD_DEDUCTION_REFUND', '21.19', d(19), { linkedEntryId: fee['id'] });
   w.wallet('SCRAP_REFUND', '1250', d(11));
   w.wallet('SCRAP_REFUND', '9', TO);
+  // Staff wallet transfers: a debit is ours, a credit is ours given away.
+  w.wallet('STAFF_DEBIT', '500', d(5), { note: 'Carton lost by the seller’s own forwarder' });
+  w.wallet('STAFF_CREDIT', '120', d(19), { note: 'Goodwill for a delayed September payout' });
+  w.wallet('STAFF_DEBIT', '40', MIDDLE);
+  w.wallet('STAFF_CREDIT', '7', TO);
 
   const tr = w.transfer('10000', 'INR', '13000', 'BDT');
   w.bank({ type: 'FX_SPREAD', amount: '7.00', currency: 'BDT', at: d(6), transferId: tr });
@@ -2307,5 +2312,25 @@ describe('parcels still moving are counted as of the END of the window', () => {
     expect(sep?.coverage.note).toMatch(
       /At the end of this window 1 parcel\(s\) on orders not yet delivered, returned or called off hold a waybill\. They are on no line/,
     );
+  });
+});
+
+describe('staff wallet adjustments', () => {
+  it('a staff debit is income, a staff credit a cost; an ADJUSTMENT_* is on no line', async () => {
+    const w = new World();
+    w.wallet('STAFF_DEBIT', '500', IN, { note: 'Carton lost by the seller’s own forwarder' });
+    w.wallet('STAFF_CREDIT', '120', IN, { note: 'Goodwill for a delayed September payout' });
+    w.wallet('ADJUSTMENT_DEBIT', '999', IN, { reasonCode: 'FIX' });
+    w.wallet('ADJUSTMENT_CREDIT', '888', IN, { reasonCode: 'FIX' });
+    const svc = w.svc();
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'staff_wallet_adjustments')).toMatchObject({
+      revenueInr: '500.00',
+      costInr: '120.00',
+      marginInr: '380.00',
+    });
+    expect(r.grossMarginInr).toBe('380.00');
+    const rows = await drill(svc, 'staff_wallet_adjustments', FROM, TO);
+    expect(rows).toMatchObject({ revenue: '500.00', cost: '120.00' });
   });
 });

@@ -345,6 +345,7 @@ export const PNL_LINE_KEYS = [
   'courier_cod_fees',
   'cod_shortfall',
   'damage_refunds',
+  'staff_wallet_adjustments',
   'bank_reconciliation',
   'investment_income',
 ] as const;
@@ -674,6 +675,7 @@ export class PnlService {
       codFees,
       codShort,
       damage,
+      staffAdjustments,
       reconciliation,
       investment,
       expenses,
@@ -691,6 +693,7 @@ export class PnlService {
       this.courierCodFees(from, to),
       this.codShortfall(from, to),
       this.damageRefunds(from, to),
+      this.staffWalletAdjustments(from, to),
       this.bankReconciliation(from, to, rates),
       this.investmentIncome(from, to, rates),
       this.expenses(from, to, rates),
@@ -710,6 +713,7 @@ export class PnlService {
       codFees,
       codShort,
       damage,
+      staffAdjustments,
       reconciliation,
       investment,
     ];
@@ -2225,6 +2229,63 @@ export class PnlService {
   }
 
   /**
+   * Money staff moved between a seller's wallet and us on purpose
+   * (StaffWalletTransferService): a STAFF_DEBIT is ours — income, whether
+   * or not the seller held the cash (a shortfall is a receivable, as with
+   * any charge); a STAFF_CREDIT is ours given away — a cost. Dated when it
+   * was written, half-open like every line, rupee wallets only.
+   *
+   * Not ADJUSTMENT_*: those correct a wallet's own mistakes, move no cash,
+   * and are on no line — an error being fixed is not income or cost.
+   */
+  private async staffWalletAdjustments(from: Date, to: Date): Promise<PnlLine> {
+    const rows = await this.prisma.client.sellerWalletEntry.groupBy({
+      by: ['direction'],
+      where: {
+        direction: { in: [WalletEntryDirection.STAFF_DEBIT, WalletEntryDirection.STAFF_CREDIT] },
+        currency: Currency.INR,
+        createdAt: win(from, to),
+      },
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+    const of = (d: WalletEntryDirection): { amount: Prisma.Decimal; count: number } => {
+      const r = rows.find((x) => x.direction === d);
+      return { amount: r?._sum.amount ?? ZERO, count: r?._count._all ?? 0 };
+    };
+    const debits = of(WalletEntryDirection.STAFF_DEBIT);
+    const credits = of(WalletEntryDirection.STAFF_CREDIT);
+    const count = debits.count + credits.count;
+    return this.line({
+      key: 'staff_wallet_adjustments',
+      label: 'Staff wallet adjustments',
+      revenue: debits.amount,
+      cost: credits.amount,
+      priced: count,
+      total: count,
+      note: null,
+      basis: {
+        revenue: [
+          {
+            label: 'Taken from sellers’ wallets by staff, with a reason',
+            source: 'seller_wallet_entries.amount WHERE direction=STAFF_DEBIT',
+            count: debits.count,
+            amountInr: debits.amount.toFixed(2),
+          },
+        ],
+        cost: [
+          {
+            label: 'Given to sellers’ wallets by staff, with a reason',
+            source: 'seller_wallet_entries.amount WHERE direction=STAFF_CREDIT',
+            count: credits.count,
+            amountInr: credits.amount.toFixed(2),
+          },
+        ],
+      },
+    });
+  }
+
+  /**
    * Every courier charge in `[from, to)` on a waybill that is no LIVE
    * Skydrop parcel — the ONE computation the line total and its
    * drill-down both read.
@@ -3016,6 +3077,38 @@ export class PnlService {
             at: e.createdAt.toISOString(),
             revenueInr: null,
             costInr: e.amount.toFixed(2),
+          })),
+          rows.length > take,
+        );
+      }
+
+      case 'staff_wallet_adjustments': {
+        const rows = await this.prisma.client.sellerWalletEntry.findMany({
+          where: {
+            direction: {
+              in: [WalletEntryDirection.STAFF_DEBIT, WalletEntryDirection.STAFF_CREDIT],
+            },
+            currency: Currency.INR,
+            createdAt: win(from, to),
+          },
+          orderBy: { createdAt: 'desc' },
+          take: take + 1,
+          select: {
+            direction: true,
+            amount: true,
+            note: true,
+            createdAt: true,
+            seller: { select: { companyName: true } },
+          },
+        });
+        return capped(
+          rows.map((e) => ({
+            ref: e.seller?.companyName ?? '—',
+            subRef: e.note,
+            at: e.createdAt.toISOString(),
+            revenueInr:
+              e.direction === WalletEntryDirection.STAFF_DEBIT ? e.amount.toFixed(2) : null,
+            costInr: e.direction === WalletEntryDirection.STAFF_CREDIT ? e.amount.toFixed(2) : null,
           })),
           rows.length > take,
         );

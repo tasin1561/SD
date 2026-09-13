@@ -6098,6 +6098,22 @@ enum WalletEntryDirection {
   /// REGISTERED in CREDIT_DIRECTIONS and in `isWalletCredit` (WAL-1). The
   /// P&L takes it back off the line that counted the deduction.
   COD_DEDUCTION_REFUND @map("cod_deduction_refund")
+  /// A member of staff taking money OUT of a seller's wallet on purpose,
+  /// with a reason the seller reads on their ledger. Unlike
+  /// ADJUSTMENT_DEBIT (a correction that moves no cash) this MOVES cash:
+  /// the seller's held money becomes capital, clamped to what they hold
+  /// (TRE-8) — beyond that the wallet goes negative and it is a
+  /// receivable. A DEBIT: ABSENT from CREDIT_DIRECTIONS (WAL-1). P&L:
+  /// income on "Staff wallet adjustments". Written only by
+  /// StaffWalletTransferService.
+  STAFF_DEBIT          @map("staff_debit")
+  /// A member of staff putting OUR money into a seller's wallet on
+  /// purpose, with a reason the seller reads. Moves cash: capital becomes
+  /// the seller's in the account the operator chose — except the part
+  /// that clears a debt, which repays a receivable and moves nothing.
+  /// A CREDIT: REGISTERED in CREDIT_DIRECTIONS and `isWalletCredit`
+  /// (WAL-1). P&L: cost on "Staff wallet adjustments".
+  STAFF_CREDIT         @map("staff_credit")
 
   @@map("wallet_entry_direction")
 }
@@ -6291,6 +6307,9 @@ model SellerWalletEntry {
   // FX snapshot for cross-currency entries (REMITTANCE_FX). Decimal(18,6)
   // matches the FxRate precision in M16.
   fxRateSnapshot      Decimal?             @map("fx_rate_snapshot") @db.Decimal(18, 6)
+  /// IDEM-1: the key of the operator form that wrote this entry (a staff
+  /// wallet transfer). A replay returns this entry and writes nothing.
+  idempotencyKey      String?              @unique @map("idempotency_key") @db.Uuid
   createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz
 
   seller         Seller                @relation(fields: [sellerId], references: [id])

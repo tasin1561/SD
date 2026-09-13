@@ -489,6 +489,8 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.ORDER_CHARGES_REFUND:
     // The tax and fee on a COD the courier reversed, given back.
     case WalletEntryDirection.COD_DEDUCTION_REFUND:
+    // A member of staff putting our money into the wallet, with a reason.
+    case WalletEntryDirection.STAFF_CREDIT:
       return true;
     // Everything we charge for. REMITTANCE_OUT is money leaving to the
     // seller's bank, so it is a debit against the wallet even though
@@ -512,6 +514,8 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.GST_WITHHOLDING:
     // A COD credit taken back because the courier reversed the COD.
     case WalletEntryDirection.COD_REVERSAL:
+    // A member of staff taking money out of the wallet, with a reason.
+    case WalletEntryDirection.STAFF_DEBIT:
       return false;
     default: {
       const exhaustive: never = direction;
@@ -574,6 +578,13 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
       return 'COD reversed by courier';
     case WalletEntryDirection.COD_DEDUCTION_REFUND:
       return 'Deduction returned on a reversed COD';
+    // Staff wallet transfers. The reason the member of staff gave is the
+    // entry's note and is shown beneath this label, so the label only
+    // says who moved the money and which way.
+    case WalletEntryDirection.STAFF_CREDIT:
+      return 'Credited by Skydrop';
+    case WalletEntryDirection.STAFF_DEBIT:
+      return 'Debited by Skydrop';
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);

@@ -65,6 +65,11 @@ export interface ApplyEntryInput {
   readonly actorType: ActorType;
   readonly actorId?: string | null;
   readonly fxRateSnapshot?: Prisma.Decimal | null;
+  /**
+   * IDEM-1: the operator form's key (a staff wallet transfer). Stored on
+   * the entry under a unique index, so a replayed form cannot write twice.
+   */
+  readonly idempotencyKey?: string | null;
 }
 
 export interface AppliedEntry {
@@ -94,6 +99,9 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryDirection> = new Set([
   // The tax and fee deducted from a COD the courier has since reversed,
   // given back. Omitting it here would take them from the seller TWICE.
   WalletEntryDirection.COD_DEDUCTION_REFUND,
+  // A member of staff putting our money into a seller's wallet, with a
+  // reason the seller reads. Omitting it here would TAKE the amount.
+  WalletEntryDirection.STAFF_CREDIT,
 ]);
 
 function isCredit(d: WalletEntryDirection): boolean {
@@ -125,6 +133,16 @@ export class WalletService {
       !input.reasonCode
     ) {
       throw new Error(`WALLET_REASON_REQUIRED: reasonCode required on ADJUSTMENT_*`);
+    }
+    // A staff transfer is only ever explained to the seller by its note —
+    // it is the line they read on their ledger. One without is refused
+    // here, not only in the service that writes it.
+    if (
+      (input.direction === WalletEntryDirection.STAFF_CREDIT ||
+        input.direction === WalletEntryDirection.STAFF_DEBIT) &&
+      (input.note ?? '').trim() === ''
+    ) {
+      throw new Error(`WALLET_NOTE_REQUIRED: a staff transfer carries the reason the seller reads`);
     }
 
     // ── Serialize every write to THIS wallet ──────────────────────────
@@ -169,6 +187,7 @@ export class WalletService {
         actorType: input.actorType,
         actorId: input.actorId ?? null,
         fxRateSnapshot: input.fxRateSnapshot ?? null,
+        idempotencyKey: input.idempotencyKey ?? null,
       },
       select: { id: true, runningBalanceAfter: true },
     });

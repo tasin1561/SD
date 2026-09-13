@@ -15,8 +15,18 @@ type TxClient = Prisma.TransactionClient;
 /** Which way the CASH behind a wallet movement changes hands. */
 type Reclassification = 'TO_CAPITAL' | 'TO_SELLER' | 'NONE';
 
+/** One step of making a seller's cash ours: where from, how many units, worth how many rupees. */
+export interface CapitalTake {
+  readonly accountId: string;
+  readonly currency: Currency;
+  readonly units: Prisma.Decimal;
+  readonly inr: Prisma.Decimal;
+  /** A rupee amount taken out of a non-rupee holding. */
+  readonly crossCurrency: boolean;
+}
+
 /** One positive holding: units in the account's currency, and their rupee book value. */
-interface Holding {
+export interface Holding {
   readonly accountId: string;
   readonly currency: Currency;
   readonly units: Prisma.Decimal;
@@ -102,6 +112,12 @@ export class SellerCashAttributionService {
       case WalletEntryDirection.INSTANT_PAY_FEE:
       case WalletEntryDirection.COD_COLLECTION_FEE:
       case WalletEntryDirection.GST_WITHHOLDING:
+      case WalletEntryDirection.STAFF_DEBIT:
+        // STAFF_DEBIT: a member of staff taking money out of a seller's
+        // wallet on purpose (StaffWalletTransferService). Unlike
+        // ADJUSTMENT_DEBIT this is not a correction: the cash behind it
+        // becomes ours, exactly as a charge does — clamped to what they
+        // hold, the rest a receivable.
         return 'TO_CAPITAL';
 
       // Giving it back. The cash was ours; now it is theirs again. The
@@ -123,6 +139,13 @@ export class SellerCashAttributionService {
       case WalletEntryDirection.REMITTANCE_OUT:
       case WalletEntryDirection.REMITTANCE_FX:
       case WalletEntryDirection.COD_REVERSAL:
+      case WalletEntryDirection.STAFF_CREDIT:
+        // STAFF_CREDIT: a member of staff putting our money into a seller's
+        // wallet. The cash moves in the account the operator CHOSE, which
+        // this switch cannot know, so StaffWalletTransferService posts it
+        // itself (`giveFromCapital`) in the same transaction — and only the
+        // part that lifts the wallet above zero; the rest repays a
+        // receivable.
         return 'NONE';
 
       // An operator correcting a wallet. Whether any cash is implicated
@@ -230,29 +253,61 @@ export class SellerCashAttributionService {
       currency?: Currency;
     },
   ): Promise<Prisma.Decimal> {
+    const plan = await this.planTakeToCapital(tx, input);
+    for (const m of plan.moves) {
+      await this.pair(tx, {
+        accountId: m.accountId,
+        currency: m.currency,
+        sellerId: input.sellerId,
+        fromSeller: m.units,
+        // A rupee holding is its own book; anything else carries the rupees
+        // of book that go with it (their average, all of it when all of the
+        // units go).
+        inrValue: m.currency === Currency.INR ? undefined : m.inr,
+        walletEntryId: input.reference,
+        note: m.crossCurrency
+          ? `${input.note} — ${m.units.toFixed(2)} ${m.currency} worth ₹${m.inr.toFixed(2)} ` +
+            '(at their average rate in this account)'
+          : input.note,
+      });
+    }
+    return plan.taken;
+  }
+
+  /**
+   * What `takeToCapital` WOULD move, without moving it — the same walk
+   * over the same holdings, so a preview and the real write cannot come to
+   * disagree about which account the money leaves from.
+   *
+   * `taken` is in `currency` (rupees for a rupee amount): never more than
+   * the seller holds, the rest being a receivable.
+   */
+  async planTakeToCapital(
+    tx: TxClient,
+    input: { sellerId: string; amount: Prisma.Decimal; currency?: Currency },
+  ): Promise<{ moves: CapitalTake[]; taken: Prisma.Decimal }> {
     const currency = input.currency ?? Currency.INR;
-    if (input.amount.lessThanOrEqualTo(0)) return ZERO;
+    if (input.amount.lessThanOrEqualTo(0)) return { moves: [], taken: ZERO };
     const holdings = await this.holdings(tx, input.sellerId);
+    const moves: CapitalTake[] = [];
     let remaining = input.amount;
 
     for (const h of holdings.filter((x) => x.currency === currency)) {
       if (remaining.lessThanOrEqualTo(0)) break;
       const take = h.units.lessThan(remaining) ? h.units : remaining;
-      await this.pair(tx, {
+      moves.push({
         accountId: h.accountId,
         currency,
-        sellerId: input.sellerId,
-        fromSeller: take,
+        units: take,
         // A non-rupee amount taken from its own currency: the book goes at
         // their average, all of it when all of the units go.
-        inrValue:
+        inr:
           currency === Currency.INR
-            ? undefined
+            ? take
             : take.equals(h.units)
               ? h.book
               : take.mul(h.book).div(h.units).toDecimalPlaces(2),
-        walletEntryId: input.reference,
-        note: input.note,
+        crossCurrency: false,
       });
       remaining = remaining.sub(take);
     }
@@ -288,21 +343,50 @@ export class SellerCashAttributionService {
           }
         }
         if (units.lessThanOrEqualTo(0)) continue;
-        await this.pair(tx, {
+        moves.push({
           accountId: h.accountId,
           currency: h.currency,
-          sellerId: input.sellerId,
-          fromSeller: units,
-          inrValue: moved,
-          walletEntryId: input.reference,
-          note:
-            `${input.note} — ${units.toFixed(2)} ${h.currency} worth ₹${moved.toFixed(2)} ` +
-            '(at their average rate in this account)',
+          units,
+          inr: moved,
+          crossCurrency: true,
         });
         remaining = remaining.sub(moved);
       }
     }
-    return input.amount.sub(remaining.lessThan(0) ? ZERO : remaining);
+    return { moves, taken: input.amount.sub(remaining.lessThan(0) ? ZERO : remaining) };
+  }
+
+  /**
+   * Make `amount` of OUR rupees in `accountId` the seller's — a zero-sum
+   * pair, like `front`, for a staff wallet credit. The caller passes only
+   * the part that lifts the wallet above zero (`debtSplit`), holds the
+   * seller's WALLET lock and the account's reconcile key, and has checked
+   * that capital there covers it.
+   */
+  async giveFromCapital(
+    tx: TxClient,
+    input: {
+      sellerId: string;
+      accountId: string;
+      amount: Prisma.Decimal;
+      reference: string;
+      note: string;
+    },
+  ): Promise<void> {
+    if (input.amount.lessThanOrEqualTo(0)) return;
+    await this.pair(tx, {
+      accountId: input.accountId,
+      currency: Currency.INR,
+      sellerId: input.sellerId,
+      fromSeller: input.amount.neg(),
+      walletEntryId: input.reference,
+      note: input.note,
+    });
+  }
+
+  /** Every positive holding the seller has, with its rupee book value — the most valuable first. */
+  async sellerHoldings(tx: TxClient, sellerId: string): Promise<readonly Holding[]> {
+    return this.holdings(tx, sellerId);
   }
 
   /** What this seller holds in `currency` across every live account, and where most of it is. */
