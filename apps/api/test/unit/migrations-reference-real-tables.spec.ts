@@ -79,7 +79,27 @@ function created(sql: string): string[] {
   ];
 }
 
+/**
+ * Names a migration defines for itself in a `WITH` clause. They are read
+ * with FROM/JOIN exactly like tables, and exist for that statement only.
+ */
+function cteNames(sql: string): string[] {
+  return Array.from(
+    sql.matchAll(new RegExp(String.raw`(?:\bWITH|,)\s+(?:RECURSIVE\s+)?${ident}\s+AS\s*\(`, 'gi')),
+    (m) => m[1] as string,
+  );
+}
+
+/**
+ * `EXTRACT(YEAR FROM created_at)`, `SUBSTRING(x FROM 2)`, `TRIM(BOTH FROM x)`
+ * — a FROM inside a function call names a value, not a table.
+ */
+function withoutFunctionFroms(sql: string): string {
+  return sql.replace(/\b(EXTRACT|SUBSTRING|TRIM|OVERLAY|POSITION)\s*\(([^()]*)\)/gi, '$1()');
+}
+
 function referenced(sql: string): string[] {
+  sql = withoutFunctionFroms(sql);
   const out: string[] = [];
   for (const kw of ['INSERT\\s+INTO', 'UPDATE', 'DELETE\\s+FROM', 'ALTER\\s+TABLE']) {
     for (const m of sql.matchAll(new RegExp(String.raw`\b${kw}\s+(?:ONLY\s+)?${ident}`, 'gi'))) {
@@ -93,6 +113,19 @@ function referenced(sql: string): string[] {
   }
   return out;
 }
+
+describe('the scanner itself', () => {
+  it('does not read a FROM inside EXTRACT/SUBSTRING as a table', () => {
+    expect(referenced('SELECT EXTRACT(YEAR FROM created_at) FROM "tickets"')).toEqual(['tickets']);
+  });
+
+  it('knows a WITH name is local to the migration, and still flags a real unknown', () => {
+    const sql =
+      'WITH left_stock AS (SELECT 1 FROM stock_movements), single_source AS (SELECT 1 FROM left_stock) UPDATE shipment_items SET x = 1 FROM single_source JOIN no_such_table n ON true';
+    expect(cteNames(sql)).toEqual(['left_stock', 'single_source']);
+    expect(referenced(sql)).toContain('no_such_table');
+  });
+});
 
 describe('every migration references tables that exist by then', () => {
   const dirs = migrationDirs();
@@ -119,12 +152,13 @@ describe('every migration references tables that exist by then', () => {
       // Everything this migration creates counts as existing for its own
       // later statements — a CREATE TABLE then INSERT INTO is normal.
       for (const t of created(sql)) exists.add(t.toLowerCase());
+      const local = new Set(cteNames(sql).map((t) => t.toLowerCase()));
 
       for (const t of referenced(sql)) {
         const name = t.toLowerCase();
         // Aliases and CTEs read like tables; only flag names that look
         // like real tables (snake_case, plural-ish) and are unknown.
-        if (exists.has(name)) continue;
+        if (exists.has(name) || local.has(name)) continue;
         if (!name.includes('_')) continue; // `r`, `p`, `existing` — aliases
         problems.push(`${dir}: ${t}`);
       }
