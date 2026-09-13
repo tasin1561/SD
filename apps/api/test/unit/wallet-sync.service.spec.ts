@@ -15,6 +15,7 @@ function make(
     pageThrows?: Error;
     accounts?: Array<{ id: string; label: string }>;
     rangeApplied?: boolean;
+    window?: 'LAST_90_DAYS' | 'CUSTOM_RANGE' | 'PAGE_DEFAULT' | 'UNKNOWN';
     periodFrom?: string;
     periodTo?: string;
     rowsRead?: number;
@@ -51,7 +52,11 @@ function make(
 
   const fetch = jest.fn(async () => {
     if (opts.pageThrows) throw opts.pageThrows;
-    return { bytes: Buffer.from('a ledger file'), rangeApplied: opts.rangeApplied ?? true };
+    return {
+      bytes: Buffer.from('a ledger file'),
+      rangeApplied: opts.rangeApplied ?? true,
+      window: opts.window ?? 'LAST_90_DAYS',
+    };
   });
   const fetcher = { fetch } as unknown as WalletLedgerFetcherService;
 
@@ -273,6 +278,24 @@ describe('the recharge reconciliation runs alongside the ledger', () => {
     const { svc, reconcile } = make({});
     await svc.sync();
     expect(reconcile).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the reconcile each export sum WITH the window its file covered', async () => {
+    // The page's stated debit is compared against this sum, and the two
+    // only mean the same thing over the same window (13 Sep 2026: a
+    // ninety-day export against a default-window page raised HIGH nightly).
+    const { svc, reconcile } = make({ window: 'LAST_90_DAYS' });
+    const summary = await svc.sync();
+    const passed = (reconcile.mock.calls[0] as unknown as [string, Map<string, unknown>])[1];
+    expect(passed.get('acct-1')).toEqual({ sumInr: '100.00', window: 'LAST_90_DAYS' });
+    expect(summary.accounts[0]?.exportWindow).toBe('LAST_90_DAYS');
+  });
+
+  it('says so when the export fell back to the page default', async () => {
+    const { svc, reconcile } = make({ rangeApplied: false, window: 'PAGE_DEFAULT' });
+    await svc.sync();
+    const passed = (reconcile.mock.calls[0] as unknown as [string, Map<string, unknown>])[1];
+    expect(passed.get('acct-1')).toEqual({ sumInr: '100.00', window: 'PAGE_DEFAULT' });
   });
 
   it('a reconciliation failure does NOT fail the ledger import', async () => {

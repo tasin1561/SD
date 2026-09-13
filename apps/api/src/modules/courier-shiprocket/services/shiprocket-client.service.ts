@@ -18,7 +18,7 @@ import {
   type ShiprocketServiceabilityResponse,
   type ShiprocketTrackingResponse,
 } from '../types/shiprocket.types';
-import { toIsoWithIst } from '../../tracking-events/services/courier-time';
+import { parseIstTimestamp } from '../../tracking-events/services/courier-time';
 import type { CourierOption } from '../../courier-shared/services/courier-option-selection.service';
 import { CourierWriteGuardService } from '../../courier-shared/services/courier-write-guard.service';
 import { ShiprocketHttpService } from './shiprocket-http.service';
@@ -516,23 +516,38 @@ export class ShiprocketClientService {
           courierAccountId,
         });
         const activities = res.tracking_data?.shipment_track_activities ?? [];
-        out.push({
-          awbNumber: awb,
-          scans: activities
-            .filter((a) => typeof a.status === 'string' || typeof a['sr-status-label'] === 'string')
-            .map((a) => ({
+        let unreadable = 0;
+        const scans = activities.flatMap((a) => {
+          if (typeof a.status !== 'string' && typeof a['sr-status-label'] !== 'string') return [];
+          // Their timestamps carry no zone and are IST, and the webhook's
+          // arrive DAY-first — parsed by the one helper both paths share.
+          // A scan whose time cannot be read is DROPPED, never stamped
+          // with now (TRK-3): an empty date used to become '' and then an
+          // Invalid Date downstream.
+          const eventAtIso = parseIstTimestamp(a.date);
+          if (eventAtIso === null) {
+            unreadable += 1;
+            return [];
+          }
+          return [
+            {
               awbNumber: awb,
               // Prefer their normalised label over the free-text
               // activity: the label is the one they keep stable.
               rawStatus: a['sr-status-label'] ?? a.status ?? '',
-              // Their timestamps carry no zone and are IST — the same
-              // trap Delhivery's had, and the same shared helper fixes
-              // it rather than a second copy of the parsing.
-              eventAtIso: toIsoWithIst(a.date ?? ''),
+              eventAtIso,
               locationName: a.location ?? null,
               description: a.activity ?? null,
-            })),
+            },
+          ];
         });
+        if (unreadable > 0) {
+          this.logger.warn(
+            { awb, unreadable },
+            'Shiprocket tracking returned scans with an unreadable date; they were skipped',
+          );
+        }
+        out.push({ awbNumber: awb, scans });
       } catch (err) {
         // One AWB's failure must not lose the rest of the batch.
         this.logger.warn(

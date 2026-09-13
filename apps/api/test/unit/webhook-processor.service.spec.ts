@@ -737,6 +737,29 @@ describe('WebhookProcessorService.process — terminal-ignore branches', () => {
     expect(out.kind).toBe('PARSE_FAILED');
     expect(state.webhooks[0]?.status).toBe(WebhookStatus.IGNORED);
   });
+
+  it('PARSE_FAILED, not a crashed job: a Shiprocket push whose time cannot be read', async () => {
+    // 13 Sep 2026: an unreadable time reached Prisma as `Invalid Date`,
+    // the job failed until BullMQ gave up, and the scan was lost with the
+    // webhook stuck at RECEIVED. It is now filed like any other body we
+    // cannot read — raw body kept, nothing appended. `etd` is present and
+    // readable, and must NOT be used: it is an estimated delivery date.
+    const body = {
+      awb: AWB,
+      current_status: 'REACHED AT DESTINATION HUB',
+      current_timestamp: '31 09 2026 14:52:06',
+      etd: '2026-09-17 23:59:59',
+      scans: [{ date: 'not a date', activity: 'x' }],
+    };
+    const { svc, state, mocks } = makeProcessor({
+      webhooks: [defaultWebhook({ rawBody: JSON.stringify(body), parsedBody: body })],
+    });
+    const out = await svc.process(WH_ID);
+    expect(out.kind).toBe('PARSE_FAILED');
+    expect(state.webhooks[0]?.status).toBe(WebhookStatus.IGNORED);
+    expect(mocks.fakeAppend.append).not.toHaveBeenCalled();
+    expect(mocks.orderWrite.transitionStatus).not.toHaveBeenCalled();
+  });
 });
 
 describe('WebhookProcessorService.process — transitionStatus 409 race', () => {

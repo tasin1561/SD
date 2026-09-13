@@ -191,7 +191,11 @@ export class WebhookProcessorService {
     // ingest, or the ingester chose not to store the parse).
     const parsedRoot = wh.parsedBody ?? safeJsonParse(wh.rawBody);
     const parsed = parseScanPayload(parsedRoot);
-    if (parsed === null) {
+    // The parser refuses an unreadable time, but this is the last stop
+    // before Prisma: an Invalid Date here fails the job and loses the
+    // scan (13 Sep 2026), while PARSE_FAILED keeps the raw body for a
+    // person. Belt and braces for any future envelope branch.
+    if (parsed === null || Number.isNaN(new Date(parsed.eventAtIso).getTime())) {
       await this.markIgnored(webhookId, 'PARSE_FAILED');
       return { kind: 'PARSE_FAILED', webhookId };
     }

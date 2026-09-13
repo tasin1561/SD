@@ -9,7 +9,11 @@ import {
   WalletImportService,
   type WalletImportResult,
 } from '../../wallet-ledger/services/wallet-import.service';
-import { CourierWalletReconcileService } from './courier-wallet-reconcile.service';
+import {
+  CourierWalletReconcileService,
+  type WalletExportSum,
+} from './courier-wallet-reconcile.service';
+import type { WalletWindow } from '../pages/wallet-date-range';
 import { raiseLedgerFindings } from './ledger-findings';
 
 const SETTING_ENABLED = 'courier.wallet_sync_enabled';
@@ -45,6 +49,8 @@ export interface WalletSyncAccountResult {
   readonly error: string | null;
   /** Whether their date picker took the window we asked for. */
   readonly rangeApplied: boolean | null;
+  /** Which window the export covers — the balance line must match it. */
+  readonly exportWindow: WalletWindow | null;
   /** How many days the file we got back actually spans. */
   readonly coveredDays: number | null;
 }
@@ -131,7 +137,11 @@ export class WalletSyncService {
 
     for (const account of accounts) {
       try {
-        const { bytes: file, rangeApplied } = await this.fetcher.fetch(account.id, from, now);
+        const {
+          bytes: file,
+          rangeApplied,
+          window: exportWindow,
+        } = await this.fetcher.fetch(account.id, from, now);
         // dryRun is the inverse of the write switch: in SHADOW it parses
         // the real file and reports exactly what it WOULD change.
         const result = await this.importer.importDelhiveryWallet(file, null, {
@@ -148,6 +158,7 @@ export class WalletSyncService {
           result,
           error: null,
           rangeApplied,
+          exportWindow,
           coveredDays,
         });
         await this.reportCoverage(account, windowDays, coveredDays, rangeApplied, result);
@@ -182,6 +193,7 @@ export class WalletSyncService {
           result: null,
           error: message,
           rangeApplied: null,
+          exportWindow: null,
           coveredDays: null,
         });
 
@@ -253,10 +265,16 @@ export class WalletSyncService {
       // What each account's export summed to, so the reconcile can hold
       // it against the figure their own page states for the same
       // window. Two independent readings of one ledger: if the file is
-      // short, its sum falls below theirs.
-      const exportSums = new Map<string, string>();
+      // short, its sum falls below theirs. The WINDOW travels with the
+      // sum, so the reconcile compares only readings of the same range.
+      const exportSums = new Map<string, WalletExportSum>();
       for (const r of results) {
-        if (r.result !== null) exportSums.set(r.courierAccountId, r.result.sumInr);
+        if (r.result !== null) {
+          exportSums.set(r.courierAccountId, {
+            sumInr: r.result.sumInr,
+            window: r.exportWindow ?? 'UNKNOWN',
+          });
+        }
       }
       const recon = await this.walletReconcile.reconcile('delhivery', exportSums);
       this.logger.log(recon, 'Courier wallet reconciliation done');

@@ -242,6 +242,40 @@ describe('ShiprocketClientService — stub mode', () => {
   });
 });
 
+describe('ShiprocketClientService.fetchTracking — their dates (TRK-3)', () => {
+  it('reads their IST scan dates, and drops an unreadable one rather than stamping now', async () => {
+    const sut = makeSut({
+      responses: {
+        'courier/track/awb': {
+          tracking_data: {
+            shipment_track_activities: [
+              {
+                date: '2026-09-13 14:51:54',
+                'sr-status-label': 'REACHED AT DESTINATION HUB',
+                activity: 'Pending - Shipment Received at Facility',
+                location: 'Bishalgarh_Raghunathpur_D (Tripura)',
+              },
+              // An empty date used to become '' and then an Invalid Date
+              // downstream — the lookup path's toISOString() threw on it.
+              { date: '', 'sr-status-label': 'IN TRANSIT' },
+              // Day-first, the shape their webhook uses: 13 September.
+              { date: '13 09 2026 09:00:00', 'sr-status-label': 'PICKED UP' },
+            ],
+          },
+        },
+      },
+    });
+    const out = await sut.svc.fetchTracking(['19041955688306'], 'acct-1');
+    expect(out[0]?.scans.map((s) => s.eventAtIso)).toEqual([
+      '2026-09-13T14:51:54+05:30',
+      '2026-09-13T09:00:00+05:30',
+    ]);
+    for (const s of out[0]?.scans ?? []) {
+      expect(Number.isNaN(new Date(s.eventAtIso).getTime())).toBe(false);
+    }
+  });
+});
+
 describe('ShiprocketClientService.checkServiceability', () => {
   it('a list of BLOCKED couriers is still a no', async () => {
     const sut = makeSut({

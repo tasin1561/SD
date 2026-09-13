@@ -1,5 +1,5 @@
 import { DeliveryFailureReason } from '@skydrop/db';
-import { toIsoWithIst } from '../../tracking-events/services/courier-time';
+import { parseIstTimestamp, toIsoWithIst } from '../../tracking-events/services/courier-time';
 
 /**
  * Parsed shape the M10 processor needs from a courier webhook body —
@@ -96,18 +96,26 @@ export function parseScanPayload(parsedBody: unknown): ParsedScanPayload | null 
   // and the webhook is filed as PARSE_FAILED — a delivery scan silently
   // discarded, which is the worst way for this to be wrong.
   //
-  // Their timestamps carry no zone and are IST, the same trap
-  // Delhivery's had; the shared helper fixes both.
+  // Their timestamps carry no zone and are IST, and the push's own is
+  // DAY-first (`13 09 2026 14:52:06`) — see parseIstTimestamp.
+  //
+  // WHEN, in order: the push's `current_timestamp` (when THEY say the
+  // status changed), else the latest scan's `date`. Never `etd` — that is
+  // their ESTIMATED delivery date (`2026-09-17 23:59:59`), a promise about
+  // the future, and stamping a scan with it put the event days ahead of
+  // itself. And never `now()` (TRK-3): a push whose time cannot be read is
+  // filed PARSE_FAILED with its raw body kept, exactly as the other two
+  // envelopes do, rather than handed to Prisma as an Invalid Date (which
+  // failed the job and dropped the scan, 13 Sep 2026).
   const srAwb = pickString(b, ['awb']);
   const srStatus = pickString(b, ['current_status', 'shipment_status']);
   if (srAwb !== null && srStatus !== null) {
     const scans = Array.isArray(b['scans']) ? (b['scans'] as unknown[]) : [];
     const latest = scans.length > 0 ? scans[scans.length - 1] : null;
     const scan = isObject(latest) ? (latest as Record<string, unknown>) : null;
-    const stamped =
-      pickString(b, ['current_timestamp', 'etd']) ??
-      (scan === null ? null : pickString(scan, ['date'])) ??
-      new Date().toISOString();
+    const eventAtIso =
+      parseIstTimestamp(pickString(b, ['current_timestamp'])) ?? latestScanTime(scans);
+    if (eventAtIso === null) return null;
     return {
       awbNumber: srAwb,
       rawStatus: srStatus,
@@ -116,7 +124,7 @@ export function parseScanPayload(parsedBody: unknown): ParsedScanPayload | null 
       // depend on a field they never send.
       statusType: null,
       nslCode: null,
-      eventAtIso: toIsoWithIst(stamped),
+      eventAtIso,
       locationName: scan === null ? null : pickString(scan, ['location']),
       locationCity: null,
       locationPincode: null,
@@ -210,6 +218,25 @@ export function mapFailureReason(raw: string | null): DeliveryFailureReason | nu
     if (upper.includes(phrase)) return reason;
   }
   return DeliveryFailureReason.OTHER;
+}
+
+/**
+ * The latest readable scan time in a Shiprocket `scans` list, or null.
+ *
+ * By parsed time rather than by position: their list is oldest-first on
+ * every push seen so far, but picking the LAST element's date would let a
+ * reordered or partly unreadable list stamp a push with an older scan.
+ */
+function latestScanTime(scans: readonly unknown[]): string | null {
+  let best: { iso: string; ms: number } | null = null;
+  for (const s of scans) {
+    if (!isObject(s)) continue;
+    const iso = parseIstTimestamp(pickString(s, ['date']));
+    if (iso === null) continue;
+    const ms = Date.parse(iso);
+    if (best === null || ms > best.ms) best = { iso, ms };
+  }
+  return best === null ? null : best.iso;
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WalletLedgerPage } from '../pages/wallet-ledger.page';
+import type { WalletWindow } from '../pages/wallet-date-range';
 import { PortalSessionService } from './portal-session.service';
 
 /**
@@ -20,12 +21,12 @@ export class WalletLedgerFetcherService {
     courierAccountId: string,
     from: Date,
     to: Date,
-  ): Promise<{ bytes: Buffer; rangeApplied: boolean }> {
+  ): Promise<{ bytes: Buffer; rangeApplied: boolean; window: WalletWindow }> {
     // Signed in AS THAT ACCOUNT's company — each has its own wallet, and
     // reading the wrong one would import another company's costs.
     const page = await this.session.page(courierAccountId);
     try {
-      const { bytes, rangeApplied } = await new WalletLedgerPage(page).download(from, to);
+      const { bytes, rangeApplied, window } = await new WalletLedgerPage(page).download(from, to);
       this.logger.log(
         {
           courierAccountId,
@@ -35,10 +36,11 @@ export class WalletLedgerFetcherService {
           // False means the export is whatever range their page defaults
           // to, not the one we asked for.
           rangeApplied,
+          window,
         },
         'Downloaded the Delhivery wallet ledger',
       );
-      return { bytes, rangeApplied };
+      return { bytes, rangeApplied, window };
     } finally {
       await page.close().catch(() => undefined);
     }

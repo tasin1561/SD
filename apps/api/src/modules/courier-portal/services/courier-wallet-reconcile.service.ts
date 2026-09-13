@@ -14,6 +14,13 @@ import {
   type PortalRecharge,
   type PortalWalletBalance,
 } from '../pages/wallet-recharges.page';
+import { sameWalletWindow, type WalletWindow } from '../pages/wallet-date-range';
+
+/** What one account's wallet export summed to, and over which window. */
+export interface WalletExportSum {
+  readonly sumInr: string;
+  readonly window: WalletWindow;
+}
 
 export interface WalletReconcileResult {
   readonly accounts: number;
@@ -45,6 +52,20 @@ const courierName = (code: string): string => COURIER_NAMES[code] ?? code;
  * account is an order of magnitude larger.
  */
 const ROUNDING_TOLERANCE_INR = 1;
+
+/** A window as a person reads it in an issue. */
+function windowName(w: WalletWindow): string {
+  switch (w) {
+    case 'LAST_90_DAYS':
+      return 'their "Last 90 Days" range';
+    case 'CUSTOM_RANGE':
+      return 'a custom date range';
+    case 'PAGE_DEFAULT':
+      return "the page's default range";
+    case 'UNKNOWN':
+      return 'a range we could not confirm';
+  }
+}
 
 /**
  * Does every rupee in the courier's wallet match a rupee that left ours?
@@ -103,9 +124,10 @@ export class CourierWalletReconcileService {
      * and downloading the file a second time to check it against the
      * page would be a second live request for a number we are holding.
      * Absent when the reconcile runs on its own, and the check simply
-     * does not run — a missing input is not a finding.
+     * does not run — a missing input is not a finding. Each sum carries
+     * the window its file covered; see checkBalance.
      */
-    exportSums?: ReadonlyMap<string, string>,
+    exportSums?: ReadonlyMap<string, WalletExportSum>,
   ): Promise<WalletReconcileResult> {
     const accounts = await this.prisma.client.courierAccount.findMany({
       where: { courier: { code: courierCode }, deletedAt: null },
@@ -181,7 +203,7 @@ export class CourierWalletReconcileService {
     courierCode: string,
     accountId: string,
     label: string,
-    exportSumInr?: string,
+    exportSum?: WalletExportSum,
   ): Promise<Omit<WalletReconcileResult, 'accounts' | 'paidButNeverArrived'>> {
     const page = await this.session.page(accountId);
     const portal = new WalletRechargesPage(page);
@@ -194,7 +216,7 @@ export class CourierWalletReconcileService {
         label,
         recharges,
         balance,
-        exportSumInr,
+        exportSum,
       );
     } finally {
       await page.close().catch(() => undefined);
@@ -218,7 +240,7 @@ export class CourierWalletReconcileService {
     label: string,
     recharges: readonly PortalRecharge[],
     balance: PortalWalletBalance | null,
-    exportSumInr?: string,
+    exportSum?: WalletExportSum,
   ): Promise<Omit<WalletReconcileResult, 'accounts' | 'paidButNeverArrived'>> {
     {
       let newlySeen = 0;
@@ -292,7 +314,7 @@ export class CourierWalletReconcileService {
       */
       let lowBalance = 0;
       try {
-        lowBalance = await this.checkBalance(courierCode, accountId, label, balance, exportSumInr);
+        lowBalance = await this.checkBalance(courierCode, accountId, label, balance, exportSum);
       } catch (err) {
         this.logger.error(
           { accountId, err: err instanceof Error ? err.message : String(err) },
@@ -493,16 +515,12 @@ export class CourierWalletReconcileService {
     courierCode: string,
     accountId: string,
     label: string,
-    balance: {
-      balanceInr: string;
-      /** THE SELECTED WINDOW's totals, not all-time — see the long note
-       *  below. Stored because they cross-check the export. */
-      totalCreditInr: string | null;
-      totalDebitInr: string | null;
-    } | null,
-    /** What the wallet export for the same window summed to, when this
+    /** THE SELECTED WINDOW's totals, not all-time — see the long note
+     *  below. Stored because they cross-check the export. */
+    balance: PortalWalletBalance | null,
+    /** What the wallet export summed to and over which window, when this
      *  run had one. Absent on a reconcile that ran without an import. */
-    exportSumInr?: string,
+    exportSum?: WalletExportSum,
   ): Promise<number> {
     if (balance === null) return 0;
 
@@ -575,41 +593,90 @@ export class CourierWalletReconcileService {
       A rupee of tolerance, because their page rounds for display and
       the file does not — every capture above differs by exactly one
       paisa, which is the rounding and not a missing row.
+
+      ── ONLY OVER THE SAME WINDOW (13 Sep 2026) ──────────────────────
+
+      "Each debit equals that night's export sum" held because both
+      readings used the page's DEFAULT range. COST-1 then moved the export
+      to "Last 90 Days" while this balance line kept reading the default,
+      and the check raised HIGH nightly — ₹1,07,303.22 stated against
+      ₹12,28,010.68 exported — about two different windows. The balance
+      read now selects the same preset, both sides say which window they
+      covered, and the comparison runs only when those agree. When they do
+      not it is NOT dropped silently: a MEDIUM issue says it could not run
+      and why, and any open disagreement is left open rather than cleared
+      by a comparison that never happened.
     */
     const statedKey = `courier-wallet-totals-disagree:${accountId}`;
-    const exportSum = exportSumInr === undefined ? null : new Prisma.Decimal(exportSumInr);
-    if (balance.totalDebitInr !== null && exportSum !== null) {
+    const uncheckedKey = `courier-wallet-totals-unchecked:${accountId}`;
+    if (balance.totalDebitInr !== null && exportSum !== undefined) {
       const stated = new Prisma.Decimal(balance.totalDebitInr);
-      const gap = stated.minus(exportSum).abs();
-      if (gap.greaterThan(ROUNDING_TOLERANCE_INR)) {
+      const exported = new Prisma.Decimal(exportSum.sumInr);
+      const pageWindow = balance.totalsWindow;
+      const fileWindow = exportSum.window;
+
+      if (!sameWalletWindow(pageWindow, fileWindow)) {
         await this.issues.raise({
-          kind: SystemIssueKind.MONEY,
-          severity: SystemIssueSeverity.HIGH,
-          title: `${label}'s wallet export does not match their own page`,
+          kind: SystemIssueKind.COURIER_COST_SYNC,
+          severity: SystemIssueSeverity.MEDIUM,
+          title: `${label}'s wallet export could not be checked against their own page`,
           detail:
-            `Their Finances page states ₹${stated.toFixed(2)} of debits for the window it is ` +
-            `showing, but the export we downloaded for the same window sums to ` +
-            `₹${exportSum.toFixed(2)} — a difference of ₹${gap.toFixed(2)}.\n\n` +
-            'The two are independent readings of the same ledger, so they should agree. A ' +
-            'shortfall in the file means rows are missing from it — a page we did not reach, a ' +
-            'filter excluding rows, or a truncated download — and every courier cost imported ' +
-            'from that file is therefore incomplete.',
+            `Their Finances page states ₹${stated.toFixed(2)} of debits over ` +
+            `${windowName(pageWindow)}, and the export we downloaded sums to ` +
+            `₹${exported.toFixed(2)} over ${windowName(fileWindow)}. Those are not the same ` +
+            'window, so the two figures say nothing about each other and were NOT compared.\n\n' +
+            'This check is what notices a truncated export. Until both readings use the same ' +
+            'range it is not running — the date picker on their Finances page has probably ' +
+            'changed shape for one of the two readers. Any open "does not match their own ' +
+            'page" issue is left as it is until a same-window comparison settles it.',
           source: 'CourierWalletReconcileService',
-          dedupeKey: statedKey,
+          dedupeKey: uncheckedKey,
           metadata: {
             courierAccountId: accountId,
+            reason: 'WINDOW_MISMATCH',
+            pageWindow,
+            exportWindow: fileWindow,
             statedWindowDebitInr: stated.toFixed(2),
-            exportSumInr: exportSum.toFixed(2),
-            differenceInr: gap.toFixed(2),
+            exportSumInr: exported.toFixed(2),
           },
         });
       } else {
-        // Cleared as soon as they agree again — an issue that can only
-        // ever open is one people stop reading.
         await this.issues.resolveByKey(
-          statedKey,
-          'The export matches their stated window debit again',
+          uncheckedKey,
+          'The page and the export were read over the same window again',
         );
+        const gap = stated.minus(exported).abs();
+        if (gap.greaterThan(ROUNDING_TOLERANCE_INR)) {
+          await this.issues.raise({
+            kind: SystemIssueKind.MONEY,
+            severity: SystemIssueSeverity.HIGH,
+            title: `${label}'s wallet export does not match their own page`,
+            detail:
+              `Their Finances page states ₹${stated.toFixed(2)} of debits over ` +
+              `${windowName(pageWindow)}, but the export we downloaded for the same window ` +
+              `sums to ₹${exported.toFixed(2)} — a difference of ₹${gap.toFixed(2)}.\n\n` +
+              'The two are independent readings of the same ledger, so they should agree. A ' +
+              'shortfall in the file means rows are missing from it — a page we did not reach, ' +
+              'a filter excluding rows, or a truncated download — and every courier cost ' +
+              'imported from that file is therefore incomplete.',
+            source: 'CourierWalletReconcileService',
+            dedupeKey: statedKey,
+            metadata: {
+              courierAccountId: accountId,
+              window: pageWindow,
+              statedWindowDebitInr: stated.toFixed(2),
+              exportSumInr: exported.toFixed(2),
+              differenceInr: gap.toFixed(2),
+            },
+          });
+        } else {
+          // Cleared as soon as they agree again — an issue that can only
+          // ever open is one people stop reading.
+          await this.issues.resolveByKey(
+            statedKey,
+            'The export matches their stated window debit again',
+          );
+        }
       }
     }
 

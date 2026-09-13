@@ -1,10 +1,13 @@
 import type { Page } from 'playwright';
 import { gotoPortal } from './navigate';
+import { applyLast90DaysPreset, type WalletWindow } from './wallet-date-range';
 
 export interface PortalWalletBalance {
   readonly balanceInr: string;
   readonly totalCreditInr: string | null;
   readonly totalDebitInr: string | null;
+  /** The date window the two totals above cover (the balance is "now"). */
+  readonly totalsWindow: WalletWindow;
 }
 
 export interface PortalRecharge {
@@ -86,6 +89,13 @@ export class WalletRechargesPage {
   async readBalance(): Promise<PortalWalletBalance | null> {
     await gotoPortal(this.page, `${this.origin}${FINANCES}`);
     await this.settle();
+    // The totals are for the SELECTED window, and they are compared with
+    // the wallet export — which is taken over "Last 90 Days". Read on the
+    // page default instead, ₹1,07,303.22 was held against a ninety-day
+    // file summing to ₹12,28,010.68 and raised HIGH every night (13 Sep
+    // 2026). So choose the same preset first, and say which window was
+    // read so the comparison can refuse two different ones.
+    const totalsWindow = await this.selectLast90Days();
     const text = (await this.page.locator('body').innerText()).replace(/\s+/g, ' ');
 
     const balance = /Current Balance\s*₹\s?([\d,]+(?:\.\d{1,2})?)/i.exec(text)?.[1];
@@ -96,7 +106,27 @@ export class WalletRechargesPage {
         /Total Credit\s*₹\s?([\d,]+(?:\.\d{1,2})?)/i.exec(text)?.[1]?.replace(/,/g, '') ?? null,
       totalDebitInr:
         /Total Debit\s*₹\s?([\d,]+(?:\.\d{1,2})?)/i.exec(text)?.[1]?.replace(/,/g, '') ?? null,
+      totalsWindow,
     };
+  }
+
+  /** The export's window, on this page; which one the totals now cover. */
+  private async selectLast90Days(): Promise<WalletWindow> {
+    try {
+      const outcome = await applyLast90DaysPreset(this.page);
+      if (outcome === 'APPLIED') {
+        await this.settle();
+        return 'LAST_90_DAYS';
+      }
+      if (outcome === 'NO_PRESET') {
+        // The panel was left open; close it so the page reads as it was.
+        await this.page.keyboard.press('Escape').catch(() => undefined);
+      }
+      return 'PAGE_DEFAULT';
+    } catch {
+      // Part-way through a click: which range the page shows is not known.
+      return 'UNKNOWN';
+    }
   }
 
   /** Every recharge their list is showing, across every page. */

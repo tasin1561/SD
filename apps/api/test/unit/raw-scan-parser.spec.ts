@@ -410,11 +410,10 @@ describe('parseScanPayload — Shiprocket', () => {
     // The LATEST scan describes where the parcel is now.
     expect(parsed?.description).toBe('Delivered to consignee');
     expect(parsed?.locationName).toBe('Bengaluru');
-    // Their timestamps carry no zone and are IST — the same trap
-    // Delhivery's had, stamped by the same shared helper. The push's
-    // own timestamp wins over the last scan's: it is when THEY say the
+    // Their timestamps carry no zone and are IST. The push's own
+    // timestamp wins over the last scan's: it is when THEY say the
     // status changed.
-    expect(parsed?.eventAtIso).toBe('2026-08-29 14:32:00+05:30');
+    expect(parsed?.eventAtIso).toBe('2026-08-29T14:32:00+05:30');
     expect(new Date(parsed?.eventAtIso ?? '').toISOString()).toBe('2026-08-29T09:02:00.000Z');
   });
 
@@ -434,10 +433,95 @@ describe('parseScanPayload — Shiprocket', () => {
   });
 
   it('still parses when they send no scan history at all', () => {
-    const parsed = parseScanPayload({ awb: 'SR1', current_status: 'In Transit' });
+    const parsed = parseScanPayload({
+      awb: 'SR1',
+      current_status: 'In Transit',
+      current_timestamp: '13 09 2026 14:52:06',
+      scans: null,
+    });
     // A status push with no history is a normal push, not a broken one.
     expect(parsed).not.toBeNull();
     expect(parsed?.awbNumber).toBe('SR1');
+  });
+
+  /**
+   * The formats production actually sends (every Shiprocket push stored
+   * on 13 Sep 2026): `current_timestamp` DAY-first with spaces in 810 of
+   * 811, year-first in one; every scan `date` year-first. V8 reads the
+   * spaced numeric form MONTH-first, so `11 09 2026` was stored as
+   * 9 November and `13 09 2026` became an Invalid Date that failed the
+   * job and dropped the scan.
+   */
+  describe('the dates they really send (13 Sep 2026)', () => {
+    const push = (over: Record<string, unknown>): unknown => ({
+      awb: '19041955688306',
+      current_status: 'REACHED AT DESTINATION HUB',
+      etd: '2026-09-17 23:59:59',
+      scans: [
+        { date: '2026-09-08 13:31:40', activity: 'Picked up', location: 'Delhi' },
+        {
+          date: '2026-09-13 14:51:54',
+          activity: 'Pending - Shipment Received at Facility',
+          location: 'Bishalgarh_Raghunathpur_D (Tripura)',
+        },
+      ],
+      ...over,
+    });
+
+    it('reads a day-first push after the 12th — the push that crashed the worker', () => {
+      const parsed = parseScanPayload(push({ current_timestamp: '13 09 2026 14:52:06' }));
+      expect(parsed?.eventAtIso).toBe('2026-09-13T14:52:06+05:30');
+      expect(new Date(parsed?.eventAtIso ?? '').toISOString()).toBe('2026-09-13T09:22:06.000Z');
+    });
+
+    it('reads a day-first push up to the 12th as SEPTEMBER, not November', () => {
+      const parsed = parseScanPayload(push({ current_timestamp: '11 09 2026 19:10:30' }));
+      expect(new Date(parsed?.eventAtIso ?? '').toISOString()).toBe('2026-09-11T13:40:30.000Z');
+    });
+
+    it('reads the year-first push too', () => {
+      const parsed = parseScanPayload(push({ current_timestamp: '2026-09-09 15:55:00' }));
+      expect(new Date(parsed?.eventAtIso ?? '').toISOString()).toBe('2026-09-09T10:25:00.000Z');
+    });
+
+    it('falls back to the LATEST scan when the push time is unreadable', () => {
+      const parsed = parseScanPayload(push({ current_timestamp: 'not a date' }));
+      expect(parsed?.eventAtIso).toBe('2026-09-13T14:51:54+05:30');
+    });
+
+    it('takes the latest scan by TIME, not by position in the list', () => {
+      const parsed = parseScanPayload(
+        push({
+          current_timestamp: undefined,
+          scans: [
+            { date: '2026-09-13 14:51:54', activity: 'b' },
+            { date: '2026-09-08 13:31:40', activity: 'a' },
+          ],
+        }),
+      );
+      expect(parsed?.eventAtIso).toBe('2026-09-13T14:51:54+05:30');
+    });
+
+    it('never uses etd — an ESTIMATED delivery date is not a scan time', () => {
+      // Only etd is readable: the push is refused (PARSE_FAILED) rather
+      // than stamped four days into the future.
+      expect(parseScanPayload(push({ current_timestamp: undefined, scans: [] }))).toBeNull();
+    });
+
+    it('refuses rather than stamping now() when no time is readable (TRK-3)', () => {
+      expect(
+        parseScanPayload(
+          push({ current_timestamp: '31 09 2026 10:00:00', scans: [{ date: 'garbage' }] }),
+        ),
+      ).toBeNull();
+      expect(parseScanPayload({ awb: 'SR1', current_status: 'In Transit' })).toBeNull();
+    });
+
+    it('never returns an Invalid Date from any branch', () => {
+      const parsed = parseScanPayload(push({ current_timestamp: '99 99 2026 99:99:99' }));
+      expect(parsed).not.toBeNull();
+      expect(Number.isNaN(new Date(parsed?.eventAtIso ?? '').getTime())).toBe(false);
+    });
   });
 
   it('does not shadow the Delhivery envelope', () => {

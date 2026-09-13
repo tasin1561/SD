@@ -289,6 +289,9 @@ export class ShiprocketWalletSyncService {
               balanceInr: usable ?? pb.newestBalanceInr ?? '0.00',
               totalCreditInr: null,
               totalDebitInr: null,
+              // No windowed totals are read off their panel, so there is
+              // nothing to compare an export against.
+              totalsWindow: 'UNKNOWN',
             },
           )
         : null;

@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
 import { gotoPortal } from './navigate';
+import { applyLast90DaysPreset, type WalletWindow } from './wallet-date-range';
 
 const FINANCES_PATH = '/finances/unified/transactions';
 
@@ -30,10 +31,17 @@ export class WalletLedgerPage {
    * that worked, and the only symptom was a narrower export nobody
    * compared against what was requested.
    */
-  async download(from: Date, to: Date): Promise<{ bytes: Buffer; rangeApplied: boolean }> {
+  async download(
+    from: Date,
+    to: Date,
+  ): Promise<{ bytes: Buffer; rangeApplied: boolean; window: WalletWindow }> {
     await gotoPortal(this.page, `https://one.delhivery.com${FINANCES_PATH}`);
 
-    const rangeApplied = await this.setDateRange(from, to);
+    // WHICH window, not only whether one took: the balance line read later
+    // is compared against this file, and that comparison is only true
+    // when both covered the same range.
+    const window = await this.setDateRange(from, to);
+    const rangeApplied = window === 'LAST_90_DAYS' || window === 'CUSTOM_RANGE';
 
     // Playwright must be waiting BEFORE the click — a download that
     // starts while nothing is listening is simply lost.
@@ -50,7 +58,7 @@ export class WalletLedgerPage {
     for await (const chunk of stream) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer));
     }
-    return { bytes: Buffer.concat(chunks), rangeApplied };
+    return { bytes: Buffer.concat(chunks), rangeApplied, window };
   }
 
   /**
@@ -64,19 +72,8 @@ export class WalletLedgerPage {
    * caller is told, so a picker that has stopped working shows up as a
    * warning rather than as costs that quietly stop updating.
    */
-  private async setDateRange(from: Date, to: Date): Promise<boolean> {
-    const trigger = this.page.getByText(/date range/i).first();
-    const found = await trigger
-      .waitFor({ state: 'visible', timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!found) return false;
-
+  private async setDateRange(from: Date, to: Date): Promise<WalletWindow> {
     try {
-      await trigger.click();
-      // The panel animates in; its buttons are not hittable immediately.
-      await this.page.waitForTimeout(700);
-
       /*
         ── THE PRESET, NOT THE CALENDAR ──────────────────────────────
 
@@ -93,29 +90,13 @@ export class WalletLedgerPage {
         no chance of landing on the wrong year.
 
         Ninety days is as far back as the list goes, which is why the
-        window setting is ninety and not more.
+        window setting is ninety and not more. The clicks live in
+        `applyLast90DaysPreset`, shared with the balance read, because
+        the two readings are compared and must take the same range.
       */
-      const preset = this.page.getByText(/^last 90 days$/i).first();
-      const hasPreset = await preset
-        .waitFor({ state: 'visible', timeout: 4_000 })
-        .then(() => true)
-        .catch(() => false);
-
-      if (hasPreset) {
-        await preset.click();
-        // Done COMMITS the choice. Without it the panel closes on the
-        // next outside click and the range reverts — the export then
-        // looks like it was asked for and silently was not.
-        await this.page
-          .getByRole('button', { name: /^done$/i })
-          .first()
-          .click()
-          .catch(() => undefined);
-        // Their table re-queries on commit; downloading mid-refresh
-        // gets the previous range.
-        await this.page.waitForTimeout(1_500);
-        return true;
-      }
+      const outcome = await applyLast90DaysPreset(this.page);
+      if (outcome === 'APPLIED') return 'LAST_90_DAYS';
+      if (outcome === 'NO_PICKER') return 'PAGE_DEFAULT';
 
       /*
         FALLBACK: a pair of date inputs.
@@ -137,11 +118,13 @@ export class WalletLedgerPage {
           .click()
           .catch(() => undefined);
         await this.page.waitForTimeout(1_500);
-        return true;
+        return 'CUSTOM_RANGE';
       }
-      return false;
+      return 'PAGE_DEFAULT';
     } catch {
-      return false;
+      // A click failed part-way: we cannot say which range the page is
+      // on, so this reading is never compared against another.
+      return 'UNKNOWN';
     }
   }
 }

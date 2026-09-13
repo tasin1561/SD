@@ -1,5 +1,9 @@
 import { CourierRechargeMatch, Prisma } from '@skydrop/db';
-import { CourierWalletReconcileService } from '../../src/modules/courier-portal/services/courier-wallet-reconcile.service';
+import {
+  CourierWalletReconcileService,
+  type WalletExportSum,
+} from '../../src/modules/courier-portal/services/courier-wallet-reconcile.service';
+import type { WalletWindow } from '../../src/modules/courier-portal/pages/wallet-date-range';
 // jest hoists `jest.mock` above the imports, so this binding IS the fake
 // class below; its statics are how each case sets the portal up.
 import { WalletRechargesPage } from '../../src/modules/courier-portal/pages/wallet-recharges.page';
@@ -25,7 +29,9 @@ jest.mock('../../src/modules/courier-portal/pages/wallet-recharges.page', () => 
 
     async readBalance(): Promise<unknown> {
       if (FakeWalletRechargesPage.fail !== null) throw FakeWalletRechargesPage.fail;
-      return FakeWalletRechargesPage.balance;
+      // The real page selects "Last 90 Days" before reading the totals —
+      // the export's window. A case that means otherwise says so.
+      return { totalsWindow: 'LAST_90_DAYS', ...(FakeWalletRechargesPage.balance as object) };
     }
 
     async listRecharges(): Promise<unknown> {
@@ -36,10 +42,20 @@ jest.mock('../../src/modules/courier-portal/pages/wallet-recharges.page', () => 
 });
 
 const Portal = WalletRechargesPage as unknown as {
-  balance: { balanceInr: string; totalCreditInr: string | null; totalDebitInr: string | null };
+  balance: {
+    balanceInr: string;
+    totalCreditInr: string | null;
+    totalDebitInr: string | null;
+    totalsWindow?: WalletWindow;
+  };
   recharges: Array<Record<string, unknown>>;
   fail: Error | null;
 };
+
+/** One account's export sum, over the window the file covered. */
+function sums(sumInr: string, window: WalletWindow = 'LAST_90_DAYS'): Map<string, WalletExportSum> {
+  return new Map([['ca-1', { sumInr, window }]]);
+}
 
 interface Ctx {
   svc: CourierWalletReconcileService;
@@ -288,7 +304,7 @@ describe('CourierWalletReconcileService', () => {
       totalCreditInr: '100000.00',
       totalDebitInr: '30000.00',
     };
-    await ctx.svc.reconcile('delhivery', new Map([['ca-1', '25000.00']]));
+    await ctx.svc.reconcile('delhivery', sums('25000.00'));
     const issue = totalsIssue(ctx);
     expect(issue?.severity).toBe('HIGH');
     expect(issue?.metadata['differenceInr']).toBe('5000.00');
@@ -304,7 +320,7 @@ describe('CourierWalletReconcileService', () => {
       totalCreditInr: '100000.00',
       totalDebitInr: '133782.35',
     };
-    await ctx.svc.reconcile('delhivery', new Map([['ca-1', '133782.36']]));
+    await ctx.svc.reconcile('delhivery', sums('133782.36'));
     expect(totalsIssue(ctx)).toBeUndefined();
   });
 
@@ -334,7 +350,7 @@ describe('CourierWalletReconcileService', () => {
       totalCreditInr: '100000.00',
       totalDebitInr: '30000.00',
     };
-    await ctx.svc.reconcile('delhivery', new Map([['ca-1', '30000.00']]));
+    await ctx.svc.reconcile('delhivery', sums('30000.00'));
     expect(totalsIssue(ctx)).toBeUndefined();
   });
 
@@ -359,6 +375,115 @@ describe('CourierWalletReconcileService', () => {
       String((c[0] as { dedupeKey: string }).dedupeKey).startsWith('courier-wallet-low'),
     )?.[0] as { severity: string };
     expect(issue.severity).toBe('HIGH');
+  });
+});
+
+/**
+ * The page's stated debit and the export are only comparable over the
+ * SAME window (13 Sep 2026). COST-1 moved the export to "Last 90 Days"
+ * while the balance line kept reading the page default, and production
+ * raised HIGH nightly: ₹1,07,303.22 stated against ₹12,28,010.68 exported.
+ */
+describe('the totals check compares like with like', () => {
+  function issue(
+    ctx: ReturnType<typeof make>,
+    prefix: string,
+  ): { severity: string; metadata: Record<string, string> } | undefined {
+    return ctx.raise.mock.calls.find((c) =>
+      String((c[0] as { dedupeKey: string }).dedupeKey).startsWith(prefix),
+    )?.[0] as { severity: string; metadata: Record<string, string> } | undefined;
+  }
+  const resolved = (ctx: ReturnType<typeof make>): string[] =>
+    ctx.resolveByKey.mock.calls.map((c) => String(c[0]));
+
+  it('does NOT compare a default-window page against a ninety-day export — the production false alarm', async () => {
+    const ctx = make();
+    Portal.balance = {
+      balanceInr: '4206.79',
+      totalCreditInr: '60086.54',
+      totalDebitInr: '107303.22',
+      totalsWindow: 'PAGE_DEFAULT',
+    };
+    await ctx.svc.reconcile('delhivery', sums('1228010.68', 'LAST_90_DAYS'));
+
+    expect(issue(ctx, 'courier-wallet-totals-disagree')).toBeUndefined();
+    // Not dropped silently: it says the check did not run, and why.
+    const unchecked = issue(ctx, 'courier-wallet-totals-unchecked:ca-1');
+    expect(unchecked?.severity).toBe('MEDIUM');
+    expect(unchecked?.metadata).toMatchObject({
+      reason: 'WINDOW_MISMATCH',
+      pageWindow: 'PAGE_DEFAULT',
+      exportWindow: 'LAST_90_DAYS',
+      statedWindowDebitInr: '107303.22',
+      exportSumInr: '1228010.68',
+    });
+    // And an open disagreement is NOT cleared by a comparison that never
+    // happened.
+    expect(resolved(ctx)).not.toContain('courier-wallet-totals-disagree:ca-1');
+  });
+
+  it('clears the open disagreement once both sides read the same ninety days and agree', async () => {
+    const ctx = make();
+    Portal.balance = {
+      balanceInr: '4206.79',
+      totalCreditInr: '60086.54',
+      totalDebitInr: '1228010.67',
+      totalsWindow: 'LAST_90_DAYS',
+    };
+    await ctx.svc.reconcile('delhivery', sums('1228010.68', 'LAST_90_DAYS'));
+
+    expect(issue(ctx, 'courier-wallet-totals-disagree')).toBeUndefined();
+    expect(issue(ctx, 'courier-wallet-totals-unchecked')).toBeUndefined();
+    expect(resolved(ctx)).toEqual(
+      expect.arrayContaining([
+        'courier-wallet-totals-disagree:ca-1',
+        'courier-wallet-totals-unchecked:ca-1',
+      ]),
+    );
+  });
+
+  it('a real shortfall over the same window is still HIGH, and names the window', async () => {
+    const ctx = make();
+    Portal.balance = {
+      balanceInr: '4206.79',
+      totalCreditInr: null,
+      totalDebitInr: '1228010.68',
+      totalsWindow: 'LAST_90_DAYS',
+    };
+    await ctx.svc.reconcile('delhivery', sums('1200000.00', 'LAST_90_DAYS'));
+    const disagree = issue(ctx, 'courier-wallet-totals-disagree:ca-1');
+    expect(disagree?.severity).toBe('HIGH');
+    expect(disagree?.metadata['window']).toBe('LAST_90_DAYS');
+    expect(disagree?.metadata['differenceInr']).toBe('28010.68');
+  });
+
+  it('two default-window readings still compare, as they always did', async () => {
+    // The picker being gone on BOTH readers leaves both on the default —
+    // the same window, which is what the check was built on.
+    const ctx = make();
+    Portal.balance = {
+      balanceInr: '4206.79',
+      totalCreditInr: null,
+      totalDebitInr: '30000.00',
+      totalsWindow: 'PAGE_DEFAULT',
+    };
+    await ctx.svc.reconcile('delhivery', sums('25000.00', 'PAGE_DEFAULT'));
+    expect(issue(ctx, 'courier-wallet-totals-disagree:ca-1')?.severity).toBe('HIGH');
+  });
+
+  it('a window nobody can confirm is never compared, even against itself', async () => {
+    const ctx = make();
+    Portal.balance = {
+      balanceInr: '4206.79',
+      totalCreditInr: null,
+      totalDebitInr: '30000.00',
+      totalsWindow: 'UNKNOWN',
+    };
+    await ctx.svc.reconcile('delhivery', sums('25000.00', 'UNKNOWN'));
+    expect(issue(ctx, 'courier-wallet-totals-disagree')).toBeUndefined();
+    expect(issue(ctx, 'courier-wallet-totals-unchecked:ca-1')?.metadata['reason']).toBe(
+      'WINDOW_MISMATCH',
+    );
   });
 });
 
@@ -393,6 +518,7 @@ describe('the same matching for Shiprocket, fed rows it read itself', () => {
       balanceInr: '900.00',
       totalCreditInr: null,
       totalDebitInr: null,
+      totalsWindow: 'UNKNOWN',
     });
     const unrecorded = ctx.raise.mock.calls.find((c) =>
       String((c[0] as { dedupeKey: string }).dedupeKey).startsWith('courier-recharge-unrecorded'),
