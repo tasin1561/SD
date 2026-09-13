@@ -337,6 +337,27 @@ describe('waybills charged and never invoiced', () => {
     expect(r.uninvoiced.items[0]).toMatchObject({ awb: 'W9', netInr: '60.00' });
   });
 
+  it('is not called uninvoiced while an invoice that may have billed it is unread', () => {
+    // Production, 13 Sep 2026: the 15 Aug invoice produced no file, and the
+    // waybills it billed read as never invoiced because the read invoices
+    // either side of it had passed them by.
+    const unread: DlvInvoiceRead = {
+      invoice: inv('EPH-U', 'Domestic', '2026-08-31', 6000),
+      itemized: null,
+      problem: '"Invoice Transaction list" for EPH-U produced no file',
+    };
+    const EPH_D = read(inv('EPH-D', 'Domestic', '2026-09-30', 0), domesticCsv('EPH-D', []));
+    const r = checkDelhiveryInvoices(
+      input({
+        invoices: [EPH_A, unread, EPH_C, EPH_D],
+        txns: [W9],
+        now: new Date('2026-10-05T12:00:00Z'),
+      }),
+    );
+    expect(r.uninvoiced).toMatchObject({ count: 0, pendingCount: 1 });
+    expect(r.rows.find((x) => x.invoiceId === 'EPH-U')?.status).toBe('UNREADABLE');
+  });
+
   it('counts, never flags, one charged before the ledger begins', () => {
     const r = checkDelhiveryInvoices(
       input({

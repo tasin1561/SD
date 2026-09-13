@@ -787,8 +787,13 @@ export class DelhiveryBillingPage {
       await this.dom.markSeen();
       const got = await this.clickForFile(opt, null, 1, CHECK_DOWNLOAD_TIMEOUT_MS);
       const file = this.downloads.slice(before).find((d) => d.forInvoice === key);
-      if (got === 0 || file === undefined)
-        return new Error(`"${text}" for ${key} produced no file`);
+      if (got === 0 || file === undefined) {
+        // What the click did instead (a toast, a "Generating…" label) is
+        // the only clue to why, so it goes in the reason.
+        const seen = this.attempts.at(-1);
+        const why = seen !== undefined && seen.control === opt.label ? ` (${seen.outcome})` : '';
+        return new Error(`"${text}" for ${key} produced no file${why}`);
+      }
       if (file.body === null) {
         return new Error(`the file for ${key} is larger than ${MAX_FILE_BYTES} bytes`);
       }

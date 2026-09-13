@@ -593,7 +593,13 @@ export function checkDelhiveryInvoices(input: DlvCheckInput): DlvInvoiceCheckRes
     { paise: number; lastIdx: number; pickupAt: number | null; status: string }
   >();
   const domesticDates: number[] = [];
+  // A Domestic invoice we could not read may have billed any waybill charged
+  // before its date; until it is read, those cannot be called uninvoiced.
+  const unreadDomesticDates: number[] = [];
   for (const { r, idx } of order) {
+    if (r.invoice.kind === 'DOMESTIC' && (r.itemized === null || r.problem !== null)) {
+      unreadDomesticDates.push(r.invoice.invoiceDate.getTime());
+    }
     if (r.itemized?.kind !== 'DOMESTIC' || r.problem !== null) continue;
     domesticDates.push(r.invoice.invoiceDate.getTime());
     for (const l of r.itemized.lines) {
@@ -651,7 +657,12 @@ export function checkDelhiveryInvoices(input: DlvCheckInput): DlvInvoiceCheckRes
     }
     // An invoice dated D covers journeys closed by the end of D.
     const later = domesticDates.filter((d) => d + DAY_MS > w.last).length;
-    if (later < 2) {
+    // An unread invoice dated after its last movement may be the one that
+    // billed it: on 13 Sep 2026 an unread 15 Aug invoice made 225 waybills it
+    // had billed read as never invoiced, because the two READ invoices either
+    // side of it had passed them by.
+    const unreadMayBill = unreadDomesticDates.some((d) => d + DAY_MS > w.last);
+    if (later < 2 || unreadMayBill) {
       pendingCount += 1;
       continue;
     }
