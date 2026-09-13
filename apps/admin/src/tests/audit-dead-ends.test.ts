@@ -36,7 +36,8 @@ describe('a stock adjustment can be raised', () => {
   const src = R(ADJ_PANEL);
 
   it('the panel is mounted on the adjustments page', () => {
-    expect(R(ADJ_INDEX)).toContain('<NewAdjustmentPanel />');
+    // Mounted with or without a prefill (the "Adjust" link on a bin line).
+    expect(R(ADJ_INDEX)).toMatch(/<NewAdjustmentPanel[\s/]/);
   });
 
   it('carries all three ids, because stock is held per variant/bin/batch', () => {
