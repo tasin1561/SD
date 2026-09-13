@@ -31,6 +31,8 @@ import { serverVerdict } from '@/lib/server-verdict';
 export function SellerDetailView({ sellerId }: { sellerId: string }): ReactElement {
   const detail = useSellerDetail(sellerId);
   const canChangeStatus = usePermission('sellers.approve', 'sellers.suspend');
+  // Cosmetic (FE-2): the transfer page and its endpoints refuse without it.
+  const canTransfer = usePermission('money.wallet.transfer');
 
   return (
     <div>
@@ -61,7 +63,19 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                 <span>{detail.data.contactPersonName}</span>
               </>
             }
-            action={<SellerStatusBadge status={detail.data.status} />}
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                <SellerStatusBadge status={detail.data.status} />
+                {canTransfer && (
+                  <Link
+                    href={`/wallet-transfers?sellerId=${sellerId}`}
+                    className="text-accent text-sm hover:underline"
+                  >
+                    Debit or credit wallet →
+                  </Link>
+                )}
+              </div>
+            }
           />
 
           <Section title="Profile">

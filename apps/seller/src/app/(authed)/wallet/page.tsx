@@ -15,7 +15,8 @@ import {
   SkeletonRows,
   Table,
 } from '@skydrop/ui/components';
-import { isWalletCredit, walletDirectionLabel } from '@skydrop/ui/status';
+import { isWalletCredit } from '@skydrop/ui/status';
+import { LedgerEntryLabel } from './_components/ledger-entry-label';
 import { useInfiniteWalletEntries, useWalletBalances } from '@/lib/api-hooks';
 import { TopupCard } from './_components/topup-card';
 import { WithdrawalsCard } from './_components/withdrawals-card';
@@ -337,8 +338,7 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
         {new Date(entry.createdAt).toLocaleString()}
       </td>
       <td className="px-3 py-2 text-text-body text-xs">
-        {walletDirectionLabel(entry.direction)}
-        {entry.note && <div className="text-text-faint text-xs mt-0.5 italic">{entry.note}</div>}
+        <LedgerEntryLabel direction={entry.direction} note={entry.note} />
       </td>
       <td className="px-3 py-2 text-text-body text-xs">
         {entry.linkedOrderId ? (

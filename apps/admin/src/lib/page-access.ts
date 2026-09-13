@@ -60,6 +60,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/inventory-units', 'inventory.view'],
   ['/settlements', 'money.view'],
   ['/withdrawals', 'money.view'],
+  // Moving money between a seller's wallet and us: the page is the act,
+  // so it is gated on the act — every call it makes needs this key.
+  ['/wallet-transfers', 'money.wallet.transfer'],
   ['/seller-wallets', 'money.view'],
   ['/topups', 'money.view'],
   ['/bank-accounts', 'money.view'],

@@ -121,6 +121,8 @@ function humanCause(direction: string): string {
       return 'COD collection';
     case 'ADJUSTMENT_DEBIT':
       return 'Manual adjustment';
+    case 'STAFF_DEBIT':
+      return 'Debited by Skydrop';
     default:
       return direction.replaceAll('_', ' ').toLowerCase();
   }

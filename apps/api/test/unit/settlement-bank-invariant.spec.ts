@@ -10,6 +10,7 @@ import { CodCreditService } from '../../src/modules/seller-wallet-accrual/servic
 import { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
 import { BankTransferService } from '../../src/modules/treasury/services/bank-transfer.service';
 import { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
+import { StaffWalletTransferService } from '../../src/modules/admin-wallet-transfer/services/staff-wallet-transfer.service';
 
 /**
  * TRE-4 / TRE-8, end to end in memory: after every payout, the cash the
@@ -30,6 +31,7 @@ const CREDITS = new Set([
   'COD_DEDUCTION_REFUND',
   'TOPUP',
   'ORDER_CHARGES_REFUND',
+  'STAFF_CREDIT',
 ]);
 
 interface WalletRow {
@@ -107,6 +109,18 @@ function makeWorld(
         return { id: nextId() };
       },
     ),
+    // As the real one: what one owner holds in one account, summed.
+    ownerBalance: jest.fn(
+      async (accountId: string, owner: { kind: string; sellerId?: string | null }) =>
+        bank
+          .filter(
+            (b) =>
+              b.accountId === accountId &&
+              b.ownerKind === owner.kind &&
+              (owner.kind !== 'SELLER' || b.sellerId === owner.sellerId),
+          )
+          .reduce((t, b) => t.add(b.signedAmount), ZERO),
+    ),
   };
   const attribution = new SellerCashAttributionService(ledger as never);
 
@@ -174,7 +188,15 @@ function makeWorld(
       ),
     },
     fxRate: { findFirst: jest.fn(async () => null) },
-    platformBankAccount: { findFirst: jest.fn(async () => ({ id: 'hdfc' })) },
+    platformBankAccount: {
+      findFirst: jest.fn(async () => ({ id: 'hdfc', currency: 'INR', label: 'HDFC' })),
+      findMany: jest.fn(async (a: { where: { id: { in: string[] } } }) =>
+        a.where.id.in.map((id) => ({ id, label: id === 'hdfc' ? 'HDFC' : 'Tasin City' })),
+      ),
+    },
+    seller: {
+      findFirst: jest.fn(async () => ({ companyName: 'Menev Store', status: 'APPROVED' })),
+    },
     courierSettlementLine: {
       groupBy: jest.fn(async (a: { where: { orderId: { in: string[] } } }) => {
         const by = new Map<string, { settled: Prisma.Decimal; short: Prisma.Decimal }>();
@@ -286,6 +308,36 @@ function makeWorld(
     })),
   };
   const codCredit = new CodCreditService(settings as never, walletService as never);
+  // The REAL staff transfer service, over the same book and wallet.
+  const staffTransfers = new StaffWalletTransferService(
+    { client: tx } as never,
+    walletService as never,
+    ledger as never,
+    attribution,
+    { log: jest.fn(async () => 'a1') } as never,
+  );
+  const staff = (
+    sellerId: string,
+    direction: 'DEBIT' | 'CREDIT',
+    amountInr: string,
+  ): ReturnType<StaffWalletTransferService['execute']> =>
+    staffTransfers.execute({
+      sellerId,
+      direction,
+      amountInr,
+      ...(direction === 'CREDIT' ? { bankAccountId: 'hdfc' } : {}),
+      reason: 'Agreed with the seller on the phone on 12 September',
+      staffId: 'staff-1',
+    });
+  /** Our own money arriving in HDFC (an owner contribution). */
+  const fundCapital = async (amount: string): Promise<void> => {
+    await ledger.post({
+      accountId: 'hdfc',
+      signedAmount: D(amount),
+      amountCurrency: 'INR',
+      owner: { kind: 'CAPITAL' },
+    });
+  };
   const svc = new CourierSettlementService(
     { client: tx } as never,
     { log: jest.fn(async () => 'a1') } as never,
@@ -449,6 +501,10 @@ function makeWorld(
     deliverInstantPay,
     balance,
     entriesOf,
+    staff,
+    fundCapital,
+    /** How many bank rows exist — a staff debit on a seller holding nothing must add none. */
+    bankRows: (): number => bank.length,
   };
 }
 
@@ -1001,5 +1057,116 @@ describe('a transfer moves a seller’s money and never changes what their walle
     expect(b.book('s', 'tasin')).toBe('0.00');
     expect(b.total('hdfc')).toBe('1510.00');
     expect(b.total('tasin')).toBe('0.00');
+  });
+});
+
+describe('a staff wallet transfer keeps the book equal to the wallet', () => {
+  it('a debit on a seller holding enough: their cash becomes ours, clamped exactly', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    const out = await w.staff('s', 'DEBIT', '500');
+    expect(out.preview?.cashMovedInr).toBe('500.00');
+    expect(out.preview?.withoutCashInr).toBe('0.00');
+    expect(w.balance('s')).toBe('347.46');
+    expect(w.held('s')).toBe(w.owed('s'));
+    expect(w.held('s')).toBe('347.46');
+    // A pair, never one entry: the account is what the statement says.
+    expect(w.accountTotal()).toBe('1000.00');
+  });
+
+  it('a debit beyond what they hold: only what they hold moves, the rest is a receivable', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    const out = await w.staff('s', 'DEBIT', '1000');
+    expect(out.preview?.cashMovedInr).toBe('847.46');
+    expect(out.preview?.withoutCashInr).toBe('152.54');
+    expect(out.preview?.sentence).toMatch(/they will owe us ₹152\.54/);
+    expect(w.balance('s')).toBe('-152.54');
+    expect(w.held('s')).toBe(w.owed('s'));
+    expect(w.held('s')).toBe('0.00');
+    expect(w.accountTotal()).toBe('1000.00');
+  });
+
+  it('a debit on a seller holding nothing writes NO bank entry', async () => {
+    const w = makeWorld([]);
+    await w.owe('s', '300');
+    const before = w.bankRows();
+    await w.staff('s', 'DEBIT', '200');
+    expect(w.bankRows()).toBe(before);
+    expect(w.balance('s')).toBe('-500.00');
+    expect(w.held('s')).toBe(w.owed('s'));
+  });
+
+  it('a debit reaches their taka at the rate it was credited, and leaves nothing theirs', async () => {
+    const w = makeWorld([]);
+    await w.topUp('s', '1000', '800');
+    await w.staff('s', 'DEBIT', '800');
+    expect(w.units('s', 'BDT')).toBe('0.00');
+    expect(w.held('s')).toBe('0.00');
+    expect(w.held('s')).toBe(w.owed('s'));
+  });
+
+  it('a credit: our money in the chosen account becomes theirs', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    await w.fundCapital('5000');
+    const capitalBefore = w.capital();
+    const out = await w.staff('s', 'CREDIT', '100');
+    expect(out.preview?.cashMovedInr).toBe('100.00');
+    expect(w.held('s')).toBe('947.46');
+    expect(w.held('s')).toBe(w.owed('s'));
+    expect(D(w.capital()).equals(D(capitalBefore).sub(D('100')))).toBe(true);
+  });
+
+  it('a credit to a seller in debt clears the debt first — only the rest becomes cash of theirs', async () => {
+    const w = makeWorld([]);
+    await w.owe('s', '300');
+    await w.fundCapital('1000');
+    const out = await w.staff('s', 'CREDIT', '500');
+    expect(out.preview?.withoutCashInr).toBe('300.00');
+    expect(out.preview?.cashMovedInr).toBe('200.00');
+    expect(w.balance('s')).toBe('200.00');
+    expect(w.held('s')).toBe('200.00');
+    expect(w.held('s')).toBe(w.owed('s'));
+    expect(w.capital()).toBe('800.00');
+  });
+
+  it('a credit that only clears a debt moves no cash at all', async () => {
+    const w = makeWorld([]);
+    await w.owe('s', '300');
+    const before = w.bankRows();
+    await w.staff('s', 'CREDIT', '100');
+    expect(w.bankRows()).toBe(before);
+    expect(w.balance('s')).toBe('-200.00');
+    expect(w.held('s')).toBe(w.owed('s'));
+  });
+
+  it('a credit bigger than our money in the account is refused, and nothing is written', async () => {
+    const w = makeWorld([]);
+    await w.fundCapital('50');
+    await expect(w.staff('s', 'CREDIT', '100')).rejects.toMatchObject({
+      response: { code: 'WALLET_TRANSFER_CAPITAL_SHORT' },
+    });
+    expect(w.balance('s')).toBe('0.00');
+  });
+
+  it('takes WALLET, then the account key, then the attribution key — never back down', async () => {
+    const w = makeWorld([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    w.locks.mockClear();
+    await w.staff('s', 'DEBIT', '100');
+    const attribution = advisoryKey(ATTRIBUTION_RECONCILE_KEY);
+    const account = advisoryKey(accountReconcileKey('hdfc'));
+    const seen = new Set<string>();
+    const ranks: number[] = [];
+    for (const [, ns, key] of w.locks.mock.calls as Array<[unknown, number, number]>) {
+      const id = `${ns}|${key}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (ns === AdvisoryLock.WALLET) ranks.push(0);
+      else if (ns === AdvisoryLock.BANK_RECONCILE) ranks.push(key === attribution ? 2 : 1);
+    }
+    expect(seen.has(`${AdvisoryLock.BANK_RECONCILE}|${account}`)).toBe(true);
+    expect(ranks).toEqual([...ranks].sort((x, y) => x - y));
   });
 });
