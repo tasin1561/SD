@@ -65,7 +65,14 @@ export class DelhiveryInvoiceFormatError extends Error {
 }
 
 /** Their menu option for the itemized file ("Invoice Transaction list"). */
-export const DLV_ITEMIZED_OPTION = /^invoice\s+transaction\s+list$/i;
+/**
+ * The Download menu's item that gives the itemized CSV. Their menu reads
+ * "Invoice" (the PDF) and "Transaction list" (the CSV); an "Invoice
+ * Transaction list" is the BOX holding both, its text the two run
+ * together. This asked for the box until 13 Sep 2026, so the click landed
+ * wherever the box's middle was — the CSV on 31 Aug, nothing on 15 Aug.
+ */
+export const DLV_ITEMIZED_OPTION = /^transaction\s+list$/i;
 /** A waybill's billed and charged figures agree within this (paise). */
 export const DLV_MATCH_TOLERANCE_PAISE = 5;
 /** A note is matched to wallet movements posted this many days either side of it. */

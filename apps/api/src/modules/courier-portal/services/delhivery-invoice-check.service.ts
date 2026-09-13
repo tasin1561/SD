@@ -212,7 +212,7 @@ export class DelhiveryInvoiceCheckService {
           return {
             invoice,
             itemized: null,
-            problem: 'its Download menu offered no "Invoice Transaction list"',
+            problem: 'its Download menu offered no "Transaction list"',
           };
         }
         if (file instanceof Error) {

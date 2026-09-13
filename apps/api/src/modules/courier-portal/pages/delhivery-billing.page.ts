@@ -550,6 +550,17 @@ function menuOptionJs(key: string, text: string): string {
   })()`;
 }
 
+/**
+ * A menu's items, without the box that holds them. `newlyVisible` keeps the
+ * deepest element per distinct text, and a box around "Invoice" and
+ * "Transaction list" reads "Invoice Transaction list" — a text no child has,
+ * so it came back as an option of its own. Clicking it hits whatever sits at
+ * its middle. A text made of two or more of the other texts is that box.
+ */
+export function menuItemsOnly(texts: readonly string[]): string[] {
+  return texts.filter((t) => texts.filter((u) => u !== t && t.includes(u)).length < 2);
+}
+
 /** The DOM of a live Playwright page. */
 export function pageDom(page: Page): BillingDom {
   const run = async <T>(src: string): Promise<T> => (await page.evaluate(src)) as T;
@@ -773,7 +784,7 @@ export class DelhiveryBillingPage {
         ...new Set((await this.dom.newlyVisible(MAX_MENU_OPTIONS)).map((c) => c.text ?? c.label)),
       ];
       this.menus.push({ list, invoiceId: key, trigger: trigger.label, options: texts, note: null });
-      const text = texts.find((t) => option.test(t.trim()));
+      const text = menuItemsOnly(texts).find((t) => option.test(t.trim()));
       if (text === undefined) {
         await this.page.keyboard.press('Escape').catch(() => undefined);
         return null;
@@ -1227,7 +1238,7 @@ export class DelhiveryBillingPage {
       }
       await this.page.waitForTimeout(MENU_WAIT_MS);
       const found = await this.dom.newlyVisible(MAX_MENU_OPTIONS);
-      const texts = [...new Set(found.map((o) => o.text ?? o.label))];
+      const texts = menuItemsOnly([...new Set(found.map((o) => o.text ?? o.label))]);
       if (found.length === 0) {
         const d = await direct;
         if (d !== null) {

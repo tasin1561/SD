@@ -3,6 +3,7 @@ import type { Page } from 'playwright';
 import {
   DelhiveryBillingPage,
   INVOICE_LIST_PATH,
+  menuItemsOnly,
   type BillingDom,
   type Control,
   type RawTable,
@@ -13,6 +14,7 @@ import {
   parseListRows,
 } from '../../src/modules/courier-portal/services/delhivery-billing-probe-files';
 import * as guard from '../../src/modules/courier-portal/services/portal-read-only-guard';
+import { DLV_ITEMIZED_OPTION } from '../../src/modules/courier-portal/services/delhivery-invoice-rows';
 
 /**
  * The billing probe against a fake of Delhivery ONE's invoice list, shaped
@@ -305,6 +307,24 @@ function fakePortal(o: Opts = {}) {
   return { explore, readForCheck, gotos, clicks, writes };
 }
 
+describe('menuItemsOnly', () => {
+  it('drops the box whose text is two of its items run together', () => {
+    expect(menuItemsOnly(['Invoice Transaction list', 'Invoice', 'Transaction list'])).toEqual([
+      'Invoice',
+      'Transaction list',
+    ]);
+  });
+
+  it('keeps a menu with no box, and an item that merely contains one other', () => {
+    expect(menuItemsOnly(['Invoice PDF', 'Annexure', 'Raise dispute'])).toEqual([
+      'Invoice PDF',
+      'Annexure',
+      'Raise dispute',
+    ]);
+    expect(menuItemsOnly(['Invoice', 'Invoice PDF'])).toEqual(['Invoice', 'Invoice PDF']);
+  });
+});
+
 describe('DelhiveryBillingPage', () => {
   afterEach(() => jest.restoreAllMocks());
 
@@ -447,6 +467,19 @@ describe('DelhiveryBillingPage', () => {
     const f = fakePortal();
     const r = await f.readForCheck(/^invoice transaction list$/i);
     expect(r.files.get('EPH26281228')).toBeNull();
+  });
+
+  it('clicks the "Transaction list" item, never the box that holds the menu', async () => {
+    // Production, 13 Sep 2026: their menu reads "Invoice" and "Transaction
+    // list", and the box around them read "Invoice Transaction list". The
+    // check asked for the box, so the click landed wherever its middle was —
+    // the CSV on 31 Aug, nothing on 15 Aug.
+    const f = fakePortal({ options: ['Invoice Transaction list', 'Invoice', 'Transaction list'] });
+    const r = await f.readForCheck(DLV_ITEMIZED_OPTION);
+    expect(Buffer.isBuffer(r.files.get('EPH26281228'))).toBe(true);
+    expect(f.clicks).toContain('Transaction list');
+    expect(f.clicks).not.toContain('Invoice Transaction list');
+    expect(f.clicks).not.toContain('Invoice');
   });
 
   it('falls back to discovery when the known url shows no invoice table', async () => {
