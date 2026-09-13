@@ -9,11 +9,11 @@ import {
   EmptyState,
   FormField,
   Input,
-  Select,
   useToast,
 } from '@skydrop/ui/components';
 import { ApiError } from '@skydrop/api-client';
 import { PutawayPanel } from './putaway-panel';
+import { RtoItemRow } from './rto-item-row';
 import type { RtoItemCondition, RtoDisposition } from '@skydrop/db';
 import { OpenReturns } from './open-returns';
 import { AtOurDoorList, StillWithCourierList } from './awaiting-returns';
@@ -304,100 +304,5 @@ export function RtoStation(): ReactElement {
         title="Scan the return label"
       />
     </>
-  );
-}
-
-function RtoItemRow({
-  item,
-  onSave,
-  saving,
-}: {
-  readonly item: {
-    readonly shipmentItemId: string;
-    readonly skuCode: string;
-    readonly productName: string;
-    readonly variantLabel: string | null;
-    readonly quantity: number;
-    readonly rtoCondition: string | null;
-    readonly rtoDisposition: string | null;
-    readonly rtoInspectionNotes: string | null;
-  };
-  readonly onSave: (condition: string, disposition: string, notes?: string) => Promise<void>;
-  readonly saving: boolean;
-}): ReactElement {
-  const [condition, setCondition] = useState(item.rtoCondition ?? '');
-  const [disposition, setDisposition] = useState(item.rtoDisposition ?? '');
-  const [notes, setNotes] = useState(item.rtoInspectionNotes ?? '');
-
-  const inspected = item.rtoCondition !== null && item.rtoDisposition !== null;
-
-  return (
-    <div
-      className={
-        'p-3 rounded-[6px] border ' +
-        (inspected
-          ? 'border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)]'
-          : 'border-border')
-      }
-    >
-      <div className="flex items-baseline justify-between mb-2">
-        <div>
-          <div className="text-text-bright text-sm">
-            {item.productName}
-            {item.variantLabel ? (
-              <span className="text-text-muted"> · {item.variantLabel}</span>
-            ) : null}
-          </div>
-          <div className="text-text-faint text-xs font-mono">
-            {item.skuCode} · qty {item.quantity}
-          </div>
-        </div>
-        {inspected && <div className="text-accent text-xs">✓ Inspected</div>}
-      </div>
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <FormField label="Condition">
-          <Select
-            value={condition}
-            onChange={(e) => setCondition(e.target.value)}
-            disabled={saving}
-          >
-            <option value="">—</option>
-            <option value="GOOD">GOOD</option>
-            <option value="DAMAGED">DAMAGED</option>
-            <option value="MISSING">MISSING</option>
-          </Select>
-        </FormField>
-        <FormField label="Disposition">
-          <Select
-            value={disposition}
-            onChange={(e) => setDisposition(e.target.value)}
-            disabled={saving}
-          >
-            <option value="">—</option>
-            <option value="RESTOCK">RESTOCK</option>
-            <option value="WRITE_OFF">WRITE_OFF</option>
-          </Select>
-        </FormField>
-      </div>
-      <FormField label="Notes">
-        <Input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          maxLength={1000}
-          placeholder="Optional inspection notes"
-          disabled={saving}
-        />
-      </FormField>
-      <div className="flex justify-end mt-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={saving || !condition || !disposition}
-          onClick={() => void onSave(condition, disposition, notes.trim() || undefined)}
-        >
-          {saving ? 'Saving…' : 'Save inspection'}
-        </Button>
-      </div>
-    </div>
   );
 }

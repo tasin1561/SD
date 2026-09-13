@@ -16,6 +16,7 @@ import { TicketModule } from '../ticket/ticket.module';
 import { InboundFreightModule } from '../inbound-freight/inbound-freight.module';
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { TrackingEventsModule } from '../tracking-events/tracking-events.module';
+import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 
 /**
  * Module 8 warehouse-rto module — reverted to a dispatch/pack-time
@@ -61,6 +62,8 @@ import { TrackingEventsModule } from '../tracking-events/tracking-events.module'
     // A returned parcel is charged delivery + RTO fee at receive.
     SellerWalletAccrualModule,
     SellerRestrictionModule,
+    // The product picture beside each line on the inspect screen.
+    CatalogReadModule,
   ],
   controllers: [WarehouseRtoController],
   providers: [

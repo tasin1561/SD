@@ -564,6 +564,7 @@ Canonical applications:
    - Hard-deleted (Phase 2 cron): row gone, object deleted together
    - Never registered (orphan): no row → object > 24h → cleaned by orphan cron (skips `thumbnails/` prefix)
 5. **Presigned URL security:** key path must match `sellers/{sellerId}/variants/{variantId}/{token}.{ext}`; service validates seller segment matches authenticated seller; HEAD verifies object exists and size matches before registering.
+5b. **A product picture beside a line on ANY screen comes from `CatalogReadService.thumbnailUrlsByVariant` / `displayInfoByVariant`** (2026-09-13) — one batched query for every line, the thumbnail key preferred via `displayImageKey`, presigned inside the handler that already authorised the read, and never stored. Call centre, order detail and the RTO inspect screen use it; a lookup failure costs the picture, never the screen (fail-open). The client renders it with `ProductThumb` from `@skydrop/ui/components`. Do not query `product_images` from another module for this (goods receipt still does — a known exception, not a pattern to copy).
 6. **CSV re-upload PATCH semantics:** CSV-provided cells overwrite; omitted/blank cells do not null out existing values. Dedup by `(sellerId, externalRef)` for products, `(sellerId, skuCode)` for variants.
 7. **Archive vs delete:** ARCHIVED status blocks new uses (orders, stock receiving) — enforce in service layer; `deletedAt` makes the row invisible in read paths. Both preserve historical references.
 

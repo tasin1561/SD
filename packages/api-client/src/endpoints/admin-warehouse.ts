@@ -236,6 +236,9 @@ export interface RtoShipmentItem {
   readonly rtoCondition: RtoItemCondition | null;
   readonly rtoDisposition: RtoDisposition | null;
   readonly rtoInspectionNotes: string | null;
+  /** Presigned product thumbnail, minted per response (short-lived — never
+   *  store it); null when the variant has no image. */
+  readonly thumbnailUrl: string | null;
 }
 
 export interface RtoShipmentDetail {

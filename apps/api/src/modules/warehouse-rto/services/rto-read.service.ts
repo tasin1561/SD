@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { type OrderStatus, type RtoDisposition, type RtoItemCondition } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 
 /**
  * Read-only listing of a shipment + its items for the RTO operator UI.
@@ -24,6 +25,16 @@ export interface RtoShipmentItem {
   rtoCondition: RtoItemCondition | null;
   rtoDisposition: RtoDisposition | null;
   rtoInspectionNotes: string | null;
+  /**
+   * The product's current primary picture (thumbnail preferred), as a
+   * presigned URL minted for THIS response — never stored. Null when the
+   * variant has no image, or when the catalogue read failed (fail-open:
+   * an inspector without a picture can still inspect; one without the
+   * screen cannot). The inspector judges the item's condition with the
+   * box open, and a photograph answers "is this even the right thing"
+   * before a SKU string does.
+   */
+  thumbnailUrl: string | null;
 }
 
 export interface RtoShipmentDetail {
@@ -38,7 +49,12 @@ export interface RtoShipmentDetail {
 
 @Injectable()
 export class RtoReadService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(RtoReadService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalog: CatalogReadService,
+  ) {}
 
   async loadShipment(shipmentId: string): Promise<RtoShipmentDetail> {
     const shipment = await this.prisma.client.shipment.findFirst({
@@ -69,6 +85,9 @@ export class RtoReadService {
             rtoCondition: true,
             rtoDisposition: true,
             rtoInspectionNotes: true,
+            // The line snapshot carries no variant id; the order line it
+            // was cut from does (the FK the shipment line already holds).
+            orderItem: { select: { variantId: true } },
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -81,6 +100,7 @@ export class RtoReadService {
       });
     }
     const firstOrder = shipment.orderShipments[0]?.order ?? null;
+    const thumbs = await this.thumbnails(shipment.items.map((it) => it.orderItem.variantId));
     return {
       shipmentId: shipment.id,
       shipmentNumber: shipment.shipmentNumber,
@@ -98,7 +118,28 @@ export class RtoReadService {
         rtoCondition: it.rtoCondition,
         rtoDisposition: it.rtoDisposition,
         rtoInspectionNotes: it.rtoInspectionNotes,
+        thumbnailUrl: thumbs.get(it.orderItem.variantId) ?? null,
       })),
     };
+  }
+
+  /**
+   * One catalogue read for every line on the parcel, through the
+   * sanctioned boundary (MUST #13) — the same method the call centre and
+   * order detail use, so every staff screen agrees on which picture is
+   * "the" picture and none of them serves a full-size original in a
+   * thumbnail cell. The access decision was made by the handler that
+   * called `loadShipment`; nothing here widens it.
+   */
+  private async thumbnails(variantIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
+    try {
+      return await this.catalog.thumbnailUrlsByVariant(variantIds);
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'RTO line thumbnails unavailable; rendering without them (fail-open)',
+      );
+      return new Map();
+    }
   }
 }
