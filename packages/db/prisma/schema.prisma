@@ -6582,6 +6582,11 @@ enum TicketStatus {
 /// than collapsed into a current-status column.
 model Ticket {
   id             String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// What a person calls the ticket — `TK-2026-000003`. Allocated from
+  /// the per-year `ticket_number_seq_<YYYY>` inside the transaction that
+  /// inserts the row (TicketService.open), like ORD-8's order numbers.
+  /// The uuid stays the key and the URL; this is what gets read aloud.
+  ticketNumber   String       @unique @map("ticket_number")
   ticketType     TicketType   @map("ticket_type")
   status         TicketStatus @default(OPEN)
   sellerId       String       @map("seller_id") @db.Uuid

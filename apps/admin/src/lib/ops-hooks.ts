@@ -51,6 +51,13 @@ export interface Paginated<T> {
 
 export interface TicketView {
   readonly id: string;
+  /** `TK-2026-000003` — what a seller quotes to us. The id is for links. */
+  readonly ticketNumber: string;
+  /**
+   * Who opened it, and so whose words the opening message is. A scrap
+   * ticket the RTO inspection opened carries OUR message, not the seller's.
+   */
+  readonly openedBy: 'STAFF' | 'SELLER' | 'SYSTEM';
   readonly ticketType: TicketType;
   readonly status: TicketStatus;
   readonly sellerId: string;
@@ -274,6 +281,8 @@ export function useTicketsList(
     stage?: string;
     ticketType?: string;
     sellerId?: string;
+    /** Ticket number, subject, order number, parcel number or waybill. */
+    search?: string;
     page?: number;
     pageSize?: number;
   },

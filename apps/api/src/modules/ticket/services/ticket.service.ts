@@ -18,12 +18,27 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { TicketStateMachineService } from './ticket-state-machine.service';
+import { allocateTicketNumber } from './ticket-numbering';
 
 export interface TicketActor {
   readonly type: ActorType;
   readonly staffId?: string | null;
   readonly sellerUserId?: string | null;
 }
+
+/**
+ * The companion "Ticket opened" event `open()` writes — the one row that
+ * records the opener's ACTOR TYPE. Read from there rather than from the
+ * `opened_by_*` columns alone, because a seller acting without a user id
+ * (an API key, the delivery-action path) sets neither column and would
+ * otherwise read as the system speaking.
+ */
+const OPENING_EVENT = {
+  where: { fromStatus: null },
+  orderBy: { createdAt: 'asc' },
+  take: 1,
+  select: { actorType: true },
+} as const;
 
 /**
  * The two names a person can actually read, pulled with every ticket.
@@ -36,7 +51,55 @@ export interface TicketActor {
 const TICKET_NAMES = {
   order: { select: { orderNumber: true } },
   shipment: { select: { shipmentNumber: true } },
+  events: OPENING_EVENT,
 } as const;
+
+/**
+ * Who opened a ticket, as the conversations need it: our side or the
+ * seller's. The opening bubble is the ticket's `description`, and it
+ * used to be drawn as the SELLER's on every ticket — so the message we
+ * write when an RTO inspection opens a scrap ticket read as "You" to the
+ * seller who had never said it.
+ */
+export type TicketOpener = 'STAFF' | 'SELLER' | 'SYSTEM';
+
+function openedByOf(row: {
+  openedByStaffId: string | null;
+  openedBySellerUserId: string | null;
+  events?: readonly { actorType: ActorType }[];
+}): TicketOpener {
+  switch (row.events?.[0]?.actorType) {
+    case ActorType.SELLER:
+    case ActorType.API:
+      return 'SELLER';
+    case ActorType.STAFF:
+      return 'STAFF';
+    case ActorType.SYSTEM:
+      return 'SYSTEM';
+    case undefined:
+      // `typeof` rather than `!== null`: a caller that did not select the
+      // column hands over undefined, which a null check reads as set.
+      if (typeof row.openedBySellerUserId === 'string') return 'SELLER';
+      if (typeof row.openedByStaffId === 'string') return 'STAFF';
+      return 'SYSTEM';
+  }
+}
+
+/** Search: the ticket number, its subject, the order and the parcel. */
+function ticketSearchWhere(search: string | undefined): Prisma.TicketWhereInput {
+  const q = search?.trim().slice(0, 100) ?? '';
+  if (q === '') return {};
+  const c = { contains: q, mode: 'insensitive' as const };
+  return {
+    OR: [
+      { ticketNumber: c },
+      { subject: c },
+      { order: { orderNumber: c } },
+      { shipment: { shipmentNumber: c } },
+      { shipment: { awbNumber: c } },
+    ],
+  };
+}
 
 /**
  * The three stages a ticket travels, and the statuses behind each.
@@ -68,6 +131,13 @@ export interface OpenTicketInput {
   readonly sellerId: string;
   readonly subject: string;
   readonly description?: string | null;
+  /**
+   * The description, written once the ticket number is known — so an
+   * opening message WE write can name the ticket it opens. Wins over
+   * `description` when given. Called inside the opening transaction and
+   * must not do I/O.
+   */
+  readonly descriptionFor?: (ticketNumber: string) => string;
   readonly orderId?: string | null;
   readonly shipmentId?: string | null;
   readonly shipmentItemId?: string | null;
@@ -87,6 +157,10 @@ export interface ResolveTicketInput {
 
 export interface TicketView {
   readonly id: string;
+  /** `TK-2026-000003` — what a person reads out. The id stays for links. */
+  readonly ticketNumber: string;
+  /** Whose opening message `description` is — see TicketOpener. */
+  readonly openedBy: TicketOpener;
   readonly ticketType: TicketType;
   readonly status: TicketStatus;
   readonly sellerId: string;
@@ -224,7 +298,14 @@ export class TicketService {
      * the seller thinks they have asked, and nobody has been asked.
      */
     scope?: { sellerId?: string; openOnly?: boolean },
+    /**
+     * The caller's transaction — the RTO inspection says a corrected
+     * finding in the same transaction as the correction, so the seller is
+     * never shown a finding the ticket does not also carry.
+     */
+    tx?: Prisma.TransactionClient,
   ): Promise<{ ticketId: string; at: Date }> {
+    const client = tx ?? this.prisma.client;
     const trimmed = note.trim();
     if (trimmed.length < 3) {
       throw new BadRequestException({
@@ -232,7 +313,7 @@ export class TicketService {
         message: 'Write something the seller can act on.',
       });
     }
-    const ticket = await this.prisma.client.ticket.findFirst({
+    const ticket = await client.ticket.findFirst({
       where: {
         id: ticketId,
         ...(scope?.sellerId === undefined ? {} : { sellerId: scope.sellerId }),
@@ -249,7 +330,7 @@ export class TicketService {
           'This one is closed, so a reply here would not reach anybody. Raise a new issue and we will pick it up.',
       });
     }
-    const row = await this.prisma.client.ticketEvent.create({
+    const row = await client.ticketEvent.create({
       data: {
         ticketId,
         fromStatus: ticket.status,
@@ -315,8 +396,49 @@ export class TicketService {
     actor: TicketActor,
     tx?: Prisma.TransactionClient,
   ): Promise<TicketView> {
-    const client = tx ?? this.prisma.client;
+    return (await this.openOrFind(input, actor, tx)).ticket;
+  }
 
+  /** The auto-raised ticket for one shipment line, if there is one. */
+  async findByShipmentItem(
+    shipmentItemId: string,
+    ticketType: TicketType,
+    tx?: Prisma.TransactionClient,
+  ): Promise<TicketView | null> {
+    const row = await (tx ?? this.prisma.client).ticket.findUnique({
+      where: { shipmentItemId_ticketType: { shipmentItemId, ticketType } },
+      include: { events: OPENING_EVENT },
+    });
+    return row === null ? null : this.toView(row);
+  }
+
+  /**
+   * `open`, saying whether it opened anything. The RTO inspection needs
+   * to know: a re-inspection that finds the existing ticket may have a
+   * corrected finding to say on it, and a fresh ticket already says it.
+   *
+   * The ticket NUMBER is allocated inside the same transaction as the
+   * insert (the caller's, or one of our own), so a rolled-back open gives
+   * its number back to nobody and two opens can never share one. The
+   * idempotent path returns the existing ticket before anything is
+   * allocated, so a retried inspection never burns a second number.
+   */
+  async openOrFind(
+    input: OpenTicketInput,
+    actor: TicketActor,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ ticket: TicketView; created: boolean }> {
+    const run = (
+      client: Prisma.TransactionClient,
+    ): Promise<{ ticket: TicketView; created: boolean }> => this.openIn(client, input, actor);
+    return tx === undefined ? this.prisma.client.$transaction(run) : run(tx);
+  }
+
+  private async openIn(
+    client: Prisma.TransactionClient,
+    input: OpenTicketInput,
+    actor: TicketActor,
+  ): Promise<{ ticket: TicketView; created: boolean }> {
     if (input.shipmentItemId) {
       const existing = await client.ticket.findUnique({
         where: {
@@ -325,17 +447,25 @@ export class TicketService {
             ticketType: input.ticketType,
           },
         },
+        include: { events: OPENING_EVENT },
       });
-      if (existing) return this.toView(existing);
+      if (existing) return { ticket: this.toView(existing), created: false };
     }
+
+    const ticketNumber = await allocateTicketNumber(client);
+    const description =
+      input.descriptionFor === undefined
+        ? (input.description ?? null)
+        : input.descriptionFor(ticketNumber);
 
     const created = await client.ticket.create({
       data: {
+        ticketNumber,
         ticketType: input.ticketType,
         status: TicketStatus.OPEN,
         sellerId: input.sellerId,
         subject: input.subject,
-        description: input.description ?? null,
+        description,
         orderId: input.orderId ?? null,
         shipmentId: input.shipmentId ?? null,
         shipmentItemId: input.shipmentItemId ?? null,
@@ -370,14 +500,20 @@ export class TicketService {
         severity: 'MEDIUM',
         metadata: {
           ticketType: input.ticketType,
+          ticketNumber,
           shipmentItemId: input.shipmentItemId ?? null,
           rtoCondition: input.rtoCondition ?? null,
         },
       },
-      tx,
+      client,
     );
 
-    return this.toView(created);
+    // The opening event was just written with this actor, so the view can
+    // say who opened it without reading it back.
+    return {
+      ticket: this.toView({ ...created, events: [{ actorType: actor.type }] }),
+      created: true,
+    };
   }
 
   /**
@@ -578,6 +714,8 @@ export class TicketService {
     status?: TicketStatus,
     orderId?: string,
     stage?: TicketStage,
+    /** Ticket number, subject, order number, parcel number or waybill. */
+    search?: string,
   ): Promise<readonly TicketView[]> {
     const rows = await this.prisma.client.ticket.findMany({
       // An order may carry SEVERAL tickets — a re-attempt, then a
@@ -595,6 +733,7 @@ export class TicketService {
             ? {}
             : { status: { in: [...STAGE_STATUSES[stage]] } }),
         ...(orderId === undefined ? {} : { orderId }),
+        ...ticketSearchWhere(search),
       },
       orderBy: { createdAt: 'desc' },
       include: TICKET_NAMES,
@@ -641,6 +780,8 @@ export class TicketService {
     ticketType?: TicketType;
     /** AUTO = software is carrying it; MANUAL = a person must. */
     handling?: TicketHandlingFilter;
+    /** Ticket number, subject, order number, parcel number or waybill. */
+    search?: string;
     page?: number;
     pageSize?: number;
   }): Promise<{ items: readonly TicketView[]; total: number; page: number; pageSize: number }> {
@@ -662,6 +803,7 @@ export class TicketService {
       // a scrap ticket has no courier to carry it to, so it belongs in
       // neither answer.
       ...(filters.handling === undefined ? {} : { handling: filters.handling }),
+      ...ticketSearchWhere(filters.search),
     };
     const [rows, total] = await Promise.all([
       this.prisma.client.ticket.findMany({
@@ -778,6 +920,11 @@ export class TicketService {
   private toView(
     row: {
       id: string;
+      ticketNumber: string;
+      openedByStaffId: string | null;
+      openedBySellerUserId: string | null;
+      /** The opening event (OPENING_EVENT), when the read carried it. */
+      events?: readonly { actorType: ActorType }[];
       ticketType: TicketType;
       status: TicketStatus;
       sellerId: string;
@@ -809,6 +956,8 @@ export class TicketService {
   ): TicketView {
     return {
       id: row.id,
+      ticketNumber: row.ticketNumber,
+      openedBy: openedByOf(row),
       issueCategoryExternalId: row.issueCategoryExternalId,
       issueSubcategoryExternalId: row.issueSubcategoryExternalId,
       issueCategoryLabel:

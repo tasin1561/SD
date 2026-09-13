@@ -75,16 +75,20 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     (e) => (e.note ?? '').trim() === 'Ticket opened' && e.actorType === 'SELLER',
   );
 
+  // The opening message sits with WHOEVER OPENED the ticket: the seller's
+  // words on a seller issue, ours on a ticket we opened (a scrap/damage
+  // claim off an RTO inspection) — which used to be drawn as the seller's.
   if (ticket.description !== null && ticket.description.trim() !== '') {
+    const theirs = ticket.openedBy === 'SELLER';
     bubbles.push({
       key: 'raised',
-      side: 'SELLER',
-      who: 'Seller',
+      side: theirs ? 'SELLER' : 'US',
+      who: theirs ? 'Seller' : 'Skydrop',
       body: ticket.description,
       at: ticket.createdAt,
-      ...(openingEvent === undefined
-        ? {}
-        : { eventId: openingEvent.id, relayedAt: openingEvent.relayedAt }),
+      ...(theirs && openingEvent !== undefined
+        ? { eventId: openingEvent.id, relayedAt: openingEvent.relayedAt }
+        : {}),
     });
   }
 

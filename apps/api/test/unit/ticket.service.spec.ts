@@ -14,6 +14,9 @@ const TICKET = 'ticket-1';
 function ticketRow(over: Partial<AnyArgs> = {}): AnyArgs {
   return {
     id: TICKET,
+    ticketNumber: 'TK-2026-000001',
+    openedByStaffId: null,
+    openedBySellerUserId: null,
     ticketType: TicketType.SCRAP_DAMAGE,
     status: TicketStatus.OPEN,
     sellerId: SELLER,
@@ -76,9 +79,19 @@ function makeService(
   ]);
   const eventFindMany = jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => []);
 
+  // The ticket-number allocation runs raw SQL on the transaction it is
+  // handed: an advisory lock, a lazy CREATE SEQUENCE, then nextval.
+  let serial = 0;
+  const executeRawUnsafe = jest.fn(async () => 0);
+  const queryRawUnsafe = jest.fn(async () => {
+    serial += 1;
+    return [{ value: BigInt(serial) }];
+  });
   const tx = {
-    ticket: { findUnique, create, update, updateMany },
+    ticket: { findUnique, findFirst, create, update, updateMany },
     ticketEvent: { create: eventCreate },
+    $executeRawUnsafe: executeRawUnsafe,
+    $queryRawUnsafe: queryRawUnsafe,
   };
   const $transaction = jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx));
   const client = {
@@ -116,6 +129,9 @@ function makeService(
     findMany,
     issueCategoryFindMany,
     claim: updateMany,
+    tx,
+    $transaction,
+    nextval: queryRawUnsafe,
   };
 }
 
@@ -490,5 +506,122 @@ describe('TicketService issue-category labels', () => {
     // The id survives — nothing is lost; there is just no current word.
     expect(view?.issueCategoryExternalId).toBe('GONE-9');
     expect(view?.issueCategoryLabel).toBeNull();
+  });
+});
+
+describe('TicketService — ticket numbers', () => {
+  it('allocates the number on the transaction it is handed, and the description can name it', async () => {
+    const { svc, create, tx, $transaction, nextval } = makeService();
+    const r = await svc.openOrFind(
+      {
+        ticketType: TicketType.SCRAP_DAMAGE,
+        sellerId: SELLER,
+        subject: 'RTO DAMAGED: Widget',
+        shipmentItemId: 'si-9',
+        descriptionFor: (n) => `Ticket ${n} — our message`,
+      },
+      { type: ActorType.STAFF, staffId: STAFF },
+      tx as never,
+    );
+    const year = new Date().getUTCFullYear();
+    const data = create.mock.calls[0]?.[0]?.data as AnyArgs;
+    expect(data.ticketNumber).toBe(`TK-${year}-000001`);
+    expect(data.description).toBe(`Ticket TK-${year}-000001 — our message`);
+    expect(nextval).toHaveBeenCalledTimes(1);
+    // The caller's transaction, not one of our own.
+    expect($transaction).not.toHaveBeenCalled();
+    expect(r.created).toBe(true);
+    expect(r.ticket.ticketNumber).toBe(`TK-${year}-000001`);
+    expect(r.ticket.openedBy).toBe('STAFF');
+  });
+
+  it('opens in a transaction of its own when none is given, so the number and the row commit together', async () => {
+    const { svc, $transaction } = makeService();
+    await svc.open(
+      { ticketType: TicketType.SELLER_RAISED_ISSUE, sellerId: SELLER, subject: 'Broken' },
+      { type: ActorType.SELLER, sellerUserId: 'su-1' },
+    );
+    expect($transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('a retried open of the same auto-raised ticket keeps its number and allocates nothing', async () => {
+    const { svc, create, nextval } = makeService({
+      existingByItem: ticketRow({ ticketNumber: 'TK-2026-000007' }),
+    });
+    const r = await svc.openOrFind(
+      {
+        ticketType: TicketType.SCRAP_DAMAGE,
+        sellerId: SELLER,
+        subject: 're-inspected',
+        shipmentItemId: 'si-1',
+      },
+      { type: ActorType.STAFF, staffId: STAFF },
+    );
+    expect(r.created).toBe(false);
+    expect(r.ticket.ticketNumber).toBe('TK-2026-000007');
+    expect(create).not.toHaveBeenCalled();
+    expect(nextval).not.toHaveBeenCalled();
+  });
+});
+
+describe('TicketService — who opened it', () => {
+  it.each([
+    ['the opening event says SELLER', { events: [{ actorType: ActorType.SELLER }] }, 'SELLER'],
+    ['a seller acting through the API', { events: [{ actorType: ActorType.API }] }, 'SELLER'],
+    ['the opening event says STAFF', { events: [{ actorType: ActorType.STAFF }] }, 'STAFF'],
+    ['the opening event says SYSTEM', { events: [{ actorType: ActorType.SYSTEM }] }, 'SYSTEM'],
+    ['no event read, a staff opener', { openedByStaffId: STAFF }, 'STAFF'],
+    ['no event read, a seller opener', { openedBySellerUserId: 'su-1' }, 'SELLER'],
+    ['no event read, nobody recorded', {}, 'SYSTEM'],
+  ])('%s', async (_label, over, expected) => {
+    const { svc } = makeService({ existing: ticketRow(over) });
+    const view = await svc.getById(TICKET);
+    expect(view.openedBy).toBe(expected);
+    expect(view.ticketNumber).toBe('TK-2026-000001');
+  });
+});
+
+describe('TicketService — search', () => {
+  it('the admin list searches the ticket number, subject, order, parcel and waybill', async () => {
+    const { svc, findMany } = makeService();
+    await svc.listForAdmin({ search: '  tk-2026-000003 ' });
+    const where = (findMany.mock.calls[0]?.[0] as AnyArgs).where as AnyArgs;
+    const c = { contains: 'tk-2026-000003', mode: 'insensitive' };
+    expect(where.OR).toEqual([
+      { ticketNumber: c },
+      { subject: c },
+      { order: { orderNumber: c } },
+      { shipment: { shipmentNumber: c } },
+      { shipment: { awbNumber: c } },
+    ]);
+  });
+
+  it("the seller list searches too, still scoped to the seller's own tickets", async () => {
+    const { svc, findMany } = makeService();
+    await svc.listForSeller(SELLER, undefined, undefined, undefined, 'TK-2026');
+    const where = (findMany.mock.calls[0]?.[0] as AnyArgs).where as AnyArgs;
+    expect(where.sellerId).toBe(SELLER);
+    expect(where.OR).toBeDefined();
+  });
+
+  it('a blank search adds no filter', async () => {
+    const { svc, findMany } = makeService();
+    await svc.listForSeller(SELLER, undefined, undefined, undefined, '   ');
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { sellerId: SELLER } }));
+  });
+});
+
+describe('TicketService.addNote on a caller transaction', () => {
+  it('writes the note through the transaction it is handed', async () => {
+    const { svc, tx, eventCreate } = makeService();
+    await svc.addNote(
+      TICKET,
+      'We looked again.',
+      { type: ActorType.STAFF, staffId: STAFF },
+      undefined,
+      tx as never,
+    );
+    expect(tx.ticket.findFirst).toHaveBeenCalledTimes(1);
+    expect(eventCreate).toHaveBeenCalledTimes(1);
   });
 });

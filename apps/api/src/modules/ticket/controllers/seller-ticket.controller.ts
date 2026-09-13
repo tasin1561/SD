@@ -143,8 +143,10 @@ export class SellerTicketController {
     // Open / Reviewing / Closed — the three the screens speak in.
     // `status` still works for anything wanting one exact outcome.
     @Query('stage') stage?: TicketStage,
+    /** Ticket number, subject, order number, parcel number or waybill. */
+    @Query('search') search?: string,
   ): Promise<readonly TicketView[]> {
-    return this.tickets.listForSeller(seller.id, status, orderId, stage);
+    return this.tickets.listForSeller(seller.id, status, orderId, stage, search);
   }
 
   @Get(':ticketId')

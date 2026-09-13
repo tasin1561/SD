@@ -32,6 +32,13 @@ import type {
 
 export interface TicketView {
   readonly id: string;
+  /** `TK-2026-000003` — what you quote to us. The id is for links. */
+  readonly ticketNumber: string;
+  /**
+   * Who opened it, and so whose words the opening message is. A ticket
+   * Skydrop opened (damage found on a return) opens with OUR message.
+   */
+  readonly openedBy: 'STAFF' | 'SELLER' | 'SYSTEM';
   readonly ticketType: TicketType;
   readonly status: TicketStatus;
   readonly sellerId: string;
@@ -159,20 +166,27 @@ export interface UnitDiscrepancyReport {
 
 // ───────── Tickets (R7) ─────────
 
-export function useSellerTickets(query: {
-  status?: string;
-  /** 'OPEN' | 'REVIEWING' | 'CLOSED' — the three the screens speak in. */
-  stage?: string;
-  orderId?: string;
-}): UseQueryResult<readonly TicketView[]> {
+export function useSellerTickets(
+  query: {
+    status?: string;
+    /** 'OPEN' | 'REVIEWING' | 'CLOSED' — the three the screens speak in. */
+    stage?: string;
+    orderId?: string;
+    /** Ticket number, subject, order number, parcel number or waybill. */
+    search?: string;
+  },
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<readonly TicketView[]> {
   const client = useApiClient();
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: ['seller-tickets', 'list', query],
     queryFn: () => {
       const qs = new URLSearchParams();
       if (query.status !== undefined && query.status !== '') qs.set('status', query.status);
       if (query.stage !== undefined && query.stage !== '') qs.set('stage', query.stage);
       if (query.orderId !== undefined && query.orderId !== '') qs.set('orderId', query.orderId);
+      if (query.search !== undefined && query.search !== '') qs.set('search', query.search);
       const suffix = qs.toString() === '' ? '' : `?${qs.toString()}`;
       return client.request<readonly TicketView[]>(`/api/seller/tickets${suffix}`);
     },

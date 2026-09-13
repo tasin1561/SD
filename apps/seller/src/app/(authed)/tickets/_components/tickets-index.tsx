@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState, type ReactElement } from 'react';
+import { Fragment, useEffect, useState, type ReactElement } from 'react';
 import { MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -10,6 +10,7 @@ import {
   EmptyState,
   ErrorNote,
   Ident,
+  Input,
   Money,
   PageHeader,
   Select,
@@ -24,7 +25,7 @@ import {
   Toolbar,
   Tr,
 } from '@skydrop/ui/components';
-import { TicketStatus, TicketType } from '@skydrop/db';
+import { TicketStatus } from '@skydrop/db';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from './raise-ticket-modal';
 import { CourierThread } from './courier-thread';
@@ -53,7 +54,19 @@ export function SellerTicketsIndex(): ReactElement {
   // outcomes in the database — refunded, goods back, write-off, not
   // upheld — and a filter offering all four made somebody pick which
   // kind of finished they meant in order to ask "is it finished".
-  const list = useSellerTickets(status === '' ? {} : { stage: status });
+  // Search by the ticket number you were given (TK-…), the subject, or
+  // the order / parcel / waybill it is about. Waits for typing to stop.
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+  const list = useSellerTickets({
+    ...(status === '' ? {} : { stage: status }),
+    ...(debounced === '' ? {} : { search: debounced }),
+  });
+  const filtered = status !== '' || debounced !== '';
 
   const rows = list.data ?? [];
   const open = rows.filter(
@@ -104,6 +117,14 @@ export function SellerTicketsIndex(): ReactElement {
           <option value="REVIEWING">Reviewing</option>
           <option value="CLOSED">Closed</option>
         </Select>
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Ticket (TK-…), order, parcel or waybill"
+          aria-label="Search tickets"
+          className="w-72"
+        />
       </Toolbar>
 
       {list.isError ? (
@@ -121,14 +142,14 @@ export function SellerTicketsIndex(): ReactElement {
         <Card className="rounded-t-none border-t-0">
           <EmptyState
             bare
-            title={status === '' ? 'No tickets' : 'No tickets with that status'}
+            title={filtered ? 'No tickets match' : 'No tickets'}
             description={
-              status === ''
-                ? 'Nothing is disputed. If a parcel arrives damaged, goes missing, or something else looks wrong, raise it here and we will work it out.'
-                : 'Try a different status.'
+              filtered
+                ? 'Try a different status, or check the ticket number.'
+                : 'Nothing is disputed. If a parcel arrives damaged, goes missing, or something else looks wrong, raise it here and we will work it out.'
             }
             action={
-              canWrite && status === '' ? (
+              canWrite && !filtered ? (
                 <Button variant="primary" size="sm" onClick={() => setRaising(true)}>
                   Raise an issue
                 </Button>
@@ -140,6 +161,7 @@ export function SellerTicketsIndex(): ReactElement {
         <Table wrapperClassName="rounded-t-none border-t-0">
           <THead>
             <Tr>
+              <Th>Ticket</Th>
               <Th>Raised by</Th>
               <Th>Subject</Th>
               <Th>Order</Th>
@@ -156,8 +178,9 @@ export function SellerTicketsIndex(): ReactElement {
                     a ticket with no order (a general parcel issue) was
                     sending the reader to /orders/null. */}
                 <Tr onActivate={() => router.push(`/tickets/${t.id}`)}>
+                  <Td className="whitespace-nowrap font-mono text-xs">{t.ticketNumber}</Td>
                   <Td className="text-text-muted whitespace-nowrap text-xs">
-                    {t.ticketType === TicketType.SCRAP_DAMAGE ? 'Skydrop' : 'You'}
+                    {t.openedBy === 'SELLER' ? 'You' : 'Skydrop'}
                   </Td>
                   <Td className="max-w-xs">
                     {/* The real link, in the primary cell — the row click
@@ -221,7 +244,7 @@ export function SellerTicketsIndex(): ReactElement {
                 </Tr>
                 {openThread === t.id ? (
                   <Tr>
-                    <Td colSpan={7} className="bg-surface-1 p-3">
+                    <Td colSpan={8} className="bg-surface-1 p-3">
                       <TicketTimeline ticketId={t.id} />
                       <CourierThread ticketId={t.id} />
                     </Td>

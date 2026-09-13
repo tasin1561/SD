@@ -16,7 +16,6 @@ import {
   Skeleton,
   TicketStatusBadge,
 } from '@skydrop/ui/components';
-import { TicketType } from '@skydrop/db';
 import type { TicketView } from '@/lib/ops-hooks';
 import { useSellerTicket } from '@/lib/ticket-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -70,14 +69,16 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
   }
 
   const ticket = query.data;
-  const raisedByUs = ticket.ticketType === TicketType.SCRAP_DAMAGE;
+  // Who opened it, as the server recorded it — not guessed from the type.
+  const raisedByUs = ticket.openedBy !== 'SELLER';
 
   return (
     <div>
       <BackLink />
 
       <PageHeader
-        title={ticket.subject}
+        // The NUMBER leads: it is what you quote to us about this ticket.
+        title={`${ticket.ticketNumber} · ${ticket.subject}`}
         subtitle={`${raisedByUs ? 'Raised by Skydrop' : 'Raised by you'} on ${formatDateTime(ticket.createdAt)}`}
         action={<TicketStatusBadge status={ticket.status} />}
       />

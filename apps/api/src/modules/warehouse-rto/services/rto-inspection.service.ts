@@ -5,6 +5,11 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { TicketService } from '../../ticket/services/ticket.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import {
+  type ScrapTicketFacts,
+  scrapTicketOpeningMessage,
+  scrapTicketReinspectionNote,
+} from './rto-scrap-ticket-message';
 
 export interface InspectRtoItemInput {
   condition: RtoItemCondition;
@@ -60,10 +65,22 @@ export class RtoInspectionService {
         shipmentId: true,
         skuCode: true,
         productName: true,
+        // The scrap ticket's opening message states these (quantity) and
+        // compares the prior finding with this one (a correction is said
+        // on the ticket rather than left for the seller to notice).
+        quantity: true,
+        rtoCondition: true,
+        rtoDisposition: true,
+        rtoInspectionNotes: true,
         shipment: {
           select: {
             id: true,
             courierCode: true,
+            shipmentNumber: true,
+            awbNumber: true,
+            rtoReceivedAt: true,
+            rtoReceivedWarehouseId: true,
+            originWarehouseId: true,
             orderShipments: {
               select: { orderId: true },
               orderBy: { shipmentSequence: 'asc' },
@@ -108,8 +125,22 @@ export class RtoInspectionService {
     // DAMAGED/MISSING judgement is exactly the moment a liability claim
     // comes into existence, so recording the judgement without the
     // ticket would reintroduce the silent-write-off gap this closes.
-    const damaged =
-      input.condition === RtoItemCondition.DAMAGED || input.condition === RtoItemCondition.MISSING;
+    const damaged = isClaim(input.condition);
+    // A RE-inspection that changes the finding. The ticket's opening
+    // message is never edited (TKT-1 — the conversation is a record), so
+    // the correction is said on it as a new message, in the same
+    // transaction as the correction itself.
+    const changed =
+      item.rtoCondition !== null &&
+      (item.rtoCondition !== input.condition ||
+        item.rtoDisposition !== input.disposition ||
+        (item.rtoInspectionNotes ?? null) !== notes);
+    const correctsAClaim = !damaged && changed && isClaim(item.rtoCondition);
+    const facts =
+      damaged || correctsAClaim
+        ? await this.scrapFacts(item, order.orderNumber, input.condition, input.disposition, notes)
+        : null;
+    const actor = { type: ActorType.STAFF, staffId };
     await this.prisma.client.$transaction(async (tx) => {
       await tx.shipmentItem.update({
         where: { id: shipmentItemId },
@@ -121,25 +152,52 @@ export class RtoInspectionService {
         },
       });
 
-      if (damaged) {
+      if (damaged && facts !== null) {
         // Idempotent per (shipmentItem, SCRAP_DAMAGE) — re-inspecting a
         // line to correct a judgement returns the existing ticket rather
-        // than stacking duplicates.
-        await this.tickets.open(
+        // than stacking duplicates. The ticket OPENS with our message
+        // stating the facts; an inspector's notes are quoted inside it.
+        const opened = await this.tickets.openOrFind(
           {
             ticketType: TicketType.SCRAP_DAMAGE,
             sellerId: item.orderItem.order.sellerId,
             subject: `RTO ${input.condition}: ${item.productName} (${item.skuCode})`,
-            description: notes,
+            descriptionFor: (ticketNumber) => scrapTicketOpeningMessage({ ...facts, ticketNumber }),
             orderId,
             shipmentId: item.shipmentId,
             shipmentItemId,
             courierCode: item.shipment.courierCode,
             rtoCondition: input.condition,
           },
-          { type: ActorType.STAFF, staffId },
+          actor,
           tx,
         );
+        if (!opened.created && changed && opened.ticket.resolvedAt === null) {
+          await this.tickets.addNote(
+            opened.ticket.id,
+            scrapTicketReinspectionNote(facts),
+            actor,
+            undefined,
+            tx,
+          );
+        }
+      } else if (correctsAClaim && facts !== null) {
+        // Damaged/missing on first look, fine on the second: the ticket
+        // stays (a person closes it), but it now says so.
+        const existing = await this.tickets.findByShipmentItem(
+          shipmentItemId,
+          TicketType.SCRAP_DAMAGE,
+          tx,
+        );
+        if (existing !== null && existing.resolvedAt === null) {
+          await this.tickets.addNote(
+            existing.id,
+            scrapTicketReinspectionNote(facts),
+            actor,
+            undefined,
+            tx,
+          );
+        }
       }
     });
 
@@ -171,4 +229,53 @@ export class RtoInspectionService {
       rtoInspectionNotes: notes,
     };
   }
+
+  /**
+   * The facts the scrap ticket states. The warehouse is where the parcel
+   * came back to — the receiving one, else the origin (a NULL receiving
+   * warehouse means received at the origin, R6). A missing warehouse row
+   * just leaves the "at …" off; it never costs the seller the message.
+   */
+  private async scrapFacts(
+    item: {
+      productName: string;
+      skuCode: string;
+      quantity: number;
+      shipment: {
+        shipmentNumber: string;
+        awbNumber: string | null;
+        rtoReceivedAt: Date | null;
+        rtoReceivedWarehouseId: string | null;
+        originWarehouseId: string;
+      };
+    },
+    orderNumber: string,
+    condition: RtoItemCondition,
+    disposition: RtoDisposition,
+    notes: string | null,
+  ): Promise<ScrapTicketFacts> {
+    const warehouseId = item.shipment.rtoReceivedWarehouseId ?? item.shipment.originWarehouseId;
+    const warehouse = await this.prisma.client.warehouse.findUnique({
+      where: { id: warehouseId },
+      select: { code: true, name: true, timezone: true },
+    });
+    return {
+      productName: item.productName,
+      skuCode: item.skuCode,
+      quantity: item.quantity,
+      condition,
+      disposition,
+      orderNumber,
+      shipmentNumber: item.shipment.shipmentNumber,
+      awbNumber: item.shipment.awbNumber,
+      receivedAt: item.shipment.rtoReceivedAt,
+      receivedWarehouse: warehouse,
+      notes,
+    };
+  }
+}
+
+/** A finding that opens a scrap/damage claim. */
+function isClaim(condition: RtoItemCondition | null): boolean {
+  return condition === RtoItemCondition.DAMAGED || condition === RtoItemCondition.MISSING;
 }
