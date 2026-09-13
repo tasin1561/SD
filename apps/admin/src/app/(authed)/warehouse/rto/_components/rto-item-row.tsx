@@ -48,6 +48,54 @@ export function RtoLineThumb({
   );
 }
 
+/**
+ * The words on the bench. The values are the API's enum (FE-2 — the
+ * server decides); the labels say what each one DOES, because "WRITE_OFF"
+ * told the inspector nothing about stock, freight or the seller.
+ */
+export const CONDITION_OPTIONS = [
+  { value: 'GOOD', label: 'Good — sellable as new' },
+  { value: 'DAMAGED', label: 'Damaged' },
+  { value: 'MISSING', label: 'Missing from the box' },
+] as const;
+
+export const DISPOSITION_OPTIONS = [
+  {
+    value: 'RESTOCK',
+    label: 'Put back in stock',
+    effect:
+      'Goes to the returns hold at finalise, and becomes sellable once it is shelved from “On the bench”.',
+  },
+  {
+    value: 'WRITE_OFF',
+    label: 'Write off (not sellable)',
+    effect:
+      'Nothing goes back into stock. The seller is charged this unit’s share of inbound freight; any refund for the goods is decided on the damage ticket.',
+  },
+  {
+    value: 'INSPECT_LATER',
+    label: 'Decide later',
+    effect:
+      'Stays in the returns hold, unsellable. The parcel cannot be finalised until every line has a decision.',
+  },
+] as const;
+
+/**
+ * A combination that is allowed but usually a slip — said out loud, never
+ * refused (the server is the only authority on what may be saved).
+ */
+export function dispositionMismatch(condition: string, disposition: string): string | null {
+  if (disposition === 'RESTOCK' && (condition === 'DAMAGED' || condition === 'MISSING')) {
+    return condition === 'MISSING'
+      ? 'A missing unit cannot go back on the shelf — you probably mean Write off.'
+      : 'A damaged unit put back in stock will be sold to the next customer. Is it really sellable?';
+  }
+  if (disposition === 'WRITE_OFF' && condition === 'GOOD') {
+    return 'Writing off a good unit removes sellable stock for good. Put it back in stock instead?';
+  }
+  return null;
+}
+
 export function RtoItemRow({
   item,
   onSave,
@@ -62,6 +110,8 @@ export function RtoItemRow({
   const [notes, setNotes] = useState(item.rtoInspectionNotes ?? '');
 
   const inspected = item.rtoCondition !== null && item.rtoDisposition !== null;
+  const mismatch = dispositionMismatch(condition, disposition);
+  const selected = DISPOSITION_OPTIONS.find((o) => o.value === disposition);
 
   return (
     <div
@@ -89,31 +139,48 @@ export function RtoItemRow({
         </div>
         {inspected && <div className="text-accent text-xs shrink-0">✓ Inspected</div>}
       </div>
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <FormField label="Condition">
+      <div className="grid grid-cols-1 gap-2 mb-2 sm:grid-cols-2">
+        <FormField
+          label="Condition"
+          hint="What you found in the box. Damaged or Missing opens a damage ticket to the seller, which is where any refund is decided."
+        >
           <Select
             value={condition}
             onChange={(e) => setCondition(e.target.value)}
             disabled={saving}
+            aria-label="Condition"
           >
             <option value="">—</option>
-            <option value="GOOD">GOOD</option>
-            <option value="DAMAGED">DAMAGED</option>
-            <option value="MISSING">MISSING</option>
+            {CONDITION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </Select>
         </FormField>
-        <FormField label="Disposition">
+        <FormField
+          label="What happens to it"
+          hint="Put back in stock: the unit goes to the returns hold and is sellable once shelved. Write off: nothing goes back into stock and the seller is charged its share of inbound freight. Decide later: keeps it in the returns hold; the parcel cannot be finalised until you choose."
+          {...(mismatch === null ? {} : { notice: mismatch })}
+        >
           <Select
             value={disposition}
             onChange={(e) => setDisposition(e.target.value)}
             disabled={saving}
+            aria-label="What happens to it"
           >
             <option value="">—</option>
-            <option value="RESTOCK">RESTOCK</option>
-            <option value="WRITE_OFF">WRITE_OFF</option>
+            {DISPOSITION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </Select>
         </FormField>
       </div>
+      {selected === undefined ? null : (
+        <p className="text-text-muted mb-2 text-xs">{selected.effect}</p>
+      )}
       <FormField label="Notes">
         <Input
           value={notes}
