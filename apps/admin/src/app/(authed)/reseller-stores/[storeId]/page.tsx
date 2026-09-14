@@ -11,6 +11,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  Money,
   PageHeader,
   ResellerStoreStatusBadge,
   Section,
@@ -23,6 +24,7 @@ import {
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAdminResellerStore } from '@/lib/reseller-store-hooks';
+import { useAdminResellerStoreTerms } from '@/lib/reseller-terms-hooks';
 
 function when(iso: string | null): string {
   return iso === null
@@ -47,6 +49,119 @@ const ACTOR_WORDS: Record<string, string> = {
   SYSTEM: 'System',
   API: 'The seller’s systems',
 };
+
+/**
+ * RS-4 — the store's terms, read-only: they are the seller's to publish and
+ * the store's to accept. Shows who accepted each version, when and from
+ * which address — the evidence if the two ever disagree about what was
+ * agreed.
+ */
+function TermsSection({ storeId }: { storeId: string }): ReactElement {
+  const terms = useAdminResellerStoreTerms(storeId);
+  if (terms.isPending) return <LoadingState label="Loading the terms" rows={3} />;
+  if (terms.isError) {
+    return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
+  }
+  const t = terms.data;
+  const c = t.current;
+  return (
+    <Section
+      title="Terms"
+      subtitle="Who pays which Skydrop fee on this store’s orders, and when each side is credited."
+    >
+      {c === null ? (
+        <EmptyState
+          title="No terms published"
+          description="The store cannot place orders until the seller publishes terms and the store accepts them."
+        />
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm">
+            Version {c.version}, published {when(c.publishedAt)} —{' '}
+            {c.acceptance === null
+              ? 'not accepted by the store yet.'
+              : `accepted by ${c.acceptance.acceptedByName} on ${when(c.acceptance.acceptedAt)}${
+                  c.acceptance.ipAddress === null ? '' : ` from ${c.acceptance.ipAddress}`
+                }.`}
+          </p>
+          {t.needsRevision !== null ? (
+            <p role="alert" className="text-critical text-sm">
+              {t.needsRevision}
+            </p>
+          ) : null}
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Fee</Th>
+                <Th>Store pays</Th>
+                <Th>Seller pays</Th>
+                <Th>Example</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {c.shares.map((sh) => {
+                const ex = t.examples.find((e) => e.feeType === sh.feeType);
+                return (
+                  <Tr key={sh.feeType}>
+                    <Td>{sh.label}</Td>
+                    <Td>{Number(sh.storePercent)}%</Td>
+                    <Td>{Number(sh.sellerPercent)}%</Td>
+                    <Td>
+                      {ex === undefined ? (
+                        '—'
+                      ) : (
+                        <>
+                          <Money amount={ex.feeInr} convert={false} /> →{' '}
+                          <Money amount={ex.storeInr} convert={false} /> /{' '}
+                          <Money amount={ex.sellerInr} convert={false} />
+                        </>
+                      )}
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+          <ul className="space-y-1 text-sm">
+            <li>{c.storeCredit.words}</li>
+            <li>{c.sellerCredit.words}</li>
+          </ul>
+          <p className="text-text-muted text-xs">{t.rounding}</p>
+        </div>
+      )}
+      {t.history.length > 1 ? (
+        <div className="mt-4">
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Version</Th>
+                <Th>Published</Th>
+                <Th>Accepted</Th>
+                <Th>Note</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {t.history.map((v) => (
+                <Tr key={v.id}>
+                  <Td>{v.version}</Td>
+                  <Td>{when(v.publishedAt)}</Td>
+                  <Td>
+                    {v.acceptance === null
+                      ? '—'
+                      : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt)}${
+                          v.acceptance.ipAddress === null ? '' : ` (${v.acceptance.ipAddress})`
+                        }`}
+                  </Td>
+                  <Td>{v.note ?? '—'}</Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
+      ) : null}
+    </Section>
+  );
+}
 
 /** One reseller store: its details, its status history and its team — read-only. */
 export default function AdminResellerStorePage(): ReactElement {
@@ -92,6 +207,8 @@ export default function AdminResellerStorePage(): ReactElement {
           />
         </CardBody>
       </Card>
+
+      <TermsSection storeId={s.id} />
 
       <Section title="Status history" subtitle="Every change to this store’s life, oldest first.">
         {s.events.length === 0 ? (

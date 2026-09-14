@@ -157,6 +157,7 @@ describe('seller permission surface', () => {
     expect(declaring).toEqual([]);
     // Pinned by name, so a key cannot be quietly reserved to dodge the
     // orphan check above.
-    expect([...reserved].sort()).toEqual(['stores.pricing', 'stores.wallet']);
+    // `stores.pricing` left the list with RS-4's terms endpoints.
+    expect([...reserved].sort()).toEqual(['stores.wallet']);
   });
 });

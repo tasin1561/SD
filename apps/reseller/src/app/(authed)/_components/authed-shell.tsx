@@ -6,8 +6,9 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
-import { LayoutDashboard, Settings, UserRound, Users } from 'lucide-react';
-import { canSeePath } from '@/lib/page-access';
+import { FileSignature, LayoutDashboard, Settings, UserRound, Users } from 'lucide-react';
+import { can, canSeePath } from '@/lib/page-access';
+import { TermsBanner } from './terms-banner';
 
 /**
  * The reseller shell — the SAME `AppShell` as the seller and admin apps
@@ -39,6 +40,7 @@ export function AuthedShell({
       heading: 'Store',
       items: [
         { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
+        { href: '/terms', label: 'Terms', icon: <FileSignature size={15} /> },
         { href: '/team', label: 'Team', icon: <Users size={15} /> },
         { href: '/settings', label: 'Store settings', icon: <Settings size={15} /> },
       ],
@@ -70,6 +72,8 @@ export function AuthedShell({
         }}
         signingOut={signingOut}
       >
+        {/* RS-4: stays until the terms in force are accepted. */}
+        <TermsBanner enabled={can(identity, 'terms.view')} />
         {children}
       </AppShell>
     </Toaster>

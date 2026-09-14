@@ -167,6 +167,12 @@ Email change/verification.
 ## reseller_store_events
 APPEND-ONLY history of a reseller store (`kind: ResellerStoreEventKind` CREATED / APPROVED / REJECTED / PAUSED / RESUMED / CLOSED / WALLET_MANAGER_CHANGED, `fromStatus`, `toStatus`, `actorType`, `actorId`, `note` — the reason given, `data`), written in the transition's own tx. FK store CASCADE. **Indexes:** `(storeId, createdAt)`.
 
+## reseller_store_terms_versions *(RS-4, 2026-09-14, `20260914220000_reseller_store_terms`)*
+APPEND-ONLY versions of a reseller store's terms, written ONLY by `ResellerStoreTermsService.publish` under `AdvisoryLock.RESELLER_TERMS`. `storeId` (FK seller_stores RESTRICT), `version` Int (1, 2, 3… per store), the share of each Skydrop fee the STORE pays as `Decimal(5,2)` 0–100 — `deliveryFeeStorePercent`, `returnFeeStorePercent`, `customerReturnFeeStorePercent`, `codFeeStorePercent`, `codTaxStorePercent`, `instantPayFeeStorePercent` — `storeCreditTrigger` / `sellerCreditTrigger` (`ResellerCreditTrigger`: ON_PAYOUT / AFTER_DELIVERY / INSTANT / AFTER_CONFIRMATION) with `storeCreditDays` / `sellerCreditDays` Int, `note`, `createdByActorType`, `createdById` (plain uuid, no FK), `createdAt`. **Unique:** `(storeId, version)`, `(id, storeId)` (target of the acceptance's composite FK). **Index:** `(storeId, createdAt)`. **CHECKs** (migration): shares 0–100; days 0–365; INSTANT ⇒ days 0; AFTER_DELIVERY ⇒ days ≥ 1; version ≥ 1. A store order (phase 3b) snapshots the version id, so a row is never updated.
+
+## reseller_store_terms_acceptances *(RS-4)*
+APPEND-ONLY: a store accepting ONE version. `storeId` (FK seller_stores RESTRICT), `termsVersionId` UNIQUE, `storeUserId` (FK store_users RESTRICT), `acceptedAt`, `ipAddress` (INET), `userAgent`. **Composite FK** `(termsVersionId, storeId) → reseller_store_terms_versions (id, storeId)` RESTRICT — an acceptance of another store's version cannot be stored. **Indexes:** `(storeId, acceptedAt)`, `(storeUserId)`. Written only by `ResellerStoreTermsService.accept`; the store has accepted its terms iff its LATEST version has a row.
+
 ## store_users
 A reseller store's logins. `email` (lower-cased) UNIQUE across the platform (one store per login) + `emailDisplay`, `passwordHash`, `fullName`, `emailVerifiedAt`, `lastLoginAt`, `deletedAt`. FK store RESTRICT, role (`store_role_definitions`) RESTRICT.
 

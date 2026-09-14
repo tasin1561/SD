@@ -22,6 +22,10 @@ import {
 } from '../../src/modules/ticket/services/ticket-notification-plan';
 import { RECEIPT_SURPLUS_TOPIC } from '../../src/modules/inventory-receipt/services/receipt-shortfall-ticket.service';
 import { RESELLER_STORE_PENDING_TOPIC } from '../../src/modules/reseller-store/services/reseller-store-notifier.service';
+import {
+  RESELLER_TERMS_ACCEPTED_TOPIC,
+  RESELLER_TERMS_NEED_REVISION_TOPIC,
+} from '../../src/modules/reseller-store-terms/services/reseller-terms-notifier.service';
 
 /** Seller topics sent by something other than the lifecycle listener,
  *  each named by its sender's own constant. */
@@ -33,6 +37,9 @@ const OTHER_SELLER_SENDERS = [
   RECEIPT_SURPLUS_TOPIC,
   // RS-1: an admin-opened reseller store waiting on the seller.
   RESELLER_STORE_PENDING_TOPIC,
+  // RS-4: a store accepted the seller's terms; stores needing new terms.
+  RESELLER_TERMS_ACCEPTED_TOPIC,
+  RESELLER_TERMS_NEED_REVISION_TOPIC,
 ];
 
 /** Staff topics that are not system issues (TKT-3), by their sender's constant. */

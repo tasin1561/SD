@@ -46,6 +46,9 @@ import {
   type StoreRoleKey,
   type WalletManager,
 } from '@/lib/reseller-store-hooks';
+import { TermsSection } from './_components/terms-section';
+
+type StoreTab = 'overview' | 'terms';
 
 function when(iso: string | null): string {
   return iso === null
@@ -75,6 +78,7 @@ const ACTOR_WORDS: Record<string, string> = {
 export default function ResellerStorePage(): ReactElement {
   const { storeId } = useParams<{ storeId: string }>();
   const store = useResellerStore(storeId);
+  const [tab, setTab] = useState<StoreTab>('overview');
 
   if (store.isPending) return <LoadingState label="Loading the store" rows={5} />;
   if (store.isError) {
@@ -93,6 +97,46 @@ export default function ResellerStorePage(): ReactElement {
       </div>
       <PageHeader title={s.name} subtitle={<ResellerStoreStatusBadge status={s.status} />} />
 
+      <div role="tablist" aria-label="Store sections" className="flex gap-2">
+        {(
+          [
+            ['overview', 'Overview'],
+            ['terms', 'Terms'],
+          ] as const
+        ).map(([key, label]) => (
+          <Button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            variant={tab === key ? 'primary' : 'secondary'}
+            size="md"
+            onClick={() => setTab(key)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      {tab === 'terms' ? (
+        <TermsSection storeId={s.id} final={final} />
+      ) : (
+        <OverviewTab store={s} open={open} final={final} />
+      )}
+    </div>
+  );
+}
+
+function OverviewTab({
+  store: s,
+  open,
+  final,
+}: {
+  store: ResellerStoreDetail;
+  open: boolean;
+  final: boolean;
+}): ReactElement {
+  return (
+    <div className="space-y-6">
       {s.status === 'PENDING_SELLER_APPROVAL' ? <DecisionCard store={s} /> : null}
       {open ? <LifecycleCard store={s} /> : null}
 

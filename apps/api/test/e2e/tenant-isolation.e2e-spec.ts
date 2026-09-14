@@ -568,9 +568,105 @@ describe('cross-tenant isolation (e2e)', () => {
     }
   });
 
+  // ─── Reseller store terms (RS-4) ───────────────────────────────────────
+  //
+  // The store side takes its store from the token, so the only id a store
+  // user can name is a VERSION id — and accepting another store's version
+  // must fail at the scoped lookup (and could not be stored anyway: the
+  // acceptance's composite FK ties it to its own store's versions). The
+  // seller side names a store id, so the question there is the usual one.
+
+  const TERMS_BODY = {
+    deliveryFeeStorePercent: '80',
+    returnFeeStorePercent: '100',
+    customerReturnFeeStorePercent: '100',
+    codFeeStorePercent: '0',
+    codTaxStorePercent: '100',
+    instantPayFeeStorePercent: '100',
+    storeCreditTrigger: 'ON_PAYOUT',
+    storeCreditDays: 0,
+    sellerCreditTrigger: 'ON_PAYOUT',
+    sellerCreditDays: 2,
+  };
+
+  it('RS-4: a store cannot read or accept another store’s terms', async () => {
+    const storeA = await makeStoreUser(alpha, 'store-a');
+    const storeB = await makeStoreUser(beta, 'store-b');
+    await request(h.baseUrl)
+      .post(`/seller/reseller-stores/${storeA.storeId}/terms`)
+      .set(alpha.auth)
+      .send(TERMS_BODY)
+      .expect(201);
+    const bPublished = await request(h.baseUrl)
+      .post(`/seller/reseller-stores/${storeB.storeId}/terms`)
+      .set(beta.auth)
+      .send(TERMS_BODY)
+      .expect(201);
+    const bVersionId = (bPublished.body as { current: { id: string } }).current.id;
+
+    // Store A's own view carries only store A's versions.
+    const aView = await request(h.baseUrl).get('/store/terms').set(storeA.auth).expect(200);
+    expect((aView.body as { storeId: string }).storeId).toBe(storeA.storeId);
+    expect(JSON.stringify(aView.body)).not.toContain(bVersionId);
+    expect(JSON.stringify(aView.body)).not.toContain(storeB.storeName);
+
+    // Store A accepting store B's version, by id.
+    const accept = await request(h.baseUrl)
+      .post(`/store/terms/${bVersionId}/accept`)
+      .set(storeA.auth)
+      .send({});
+    expectDenied(accept.status, accept.body, "accepting another store's terms");
+    expect(
+      await h.prisma.resellerStoreTermsAcceptance.count({ where: { termsVersionId: bVersionId } }),
+    ).toBe(0);
+
+    // Store B can — proving the id was real and the denial was the scope.
+    await request(h.baseUrl)
+      .post(`/store/terms/${bVersionId}/accept`)
+      .set(storeB.auth)
+      .send({})
+      .expect(200);
+  });
+
+  it('RS-4: a seller cannot read, preview or publish terms on another seller’s store', async () => {
+    const storeA = await makeStoreUser(alpha, 'store-a');
+
+    await request(h.baseUrl)
+      .get(`/seller/reseller-stores/${storeA.storeId}/terms`)
+      .set(alpha.auth)
+      .expect(200);
+
+    const read = await request(h.baseUrl)
+      .get(`/seller/reseller-stores/${storeA.storeId}/terms`)
+      .set(beta.auth);
+    expectDenied(read.status, read.body, "another seller's store terms");
+
+    const preview = await request(h.baseUrl)
+      .get(`/seller/reseller-stores/${storeA.storeId}/terms/preview`)
+      .query({
+        deliveryFeeStorePercent: '50',
+        returnFeeStorePercent: '50',
+        customerReturnFeeStorePercent: '50',
+        codFeeStorePercent: '50',
+        codTaxStorePercent: '50',
+        instantPayFeeStorePercent: '50',
+      })
+      .set(beta.auth);
+    expectDenied(preview.status, preview.body, "previewing another seller's store terms");
+
+    const publish = await request(h.baseUrl)
+      .post(`/seller/reseller-stores/${storeA.storeId}/terms`)
+      .set(beta.auth)
+      .send(TERMS_BODY);
+    expectDenied(publish.status, publish.body, "publishing terms on another seller's store");
+    expect(
+      await h.prisma.resellerStoreTermsVersion.count({ where: { storeId: storeA.storeId } }),
+    ).toBe(0);
+  });
+
   it('a seller or staff token is refused on every store surface', async () => {
     for (const auth of [alpha.auth, staffAuth]) {
-      for (const path of ['/store/profile', '/store/team', '/auth/store/me']) {
+      for (const path of ['/store/profile', '/store/team', '/store/terms', '/auth/store/me']) {
         const res = await request(h.baseUrl).get(path).set(auth);
         // 401 specifically: the audience check fails before any permission
         // question is asked, and a 404 would mean the path is wrong.

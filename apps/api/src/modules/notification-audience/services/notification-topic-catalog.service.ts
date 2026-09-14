@@ -144,6 +144,24 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
       'Skydrop opened a reseller store on your account. Nothing about it is live until you approve or reject it.',
     group: 'Reseller stores',
   },
+  {
+    // Sent by ResellerTermsNotifier (RS-4) to the people holding
+    // `stores.pricing` when a store accepts a version of its terms.
+    topic: 'seller.reseller_terms_accepted',
+    label: 'A reseller store accepted your terms',
+    description:
+      'A store accepted the version of the terms you published; its next orders are priced and credited under it.',
+    group: 'Reseller stores',
+  },
+  {
+    // Sent by ResellerTermsNotifier (RS-4) when Skydrop switches credit
+    // after confirmation off while stores' current terms still use it.
+    topic: 'seller.reseller_terms_need_revision',
+    label: 'A reseller store needs new terms',
+    description:
+      'A store’s current terms use a timing Skydrop no longer allows for your account. It cannot order until you publish new terms and it accepts them.',
+    group: 'Reseller stores',
+  },
 ];
 
 /**

@@ -167,6 +167,8 @@ describe('staff permission surface', () => {
         .map((p) => `${h.file} ${h.name}() → '${p}'`),
     );
     expect(declaring).toEqual([]);
-    expect([...reserved].sort()).toEqual(['reseller.credit_after_confirmation.enable']);
+    // `reseller.credit_after_confirmation.enable` left the list with RS-4's
+    // per-seller switch (POST /admin/sellers/:id/reseller-credit-after-confirmation).
+    expect([...reserved].sort()).toEqual([]);
   });
 });
