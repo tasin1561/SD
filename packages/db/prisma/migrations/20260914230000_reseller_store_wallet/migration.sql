@@ -199,7 +199,9 @@ VALUES (
   false,
   true,
   0,
-  10000000
+  10000000,
+  now(),
+  now()
 )
 ON CONFLICT ("key") DO NOTHING;
 
