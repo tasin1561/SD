@@ -97,6 +97,10 @@ export class WalletLedgerPage {
       const outcome = await applyLast90DaysPreset(this.page);
       if (outcome === 'APPLIED') return 'LAST_90_DAYS';
       if (outcome === 'NO_PICKER') return 'PAGE_DEFAULT';
+      // NO_PRESET leaves the panel open; an open panel can sit over the
+      // Download Ledger button. The date-input fallback below re-opens
+      // whatever it needs.
+      await this.page.keyboard.press('Escape').catch(() => undefined);
 
       /*
         FALLBACK: a pair of date inputs.

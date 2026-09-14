@@ -35,9 +35,18 @@ export type PresetOutcome = 'APPLIED' | 'NO_PICKER' | 'NO_PRESET';
  * on a click that fails; callers decide what that means.
  */
 export async function applyLast90DaysPreset(page: Page): Promise<PresetOutcome> {
+  // Settle FIRST (14 Sep 2026). The ledger download opened the page and
+  // looked for the picker straight away with 5s to find it; on the night
+  // of the 13th their app was still behind its loading overlay, the
+  // picker "was not there", and the export came back at the page's
+  // default seven days — while the balance read, which settled first,
+  // took ninety the same night. The two readings then could not be
+  // compared at all. Waiting here, in the one helper, means neither
+  // reader can skip it.
+  await settleFinancesPage(page);
   const trigger = page.getByText(/date range/i).first();
   const found = await trigger
-    .waitFor({ state: 'visible', timeout: 5_000 })
+    .waitFor({ state: 'visible', timeout: 15_000 })
     .then(() => true)
     .catch(() => false);
   if (!found) return 'NO_PICKER';
@@ -66,4 +75,19 @@ export async function applyLast90DaysPreset(page: Page): Promise<PresetOutcome> 
   // the previous range.
   await page.waitForTimeout(1_500);
   return 'APPLIED';
+}
+
+/**
+ * Let the Finances page finish drawing: network quiet, their loading
+ * overlay gone, then a beat for the widgets to become hittable. Each wait
+ * is bounded and never throws — a page that stays busy is read as it is,
+ * and the reading says which window it got.
+ */
+export async function settleFinancesPage(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle', { timeout: 25_000 }).catch(() => undefined);
+  await page
+    .locator('.ap-loading__overlay')
+    .waitFor({ state: 'detached', timeout: 20_000 })
+    .catch(() => undefined);
+  await page.waitForTimeout(1_500);
 }
