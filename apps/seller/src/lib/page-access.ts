@@ -61,6 +61,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   // RS-1: a reseller store's team and history belong to a separate
   // business, so even the READ is stores.manage (the controller's
   // class-level permission) — never open to VIEWER.
+  // RS-3: the default price list is a single-purpose page whose writes
+  // are stores.pricing (@Controller seller/reseller-price-list).
+  ['/reseller-stores/price-list', 'stores.pricing'],
   ['/reseller-stores', 'stores.manage'], // @Controller seller/reseller-stores
   ['/team/roles', 'roles.manage'],
   ['/team', 'team.view'],

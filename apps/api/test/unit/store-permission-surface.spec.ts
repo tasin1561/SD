@@ -137,6 +137,22 @@ describe('store permission surface (RS-2)', () => {
     expect(viewer?.permissions.some((p) => p.endsWith('.manage'))).toBe(false);
   });
 
+  it('RS-3: every role sees the catalogue, and the catalogue is read-only to the store', () => {
+    // The products a store may sell and their prices are what the whole
+    // team works from, so every starting role holds catalogue.view (the
+    // owner implicitly). The seller sets the terms; a store has no write.
+    for (const r of DEFAULT_STORE_ROLES.filter((role) => role.isOwner !== true)) {
+      expect(r.permissions).toContain('catalogue.view');
+    }
+    const catalogue = HANDLERS.filter((h) => h.file === 'store-catalogue.controller.ts');
+    expect(catalogue.map((h) => `${h.method} ${h.name}`)).toEqual(['Get list']);
+    expect(
+      catalogue.every(
+        (h) => Array.isArray(h.permissions) && h.permissions.join() === 'catalogue.view',
+      ),
+    ).toBe(true);
+  });
+
   it('no store controller reaches for a seller or staff guard', () => {
     // A store route guarded by the wrong identity would accept the wrong
     // token. Every controller mentioning the store guard uses only it.

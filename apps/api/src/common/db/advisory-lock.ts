@@ -94,6 +94,16 @@ export const AdvisoryLock = {
    * open" is checked and acted on under one lock.
    */
   PNL_PERIOD: 0x0504c,
+  /**
+   * 'RA' — committing a seller's on-hand to reseller stores (RS-3), per
+   * (seller, variant). A set-aside save reads Σ set-asides of the other
+   * stores and the variant's on-hand, then writes; two saves for two
+   * stores at once would each see the other's commitment missing and
+   * together promise more units than exist. The shrink sweep takes the
+   * same key, so it never cuts a set-aside a seller is mid-way through
+   * raising.
+   */
+  RESELLER_SET_ASIDE: 0x05241,
 } as const;
 
 /**

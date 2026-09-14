@@ -1,3 +1,4 @@
+import type { WarehouseResolverService } from '../../src/modules/inventory-shared/warehouse-resolver.service';
 import { VariantStatus } from '@skydrop/db';
 import { StockReadService } from '../../src/modules/inventory-stock/services/stock-read.service';
 import type { StockCacheService } from '../../src/modules/inventory-shared/stock-cache.service';
@@ -65,7 +66,9 @@ function makeSut(opts: {
     getVariantById: jest.fn(async (id: string) => map.get(id) ?? null),
   } as unknown as CatalogReadService;
 
-  const svc = new StockReadService(prisma, cache, catalog);
+  const svc = new StockReadService(prisma, cache, catalog, {
+    fulfillingWarehouseIds: jest.fn(async () => ['w1']),
+  } as unknown as WarehouseResolverService);
   return { svc, stockLevel, stockReservation, cache, catalog };
 }
 

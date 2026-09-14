@@ -260,6 +260,8 @@ model Seller {
   customers                Customer[]
   orders                   Order[]
   stores                   SellerStore[]
+  resellerPriceListItems   ResellerPriceListItem[]
+  resellerStoreVariants    ResellerStoreVariant[]
   bulkOrderUploads         BulkOrderUpload[]              @relation("BulkUploadSeller")
   bulkUploadsTriggered     BulkOrderUpload[]              @relation("BulkUploadUploadedBySeller")
   pricing                  SellerPricing[]
@@ -869,6 +871,8 @@ model ProductVariant {
   freightAllocations      InboundFreightAllocation[]
   packBoxScans            PackBoxScan[]
   sellerFavouriteVariants SellerFavouriteVariant[]
+  resellerPriceListItems  ResellerPriceListItem[]
+  resellerStoreVariants   ResellerStoreVariant[]
 
   @@unique([sellerId, skuCode])
   @@index([productId])
@@ -2706,13 +2710,15 @@ model SellerStore {
   /// `updatedAt` it means what it says (rule 4b).
   statusChangedAt DateTime?              @map("status_changed_at") @db.Timestamptz
 
-  seller               Seller                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  seller               Seller                 @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   orders               Order[]
   sellerUsers          SellerUser[]
   storeUsers           StoreUser[]
   storeRoles           StoreRoleDefinition[]
   storeUserInvitations StoreUserInvitation[]
   resellerEvents       ResellerStoreEvent[]
+  /// RS-3 — what this store may sell, at what price, with how much stock.
+  resellerVariants     ResellerStoreVariant[]
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -8414,4 +8420,141 @@ model PnlCarryForward {
   @@index([landedMonth, originMonth, lineKey], map: "pnl_carry_forwards_landed_origin_line_idx")
   @@index([originPeriodId, lineKey, refKey], map: "pnl_carry_forwards_origin_line_ref_idx")
   @@map("pnl_carry_forwards")
+}
+
+// ── RS-3 reseller catalogue, prices, stock (2026-09-14) ─────────────────
+
+/// RS-3 — how a reseller store's stock of one variant is decided.
+/// SHARED: the pool everybody sells from, less other stores' set-asides.
+/// SET_ASIDE: a quantity committed to this store alone.
+enum ResellerStockMode {
+  SHARED    @map("shared")
+  SET_ASIDE @map("set_aside")
+
+  @@map("reseller_stock_mode")
+}
+
+/// RS-3 — a seller's DEFAULT reseller price for one variant.
+///
+/// What every reseller store of this seller pays for the variant (the
+/// transfer price) and the retail range it may sell at, unless the store
+/// has its own override on `reseller_store_variants`. An override is a
+/// WHOLE row, never a per-field patch: "override ?? default" is decided
+/// per (store, variant) as one set of four numbers, so a later change to
+/// the default can never combine with half an override into a range the
+/// seller never saw. CHECKs in the migration keep every stored row valid
+/// on its own (transfer > 0, min ≤ suggested ≤ max where set).
+model ResellerPriceListItem {
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId           String   @map("seller_id") @db.Uuid
+  variantId          String   @map("variant_id") @db.Uuid
+  transferPriceInr   Decimal  @map("transfer_price_inr") @db.Decimal(12, 2)
+  minRetailInr       Decimal? @map("min_retail_inr") @db.Decimal(12, 2)
+  maxRetailInr       Decimal? @map("max_retail_inr") @db.Decimal(12, 2)
+  suggestedRetailInr Decimal? @map("suggested_retail_inr") @db.Decimal(12, 2)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller  Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@unique([sellerId, variantId])
+  @@index([variantId])
+  @@map("reseller_price_list_items")
+}
+
+/// RS-3 — one reseller store's terms for one variant: whether it may sell
+/// it, a price override, how stock is shared, and the catalogue overlay.
+///
+/// ── STOCK IS NEVER STORED HERE ──────────────────────────────────────
+/// `set_aside_qty` is a COMMITMENT of the seller's on-hand to this store,
+/// and `hidden_percent` a share withheld from view. What the store SEES is
+/// computed on every read from real availability (INV-3) —
+/// `reseller-visible-stock.ts` is the one place that arithmetic lives.
+/// Σ set-asides across a seller's live stores never exceeds the variant's
+/// pickable on-hand at save time (`SET_ASIDE_EXCEEDS_STOCK`, serialised by
+/// `AdvisoryLock.RESELLER_SET_ASIDE`); an hourly sweep shrinks them
+/// newest-first when stock later falls below.
+model ResellerStoreVariant {
+  id                 String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId            String            @map("store_id") @db.Uuid
+  /// Denormalised from the store so "every set-aside of this seller for
+  /// this variant" is one indexed read, and the lock key needs no join.
+  sellerId           String            @map("seller_id") @db.Uuid
+  variantId          String            @map("variant_id") @db.Uuid
+  /// Default FALSE: a store sells nothing it was not explicitly given.
+  enabled            Boolean           @default(false)
+  /// The override. All four NULL ⇒ the seller's default applies; a CHECK
+  /// makes a retail figure without a transfer price unrepresentable.
+  transferPriceInr   Decimal?          @map("transfer_price_inr") @db.Decimal(12, 2)
+  minRetailInr       Decimal?          @map("min_retail_inr") @db.Decimal(12, 2)
+  maxRetailInr       Decimal?          @map("max_retail_inr") @db.Decimal(12, 2)
+  suggestedRetailInr Decimal?          @map("suggested_retail_inr") @db.Decimal(12, 2)
+  stockMode          ResellerStockMode @default(SHARED) @map("stock_mode")
+  /// NULL when SHARED, ≥ 0 when SET_ASIDE (CHECK).
+  setAsideQty        Int?              @map("set_aside_qty")
+  /// When this commitment last GREW. The shrink sweep takes from the
+  /// newest claim first, so it is written only when the set-aside is
+  /// created or increased — a decrease keeps the claim's age.
+  setAsideAt         DateTime?         @map("set_aside_at") @db.Timestamptz
+  /// 0–90 (CHECK): the share of the computed quantity the store is not shown.
+  hiddenPercent      Int               @default(0) @map("hidden_percent")
+  overlayTitle       String?           @map("overlay_title")
+  overlayDescription String?           @map("overlay_description") @db.Text
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  store   SellerStore                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  seller  Seller                      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  variant ProductVariant              @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  images  ResellerStoreVariantImage[]
+  shrinks ResellerSetAsideShrink[]
+
+  @@unique([storeId, variantId])
+  @@index([sellerId, variantId])
+  @@index([variantId])
+  @@map("reseller_store_variants")
+}
+
+/// RS-3 — a store-specific picture of a variant (the catalogue overlay).
+/// A Spaces KEY under `stores/<storeId>/catalogue/<variantId>/`, read by
+/// presigned GET; nothing in the bucket is public and no URL is stored.
+model ResellerStoreVariantImage {
+  id             String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeVariantId String    @map("store_variant_id") @db.Uuid
+  storageKey     String    @map("storage_key")
+  mimeType       String    @map("mime_type")
+  position       Int       @default(0)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  storeVariant ResellerStoreVariant @relation(fields: [storeVariantId], references: [id], onDelete: Cascade)
+
+  @@index([storeVariantId])
+  @@map("reseller_store_variant_images")
+}
+
+/// RS-3 — every time the hourly sweep shrank a set-aside because stock
+/// fell below Σ set-asides. APPEND-ONLY, written in the SAME transaction
+/// as the shrink (an audit row is best-effort and may be lost; the
+/// seller's screen shows these, and a history with a gap is worse than
+/// none — the `reseller_store_events` argument).
+model ResellerSetAsideShrink {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeVariantId String   @map("store_variant_id") @db.Uuid
+  storeId        String   @map("store_id") @db.Uuid
+  sellerId       String   @map("seller_id") @db.Uuid
+  variantId      String   @map("variant_id") @db.Uuid
+  fromQty        Int      @map("from_qty")
+  toQty          Int      @map("to_qty")
+  /// Pickable on-hand the sweep read, and Σ set-asides before it acted.
+  onHand         Int      @map("on_hand")
+  totalBefore    Int      @map("total_before")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  storeVariant ResellerStoreVariant @relation(fields: [storeVariantId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
+  @@index([sellerId, createdAt])
+  @@map("reseller_set_aside_shrinks")
 }

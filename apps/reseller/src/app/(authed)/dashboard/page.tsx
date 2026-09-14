@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import type { ReactElement } from 'react';
 import { useStoreIdentity } from '@skydrop/auth/client';
+import { can } from '@/lib/page-access';
 import {
   Card,
   CardBody,
@@ -67,12 +69,17 @@ export default function DashboardPage(): ReactElement {
       </Card>
 
       <Card>
-        <CardHeader title="What comes next" />
+        <CardHeader title="What you can sell" />
         <CardBody>
           <p className="text-sm">
-            Your store is set up. The products you may sell, their prices, and placing orders arrive
-            in the next releases of this portal — {seller.companyName} decides which products and at
-            what price.
+            {seller.companyName} decides which of their products you may sell, what you pay for each
+            and the price range you may sell at.{' '}
+            {can(me, 'catalogue.view') ? (
+              <Link href="/catalogue" className="text-accent hover:text-accent-hover">
+                See your catalogue →
+              </Link>
+            ) : null}{' '}
+            Placing orders arrives in the next release of this portal.
           </p>
         </CardBody>
       </Card>

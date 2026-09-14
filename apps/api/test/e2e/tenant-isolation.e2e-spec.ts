@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
-import { SellerStatus, StaffRole } from '@skydrop/db';
+import { ProductStatus, SellerStatus, StaffRole } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
@@ -560,6 +560,9 @@ describe('cross-tenant isolation (e2e)', () => {
       '/seller/reseller-stores',
       `/seller/reseller-stores/${storeA.storeId}`,
       '/admin/reseller-stores',
+      '/seller/reseller-price-list',
+      `/seller/reseller-stores/${storeA.storeId}/catalogue`,
+      `/admin/reseller-stores/${storeA.storeId}/catalogue`,
       '/admin/orders',
       '/admin/sellers',
     ]) {
@@ -570,12 +573,143 @@ describe('cross-tenant isolation (e2e)', () => {
 
   it('a seller or staff token is refused on every store surface', async () => {
     for (const auth of [alpha.auth, staffAuth]) {
-      for (const path of ['/store/profile', '/store/team', '/auth/store/me']) {
+      for (const path of ['/store/profile', '/store/team', '/store/catalogue', '/auth/store/me']) {
         const res = await request(h.baseUrl).get(path).set(auth);
         // 401 specifically: the audience check fails before any permission
         // question is asked, and a 404 would mean the path is wrong.
         expect(res.status).toBe(401);
       }
     }
+  });
+
+  // ─── Reseller catalogue (RS-3) ─────────────────────────────────────────
+
+  /** A resellable variant (ACTIVE product, ACTIVE variant) owned by `owner`. */
+  async function makeVariant(owner: Tenant, label: string): Promise<string> {
+    const tag = `${label}-${Math.random().toString(36).slice(2, 8)}`;
+    const product = await request(h.baseUrl)
+      .post('/seller/products')
+      .set(owner.auth)
+      .send({ name: `${label} product`, externalRef: `EXT-${tag}` })
+      .expect(201);
+    const productId = (product.body as { id: string }).id;
+    await h.prisma.product.update({
+      where: { id: productId },
+      data: { status: ProductStatus.ACTIVE },
+    });
+    const variant = await request(h.baseUrl)
+      .post(`/seller/products/${productId}/variants`)
+      .set(owner.auth)
+      .send({ skuCode: `SKU-${tag}` })
+      .expect(201);
+    return (variant.body as { id: string }).id;
+  }
+
+  const PRICE = {
+    transferPriceInr: '250.00',
+    minRetailInr: '300.00',
+    maxRetailInr: '500.00',
+    suggestedRetailInr: '399.00',
+  };
+
+  it('RS-3: a store sees only its own enabled products, never cost, stock internals or another store', async () => {
+    const storeA = await makeStoreUser(alpha, 'cat-a');
+    const storeB = await makeStoreUser(beta, 'cat-b');
+    const onA = await makeVariant(alpha, 'on');
+    const offA = await makeVariant(alpha, 'off');
+    const onB = await makeVariant(beta, 'b');
+
+    for (const v of [onA, offA]) {
+      await request(h.baseUrl)
+        .put(`/seller/reseller-price-list/${v}`)
+        .set(alpha.auth)
+        .send(PRICE)
+        .expect(200);
+    }
+    await request(h.baseUrl)
+      .put(`/seller/reseller-stores/${storeA.storeId}/catalogue/${onA}`)
+      .set(alpha.auth)
+      .send({ enabled: true, stockMode: 'SHARED', hiddenPercent: 20 })
+      .expect(200);
+    await request(h.baseUrl)
+      .put(`/seller/reseller-price-list/${onB}`)
+      .set(beta.auth)
+      .send({ transferPriceInr: '99.00' })
+      .expect(200);
+    await request(h.baseUrl)
+      .put(`/seller/reseller-stores/${storeB.storeId}/catalogue/${onB}`)
+      .set(beta.auth)
+      .send({ enabled: true, stockMode: 'SHARED', hiddenPercent: 0 })
+      .expect(200);
+
+    const cat = await request(h.baseUrl).get('/store/catalogue').set(storeA.auth).expect(200);
+    const items = (cat.body as { items: Array<Record<string, unknown>> }).items;
+    expect(items.map((i) => i.variantId)).toEqual([onA]);
+    expect(items[0]).toMatchObject({ transferPriceInr: '250.00', suggestedRetailInr: '399.00' });
+    // Nothing in the warehouse ⇒ nothing to show, never a guess.
+    expect(items[0]?.availableQty).toBe(0);
+    const text = JSON.stringify(cat.body);
+    for (const leak of [offA, onB, storeB.storeName, '99.00']) expect(text).not.toContain(leak);
+    for (const key of [
+      'hiddenPercent',
+      'setAside',
+      'onHand',
+      'realAvailable',
+      'unitCost',
+      'stockMode',
+    ]) {
+      expect(text).not.toContain(key);
+    }
+
+    // A set-aside cannot promise stock that is not on hand.
+    const over = await request(h.baseUrl)
+      .put(`/seller/reseller-stores/${storeA.storeId}/catalogue/${onA}`)
+      .set(alpha.auth)
+      .send({ enabled: true, stockMode: 'SET_ASIDE', setAsideQty: 1, hiddenPercent: 0 });
+    expect(over.status).toBe(409);
+    expect((over.body as { code: string }).code).toBe('SET_ASIDE_EXCEEDS_STOCK');
+  });
+
+  it('RS-3: a seller cannot read or change another seller’s store terms or price list', async () => {
+    const storeA = await makeStoreUser(alpha, 'terms-a');
+    const vA = await makeVariant(alpha, 'va');
+    const vB = await makeVariant(beta, 'vb');
+    await request(h.baseUrl)
+      .put(`/seller/reseller-price-list/${vA}`)
+      .set(alpha.auth)
+      .send(PRICE)
+      .expect(200);
+
+    const read = await request(h.baseUrl)
+      .get(`/seller/reseller-stores/${storeA.storeId}/catalogue`)
+      .set(beta.auth);
+    expectDenied(read.status, read.body, "another seller's store terms");
+
+    const write = await request(h.baseUrl)
+      .put(`/seller/reseller-stores/${storeA.storeId}/catalogue/${vA}`)
+      .set(beta.auth)
+      .send({ enabled: true, stockMode: 'SHARED', hiddenPercent: 0 });
+    expectDenied(write.status, write.body, "changing another seller's store terms");
+
+    // Alpha can neither hand beta's product to its own store nor price it.
+    const foreign = await request(h.baseUrl)
+      .put(`/seller/reseller-stores/${storeA.storeId}/catalogue/${vB}`)
+      .set(alpha.auth)
+      .send({ enabled: true, stockMode: 'SHARED', hiddenPercent: 0 });
+    expectDenied(foreign.status, foreign.body, "another seller's product in a store");
+    const price = await request(h.baseUrl)
+      .put(`/seller/reseller-price-list/${vB}`)
+      .set(alpha.auth)
+      .send(PRICE);
+    expectDenied(price.status, price.body, "pricing another seller's product");
+
+    expect(await h.prisma.resellerStoreVariant.count({ where: { storeId: storeA.storeId } })).toBe(
+      0,
+    );
+    const betaList = await request(h.baseUrl)
+      .get('/seller/reseller-price-list')
+      .set(beta.auth)
+      .expect(200);
+    expect(JSON.stringify(betaList.body)).not.toContain(vA);
   });
 });

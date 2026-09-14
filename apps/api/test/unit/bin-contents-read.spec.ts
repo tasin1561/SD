@@ -1,3 +1,4 @@
+import type { WarehouseResolverService } from '../../src/modules/inventory-shared/warehouse-resolver.service';
 import 'reflect-metadata';
 import { REQUIRE_PERMISSIONS_KEY } from '../../src/common/auth/require-permissions.decorator';
 import { AdminBinContentsController } from '../../src/modules/inventory-warehouse/admin-bin-contents.controller';
@@ -42,6 +43,7 @@ function makeSut(opts: { groups?: unknown[]; rows?: unknown[]; movementGroups?: 
     prisma,
     {} as unknown as StockCacheService,
     {} as unknown as CatalogReadService,
+    {} as unknown as WarehouseResolverService,
   );
   return { svc, stockLevel, stockMovement };
 }

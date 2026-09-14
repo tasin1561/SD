@@ -151,6 +151,22 @@ export class WarehouseResolverService {
     return wh?.fulfilsOrders ?? true;
   }
 
+  /**
+   * Every live warehouse customer orders can ship FROM — the same reader
+   * of `fulfils_orders` as `fulfilsOrders()` (CNS-2), for a caller that
+   * needs the whole set at once (RS-3's cross-warehouse sellable stock).
+   * Stock in an intake-only site is on its way to India and is not
+   * sellable from anywhere yet.
+   */
+  async fulfillingWarehouseIds(): Promise<readonly string[]> {
+    const rows = await this.prisma.client.warehouse.findMany({
+      where: { deletedAt: null, fulfilsOrders: true },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => r.id);
+  }
+
   /** A non-soft-deleted warehouse, or 404. */
   async requireWarehouse(id: string): Promise<WarehouseRef> {
     const wh = await this.prisma.client.warehouse.findFirst({

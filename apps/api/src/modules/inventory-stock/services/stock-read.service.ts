@@ -3,6 +3,7 @@ import { Prisma, VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
+import { WarehouseResolverService } from '../../inventory-shared/warehouse-resolver.service';
 import {
   StockCacheService,
   type CachedStockAggregate,
@@ -98,7 +99,67 @@ export class StockReadService {
     private readonly prisma: PrismaService,
     private readonly cache: StockCacheService,
     private readonly catalog: CatalogReadService,
+    private readonly warehouses: WarehouseResolverService,
   ) {}
+
+  /**
+   * RS-3 — a seller's SELLABLE stock per variant, across every warehouse
+   * that fulfils orders, LIVE (INV-2: no cache — the reseller set-aside
+   * guard decides on it).
+   *
+   *   onHand    = Σ qtyOnHand in PICKABLE bins (BIN-2's shared constant)
+   *   available = max(0, onHand − Σ ACTIVE reservations)   — INV-3
+   *
+   * Intake-only warehouses (CNS-2, asked of `WarehouseResolverService`)
+   * and non-pickable bins (hold / damaged / quarantine / transit) count
+   * for nothing: a reseller store may only ever be shown, or given, units
+   * a picker in India could fetch. Every requested id is in the result
+   * (zeros when it has no stock), so callers index without a guard.
+   */
+  async getSellableStockLive(
+    sellerId: string,
+    variantIds: readonly string[],
+  ): Promise<ReadonlyMap<string, { readonly onHand: number; readonly available: number }>> {
+    const ids = [...new Set(variantIds)];
+    const out = new Map<string, { onHand: number; available: number }>();
+    for (const id of ids) out.set(id, { onHand: 0, available: 0 });
+    if (ids.length === 0) return out;
+    const warehouseIds = [...(await this.warehouses.fulfillingWarehouseIds())];
+    if (warehouseIds.length === 0) return out;
+
+    const [levels, reservations] = await Promise.all([
+      this.prisma.client.stockLevel.groupBy({
+        by: ['variantId'],
+        where: {
+          sellerId,
+          variantId: { in: ids },
+          warehouseId: { in: warehouseIds },
+          bin: { type: { notIn: [...NON_PICKABLE_BIN_TYPES] }, deletedAt: null },
+        },
+        _sum: { qtyOnHand: true },
+      }),
+      this.prisma.client.stockReservation.groupBy({
+        by: ['variantId'],
+        where: {
+          sellerId,
+          variantId: { in: ids },
+          warehouseId: { in: warehouseIds },
+          status: 'ACTIVE',
+        },
+        _sum: { qtyReserved: true },
+      }),
+    ]);
+    const reserved = new Map<string, number>();
+    for (const r of reservations) reserved.set(r.variantId, r._sum.qtyReserved ?? 0);
+    for (const l of levels) {
+      const onHand = l._sum.qtyOnHand ?? 0;
+      out.set(l.variantId, {
+        onHand,
+        available: Math.max(0, onHand - (reserved.get(l.variantId) ?? 0)),
+      });
+    }
+    return out;
+  }
 
   /** INV-2: the live path. No cache — safe for mutation decisions. */
   async getVariantStockLive(

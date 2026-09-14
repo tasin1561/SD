@@ -6,7 +6,7 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
-import { LayoutDashboard, Settings, UserRound, Users } from 'lucide-react';
+import { LayoutDashboard, Package, Settings, UserRound, Users } from 'lucide-react';
 import { canSeePath } from '@/lib/page-access';
 
 /**
@@ -39,6 +39,7 @@ export function AuthedShell({
       heading: 'Store',
       items: [
         { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
+        { href: '/catalogue', label: 'Catalogue', icon: <Package size={15} /> },
         { href: '/team', label: 'Team', icon: <Users size={15} /> },
         { href: '/settings', label: 'Store settings', icon: <Settings size={15} /> },
       ],

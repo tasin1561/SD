@@ -31,6 +31,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
+import { StoreCatalogue } from './_components/store-catalogue';
 import {
   useApproveResellerStore,
   useCloseResellerStore,
@@ -75,6 +76,7 @@ const ACTOR_WORDS: Record<string, string> = {
 export default function ResellerStorePage(): ReactElement {
   const { storeId } = useParams<{ storeId: string }>();
   const store = useResellerStore(storeId);
+  const [tab, setTab] = useState<'overview' | 'catalogue'>('overview');
 
   if (store.isPending) return <LoadingState label="Loading the store" rows={5} />;
   if (store.isError) {
@@ -93,6 +95,44 @@ export default function ResellerStorePage(): ReactElement {
       </div>
       <PageHeader title={s.name} subtitle={<ResellerStoreStatusBadge status={s.status} />} />
 
+      <div role="tablist" aria-label="Store sections" className="flex flex-wrap gap-2">
+        <Button
+          role="tab"
+          aria-selected={tab === 'overview'}
+          variant={tab === 'overview' ? 'primary' : 'secondary'}
+          size="md"
+          onClick={() => setTab('overview')}
+        >
+          Overview
+        </Button>
+        <Button
+          role="tab"
+          aria-selected={tab === 'catalogue'}
+          variant={tab === 'catalogue' ? 'primary' : 'secondary'}
+          size="md"
+          onClick={() => setTab('catalogue')}
+        >
+          Catalogue &amp; stock
+        </Button>
+      </div>
+
+      {tab === 'catalogue' ? <StoreCatalogue storeId={s.id} final={final} /> : null}
+      {tab === 'overview' ? <Overview store={s} open={open} final={final} /> : null}
+    </div>
+  );
+}
+
+function Overview({
+  store: s,
+  open,
+  final,
+}: {
+  store: ResellerStoreDetail;
+  open: boolean;
+  final: boolean;
+}): ReactElement {
+  return (
+    <div className="space-y-6">
       {s.status === 'PENDING_SELLER_APPROVAL' ? <DecisionCard store={s} /> : null}
       {open ? <LifecycleCard store={s} /> : null}
 

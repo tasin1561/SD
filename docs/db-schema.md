@@ -181,6 +181,24 @@ Same shapes as the seller equivalents above, keyed on `storeUserId`.
 
 **Enum values added:** `ActorType.STORE`, `NotificationRecipientType.STORE_USER`.
 
+## Reseller catalogue — RS-3 *(2026-09-14, `20260914210000_reseller_catalogue`; design `docs/reseller-stores.md` "Phase 2 as built")*
+
+**Enum** `ResellerStockMode` (SHARED | SET_ASIDE).
+
+## reseller_price_list_items
+A seller's DEFAULT reseller price per variant: `transferPriceInr` (NOT NULL, > 0), `minRetailInr`, `maxRetailInr`, `suggestedRetailInr` (nullable), all `Decimal(12,2)`. UNIQUE `(sellerId, variantId)`; index `(variantId)`. FK sellers CASCADE, product_variants RESTRICT. CHECK `reseller_price_list_items_amounts_ck`: retail ≥ 0 and min ≤ suggested ≤ max where set. Written only by `ResellerCatalogueService`.
+
+## reseller_store_variants
+One reseller store's terms for one variant. UNIQUE `(storeId, variantId)`; indexes `(sellerId, variantId)`, `(variantId)`. `sellerId` denormalised from the store. `enabled` (default false); price OVERRIDE `transferPriceInr` / `minRetailInr` / `maxRetailInr` / `suggestedRetailInr` (all NULL = the default applies; CHECK `…_override_ck` makes it a whole row or nothing, same amount rules); `stockMode` (default SHARED), `setAsideQty` (CHECK `…_stock_mode_ck`: NULL iff SHARED, ≥ 0 when SET_ASIDE), `setAsideAt` (stamped only when the commitment grows — the shrink order), `hiddenPercent` (CHECK `…_hidden_percent_ck` 0–90, default 0), `overlayTitle`, `overlayDescription`. FK seller_stores CASCADE, sellers CASCADE, product_variants RESTRICT. **No stock figure is stored** — the visible quantity is computed on read (INV-3 stays the authority).
+
+## reseller_store_variant_images
+Store-specific pictures (the overlay). `storeVariantId` FK reseller_store_variants CASCADE, `storageKey` (Spaces key under `stores/<storeId>/catalogue/<variantId>/` — never a URL), `mimeType`, `position`, `deletedAt` (soft delete; ≤ 5 live per row, enforced in the service under the RS-3 lock).
+
+## reseller_set_aside_shrinks
+APPEND-ONLY history of the hourly sweep's cuts: `storeVariantId` (FK CASCADE), `storeId`, `sellerId`, `variantId` (plain ids), `fromQty`, `toQty`, `onHand` (pickable on-hand read), `totalBefore` (Σ set-asides before). CHECK `0 ≤ toQty < fromQty`. Written in the SAME tx as the cut. Indexes `(storeId, createdAt)`, `(sellerId, createdAt)`.
+
+**Migration grants:** existing reseller stores' admin/ops/finance/viewer roles += `catalogue.view`; existing seller system `admin` roles holding `stores.manage` += `stores.pricing`.
+
 ## seller_notes
 Admin notes about sellers (replaces simple `rejectionReason` field).
 

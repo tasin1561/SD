@@ -292,10 +292,9 @@ export const SELLER_PERMISSIONS = [
     key: 'stores.pricing',
     label: 'Set reseller prices and terms',
     description:
-      'Coming with reseller pricing: which products a store may sell, at what price, how stock is shared, and who pays which fee. Granting it changes nothing yet.',
+      'Your default reseller price list, and for each store: which products it may sell, at what price, how much stock it is shown or given, and what it calls each product.',
     group: 'Reseller stores',
     sensitive: true,
-    reserved: true,
   },
   {
     key: 'stores.wallet',

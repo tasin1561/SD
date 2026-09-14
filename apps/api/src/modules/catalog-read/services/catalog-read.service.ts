@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, VariantStatus } from '@skydrop/db';
+import { Prisma, ProductStatus, VariantStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { displayImageKey } from '../../catalog-image/image-key';
@@ -49,6 +49,17 @@ export interface ResolvedVariant {
    */
   readonly productName: string;
   readonly imageUrl: string | null;
+}
+
+/** RS-3 — a variant a reseller store could be given (see listResellableVariants). */
+export interface ResellableVariant {
+  readonly variantId: string;
+  readonly productId: string;
+  readonly skuCode: string;
+  readonly variantLabel: string | null;
+  readonly status: VariantStatus;
+  readonly productName: string;
+  readonly productDescription: string | null;
 }
 
 const VARIANT_SELECT = {
@@ -192,6 +203,61 @@ export class CatalogReadService {
       }),
     );
     return out;
+  }
+
+  /**
+   * RS-3 — a seller's variants a reseller store could be given: the
+   * variant not ARCHIVED and not deleted, its product ACTIVE and not
+   * deleted. Name, label and description come with it so the reseller
+   * screens never read `product_variants` / `products` themselves (MUST
+   * #13). Ordered by product then SKU; capped at 2,000 (a seller with
+   * more reseller-ready variants than that is a pagination change, not a
+   * silent truncation — `truncated` says so).
+   *
+   * `variantIds` narrows the read to those ids (still only this seller's
+   * and only resellable ones — an id that fails the rule is ABSENT).
+   */
+  async listResellableVariants(
+    sellerId: string,
+    variantIds?: readonly string[],
+  ): Promise<{ readonly variants: readonly ResellableVariant[]; readonly truncated: boolean }> {
+    const cap = 2000;
+    if (variantIds !== undefined && variantIds.length === 0) {
+      return { variants: [], truncated: false };
+    }
+    const rows = await this.prisma.client.productVariant.findMany({
+      where: {
+        sellerId,
+        deletedAt: null,
+        status: { not: VariantStatus.ARCHIVED },
+        product: { deletedAt: null, status: ProductStatus.ACTIVE },
+        ...(variantIds === undefined ? {} : { id: { in: [...new Set(variantIds)] } }),
+      },
+      orderBy: [{ product: { name: 'asc' } }, { skuCode: 'asc' }],
+      take: cap + 1,
+      select: {
+        id: true,
+        productId: true,
+        skuCode: true,
+        variantLabel: true,
+        status: true,
+        product: { select: { name: true, description: true } },
+      },
+    });
+    return {
+      truncated: rows.length > cap,
+      variants: rows.slice(0, cap).map((r) =>
+        Object.freeze({
+          variantId: r.id,
+          productId: r.productId,
+          skuCode: r.skuCode,
+          variantLabel: r.variantLabel,
+          status: r.status,
+          productName: r.product.name,
+          productDescription: r.product.description,
+        }),
+      ),
+    };
   }
 
   async getVariantById(variantId: string): Promise<ResolvedVariant | null> {

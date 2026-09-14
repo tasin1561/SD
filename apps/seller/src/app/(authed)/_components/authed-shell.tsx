@@ -22,6 +22,7 @@ import {
   PackageOpen,
   Settings,
   Store,
+  Tags,
   Truck,
   Users,
   Wallet,
@@ -99,7 +100,15 @@ export function AuthedShell({
     {
       // RS-1 — separate businesses reselling this seller's stock.
       heading: 'Reselling',
-      items: [{ href: '/reseller-stores', label: 'Reseller stores', icon: <Store size={15} /> }],
+      items: [
+        { href: '/reseller-stores', label: 'Reseller stores', icon: <Store size={15} /> },
+        // RS-3 — the default price every reseller store pays.
+        {
+          href: '/reseller-stores/price-list',
+          label: 'Reseller price list',
+          icon: <Tags size={15} />,
+        },
+      ],
     },
     {
       heading: 'Account',

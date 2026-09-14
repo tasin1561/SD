@@ -144,6 +144,15 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
       'Skydrop opened a reseller store on your account. Nothing about it is live until you approve or reject it.',
     group: 'Reseller stores',
   },
+  {
+    // Sent by ResellerSetAsideNotifier (RS-3) when the hourly sweep cuts
+    // a reseller set-aside because stock fell below what was promised.
+    topic: 'seller.reseller_set_aside_shrunk',
+    label: 'Stock set aside for a reseller store was reduced',
+    description:
+      'Stock fell below what you had set aside for your reseller stores, so the newest set-asides were reduced to fit.',
+    group: 'Reseller stores',
+  },
 ];
 
 /**

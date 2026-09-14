@@ -152,4 +152,5 @@ export {
   ResellerStoreOrigin,
   ResellerWalletManager,
   ResellerStoreEventKind,
+  ResellerStockMode,
 } from '@prisma/client';

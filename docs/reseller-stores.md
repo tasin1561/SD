@@ -261,3 +261,160 @@ invitation, dashboard, team, store settings (logo via presigned Spaces PUT,
 pause/resume/close, wallet manager, team, history). apps/admin
 `/reseller-stores` (list across sellers, create for a seller, read-only
 detail with history).
+
+## Phase 2 as built (2026-09-14) — RS-3 catalogue, prices, stock
+
+**Schema** (`20260914210000_reseller_catalogue`). Enum `reseller_stock_mode`
+(SHARED | SET_ASIDE). Four NEW tables, nothing existing rewritten:
+
+- `reseller_price_list_items` — the seller's DEFAULT reseller price per
+  variant: `transfer_price_inr` (NOT NULL), `min_/max_/suggested_retail_inr`
+  (nullable), all `Decimal(12,2)`. UNIQUE `(seller_id, variant_id)`. FK
+  sellers CASCADE, product_variants RESTRICT.
+- `reseller_store_variants` — ONE store's terms for ONE variant, UNIQUE
+  `(store_id, variant_id)`: `enabled` (default FALSE), the price OVERRIDE
+  (same four columns, all NULL = use the default), `stock_mode`,
+  `set_aside_qty`, `set_aside_at`, `hidden_percent`, `overlay_title`,
+  `overlay_description`. `seller_id` is denormalised (the Σ-set-aside read
+  and the lock key need no join). FK seller_stores CASCADE, sellers
+  CASCADE, product_variants RESTRICT.
+- `reseller_store_variant_images` — overlay pictures: a Spaces KEY under
+  `stores/<storeId>/catalogue/<variantId>/`, soft-deleted, ≤ 5 live per
+  (store, variant), ≤ 2 MB, JPEG/PNG/WebP. Presigned PUT to upload,
+  presigned GET to read; no URL is stored.
+- `reseller_set_aside_shrinks` — APPEND-ONLY history of every sweep cut
+  (`from_qty`, `to_qty`, the `on_hand` read, `total_before`).
+
+CHECKs: a default row has transfer > 0 and retail ≥ 0 with
+min ≤ suggested ≤ max where set; an override is a WHOLE row or nothing
+(no retail figure without a transfer price) under the same rules;
+SHARED ⇔ `set_aside_qty` NULL, SET_ASIDE ⇔ NOT NULL and ≥ 0;
+`0 ≤ hidden_percent ≤ 90`; a shrink has `0 ≤ to_qty < from_qty`.
+
+**Grants in the migration.** Every existing reseller store's admin / ops /
+finance / viewer role gains `catalogue.view` (new stores get it from
+`provisionDefaultStoreRoles`; the owner holds it implicitly). Every
+seller's system `admin` role that already held `stores.manage` gains
+`stores.pricing` (no longer reserved). Both `INSERT … WHERE NOT EXISTS`.
+
+### Prices
+
+- **Effective price per (store, variant) = the store's override row if it
+  has one, else the seller's default row — decided per ROW, never per
+  field.** A per-field merge would let a later change to the default
+  combine with half an override into a range nobody saw. The seller's
+  screen pre-fills an override from the default.
+- Rules (`reseller-price-rules.ts`, pure, in whole paise): every figure
+  ≥ 0 with ≤ 2 decimals (`INVALID_AMOUNT`); transfer price present and
+  > 0 (`TRANSFER_PRICE_REQUIRED`); min ≤ max (`RETAIL_RANGE_INVERTED`);
+  suggestion inside whichever bounds are set (`SUGGESTED_OUTSIDE_RANGE`).
+  Retail is NOT required to exceed the transfer price — the seller's call.
+- A variant is RESELLABLE when it is the seller's, not ARCHIVED, not
+  deleted, and its product is ACTIVE and not deleted
+  (`CatalogReadService.listResellableVariants`, MUST #13 — extended for
+  this; capped at 2,000 with `truncated` said out loud).
+- A store SELLS a variant only when `enabled` AND it is resellable AND it
+  has an effective transfer price. Enabling without a price is refused
+  (`TRANSFER_PRICE_REQUIRED`); enabling a non-resellable variant too
+  (`VARIANT_NOT_RESELLABLE`). A row whose variant was archived later
+  stays on the seller's screen, labelled, and drops off the store's.
+- Removing a default price is refused while an enabled live store sells
+  that variant AT the default (`DEFAULT_PRICE_IN_USE`, naming the stores).
+
+### Stock — the formula as implemented (`reseller-visible-stock.ts`, pure)
+
+`realAvailable` = INV-3 availability summed over every warehouse that
+fulfils orders (`WarehouseResolverService.fulfillingWarehouseIds`, CNS-2),
+pickable bins only (BIN-2's shared constant): Σ pickable `qtyOnHand` −
+Σ ACTIVE reservations, clamped at 0 — read LIVE through the new
+`StockReadService.getSellableStockLive` (inventory-stock's sanctioned
+surface; INV-2, no cache). `onHand` is the same Σ pickable `qtyOnHand`
+before reservations — the set-aside basis.
+
+```
+unused(store)  = max(0, set_aside_qty − consumedByStore)
+SHARED:    floor(max(0, realAvailable − Σ other live stores' unused set-asides) × (100 − hidden) / 100)
+SET_ASIDE: floor(min(unused, max(0, realAvailable)) × (100 − hidden) / 100)
+```
+
+Integer arithmetic, so the floor is exact. **Phase-3 seam:**
+`consumedByStore` is `ResellerCatalogueService.consumedByStore()`, which
+returns `CONSUMED_BY_STORE_BEFORE_ORDERS` (0) — phase 3 answers it from
+the store's own ACTIVE reservations, and both the seller's preview and
+the store's page follow because both go through `visibleFor`.
+
+- "Live stores" whose set-asides HOLD stock (`COMMITTING_STORE_STATUSES`):
+  PENDING_SELLER_APPROVAL, ACTIVE, PAUSED. A closed or rejected store's
+  set-aside holds nothing, and its terms can no longer be edited
+  (`STORE_FINAL`). A pending store can be set up before the seller
+  approves it, so its commitment already counts.
+- A set-aside counts whether or not the variant is `enabled` there — it
+  is a commitment the seller made and the guard checked; freeing it is
+  switching the store to SHARED.
+- **The set-aside guard.** On save, under `AdvisoryLock.RESELLER_SET_ASIDE`
+  (`0x05241`, key `<seller>|<variant>`) INSIDE the writing transaction:
+  if the save GROWS the store's commitment (new SET_ASIDE, or a larger
+  quantity), Σ other live stores' set-asides + the new quantity must not
+  exceed `onHand`, else 409 `SET_ASIDE_EXCEEDS_STOCK` saying how many are
+  free. A DECREASE is always allowed — refusing somebody who promises
+  less because stock fell since would only leave the over-commitment for
+  the sweep. `set_aside_at` is stamped only when the commitment grows.
+- **The shrink sweep** (`ResellerSetAsideSweepService`, own BullMQ queue
+  `reseller-set-aside`, hourly at :20, `WorkerRoleService` per SCALE-1):
+  every (seller, variant) whose live set-asides exceed `onHand` is cut
+  NEWEST-FIRST (`set_aside_at` desc, then id desc; an undated row is the
+  oldest) until it fits, under the same lock, re-reading rows and stock
+  inside it; each cut is a guarded `updateMany` on the quantity read, cut
+  to 0 at most (the store stays SET_ASIDE — the seller decides what
+  next). It never touches stock. **Recorded as append-only
+  `reseller_set_aside_shrinks` rows, written in the shrink's own
+  transaction**, not as audit rows: the audit writer is best-effort by
+  design and the seller's screen lists these, so a lost row would be a
+  cut nobody can see (the `reseller_store_events` argument). One MEDIUM
+  audit row per (seller, variant) as well, `entityId` null. The seller
+  is told in-app — topic `seller.reseller_set_aside_shrunk`
+  (catalogued, NOTIF-17), to `SELLER_PERMISSION stores.pricing`, event id
+  from the first shrink row — awaited after commit and never throwing,
+  so nothing outlives the job (no drain needed).
+
+### Overlay
+
+Per (store, variant): title, description, pictures. The store sees
+`overlay_title ?? product name`, `overlay_description ?? product
+description`, and the overlay pictures, else the catalogue thumbnail
+(`CatalogReadService.thumbnailUrlsByVariant`, fail-open).
+
+### Who sees what
+
+| Surface | Endpoint | Permission |
+|---|---|---|
+| Seller default price list | `GET /seller/reseller-price-list` | `stores.pricing` or `stores.manage` |
+| | `PUT /seller/reseller-price-list/:variantId`, `DELETE …` | `stores.pricing` |
+| Seller store terms | `GET /seller/reseller-stores/:storeId/catalogue` | `stores.pricing` or `stores.manage` |
+| | `PUT /seller/reseller-stores/:storeId/catalogue/:variantId` | `stores.pricing` |
+| | `POST …/:variantId/images/presign`, `POST …/images`, `DELETE …/images/:imageId` | `stores.pricing` |
+| Store | `GET /store/catalogue` | store `catalogue.view` (every role) |
+| Admin | `GET /admin/reseller-stores/:storeId/catalogue` | `reseller.stores.view` |
+
+Every seller write audits MEDIUM with before/after (`entityId` = the row).
+The store's response carries ONLY: variant id, SKU, title, label,
+description, picture URLs, transfer price, retail range, suggestion,
+visible quantity — never the seller's cost, real stock, set-asides,
+hidden share or anything about another store (pinned in
+`tenant-isolation.e2e-spec.ts`). The admin view is the seller's view,
+read-only.
+
+**Screens.** apps/seller: `/reseller-stores/price-list` (gate
+`stores.pricing`, nav "Reseller price list") and a "Catalogue & stock"
+tab on `/reseller-stores/[storeId]` (page gate `stores.manage`; Edit
+offered only with `stores.pricing` — so a person with pricing but not
+manage edits defaults only; a known, cosmetic limit). The tab shows real
+availability beside what the store sees, the free-to-set-aside figure,
+and the recent shrinks. apps/reseller: `/catalogue` (gate
+`catalogue.view`, nav, linked from the dashboard). apps/admin: a
+read-only "Catalogue terms" section on the store detail page.
+
+**Left for phase 3.** `consumedByStore` (the seam), confirmation checking
+real availability AND the store's set-aside, retail within [min, max]
+enforced on a store order, and snapshotting the effective price onto the
+order (RS-4). No order path reads any of this yet.

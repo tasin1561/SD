@@ -497,6 +497,13 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // off them — go here, BEFORE resetOrderState truncates
         // seller_stores. Named one by one rather than left to CASCADE, so
         // a changed FK cannot quietly leave rows behind.
+        // RS-3 reseller catalogue — FK seller_stores / sellers (CASCADE) and
+        // product_variants (RESTRICT), so they go before resetCatalogState
+        // truncates variants and before seller_stores (MUST #12).
+        'reseller_set_aside_shrinks',
+        'reseller_store_variant_images',
+        'reseller_store_variants',
+        'reseller_price_list_items',
         'store_refresh_tokens',
         'store_password_reset_tokens',
         'store_email_verification_tokens',

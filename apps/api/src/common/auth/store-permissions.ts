@@ -24,7 +24,7 @@ export interface StorePermissionDef {
   readonly sensitive?: true;
 }
 
-export const STORE_PERMISSION_GROUPS = ['Store', 'Team'] as const;
+export const STORE_PERMISSION_GROUPS = ['Store', 'Team', 'Catalogue'] as const;
 
 export type StorePermissionGroup = (typeof STORE_PERMISSION_GROUPS)[number];
 
@@ -53,6 +53,17 @@ export const STORE_PERMISSIONS = [
     description: 'Invite a colleague, change what somebody may do, or remove their access.',
     group: 'Team',
     sensitive: true,
+  },
+  {
+    // RS-3. Every role holds it by default (the owner implicitly): the
+    // products a store may sell and their prices are what the whole team
+    // works from. It shows the store's OWN terms only — never the
+    // seller's cost, real stock, or anything about another store.
+    key: 'catalogue.view',
+    label: 'See the catalogue',
+    description:
+      'The products this store may sell, the price it pays for each, the retail range, and how many are available.',
+    group: 'Catalogue',
   },
 ] as const satisfies readonly StorePermissionDef[];
 
@@ -99,20 +110,21 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
   {
     key: 'ops',
     name: 'Operations',
-    description: 'Day-to-day work. Sees the store and its team; changes neither.',
-    permissions: ['store.profile.view', 'team.view'],
+    description:
+      'Day-to-day work. Sees the store, its team and its catalogue; changes neither store nor team.',
+    permissions: ['store.profile.view', 'team.view', 'catalogue.view'],
   },
   {
     key: 'finance',
     name: 'Finance',
-    description: 'The money side, when it arrives. Sees the store and its team.',
-    permissions: ['store.profile.view', 'team.view'],
+    description: 'The money side, when it arrives. Sees the store, its team and its catalogue.',
+    permissions: ['store.profile.view', 'team.view', 'catalogue.view'],
   },
   {
     key: 'viewer',
     name: 'Viewer',
     description: 'Read-only. The narrowest login there is.',
-    permissions: ['store.profile.view'],
+    permissions: ['store.profile.view', 'catalogue.view'],
   },
 ];
 

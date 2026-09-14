@@ -30,4 +30,10 @@ describe('reseller page access', () => {
     expect(canSeePath({ permissions: ['store.profile.view'] }, '/team')).toBe(false);
     expect(canSeePath({ permissions: ['team.view'] }, '/team')).toBe(true);
   });
+
+  it('gates the catalogue on catalogue.view (RS-3)', () => {
+    expect(permissionForPath('/catalogue')).toBe('catalogue.view');
+    expect(canSeePath({ permissions: ['store.profile.view'] }, '/catalogue')).toBe(false);
+    expect(canSeePath({ permissions: ['catalogue.view'] }, '/catalogue')).toBe(true);
+  });
 });
