@@ -412,14 +412,18 @@ export class OrderService {
         // HERE rather than in the form so every entry path gets it —
         // CSV import calls this same method, and an order placed by API
         // would otherwise be the one parcel on the bench with no code.
+        //
+        // EXCEPT a reseller store's order (RS-10, decision 4): the stored
+        // name is what the courier prints on the label, and the customer
+        // must see the STORE, never a code naming the seller behind it.
         const seller = await tx.seller.findUnique({
           where: { id: sellerId },
           select: { initials: true },
         });
-        const prefixedRecipientName = composeSellerPrefixedName(
-          seller?.initials,
-          input.recipientName,
-        );
+        const prefixedRecipientName =
+          reseller === null
+            ? composeSellerPrefixedName(seller?.initials, input.recipientName)
+            : input.recipientName.trim();
 
         const customer = await this.customers.findOrCreate(tx, {
           sellerId,
