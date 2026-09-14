@@ -683,6 +683,23 @@ function OrderInvoiceSection({
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
 
+  // RS-10 / decision 8: an order sold by a reseller store gets no tax
+  // invoice. The SERVER refuses it by name; we show its verdict verbatim
+  // and offer nothing to press (FE-2 — the hide is cosmetic). Checked
+  // first, whatever the status: "auto-generated on delivery" would be a
+  // promise that never comes true for this order.
+  if (invoice.data !== undefined && invoice.data !== null && 'refused' in invoice.data) {
+    return (
+      <Card>
+        <CardBody>
+          <p className="text-text-muted text-sm" data-testid="invoice-refused">
+            {invoice.data.refused}
+          </p>
+        </CardBody>
+      </Card>
+    );
+  }
+
   if (status !== 'DELIVERED') {
     return (
       <Card>

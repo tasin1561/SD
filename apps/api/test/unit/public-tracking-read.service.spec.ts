@@ -23,14 +23,21 @@ type ShipRow = {
     displayName: string;
     deletedAt: Date | null;
   };
+  /** RS-10 — the order behind the parcel (who the customer bought from). */
+  orderShipments: Array<{ order: Record<string, unknown> }>;
 };
 
 function makeService(
   opts: {
     ship?: ShipRow | null;
     events?: EventRow[];
+    presignFails?: boolean;
   } = {},
 ) {
+  const presign = jest.fn(async (key: string): Promise<string> => {
+    if (opts.presignFails) throw new Error('spaces down');
+    return `https://skydrop.sgp1.digitaloceanspaces.com/${key}?X-Amz-Signature=abc`;
+  });
   const events: EventRow[] = opts.events ?? [];
   const shipFindUnique = jest.fn(async () => opts.ship ?? null);
   const trackingEventFindMany = jest.fn(
@@ -49,8 +56,11 @@ function makeService(
     shipment: { findUnique: shipFindUnique },
     trackingEvent: { findMany: trackingEventFindMany },
   };
-  const svc = new PublicTrackingReadService({ client } as unknown as PrismaService);
-  return { svc, shipFindUnique, trackingEventFindMany };
+  const svc = new PublicTrackingReadService(
+    { client } as unknown as PrismaService,
+    { presignGetUrl: presign } as never,
+  );
+  return { svc, shipFindUnique, trackingEventFindMany, presign };
 }
 
 const AWB = 'DLV-AWB-PUB-0001';
@@ -67,9 +77,108 @@ function defaultShip(over: Partial<ShipRow> = {}): ShipRow {
     createdAt: new Date('2026-05-18T00:00:00.000Z'),
     manualCourierName: null,
     courier: { displayName: 'Delhivery', deletedAt: null },
+    // A CHANNEL-store order — every order that existed before RS-1.
+    orderShipments: [
+      {
+        order: {
+          storeNameSnapshot: 'Main store',
+          store: { kind: 'CHANNEL', displayName: null, name: 'Main store', logoKey: null },
+          seller: { companyName: 'Acme Exports Ltd' },
+        },
+      },
+    ],
     ...over,
   };
 }
+
+const RESELLER_ORDER = {
+  storeNameSnapshot: 'Kurta Corner',
+  store: {
+    kind: 'RESELLER',
+    displayName: 'Kurta Corner',
+    name: 'kurta-corner',
+    logoKey: 'stores/st-1/logo.png',
+  },
+  seller: { companyName: 'Acme Exports Ltd' },
+};
+
+describe('PublicTrackingReadService.findByAwb — RS-10 "sold by"', () => {
+  it('a CHANNEL order: no soldBy key at all, nothing signed — the response is unchanged', async () => {
+    const { svc, presign } = makeService({ ship: defaultShip() });
+    const res = await svc.findByAwb(AWB);
+    expect(res).not.toHaveProperty('soldBy');
+    expect(Object.keys(res).sort()).toEqual(
+      [
+        'awbNumber',
+        'courierDisplayName',
+        'currentStatus',
+        'currentStatusAt',
+        'destinationCity',
+        'estimatedDeliveryAt',
+        'timeline',
+      ].sort(),
+    );
+    expect(presign).not.toHaveBeenCalled();
+  });
+
+  it('a parcel with no order link behaves as before (no soldBy)', async () => {
+    const { svc } = makeService({ ship: defaultShip({ orderShipments: [] }) });
+    expect(await svc.findByAwb(AWB)).not.toHaveProperty('soldBy');
+  });
+
+  it('a RESELLER order: soldBy is the store name + a presigned logo, and nothing of the seller', async () => {
+    const { svc, presign } = makeService({
+      ship: defaultShip({ orderShipments: [{ order: RESELLER_ORDER }] }),
+    });
+    const res = await svc.findByAwb(AWB);
+    expect(res.soldBy).toEqual({
+      name: 'Kurta Corner',
+      logoUrl:
+        'https://skydrop.sgp1.digitaloceanspaces.com/stores/st-1/logo.png?X-Amz-Signature=abc',
+    });
+    expect(presign).toHaveBeenCalledWith('stores/st-1/logo.png');
+    // TRK-8: the underlying seller never reaches the customer — neither
+    // the company name nor any id.
+    const body = JSON.stringify(res);
+    expect(body).not.toContain('Acme');
+    expect(body).not.toMatch(/seller/i);
+    expect(body).not.toContain('kurta-corner');
+  });
+
+  it('a reseller store with no logo: soldBy.logoUrl is null, nothing signed', async () => {
+    const { svc, presign } = makeService({
+      ship: defaultShip({
+        orderShipments: [
+          { order: { ...RESELLER_ORDER, store: { ...RESELLER_ORDER.store, logoKey: null } } },
+        ],
+      }),
+    });
+    expect((await svc.findByAwb(AWB)).soldBy).toEqual({ name: 'Kurta Corner', logoUrl: null });
+    expect(presign).not.toHaveBeenCalled();
+  });
+
+  it('a logo that cannot be signed costs the logo, never the page (fail-open)', async () => {
+    const { svc } = makeService({
+      ship: defaultShip({ orderShipments: [{ order: RESELLER_ORDER }] }),
+      presignFails: true,
+    });
+    const res = await svc.findByAwb(AWB);
+    expect(res.soldBy).toEqual({ name: 'Kurta Corner', logoUrl: null });
+    expect(res.awbNumber).toBe(AWB);
+  });
+
+  it('the 404 is unchanged for a reseller parcel that is not visible (generic body)', async () => {
+    const { svc } = makeService({
+      ship: defaultShip({ orderShipments: [{ order: RESELLER_ORDER }], deletedAt: new Date() }),
+    });
+    await expect(svc.findByAwb(AWB)).rejects.toMatchObject({
+      response: {
+        code: 'TRACKING_NOT_FOUND',
+        message: 'No tracking information found for the provided number.',
+      },
+    });
+  });
+});
 
 describe('PublicTrackingReadService.findByAwb — happy path projection (TRK-8)', () => {
   it('returns a customer-safe projection: NO internal IDs, NO PII, NO cross-order data; current status derived from latest scan by eventAt', async () => {

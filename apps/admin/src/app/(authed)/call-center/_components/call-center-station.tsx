@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import { ApiError } from '@skydrop/api-client';
 import type { CallOrderSnapshot, PulledAssignment } from '@skydrop/api-client';
+import { callBrandLine } from '@/lib/call-brand';
 import { PhoneToCall } from '@/components/phone-to-call';
 import { ProductThumb } from '@skydrop/ui/components';
 import {
@@ -484,6 +485,7 @@ export function CallCenterStation(): ReactElement {
             <RecipientPanel
               order={assignment.order}
               seller={assignment.seller}
+              customerBrand={assignment.customerBrand ?? null}
               itemDisplay={assignment.itemDisplay}
             />
             {/* Above the outcome form on purpose: the agent needs the
@@ -609,10 +611,12 @@ export function CallCenterStation(): ReactElement {
 function RecipientPanel({
   order,
   seller,
+  customerBrand,
   itemDisplay,
 }: {
   readonly order: CallOrderSnapshot | null;
   readonly seller: PulledAssignment['seller'];
+  readonly customerBrand: NonNullable<PulledAssignment['customerBrand']> | null;
   readonly itemDisplay: PulledAssignment['itemDisplay'];
 }): ReactElement {
   // ABOVE the early return. A hook called after one runs in a different
@@ -642,20 +646,39 @@ function RecipientPanel({
   // the flat column names, so every field here rendered "—" and an
   // agent was asked to phone a number the screen would not show.
   const r = order.recipient;
+  // RS-10 — whom this call is on behalf of (a reseller store or the seller).
+  const { orderedFrom, isReseller } = callBrandLine(seller, customerBrand);
 
   return (
     <div className="rounded-[6px] border border-border p-3 text-sm">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span className="text-text-bright text-base font-semibold">{order.orderNumber}</span>
-        {seller !== null && (
+        {orderedFrom !== null && (
           // The agent opens with this: "calling about your order from
           // <store>". A customer phoned by a company they do not
           // recognise hangs up, and in a COD market that is a refusal.
-          <span className="text-text-muted text-sm">
-            Ordered from <span className="text-text-bright font-medium">{seller.companyName}</span>
+          // RS-10: for a reseller-store order that is THE STORE's name.
+          <span className="text-text-muted text-sm" data-testid="ordered-from">
+            Ordered from <span className="text-text-bright font-medium">{orderedFrom}</span>
+            {isReseller && (
+              <span className="border-border text-text-muted ml-2 rounded-[4px] border px-1.5 py-0.5 text-xs">
+                Reseller store
+              </span>
+            )}
           </span>
         )}
       </div>
+
+      {isReseller && (
+        // RS-10 — the script. The customer bought from the store and
+        // has never heard of the seller behind it; naming the seller
+        // on the phone reads as a stranger calling about their parcel.
+        <p className="text-text-muted mb-2 text-sm" data-testid="reseller-script">
+          Say you are calling about their order from{' '}
+          <span className="text-text-bright font-medium">{orderedFrom}</span>. Do not mention the
+          seller behind the store.
+        </p>
+      )}
 
       <div className="mb-2">
         <PhoneToCall phone={r.phoneE164} altPhone={r.altPhoneE164} />
@@ -694,9 +717,20 @@ function RecipientPanel({
             '—'
           }
         />
+        {isReseller &&
+          customerBrand !== null &&
+          (customerBrand.storeContactPhone !== null ||
+            customerBrand.storeContactEmail !== null) && (
+            <Field
+              label="Store contact"
+              value={[customerBrand.storeContactPhone, customerBrand.storeContactEmail]
+                .filter((v): v is string => v !== null && v.trim() !== '')
+                .join(' · ')}
+            />
+          )}
         {seller !== null && (
           <Field
-            label="Seller contact"
+            label={isReseller ? 'Seller contact (not for the customer)' : 'Seller contact'}
             // For the questions an agent cannot answer — a substitution,
             // a discount the customer says they were promised. Reaching
             // the shop takes a call, not a support ticket.

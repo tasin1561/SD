@@ -82,6 +82,19 @@ export interface PulledAssignment {
     readonly phone: string;
   } | null;
   /**
+   * RS-10 — WHOM the agent is calling on behalf of. For an order sold by
+   * a reseller store it is THE STORE (its name at order time and its own
+   * contact) — the customer bought from that business and has never heard
+   * of the seller behind it. For every other order it is the seller's
+   * company. Absent/null ⇒ fall back to `seller.companyName`.
+   */
+  readonly customerBrand?: {
+    readonly kind: 'RESELLER_STORE' | 'SELLER';
+    readonly name: string | null;
+    readonly storeContactPhone: string | null;
+    readonly storeContactEmail: string | null;
+  } | null;
+  /**
    * Picture and description per variant, keyed by variantId.
    *
    * Beside the order rather than inside its items, because these are

@@ -243,6 +243,8 @@ export class ShiprocketClientService {
       height: req.heightCm,
       // KILOGRAMS. Ours are grams everywhere else.
       weight: req.weightGrams / 1000,
+      // RS-10: a reseller store's name; absent for every other order.
+      ...(req.resellerName === undefined ? {} : { reseller_name: req.resellerName }),
     };
 
     try {

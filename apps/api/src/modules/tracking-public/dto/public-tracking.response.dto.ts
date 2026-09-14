@@ -58,7 +58,21 @@ export interface PublicTrackingTimelineEvent {
   locationCity: string | null;
 }
 
+/**
+ * RS-10 — the reseller store the customer bought from. Present ONLY on
+ * an order sold by a reseller store; absent for every other order.
+ * Carries nothing about the underlying seller (TRK-8): the store's
+ * name as it was when the order was placed, and a short-lived presigned
+ * logo URL (null when the store has none or signing failed).
+ */
+export interface PublicSoldBy {
+  name: string;
+  logoUrl: string | null;
+}
+
 export interface PublicTrackingResponse {
+  /** RS-10 — see `PublicSoldBy`. Absent unless a reseller store sold it. */
+  soldBy?: PublicSoldBy;
   /** The AWB the customer asked about — echoed for confirmation. */
   awbNumber: string;
   /** Display name of the courier (e.g. "Delhivery"). Never the

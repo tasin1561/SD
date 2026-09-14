@@ -179,6 +179,8 @@ exactly as it is. A store now has a **kind**:
 
 Call-centre script, shipping label ("sold by"), public tracking page,
 customer emails carry the store's name and logo. No tax invoices.
+(As built — including why emails carry the name but not the logo — is
+"RS-10 as built" at the end of this file.)
 
 ## RS-11 Phases
 
@@ -723,3 +725,82 @@ claim / withdrawal outcomes (the store sees the state on its wallet page);
 a store bank account of record with change approval (payee details are
 given per request); an unpayable-request sweep for store withdrawals (they
 are re-checked at approve and pay instead).
+
+
+## RS-10 as built (2026-09-14) — the customer sees the store
+
+**The rule lives once.** `apps/api/src/common/brand/customer-facing-brand.ts`
+(pure, no DI, no module — the R3 shape) exports `customerFacingBrand(order)`
+and `CUSTOMER_BRAND_ORDER_SELECT` (the columns every surface reads). An order
+whose store is `kind = RESELLER` presents as THAT STORE: the name the order
+carried when it was placed (`orders.store_name_snapshot`, ORD-6 — RS-5 writes
+`displayName ?? name`), and the store's CURRENT `logo_key`, presigned on read.
+Every other order — every CHANNEL-store order, which is every order in
+production today — presents exactly as before: the seller's company. **A
+reseller order never falls back to the seller**: blank names fall through the
+store's own names (snapshot → display name → name), never to
+`seller.companyName`. No schema change and no migration.
+
+**Surfaces.**
+
+- **Call centre.** `PulledAssignment.customerBrand` (`kind`, `name`, the
+  store's own contact phone/email for a reseller order), batched in one
+  `order.findMany` per pull/list and FAIL-OPEN to null (the screen then shows
+  the seller line it always showed). The admin station prints "Ordered from
+  <store>" with a "Reseller store" badge, the script line "Say you are calling
+  about their order from <store>. Do not mention the seller behind the
+  store.", a "Store contact" field, and relabels the seller's contact "Seller
+  contact (not for the customer)". A channel order renders byte-for-byte as
+  before (`apps/admin/src/lib/call-brand.ts`, `call-brand.test.ts`).
+- **Courier booking ("sold by").** `DispatchAwbInput.soldByName`, set by
+  `AwbGenerationService` ONLY for a reseller order; the dispatcher (CUR-12)
+  maps it to Delhivery's `seller_name` (sanitised like every other free text)
+  and Shiprocket's `reseller_name`. Absent for every other order, so their
+  payloads are byte-identical — pinned key-for-key in
+  `courier-awb-dispatch.service.spec.ts`, `delhivery-awb.service.spec.ts` and
+  `shiprocket-client.service.spec.ts`. Pickup location, return address and
+  everything a courier matches on are untouched. **Unverified:** whether
+  Shiprocket prints `reseller_name` on its label depends on their label
+  settings — check the first real reseller parcel's label. Reverse bookings
+  (customer returns) send nothing new.
+- **Our own printed label** (manual-courier labels, `warehouse-printing`): the
+  "order · from" line uses the brand, so a reseller parcel carries the store.
+  Staff-only screens (print queue, selection table) still show the seller.
+- **Public tracking.** `PublicTrackingResponse.soldBy?: { name, logoUrl }` —
+  ONLY for a reseller order, ABSENT (not null) otherwise. TRK-8 holds: nothing
+  of the underlying seller is projected; the logo is a 15-minute presigned GET
+  and a failed presign costs the logo, never the page; the generic 404 is
+  unchanged. apps/track renders "Sold by" / "विक्रेता" with the logo in its
+  own design world; its CSP `img-src` now admits
+  `https://*.digitaloceanspaces.com` (images only, never connect-src), pinned
+  by `track-csp-store-logo.spec.ts`.
+- **Customer emails.** A new `store_name` variable (the reseller store's name,
+  else the seller company — never blank for an order that has one). The three
+  customer templates that named the seller (`customer.order_{dispatched,
+  delivered,cancelled}.email`) now read `{{ store_name }}`; the seed UPSERTS
+  templates (bodyTemplate is in `update:`) and the deploy re-seeds when
+  seed.ts changes, so **no `20260914250000_customer_templates_store_name`
+  migration was needed or written**. For a reseller order's CUSTOMER target the
+  listener also overrides `company_name` / `seller_company_name` with the store
+  name, so a row still on its old wording until the re-seed cannot leak the
+  seller; a channel order's customer target gets the very same variables object
+  as before (pinned). Seller-facing emails are unchanged.
+  **The logo is NOT in emails, on purpose:** nothing in the bucket is public
+  and a presigned URL lives 15 minutes, so an email opened tomorrow would show
+  a broken image. If a logo in email is wanted, it needs a durable, public,
+  per-store asset — a decision, not a code change.
+- **No tax invoices (decision 8).** `InvoiceService.assertInvoiceable` refuses
+  a reseller order with 409 `INVOICE_NOT_FOR_RESELLER_ORDER` before any invoice
+  row is read — on generate, the seller's GET and the PDF redirect; the
+  DELIVERED listener skips it quietly. apps/seller shows the verdict verbatim
+  and no "Generate now" (FE-2). Channel orders unchanged
+  (`invoice-reseller-refusal.spec.ts`).
+
+**Left for RS-5 to notice.** `orders.recipient_name` carries the seller's
+initials code (`composeSellerPrefixedName`) and is printed on courier labels.
+It is a short code, not a name, but for a reseller order RS-5 should decide
+whether to prefix with the seller's code at all.
+
+**Dormant until RS-5.** `resolveForOrder` still refuses a reseller store, so
+no reseller order exists yet; every branch above is exercised by unit tests
+only until store orders land.

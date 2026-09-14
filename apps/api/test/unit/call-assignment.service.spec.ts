@@ -22,6 +22,8 @@ function makeService(
     available?: boolean;
     picked?: { id: string; orderId: string; reason?: CallQueueReason } | null;
     order?: AnyArgs | null;
+    /** RS-10 — rows `order.findMany` returns for the brand read. */
+    orderBrands?: AnyArgs[];
     /** Rows the seller lookup returns (the agent's "ordered from" line). */
     sellers?: AnyArgs[];
     /** This order's logged calls, newest first. */
@@ -92,6 +94,8 @@ function makeService(
     callQueueEntry: { count, findMany, findUnique, updateMany },
     agentCallSettings: { findUnique: agentSettingsFindUnique },
     seller: { findMany: sellerFindMany },
+    // RS-10 — whom each order presents as. Empty unless a test says so.
+    order: { findMany: jest.fn(async () => opts.orderBrands ?? []) },
     // This order's previous calls — the context an agent opens with.
     // Empty by default; a test that cares supplies rows.
     callAttempt: { findMany: jest.fn(async () => opts.priorAttempts ?? []) },
@@ -115,6 +119,7 @@ function makeService(
     };
     agentCallSettings: { findUnique: typeof agentSettingsFindUnique };
     seller: { findMany: typeof sellerFindMany };
+    order: { findMany: jest.Mock };
     callAttempt: { findMany: jest.Mock };
     ticket: { findMany: jest.Mock; findFirst: jest.Mock };
     orderDeliveryActionRequest: { findFirst: jest.Mock };
@@ -552,5 +557,78 @@ describe('the confirmation-call statuses are shared, not restated', () => {
     expect(src).toContain("import { CONFIRMATION_CALL_STATUSES } from './call-attempt.service'");
     // …and does not rebuild one.
     expect(src).not.toMatch(/CONFIRMATION_CALL_STATUSES[^=]*=\s*new Set/);
+  });
+});
+
+/**
+ * RS-10 — the agent calls on behalf of the business the customer bought
+ * from. For a reseller-store order that is THE STORE.
+ */
+describe('CallAssignmentService — RS-10 customerBrand', () => {
+  const ORDER = { orderId: 'o1', sellerId: 's1', items: [], recipient: { name: 'Asha' } };
+
+  it('a CHANNEL order presents as the seller company (what the screen always said)', async () => {
+    const { svc } = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      order: ORDER,
+      orderBrands: [
+        {
+          id: 'o1',
+          storeNameSnapshot: 'Main store',
+          store: {
+            kind: 'CHANNEL',
+            displayName: null,
+            name: 'Main store',
+            logoKey: null,
+            contactPhone: null,
+            contactEmail: null,
+          },
+          seller: { companyName: 'Acme Exports Ltd' },
+        },
+      ],
+    });
+    const r = await svc.pullNext('agent-1');
+    expect(r?.customerBrand).toEqual({
+      kind: 'SELLER',
+      name: 'Acme Exports Ltd',
+      storeContactPhone: null,
+      storeContactEmail: null,
+    });
+  });
+
+  it('a RESELLER order presents as the store, with the store’s own contact', async () => {
+    const { svc } = makeService({
+      picked: { id: 'q1', orderId: 'o1' },
+      order: ORDER,
+      orderBrands: [
+        {
+          id: 'o1',
+          storeNameSnapshot: 'Kurta Corner',
+          store: {
+            kind: 'RESELLER',
+            displayName: 'Kurta Corner',
+            name: 'kurta-corner',
+            logoKey: null,
+            contactPhone: '+919800000000',
+            contactEmail: 'hello@kurta.example',
+          },
+          seller: { companyName: 'Acme Exports Ltd' },
+        },
+      ],
+    });
+    const r = await svc.pullNext('agent-1');
+    expect(r?.customerBrand).toEqual({
+      kind: 'RESELLER_STORE',
+      name: 'Kurta Corner',
+      storeContactPhone: '+919800000000',
+      storeContactEmail: 'hello@kurta.example',
+    });
+  });
+
+  it('a brand read that fails costs the line, never the call (fail-open → null)', async () => {
+    const { svc } = makeService({ picked: { id: 'q1', orderId: 'o1' }, order: ORDER });
+    const r = await svc.pullNext('agent-1');
+    expect(r).not.toBeNull();
+    expect(r?.customerBrand).toBeNull();
   });
 });

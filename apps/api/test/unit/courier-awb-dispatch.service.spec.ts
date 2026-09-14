@@ -219,3 +219,81 @@ describe('CourierAwbDispatchService — the intake switch', () => {
     expect(shiprocketGenerate).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * RS-10 — a reseller-store order books with THE STORE as the seller the
+ * customer sees. Every other order must send each courier exactly the
+ * request it sent before RS-10: no new key, no new value.
+ */
+describe('CourierAwbDispatchService — RS-10 "sold by"', () => {
+  const DELHIVERY_KEYS_BEFORE_RS10 = [
+    'shipmentNumber',
+    'recipientName',
+    'recipientPhoneE164',
+    'addressLine1',
+    'addressLine2',
+    'city',
+    'stateProvince',
+    'postalCode',
+    'countryCode',
+    'totalWeightGrams',
+    'declaredValueInr',
+    'codAmountInr',
+    'itemDescription',
+    'lengthCm',
+    'widthCm',
+    'heightCm',
+  ];
+  const SHIPROCKET_KEYS_BEFORE_RS10 = [
+    'shipmentId',
+    'orderNumber',
+    'recipient',
+    'items',
+    'paymentMode',
+    'subTotalInr',
+    'weightGrams',
+    'lengthCm',
+    'breadthCm',
+    'heightCm',
+  ];
+
+  it('a channel order: Delhivery gets the pre-RS-10 request, key for key', async () => {
+    const { svc, delhiveryGenerate } = makeService();
+    await svc.generate(input(), ACTOR);
+    const req = (delhiveryGenerate.mock.calls[0] as unknown as [AnyArgs])[0];
+    expect(Object.keys(req)).toEqual(DELHIVERY_KEYS_BEFORE_RS10);
+    expect(req).not.toHaveProperty('sellerName');
+  });
+
+  it('a channel order: Shiprocket gets the pre-RS-10 request, key for key', async () => {
+    const { svc, shiprocketGenerate } = makeService();
+    await svc.generate(input({ courierCode: 'shiprocket' }), ACTOR);
+    const req = shiprocketGenerate.mock.calls[0]?.[0];
+    expect(Object.keys(req)).toEqual(SHIPROCKET_KEYS_BEFORE_RS10);
+    expect(req).not.toHaveProperty('resellerName');
+  });
+
+  it('a reseller order: Delhivery gets the store as sellerName, and nothing else changes', async () => {
+    const plain = makeService();
+    await plain.svc.generate(input(), ACTOR);
+    const { svc, delhiveryGenerate } = makeService();
+    await svc.generate(input({ soldByName: 'Kurta Corner' }), ACTOR);
+    const req = (delhiveryGenerate.mock.calls[0] as unknown as [AnyArgs])[0];
+    expect(req.sellerName).toBe('Kurta Corner');
+    const { sellerName: _drop, ...rest } = req;
+    void _drop;
+    expect(rest).toEqual((plain.delhiveryGenerate.mock.calls[0] as unknown as [AnyArgs])[0]);
+  });
+
+  it('a reseller order: Shiprocket gets the store as resellerName, and nothing else changes', async () => {
+    const plain = makeService();
+    await plain.svc.generate(input({ courierCode: 'shiprocket' }), ACTOR);
+    const { svc, shiprocketGenerate } = makeService();
+    await svc.generate(input({ courierCode: 'shiprocket', soldByName: 'Kurta Corner' }), ACTOR);
+    const req = shiprocketGenerate.mock.calls[0]?.[0];
+    expect(req.resellerName).toBe('Kurta Corner');
+    const { resellerName: _drop, ...rest } = req;
+    void _drop;
+    expect(rest).toEqual(plain.shiprocketGenerate.mock.calls[0]?.[0]);
+  });
+});

@@ -1,4 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { isResellerOrder } from '../../../common/brand/customer-facing-brand';
+
+/** RS-10 — the refusal code for a tax invoice on a reseller-store order. */
+export const RESELLER_ORDER_NO_INVOICE = 'INVOICE_NOT_FOR_RESELLER_ORDER';
 import { ChargeType, NotificationRecipientType, OrderStatus, Prisma } from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -69,6 +73,35 @@ export class InvoiceService {
   }
 
   /**
+   * RS-10 / owner decision 8 — "no tax invoices for reseller orders".
+   *
+   * An order sold by a reseller store (`seller_stores.kind = RESELLER`)
+   * is sold by a business we do not invoice for, so none is generated,
+   * offered or served for it. Refused BY NAME (409) rather than a 404,
+   * so the seller's screen can say why instead of offering a "Generate
+   * now" that would never work (FE-2: the UI hides the button; this is
+   * the refusal behind it). Every other order is unaffected — this reads
+   * one column and returns.
+   */
+  async isResellerOrder(orderId: string): Promise<boolean> {
+    const row = await this.prisma.client.order.findFirst({
+      where: { id: orderId },
+      select: { store: { select: { kind: true } } },
+    });
+    return row !== null && isResellerOrder(row);
+  }
+
+  async assertInvoiceable(orderId: string): Promise<void> {
+    if (await this.isResellerOrder(orderId)) {
+      throw new ConflictException({
+        code: RESELLER_ORDER_NO_INVOICE,
+        message:
+          'This order was sold by a reseller store. Reseller-store orders do not get a tax invoice.',
+      });
+    }
+  }
+
+  /**
    * Generate (or return existing) invoice for an order. Caller is the
    * bus listener (post-DELIVERED) OR the seller's "Download invoice"
    * button (manual trigger).
@@ -79,6 +112,11 @@ export class InvoiceService {
     pdfUrl: string;
     alreadyExisted: boolean;
   }> {
+    // RS-10 / decision 8: a reseller-store order gets no tax invoice.
+    // Before the idempotency gate, so no path through here can hand one
+    // out — whoever asks (the seller's button, the DELIVERED listener).
+    await this.assertInvoiceable(orderId);
+
     // Idempotency gate.
     const existing = await this.prisma.client.invoice.findUnique({
       where: { orderId },

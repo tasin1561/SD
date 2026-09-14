@@ -3,6 +3,7 @@ import {
   NotificationChannel,
   NotificationRecipientType,
   OrderStatus,
+  SellerStoreKind,
 } from '@skydrop/db';
 import { NotificationListener } from '../../src/modules/notifications/services/notification-listener.service';
 import { NotificationEventMappingService } from '../../src/modules/notifications/services/notification-event-mapping.service';
@@ -37,6 +38,14 @@ interface OrderFixture {
   /** M13 CP2.A.1 — latest delivery_attempt on the live shipment.
    *  null when no attempts have been recorded. */
   deliveryAttempt?: { failureReason: string | null; failureNotes: string | null } | null;
+  /** RS-10 — the store the order was placed on. Defaults to a CHANNEL store. */
+  storeNameSnapshot?: string;
+  store?: {
+    kind: SellerStoreKind;
+    displayName: string | null;
+    name: string;
+    logoKey: string | null;
+  } | null;
 }
 
 function makeSut(fixture: OrderFixture | null) {
@@ -65,6 +74,16 @@ function makeSut(fixture: OrderFixture | null) {
               companyName: fixture.companyName,
               initials: fixture.sellerInitials,
             },
+            storeNameSnapshot: fixture.storeNameSnapshot ?? 'Main store',
+            store:
+              fixture.store === undefined
+                ? {
+                    kind: SellerStoreKind.CHANNEL,
+                    displayName: null,
+                    name: 'Main store',
+                    logoKey: null,
+                  }
+                : fixture.store,
             orderShipments: fixture.shipmentId
               ? [
                   {
@@ -618,5 +637,69 @@ describe('NotificationListener — the customer is written to in THEIR language'
     await listener.handle(lifecycleEvent(OrderStatus.OUT_FOR_DELIVERY, 'evt-pref-5'));
     // OUT_FOR_DELIVERY is customer-only, so nothing should even ask.
     expect(preferences.resolve).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * RS-10 — a customer of a reseller store is told about THE STORE. Every
+ * other order's emails render with exactly the variables they had.
+ */
+describe('NotificationListener — RS-10 store name for the customer', () => {
+  const RESELLER_ORDER: OrderFixture = {
+    ...ORDER_BASE,
+    storeNameSnapshot: 'Kurta Corner',
+    store: {
+      kind: SellerStoreKind.RESELLER,
+      displayName: 'Kurta Corner (renamed later)',
+      name: 'kurta-corner',
+      logoKey: 'stores/st-1/logo.png',
+    },
+  };
+
+  function calls(
+    enqueueCalls: Array<{ recipientType: string; variables: Record<string, unknown> }>,
+  ): {
+    seller: Record<string, unknown> | undefined;
+    customer: Record<string, unknown> | undefined;
+  } {
+    return {
+      seller: enqueueCalls.find((c) => c.recipientType === NotificationRecipientType.SELLER)
+        ?.variables,
+      customer: enqueueCalls.find((c) => c.recipientType === NotificationRecipientType.CUSTOMER)
+        ?.variables,
+    };
+  }
+
+  it('a CHANNEL order: store_name is the seller company, and the customer gets the SAME variables as before', async () => {
+    const { listener, enqueueCalls } = makeSut(ORDER_BASE);
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-rs10-1'));
+    const { seller, customer } = calls(enqueueCalls);
+    expect(customer?.store_name).toBe('Acme Co');
+    expect(customer?.seller_company_name).toBe('Acme Co');
+    // Not a copy with a tweak — literally the variables the seller row
+    // carries, which is what every channel email rendered with before.
+    expect(customer).toBe(seller);
+  });
+
+  it('a RESELLER order: the customer sees the store name (at order time) everywhere, never the seller', async () => {
+    const { listener, enqueueCalls } = makeSut(RESELLER_ORDER);
+    await listener.handle(lifecycleEvent(OrderStatus.DISPATCHED, 'evt-rs10-2'));
+    const { seller, customer } = calls(enqueueCalls);
+    expect(customer?.store_name).toBe('Kurta Corner');
+    expect(customer?.seller_company_name).toBe('Kurta Corner');
+    expect(customer?.company_name).toBe('Kurta Corner');
+    expect(JSON.stringify(customer)).not.toContain('Acme Co');
+    // The SELLER's own email is still addressed to the seller company.
+    expect(seller?.company_name).toBe('Acme Co');
+  });
+
+  it('a RESELLER order cancelled: the customer email names the store too', async () => {
+    const { listener, enqueueCalls } = makeSut(RESELLER_ORDER);
+    await listener.handle(lifecycleEvent(OrderStatus.CANCELLED, 'evt-rs10-3'));
+    const { customer } = calls(enqueueCalls);
+    if (customer !== undefined) {
+      expect(customer.store_name).toBe('Kurta Corner');
+      expect(JSON.stringify(customer)).not.toContain('Acme Co');
+    }
   });
 });

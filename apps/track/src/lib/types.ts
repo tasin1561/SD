@@ -24,7 +24,15 @@ export interface PublicTrackingTimelineEvent {
   readonly locationCity: string | null;
 }
 
+/** RS-10 — present only when a reseller store sold the order. */
+export interface PublicSoldBy {
+  readonly name: string;
+  /** Short-lived presigned URL; null when the store has no logo. */
+  readonly logoUrl: string | null;
+}
+
 export interface PublicTrackingResponse {
+  readonly soldBy?: PublicSoldBy;
   readonly awbNumber: string;
   readonly courierDisplayName: string;
   readonly currentStatus: PublicShipmentDisplayStatus;

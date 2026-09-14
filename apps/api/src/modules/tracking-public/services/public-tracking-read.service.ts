@@ -1,8 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
+import {
+  CUSTOMER_BRAND_ORDER_SELECT,
+  customerFacingBrand,
+  type CustomerBrandSource,
+} from '../../../common/brand/customer-facing-brand';
 import type {
   PublicShipmentDisplayStatus,
+  PublicSoldBy,
   PublicTrackingResponse,
   PublicTrackingTimelineEvent,
 } from '../dto/public-tracking.response.dto';
@@ -43,7 +50,12 @@ import type {
  */
 @Injectable()
 export class PublicTrackingReadService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(PublicTrackingReadService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly spaces: SpacesService,
+  ) {}
 
   async findByAwb(awbNumber: string): Promise<PublicTrackingResponse> {
     // Phase-1A: trim + uppercase normalization is conservative —
@@ -72,6 +84,14 @@ export class PublicTrackingReadService {
             displayName: true,
             deletedAt: true,
           },
+        },
+        // RS-10 — who the customer bought from. Read to DECIDE, never
+        // projected wholesale: only a reseller store's name and a
+        // presigned logo leave this service.
+        orderShipments: {
+          orderBy: { shipmentSequence: 'asc' },
+          take: 1,
+          select: { order: { select: CUSTOMER_BRAND_ORDER_SELECT } },
         },
       },
     });
@@ -112,7 +132,12 @@ export class PublicTrackingReadService {
       : this.projectStatus(ship.status);
     const currentStatusAt = (latest?.eventAt ?? ship.createdAt).toISOString();
 
+    // RS-10: a reseller-store order presents as THE STORE. Absent — not
+    // null — for every other order, so their response is unchanged.
+    const soldBy = await this.soldBy(ship.orderShipments[0]?.order ?? null);
+
     return {
+      ...(soldBy === null ? {} : { soldBy }),
       awbNumber: ship.awbNumber,
       // A manually-placed parcel's `courier` row is the 'manual'
       // placeholder, whose display name is not a carrier anybody has
@@ -170,6 +195,33 @@ export class PublicTrackingReadService {
       default:
         return assertNever(s);
     }
+  }
+
+  /**
+   * RS-10 — "sold by", for a reseller-store order only.
+   *
+   * TRK-8 still holds: the name is the one the customer was sold under
+   * (the order's snapshot), and NOTHING about the underlying seller —
+   * no id, no company name — is ever read into the response. The logo
+   * is a short-lived presigned GET (nothing in the bucket is public),
+   * and a presign that fails costs the logo, never the page.
+   */
+  private async soldBy(order: CustomerBrandSource | null): Promise<PublicSoldBy | null> {
+    if (order === null) return null;
+    const brand = customerFacingBrand(order);
+    if (brand.kind !== 'RESELLER_STORE') return null;
+    let logoUrl: string | null = null;
+    if (brand.logoKey !== null) {
+      try {
+        logoUrl = await this.spaces.presignGetUrl(brand.logoKey);
+      } catch (err) {
+        this.logger.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          'store logo could not be signed; showing the name alone',
+        );
+      }
+    }
+    return { name: brand.name, logoUrl };
   }
 
   private notFound(): NotFoundException {

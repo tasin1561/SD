@@ -45,6 +45,8 @@ type Dict = {
   readonly updated: string;
   readonly destination: string;
   readonly estimatedDelivery: string;
+  /** RS-10 — the reseller store the customer bought from. */
+  readonly soldBy: string;
   readonly timelineHeading: string;
   readonly noScansYet: string;
 
@@ -83,6 +85,7 @@ const EN: Dict = {
   updated: 'Updated',
   destination: 'Destination',
   estimatedDelivery: 'Estimated delivery',
+  soldBy: 'Sold by',
   timelineHeading: 'Timeline',
   noScansYet: 'No scans yet. Once the courier picks up the parcel, scan events will appear here.',
   s_processing: 'Processing',
@@ -117,6 +120,7 @@ const HI: Dict = {
   updated: 'अद्यतन',
   destination: 'गंतव्य',
   estimatedDelivery: 'अनुमानित डिलीवरी',
+  soldBy: 'विक्रेता',
   timelineHeading: 'टाइमलाइन',
   noScansYet: 'अभी तक कोई स्कैन नहीं। कूरियर द्वारा पार्सल उठाते ही स्कैन इवेंट यहाँ दिखाई देंगे।',
   s_processing: 'प्रक्रियाधीन',
