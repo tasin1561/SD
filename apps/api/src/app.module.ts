@@ -101,6 +101,7 @@ import { StoreAuthModule } from './modules/store-auth/store-auth.module';
 import { ResellerStoreModule } from './modules/reseller-store/reseller-store.module';
 import { ResellerCatalogueModule } from './modules/reseller-catalogue/reseller-catalogue.module';
 import { ResellerStoreTermsModule } from './modules/reseller-store-terms/reseller-store-terms.module';
+import { ResellerStoreWalletModule } from './modules/reseller-store-wallet/reseller-store-wallet.module';
 import { CourierWalletModule } from './modules/courier-wallet/courier-wallet.module';
 import { AdminRemittanceModule } from './modules/admin-remittance/admin-remittance.module';
 import { AdminReportsModule } from './modules/admin-reports/admin-reports.module';
@@ -243,6 +244,7 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     // RS-3 — reseller catalogue, prices and stock (phase 2).
     ResellerCatalogueModule,
     ResellerStoreTermsModule,
+    ResellerStoreWalletModule,
     CourierWalletModule,
     AdminSellerWalletModule,
     AdminWalletTransferModule,

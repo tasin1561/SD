@@ -195,6 +195,8 @@ function makeSut(
   const attribution = {
     takeToCapital,
     walletBalance: jest.fn(async () => D(opts.walletBefore ?? opts.sellerHeld ?? '0')),
+    // RS-6 — the seller with their reseller stores; none here, so the same.
+    groupBalance: jest.fn(async () => D(opts.walletBefore ?? opts.sellerHeld ?? '0')),
     sellerHeld: jest.fn(async () => ({
       total: D(opts.sellerHeld ?? '0'),
       accountId: 'bank-inr-1',

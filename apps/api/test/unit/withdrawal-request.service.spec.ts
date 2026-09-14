@@ -136,10 +136,13 @@ function makeService(
     countryCode: opts.countryCode ?? 'BD',
   }));
   const seller = { findUnique: sellerFindUnique };
-  const txClient = { withdrawalRequest, seller, $executeRaw: executeRaw };
+  // RS-6 — the seller has no reseller stores, so they add no exposure.
+  const sellerStore = { findMany: jest.fn(async () => []) };
+  const txClient = { withdrawalRequest, seller, sellerStore, $executeRaw: executeRaw };
   const client = {
     withdrawalRequest,
     seller,
+    sellerStore,
     // The SLA we told the seller to expect. Read globally rather than
     // per seller: the key carries no `sellerOverridable`, so there is
     // no per-seller answer.

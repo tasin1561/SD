@@ -45,6 +45,9 @@ function makeTx(opts: {
       findFirst: async () =>
         opts.balance === undefined ? null : { runningBalanceAfter: opts.balance },
     },
+    // RS-6 — the group read: a seller here has no reseller stores, so the
+    // combined balance is exactly the seller's own.
+    sellerStore: { findMany: async () => [] },
     bankEntry: {
       groupBy: async () =>
         (opts.held ?? []).map((h) => ({

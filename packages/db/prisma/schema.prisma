@@ -2722,6 +2722,12 @@ model SellerStore {
   /// RS-4 — the store's versioned terms, and every acceptance of them.
   termsVersions        ResellerStoreTermsVersion[]
   termsAcceptances     ResellerStoreTermsAcceptance[]
+
+  /// RS-6 — the store wallet (reseller stores only).
+  storeWalletEntries      StoreWalletEntry[]
+  storeTopupRequests      StoreTopupRequest[]
+  storeWithdrawalRequests StoreWithdrawalRequest[]
+  storeWalletSettings     StoreWalletSettings?
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -6451,6 +6457,17 @@ enum WalletEntryDirection {
   /// A CREDIT: REGISTERED in CREDIT_DIRECTIONS and `isWalletCredit`
   /// (WAL-1). P&L: cost on "Staff wallet adjustments".
   STAFF_CREDIT         @map("staff_credit")
+  /// RS-6 — the seller moved money from their own wallet into a reseller
+  /// store they manage (the store's SELLER_TOPUP is its twin, written in
+  /// the same transaction). A DEBIT: ABSENT from CREDIT_DIRECTIONS. Moves
+  /// NO cash — the seller's and the store's money are one pot in the bank
+  /// book (decision 7), and the sum of the two wallets is unchanged.
+  STORE_TOPUP_OUT      @map("store_topup_out")
+  /// RS-6 — the seller recorded paying a store they manage OFF-platform:
+  /// the store's SELLER_PAYOUT (−X) and this (+X), one transaction. A
+  /// CREDIT: REGISTERED in CREDIT_DIRECTIONS and `isWalletCredit`. Moves
+  /// no cash, for the same reason.
+  STORE_PAYOUT_IN      @map("store_payout_in")
 
   @@map("wallet_entry_direction")
 }
@@ -6567,6 +6584,11 @@ model PlatformBankAccount {
   transfersFrom BankTransfer[]       @relation("BankTransferFrom")
   transfersTo   BankTransfer[]       @relation("BankTransferTo")
   remittances   Remittance[]
+
+  /// RS-6 — reseller store top-up claims into this account, and store
+  /// withdrawals paid out of it.
+  storeTopupRequests     StoreTopupRequest[]
+  storeWithdrawalPayouts StoreWithdrawalRequest[]
 
   @@index([isActive, displayOrder])
   @@map("platform_bank_accounts")
@@ -8659,4 +8681,192 @@ model ResellerStoreTermsAcceptance {
   @@index([storeId, acceptedAt])
   @@index([storeUserId])
   @@map("reseller_store_terms_acceptances")
+}
+
+// ============================================================================
+// RS-6 — reseller store wallets (2026-09-14, `20260914230000_reseller_store_wallet`;
+// docs/reseller-stores.md "Store wallet as built"). ONE contiguous block:
+// the enum, then the models.
+//
+// Decision 7: our bank book knows ONLY the seller. A store wallet is a
+// ledger between a seller and one of their stores; every rupee behind it
+// is the SELLER's in `bank_entries`, and the TRE-8 invariant reads
+//   held for a seller = max(0, seller wallet + Σ that seller's store wallets).
+// ============================================================================
+
+/// Which way a STORE wallet entry moves, and (in the API's F2 switch) what
+/// happens to the SELLER's cash behind it. Credits are registered in
+/// `StoreWalletService.STORE_CREDIT_DIRECTIONS` AND `isStoreWalletCredit`
+/// (@skydrop/ui/status) — both, or a credit silently becomes a debit.
+enum StoreWalletEntryDirection {
+  /// SELLER-managed: the seller moved money from their wallet into the
+  /// store's (twin: the seller's STORE_TOPUP_OUT). CREDIT. No cash moves.
+  SELLER_TOPUP          @map("seller_topup")
+  /// SELLER-managed: the seller recorded paying the store off-platform
+  /// (twin: the seller's STORE_PAYOUT_IN). DEBIT. No cash moves.
+  SELLER_PAYOUT         @map("seller_payout")
+  /// SKYDROP-managed: the store wired money to our bank and a person saw it
+  /// arrive (WAL-2). CREDIT. The acceptance posts the cash as the SELLER's.
+  TOPUP                 @map("topup")
+  /// SKYDROP-managed: we paid the store out. DEBIT. The payout posts the
+  /// cash leaving, as the SELLER's up to what they hold.
+  WITHDRAWAL            @map("withdrawal")
+  /// Phase 3b — a COD order's store margin credited at the store's trigger.
+  /// CREDIT. Cash posted by the flow that brings it (a payout, or a front).
+  ORDER_CREDIT          @map("order_credit")
+  /// Phase 3b — an ORDER_CREDIT taken back on a return / loss (WAL-6 /
+  /// WAL-8 per party). DEBIT. Cash posted by the payout taking it back.
+  ORDER_CREDIT_REVERSAL @map("order_credit_reversal")
+  /// Phase 3b — the store's share of one Skydrop fee (`share_of` names
+  /// which). DEBIT. The seller's held cash becomes ours, clamped (TRE-8).
+  FEE_SHARE             @map("fee_share")
+  /// Phase 3b — the store's share of the COD tax (GST_WITHHOLDING). DEBIT,
+  /// the cash becomes ours exactly as a fee share does.
+  COD_TAX_SHARE         @map("cod_tax_share")
+  /// Phase 3b — a FEE_SHARE or COD_TAX_SHARE given back (`linked_entry_id`
+  /// names it). CREDIT. The cash is theirs again above any debt.
+  SHARE_REFUND          @map("share_refund")
+  /// Phase 3b — a PREPAID order's transfer price + store fee shares, taken
+  /// at confirmation. DEBIT. The seller's held cash becomes ours until the
+  /// seller is credited at their own trigger (TO_SELLER there).
+  PREPAID_DEBIT         @map("prepaid_debit")
+  /// Phase 3b — a PREPAID_DEBIT given back on a cancel before dispatch.
+  /// CREDIT. The cash is theirs again above any debt.
+  PREPAID_REFUND        @map("prepaid_refund")
+
+  @@map("store_wallet_entry_direction")
+}
+
+/// One movement of one reseller store's wallet. APPEND-ONLY; written ONLY
+/// by `StoreWalletService.applyEntry`, which takes the SELLER's WALLET
+/// advisory lock (`<sellerId>|INR`) — the seller's wallet and every one of
+/// their stores' wallets are serialised together, which is what makes the
+/// combined balance the bank invariant reads consistent. The balance is the
+/// LAST entry's running balance (`ORDER BY id DESC LIMIT 1`), never a re-sum
+/// (WAL-7). INR only.
+model StoreWalletEntry {
+  id                  String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId             String                    @map("store_id") @db.Uuid
+  /// Denormalised from the store: the lock key and the group read. The
+  /// store's own FK is the authority on whose store it is.
+  sellerId            String                    @map("seller_id") @db.Uuid
+  direction           StoreWalletEntryDirection
+  /// Always positive (CHECK) — `direction` carries the sign.
+  amount              Decimal                   @db.Decimal(14, 2)
+  runningBalanceAfter Decimal                   @map("running_balance_after") @db.Decimal(14, 2)
+  /// For FEE_SHARE / SHARE_REFUND: which Skydrop fee this is a share of.
+  shareOf             WalletEntryDirection?     @map("share_of")
+  /// Phase 3b's order link. A plain id for now (no FK).
+  linkedOrderId       String?                   @map("linked_order_id") @db.Uuid
+  /// The store entry this one returns or reverses.
+  linkedEntryId       String?                   @map("linked_entry_id") @db.Uuid
+  /// SELLER_TOPUP / SELLER_PAYOUT: the seller wallet entry written with it.
+  linkedSellerEntryId String?                   @unique @map("linked_seller_entry_id") @db.Uuid
+  reasonCode          String?                   @map("reason_code")
+  /// What the store reads under the line.
+  note                String?                   @db.Text
+  actorType           ActorType                 @map("actor_type")
+  actorId             String?                   @map("actor_id") @db.Uuid
+  /// IDEM-1: the key of the form that wrote it.
+  idempotencyKey      String?                   @unique @map("idempotency_key") @db.Uuid
+  createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz
+
+  store             SellerStore             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  linkedEntry       StoreWalletEntry?       @relation("StoreWalletEntryLink", fields: [linkedEntryId], references: [id])
+  linkedBy          StoreWalletEntry[]      @relation("StoreWalletEntryLink")
+  topupRequest      StoreTopupRequest?
+  withdrawalRequest StoreWithdrawalRequest?
+
+  @@index([storeId, id])
+  @@index([sellerId, id])
+  @@index([linkedOrderId])
+  @@index([linkedEntryId])
+  @@map("store_wallet_entries")
+}
+
+/// A SKYDROP-managed store says "we sent you money"; a person checks the
+/// bank and agrees or does not (WAL-2). Nothing is credited on submission.
+/// Rupees only, into one of our rupee accounts.
+model StoreTopupRequest {
+  id                     String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId                String             @map("store_id") @db.Uuid
+  sellerId               String             @map("seller_id") @db.Uuid
+  bankAccountId          String             @map("bank_account_id") @db.Uuid
+  amountInr              Decimal            @map("amount_inr") @db.Decimal(14, 2)
+  /// The store's bank reference / UTR. One of this or the proof.
+  transactionRef         String?            @map("transaction_ref")
+  /// A Spaces KEY under `stores/<storeId>/topup-proofs/`, read presigned.
+  proofSpacesKey         String?            @map("proof_spaces_key")
+  proofMimeType          String?            @map("proof_mime_type")
+  status                 TopupRequestStatus @default(PENDING)
+  /// The credit acceptance wrote. UNIQUE: a second accept cannot mint one.
+  storeEntryId           String?            @unique @map("store_entry_id") @db.Uuid
+  submittedByStoreUserId String?            @map("submitted_by_store_user_id") @db.Uuid
+  reviewedByStaffId      String?            @map("reviewed_by_staff_id") @db.Uuid
+  reviewedAt             DateTime?          @map("reviewed_at") @db.Timestamptz
+  reviewNote             String?            @map("review_note") @db.Text
+  createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  store       SellerStore         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  bankAccount PlatformBankAccount @relation(fields: [bankAccountId], references: [id])
+  storeEntry  StoreWalletEntry?   @relation(fields: [storeEntryId], references: [id])
+
+  @@index([storeId, status])
+  @@index([status, createdAt])
+  @@map("store_topup_requests")
+}
+
+/// A SKYDROP-managed store asks to be paid its balance. A REQUEST — the
+/// store wallet is debited only when a person records the payout. PENDING
+/// and APPROVED requests are held out of what the store may withdraw.
+model StoreWithdrawalRequest {
+  id                     String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId                String                  @map("store_id") @db.Uuid
+  sellerId               String                  @map("seller_id") @db.Uuid
+  amountInr              Decimal                 @map("amount_inr") @db.Decimal(14, 2)
+  status                 WithdrawalRequestStatus @default(PENDING)
+  /// Where to send it, as the store gave it on the request.
+  payeeName              String                  @map("payee_name")
+  payeeAccountNumber     String                  @map("payee_account_number")
+  payeeIfsc              String                  @map("payee_ifsc")
+  payeeBankName          String                  @map("payee_bank_name")
+  note                   String?                 @db.Text
+  requestedByStoreUserId String?                 @map("requested_by_store_user_id") @db.Uuid
+  resolvedByStaffId      String?                 @map("resolved_by_staff_id") @db.Uuid
+  resolvedAt             DateTime?               @map("resolved_at") @db.Timestamptz
+  rejectionReason        String?                 @map("rejection_reason") @db.Text
+  /// The payout (set together, when PAID).
+  paidFromAccountId      String?                 @map("paid_from_account_id") @db.Uuid
+  bankReference          String?                 @map("bank_reference")
+  paidAt                 DateTime?               @map("paid_at") @db.Timestamptz
+  storeEntryId           String?                 @unique @map("store_entry_id") @db.Uuid
+  /// IDEM-1: the pay form's key.
+  payoutIdempotencyKey   String?                 @unique @map("payout_idempotency_key") @db.Uuid
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  store           SellerStore          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  paidFromAccount PlatformBankAccount? @relation(fields: [paidFromAccountId], references: [id])
+  storeEntry      StoreWalletEntry?    @relation(fields: [storeEntryId], references: [id])
+
+  @@index([storeId, status])
+  @@index([status, createdAt])
+  @@map("store_withdrawal_requests")
+}
+
+/// Per-store wallet settings the SELLER sets. No row ⇒ the defaults (a
+/// store may not go below zero).
+model StoreWalletSettings {
+  storeId               String   @id @map("store_id") @db.Uuid
+  /// How far below zero this store may go (the seller's risk). Capped at
+  /// read time by `reseller.store_negative_limit_cap_inr` (SET-1).
+  negativeLimitInr      Decimal  @default(0) @map("negative_limit_inr") @db.Decimal(14, 2)
+  updatedBySellerUserId String?  @map("updated_by_seller_user_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  store SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("store_wallet_settings")
 }

@@ -7,6 +7,8 @@ const D = (v: string): Prisma.Decimal => new Prisma.Decimal(v);
 
 function makeSut(opts: {
   balances?: Array<{ sellerId: string; balance: Prisma.Decimal }>;
+  /** RS-6 — reseller stores and their wallet balances. */
+  stores?: Array<{ id: string; sellerId: string; balance: Prisma.Decimal }>;
   withdrawals?: Prisma.Decimal | null;
   gst?: Prisma.Decimal | null;
   freight?: Array<{ totalInr: Prisma.Decimal; amountSettledInr: Prisma.Decimal }>;
@@ -63,6 +65,15 @@ function makeSut(opts: {
       aggregate: async () => ({ _sum: { amount: opts.paidSince ?? null } }),
     },
     stockLevel: { findMany: async () => opts.stock ?? [] },
+    // RS-6 — no reseller stores unless a case adds them: each seller is a
+    // group of one.
+    sellerStore: { findMany: async () => opts.stores ?? [] },
+    storeWalletEntry: {
+      findFirst: async (a: { where: { storeId: string } }) => {
+        const s = (opts.stores ?? []).find((x) => x.id === a.where.storeId);
+        return s === undefined ? null : { runningBalanceAfter: s.balance };
+      },
+    },
   };
   const advances = {
     summary: async () => ({
@@ -297,5 +308,59 @@ describe('LiabilitiesService', () => {
     }).report();
     expect(r.sellerDebts[0]?.openingBalanceInr).toBe('0.00');
     expect(r.sellerDebts[0]?.paidSinceInr).toBe('0.00');
+  });
+});
+
+describe('RS-6 — a seller and their reseller stores are ONE party', () => {
+  // Decision 7: one pot in the bank book for the seller and every one of
+  // their stores. A store in credit is money we hold for the group; a store
+  // in debt is the seller's exposure, and comes off what the group is owed.
+  it('nets each seller with their stores, and says what the line is made of', async () => {
+    const r = await makeSut({
+      balances: [
+        { sellerId: 's1', balance: D('1000') },
+        { sellerId: 's2', balance: D('100') },
+      ],
+      stores: [
+        { id: 'st1', sellerId: 's1', balance: D('-300') },
+        { id: 'st2', sellerId: 's1', balance: D('200') },
+        { id: 'st3', sellerId: 's2', balance: D('-500') },
+      ],
+      sellers: [{ id: 's2', companyName: 'Two' }],
+    }).report();
+    const owed = r.owed.find((l) => l.key === 'seller_wallets');
+    // s1: 1000 − 300 + 200 = 900. s2's group is −400: a receivable, not owed.
+    expect(owed?.amountInr).toBe('900.00');
+    expect(owed?.count).toBe(1);
+    // The parts add up to the line exactly.
+    expect(owed?.parts?.map((p) => [p.key, p.amountInr])).toEqual([
+      ['seller_wallets_own', '1000.00'],
+      ['seller_wallets_stores', '-100.00'],
+    ]);
+    const debts = r.due.find((l) => l.key === 'seller_debts');
+    expect(debts?.amountInr).toBe('400.00');
+    expect(r.sellerDebts.map((d) => [d.sellerId, d.owedInr])).toEqual([['s2', '400.00']]);
+  });
+
+  it('a store in credit behind a seller with no wallet row is still owed', async () => {
+    const r = await makeSut({
+      balances: [],
+      stores: [{ id: 'st1', sellerId: 's1', balance: D('750') }],
+    }).report();
+    expect(r.owed.find((l) => l.key === 'seller_wallets')?.amountInr).toBe('750.00');
+  });
+
+  it('with no reseller stores the line is exactly what it was — no parts', async () => {
+    const r = await makeSut({
+      balances: [
+        { sellerId: 's1', balance: D('1000') },
+        { sellerId: 's2', balance: D('-50') },
+      ],
+      sellers: [{ id: 's2', companyName: 'Two' }],
+    }).report();
+    const owed = r.owed.find((l) => l.key === 'seller_wallets');
+    expect(owed?.amountInr).toBe('1000.00');
+    expect(owed?.parts).toBeUndefined();
+    expect(r.due.find((l) => l.key === 'seller_debts')?.amountInr).toBe('50.00');
   });
 });

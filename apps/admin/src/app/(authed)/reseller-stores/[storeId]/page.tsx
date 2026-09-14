@@ -26,6 +26,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { useAdminResellerStore } from '@/lib/reseller-store-hooks';
 import { CatalogueTerms } from './_components/catalogue-terms';
 import { useAdminResellerStoreTerms } from '@/lib/reseller-terms-hooks';
+import { StoreWalletPanel } from './_components/store-wallet-panel';
 
 function when(iso: string | null): string {
   return iso === null
@@ -211,6 +212,7 @@ export default function AdminResellerStorePage(): ReactElement {
 
       <CatalogueTerms storeId={s.id} />
       <TermsSection storeId={s.id} />
+      <StoreWalletPanel storeId={s.id} />
 
       <Section title="Status history" subtitle="Every change to this store’s life, oldest first.">
         {s.events.length === 0 ? (

@@ -83,7 +83,8 @@ export class EndedOrderMoneyService {
       const paid = await tx.courierSettlementLine.count({ where: { orderId } });
       if (paid > 0) return { reversed: false, reason: 'COURIER_PAYOUT_RECORDED' } as const;
 
-      const before = await this.attribution.walletBalance(tx, sellerId);
+      // The seller with their reseller stores: the pot the bank book holds (RS-6).
+      const before = await this.attribution.groupBalance(tx, sellerId);
       const res = await this.codCredit.reverseForOrder(tx, { orderId, sellerId, note });
       if (!res.reversed) return { reversed: false, reason: res.reason ?? 'NOT_REVERSED' } as const;
 

@@ -204,6 +204,23 @@ Store-specific pictures (the overlay). `storeVariantId` FK reseller_store_varian
 APPEND-ONLY history of the hourly sweep's cuts: `storeVariantId` (FK CASCADE), `storeId`, `sellerId`, `variantId` (plain ids), `fromQty`, `toQty`, `onHand` (pickable on-hand read), `totalBefore` (Σ set-asides before). CHECK `0 ≤ toQty < fromQty`. Written in the SAME tx as the cut. Indexes `(storeId, createdAt)`, `(sellerId, createdAt)`.
 
 **Migration grants:** existing reseller stores' admin/ops/finance/viewer roles += `catalogue.view`; existing seller system `admin` roles holding `stores.manage` += `stores.pricing`.
+## Reseller store wallets — RS-6 *(2026-09-14, `20260914230000_reseller_store_wallet`; design `docs/reseller-stores.md` "Store wallet as built")*
+
+Decision 7: our bank book knows ONLY the seller — no store owner kind was added to `bank_entries`. A store wallet is a ledger between a seller and one of their reseller stores; the TRE-8 invariant reads `held for a seller = max(0, seller wallet + Σ that seller's store wallets)`.
+
+## store_wallet_entries
+APPEND-ONLY ledger of one reseller store's wallet, INR. `storeId` (FK seller_stores RESTRICT), `sellerId` (denormalised, no FK — the lock key and the group read), `direction: StoreWalletEntryDirection` (SELLER_TOPUP / SELLER_PAYOUT / TOPUP / WITHDRAWAL / ORDER_CREDIT / ORDER_CREDIT_REVERSAL / FEE_SHARE / COD_TAX_SHARE / SHARE_REFUND / PREPAID_DEBIT / PREPAID_REFUND), `amount` (CHECK > 0), `runningBalanceAfter`, `shareOf: WalletEntryDirection?` (the Skydrop fee a share is of), `linkedOrderId` (plain), `linkedEntryId` (self FK SET NULL), `linkedSellerEntryId` UNIQUE (the seller-wallet twin), `reasonCode`, `note`, `actorType`, `actorId`, `idempotencyKey` UNIQUE, `createdAt`. Written ONLY by `StoreWalletService.applyEntry` under the SELLER's WALLET lock. **Indexes:** `(storeId, id)`, `(sellerId, id)`, `linkedOrderId`, `linkedEntryId`.
+
+## store_topup_requests
+A Skydrop-managed store's claim that money reached our bank (nothing credited until accepted — WAL-2). `storeId` (RESTRICT), `sellerId`, `bankAccountId` (FK platform_bank_accounts RESTRICT; rupee accounts only, enforced in the service), `amountInr` (CHECK > 0), `transactionRef` / `proofSpacesKey` (`stores/<storeId>/topup-proofs/…`) — one required, `proofMimeType`, `status: TopupRequestStatus`, `storeEntryId` UNIQUE (the credit), `submittedByStoreUserId`, `reviewedByStaffId`, `reviewedAt`, `reviewNote` (plain actor ids, no FK). **Indexes:** `(storeId, status)`, `(status, createdAt)`.
+
+## store_withdrawal_requests
+A Skydrop-managed store's request to be paid. `storeId` (RESTRICT), `sellerId`, `amountInr` (CHECK > 0), `status: WithdrawalRequestStatus` (PENDING / APPROVED held out of withdrawable), payee `payeeName` / `payeeAccountNumber` / `payeeIfsc` / `payeeBankName` (as given on the request), `note`, `requestedByStoreUserId`, `resolvedByStaffId`, `resolvedAt`, `rejectionReason`, payout `paidFromAccountId` (FK platform_bank_accounts SET NULL), `bankReference`, `paidAt`, `storeEntryId` UNIQUE (the WITHDRAWAL debit), `payoutIdempotencyKey` UNIQUE. **Indexes:** `(storeId, status)`, `(status, createdAt)`.
+
+## store_wallet_settings
+Per-store, seller-set: `storeId` PK (FK CASCADE), `negativeLimitInr` (default 0, CHECK ≥ 0; capped at read time by `reseller.store_negative_limit_cap_inr`), `updatedBySellerUserId`. No row ⇒ a store may not go below zero.
+
+**Enum values added:** `WalletEntryDirection.STORE_TOPUP_OUT` (debit) and `STORE_PAYOUT_IN` (credit) — the seller-side twins of a seller-managed top-up and a recorded payout, both moving no cash. **Setting added:** `reseller.store_negative_limit_cap_inr` (DECIMAL 25,000, seller-overridable 0–10,000,000). **Existing store roles:** admin and finance gained `wallet.view` / `wallet.topups.manage` / `wallet.withdrawals.manage`.
 
 ## seller_notes
 Admin notes about sellers (replaces simple `rejectionReason` field).

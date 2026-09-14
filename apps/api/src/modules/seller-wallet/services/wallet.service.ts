@@ -102,6 +102,10 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryDirection> = new Set([
   // A member of staff putting our money into a seller's wallet, with a
   // reason the seller reads. Omitting it here would TAKE the amount.
   WalletEntryDirection.STAFF_CREDIT,
+  // RS-6 — the seller recorded paying one of their reseller stores
+  // off-platform: the store's wallet falls, the seller's rises by the same.
+  // Omitting it here would take the amount from BOTH wallets.
+  WalletEntryDirection.STORE_PAYOUT_IN,
 ]);
 
 function isCredit(d: WalletEntryDirection): boolean {

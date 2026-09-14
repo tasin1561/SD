@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { BankLedgerService, type AccountBalance } from './bank-ledger.service';
+import { storeWalletTotalsBySeller } from './store-wallet-balances';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -187,7 +188,17 @@ export class TreasuryReadService {
       ZERO,
     );
 
-    const owedInr = owed.reduce((acc, r) => acc.add(r.balance), ZERO);
+    // RS-6 — what we owe is owed to a seller's GROUP: their wallet plus
+    // every one of their reseller stores' (decision 7 — one pot in the bank
+    // book). A store in credit adds to what the group is owed; a store in
+    // debt comes off it, and a group below zero owes US (a receivable, not
+    // a debt to fund). With no reseller stores this is exactly the sum of
+    // the positive seller balances above.
+    const storeTotals = await storeWalletTotalsBySeller(this.prisma.client);
+    const owedInr =
+      storeTotals.size === 0
+        ? owed.reduce((acc, r) => acc.add(r.balance), ZERO)
+        : await this.owedToGroups(storeTotals);
     const heldInr = (held._sum.signedAmount ?? ZERO).add(heldElsewhere._sum.inrBookValue ?? ZERO);
     const gap = owedInr.sub(heldInr);
 
@@ -313,5 +324,27 @@ export class TreasuryReadService {
         isOpeningBalance: r.isOpeningBalance,
       })),
     };
+  }
+
+  /**
+   * RS-6 — Σ max(0, seller wallet + Σ their store wallets) over every
+   * seller: what we owe, when some sellers have reseller stores. Each
+   * seller's own balance from the maintained table (written in the same
+   * transaction as every entry, WAL-7); each store's from its last entry.
+   */
+  private async owedToGroups(
+    storeTotals: ReadonlyMap<string, Prisma.Decimal>,
+  ): Promise<Prisma.Decimal> {
+    const own = await this.prisma.client.sellerWalletBalance.findMany({
+      where: { currency: Currency.INR },
+      select: { sellerId: true, balance: true },
+    });
+    const group = new Map(own.map((b) => [b.sellerId, b.balance]));
+    for (const [sellerId, stores] of storeTotals) {
+      group.set(sellerId, (group.get(sellerId) ?? ZERO).add(stores));
+    }
+    let owed = ZERO;
+    for (const g of group.values()) if (g.greaterThan(0)) owed = owed.add(g);
+    return owed;
   }
 }

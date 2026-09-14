@@ -516,6 +516,12 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'store_role_permissions',
         'store_roles',
         'reseller_store_events',
+        // RS-6 store wallets: entries and requests FK-RESTRICT seller_stores
+        // (and the requests platform_bank_accounts), so they go here too.
+        'store_wallet_entries',
+        'store_topup_requests',
+        'store_withdrawal_requests',
+        'store_wallet_settings',
         // Seller-team RBAC
         'seller_user_invitations',
         'seller_users',

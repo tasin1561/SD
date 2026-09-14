@@ -21,6 +21,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/settings', 'store.profile.view'], // GET /store/profile
   ['/catalogue', 'catalogue.view'], // GET /store/catalogue (RS-3)
   ['/terms', 'terms.view'], // GET /store/terms (RS-4); accepting needs terms.accept
+  ['/wallet', 'wallet.view'], // GET /store/wallet (RS-6)
 ];
 
 export function permissionForPath(pathname: string | null): string | null {

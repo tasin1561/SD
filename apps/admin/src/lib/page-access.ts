@@ -118,6 +118,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // RS-1: the class-level read of @Controller admin/reseller-stores;
   // opening one for a seller needs reseller.stores.manage at the handler.
   ['/reseller-stores', 'reseller.stores.view'],
+  // RS-6: the queues a Skydrop-managed store feeds — the same read gate as
+  // the seller money queues (/topups, /withdrawals); accepting, approving
+  // and paying are gated in the page and at the API on their own keys.
+  ['/reseller-store-wallets', 'money.view'],
   ['/courier-accounts', 'courier.accounts.view'],
   // Reading whether the cost sync works is a report about a courier
   // account's money; RUNNING it needs `.manage` and is gated in the

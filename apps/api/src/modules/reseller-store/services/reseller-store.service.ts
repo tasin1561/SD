@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   ActorType,
+  Currency,
   Prisma,
   ResellerStoreEventKind,
   ResellerStoreOrigin,
@@ -13,8 +14,12 @@ import {
   ResellerWalletManager,
   SellerStatus,
   SellerStoreKind,
+  TopupRequestStatus,
+  WithdrawalRequestStatus,
 } from '@skydrop/db';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { storeWalletBalance } from '../../treasury/services/store-wallet-balances';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import type { StoreRoleKey } from '../../../common/auth/store-permissions';
 import { provisionDefaultStoreRoles } from '../../../common/auth/store-role-provisioning';
@@ -343,6 +348,13 @@ export class ResellerStoreService {
 
     const pending = await this.prisma.client.$transaction(async (tx) => {
       const now = new Date();
+      if (action === 'CLOSE') {
+        // RS-6 — the seller's WALLET lock FIRST, before the store row is
+        // touched: the wallet-manager switch and every store wallet write
+        // take this lock before anything else, so taking it after the row
+        // lock here would be the one opposite order that can deadlock.
+        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+      }
       const moved = await tx.sellerStore.updateMany({
         where: { id: storeId, sellerId, kind: SellerStoreKind.RESELLER, status: from },
         data: { status: rule.to, statusChangedAt: now },
@@ -359,6 +371,32 @@ export class ResellerStoreService {
           message:
             'This store still has orders on their way. Pause it, and close it once they finish.',
         });
+      }
+      if (action === 'CLOSE') {
+        // RS-1: "the wallet is paid out/settled first". A closed store's
+        // team loses its login, so money left in its wallet — either way —
+        // would be owed to or by a business that can no longer see it.
+        const balance = await storeWalletBalance(tx, storeId);
+        const openTopups = await tx.storeTopupRequest.count({
+          where: { storeId, status: TopupRequestStatus.PENDING },
+        });
+        const openWithdrawals = await tx.storeWithdrawalRequest.count({
+          where: {
+            storeId,
+            status: { in: [WithdrawalRequestStatus.PENDING, WithdrawalRequestStatus.APPROVED] },
+          },
+        });
+        if (!balance.isZero() || openTopups > 0 || openWithdrawals > 0) {
+          throw new ConflictException({
+            code: 'STORE_WALLET_NOT_SETTLED',
+            message:
+              `The store’s wallet holds ₹${balance.toFixed(2)}` +
+              (openTopups + openWithdrawals > 0
+                ? ` and has ${openTopups + openWithdrawals} request(s) waiting on Skydrop`
+                : '') +
+              '. Settle it to ₹0 first — pay the store out, or have it paid back — then close it.',
+          });
+        }
       }
       if (isTerminalStoreStatus(rule.to)) {
         // A closed or rejected store's team is done: sessions end now and
@@ -435,6 +473,30 @@ export class ResellerStoreService {
     const before = store.walletManagedBy;
     const status = store.status;
     await this.prisma.client.$transaction(async (tx) => {
+      // RS-6 — a wallet cannot change hands with a Skydrop-side request
+      // still open: a claim accepted after the switch would credit a wallet
+      // the seller now manages, and a withdrawal paid after it would pay a
+      // store the seller now pays themselves. Under the seller's WALLET
+      // lock, which claim and withdrawal submission take too, so neither
+      // can slip in between this check and the switch.
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+      const openTopups = await tx.storeTopupRequest.count({
+        where: { storeId, status: TopupRequestStatus.PENDING },
+      });
+      const openWithdrawals = await tx.storeWithdrawalRequest.count({
+        where: {
+          storeId,
+          status: { in: [WithdrawalRequestStatus.PENDING, WithdrawalRequestStatus.APPROVED] },
+        },
+      });
+      if (openTopups > 0 || openWithdrawals > 0) {
+        throw new ConflictException({
+          code: 'STORE_WALLET_HAS_OPEN_REQUESTS',
+          message:
+            `This store has ${openTopups} top-up claim(s) and ${openWithdrawals} withdrawal request(s) ` +
+            'waiting on Skydrop. Once they are accepted, paid or rejected, the wallet can change hands.',
+        });
+      }
       const changed = await tx.sellerStore.updateMany({
         where: {
           id: storeId,

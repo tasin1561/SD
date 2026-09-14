@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { BankEntryType, BankOwnerKind, Currency, Prisma, WalletEntryDirection } from '@skydrop/db';
+import {
+  BankEntryType,
+  BankOwnerKind,
+  Currency,
+  Prisma,
+  StoreWalletEntryDirection,
+  WalletEntryDirection,
+} from '@skydrop/db';
 import { BankLedgerService } from './bank-ledger.service';
+import { storeWalletsTotal } from './store-wallet-balances';
 import {
   AdvisoryLock,
   ATTRIBUTION_RECONCILE_KEY,
@@ -156,6 +164,54 @@ export class SellerCashAttributionService {
       case WalletEntryDirection.ADJUSTMENT_DEBIT:
       case WalletEntryDirection.OPENING_BALANCE:
         return 'NONE';
+
+      // RS-6 — money between the seller and a reseller store they manage.
+      // Each is written with its store-side twin in one transaction, so the
+      // seller + stores sum the bank book follows does not move: no cash
+      // changes hands, and none changes owner (decision 7).
+      case WalletEntryDirection.STORE_TOPUP_OUT:
+      case WalletEntryDirection.STORE_PAYOUT_IN:
+        return 'NONE';
+    }
+  }
+
+  /**
+   * RS-6 — the same question for a STORE wallet entry. F2-exhaustive, so a
+   * new `StoreWalletEntryDirection` fails to compile until somebody decides
+   * which way its cash goes. The cash is always the SELLER's (decision 7):
+   * a store's fee share makes the seller's held cash ours exactly as the
+   * seller's own charge would.
+   */
+  private storeDirection(d: StoreWalletEntryDirection): Reclassification {
+    switch (d) {
+      // Charges on the store: the group's cash becomes ours, clamped. A
+      // prepaid order's price (PREPAID_DEBIT) leaves the store at
+      // confirmation and reaches the seller later, at the seller's own
+      // trigger — in between it is in neither wallet, so it cannot be held
+      // for either; the seller-side credit then moves it back (TO_SELLER).
+      case StoreWalletEntryDirection.FEE_SHARE:
+      case StoreWalletEntryDirection.COD_TAX_SHARE:
+      case StoreWalletEntryDirection.PREPAID_DEBIT:
+        return 'TO_CAPITAL';
+
+      // Given back: the cash is theirs again above any debt.
+      case StoreWalletEntryDirection.SHARE_REFUND:
+      case StoreWalletEntryDirection.PREPAID_REFUND:
+        return 'TO_SELLER';
+
+      // The seller's own money moving between their wallet and the store's
+      // (SELLER_TOPUP / SELLER_PAYOUT — the seller-side twin is in the same
+      // transaction): nothing changes owner. And real cash crossing the
+      // bank (TOPUP / WITHDRAWAL / ORDER_CREDIT / its reversal), posted by
+      // the flow that moved it — the top-up acceptance, the payout, the
+      // courier payout. Moving it here too would count it twice.
+      case StoreWalletEntryDirection.SELLER_TOPUP:
+      case StoreWalletEntryDirection.SELLER_PAYOUT:
+      case StoreWalletEntryDirection.TOPUP:
+      case StoreWalletEntryDirection.WITHDRAWAL:
+      case StoreWalletEntryDirection.ORDER_CREDIT:
+      case StoreWalletEntryDirection.ORDER_CREDIT_REVERSAL:
+        return 'NONE';
     }
   }
 
@@ -177,7 +233,58 @@ export class SellerCashAttributionService {
       walletEntryId: string;
     },
   ): Promise<void> {
-    const which = this.direction(input.direction);
+    await this.reclassify(tx, {
+      which: this.direction(input.direction),
+      sellerId: input.sellerId,
+      currency: input.currency,
+      amount: input.amount,
+      entryId: input.walletEntryId,
+      // The seller entry this follows is already written: an absent row can
+      // only be a fake with no ledger, and reads as the entry alone.
+      sellerFallback: input.amount,
+    });
+  }
+
+  /**
+   * RS-6 — the same, for a STORE wallet entry: called by
+   * `StoreWalletService.applyEntry` inside its own transaction, after the
+   * store entry is written and under the SELLER's WALLET lock. The cash is
+   * the seller's (decision 7), so a store's charge makes the seller's held
+   * cash ours and a store's refund makes it theirs again — judged against
+   * the COMBINED balance of the seller and every one of their stores.
+   */
+  async applyStore(
+    tx: TxClient,
+    input: {
+      sellerId: string;
+      direction: StoreWalletEntryDirection;
+      amount: Prisma.Decimal;
+      storeEntryId: string;
+    },
+  ): Promise<void> {
+    await this.reclassify(tx, {
+      which: this.storeDirection(input.direction),
+      sellerId: input.sellerId,
+      currency: Currency.INR,
+      amount: input.amount,
+      entryId: input.storeEntryId,
+      sellerFallback: ZERO,
+    });
+  }
+
+  private async reclassify(
+    tx: TxClient,
+    input: {
+      which: Reclassification;
+      sellerId: string;
+      currency: Currency;
+      amount: Prisma.Decimal;
+      entryId: string;
+      /** The seller's balance to assume when their ledger has no row. */
+      sellerFallback: Prisma.Decimal;
+    },
+  ): Promise<void> {
+    const which = input.which;
     if (which === 'NONE') return;
 
     if (which === 'TO_CAPITAL') {
@@ -192,7 +299,7 @@ export class SellerCashAttributionService {
         sellerId: input.sellerId,
         currency: input.currency,
         amount: input.amount,
-        reference: input.walletEntryId,
+        reference: input.entryId,
         note: 'Charged — cash now ours',
       });
       return;
@@ -204,12 +311,19 @@ export class SellerCashAttributionService {
     // a receivable is ours (TRE-8). Handing all of it back held them money
     // their wallet does not show. The entry this follows is already
     // written, under the wallet lock, so its running balance is `after`.
+    //
+    // RS-6: "the balance" is the seller's wallet PLUS every one of their
+    // reseller stores' — the bank book holds one pot for the group
+    // (decision 7), so a refund to a seller whose store is in debt repays
+    // that debt first. Zero stores ⇒ exactly the seller's own balance.
     const last = await tx.sellerWalletEntry.findFirst({
       where: { sellerId: input.sellerId, currency: input.currency },
       orderBy: { id: 'desc' },
       select: { runningBalanceAfter: true },
     });
-    const after = last?.runningBalanceAfter ?? input.amount;
+    const stores =
+      input.currency === Currency.INR ? await storeWalletsTotal(tx, input.sellerId) : ZERO;
+    const after = (last?.runningBalanceAfter ?? input.sellerFallback).add(stores);
     const before = after.sub(input.amount);
     const movable = positive(after).sub(positive(before));
     if (movable.lessThanOrEqualTo(0)) return;
@@ -225,7 +339,7 @@ export class SellerCashAttributionService {
       currency: input.currency,
       sellerId: input.sellerId,
       fromSeller: movable.neg(),
-      walletEntryId: input.walletEntryId,
+      walletEntryId: input.entryId,
       note: movable.lessThan(input.amount)
         ? `Refunded — ${movable.toFixed(2)} of ${input.amount.toFixed(2)} is theirs again; the rest repaid their debt`
         : 'Refunded — cash theirs again',
@@ -415,6 +529,19 @@ export class SellerCashAttributionService {
   }
 
   /**
+   * RS-6 — the seller's rupee wallet PLUS every one of their reseller
+   * stores' wallets: the one pot the bank book holds for them (decision 7),
+   * so the TRE-8 invariant reads `held = max(0, groupBalance)`. Under the
+   * seller's WALLET lock (re-entrant), which every store wallet write takes
+   * too, so no store balance can move before the caller acts on it. A
+   * seller with no reseller stores reads exactly `walletBalance`.
+   */
+  async groupBalance(tx: TxClient, sellerId: string): Promise<Prisma.Decimal> {
+    const own = await this.walletBalance(tx, sellerId);
+    return own.add(await storeWalletsTotal(tx, sellerId));
+  }
+
+  /**
    * How much of cash arriving for a seller REPAYS what they owe us.
    *
    * A charge taken while a seller held nothing wrote no bank entry — the
@@ -430,7 +557,11 @@ export class SellerCashAttributionService {
     sellerId: string,
     amount: Prisma.Decimal,
   ): Promise<{ toCapital: Prisma.Decimal; toSeller: Prisma.Decimal }> {
-    const balance = await this.walletBalance(tx, sellerId);
+    // RS-6: the debt is the GROUP's — the seller with every one of their
+    // reseller stores — because the bank book holds one pot for all of
+    // them (decision 7). Cash arriving for the seller or for a store first
+    // repays a store's negative balance as much as the seller's own.
+    const balance = await this.groupBalance(tx, sellerId);
     const debt = balance.lessThan(0) ? balance.neg() : ZERO;
     const toCapital = debt.lessThan(amount) ? debt : amount;
     return { toCapital, toSeller: amount.sub(toCapital) };

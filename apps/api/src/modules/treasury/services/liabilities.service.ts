@@ -8,6 +8,7 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { InstantPayAdvanceService } from './instant-pay-advance.service';
+import { storeWalletTotalsBySeller } from './store-wallet-balances';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -46,6 +47,8 @@ const DEBT_PAYMENTS = [
   WalletEntryDirection.ADJUSTMENT_CREDIT,
   WalletEntryDirection.COD_DEDUCTION_REFUND,
   WalletEntryDirection.STAFF_CREDIT,
+  // RS-6 — a store the seller manages handing money back (a recorded payout).
+  WalletEntryDirection.STORE_PAYOUT_IN,
 ] as const;
 
 export interface LedgerLine {
@@ -203,14 +206,37 @@ export class LiabilitiesService {
     // when negative. Summing them into one number would let a seller who
     // owes us cancel out a seller we owe — two different people, and
     // neither debt is settled by the other existing.
+    //
+    // RS-6 — a seller and their reseller stores are ONE party here, as they
+    // are one pot in the bank book (decision 7): a store's negative balance
+    // is the seller's exposure, and a store in credit is money we hold for
+    // the seller's group. So the unit is the GROUP — the seller's wallet
+    // plus every one of their stores' — and it is the group that is owed or
+    // owes. A seller with no reseller stores is a group of one: exactly the
+    // figures before.
+    const storeTotals = await storeWalletTotalsBySeller(this.prisma.client);
+    const ownById = new Map(walletBalances.map((b) => [b.sellerId, b.balance]));
+    const groupById = new Map<string, Prisma.Decimal>();
+    for (const id of new Set([...ownById.keys(), ...storeTotals.keys()])) {
+      groupById.set(id, (ownById.get(id) ?? ZERO).add(storeTotals.get(id) ?? ZERO));
+    }
     let owedToSellers = ZERO;
     let owedBySellers = ZERO;
+    let owedCount = 0;
+    // The parts of the owed line, when stores exist: what the sellers' own
+    // wallets and their stores' wallets contribute to the groups we owe.
+    let ownPart = ZERO;
+    let storesPart = ZERO;
     const debtors: string[] = [];
-    for (const b of walletBalances) {
-      if (b.balance.greaterThan(0)) owedToSellers = owedToSellers.add(b.balance);
-      else if (b.balance.lessThan(0)) {
-        owedBySellers = owedBySellers.add(b.balance.abs());
-        debtors.push(b.sellerId);
+    for (const [id, group] of groupById) {
+      if (group.greaterThan(0)) {
+        owedToSellers = owedToSellers.add(group);
+        owedCount += 1;
+        ownPart = ownPart.add(ownById.get(id) ?? ZERO);
+        storesPart = storesPart.add(storeTotals.get(id) ?? ZERO);
+      } else if (group.lessThan(0)) {
+        owedBySellers = owedBySellers.add(group.abs());
+        debtors.push(id);
       }
     }
 
@@ -224,9 +250,32 @@ export class LiabilitiesService {
         key: 'seller_wallets',
         label: 'Seller wallet balances',
         amountInr: owedToSellers.toFixed(2),
-        count: walletBalances.filter((b) => b.balance.greaterThan(0)).length,
+        count: owedCount,
         meaning:
-          'Money sellers can ask for. Withdrawable on request, so it must be held rather than worked with.',
+          storeTotals.size === 0
+            ? 'Money sellers can ask for. Withdrawable on request, so it must be held rather than worked with.'
+            : 'Money sellers — and their reseller stores — can ask for. A seller and their stores are one party here: a store in debt is the seller’s exposure. Withdrawable on request, so it must be held rather than worked with.',
+        ...(storeTotals.size === 0
+          ? {}
+          : {
+              parts: [
+                {
+                  key: 'seller_wallets_own',
+                  label: 'Sellers’ own wallets',
+                  amountInr: ownPart.toFixed(2),
+                  count: owedCount,
+                  meaning: 'The part of it in the sellers’ own wallets.',
+                },
+                {
+                  key: 'seller_wallets_stores',
+                  label: 'Their reseller stores’ wallets',
+                  amountInr: storesPart.toFixed(2),
+                  count: owedCount,
+                  meaning:
+                    'The part of it in their reseller stores’ wallets — the seller’s cash in our bank book (decision 7), a ledger between the seller and the store.',
+                },
+              ],
+            }),
       },
       {
         key: 'pending_withdrawals',
@@ -299,7 +348,7 @@ export class LiabilitiesService {
       due,
       dueTotalInr: dueTotal.toFixed(2),
       netInr: dueTotal.sub(owedTotal).toFixed(2),
-      sellerDebts: await this.debtsWithCover(debtors),
+      sellerDebts: await this.debtsWithCover(debtors, groupById),
     };
   }
 
@@ -342,17 +391,17 @@ export class LiabilitiesService {
    * Valued at COST, never at what it might retail for; the optimistic
    * number is the one that makes a bad debt look fine.
    */
-  private async debtsWithCover(sellerIds: string[]): Promise<SellerDebt[]> {
+  private async debtsWithCover(
+    sellerIds: string[],
+    /** Each seller's GROUP balance — their wallet plus their reseller stores' (RS-6). */
+    groupById: ReadonlyMap<string, Prisma.Decimal>,
+  ): Promise<SellerDebt[]> {
     if (sellerIds.length === 0) return [];
 
-    const [sellers, balances, stock] = await Promise.all([
+    const [sellers, stock] = await Promise.all([
       this.prisma.client.seller.findMany({
         where: { id: { in: sellerIds } },
         select: { id: true, companyName: true },
-      }),
-      this.prisma.client.sellerWalletBalance.findMany({
-        where: { sellerId: { in: sellerIds }, currency: Currency.INR },
-        select: { sellerId: true, balance: true },
       }),
       this.prisma.client.stockLevel.findMany({
         where: { sellerId: { in: sellerIds }, qtyOnHand: { gt: 0 } },
@@ -365,7 +414,9 @@ export class LiabilitiesService {
     ]);
 
     const nameById = new Map(sellers.map((s) => [s.id, s.companyName]));
-    const owedById = new Map(balances.map((b) => [b.sellerId, b.balance.abs()]));
+    const owedById = new Map(
+      sellerIds.map((id) => [id, (groupById.get(id) ?? ZERO).abs()] as const),
+    );
     const stockById = new Map<string, Prisma.Decimal>();
     for (const level of stock) {
       // A batch with no recorded unit cost contributes NOTHING rather

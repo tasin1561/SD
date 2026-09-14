@@ -156,3 +156,5 @@ export {
 } from '@prisma/client';
 // RS-4 — reseller store terms: when each party is credited.
 export { ResellerCreditTrigger } from '@prisma/client';
+// RS-6 — reseller store wallets.
+export { StoreWalletEntryDirection } from '@prisma/client';

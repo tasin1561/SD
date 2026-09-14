@@ -31,6 +31,7 @@ import {
   InviteLeadStatus,
   WalletEntryDirection,
   ResellerStoreStatus,
+  StoreWalletEntryDirection,
 } from '@skydrop/db';
 
 export const STATUS_KINDS = [
@@ -535,6 +536,9 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.COD_DEDUCTION_REFUND:
     // A member of staff putting our money into the wallet, with a reason.
     case WalletEntryDirection.STAFF_CREDIT:
+    // RS-6 — a reseller store the seller manages, paid back off-platform:
+    // the store's wallet falls and the seller's rises by the same.
+    case WalletEntryDirection.STORE_PAYOUT_IN:
       return true;
     // Everything we charge for. REMITTANCE_OUT is money leaving to the
     // seller's bank, so it is a debit against the wallet even though
@@ -560,6 +564,8 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.COD_REVERSAL:
     // A member of staff taking money out of the wallet, with a reason.
     case WalletEntryDirection.STAFF_DEBIT:
+    // RS-6 — the seller moving money into a reseller store they manage.
+    case WalletEntryDirection.STORE_TOPUP_OUT:
       return false;
     default: {
       const exhaustive: never = direction;
@@ -629,9 +635,84 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
       return 'Credited by Skydrop';
     case WalletEntryDirection.STAFF_DEBIT:
       return 'Debited by Skydrop';
+    // RS-6 — money between the seller and a reseller store they manage.
+    case WalletEntryDirection.STORE_TOPUP_OUT:
+      return 'Moved to a reseller store';
+    case WalletEntryDirection.STORE_PAYOUT_IN:
+      return 'Reseller store paid (recorded)';
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * RS-6 — the STORE wallet's ledger vocabulary: which way each direction
+ * moves a reseller store's balance. The same F2 discipline as
+ * `isWalletCredit`, and for the same reason — an unregistered direction
+ * must fail to BUILD, never silently read as a debit. ONE switch for every
+ * frontend (the reseller portal, the seller's store page, the admin),
+ * compared as a whole set against the API's `STORE_CREDIT_DIRECTIONS` by
+ * `store-wallet-directions.spec.ts`.
+ */
+export function isStoreWalletCredit(direction: StoreWalletEntryDirection): boolean {
+  switch (direction) {
+    case StoreWalletEntryDirection.SELLER_TOPUP:
+    case StoreWalletEntryDirection.TOPUP:
+    case StoreWalletEntryDirection.ORDER_CREDIT:
+    case StoreWalletEntryDirection.SHARE_REFUND:
+    case StoreWalletEntryDirection.PREPAID_REFUND:
+      return true;
+    case StoreWalletEntryDirection.SELLER_PAYOUT:
+    case StoreWalletEntryDirection.WITHDRAWAL:
+    case StoreWalletEntryDirection.ORDER_CREDIT_REVERSAL:
+    case StoreWalletEntryDirection.FEE_SHARE:
+    case StoreWalletEntryDirection.COD_TAX_SHARE:
+    case StoreWalletEntryDirection.PREPAID_DEBIT:
+      return false;
+    default: {
+      const exhaustive: never = direction;
+      throw new Error(`Unhandled StoreWalletEntryDirection: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * The label a store user, their seller or a member of staff reads on a
+ * store wallet line. `seller` is the seller's company name, so a store
+ * reads "Topped up by Dhaka Threads" rather than a word for a role.
+ */
+export function storeWalletDirectionLabel(
+  direction: StoreWalletEntryDirection,
+  seller = 'the seller',
+): string {
+  switch (direction) {
+    case StoreWalletEntryDirection.SELLER_TOPUP:
+      return `Topped up by ${seller}`;
+    case StoreWalletEntryDirection.SELLER_PAYOUT:
+      return `Paid by ${seller} (recorded)`;
+    case StoreWalletEntryDirection.TOPUP:
+      return 'Top-up received';
+    case StoreWalletEntryDirection.WITHDRAWAL:
+      return 'Withdrawal paid';
+    case StoreWalletEntryDirection.ORDER_CREDIT:
+      return 'Order margin';
+    case StoreWalletEntryDirection.ORDER_CREDIT_REVERSAL:
+      return 'Order margin reversed';
+    case StoreWalletEntryDirection.FEE_SHARE:
+      return 'Share of a Skydrop fee';
+    case StoreWalletEntryDirection.COD_TAX_SHARE:
+      return 'Share of the COD tax';
+    case StoreWalletEntryDirection.SHARE_REFUND:
+      return 'Fee share returned';
+    case StoreWalletEntryDirection.PREPAID_DEBIT:
+      return 'Prepaid order';
+    case StoreWalletEntryDirection.PREPAID_REFUND:
+      return 'Prepaid order refunded';
+    default: {
+      const exhaustive: never = direction;
+      throw new Error(`Unhandled StoreWalletEntryDirection: ${String(exhaustive)}`);
     }
   }
 }
