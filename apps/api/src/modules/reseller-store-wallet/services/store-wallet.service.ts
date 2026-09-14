@@ -364,7 +364,7 @@ export class StoreWalletService {
       select: { negativeLimitInr: true },
     });
     const own = row?.negativeLimitInr ?? ZERO;
-    const cap = await this.cap(sellerId);
+    const cap = await this.cap(sellerId, db);
     return {
       ownInr: own.toFixed(2),
       capInr: cap.toFixed(2),
@@ -372,9 +372,9 @@ export class StoreWalletService {
     };
   }
 
-  private async cap(sellerId: string): Promise<Prisma.Decimal> {
+  private async cap(sellerId: string, db?: TxClient): Promise<Prisma.Decimal> {
     try {
-      const resolved = await this.settings.resolve(sellerId, NEGATIVE_LIMIT_CAP_KEY);
+      const resolved = await this.settings.resolve(sellerId, NEGATIVE_LIMIT_CAP_KEY, db);
       const v = new Prisma.Decimal(String(resolved.value ?? 0));
       return v.lessThan(0) ? ZERO : v;
     } catch (err) {

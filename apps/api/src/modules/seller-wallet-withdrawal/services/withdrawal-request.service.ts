@@ -194,9 +194,12 @@ export class WithdrawalRequestService {
      */
     opts?: { readonly countOtherPending?: boolean },
   ): Promise<Prisma.Decimal> {
-    const balance = knownBalance ?? (await this.wallet.balanceLive(sellerId, currency));
+    // Inside a caller's locked transaction every read goes through `tx`:
+    // a global-client read there needs a second pool connection while the
+    // first is held, which deadlocks the pool under contention.
+    const balance = knownBalance ?? (await this.wallet.balanceLive(sellerId, currency, tx));
     if (currency !== Currency.INR) return balance;
-    const floor = await this.settings.resolve(sellerId, MIN_BALANCE_KEY);
+    const floor = await this.settings.resolve(sellerId, MIN_BALANCE_KEY, tx);
     const min = new Prisma.Decimal(String(floor.value ?? 0));
 
     // Money already asked for is NOT available again.
@@ -403,7 +406,7 @@ export class WithdrawalRequestService {
 
       // Both limits are COUNTS of requests, not totals — the amount is
       // governed by the balance floor below.
-      const maxPerDay = await this.settings.resolve(sellerId, MAX_PER_DAY_KEY);
+      const maxPerDay = await this.settings.resolve(sellerId, MAX_PER_DAY_KEY, tx);
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
       // A request WE rejected automatically because the balance fell
       // (UnpayableWithdrawalService — REJECTED with no staff member) does
@@ -420,7 +423,7 @@ export class WithdrawalRequestService {
         });
       }
 
-      const maxPerMonth = await this.settings.resolve(sellerId, MAX_PER_MONTH_KEY);
+      const maxPerMonth = await this.settings.resolve(sellerId, MAX_PER_MONTH_KEY, tx);
       const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const monthCount = await tx.withdrawalRequest.count({
         where: { sellerId, createdAt: { gte: monthAgo }, ...NOT_AUTO_REJECTED },

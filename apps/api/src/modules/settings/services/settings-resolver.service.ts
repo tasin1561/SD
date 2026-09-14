@@ -148,8 +148,21 @@ export class SettingsResolverService {
   ) {}
 
   /** `sellerOverride ?? systemDefault`. Throws 404 if the key doesn't exist at all. */
-  async resolve(sellerId: string, key: string): Promise<ResolvedSetting> {
-    const system = await this.prisma.client.systemSetting.findUnique({ where: { key } });
+  /**
+   * `db` — pass the caller's transaction when the read happens INSIDE one
+   * that holds a lock (a wallet write). Reading through the global client
+   * there asks the pool for a SECOND connection while the first is held;
+   * with every connection held by callers queued on the same lock, none is
+   * free and the lock holder waits for the pool until it times out. The
+   * store-wallet concurrency e2e deadlocked exactly so (pool of 5).
+   */
+  async resolve(
+    sellerId: string,
+    key: string,
+    db?: Prisma.TransactionClient,
+  ): Promise<ResolvedSetting> {
+    const client = db ?? this.prisma.client;
+    const system = await client.systemSetting.findUnique({ where: { key } });
     if (!system) {
       throw new NotFoundException({
         code: 'SYSTEM_SETTING_NOT_FOUND',
@@ -157,7 +170,7 @@ export class SettingsResolverService {
       });
     }
     const override = system.sellerOverridable
-      ? await this.prisma.client.sellerSettingOverride.findUnique({
+      ? await client.sellerSettingOverride.findUnique({
           where: { sellerId_key: { sellerId, key } },
         })
       : null;
