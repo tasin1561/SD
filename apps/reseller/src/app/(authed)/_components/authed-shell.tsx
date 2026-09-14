@@ -6,7 +6,17 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
-import { FileSignature, LayoutDashboard, Package, Settings, UserRound, Users } from 'lucide-react';
+import {
+  Contact,
+  FileSignature,
+  LayoutDashboard,
+  Package,
+  PlugZap,
+  Settings,
+  ShoppingBag,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import { can, canSeePath } from '@/lib/page-access';
 import { TermsBanner } from './terms-banner';
 
@@ -40,9 +50,17 @@ export function AuthedShell({
       heading: 'Store',
       items: [
         { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
+        { href: '/orders', label: 'Orders', icon: <ShoppingBag size={15} /> },
+        { href: '/customers', label: 'Customers', icon: <Contact size={15} /> },
         { href: '/catalogue', label: 'Catalogue', icon: <Package size={15} /> },
         { href: '/terms', label: 'Terms', icon: <FileSignature size={15} /> },
+      ],
+    },
+    {
+      heading: 'Setup',
+      items: [
         { href: '/team', label: 'Team', icon: <Users size={15} /> },
+        { href: '/integrations', label: 'Integrations', icon: <PlugZap size={15} /> },
         { href: '/settings', label: 'Store settings', icon: <Settings size={15} /> },
       ],
     },

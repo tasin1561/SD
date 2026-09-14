@@ -24,7 +24,15 @@ export interface StorePermissionDef {
   readonly sensitive?: true;
 }
 
-export const STORE_PERMISSION_GROUPS = ['Store', 'Team', 'Catalogue', 'Terms'] as const;
+export const STORE_PERMISSION_GROUPS = [
+  'Store',
+  'Team',
+  'Catalogue',
+  'Terms',
+  'Orders',
+  'Customers',
+  'Integrations',
+] as const;
 
 export type StorePermissionGroup = (typeof STORE_PERMISSION_GROUPS)[number];
 
@@ -85,6 +93,45 @@ export const STORE_PERMISSIONS = [
     group: 'Terms',
     sensitive: true,
   },
+  // RS-5 — the store's orders, its customers and its integrations.
+  {
+    key: 'orders.view',
+    label: 'See orders',
+    description: 'This store’s orders, their contents, customers’ delivery details and progress.',
+    group: 'Orders',
+    sensitive: true,
+  },
+  {
+    // Not `orders.manage`: placing an order commits the SELLER's stock
+    // and our warehouse to a customer, which is a different act from
+    // changing a setting. Named in store-permission-surface.spec.ts as a
+    // deliberate non-`.manage` write key.
+    key: 'orders.create',
+    label: 'Place orders',
+    description: 'Place an order on the portal or by CSV upload.',
+    group: 'Orders',
+  },
+  {
+    key: 'orders.cancel',
+    label: 'Cancel orders',
+    description: 'Call off one of this store’s orders before it is packed.',
+    group: 'Orders',
+  },
+  {
+    key: 'customers.view',
+    label: 'See customers',
+    description: 'The people this store has sold to — names, phone numbers, emails.',
+    group: 'Customers',
+    sensitive: true,
+  },
+  {
+    key: 'integrations.manage',
+    label: 'Manage integrations',
+    description:
+      'Create and revoke API keys, and set up the webhooks that tell the store’s own systems about its orders.',
+    group: 'Integrations',
+    sensitive: true,
+  },
 ] as const satisfies readonly StorePermissionDef[];
 
 export type StorePermissionKey = (typeof STORE_PERMISSIONS)[number]['key'];
@@ -131,15 +178,31 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
     key: 'ops',
     name: 'Operations',
     description:
-      'Day-to-day work. Sees the store, its team, its catalogue and its terms; changes none of them.',
-    permissions: ['store.profile.view', 'team.view', 'catalogue.view', 'terms.view'],
+      'Day-to-day work. Places, follows and cancels orders and sees who they went to; sees the store, its team, its catalogue and its terms but changes none of them.',
+    permissions: [
+      'store.profile.view',
+      'team.view',
+      'catalogue.view',
+      'terms.view',
+      'orders.view',
+      'orders.create',
+      'orders.cancel',
+      'customers.view',
+    ],
   },
   {
     key: 'finance',
     name: 'Finance',
     description:
-      'The money side, when it arrives. Sees the store, its team, its catalogue and its terms.',
-    permissions: ['store.profile.view', 'team.view', 'catalogue.view', 'terms.view'],
+      'The money side. Sees the store, its team, its catalogue, its terms, its orders and its customers; places none.',
+    permissions: [
+      'store.profile.view',
+      'team.view',
+      'catalogue.view',
+      'terms.view',
+      'orders.view',
+      'customers.view',
+    ],
   },
   {
     key: 'viewer',
@@ -147,8 +210,9 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
     description: 'Read-only. The narrowest login there is.',
     // Terms are visible to everyone at the store: they decide what every
     // order costs, and the portal banner that says "new terms to accept"
-    // must be able to read them for whoever is signed in.
-    permissions: ['store.profile.view', 'catalogue.view', 'terms.view'],
+    // must be able to read them for whoever is signed in. Orders too (RS-5)
+    // — but not the customer list, which is a list of people, not work.
+    permissions: ['store.profile.view', 'catalogue.view', 'terms.view', 'orders.view'],
   },
 ];
 

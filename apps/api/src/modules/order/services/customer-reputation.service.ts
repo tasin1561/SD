@@ -1,6 +1,24 @@
 import { Injectable } from '@nestjs/common';
-import { CustomerRiskLevel, OrderStatus } from '@skydrop/db';
+import { CustomerRiskLevel, OrderStatus, type Prisma, SellerStoreKind } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+
+/**
+ * RS-5 — whose orders are "your own" in a lookup: the seller's OWN
+ * (channel) orders, or one reseller store's. A reseller store's customer
+ * belongs to the store (ORD-7 generalised), so the seller's lookup never
+ * lists the orders a store placed, and a store's lookup never lists the
+ * seller's. The platform-wide COUNTS are unaffected — they were always
+ * across every seller.
+ */
+export type CustomerScope =
+  | { readonly kind: 'SELLER' }
+  | { readonly kind: 'STORE'; readonly storeId: string };
+
+function scopeWhere(sellerId: string, scope: CustomerScope): Prisma.OrderWhereInput {
+  return scope.kind === 'STORE'
+    ? { sellerId, storeId: scope.storeId, storeKind: SellerStoreKind.RESELLER }
+    : { sellerId, storeKind: SellerStoreKind.CHANNEL };
+}
 
 /**
  * What we know about a phone number before shipping to it.
@@ -146,7 +164,19 @@ export class CustomerReputationService {
    * nothing is the failure mode to avoid, so normalisation belongs
    * before this, not inside it.
    */
-  async lookup(sellerId: string, phoneE164: string): Promise<CustomerReputation> {
+  async lookup(
+    sellerId: string,
+    phoneE164: string,
+    /**
+     * RS-5: whose orders count as "your own". The seller's lookup sees
+     * their OWN (channel) orders and customer record only — never a
+     * reseller store's customer, which is the store's (ORD-7 generalised).
+     * A store order's lookup (the call centre, `lookupForOrder`) sees that
+     * store's orders.
+     */
+    scope: CustomerScope = { kind: 'SELLER' },
+  ): Promise<CustomerReputation> {
+    const ownWhere = scopeWhere(sellerId, scope);
     const [platformRows, ownOrders, customer] = await Promise.all([
       // Grouped counts across every seller. Soft-deleted orders excluded
       // — a deleted order is not history, it is a mistake we removed.
@@ -158,7 +188,7 @@ export class CustomerReputationService {
         _max: { createdAt: true },
       }),
       this.prisma.client.order.findMany({
-        where: { sellerId, recipientPhoneE164: phoneE164, deletedAt: null },
+        where: { ...ownWhere, recipientPhoneE164: phoneE164, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         take: 20,
         select: {
@@ -181,7 +211,12 @@ export class CustomerReputationService {
         },
       }),
       this.prisma.client.customer.findFirst({
-        where: { sellerId, phoneE164, deletedAt: null },
+        where: {
+          sellerId,
+          resellerStoreId: scope.kind === 'STORE' ? scope.storeId : null,
+          phoneE164,
+          deletedAt: null,
+        },
         select: { name: true, riskLevel: true, riskNotes: true },
       }),
     ]);
@@ -275,10 +310,16 @@ export class CustomerReputationService {
   async lookupForOrder(orderId: string): Promise<CustomerReputation | null> {
     const order = await this.prisma.client.order.findFirst({
       where: { id: orderId, deletedAt: null },
-      select: { sellerId: true, recipientPhoneE164: true },
+      select: { sellerId: true, recipientPhoneE164: true, storeId: true, storeKind: true },
     });
     if (!order) return null;
-    return this.lookup(order.sellerId, order.recipientPhoneE164);
+    return this.lookup(
+      order.sellerId,
+      order.recipientPhoneE164,
+      order.storeKind === SellerStoreKind.RESELLER
+        ? { kind: 'STORE', storeId: order.storeId }
+        : { kind: 'SELLER' },
+    );
   }
 
   /**
@@ -292,12 +333,14 @@ export class CustomerReputationService {
     sellerId: string,
     phoneE164: string,
     variantIds: readonly string[] = [],
+    /** RS-5: a seller's duplicate check sees their own orders, a store's its own. */
+    scope: CustomerScope = { kind: 'SELLER' },
   ): Promise<
     Array<CustomerOrderSummary & { readonly sharesItems: boolean; readonly recipientName: string }>
   > {
     const orders = await this.prisma.client.order.findMany({
       where: {
-        sellerId,
+        ...scopeWhere(sellerId, scope),
         recipientPhoneE164: phoneE164,
         deletedAt: null,
         status: { in: [...UNPACKED_OPEN_STATUSES] },

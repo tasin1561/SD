@@ -92,9 +92,10 @@ export interface CreateResellerStoreInput {
 
 const KEY = ['seller-reseller-stores'] as const;
 
-export function useResellerStores(): UseQueryResult<readonly ResellerStoreView[]> {
+export function useResellerStores(enabled = true): UseQueryResult<readonly ResellerStoreView[]> {
   const client = useApiClient();
   return useQuery({
+    enabled,
     queryKey: KEY,
     queryFn: () => client.request<readonly ResellerStoreView[]>('/api/seller/reseller-stores'),
   });

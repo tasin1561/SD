@@ -223,8 +223,9 @@ export class SellerOrderController {
       ctx,
     });
     // Re-read so the seller gets the full order back, same as before —
-    // the write boundary returns a transition result, not a view.
-    return this.svc.loadOwned(seller.id, id);
+    // the write boundary returns a transition result, not a view. RS-5:
+    // the SELLER's view — a reseller store customer masked.
+    return this.svc.loadOwnedForSeller(seller.id, id);
   }
 
   @Delete(':id')

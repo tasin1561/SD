@@ -22,14 +22,25 @@ describe('customer lookup — last known recipient', () => {
   );
 
   it('selects the recipient block only in the seller-scoped query', () => {
-    const sellerQuery = src.slice(src.indexOf('where: { sellerId, recipientPhoneE164: phoneE164'));
+    // RS-5: the "own" query is scoped by `ownWhere` — the seller's OWN
+    // (channel) orders, or one reseller store's — never all of a seller's.
+    const OWN = 'where: { ...ownWhere, recipientPhoneE164: phoneE164';
+    const sellerQuery = src.slice(src.indexOf(OWN));
     const platformQuery = src.slice(
       src.indexOf('where: { recipientPhoneE164: phoneE164, deletedAt: null }'),
-      src.indexOf('where: { sellerId, recipientPhoneE164: phoneE164'),
+      src.indexOf(OWN),
     );
+    expect(src.indexOf(OWN)).toBeGreaterThan(-1);
     expect(sellerQuery).toMatch(/recipientAddressLine1: true/);
     // The platform-wide query must NOT carry it.
     expect(platformQuery).not.toMatch(/recipientAddressLine1/);
+  });
+
+  it('RS-5: a seller’s lookup never reaches a reseller store’s customer', () => {
+    // The seller scope is their OWN (channel) orders; a store scope is that
+    // store's reseller orders. A reseller store's customer is the store's.
+    expect(src).toMatch(/\{ sellerId, storeKind: SellerStoreKind\.CHANNEL \}/);
+    expect(src).toMatch(/storeId: scope\.storeId, storeKind: SellerStoreKind\.RESELLER/);
   });
 
   it('reads from ownOrders — the seller-scoped result', () => {

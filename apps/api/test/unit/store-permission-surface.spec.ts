@@ -114,7 +114,12 @@ describe('store permission surface (RS-2)', () => {
     // agreeing binds every later order — so it is its own permission,
     // never folded into a view one. Named here so a second exception has
     // to be argued for.
-    const WRITE_KEYS_NOT_MANAGE = new Set(['terms.accept']);
+    // RS-5 adds two more, each argued for: `orders.create` places an order
+    // (portal or CSV) and `orders.cancel` calls one off — both commit or
+    // release the SELLER's stock and our warehouse for a customer, which
+    // is a different act from managing a setting, so neither is folded
+    // into a `.manage` key or a view one.
+    const WRITE_KEYS_NOT_MANAGE = new Set(['terms.accept', 'orders.create', 'orders.cancel']);
     const loose = HANDLERS.filter(
       (h) =>
         h.method !== 'Get' &&
@@ -166,6 +171,60 @@ describe('store permission surface (RS-2)', () => {
     expect(
       catalogue.every(
         (h) => Array.isArray(h.permissions) && h.permissions.join() === 'catalogue.view',
+      ),
+    ).toBe(true);
+  });
+
+  it('RS-5: the order, customer and integration permissions — who holds what by default', () => {
+    const byKey = new Map(DEFAULT_STORE_ROLES.map((r) => [r.key, r.permissions]));
+    // Every role follows the store's orders; the viewer does nothing else.
+    for (const key of ['admin', 'ops', 'finance', 'viewer'] as const) {
+      expect(byKey.get(key)).toContain('orders.view');
+    }
+    // Placing and cancelling: the people who do the work.
+    for (const key of ['admin', 'ops'] as const) {
+      expect(byKey.get(key)).toContain('orders.create');
+      expect(byKey.get(key)).toContain('orders.cancel');
+    }
+    for (const key of ['finance', 'viewer'] as const) {
+      expect(byKey.get(key)).not.toContain('orders.create');
+      expect(byKey.get(key)).not.toContain('orders.cancel');
+    }
+    // The customer list is a list of PEOPLE — not the viewer's.
+    for (const key of ['admin', 'ops', 'finance'] as const) {
+      expect(byKey.get(key)).toContain('customers.view');
+    }
+    expect(byKey.get('viewer')).not.toContain('customers.view');
+    // Keys and webhooks: admin (and the owner) only.
+    expect(byKey.get('admin')).toContain('integrations.manage');
+    for (const key of ['ops', 'finance', 'viewer'] as const) {
+      expect(byKey.get(key)).not.toContain('integrations.manage');
+    }
+  });
+
+  it('RS-5: the store order surface declares exactly these gates', () => {
+    const got = (file: string): string[] =>
+      HANDLERS.filter((h) => h.file === file).map(
+        (h) =>
+          `${h.method} ${h.name} → ${Array.isArray(h.permissions) ? h.permissions.join('|') : String(h.permissions)}`,
+      );
+    expect(got('store-order.controller.ts')).toEqual([
+      'Get list → orders.view',
+      'Post create → orders.create',
+      'Get get → orders.view',
+      'Get events → orders.view',
+      'Post cancel → orders.cancel',
+    ]);
+    expect(got('store-customer.controller.ts')).toEqual([
+      'Get list → customers.view',
+      'Get get → customers.view',
+    ]);
+    expect(
+      got('store-order-csv-import.controller.ts').every((h) => h.endsWith('→ orders.create')),
+    ).toBe(true);
+    expect(
+      [...got('store-api-key.controller.ts'), ...got('store-webhook.controller.ts')].every((h) =>
+        h.endsWith('→ integrations.manage'),
       ),
     ).toBe(true);
   });

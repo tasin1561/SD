@@ -41,6 +41,8 @@ export interface CoercedOrderRow {
   pinCode: string;
   codAmount?: number;
   externalRef: string;
+  /** RS-5 — a reseller store's retail per unit (required on a store upload). */
+  retailUnitPrice?: number;
 }
 
 @Injectable()
@@ -148,6 +150,20 @@ export class OrderCsvParserService {
       }
     }
 
+    let retailUnitPrice: number | undefined;
+    const retailRaw = get('retailUnitPrice');
+    if (retailRaw !== undefined) {
+      const n = Number(retailRaw);
+      if (!Number.isFinite(n) || n < 0 || Math.round(n * 100) !== n * 100) {
+        errors.push({
+          field: 'retailUnitPrice',
+          reason: `retailUnitPrice must be a non-negative amount with at most 2 decimals: "${retailRaw}"`,
+        });
+      } else {
+        retailUnitPrice = n;
+      }
+    }
+
     if (errors.length > 0) return { row: null, errors };
 
     const row: CoercedOrderRow = {
@@ -171,6 +187,7 @@ export class OrderCsvParserService {
     const state = get('state');
     if (state !== undefined) row.state = state;
     if (codAmount !== undefined) row.codAmount = codAmount;
+    if (retailUnitPrice !== undefined) row.retailUnitPrice = retailUnitPrice;
     return { row, errors: [] };
   }
 }

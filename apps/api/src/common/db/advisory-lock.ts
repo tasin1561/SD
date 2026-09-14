@@ -115,6 +115,16 @@ export const AdvisoryLock = {
    * checked and written under the same lock a publish holds.
    */
   RESELLER_TERMS: 0x05254,
+  /**
+   * 'CI' — resolving a customer's identity (ORD-7, RS-5), per
+   * (owner, phone). Identity used to be an upsert on the
+   * (seller_id, phone_e164) unique; RS-5 replaced that with two PARTIAL
+   * uniques (one per owner kind) Prisma cannot target, so find-then-create
+   * runs under this lock — two orders for the same new phone at once
+   * would otherwise both read "no such customer" and the second insert
+   * would abort its whole order transaction on the unique.
+   */
+  CUSTOMER_IDENTITY: 0x04349,
 } as const;
 
 /**

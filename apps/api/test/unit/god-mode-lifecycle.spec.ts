@@ -163,6 +163,11 @@ describe('god mode publishes the same lifecycle event a matrix transition does',
     const enqueue = jest.fn(async () => undefined);
     const prisma = {
       client: {
+        // RS-5: the listener asks which store the order belongs to, so a
+        // reseller order's events go to that store's endpoints only.
+        order: {
+          findUnique: jest.fn(async () => ({ storeId: 'store-1', storeKind: 'CHANNEL' })),
+        },
         sellerWebhookEndpoint: {
           findMany: jest.fn(async () => [
             { id: 'ep1', url: 'https://hooks.example.in/skydrop', secretKey: 'k' },

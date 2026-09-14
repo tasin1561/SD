@@ -7,8 +7,10 @@ import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { OrderService, type BulkOrderPatchInput } from '../../order/services/order.service';
+import { ResellerOrderService } from '../../order/services/reseller-order.service';
 import { StagedOrderRowService } from './staged-order-row.service';
 import type { CreateOrderDto } from '../../order/dto/create-order.dto';
+import type { CreateStoreOrderDto } from '../../order/dto/create-store-order.dto';
 import { OrderCsvParserService, type CoercedOrderRow } from './order-csv-parser.service';
 import type { OrderCsvField } from '../order-csv-fields';
 import { orderErrorReportKeyFor } from '../order-csv-key';
@@ -51,12 +53,22 @@ export class OrderCsvImportProcessorService {
     private readonly catalog: CatalogReadService,
     private readonly orders: OrderService,
     private readonly staged: StagedOrderRowService,
+    // RS-5: a reseller store's upload places each row as THAT store's
+    // order, through every refusal a portal order meets.
+    private readonly resellerOrders: ResellerOrderService,
   ) {}
 
   async process(uploadId: string, mapping: Partial<Record<OrderCsvField, string>>): Promise<void> {
     const upload = await this.prisma.client.bulkOrderUpload.findUnique({
       where: { id: uploadId },
-      select: { id: true, sellerId: true, spacesKey: true, status: true },
+      select: {
+        id: true,
+        sellerId: true,
+        spacesKey: true,
+        status: true,
+        resellerStoreId: true,
+        uploadedByStoreUserId: true,
+      },
     });
     if (!upload) {
       this.logger.warn({ uploadId }, 'Order CSV upload row not found; skipping');
@@ -93,6 +105,12 @@ export class OrderCsvImportProcessorService {
     const ctx = { ipAddress: null, userAgent: null, requestId: `bulk:${uploadId}` };
     const counters = { ordersCreated: 0, rowsFailed: 0, rowsSkipped: 0 };
     const errorRows: ErrorRow[] = [];
+    // RS-5 — a reseller store's upload. Its rows are that store's orders
+    // and its customers' details; none is ever parked in the SELLER's
+    // staged-row queue (the seller must not read them), so a failed row
+    // lives in the error report only.
+    const storeId = upload.resellerStoreId ?? null;
+    const storeUserId = upload.uploadedByStoreUserId ?? null;
 
     for (let i = 0; i < parsed.rows.length; i++) {
       const raw = parsed.rows[i];
@@ -111,14 +129,54 @@ export class OrderCsvImportProcessorService {
         }
         // ...and park it somewhere the seller can actually fix it. The
         // error CSV stays for bulk triage; this is the queue.
-        await this.staged.stage({
-          uploadId,
-          sellerId,
-          rowNumber,
-          data: this.mappedValues(raw, mapping),
-          problems: errors.map((e) => ({ field: e.field ?? '', reason: e.reason })),
-        });
+        if (storeId === null) {
+          await this.staged.stage({
+            uploadId,
+            sellerId,
+            rowNumber,
+            data: this.mappedValues(raw, mapping),
+            problems: errors.map((e) => ({ field: e.field ?? '', reason: e.reason })),
+          });
+        }
         counters.rowsFailed += 1;
+        continue;
+      }
+
+      if (storeId !== null) {
+        // ORD-9 for a STORE: a new reference places the order; a reference
+        // already placed is an error row, never a PATCH — a patch would
+        // re-price the order outside the store's terms. Cancel and
+        // re-upload to change one.
+        try {
+          if (storeUserId === null) {
+            throw new Error('This upload has no store user to place its orders as');
+          }
+          const existing = await this.orders.getBySellerOrderRef(
+            sellerId,
+            row.externalRef,
+            storeId,
+          );
+          if (existing) {
+            errorRows.push({
+              rowNumber,
+              errorField: 'externalRef',
+              errorReason: `externalRef "${row.externalRef}" is already an order of this store (${existing.status}); cancel it and upload again to change it`,
+              original: raw,
+            });
+            counters.rowsFailed += 1;
+            continue;
+          }
+          await this.createStoreOrder(sellerId, storeId, storeUserId, uploadId, row, ctx);
+          counters.ordersCreated += 1;
+        } catch (err) {
+          errorRows.push({
+            rowNumber,
+            errorField: '',
+            errorReason: err instanceof Error ? err.message : 'Unexpected error importing row',
+            original: raw,
+          });
+          counters.rowsFailed += 1;
+        }
         continue;
       }
 
@@ -197,16 +255,68 @@ export class OrderCsvImportProcessorService {
     });
 
     await this.audit.log({
-      actorType: ActorType.SELLER,
+      actorType: storeId === null ? ActorType.SELLER : ActorType.STORE,
+      ...(storeId === null ? {} : { actorId: storeUserId }),
       sellerId,
       action: 'order.csv_import.processed',
       entityType: 'bulk_order_upload',
       entityId: uploadId,
-      metadata: { status, ...counters, rowCount: parsed.rowCount },
+      metadata: {
+        status,
+        ...counters,
+        rowCount: parsed.rowCount,
+        ...(storeId === null ? {} : { resellerStoreId: storeId }),
+      },
     });
   }
 
   // ── internal ──────────────────────────────────────────────────────
+
+  /** RS-5 — one CSV row as a reseller store's order (every portal refusal applies). */
+  private async createStoreOrder(
+    sellerId: string,
+    storeId: string,
+    storeUserId: string,
+    uploadId: string,
+    row: CoercedOrderRow,
+    ctx: { ipAddress: null; userAgent: null; requestId: string },
+  ): Promise<void> {
+    if (row.retailUnitPrice === undefined) {
+      throw new Error('Retail Price is required on a store’s order');
+    }
+    const resolved = await this.catalog.getVariantBySku(sellerId, row.productSku);
+    if (!resolved || resolved.sellerId !== sellerId) {
+      throw new Error(`Variant SKU "${row.productSku}" is not in this store's catalogue`);
+    }
+    const dto: CreateStoreOrderDto = {
+      sellerOrderRef: row.externalRef,
+      recipientName: row.customerName,
+      recipientPhoneE164: row.customerPhone,
+      recipientAddressLine1: row.addressLine1,
+      recipientAddressLine2: row.addressLine2,
+      recipientPostalCode: row.pinCode,
+      // A store order is cash on delivery (prepaid waits for the store
+      // wallet, RS-5); with no COD Amount the row collects its retail total.
+      paymentMode: PaymentMode.COD,
+      items: [
+        {
+          variantId: resolved.variantId,
+          quantity: row.quantity,
+          retailUnitPriceInr: row.retailUnitPrice,
+        },
+      ],
+    } as CreateStoreOrderDto;
+    if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
+    if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
+    if (row.city !== undefined) dto.recipientCity = row.city;
+    if (row.state !== undefined) dto.recipientStateProvince = row.state;
+    if (row.codAmount !== undefined && row.codAmount > 0) dto.codAmountInr = row.codAmount;
+
+    await this.resellerOrders.create({ kind: 'STORE_USER', storeId, storeUserId }, dto, ctx, {
+      source: OrderSource.BULK_UPLOAD,
+      bulkUploadId: uploadId,
+    });
+  }
 
   private async createOrder(
     sellerId: string,

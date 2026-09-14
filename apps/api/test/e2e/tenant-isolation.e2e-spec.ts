@@ -814,4 +814,123 @@ describe('cross-tenant isolation (e2e)', () => {
       .expect(200);
     expect(JSON.stringify(betaList.body)).not.toContain(vA);
   });
+
+  // ─── Reseller store orders (RS-5) ──────────────────────────────────────
+
+  it("RS-5: a store never reaches a sister store's order or customer, and the seller never sees a store customer", async () => {
+    // Two stores of the SAME seller — the boundary under test is the store,
+    // not the seller.
+    const storeA = await makeStoreUser(alpha, 'ord-a');
+    const storeB = await makeStoreUser(alpha, 'ord-b');
+    const published = await request(h.baseUrl)
+      .post(`/seller/reseller-stores/${storeA.storeId}/terms`)
+      .set(alpha.auth)
+      .send({
+        deliveryFeeStorePercent: '80',
+        returnFeeStorePercent: '100',
+        customerReturnFeeStorePercent: '100',
+        codFeeStorePercent: '0',
+        codTaxStorePercent: '100',
+        instantPayFeeStorePercent: '100',
+        storeCreditTrigger: 'ON_PAYOUT',
+        storeCreditDays: 0,
+        sellerCreditTrigger: 'ON_PAYOUT',
+        sellerCreditDays: 0,
+        basedOnVersion: 0,
+      })
+      .expect(201);
+    const termsVersionId = (published.body as { current: { id: string } }).current.id;
+
+    // Seeded directly: the READS are under test.
+    const customer = await h.prisma.customer.create({
+      data: {
+        sellerId: alpha.sellerId,
+        resellerStoreId: storeA.storeId,
+        phoneE164: '+919876500031',
+        name: 'Priya Store-Customer',
+        email: 'priya@example.com',
+      },
+      select: { id: true },
+    });
+    const order = await h.prisma.order.create({
+      data: {
+        sellerId: alpha.sellerId,
+        storeId: storeA.storeId,
+        storeKind: 'RESELLER',
+        storeNameSnapshot: storeA.storeName,
+        customerId: customer.id,
+        orderNumber: `SD-2026-95-${Math.floor(Math.random() * 900000 + 100000)}`,
+        status: 'PENDING_CONFIRMATION',
+        paymentMode: 'COD',
+        codAmountInr: '499.00',
+        recipientName: 'Priya Store-Customer',
+        recipientPhoneE164: '+919876500031',
+        recipientEmail: 'priya@example.com',
+        recipientAddressLine1: '44 Hidden Lane',
+        recipientAddressLine2: 'Behind the temple',
+        recipientCity: 'Pune',
+        recipientStateProvince: 'Maharashtra',
+        recipientPostalCode: '411001',
+        recipientCountryCode: 'IN',
+        declaredValueInr: '0.00',
+        resellerTermsVersionId: termsVersionId,
+        resellerDeliveryFeeStorePercent: '80',
+        resellerReturnFeeStorePercent: '100',
+        resellerCustomerReturnFeeStorePercent: '100',
+        resellerCodFeeStorePercent: '0',
+        resellerCodTaxStorePercent: '100',
+        resellerInstantPayFeeStorePercent: '100',
+        resellerStoreCreditTrigger: 'ON_PAYOUT',
+        resellerStoreCreditDays: 0,
+        resellerSellerCreditTrigger: 'ON_PAYOUT',
+        resellerSellerCreditDays: 0,
+      },
+      select: { id: true },
+    });
+
+    // Store A sees its own — the ids are real, so the denials below are denials.
+    await request(h.baseUrl).get(`/store/orders/${order.id}`).set(storeA.auth).expect(200);
+    await request(h.baseUrl).get(`/store/customers/${customer.id}`).set(storeA.auth).expect(200);
+
+    const bOrder = await request(h.baseUrl).get(`/store/orders/${order.id}`).set(storeB.auth);
+    expectDenied(bOrder.status, bOrder.body, "a sister store's order");
+    const bCustomer = await request(h.baseUrl)
+      .get(`/store/customers/${customer.id}`)
+      .set(storeB.auth);
+    expectDenied(bCustomer.status, bCustomer.body, "a sister store's customer");
+    const bList = await request(h.baseUrl).get('/store/orders').set(storeB.auth).expect(200);
+    expect(JSON.stringify(bList.body)).not.toContain(order.id);
+
+    // Store B's API key is no key to store A's orders.
+    const key = await request(h.baseUrl)
+      .post('/store/api-keys')
+      .set(storeB.auth)
+      .send({ name: 'B integration' })
+      .expect(201);
+    const apiAuth = { Authorization: `Bearer ${(key.body as { plaintext: string }).plaintext}` };
+    await request(h.baseUrl).get('/store-api/v1/orders').set(apiAuth).expect(200);
+    const viaKey = await request(h.baseUrl).get(`/store-api/v1/orders/${order.id}`).set(apiAuth);
+    expectDenied(viaKey.status, viaKey.body, "a sister store's order via an API key");
+
+    // The seller sees the order is theirs — and never who it goes to.
+    const seen = await request(h.baseUrl)
+      .get(`/seller/orders/${order.id}`)
+      .set(alpha.auth)
+      .expect(200);
+    expect((seen.body as { recipientMasked: boolean }).recipientMasked).toBe(true);
+    const text = JSON.stringify(seen.body);
+    expect(text).not.toContain('Priya');
+    expect(text).not.toContain('9876500031');
+    expect(text).not.toContain('priya@example.com');
+    expect(text).not.toContain('Hidden Lane');
+    const byPhone = await request(h.baseUrl)
+      .get('/seller/orders?search=9876500031')
+      .set(alpha.auth)
+      .expect(200);
+    expect((byPhone.body as { total: number }).total).toBe(0);
+    const customers = await request(h.baseUrl).get('/seller/customers').set(alpha.auth).expect(200);
+    expect(JSON.stringify(customers.body)).not.toContain(customer.id);
+    const direct = await request(h.baseUrl).get(`/seller/customers/${customer.id}`).set(alpha.auth);
+    expectDenied(direct.status, direct.body, "a store's customer from the seller side");
+  });
 });

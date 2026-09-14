@@ -41,7 +41,20 @@ export interface OrderListItem {
   readonly codAmountInr: string | null;
   readonly placedAt: string;
   readonly sellerId: string;
+  /** RS-5 — which shopfront, and whether it is a reseller store's order. */
+  readonly storeId?: string;
+  readonly storeKind?: StoreKindValue;
+  readonly storeNameSnapshot?: string;
+  /**
+   * RS-5 — true on a SELLER's read of a reseller store's order: the
+   * customer's name, phone, email and street address were taken off
+   * (they are the store's). City, state and PIN stay.
+   */
+  readonly recipientMasked?: boolean;
 }
+
+/** RS-1 / RS-5 — a store's kind: the seller's own channel, or a reseller store. */
+export type StoreKindValue = 'CHANNEL' | 'RESELLER';
 
 export interface OrderListResponse {
   readonly items: readonly OrderListItem[];
@@ -66,6 +79,12 @@ export interface OrderItemView {
   readonly unitDeclaredValueInr: string | null;
   readonly unitPriceInr: string | null;
   readonly qtyReserved: number;
+  /** RS-5 — a reseller line's terms as placed (null on a channel order). */
+  readonly resellerTransferPriceInr?: string | null;
+  readonly resellerRetailUnitInr?: string | null;
+  readonly resellerMinRetailInr?: string | null;
+  readonly resellerMaxRetailInr?: string | null;
+  readonly resellerStockMode?: 'SHARED' | 'SET_ASIDE' | null;
 }
 
 export interface OrderView {
@@ -75,6 +94,23 @@ export interface OrderView {
   readonly sellerId: string;
   /** Which shopfront it came from. */
   readonly storeId: string | null;
+  /** RS-5 — a reseller store's order, and the store's name as placed. */
+  readonly storeKind?: StoreKindValue;
+  readonly storeNameSnapshot?: string;
+  /** RS-5 — true when a seller reads a reseller store's order (see OrderListItem). */
+  readonly recipientMasked?: boolean;
+  /** RS-5 — the terms snapshot on a reseller order (all null on a channel one). */
+  readonly resellerTermsVersionId?: string | null;
+  readonly resellerDeliveryFeeStorePercent?: string | null;
+  readonly resellerReturnFeeStorePercent?: string | null;
+  readonly resellerCustomerReturnFeeStorePercent?: string | null;
+  readonly resellerCodFeeStorePercent?: string | null;
+  readonly resellerCodTaxStorePercent?: string | null;
+  readonly resellerInstantPayFeeStorePercent?: string | null;
+  readonly resellerStoreCreditTrigger?: string | null;
+  readonly resellerStoreCreditDays?: number | null;
+  readonly resellerSellerCreditTrigger?: string | null;
+  readonly resellerSellerCreditDays?: number | null;
   readonly status: OrderStatus;
   readonly source: OrderSource;
 

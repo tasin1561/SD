@@ -20,7 +20,10 @@ import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-walle
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { SettingsModule } from '../settings/settings.module';
+import { ResellerOrderGateModule } from '../reseller-order-gate/reseller-order-gate.module';
+import { ResellerStoreTermsModule } from '../reseller-store-terms/reseller-store-terms.module';
 import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.service';
+import { ResellerOrderService } from './services/reseller-order.service';
 
 /**
  * Module 6 — INTERNAL core (the Module-5 `inventory-shared` analogue).
@@ -75,6 +78,12 @@ import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.
     //  - SettingsModule: the per-seller default courier resolved for the
     //    provision (SET-1). Dependency-free R3 primitive.
     SettingsModule,
+    // RS-5 — a reseller store's order. ResellerOrderService reads the
+    // store's terms (ResellerStoreTermsModule imports nothing
+    // order-shaped, by design) and its offers (the dependency-free R3
+    // gate). Neither imports this module back, so no cycle.
+    ResellerStoreTermsModule,
+    ResellerOrderGateModule,
   ],
   providers: [
     OrderNumberingService,
@@ -87,8 +96,12 @@ import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.
     OrderService,
     OrderAdminOverrideService,
     OrderPostCommitHooksService,
+    ResellerOrderService,
   ],
   exports: [
+    // Intra-Module-6 only (the store-order and CSV submodules place a
+    // reseller store's order through it).
+    ResellerOrderService,
     // Intra-Module-6 only: OrderModule's OrderWriteService draws it from
     // here (NestJS forbids re-exporting an imported provider).
     OrderPostCommitHooksService,

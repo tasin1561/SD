@@ -21,6 +21,12 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/settings', 'store.profile.view'], // GET /store/profile
   ['/catalogue', 'catalogue.view'], // GET /store/catalogue (RS-3)
   ['/terms', 'terms.view'], // GET /store/terms (RS-4); accepting needs terms.accept
+  // RS-5 — the store's orders, customers and integrations.
+  ['/orders', 'orders.view'], // GET /store/orders; cancelling needs orders.cancel
+  ['/orders/new', 'orders.create'], // POST /store/orders (the picker reads the catalogue)
+  ['/orders/import', 'orders.create'], // /store/order-imports/*
+  ['/customers', 'customers.view'], // GET /store/customers
+  ['/integrations', 'integrations.manage'], // /store/api-keys, /store/webhook-endpoints
 ];
 
 export function permissionForPath(pathname: string | null): string | null {

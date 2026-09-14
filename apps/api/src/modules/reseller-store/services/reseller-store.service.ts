@@ -343,6 +343,17 @@ export class ResellerStoreService {
 
     const pending = await this.prisma.client.$transaction(async (tx) => {
       const now = new Date();
+      // RS-5 — THE CLOSE RACE, closed. A store order's create transaction
+      // locks this row FOR SHARE and re-checks ACTIVE before it writes
+      // (`ResellerOrderService.lockAndReadTerms`). Taking the row FOR
+      // UPDATE here conflicts with that: a close or pause waits for an
+      // order already being placed to commit and then COUNTS it below, or
+      // the order waits for the close and then sees CLOSED and is refused.
+      // The guarded `updateMany` would take the same lock; it is taken
+      // first and on purpose so the rule does not rest on a side effect.
+      await tx.$queryRaw(
+        Prisma.sql`SELECT 1 FROM "seller_stores" WHERE "id" = ${storeId}::uuid FOR UPDATE`,
+      );
       const moved = await tx.sellerStore.updateMany({
         where: { id: storeId, sellerId, kind: SellerStoreKind.RESELLER, status: from },
         data: { status: rule.to, statusChangedAt: now },

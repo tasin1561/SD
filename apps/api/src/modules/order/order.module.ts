@@ -10,6 +10,7 @@ import { SellerCustomerController } from './controllers/seller-customer.controll
 import { SellerRecipientAddressController } from './controllers/seller-recipient-address.controller';
 import { AdminOrderController } from './controllers/admin-order.controller';
 import { SettingsModule } from '../settings/settings.module';
+import { ResellerOrderGateModule } from '../reseller-order-gate/reseller-order-gate.module';
 import { SellerOrderDefaultsController } from './controllers/seller-order-defaults.controller';
 import { OrderReadService } from './services/order-read.service';
 import { OrderWriteService } from './services/order-write.service';
@@ -59,6 +60,10 @@ import { OrderWriteService } from './services/order-write.service';
     InventorySharedModule,
     // The seller's own default for the delivery-fee field (SET-1).
     SettingsModule,
+    // RS-5: the reseller set-aside guard every confirmation reserves
+    // through. A dependency-free R3 primitive (it imports neither order
+    // nor reseller-catalogue), so no cycle.
+    ResellerOrderGateModule,
     // CallQueue / ShipmentProvision / LifecycleEvents / SellerWalletAccrual
     // are no longer imported here: OrderWriteService reaches all four only
     // through OrderPostCommitHooksService, provided by OrderCoreModule and

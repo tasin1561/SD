@@ -37,6 +37,19 @@ describe('reseller page access', () => {
     expect(canSeePath({ permissions: ['catalogue.view'] }, '/catalogue')).toBe(true);
   });
 
+  it('RS-5: orders, placing orders, customers and integrations each on their own key', () => {
+    expect(permissionForPath('/orders')).toBe('orders.view');
+    expect(permissionForPath('/orders/0197')).toBe('orders.view');
+    // The longer entry wins: placing and importing need orders.create.
+    expect(permissionForPath('/orders/new')).toBe('orders.create');
+    expect(permissionForPath('/orders/import')).toBe('orders.create');
+    expect(canSeePath({ permissions: ['orders.view'] }, '/orders/new')).toBe(false);
+    expect(canSeePath({ permissions: ['orders.view', 'orders.create'] }, '/orders/new')).toBe(true);
+    expect(permissionForPath('/customers')).toBe('customers.view');
+    expect(permissionForPath('/integrations')).toBe('integrations.manage');
+    expect(canSeePath({ permissions: ['orders.view'] }, '/integrations')).toBe(false);
+  });
+
   it('RS-4: the terms page opens on terms.view (every role has it)', () => {
     expect(permissionForPath('/terms')).toBe('terms.view');
     expect(canSeePath({ permissions: ['terms.view'] }, '/terms')).toBe(true);

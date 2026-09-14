@@ -2722,6 +2722,12 @@ model SellerStore {
   /// RS-4 — the store's versioned terms, and every acceptance of them.
   termsVersions        ResellerStoreTermsVersion[]
   termsAcceptances     ResellerStoreTermsAcceptance[]
+  /// RS-5 — the store's own customers (ORD-7 generalised), API keys,
+  /// outbound webhook endpoints and CSV uploads.
+  resellerCustomers    Customer[]
+  storeApiKeys         StoreApiKey[]
+  webhookEndpoints     SellerWebhookEndpoint[]
+  bulkOrderUploads     BulkOrderUpload[]
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -2729,6 +2735,9 @@ model SellerStore {
   /// unlikely.
 
   @@unique([sellerId, name])
+  /// RS-5 — the target of `orders (store_id, store_kind)`: an order's kind
+  /// is its store's kind, by foreign key, never by convention.
+  @@unique([id, kind])
   @@index([sellerId, isActive])
   @@index([kind, status])
   @@map("seller_stores")
@@ -2943,18 +2952,32 @@ model Customer {
   createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz
   updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt             DateTime?         @map("deleted_at") @db.Timestamptz
+  /// RS-5 (ORD-7 generalised): set when this is a RESELLER STORE's
+  /// customer — the store sold to them, and the seller behind the store
+  /// never sees their name, phone, email or street address. NULL is the
+  /// seller's own customer, exactly as before.
+  resellerStoreId       String?           @map("reseller_store_id") @db.Uuid
 
-  seller       Seller                       @relation(fields: [sellerId], references: [id])
-  orders       Order[]
-  addressCache OrderRecipientAddressCache[]
+  seller        Seller                       @relation(fields: [sellerId], references: [id])
+  resellerStore SellerStore?                 @relation(fields: [resellerStoreId], references: [id], onDelete: Restrict)
+  orders        Order[]
+  addressCache  OrderRecipientAddressCache[]
 
   // Module 6: customer identity is per-seller (sellerId, phoneE164). The
   // canonical pre-M6 design was a GLOBAL phone-keyed customer with
   // cross-seller risk aggregation; that was deliberately narrowed to
   // per-seller for Phase 1A privacy (see phase-1a-debt). Risk aggregates
   // (rtoCount, fakeOrdersCount, riskLevel) are therefore per-seller now.
-  @@unique([sellerId, phoneE164])
+  //
+  // RS-5: identity is per OWNER — the seller, or one of their reseller
+  // stores. Two PARTIAL uniques in the migration replace the old
+  // (seller_id, phone_e164) unique: `(seller_id, phone_e164) WHERE
+  // reseller_store_id IS NULL` and `(reseller_store_id, phone_e164) WHERE
+  // reseller_store_id IS NOT NULL`. Prisma cannot express a partial
+  // unique, so they are invisible here; CustomerService resolves identity
+  // under `AdvisoryLock.CUSTOMER_IDENTITY` instead of an upsert.
   @@index([sellerId])
+  @@index([resellerStoreId])
   @@index([phoneE164])
   @@index([riskLevel])
   @@index([lastOrderAt])
@@ -2980,6 +3003,28 @@ model Order {
   /// rewrite what a past customer was told, and the live row cannot
   /// answer what it used to be called.
   storeNameSnapshot String @map("store_name_snapshot")
+
+  // ── RS-5 reseller store orders (2026-09-14) ────────────────────────
+  /// The store's KIND, carried so the composite FK `(store_id,
+  /// store_kind) → seller_stores (id, kind)` makes an order's kind its
+  /// store's kind — and the CHECK `orders_reseller_snapshot_ck` then
+  /// makes a RESELLER order carry every snapshot column below and a
+  /// CHANNEL order none of them.
+  storeKind                             SellerStoreKind        @default(CHANNEL) @map("store_kind")
+  /// The terms version the order was placed under (RS-4). Versions are
+  /// append-only, so the id alone pins the terms; the columns after it
+  /// copy the split and both timings so 3c and reports never join back.
+  resellerTermsVersionId                String?                @map("reseller_terms_version_id") @db.Uuid
+  resellerDeliveryFeeStorePercent       Decimal?               @map("reseller_delivery_fee_store_percent") @db.Decimal(5, 2)
+  resellerReturnFeeStorePercent         Decimal?               @map("reseller_return_fee_store_percent") @db.Decimal(5, 2)
+  resellerCustomerReturnFeeStorePercent Decimal?               @map("reseller_customer_return_fee_store_percent") @db.Decimal(5, 2)
+  resellerCodFeeStorePercent            Decimal?               @map("reseller_cod_fee_store_percent") @db.Decimal(5, 2)
+  resellerCodTaxStorePercent            Decimal?               @map("reseller_cod_tax_store_percent") @db.Decimal(5, 2)
+  resellerInstantPayFeeStorePercent     Decimal?               @map("reseller_instant_pay_fee_store_percent") @db.Decimal(5, 2)
+  resellerStoreCreditTrigger            ResellerCreditTrigger? @map("reseller_store_credit_trigger")
+  resellerStoreCreditDays               Int?                   @map("reseller_store_credit_days")
+  resellerSellerCreditTrigger           ResellerCreditTrigger? @map("reseller_seller_credit_trigger")
+  resellerSellerCreditDays              Int?                   @map("reseller_seller_credit_days")
 
   sellerOrderRef          String?      @map("seller_order_ref")
   source                  OrderSource  @default(MANUAL)
@@ -3075,7 +3120,9 @@ model Order {
 
   seller                 Seller                       @relation(fields: [sellerId], references: [id])
   customer               Customer?                    @relation(fields: [customerId], references: [id])
-  store                  SellerStore                  @relation(fields: [storeId], references: [id])
+  /// RS-5: composite — (store_id, store_kind) → seller_stores (id, kind).
+  store                  SellerStore                  @relation(fields: [storeId, storeKind], references: [id, kind])
+  resellerTermsVersion   ResellerStoreTermsVersion?   @relation(fields: [resellerTermsVersionId], references: [id], onDelete: Restrict)
   bulkUpload             BulkOrderUpload?             @relation(fields: [bulkUploadId], references: [id])
   confirmedBy            StaffUser?                   @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
   cancelledBy            StaffUser?                   @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
@@ -3109,6 +3156,7 @@ model Order {
   /// corruption, not an inconvenience.
   @@unique([sellerId, storeId, sellerOrderRef])
   @@index([storeId])
+  @@index([resellerTermsVersionId])
   @@index([sellerId, storeId, status])
   // A seller's own list, newest first — the most-hit read in the
   // product. Without placedAt in the key, Postgres walks the GLOBAL
@@ -3156,6 +3204,18 @@ model OrderItem {
   pickedBinId          String?  @map("picked_bin_id") @db.Uuid
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // ── RS-5: a reseller line's terms AS PLACED (ORD-6; RS-4 "later edits
+  // never re-price"). All NULL on a channel order's line. CHECK
+  // `order_items_reseller_snapshot_ck`: transfer price, retail and stock
+  // mode together or not at all; retail inside min/max where set.
+  // `unit_price_inr` carries the same retail figure for every reader that
+  // already shows a unit price.
+  resellerTransferPriceInr Decimal?           @map("reseller_transfer_price_inr") @db.Decimal(12, 2)
+  resellerRetailUnitInr    Decimal?           @map("reseller_retail_unit_inr") @db.Decimal(12, 2)
+  resellerMinRetailInr     Decimal?           @map("reseller_min_retail_inr") @db.Decimal(12, 2)
+  resellerMaxRetailInr     Decimal?           @map("reseller_max_retail_inr") @db.Decimal(12, 2)
+  resellerStockMode        ResellerStockMode? @map("reseller_stock_mode")
 
   order          Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant        ProductVariant     @relation(fields: [variantId], references: [id])
@@ -3248,29 +3308,35 @@ model StagedOrderRow {
 }
 
 model BulkOrderUpload {
-  id                 String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId           String           @map("seller_id") @db.Uuid
-  fileName           String           @map("file_name")
-  spacesKey          String           @map("spaces_key")
-  fileSizeBytes      Int              @map("file_size_bytes")
-  rowCount           Int              @default(0) @map("row_count")
-  status             BulkUploadStatus @default(PENDING)
-  errorReportKey     String?          @map("error_report_key")
-  ordersCreated      Int              @default(0) @map("orders_created")
-  rowsFailed         Int              @default(0) @map("rows_failed")
-  rowsSkipped        Int              @default(0) @map("rows_skipped")
-  jobId              String?          @map("job_id")
-  startedAt          DateTime?        @map("started_at") @db.Timestamptz
-  completedAt        DateTime?        @map("completed_at") @db.Timestamptz
-  uploadedBySellerId String?          @map("uploaded_by_seller_id") @db.Uuid
-  uploadedByStaffId  String?          @map("uploaded_by_staff_id") @db.Uuid
-  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt          DateTime?        @map("deleted_at") @db.Timestamptz
+  id                    String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId              String           @map("seller_id") @db.Uuid
+  fileName              String           @map("file_name")
+  spacesKey             String           @map("spaces_key")
+  fileSizeBytes         Int              @map("file_size_bytes")
+  rowCount              Int              @default(0) @map("row_count")
+  status                BulkUploadStatus @default(PENDING)
+  errorReportKey        String?          @map("error_report_key")
+  ordersCreated         Int              @default(0) @map("orders_created")
+  rowsFailed            Int              @default(0) @map("rows_failed")
+  rowsSkipped           Int              @default(0) @map("rows_skipped")
+  jobId                 String?          @map("job_id")
+  startedAt             DateTime?        @map("started_at") @db.Timestamptz
+  completedAt           DateTime?        @map("completed_at") @db.Timestamptz
+  uploadedBySellerId    String?          @map("uploaded_by_seller_id") @db.Uuid
+  uploadedByStaffId     String?          @map("uploaded_by_staff_id") @db.Uuid
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt             DateTime?        @map("deleted_at") @db.Timestamptz
+  /// RS-5: a reseller store's upload. Its rows become that store's
+  /// orders, and it is listed to that store only (never to the seller).
+  resellerStoreId       String?          @map("reseller_store_id") @db.Uuid
+  /// The store user who uploaded it — a plain id, like an actor id.
+  uploadedByStoreUserId String?          @map("uploaded_by_store_user_id") @db.Uuid
 
-  seller           Seller     @relation("BulkUploadSeller", fields: [sellerId], references: [id])
-  uploadedBySeller Seller?    @relation("BulkUploadUploadedBySeller", fields: [uploadedBySellerId], references: [id])
-  uploadedByStaff  StaffUser? @relation("BulkUploadUploadedByStaff", fields: [uploadedByStaffId], references: [id])
+  resellerStore    SellerStore? @relation(fields: [resellerStoreId], references: [id], onDelete: Restrict)
+  seller           Seller       @relation("BulkUploadSeller", fields: [sellerId], references: [id])
+  uploadedBySeller Seller?      @relation("BulkUploadUploadedBySeller", fields: [uploadedBySellerId], references: [id])
+  uploadedByStaff  StaffUser?   @relation("BulkUploadUploadedByStaff", fields: [uploadedByStaffId], references: [id])
   orders           Order[]
 
   stagedRows StagedOrderRow[]
@@ -3280,6 +3346,7 @@ model BulkOrderUpload {
   @@index([createdAt])
   @@index([uploadedBySellerId])
   @@index([uploadedByStaffId])
+  @@index([resellerStoreId])
   @@map("bulk_order_uploads")
 }
 
@@ -4742,10 +4809,18 @@ model SellerWebhookEndpoint {
   createdAt                   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt                   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt                   DateTime? @map("deleted_at") @db.Timestamptz
+  /// RS-5: set when the endpoint belongs to a RESELLER STORE. It then
+  /// receives that store's orders only; an endpoint with NULL (the
+  /// seller's own) receives channel orders only — a reseller order's
+  /// events never reach the seller's integration, nor a store's the
+  /// seller's.
+  resellerStoreId             String?   @map("reseller_store_id") @db.Uuid
 
-  seller     Seller                    @relation(fields: [sellerId], references: [id])
-  deliveries OutboundWebhookDelivery[]
+  seller        Seller                    @relation(fields: [sellerId], references: [id])
+  resellerStore SellerStore?              @relation(fields: [resellerStoreId], references: [id], onDelete: Cascade)
+  deliveries    OutboundWebhookDelivery[]
 
+  @@index([resellerStoreId])
   @@index([sellerId, isActive])
   @@index([isActive])
   @@index([deletedAt])
@@ -8627,6 +8702,8 @@ model ResellerStoreTermsVersion {
 
   store       SellerStore                    @relation(fields: [storeId], references: [id], onDelete: Restrict)
   acceptances ResellerStoreTermsAcceptance[]
+  /// RS-5 — every order placed under this version (FK RESTRICT).
+  orders      Order[]
 
   @@unique([storeId, version])
   /// The target of the acceptance's composite FK — what makes an acceptance
@@ -8659,4 +8736,41 @@ model ResellerStoreTermsAcceptance {
   @@index([storeId, acceptedAt])
   @@index([storeUserId])
   @@map("reseller_store_terms_acceptances")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// RS-5 — reseller store ORDERS (2026-09-14, docs/reseller-stores.md
+// "Store orders as built", migration 20260914240000_reseller_store_orders).
+// The order / order_items / customers / bulk_order_uploads /
+// seller_webhook_endpoints additions sit on those models; this block
+// holds the one new table.
+// ════════════════════════════════════════════════════════════════════
+
+/// RS-5 — a machine key a reseller store's integration places orders
+/// with (`Authorization: Bearer sks_…`). The store's twin of
+/// `seller_api_keys`: only the SHA-256 hash is stored, the plaintext is
+/// shown once at creation, and a key reaches its own store's orders and
+/// nothing else — never the seller's. Written only by
+/// `StoreApiKeyService`; checked only by `StoreApiKeyGuard`.
+model StoreApiKey {
+  id                   String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId              String    @map("store_id") @db.Uuid
+  /// Denormalised so the guard needs no join to know whose stock it is.
+  sellerId             String    @map("seller_id") @db.Uuid
+  name                 String
+  keyPrefix            String    @map("key_prefix")
+  keyHash              String    @unique @map("key_hash")
+  /// The store user who created it — a plain id, like an actor id.
+  createdByStoreUserId String?   @map("created_by_store_user_id") @db.Uuid
+  lastUsedAt           DateTime? @map("last_used_at") @db.Timestamptz
+  expiresAt            DateTime? @map("expires_at") @db.Timestamptz
+  revokedAt            DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt            DateTime? @map("deleted_at") @db.Timestamptz
+
+  store SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@map("store_api_keys")
 }

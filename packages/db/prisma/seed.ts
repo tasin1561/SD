@@ -1432,6 +1432,22 @@ const systemSettings: SystemSettingSeed[] = [
     isEditableByAdmin: false,
   },
   {
+    // RS-5 — the master switch for reseller store ORDERS. OFF until the
+    // reseller money (phase 3c: the fee split at each party's credit
+    // trigger, the prepaid debit, reversals) is wired: without it a
+    // delivered reseller order would credit the SELLER the whole COD.
+    // Seller-overridable, so Skydrop switches it on per seller. Also
+    // inserted by 20260914240000_reseller_store_orders.
+    key: 'reseller.orders_enabled',
+    category: 'reseller',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Reseller stores — accept store orders',
+    description:
+      "Whether this seller's reseller stores may place orders. OFF until the reseller money (fee split at each party's credit trigger, prepaid debit, reversals) is live: without it a delivered reseller order would credit the seller the whole COD. Switch on per seller from the seller's settings.",
+    sellerOverridable: true,
+  },
+  {
     key: 'wallet.withdrawal_sla_hours',
     category: 'wallet',
     valueType: SettingValueType.INT,
