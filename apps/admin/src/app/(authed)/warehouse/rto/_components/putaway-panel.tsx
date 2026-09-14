@@ -12,19 +12,18 @@ import {
 } from '@/lib/api-hooks';
 
 /**
- * Shelving returned goods — the step that makes them sellable again.
+ * Shelving returned goods an OLDER finalise left in the returns hold.
  *
- * ── WHY THIS SCREEN EXISTS ───────────────────────────────────────────
- * Finalising a return does NOT put stock back on the shelf. Restocked
- * items land in an RTO_HOLD bin, because at that moment the carton is
- * on the returns bench and booking it onto a shelf nobody walked to
- * would be claiming a putaway that never happened. Availability
- * deliberately ignores hold bins (INV-3), so until somebody physically
- * shelves these and says where, the goods are counted as on-hand and
- * cannot be sold by anyone.
- *
- * Without this panel that was a dead end: the endpoint existed, no page
- * called it, and every good return quietly became unsellable stock.
+ * ── WHY THIS SCREEN STILL EXISTS (WMS-8e, 2026-09-14) ─────────────────
+ * Until 14 Sep 2026 finalising a return put restocked items into an
+ * RTO_HOLD bin and this panel was the step that made them sellable.
+ * Since WMS-8e the hold holds returns received and NOT yet decided, and
+ * "Put back in stock" moves the unit straight to a sellable bin at
+ * finalise — so a return finalised now never appears here. What can
+ * still appear is a unit an earlier finalise left in hold: availability
+ * ignores hold bins (INV-3), so until somebody shelves it, it is on hand
+ * and cannot be sold. The server offers only those, and never a return
+ * that is still waiting for its decision.
  *
  * ── THE SUGGESTION IS THE POINT ──────────────────────────────────────
  * The server proposes a bin — the one the item was picked from, else
@@ -116,7 +115,8 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
             In hold — not yet sellable ({rows.length})
           </h2>
           <span className="text-text-faint text-xs">
-            These came back good. They stay unsellable until they are on a shelf.
+            An earlier version of finalise left these in the returns hold. They stay unsellable
+            until they are on a shelf — returns finalised now go straight back into stock.
           </span>
         </div>
 

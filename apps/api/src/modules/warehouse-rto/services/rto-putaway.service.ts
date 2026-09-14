@@ -1,25 +1,33 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { ActorType, BinType, RtoDisposition } from '@skydrop/db';
+import { ActorType, BinType, RtoDisposition, StockMovementType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockTransferService } from '../../inventory-transfer/services/stock-transfer.service';
 import { NON_PICKABLE_BIN_TYPES } from '../../inventory-shared/bin-policy.service';
 import { effectiveRows, quantitiesByDisposition } from './rto-inspection-rows';
+import { findUsableShelf } from './rto-restock-target.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 /**
- * Shelving a return.
+ * Shelving a return — now only the returns a PRE-WMS-8e finalize left in hold.
  *
- * A returned parcel comes back into RTO_HOLD, which is deliberately not
- * pickable: the goods are on the returns bench, not on a shelf, and
- * until somebody physically walks them somewhere the system should not
- * promise them to the next customer. That promise is what INV-3's
- * bin-type filter withholds.
+ * Until 2026-09-14 finalize put a restocked unit into RTO_HOLD and this
+ * service was the step that made it sellable. Since WMS-8e the hold holds
+ * what came back and has NOT been decided (booked at receive), and "Put
+ * back in stock" moves the unit straight to a sellable bin at finalize, so
+ * a return finalized since needs no putaway. What can still be sitting in
+ * hold waiting for a shelf is a unit an older finalize restocked there —
+ * a `RETURN_RESTOCK` into an RTO_HOLD bin for this shipment — and that is
+ * the only thing offered. Nothing written since produces one, so the list
+ * empties itself as those are shelved.
  *
- * Putaway is the moment the promise becomes safe to make. The person who
- * inspected the item does it — they are already holding it — and the
- * system tells them where the unit lived last, because a returned SKU
- * almost always belongs back with its siblings.
+ * The distinction that must hold: an UNDECIDED unit (booked at receive, not
+ * yet finalized) sharing the same hold bin and batch is never offered. Its
+ * receive booking, net of its finalize movements out, is subtracted from
+ * what the hold row holds before anything is offered.
+ *
+ * The person shelving is told where the unit lived last, because a returned
+ * SKU almost always belongs back with its siblings.
  *
  * Mechanically it is an ordinary same-warehouse bin transfer, so it goes
  * through `StockTransferService` and lands as a paired
@@ -97,6 +105,7 @@ export class RtoPutawayService {
         items: {
           select: {
             id: true,
+            orderItemId: true,
             quantity: true,
             rtoCondition: true,
             rtoDisposition: true,
@@ -126,6 +135,27 @@ export class RtoPutawayService {
     }
     const warehouseId = shipment.rtoReceivedWarehouseId ?? shipment.originWarehouseId;
 
+    // What a pre-WMS-8e finalize restocked INTO a returns hold for this
+    // shipment. A return finalized since writes no RETURN_RESTOCK into a
+    // hold bin (a booked line leaves the hold by a transfer; an unbooked
+    // one restocks straight to a sellable bin), so this is empty for it.
+    const restocks = await this.prisma.client.stockMovement.findMany({
+      where: { shipmentId, type: StockMovementType.RETURN_RESTOCK, qtyChange: { gt: 0 } },
+      select: { orderItemId: true, binId: true, batchId: true, qtyChange: true },
+    });
+    if (restocks.length === 0) return [];
+    const restockBinIds = [
+      ...new Set(restocks.map((r) => r.binId).filter((b): b is string => b !== null)),
+    ];
+    // RTO_HOLD ONLY: the other non-pickable bins hold goods on purpose —
+    // the DAMAGED bin holds units kept aside damaged (WMS-8d), which must
+    // never be offered to a shelf.
+    const holdBins = await this.prisma.client.warehouseBin.findMany({
+      where: { id: { in: restockBinIds }, type: BinType.RTO_HOLD, deletedAt: null },
+      select: { id: true, code: true },
+    });
+    const holdCode = new Map(holdBins.map((b) => [b.id, b.code]));
+
     const out: RtoPutawayPending[] = [];
     for (const item of shipment.items) {
       const restockQty = quantitiesByDisposition(effectiveRows(item))[RtoDisposition.RESTOCK];
@@ -133,22 +163,29 @@ export class RtoPutawayService {
       const variantId = item.orderItem.variantId;
       const sellerId = item.orderItem.order.sellerId;
 
-      // Find the hold row this line's goods are actually sitting in.
-      // RTO_HOLD ONLY: a restock lands there (BIN-3), and the other
-      // non-pickable bins hold goods on purpose — the DAMAGED bin holds
-      // units kept aside damaged (WMS-8d), which must never be offered
-      // to a shelf.
-      const holdLevel = await this.prisma.client.stockLevel.findFirst({
-        where: {
-          sellerId,
-          variantId,
-          warehouseId,
-          qtyOnHand: { gt: 0 },
-          bin: { type: BinType.RTO_HOLD, deletedAt: null },
-        },
-        select: { binId: true, batchId: true, bin: { select: { code: true } } },
-      });
-      if (!holdLevel) continue; // already shelved, or never held
+      const groups = new Map<string, { binId: string; batchId: string; quantity: number }>();
+      for (const r of restocks) {
+        if (r.orderItemId !== item.orderItemId || r.binId === null || r.batchId === null) continue;
+        if (!holdCode.has(r.binId)) continue;
+        const key = `${r.binId}|${r.batchId}`;
+        const g = groups.get(key);
+        if (g !== undefined) g.quantity += r.qtyChange;
+        else groups.set(key, { binId: r.binId, batchId: r.batchId, quantity: r.qtyChange });
+      }
+      let holdLevel: { binId: string; batchId: string; quantity: number } | null = null;
+      for (const g of [...groups.values()].sort((a, b) => b.quantity - a.quantity)) {
+        const level = await this.prisma.client.stockLevel.findFirst({
+          where: { sellerId, variantId, binId: g.binId, batchId: g.batchId },
+          select: { qtyOnHand: true },
+        });
+        const undecided = await this.undecidedInHold(variantId, g.binId, g.batchId);
+        const offerable = Math.min(g.quantity, restockQty, (level?.qtyOnHand ?? 0) - undecided);
+        if (offerable > 0) {
+          holdLevel = { ...g, quantity: offerable };
+          break;
+        }
+      }
+      if (holdLevel === null) continue; // already shelved, or never held
 
       const suggestion = await this.suggestBin(sellerId, variantId, warehouseId, item.pickedBinId);
       out.push({
@@ -156,9 +193,9 @@ export class RtoPutawayService {
         variantId,
         skuCode: item.orderItem.skuCode,
         productName: item.orderItem.productName,
-        quantity: restockQty,
+        quantity: holdLevel.quantity,
         holdBinId: holdLevel.binId,
-        holdBinCode: holdLevel.bin.code,
+        holdBinCode: holdCode.get(holdLevel.binId) ?? holdLevel.binId,
         warehouseId,
         batchId: holdLevel.batchId,
         suggestedBinId: suggestion?.binId ?? null,
@@ -290,6 +327,39 @@ export class RtoPutawayService {
   // ── internal ──────────────────────────────────────────────────────
 
   /**
+   * Units booked into this hold row at receive (WMS-8e) that no finalize
+   * has moved out yet — returns nobody has decided about. Only a receive
+   * booking and a finalize write these types with a shipment id at a hold
+   * bin, so their sum is exactly what is still undecided there.
+   */
+  private async undecidedInHold(
+    variantId: string,
+    binId: string,
+    batchId: string,
+  ): Promise<number> {
+    const rows = await this.prisma.client.stockMovement.findMany({
+      where: {
+        variantId,
+        binId,
+        batchId,
+        shipmentId: { not: null },
+        type: {
+          in: [
+            StockMovementType.RETURN_RECEIVE,
+            StockMovementType.TRANSFER_OUT,
+            StockMovementType.ADJUSTMENT_DECREASE,
+          ],
+        },
+      },
+      select: { qtyChange: true },
+    });
+    return Math.max(
+      0,
+      rows.reduce((sum, r) => sum + r.qtyChange, 0),
+    );
+  }
+
+  /**
    * "Where was this before?"
    *
    * First choice is the bin it was picked from — a returned SKU belongs
@@ -308,18 +378,9 @@ export class RtoPutawayService {
     warehouseId: string,
     pickedBinId: string | null,
   ): Promise<{ binId: string; code: string; reason: 'PICKED_FROM' | 'RECENT_LOCATION' } | null> {
-    if (pickedBinId) {
-      const picked = await this.prisma.client.warehouseBin.findFirst({
-        where: {
-          id: pickedBinId,
-          warehouseId,
-          deletedAt: null,
-          type: { notIn: [...NON_PICKABLE_BIN_TYPES] },
-        },
-        select: { id: true, code: true },
-      });
-      if (picked) return { binId: picked.id, code: picked.code, reason: 'PICKED_FROM' };
-    }
+    // The same shelf test finalize uses for "Put back in stock" (WMS-8e).
+    const picked = await findUsableShelf(this.prisma.client, pickedBinId, warehouseId);
+    if (picked) return { binId: picked.id, code: picked.code, reason: 'PICKED_FROM' };
     const recent = await this.prisma.client.stockLevel.findFirst({
       where: {
         sellerId,

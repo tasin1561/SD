@@ -1,5 +1,6 @@
 import { BatchStatus, BinType } from '@skydrop/db';
 import { RtoRestockTargetService } from '../../src/modules/warehouse-rto/services/rto-restock-target.service';
+import type { BinPolicyService } from '../../src/modules/inventory-shared/bin-policy.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -16,10 +17,24 @@ function makeSut(
     parent?: AnyArgs | null;
     existingChild?: AnyArgs | null;
     warehouseCode?: string;
+    /** BIN-1: bin tracking on the warehouse the goods are in. */
+    tracking?: boolean;
+    /** Real shelves, looked up by id (the picked-from test). */
+    shelves?: Array<{ id: string; warehouseId: string; type: BinType }>;
   } = {},
 ) {
   const binFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
-    const wanted = ((args['where'] ?? {}) as AnyArgs)['type'] as BinType;
+    const where = (args['where'] ?? {}) as AnyArgs;
+    if (where['id'] !== undefined) {
+      const notIn = ((where['type'] as { notIn?: BinType[] } | undefined)?.notIn ??
+        []) as BinType[];
+      const shelf = (opts.shelves ?? []).find(
+        (b) =>
+          b.id === where['id'] && b.warehouseId === where['warehouseId'] && !notIn.includes(b.type),
+      );
+      return shelf === undefined ? null : { id: shelf.id, code: `CODE-${shelf.id}` };
+    }
+    const wanted = where['type'] as BinType;
     const bins = opts.bins ?? [{ id: 'bin-rto', type: BinType.RTO_HOLD }];
     return bins.find((b) => b.type === wanted) ?? null;
   });
@@ -59,8 +74,12 @@ function makeSut(
     },
   };
 
+  const binPolicy = {
+    isTrackingEnabled: jest.fn(async () => opts.tracking ?? false),
+    floorBinId: jest.fn(async (warehouseId: string) => `floor-${warehouseId}`),
+  };
   return {
-    svc: new RtoRestockTargetService(),
+    svc: new RtoRestockTargetService(binPolicy as unknown as BinPolicyService),
     tx: tx as unknown as Parameters<RtoRestockTargetService['resolve']>[0],
     binFindFirst,
     batchCreate,
@@ -130,57 +149,98 @@ describe('RtoRestockTargetService.resolveDamagedHold — Keep aside (damaged), W
   });
 });
 
-describe('RtoRestockTargetService.resolve — same warehouse', () => {
-  it('lands in RTO_HOLD, not the picked bin, keeping the picked batch', async () => {
-    // At finalize the carton is on the returns bench, not back on the
-    // shelf it was picked from — nobody carried it there. Booking it
-    // into the picked bin would claim a putaway that never happened
-    // AND, because that bin is pickable, offer the unit to the next
-    // customer before anyone had physically shelved it.
-    //
-    // The BATCH is untouched: same goods, same expiry, same freight
-    // lineage. Only the location is in question.
-    const sut = makeSut();
-    const t = await sut.svc.resolve(sut.tx, {
-      ...INPUT,
-      receivedWarehouseId: ORIGIN,
+describe('RtoRestockTargetService.holdBinId — where receive books a return (WMS-8e)', () => {
+  it('the warehouse’s RTO_HOLD bin', async () => {
+    const sut = makeSut({
+      bins: [
+        { id: 'bin-storage', type: BinType.STORAGE },
+        { id: 'bin-rto', type: BinType.RTO_HOLD },
+      ],
     });
-    expect(t).toEqual({
-      warehouseId: ORIGIN,
-      binId: 'bin-rto',
-      batchId: PICKED_BATCH,
-      crossWarehouse: false,
-    });
-    // Still no child batch — that is the cross-warehouse concern.
-    expect(sut.batchCreate).not.toHaveBeenCalled();
+    await expect(sut.svc.holdBinId(sut.tx, ORIGIN)).resolves.toBe('bin-rto');
   });
 
-  it('falls back to the picked bin when the warehouse has no hold bin', async () => {
-    // A warehouse that never set up a returns area behaves exactly as
-    // it did before: the goods go back where they came from. Refusing
-    // instead would strand a return over a setup step.
-    const sut = makeSut({ bins: [] });
-    const t = await sut.svc.resolve(sut.tx, {
-      ...INPUT,
-      receivedWarehouseId: ORIGIN,
-    });
-    expect(t).toEqual({
-      warehouseId: ORIGIN,
-      binId: PICKED_BIN,
-      batchId: PICKED_BATCH,
-      crossWarehouse: false,
-    });
+  it('null when there is none — never a storage bin standing in for it', async () => {
+    const sut = makeSut({ bins: [{ id: 'bin-storage', type: BinType.STORAGE }] });
+    await expect(sut.svc.holdBinId(sut.tx, ORIGIN)).resolves.toBeNull();
   });
 });
 
-describe('RtoRestockTargetService.resolve — cross warehouse', () => {
-  it('creates a child batch that INHERITS the lineage that matters', async () => {
+describe('RtoRestockTargetService.sellableDestination — where “Put back in stock” lands (WMS-8e)', () => {
+  const shelves = [{ id: 'shelf-A', warehouseId: ORIGIN, type: BinType.STORAGE }];
+
+  it('bin tracking OFF: the FLOOR bin, even when the picked shelf still exists', async () => {
+    const sut = makeSut({ tracking: false, shelves });
+    await expect(
+      sut.svc.sellableDestination(sut.tx, { warehouseId: ORIGIN, candidateBinIds: ['shelf-A'] }),
+    ).resolves.toEqual({ binId: `floor-${ORIGIN}`, reason: 'FLOOR' });
+  });
+
+  it('bin tracking ON: the shelf the unit was picked from', async () => {
+    const sut = makeSut({ tracking: true, shelves });
+    await expect(
+      sut.svc.sellableDestination(sut.tx, { warehouseId: ORIGIN, candidateBinIds: ['shelf-A'] }),
+    ).resolves.toEqual({ binId: 'shelf-A', reason: 'PICKED_FROM' });
+  });
+
+  it('bin tracking ON: the first usable candidate wins; a missing one is skipped', async () => {
+    const sut = makeSut({ tracking: true, shelves });
+    const d = await sut.svc.sellableDestination(sut.tx, {
+      warehouseId: ORIGIN,
+      candidateBinIds: [null, 'gone', 'shelf-A'],
+    });
+    expect(d.binId).toBe('shelf-A');
+  });
+
+  it('bin tracking ON: a shelf in another warehouse, or a non-pickable bin, falls back to FLOOR', async () => {
+    const sut = makeSut({
+      tracking: true,
+      shelves: [
+        { id: 'shelf-elsewhere', warehouseId: RECEIVED, type: BinType.STORAGE },
+        { id: 'bin-hold', warehouseId: ORIGIN, type: BinType.RTO_HOLD },
+      ],
+    });
+    await expect(
+      sut.svc.sellableDestination(sut.tx, {
+        warehouseId: ORIGIN,
+        candidateBinIds: ['shelf-elsewhere', 'bin-hold'],
+      }),
+    ).resolves.toEqual({ binId: `floor-${ORIGIN}`, reason: 'FLOOR' });
+  });
+});
+
+describe('RtoRestockTargetService.resolve — a line NOT booked at receive (WMS-8e)', () => {
+  it('same warehouse: straight to a sellable bin (FLOOR), keeping the picked batch — never the hold', async () => {
+    // It used to land in RTO_HOLD and wait for a putaway. Since WMS-8e the
+    // hold holds returns nobody has decided about; this one has been
+    // decided, so it goes where it can be sold.
+    const sut = makeSut();
+    const t = await sut.svc.resolve(sut.tx, { ...INPUT, receivedWarehouseId: ORIGIN });
+    expect(t).toEqual({
+      warehouseId: ORIGIN,
+      binId: `floor-${ORIGIN}`,
+      batchId: PICKED_BATCH,
+      crossWarehouse: false,
+    });
+    expect(sut.batchCreate).not.toHaveBeenCalled();
+  });
+
+  it('same warehouse, tracking ON: back to the shelf it was picked from', async () => {
+    const sut = makeSut({
+      tracking: true,
+      shelves: [{ id: PICKED_BIN, warehouseId: ORIGIN, type: BinType.STORAGE }],
+    });
+    const t = await sut.svc.resolve(sut.tx, { ...INPUT, receivedWarehouseId: ORIGIN });
+    expect(t.binId).toBe(PICKED_BIN);
+  });
+
+  it('cross warehouse: FLOOR at the RECEIVING warehouse, in a child batch that inherits the lineage', async () => {
     const sut = makeSut();
     const t = await sut.svc.resolve(sut.tx, INPUT);
 
     expect(t).toEqual({
       warehouseId: RECEIVED,
-      binId: 'bin-rto',
+      binId: `floor-${RECEIVED}`,
       batchId: 'batch-child',
       crossWarehouse: true,
     });
@@ -204,36 +264,20 @@ describe('RtoRestockTargetService.resolve — cross warehouse', () => {
     // Clearing this would orphan the returned unit's landed cost.
     expect(data['receivingNoteId']).toBe('gr-1');
   });
+});
 
-  it('prefers an RTO_HOLD bin', async () => {
-    const sut = makeSut({
-      bins: [
-        { id: 'bin-storage', type: BinType.STORAGE },
-        { id: 'bin-rto', type: BinType.RTO_HOLD },
-      ],
-    });
-    const t = await sut.svc.resolve(sut.tx, INPUT);
-    expect(t.binId).toBe('bin-rto');
-  });
-
-  it('falls back to STORAGE when the warehouse has no RTO bin', async () => {
-    const sut = makeSut({ bins: [{ id: 'bin-storage', type: BinType.STORAGE }] });
-    const t = await sut.svc.resolve(sut.tx, INPUT);
-    expect(t.binId).toBe('bin-storage');
-  });
-
-  it('refuses — with an actionable code — when no bin can hold returns', async () => {
-    const sut = makeSut({ bins: [] });
-    await expect(sut.svc.resolve(sut.tx, INPUT)).rejects.toMatchObject({
-      response: { code: 'RTO_RESTOCK_NO_TARGET_BIN' },
-    });
+describe('RtoRestockTargetService.bookingBatch — the batch a return is booked in', () => {
+  it('same warehouse: the batch the unit left from', async () => {
+    const sut = makeSut();
+    await expect(
+      sut.svc.bookingBatch(sut.tx, { ...INPUT, receivedWarehouseId: ORIGIN }),
+    ).resolves.toBe(PICKED_BATCH);
     expect(sut.batchCreate).not.toHaveBeenCalled();
   });
 
   it('a second return joins the EXISTING child batch instead of colliding', async () => {
     const sut = makeSut({ existingChild: { id: 'batch-child-existing' } });
-    const t = await sut.svc.resolve(sut.tx, INPUT);
-    expect(t.batchId).toBe('batch-child-existing');
+    await expect(sut.svc.bookingBatch(sut.tx, INPUT)).resolves.toBe('batch-child-existing');
     expect(sut.batchCreate).not.toHaveBeenCalled();
     // initialQty accumulates so the return batch stays a meaningful record.
     expect(sut.batchUpdate.mock.calls[0]![0]).toMatchObject({
@@ -244,7 +288,7 @@ describe('RtoRestockTargetService.resolve — cross warehouse', () => {
 
   it('refuses when the original batch has vanished rather than inventing lineage', async () => {
     const sut = makeSut({ parent: null });
-    await expect(sut.svc.resolve(sut.tx, INPUT)).rejects.toMatchObject({
+    await expect(sut.svc.bookingBatch(sut.tx, INPUT)).rejects.toMatchObject({
       response: { code: 'RTO_RESTOCK_PARENT_BATCH_MISSING' },
     });
   });

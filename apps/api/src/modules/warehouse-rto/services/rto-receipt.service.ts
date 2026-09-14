@@ -5,7 +5,10 @@ import {
   ActorType,
   OrderStatus,
   ShipmentStatus,
+  StockMovementType,
   StockUnitStatus,
+  SystemIssueKind,
+  SystemIssueSeverity,
   WarehouseStatus,
   SellerCapability,
 } from '@skydrop/db';
@@ -17,7 +20,54 @@ import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { RtoFeeAccrualService } from '../../seller-wallet-accrual/services/rto-fee-accrual.service';
 import { StockUnitService } from '../../inventory-shared/stock-unit.service';
+import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { RtoRestockTargetService } from './rto-restock-target.service';
+import { resolveRestockSources } from './rto-restock-sources';
+import { loadPackEvidence } from './rto-stock-evidence';
+import type { ReceiveBookingMetadata } from './rto-held-returns';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+
+/**
+ * WMS-8e — what the receive did about the returns hold.
+ *
+ *   BOOKED           units booked into the receiving warehouse's RTO_HOLD
+ *   NOTHING_TO_BOOK  no line has pack evidence (never left our stock
+ *                    through Skydrop — a seeded / imported parcel)
+ *   NO_HOLD_BIN      the warehouse has no RTO_HOLD bin: the receive is
+ *                    recorded, nothing is booked, a system issue says so,
+ *                    and the parcel finalizes straight to a sellable bin
+ *   FAILED           the booking threw; the receive stands, the parcel
+ *                    finalizes the same way as NO_HOLD_BIN
+ *   SKIPPED          not this call's to book: already received, or another
+ *                    call won the receive stamp (it books, or already did)
+ */
+export type HoldBookingOutcome =
+  | 'BOOKED'
+  | 'NOTHING_TO_BOOK'
+  | 'NO_HOLD_BIN'
+  | 'FAILED'
+  | 'SKIPPED';
+
+export interface HoldBookingResult {
+  readonly outcome: HoldBookingOutcome;
+  readonly unitsBooked: number;
+  /** Per booked line, the (hold bin, batch) holding most of its units — what
+   *  the unit ledger follows. */
+  readonly lines: ReadonlyArray<{
+    readonly shipmentItemId: string;
+    readonly quantity: number;
+    readonly binId: string;
+    readonly batchId: string;
+  }>;
+}
+
+const HOLD_SKIPPED: HoldBookingResult = { outcome: 'SKIPPED', unitsBooked: 0, lines: [] };
+
+/** One open issue per warehouse missing a returns hold. */
+function holdBinIssueKey(warehouseId: string): string {
+  return `rto-hold-bin-missing:${warehouseId}`;
+}
 
 export interface ReceiveRtoResult {
   shipmentId: string;
@@ -36,6 +86,8 @@ export interface ReceiveRtoResult {
   crossWarehouse: boolean;
   /** true ⇒ idempotent no-op (already RTO_RECEIVED + stamped). */
   alreadyReceived: boolean;
+  /** WMS-8e — whether the returned units were booked into the returns hold. */
+  holdBooking: HoldBookingResult;
 }
 
 /**
@@ -50,6 +102,19 @@ export interface ReceiveRtoResult {
  * intermediate (rtoReceivedAt set, order still RTO_IN_TRANSIT/INITIATED)
  * that converges on retry — the stamp's guard skips re-application and
  * the transition retries cleanly.
+ *
+ * WMS-8e (2026-09-14): between the stamp and the transition, the call that
+ * WON the stamp books each line's units into the receiving warehouse's
+ * RTO_HOLD bin — `RETURN_RECEIVE` +qty per (bin, batch) the unit LEFT from
+ * (WMS-8c's pack evidence; a cross-warehouse return in its R6b child
+ * batch). Received-but-undecided stock is then on the ledger where it
+ * physically is, and never sellable (BIN-2). The booking NEVER blocks the
+ * receive — the parcel is at the door whatever the ledger says: no hold
+ * bin, nothing that left through us, or a failure all record the receive,
+ * book nothing, and leave the parcel to finalize the pre-WMS-8e way
+ * (straight to a sellable bin), which conserves stock on its own. Only the
+ * stamp winner books, so two concurrent receives cannot book twice; a
+ * prior `RETURN_RECEIVE` for the shipment is checked as well.
  */
 @Injectable()
 export class RtoReceiptService {
@@ -66,6 +131,10 @@ export class RtoReceiptService {
     private readonly orderCharges: OrderChargesService,
     // The M10 shared primitive: the courier's own scan times (TRK-3).
     private readonly trackingEvents: TrackingEventAppendService,
+    // WMS-8e — the receive booking into the returns hold (INV-1).
+    private readonly mutation: StockMutationService,
+    private readonly restockTargets: RtoRestockTargetService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   /**
@@ -167,6 +236,10 @@ export class RtoReceiptService {
         rtoReceivedWarehouseId: settled,
         crossWarehouse: settled !== shipment.originWarehouseId,
         alreadyReceived: true,
+        // Never re-attempted here: a finalize may already be reading the
+        // order as RTO_RECEIVED, and a booking landing under it would
+        // count the same units twice.
+        holdBooking: HOLD_SKIPPED,
       };
     }
     if (order.status !== OrderStatus.RTO_INITIATED && order.status !== OrderStatus.RTO_IN_TRANSIT) {
@@ -201,6 +274,20 @@ export class RtoReceiptService {
       : (shipment.rtoReceivedWarehouseId ?? shipment.originWarehouseId);
     const crossWarehouse = effectiveWarehouseId !== shipment.originWarehouseId;
 
+    // 1b. WMS-8e: book the units into the returns hold — AFTER the stamp
+    //     (the durable "it is here" fact) and BEFORE the transition, so no
+    //     finalize can read the order as RTO_RECEIVED before the booking
+    //     exists. Only the stamp winner books; it never throws.
+    const holdBooking = wonTheStamp
+      ? await this.bookIntoHold({
+          shipmentId: shipment.id,
+          orderId,
+          originWarehouseId: shipment.originWarehouseId,
+          warehouseId: effectiveWarehouseId,
+          staffId,
+        })
+      : HOLD_SKIPPED;
+
     // 2. AUTHORITATIVE transition LAST. expectedFrom uses the order's
     //    actual current status — RTO_INITIATED or RTO_IN_TRANSIT — so
     //    the matrix accepts either path.
@@ -231,6 +318,8 @@ export class RtoReceiptService {
         originWarehouseId: shipment.originWarehouseId,
         rtoReceivedWarehouseId: effectiveWarehouseId,
         crossWarehouse,
+        holdBooking: holdBooking.outcome,
+        unitsBookedIntoHold: holdBooking.unitsBooked,
         ipAddress: ctx?.ipAddress ?? null,
         userAgent: ctx?.userAgent ?? null,
         requestId: ctx?.requestId ?? null,
@@ -281,8 +370,27 @@ export class RtoReceiptService {
     // unit-ledger failure must not un-receive a parcel that is standing
     // in the building. The discrepancy report surfaces stragglers.
     try {
-      await this.prisma.client.$transaction((tx) =>
-        this.units.advanceUnitsForShipment(tx, {
+      await this.prisma.client.$transaction(async (tx) => {
+        // WMS-8e: a line booked into the returns hold has its units IN
+        // STOCK at that hold bin — where the aggregate now says they are,
+        // so the STRICT reconciliation (units IN_STOCK vs qtyOnHand) keeps
+        // agreeing. Guarded on DISPATCHED like everything else here.
+        for (const line of holdBooking.lines) {
+          await this.units.advanceUnitsForShipment(tx, {
+            shipmentId: shipment.id,
+            shipmentItemId: line.shipmentItemId,
+            fromStatus: StockUnitStatus.DISPATCHED,
+            toStatus: StockUnitStatus.IN_STOCK,
+            gate: 'RTO_RECEIVE',
+            actorType: ActorType.STAFF,
+            actorId: staffId,
+            warehouseId: effectiveWarehouseId,
+            binId: line.binId,
+            batchId: line.batchId,
+          });
+        }
+        // Any line not booked waits as RTO_RECEIVED, as before.
+        await this.units.advanceUnitsForShipment(tx, {
           shipmentId: shipment.id,
           fromStatus: StockUnitStatus.DISPATCHED,
           toStatus: StockUnitStatus.RTO_RECEIVED,
@@ -290,8 +398,8 @@ export class RtoReceiptService {
           actorType: ActorType.STAFF,
           actorId: staffId,
           warehouseId: effectiveWarehouseId,
-        }),
-      );
+        });
+      });
     } catch (err) {
       this.logger.warn(
         { shipmentId: shipment.id, awbNumber, err: (err as Error).message },
@@ -308,7 +416,206 @@ export class RtoReceiptService {
       rtoReceivedWarehouseId: effectiveWarehouseId,
       crossWarehouse,
       alreadyReceived: false,
+      holdBooking,
     };
+  }
+
+  /**
+   * WMS-8e — book a received parcel's units into the returns hold.
+   *
+   * Per line, what LEFT our stock for it (PACK_CONFIRM / DISPATCH net of
+   * PACK_REVERSED, read by order — WMS-8c) is booked back as
+   * `RETURN_RECEIVE` +qty into the receiving warehouse's RTO_HOLD bin, one
+   * movement per (bin, batch) it left from, in that batch (same warehouse)
+   * or its R6b child batch (cross-warehouse). A line with less evidence than
+   * its quantity books what left; a line with none — or only a pick hint,
+   * which is not evidence the unit ever left — books nothing.
+   *
+   * Every movement is written in ONE transaction, so the booking exists
+   * whole or not at all. NEVER throws: the receive it belongs to must be
+   * recorded whatever happens here.
+   */
+  private async bookIntoHold(input: {
+    readonly shipmentId: string;
+    readonly orderId: string;
+    readonly originWarehouseId: string;
+    readonly warehouseId: string;
+    readonly staffId: string;
+  }): Promise<HoldBookingResult> {
+    try {
+      // Gate: a booking already on the ledger for this shipment (the
+      // explicit existence query IS the gate — stock_movements has no
+      // dedup key). The stamp win already serialises receives; this also
+      // covers an attempt that booked and then failed at its transition.
+      const prior = await this.prisma.client.stockMovement.findFirst({
+        where: { shipmentId: input.shipmentId, type: StockMovementType.RETURN_RECEIVE },
+        select: { id: true },
+      });
+      if (prior !== null) return HOLD_SKIPPED;
+
+      const items = await this.prisma.client.shipmentItem.findMany({
+        where: { shipmentId: input.shipmentId },
+        select: {
+          id: true,
+          orderItemId: true,
+          quantity: true,
+          pickedBinId: true,
+          pickedBatchId: true,
+          orderItem: { select: { variantId: true, order: { select: { sellerId: true } } } },
+        },
+      });
+      const evidence = await loadPackEvidence(this.prisma.client, input.orderId);
+      const resolution = resolveRestockSources({
+        lines: items.map((i) => ({
+          shipmentItemId: i.id,
+          orderItemId: i.orderItemId,
+          variantId: i.orderItem.variantId,
+          quantity: i.quantity,
+          pickedBinId: i.pickedBinId,
+          pickedBatchId: i.pickedBatchId,
+        })),
+        leftMovements: evidence.leftMovements,
+        reversedMovementIds: evidence.reversedMovementIds,
+        originWarehouseId: input.originWarehouseId,
+        allowPartial: true,
+      });
+      const toBook = resolution.resolved.filter(
+        (r) => r.origin === 'PACK_MOVEMENT' && r.sources.length > 0,
+      );
+      if (toBook.length === 0) return { outcome: 'NOTHING_TO_BOOK', unitsBooked: 0, lines: [] };
+      const unitsToBook = toBook.reduce(
+        (sum, r) => sum + r.sources.reduce((s, src) => s + src.quantity, 0),
+        0,
+      );
+      const byItem = new Map(items.map((i) => [i.id, i]));
+
+      const booked = await this.mutation.runWithRetry(async (tx) => {
+        const holdBinId = await this.restockTargets.holdBinId(tx, input.warehouseId);
+        if (holdBinId === null) return null;
+        const written: Array<{
+          shipmentItemId: string;
+          quantity: number;
+          binId: string;
+          batchId: string;
+        }> = [];
+        for (const r of toBook) {
+          const item = byItem.get(r.shipmentItemId);
+          if (item === undefined) continue;
+          const sellerId = item.orderItem.order.sellerId;
+          const variantId = item.orderItem.variantId;
+          for (const source of r.sources) {
+            const batchId = await this.restockTargets.bookingBatch(tx, {
+              sellerId,
+              variantId,
+              originWarehouseId: source.warehouseId,
+              receivedWarehouseId: input.warehouseId,
+              pickedBatchId: source.batchId,
+              quantity: source.quantity,
+              staffId: input.staffId,
+            });
+            const metadata: ReceiveBookingMetadata = {
+              shipmentItemId: r.shipmentItemId,
+              leftFromWarehouseId: source.warehouseId,
+              leftFromBinId: source.binId,
+              leftFromBatchId: source.batchId,
+            };
+            await this.mutation.apply(tx, {
+              sellerId,
+              variantId,
+              warehouseId: input.warehouseId,
+              binId: holdBinId,
+              batchId,
+              qtyChange: source.quantity, // +qty — the unit is back in the building
+              type: StockMovementType.RETURN_RECEIVE,
+              actorType: ActorType.STAFF,
+              actorId: input.staffId,
+              reasonCode: null,
+              reason: 'RTO received — held in the returns hold until it is decided',
+              orderId: input.orderId,
+              orderItemId: item.orderItemId,
+              shipmentId: input.shipmentId,
+              metadata: { ...metadata },
+            });
+            written.push({
+              shipmentItemId: r.shipmentItemId,
+              quantity: source.quantity,
+              binId: holdBinId,
+              batchId,
+            });
+          }
+        }
+        return written;
+      });
+
+      if (booked === null) {
+        await this.raiseNoHoldBin(input.warehouseId, input.shipmentId, unitsToBook);
+        return { outcome: 'NO_HOLD_BIN', unitsBooked: 0, lines: [] };
+      }
+      await this.issues.resolveByKey(
+        holdBinIssueKey(input.warehouseId),
+        'A return was booked into a returns hold at this warehouse.',
+      );
+
+      // The unit ledger follows the (bin, batch) holding most of a line.
+      const largest = new Map<string, (typeof booked)[number]>();
+      for (const b of booked) {
+        const prior = largest.get(b.shipmentItemId);
+        if (prior === undefined || b.quantity > prior.quantity) largest.set(b.shipmentItemId, b);
+      }
+      return {
+        outcome: 'BOOKED',
+        unitsBooked: booked.reduce((sum, b) => sum + b.quantity, 0),
+        lines: [...largest.values()],
+      };
+    } catch (err) {
+      this.logger.error(
+        { shipmentId: input.shipmentId, err: err instanceof Error ? err.message : String(err) },
+        'RTO receive: booking into the returns hold failed — the parcel IS received; it will finalize straight to a sellable bin',
+      );
+      return { outcome: 'FAILED', unitsBooked: 0, lines: [] };
+    }
+  }
+
+  /**
+   * A warehouse that receives returns with no RTO_HOLD bin. The receive is
+   * recorded and nothing is lost — finalize still restocks straight to a
+   * sellable bin — but the undecided return is off the ledger until then,
+   * which is exactly what the owner asked the hold to show. MEDIUM: a setup
+   * step is missing and stays missing, nothing is wrong with the parcel.
+   * One issue per warehouse, bumped by every parcel, cleared by the first
+   * booking that succeeds there.
+   */
+  private async raiseNoHoldBin(
+    warehouseId: string,
+    shipmentId: string,
+    units: number,
+  ): Promise<void> {
+    try {
+      const warehouse = await this.prisma.client.warehouse.findFirst({
+        where: { id: warehouseId },
+        select: { code: true },
+      });
+      const code = warehouse?.code ?? warehouseId;
+      await this.issues.raise({
+        kind: SystemIssueKind.OTHER,
+        severity: SystemIssueSeverity.MEDIUM,
+        title: `No returns hold bin at ${code}`,
+        detail:
+          `A returned parcel was received at ${code}, which has no returns hold (RTO_HOLD) bin, ` +
+          'so its units could not be booked in while they wait to be inspected — they are off ' +
+          'the stock ledger until the return is finalized. Nothing is lost: finalizing still puts ' +
+          'good units back into sellable stock. Create one (Warehouse → Bins, type "Returns hold — ' +
+          'not pickable"); this clears itself on the next return received there.',
+        source: 'warehouse-rto.receive',
+        dedupeKey: holdBinIssueKey(warehouseId),
+        metadata: { warehouseId, shipmentId, unitsNotBooked: units },
+      });
+    } catch (err) {
+      this.logger.warn(
+        { warehouseId, shipmentId, err: err instanceof Error ? err.message : String(err) },
+        'RTO receive: could not raise the missing-hold-bin issue',
+      );
+    }
   }
 
   /**

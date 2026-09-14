@@ -35,9 +35,11 @@ export function BinNote({ type }: { readonly type: string }): ReactElement | nul
     case 'RTO_HOLD':
       return (
         <p className="text-sm text-[var(--status-rto-fg)]">
-          Returned goods waiting to be shelved. Not sellable until they are put away —{' '}
+          Returns received but not yet decided — waiting to be inspected, or marked &ldquo;decide
+          later&rdquo;. Not sellable. Finalising each return moves it on (back into stock, to the
+          damaged bin, or written off) —{' '}
           <Link href="/warehouse/rto?tab=bench" className="underline">
-            put them away from the RTO station (On the bench)
+            decide them at the RTO station (On the bench)
           </Link>
           .
         </p>

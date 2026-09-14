@@ -9,6 +9,7 @@ import {
 } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { StockAvailabilityService } from '../../src/modules/inventory-shared/stock-availability.service';
+import { FLOOR_BIN_CODE } from '../../src/modules/inventory-warehouse/bin-code';
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
   bootTestApp,
@@ -375,18 +376,8 @@ describe('Warehouse RTO flow (e2e)', () => {
     expect(total).toBe(174.5);
   });
 
-  it('a hold bin gates sellability: restock lands there, availability ignores it, putaway releases it', async () => {
-    // The end-to-end proof of the INV-3 fix.
-    //
-    // Without a hold bin (every other test in this file) a return goes
-    // straight back to the shelf it was picked from and is instantly
-    // sellable. With one, the carton lands on the returns bench — which
-    // is where it physically is — and stays unsellable until a person
-    // walks it somewhere and says where.
-    //
-    // The bug this pins: availability used to count hold stock. The
-    // seller saw 10, an order confirmed against it, and pick allocation
-    // then refused the bin and shortfalled on the floor.
+  /** The warehouse's returns hold (R-01-01 in its own zone). */
+  async function createHoldBin(): Promise<string> {
     const holdZone = await request(h.baseUrl)
       .post(`/admin/warehouses/${warehouseId}/zones`)
       .set(staffAuth)
@@ -397,10 +388,19 @@ describe('Warehouse RTO flow (e2e)', () => {
       .set(staffAuth)
       .send({ zoneId: holdZone.body.id, aisle: 'R', rack: '1', shelf: '1', type: 'RTO_HOLD' })
       .expect(201);
-    const holdBinId = holdBin.body.id as string;
     // Composed server-side from the grid, never taken from the client.
     expect(holdBin.body.code).toBe('R-01-01');
+    return holdBin.body.id as string;
+  }
 
+  it('WMS-8e: receive books the return into the hold — unsellable while undecided, sellable the moment it is finalised', async () => {
+    // The owner: "R-01-01 should hold products that are received but not
+    // decided yet … Put back in stock goes to floor."
+    //
+    // The INV-3 fix is still pinned here: availability used to count hold
+    // stock, so the seller saw 10, an order confirmed against it, and pick
+    // allocation then refused the bin and shortfalled on the floor.
+    const holdBinId = await createHoldBin();
     await receiveStock(10);
     const { shipmentId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
 
@@ -409,6 +409,73 @@ describe('Warehouse RTO flow (e2e)', () => {
 
     expect(await avail()).toBe(8); // dispatched 2 of 10
 
+    const rec = await request(h.baseUrl)
+      .post('/warehouse/rto/receive')
+      .set(staffAuth)
+      .send({ awbNumber })
+      .expect(200);
+    expect(rec.body.holdBooking).toMatchObject({ outcome: 'BOOKED', unitsBooked: 2 });
+
+    // The units are back on the ledger, in the hold where they physically
+    // are — and NOT for sale.
+    const held = await h.prisma.stockLevel.findFirstOrThrow({
+      where: { variantId, binId: holdBinId },
+    });
+    expect(held.qtyOnHand).toBe(2);
+    expect(await avail()).toBe(8);
+
+    for (const itemId of shipmentItemIds) {
+      await request(h.baseUrl)
+        .post(`/warehouse/rto/items/${itemId}/inspect`)
+        .set(staffAuth)
+        .send({ condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK })
+        .expect(200);
+    }
+    // Decided but not finalised: putaway never offers an undecided return.
+    const undecided = await request(h.baseUrl)
+      .get(`/warehouse/rto/shipments/${shipmentId}/putaway`)
+      .set(staffAuth)
+      .expect(200);
+    expect(undecided.body).toEqual([]);
+    expect(await avail()).toBe(8);
+
+    await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+      .set(staffAuth)
+      .expect(200);
+
+    // Out of the hold, onto the FLOOR (bin tracking is off), sellable now.
+    const holdAfter = await h.prisma.stockLevel.findFirst({
+      where: { variantId, binId: holdBinId },
+    });
+    expect(holdAfter?.qtyOnHand ?? 0).toBe(0);
+    const floor = await h.prisma.warehouseBin.findFirstOrThrow({
+      where: { warehouseId, code: FLOOR_BIN_CODE, deletedAt: null },
+    });
+    const floorLevel = await h.prisma.stockLevel.findFirstOrThrow({
+      where: { variantId, binId: floor.id },
+    });
+    expect(floorLevel.qtyOnHand).toBe(2);
+    expect(await avail()).toBe(10);
+
+    // Nothing to shelve, and nothing can be shelved for it.
+    const after = await request(h.baseUrl)
+      .get(`/warehouse/rto/shipments/${shipmentId}/putaway`)
+      .set(staffAuth)
+      .expect(200);
+    expect(after.body).toHaveLength(0);
+    const refused = await request(h.baseUrl)
+      .post(`/warehouse/rto/shipments/${shipmentId}/putaway`)
+      .set(staffAuth)
+      .send({ lines: [{ shipmentItemId: shipmentItemIds[0], destBinId: binId }] })
+      .expect(409);
+    expect(refused.body.code).toBe('RTO_PUTAWAY_NOT_IN_HOLD');
+  });
+
+  it('WMS-8e: with bin tracking ON, a booked restock goes back to the shelf it was picked from', async () => {
+    const holdBinId = await createHoldBin();
+    await receiveStock(10);
+    const { shipmentId, shipmentItemIds, awbNumber } = await makeRtoInitiatedShipment(2);
     await request(h.baseUrl)
       .post('/warehouse/rto/receive')
       .set(staffAuth)
@@ -421,67 +488,37 @@ describe('Warehouse RTO flow (e2e)', () => {
         .send({ condition: RtoItemCondition.GOOD, disposition: RtoDisposition.RESTOCK })
         .expect(200);
     }
-    await request(h.baseUrl)
-      .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
-      .set(staffAuth)
-      .expect(200);
 
-    // The units came back — on hand is whole again...
-    const held = await h.prisma.stockLevel.findFirstOrThrow({
-      where: { variantId, binId: holdBinId },
+    // Tracking is switched on only around the finalize — it is the one
+    // step that reads it here — and put back whatever happens, because the
+    // seeded warehouse outlives this test.
+    const before = await h.prisma.warehouse.findUniqueOrThrow({ where: { id: warehouseId } });
+    await h.prisma.warehouse.update({
+      where: { id: warehouseId },
+      data: { binTrackingEnabled: true },
     });
-    expect(held.qtyOnHand).toBe(2);
-    // ...but they are NOT for sale. This is the assertion that would
-    // have failed before the fix.
-    expect(await avail()).toBe(8);
+    try {
+      await request(h.baseUrl)
+        .post(`/warehouse/rto/shipments/${shipmentId}/finalize`)
+        .set(staffAuth)
+        .expect(200);
+    } finally {
+      await h.prisma.warehouse.update({
+        where: { id: warehouseId },
+        data: { binTrackingEnabled: before.binTrackingEnabled },
+      });
+    }
 
-    // The screen offers the shelf it was picked from.
-    const pending = await request(h.baseUrl)
-      .get(`/warehouse/rto/shipments/${shipmentId}/putaway`)
-      .set(staffAuth)
-      .expect(200);
-    expect(pending.body).toHaveLength(1);
-    expect(pending.body[0]).toMatchObject({
-      quantity: 2,
-      holdBinCode: 'R-01-01',
-      suggestedBinId: binId,
-      suggestionReason: 'PICKED_FROM',
-    });
-
-    // Refuses to shelve into another hold bin — that would move the
-    // carton and leave it just as unsellable.
-    const refused = await request(h.baseUrl)
-      .post(`/warehouse/rto/shipments/${shipmentId}/putaway`)
-      .set(staffAuth)
-      .send({ lines: [{ shipmentItemId: shipmentItemIds[0], destBinId: holdBinId }] })
-      .expect(400);
-    expect(refused.body.code).toBe('DEST_BIN_NOT_PICKABLE');
-
-    await request(h.baseUrl)
-      .post(`/warehouse/rto/shipments/${shipmentId}/putaway`)
-      .set(staffAuth)
-      .send({ lines: [{ shipmentItemId: shipmentItemIds[0], destBinId: binId }] })
-      .expect(200);
-
-    // Shelved: hold is empty, the shelf is whole, and only NOW is the
-    // stock sellable again.
+    const shelf = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId, binId } });
+    expect(shelf.qtyOnHand).toBe(10);
     const holdAfter = await h.prisma.stockLevel.findFirst({
       where: { variantId, binId: holdBinId },
     });
     expect(holdAfter?.qtyOnHand ?? 0).toBe(0);
-    const shelfAfter = await h.prisma.stockLevel.findFirstOrThrow({
-      where: { variantId, binId },
+    const ins = await h.prisma.stockMovement.findMany({
+      where: { shipmentId, type: StockMovementType.TRANSFER_IN },
     });
-    expect(shelfAfter.qtyOnHand).toBe(10);
-    expect(await avail()).toBe(10);
-
-    // Idempotent-ish: nothing is left in hold, so there is nothing to
-    // put away a second time.
-    const after = await request(h.baseUrl)
-      .get(`/warehouse/rto/shipments/${shipmentId}/putaway`)
-      .set(staffAuth)
-      .expect(200);
-    expect(after.body).toHaveLength(0);
+    expect(ins.map((m) => [m.binId, m.qtyChange])).toEqual([[binId, 2]]);
   });
 
   it('RESTOCK happy: RETURN_RESTOCK +qty re-adds — qtyOnHand 8 → 10', async () => {
@@ -526,17 +563,31 @@ describe('Warehouse RTO flow (e2e)', () => {
     const order = await h.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
     expect(order.status).toBe(OrderStatus.RTO_RESTOCKED);
 
-    const afterFinalize = await h.prisma.stockLevel.findFirstOrThrow({
+    // WMS-8e: no returns hold bin here, so receive booked nothing and the
+    // restock went straight to a sellable bin — the FLOOR (bin tracking is
+    // off), not the shelf the stock was received onto.
+    const floor = await h.prisma.warehouseBin.findFirstOrThrow({
+      where: { warehouseId, code: FLOOR_BIN_CODE, deletedAt: null },
+    });
+    const shelfAfter = await h.prisma.stockLevel.findFirstOrThrow({
       where: { variantId, binId },
     });
-    expect(afterFinalize.qtyOnHand).toBe(10); // RETURN_RESTOCK +2 — back to baseline
-    expect(afterFinalize.qtyReserved).toBe(0);
+    expect(shelfAfter.qtyOnHand).toBe(8);
+    const floorAfter = await h.prisma.stockLevel.findFirstOrThrow({
+      where: { variantId, binId: floor.id },
+    });
+    expect(floorAfter.qtyOnHand).toBe(2); // RETURN_RESTOCK +2 — back to baseline 10 in total
+    expect(floorAfter.qtyReserved).toBe(0);
+    expect(
+      await h.app.get(StockAvailabilityService).compute({ sellerId, variantId, warehouseId }),
+    ).toBe(10);
 
     const restockMovements = await h.prisma.stockMovement.findMany({
       where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
     });
     expect(restockMovements).toHaveLength(1);
     expect(restockMovements[0]!.qtyChange).toBe(2);
+    expect(restockMovements[0]!.binId).toBe(floor.id);
 
     // No ACTIVE reservations — fulfilled at dispatch, not re-created.
     const active = await h.prisma.stockReservation.findMany({

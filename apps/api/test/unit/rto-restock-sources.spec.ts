@@ -138,6 +138,20 @@ describe('resolveRestockSources — where a returned unit left from', () => {
     expect(r.shortfalls).toEqual([{ shipmentItemId: 'si-2', quantity: 2, leftQuantity: 1 }]);
   });
 
+  it('allowPartial (the WMS-8e receive booking): less left than the line → books exactly what left', () => {
+    const r = resolveRestockSources({
+      lines: [line({ quantity: 3 })],
+      leftMovements: [packed({ qtyChange: -2 })],
+      reversedMovementIds: new Set(),
+      originWarehouseId: WH,
+      allowPartial: true,
+    });
+    expect(r.shortfalls).toEqual([]);
+    expect(r.resolved[0]?.sources).toEqual([
+      { warehouseId: WH, binId: 'bin-A', batchId: 'bat-A', quantity: 2 },
+    ]);
+  });
+
   it('keeps the warehouse the stock left from (R6b decides same vs cross from it)', () => {
     const r = resolve([line()], [packed({ warehouseId: 'wh-2' })]);
     expect(r.resolved[0]?.sources[0]?.warehouseId).toBe('wh-2');

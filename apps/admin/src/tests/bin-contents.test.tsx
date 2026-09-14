@@ -128,8 +128,9 @@ describe('every bin, with what is in it', () => {
       fetchImpl: buildFetchMock([overviewRoute()]),
     });
     await screen.findByText('Cotton Kurta');
-    expect(screen.getByText(/Not sellable until they are put away/)).toBeTruthy();
-    const putaway = screen.getByRole('link', { name: /put them away from the RTO station/ });
+    // WMS-8e: the returns hold holds what came back and is not decided yet.
+    expect(screen.getByText(/Returns received but not yet decided/)).toBeTruthy();
+    const putaway = screen.getByRole('link', { name: /decide them at the RTO station/ });
     expect(putaway.getAttribute('href')).toBe('/warehouse/rto?tab=bench');
     expect(screen.getByText(/Held back from sale\. Nothing is picked/)).toBeTruthy();
     expect(screen.getByText(/On its way from another warehouse/)).toBeTruthy();

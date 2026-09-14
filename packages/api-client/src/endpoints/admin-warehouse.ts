@@ -271,6 +271,11 @@ export interface ReceiveRtoResult {
   readonly orderStatus: OrderStatus;
   readonly rtoReceivedAt: string;
   readonly alreadyReceived: boolean;
+  /** WMS-8e — whether the units were booked into the returns hold. */
+  readonly holdBooking?: {
+    readonly outcome: 'BOOKED' | 'NOTHING_TO_BOOK' | 'NO_HOLD_BIN' | 'FAILED' | 'SKIPPED';
+    readonly unitsBooked: number;
+  };
 }
 
 /**

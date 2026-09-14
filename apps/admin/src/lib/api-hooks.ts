@@ -1033,12 +1033,13 @@ export function useRtoShipmentDetail(shipmentId: string | null): UseQueryResult<
 }
 
 /**
- * What is still sitting in a hold bin for a finalised return.
+ * What an OLDER finalise left in a hold bin for a return.
  *
- * Restocked goods land in RTO_HOLD, and availability deliberately
- * ignores hold bins (INV-3) — so until these are shelved they exist,
- * are counted as on-hand, and cannot be sold. This list is how an
- * operator finds them.
+ * Before WMS-8e (2026-09-14) restocked goods landed in RTO_HOLD, and
+ * availability deliberately ignores hold bins (INV-3) — so until these
+ * are shelved they exist, are counted as on-hand, and cannot be sold.
+ * A return finalised since goes straight to a sellable bin and never
+ * appears here; nor does one still waiting for its decision.
  */
 export interface RtoPutawayPending {
   readonly shipmentItemId: string;

@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   OrderStatus,
   RtoDisposition,
+  type Prisma,
   type RtoItemCondition,
   StockMovementType,
   StockUnitStatus,
@@ -17,6 +19,7 @@ import { RtoRestockTargetService, type RestockTarget } from './rto-restock-targe
 import {
   resolveRestockSources,
   type ResolvedRestockLine,
+  type RestockShortfall,
   type RestockSourceResolution,
 } from './rto-restock-sources';
 import {
@@ -26,6 +29,14 @@ import {
   summarizeRows,
   type InspectionRow,
 } from './rto-inspection-rows';
+import {
+  heldByLine,
+  heldQuantity,
+  splitHeldAcrossRows,
+  writeOffReasonCode,
+  type HeldSource,
+} from './rto-held-returns';
+import { FINALIZE_MOVEMENT_TYPES, loadHeldReturns, loadPackEvidence } from './rto-stock-evidence';
 import { InboundFreightAmortisationService } from '../../inbound-freight/services/inbound-freight-amortisation.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
@@ -33,7 +44,10 @@ export interface FinalizeRtoRowSummary {
   quantity: number;
   condition: RtoItemCondition;
   disposition: RtoDisposition;
-  /** Every RETURN_RESTOCK this row wrote (RESTOCK / HOLD_DAMAGED only). */
+  /** Every movement that settled this row's units: the TRANSFER_IN that put
+   *  a booked unit on a sellable / DAMAGED bin, the ADJUSTMENT_DECREASE that
+   *  wrote a booked unit off, or (a line not booked at receive) the
+   *  RETURN_RESTOCK that put it back. */
   movementIds: string[];
 }
 
@@ -44,12 +58,11 @@ export interface FinalizeRtoItemSummary {
    *  disposition — see `summarizeRows`. The truth per unit is `rows`. */
   disposition: RtoDisposition;
   quantity: number;
-  /** The first RETURN_RESTOCK for the line (null when it wrote none — a
-   *  write-off-only line, or a retry whose movement gate skipped). */
+  /** The first settling movement for the line (null when it wrote none — a
+   *  write-off-only line that was never booked, or a retry whose movement
+   *  gate skipped). */
   movementId: string | null;
-  /** Every RETURN_RESTOCK written for the line, across its rows — more than
-   *  one when units left from more than one (bin, batch) or the line was
-   *  split. Empty where movementId is null. */
+  /** Every settling movement written for the line, across its rows. */
   movementIds: string[];
   /** WMS-8d — the line by quantity; one row for an unsplit line. */
   rows: FinalizeRtoRowSummary[];
@@ -68,9 +81,9 @@ export interface FinalizeRtoResult {
   writtenOffUnits: number;
   heldDamagedUnits: number;
   items: FinalizeRtoItemSummary[];
-  /** true ⇒ the gate-2 existence query fired — RETURN_RESTOCK rows
-   *  already present for this shipment, so the movement tx was skipped
-   *  on this call (recovery from a prior crash-after-movements). */
+  /** true ⇒ the gate-2 existence query fired — finalize movements already
+   *  present for this shipment, so the movement tx was skipped on this call
+   *  (recovery from a prior crash-after-movements). */
   movementsAlreadyApplied: boolean;
   /** true ⇒ idempotent no-op (order already RTO_RESTOCKED / RTO_DAMAGED). */
   alreadyFinalized: boolean;
@@ -100,61 +113,62 @@ interface PlannedLine {
   readonly qty: Readonly<Record<RtoDisposition, number>>;
   /** Units that come back into our stock: RESTOCK + HOLD_DAMAGED. */
   readonly returningQty: number;
+  /** WMS-8e — what receive booked into the returns hold for this line;
+   *  null when the line was not booked (it finalizes the pre-WMS-8e way). */
+  readonly held: readonly HeldSource[] | null;
 }
 
 /**
- * Module 8 RTO disposition finalize — Module 9 reverted it to a
- * dispatch-time decrement model (the bug-1 fix), and Model C
- * (2026-09-03) later moved WHEN that decrement fires without touching
- * this finalize logic at all — see the conservation history below.
+ * RTO disposition finalize (WMS-8, WMS-8c, WMS-8d, WMS-8e).
  *
  * ── qtyOnHand decrements ONCE, before finalize ever runs ───────────────
- * The `DISPATCH_STOCK` matrix side-effect decrements
- * `stock_levels.qtyOnHand` and `fulfill()`s the phase-2 reservation
- * exactly once per shipment — originally at PENDING_DISPATCH →
- * DISPATCHED (Model A), now at PICKED → PACKED (Model C). This service
- * does not care WHICH edge fired it: every RTO order has necessarily
- * passed through it by the time it reaches RTO_RECEIVED, so by finalize
- * time the unit's qtyOnHand was ALREADY decremented and the reservation
- * is ALREADY FULFILLED (no ACTIVE reservation remains — finalize does
- * NOT touch reservations).
+ * `DISPATCH_STOCK` decrements `stock_levels.qtyOnHand` and `fulfill()`s the
+ * phase-2 reservation exactly once per shipment — at PICKED → PACKED since
+ * Model C (CUR-3). Every RTO order has passed through it by RTO_RECEIVED,
+ * so finalize never touches reservations.
  *
- * ── Per ROW, not per line (WMS-8d, 2026-09-13) ─────────────────────────
- * A returned line is inspected BY QUANTITY (`shipment_item_rto_inspections`
- * — "1 good, 1 damaged"). Each row's disposition applies to that row's
- * units:
- *   - RESTOCK      : RETURN_RESTOCK +qty into the returns hold (BIN-3) —
- *                    sellable once shelved.
- *   - HOLD_DAMAGED : RETURN_RESTOCK +qty into the receiving warehouse's
- *                    DAMAGED bin — on hand, never sellable (BIN-2); no
- *                    freight charged (the unit has not left); refused
- *                    with RTO_NO_DAMAGED_BIN when there is no such bin.
- *   - WRITE_OFF    : NO movement — the unit left and never returned; the
- *                    original decrement stands. Its inbound-freight share
- *                    is charged for the written-off UNITS only.
- *   - INSPECT_LATER: blocks finalize.
- * Both stock-returning dispositions are sourced from where the units LEFT
- * (WMS-8c): the line's returning quantity is resolved once against the
- * order's pack movements — so RTO_RESTOCK_NEVER_LEFT_STOCK /
- * RTO_RESTOCK_EXCEEDS_STOCK_LEFT guard every row of the line together —
- * and the sources are handed to the rows in row order
- * (`splitSourcesAcrossRows`, deterministic). A line inspected before rows
- * existed is one row made of its summary columns (`effectiveRows`).
+ * ── Booked at RECEIVE, moved at FINALIZE (WMS-8e, 2026-09-14) ──────────
+ * `RtoReceiptService.receive` books each line's units into the receiving
+ * warehouse's RTO_HOLD bin (`RETURN_RECEIVE` +qty, per (bin, batch) the unit
+ * left from). For a line so booked, finalize moves the held units OUT, per
+ * inspection row (WMS-8d), as paired TRANSFER_OUT / TRANSFER_IN or an
+ * adjustment, all through `StockMutationService` (INV-1):
+ *   - RESTOCK      : hold → a SELLABLE bin — FLOOR when bin tracking is off;
+ *                    when on, the shelf the unit was picked from if it is in
+ *                    this warehouse and still pickable, else FLOOR.
+ *                    Sellable at once (BIN-2).
+ *   - HOLD_DAMAGED : hold → the DAMAGED bin (`RTO_NO_DAMAGED_BIN` if none).
+ *   - WRITE_OFF    : `ADJUSTMENT_DECREASE` out of the hold, reasonCode from
+ *                    the condition (INV-7): DAMAGED → DAMAGED_IN_WAREHOUSE,
+ *                    MISSING → LOST, GOOD → OTHER. Its inbound-freight share
+ *                    is charged for the written-off units, as before.
+ *   - INSPECT_LATER: blocks finalize; the units stay in the hold.
+ * The units keep the batch they were booked in (a cross-warehouse return's
+ * R6b child batch was made at receive).
+ *
+ * ── A line NOT booked at receive (the pre-WMS-8e path) ─────────────────
+ * Received before WMS-8e, received where there was no hold bin, or a line
+ * that never left our stock. Detected by the ABSENCE of its receive booking,
+ * never by a date. As before, RESTOCK / HOLD_DAMAGED rows are sourced from
+ * where the units LEFT (WMS-8c), refused when they never left
+ * (`RTO_RESTOCK_NEVER_LEFT_STOCK`) or when more come back than left
+ * (`RTO_RESTOCK_EXCEEDS_STOCK_LEFT`), and credited with RETURN_RESTOCK +qty —
+ * RESTOCK now into the same SELLABLE destination as a booked line (it used
+ * to land in the hold and wait for a putaway), HOLD_DAMAGED into the DAMAGED
+ * bin. WRITE_OFF writes nothing: the pack decrement stands.
  *
  * ── SAGA (movements-first, transition-last; visible-vs-silent) ─────────
  *   1. Pre-flight: gate 1 (order already RTO_RESTOCKED / RTO_DAMAGED),
  *      ORDER_NOT_RTO_READY, RTO_NO_ITEMS, RTO_INSPECTION_INCOMPLETE,
  *      RTO_INSPECTION_QUANTITY_MISMATCH, RTO_DISPOSITION_UNDECIDED, and the
  *      source guards above.
- *   2. Gate 2 (movement idempotency): existence query on (shipmentId,
- *      type=RETURN_RESTOCK). Present ⇒ skip the movement tx
+ *   2. Gate 2: an existence query for ANY finalize movement on the shipment
+ *      (RETURN_RESTOCK, TRANSFER_OUT, ADJUSTMENT_DECREASE — nothing else
+ *      writes those with a shipment id). Present ⇒ skip the movement tx
  *      (crash-after-movements recovery). stock_movements has no native
- *      dedup key — the explicit query IS the gate. Every RETURN_RESTOCK of
- *      the finalize — hold and damaged alike — is written in ONE tx, so the
- *      gate sees all of them or none.
- *   3. RETURN_RESTOCK movements: one runWithRetry((tx) => …) — atomic
- *      (INV-1/INV-6). A missing DAMAGED bin throws inside it and rolls the
- *      whole tx back.
+ *      dedup key — the explicit query IS the gate.
+ *   3. Every movement of the finalize — booked and unbooked lines alike — in
+ *      ONE runWithRetry tx (INV-1/INV-6), so gate 2 sees all or none.
  *   4. Authoritative transition RTO_RECEIVED → RTO_RESTOCKED when any unit
  *      was restocked, else RTO_DAMAGED (own tx).
  */
@@ -236,7 +250,7 @@ export class RtoDispositionService {
       });
     }
 
-    const lines: PlannedLine[] = (shipment.items as LoadedLine[]).map((line) => {
+    const inspected: PlannedLine[] = (shipment.items as LoadedLine[]).map((line) => {
       const rows = effectiveRows(line);
       const qty = quantitiesByDisposition(rows);
       return {
@@ -244,6 +258,7 @@ export class RtoDispositionService {
         rows,
         qty,
         returningQty: qty[RtoDisposition.RESTOCK] + qty[RtoDisposition.HOLD_DAMAGED],
+        held: null,
       };
     });
 
@@ -256,8 +271,8 @@ export class RtoDispositionService {
         shipmentId,
         orderId,
         status: order.status,
-        ...this.counts(lines),
-        items: this.buildItemSummaries(lines, null),
+        ...this.counts(inspected),
+        items: this.buildItemSummaries(inspected, null),
         movementsAlreadyApplied: true,
         alreadyFinalized: true,
       };
@@ -268,7 +283,7 @@ export class RtoDispositionService {
         message: `Order is ${order.status}; RTO finalize requires RTO_RECEIVED`,
       });
     }
-    if (lines.length === 0) {
+    if (inspected.length === 0) {
       throw new ConflictException({
         code: 'RTO_NO_ITEMS',
         message: `Shipment ${shipmentId} has no items to finalize`,
@@ -276,7 +291,7 @@ export class RtoDispositionService {
     }
 
     // ── Inspection-completeness check.
-    const uninspected = lines.filter((l) => l.rows.length === 0);
+    const uninspected = inspected.filter((l) => l.rows.length === 0);
     if (uninspected.length > 0) {
       throw new ConflictException({
         code: 'RTO_INSPECTION_INCOMPLETE',
@@ -287,7 +302,7 @@ export class RtoDispositionService {
     // The inspection write enforces this; re-asserted because finalize
     // moves real stock per row, and rows that do not cover the line would
     // restock or charge for units nobody decided about.
-    const mismatched = lines.filter(
+    const mismatched = inspected.filter(
       (l) => l.rows.reduce((sum, r) => sum + r.quantity, 0) !== l.line.quantity,
     );
     if (mismatched.length > 0) {
@@ -304,9 +319,9 @@ export class RtoDispositionService {
     // disposition existing at all. Finalizing around them would force
     // the same guess the operator declined to make at the bench — and
     // WMS-8 is conservation-critical, so a guess here moves real stock.
-    // The goods are safe meanwhile: they sit in RTO_HOLD, which BIN-2
-    // keeps out of every availability sum, so nothing undecided sells.
-    const undecided = lines.filter((l) => l.qty[RtoDisposition.INSPECT_LATER] > 0);
+    // The goods are safe meanwhile: they sit in RTO_HOLD (booked at
+    // receive, WMS-8e), which BIN-2 keeps out of every availability sum.
+    const undecided = inspected.filter((l) => l.qty[RtoDisposition.INSPECT_LATER] > 0);
     if (undecided.length > 0) {
       throw new ConflictException({
         code: 'RTO_DISPOSITION_UNDECIDED',
@@ -317,27 +332,38 @@ export class RtoDispositionService {
       });
     }
 
-    const returningLines = lines.filter((l) => l.returningQty > 0);
+    // ── WMS-8e: which lines receive BOOKED into the returns hold. Detected
+    // from the ledger (the line's RETURN_RECEIVE), never from a date.
+    const heldBooked = heldByLine(await loadHeldReturns(this.prisma.client, shipmentId));
+    const lines: PlannedLine[] = inspected.map((l) => {
+      const held = heldBooked.get(l.line.id);
+      return { ...l, held: held !== undefined && heldQuantity(held) > 0 ? held : null };
+    });
+    const bookedLines = lines.filter((l) => l.held !== null);
+    const legacyReturning = lines.filter((l) => l.held === null && l.returningQty > 0);
     const writeOffLines = lines.filter((l) => l.qty[RtoDisposition.WRITE_OFF] > 0);
+    const skuOf = (id: string): string =>
+      lines.find((l) => l.line.id === id)?.line.orderItem.skuCode ?? id;
 
-    // ── WHERE each returning unit comes back from (WMS-8c).
-    //
-    // The RETURN_RESTOCK movement targets a concrete (bin, batch), and the
-    // authority on that is where the unit LEFT: the order's PACK_CONFIRM
-    // movements (DISPATCH for pre-Model-C orders), net of PACK_REVERSED,
-    // queried by ORDER — a supersede leaves them on the original shipment
-    // (CUR-3). Resolved for the line's WHOLE returning quantity (RESTOCK +
-    // HOLD_DAMAGED rows together), so the never-left / exceeds guards cover
-    // every row of the line at once; the rows then share the sources.
+    // A booked line can put back no more than was booked (= what left).
+    const shortfalls: RestockShortfall[] = bookedLines
+      .filter((l) => l.returningQty > heldQuantity(l.held ?? []))
+      .map((l) => ({
+        shipmentItemId: l.line.id,
+        quantity: l.returningQty,
+        leftQuantity: heldQuantity(l.held ?? []),
+      }));
+
+    // ── WHERE each returning unit of an UNBOOKED line comes back from
+    // (WMS-8c): the order's pack movements, net of PACK_REVERSED, read by
+    // ORDER (CUR-3), resolved for the line's WHOLE returning quantity.
     const sourcesByItem = new Map<string, ResolvedRestockLine>();
-    if (returningLines.length > 0) {
+    if (legacyReturning.length > 0) {
       const resolution = await this.resolveSources(
         orderId,
         shipment.originWarehouseId,
-        returningLines,
+        legacyReturning,
       );
-      const skuOf = (id: string): string =>
-        returningLines.find((l) => l.line.id === id)?.line.orderItem.skuCode ?? id;
       if (resolution.neverLeft.length > 0) {
         const skus = resolution.neverLeft.map(skuOf).join(', ');
         throw new ConflictException({
@@ -349,22 +375,21 @@ export class RtoDispositionService {
           cause: resolution.neverLeft,
         });
       }
-      if (resolution.shortfalls.length > 0) {
-        const detail = resolution.shortfalls
-          .map(
-            (s) => `${skuOf(s.shipmentItemId)}: ${s.quantity} coming back, ${s.leftQuantity} left`,
-          )
-          .join('; ');
-        throw new ConflictException({
-          code: 'RTO_RESTOCK_EXCEEDS_STOCK_LEFT',
-          message:
-            `More units are marked to come back into stock than left our stock for this order (${detail}). ` +
-            'Putting back the difference would add stock that was never taken out — ' +
-            'check the inspection, and write off what did not leave through us.',
-          cause: resolution.shortfalls.map((s) => s.shipmentItemId),
-        });
-      }
+      shortfalls.push(...resolution.shortfalls);
       for (const r of resolution.resolved) sourcesByItem.set(r.shipmentItemId, r);
+    }
+    if (shortfalls.length > 0) {
+      const detail = shortfalls
+        .map((s) => `${skuOf(s.shipmentItemId)}: ${s.quantity} coming back, ${s.leftQuantity} left`)
+        .join('; ');
+      throw new ConflictException({
+        code: 'RTO_RESTOCK_EXCEEDS_STOCK_LEFT',
+        message:
+          `More units are marked to come back into stock than left our stock for this order (${detail}). ` +
+          'Putting back the difference would add stock that was never taken out — ' +
+          'check the inspection, and write off what did not leave through us.',
+        cause: shortfalls.map((s) => s.shipmentItemId),
+      });
     }
     const hintDisagreements = [...sourcesByItem.values()]
       .filter((r) => r.hintDisagrees)
@@ -379,29 +404,27 @@ export class RtoDispositionService {
       );
     }
 
-    // ── R6/R6b: CROSS-WAREHOUSE RESTOCK.
-    //
-    // When the parcel physically came back somewhere other than where it
-    // shipped from, crediting the origin bin would book a unit into a
-    // warehouse that does not hold it. `RtoRestockTargetService` resolves
-    // a real target at the RECEIVING warehouse instead — a lineage-
-    // preserving child batch plus a returns bin (RESTOCK) or its DAMAGED
-    // bin (HOLD_DAMAGED) — and refuses when the bin it needs is missing.
-    // WRITE_OFF never reaches this: it emits no movement.
+    // ── R6/R6b: the goods are in the RECEIVING warehouse. A booked line was
+    // booked there; an unbooked one is credited there by
+    // `RtoRestockTargetService` (a lineage child batch cross-warehouse).
     const restockWarehouseId = shipment.rtoReceivedWarehouseId ?? shipment.originWarehouseId;
     const crossWarehouseRestock =
-      returningLines.length > 0 && restockWarehouseId !== shipment.originWarehouseId;
+      (legacyReturning.length > 0 || bookedLines.length > 0) &&
+      restockWarehouseId !== shipment.originWarehouseId;
 
     // Where each (line, row) actually landed, so the unit ledger can follow
     // the aggregate rather than assuming the original bin/batch.
     const targetsByRow = new Map<string, RestockTarget>();
+    // Held units no row claimed (a booking larger than its line — should
+    // never happen; left in hold and reported rather than guessed at).
+    const unclaimedHeld: Array<{ shipmentItemId: string; quantity: number }> = [];
 
-    // ── GATE 2: movement-level idempotency. RETURN_RESTOCK is the marker.
+    // ── GATE 2: movement-level idempotency over every finalize type.
     let movementsAlreadyApplied = false;
     let movementIdsByRow: Map<string, string[]> | null = null;
-    if (returningLines.length > 0) {
+    if (legacyReturning.length > 0 || bookedLines.length > 0) {
       const existing = await this.prisma.client.stockMovement.findFirst({
-        where: { shipmentId, type: StockMovementType.RETURN_RESTOCK },
+        where: { shipmentId, type: { in: [...FINALIZE_MOVEMENT_TYPES] } },
         select: { id: true },
       });
       movementsAlreadyApplied = existing !== null;
@@ -410,79 +433,37 @@ export class RtoDispositionService {
         movementIdsByRow = await this.mutation.runWithRetry(async (tx) => {
           // Cleared per attempt: runWithRetry may re-run the whole tx.
           targetsByRow.clear();
+          unclaimedHeld.length = 0;
           const ids = new Map<string, string[]>();
-          for (const planned of returningLines) {
-            const { line } = planned;
-            const resolved = sourcesByItem.get(line.id);
-            if (resolved === undefined) {
-              // Pre-flighted: every returning line resolved or we refused.
-              throw new ConflictException({
-                code: 'RTO_RESTOCK_NEVER_LEFT_STOCK',
-                message: `item ${line.id} has no restock source`,
-              });
-            }
-            // The line's sources, handed to its rows in row order. Largest
-            // source first, so an unsplit line restocks as it always did.
-            for (const { rowIndex, sources } of splitSourcesAcrossRows(
-              planned.rows,
-              resolved.sources,
-            )) {
-              const row = planned.rows[rowIndex];
-              if (row === undefined) continue;
-              const key = rowKey(line.id, rowIndex);
-              const rowIds: string[] = [];
-              for (const source of sources) {
-                const targetInput = {
-                  sellerId: line.orderItem.order.sellerId,
-                  variantId: line.orderItem.variantId,
-                  originWarehouseId: source.warehouseId,
-                  receivedWarehouseId: restockWarehouseId,
-                  pickedBinId: source.binId,
-                  pickedBatchId: source.batchId,
-                  quantity: source.quantity,
-                  staffId,
-                };
-                const target =
-                  row.disposition === RtoDisposition.HOLD_DAMAGED
-                    ? await this.restockTargets.resolveDamagedHold(tx, targetInput)
-                    : await this.restockTargets.resolve(tx, targetInput);
-                // The unit ledger follows the LARGEST source (first).
-                if (!targetsByRow.has(key)) targetsByRow.set(key, target);
-                const result = await this.mutation.apply(tx, {
-                  sellerId: line.orderItem.order.sellerId,
-                  variantId: line.orderItem.variantId,
-                  warehouseId: target.warehouseId,
-                  binId: target.binId,
-                  batchId: target.batchId,
-                  qtyChange: source.quantity, // +qty — the unit returned
-                  type: StockMovementType.RETURN_RESTOCK,
-                  actorType: ActorType.STAFF,
-                  actorId: staffId,
-                  // RETURN_RESTOCK self-describes (INV-7 — no reasonCode req).
-                  reasonCode: null,
-                  reason:
-                    row.disposition === RtoDisposition.HOLD_DAMAGED
-                      ? `RTO kept aside (damaged): rtoCondition=${row.condition}`
-                      : `RTO restock: rtoCondition=${row.condition}`,
-                  orderId,
-                  orderItemId: line.orderItemId,
-                  shipmentId,
-                  metadata: {
-                    restockSource: resolved.origin,
-                    disposition: row.disposition,
-                    inspectionRow: rowIndex + 1,
-                    leftFromWarehouseId: source.warehouseId,
-                    leftFromBinId: source.binId,
-                    leftFromBatchId: source.batchId,
-                  },
-                });
-                rowIds.push(result.movementId);
-              }
-              ids.set(key, rowIds);
-            }
+          for (const planned of legacyReturning) {
+            await this.restockUnbookedLine(tx, planned, sourcesByItem.get(planned.line.id), {
+              orderId,
+              shipmentId,
+              staffId,
+              restockWarehouseId,
+              ids,
+              targetsByRow,
+            });
+          }
+          for (const planned of bookedLines) {
+            await this.moveBookedLine(tx, planned, {
+              orderId,
+              shipmentId,
+              staffId,
+              originWarehouseId: shipment.originWarehouseId,
+              ids,
+              targetsByRow,
+              unclaimedHeld,
+            });
           }
           return ids;
         });
+        if (unclaimedHeld.length > 0) {
+          this.logger.warn(
+            { shipmentId, orderId, unclaimedHeld },
+            'RTO finalize: held units no inspection row claimed are left in the returns hold',
+          );
+        }
       }
     }
     const itemSummaries = this.buildItemSummaries(lines, movementIdsByRow);
@@ -509,10 +490,10 @@ export class RtoDispositionService {
     // R4 — settle the serialized units, mirroring the aggregate decision
     // that just committed. Only a line with ONE row can carry serials
     // here: the inspection refuses to split a line that has units
-    // (RTO_SPLIT_SERIALIZED_LINE), because which serial went which way
-    // is not recorded on a row. Best-effort + guarded on fromStatus: the
-    // aggregate movements and the order transition are the durable facts;
-    // a unit-ledger failure must not undo a finalize.
+    // (RTO_SPLIT_SERIALIZED_LINE). A line booked at receive has its units
+    // IN_STOCK at the hold bin (WMS-8e); one that was not is RTO_RECEIVED.
+    // Best-effort + guarded on fromStatus: the aggregate movements and the
+    // order transition are the durable facts.
     for (const planned of lines) {
       const row = planned.rows.length === 1 ? planned.rows[0] : undefined;
       if (row === undefined) continue;
@@ -524,6 +505,8 @@ export class RtoDispositionService {
         {
           restockWarehouseId,
           staffId,
+          fromStatus:
+            planned.held !== null ? StockUnitStatus.IN_STOCK : StockUnitStatus.RTO_RECEIVED,
         },
       );
     }
@@ -532,8 +515,9 @@ export class RtoDispositionService {
     // share of the inbound freight — that money was genuinely spent
     // carrying the goods into India. Charged for the written-off UNITS
     // only (WMS-8d): a unit restocked or kept aside has not left, so it
-    // owes nothing yet. Best-effort + gated on one INBOUND_FREIGHT entry
-    // per order, so a re-run cannot double-charge.
+    // owes nothing yet. Unchanged by WMS-8e (the ADJUSTMENT_DECREASE out of
+    // the hold moves stock, not money). Best-effort + gated on one
+    // INBOUND_FREIGHT entry per order, so a re-run cannot double-charge.
     const writeOffSellerId = writeOffLines[0]?.line.orderItem.order.sellerId;
     if (writeOffSellerId !== undefined) {
       try {
@@ -574,12 +558,17 @@ export class RtoDispositionService {
         // WMS-8d: lines whose units went more than one way.
         splitLines: lines.filter((l) => l.rows.length > 1).map((l) => l.line.id),
         movementsAlreadyApplied,
+        // WMS-8e: which lines moved out of the returns hold, which were
+        // finalized the pre-WMS-8e way, and any held stock left behind.
+        bookedAtReceiveLines: bookedLines.map((l) => l.line.id),
+        unbookedReturningLines: legacyReturning.map((l) => l.line.id),
+        unclaimedHeld,
         // R6b: a return restocked at a warehouse other than origin is
         // worth seeing in the audit trail — the goods moved buildings.
         crossWarehouseRestock,
         restockWarehouseId,
         originWarehouseId: shipment.originWarehouseId,
-        // WMS-8c: where each returning line was taken from.
+        // WMS-8c: where each unbooked returning line was taken from.
         restockedFromHintOnly,
         hintDisagreements,
         ipAddress: ctx?.ipAddress ?? null,
@@ -603,18 +592,279 @@ export class RtoDispositionService {
 
   // ── internal ──────────────────────────────────────────────────────
 
+  /**
+   * An UNBOOKED line's returning rows: RETURN_RESTOCK +qty per source, into
+   * the sellable destination (RESTOCK) or the DAMAGED bin (HOLD_DAMAGED) of
+   * the receiving warehouse. The line's sources are handed to its rows in
+   * row order, largest source first (WMS-8d).
+   */
+  private async restockUnbookedLine(
+    tx: Prisma.TransactionClient,
+    planned: PlannedLine,
+    resolved: ResolvedRestockLine | undefined,
+    ctx: {
+      readonly orderId: string;
+      readonly shipmentId: string;
+      readonly staffId: string;
+      readonly restockWarehouseId: string;
+      readonly ids: Map<string, string[]>;
+      readonly targetsByRow: Map<string, RestockTarget>;
+    },
+  ): Promise<void> {
+    const { line } = planned;
+    if (resolved === undefined) {
+      // Pre-flighted: every returning line resolved or we refused.
+      throw new ConflictException({
+        code: 'RTO_RESTOCK_NEVER_LEFT_STOCK',
+        message: `item ${line.id} has no restock source`,
+      });
+    }
+    for (const { rowIndex, sources } of splitSourcesAcrossRows(planned.rows, resolved.sources)) {
+      const row = planned.rows[rowIndex];
+      if (row === undefined) continue;
+      const key = rowKey(line.id, rowIndex);
+      const rowIds: string[] = [];
+      for (const source of sources) {
+        const targetInput = {
+          sellerId: line.orderItem.order.sellerId,
+          variantId: line.orderItem.variantId,
+          originWarehouseId: source.warehouseId,
+          receivedWarehouseId: ctx.restockWarehouseId,
+          pickedBinId: source.binId,
+          pickedBatchId: source.batchId,
+          quantity: source.quantity,
+          staffId: ctx.staffId,
+        };
+        const target =
+          row.disposition === RtoDisposition.HOLD_DAMAGED
+            ? await this.restockTargets.resolveDamagedHold(tx, targetInput)
+            : await this.restockTargets.resolve(tx, targetInput);
+        // The unit ledger follows the LARGEST source (first).
+        if (!ctx.targetsByRow.has(key)) ctx.targetsByRow.set(key, target);
+        const result = await this.mutation.apply(tx, {
+          sellerId: line.orderItem.order.sellerId,
+          variantId: line.orderItem.variantId,
+          warehouseId: target.warehouseId,
+          binId: target.binId,
+          batchId: target.batchId,
+          qtyChange: source.quantity, // +qty — the unit returned
+          type: StockMovementType.RETURN_RESTOCK,
+          actorType: ActorType.STAFF,
+          actorId: ctx.staffId,
+          // RETURN_RESTOCK self-describes (INV-7 — no reasonCode req).
+          reasonCode: null,
+          reason:
+            row.disposition === RtoDisposition.HOLD_DAMAGED
+              ? `RTO kept aside (damaged): rtoCondition=${row.condition}`
+              : `RTO restock: rtoCondition=${row.condition}`,
+          orderId: ctx.orderId,
+          orderItemId: line.orderItemId,
+          shipmentId: ctx.shipmentId,
+          metadata: {
+            restockSource: resolved.origin,
+            disposition: row.disposition,
+            inspectionRow: rowIndex + 1,
+            leftFromWarehouseId: source.warehouseId,
+            leftFromBinId: source.binId,
+            leftFromBatchId: source.batchId,
+          },
+        });
+        rowIds.push(result.movementId);
+      }
+      ctx.ids.set(key, rowIds);
+    }
+  }
+
+  /**
+   * WMS-8e — a line BOOKED into the returns hold at receive: move every held
+   * unit out of the hold, per inspection row (`splitHeldAcrossRows` —
+   * returning rows first and in full, write-off rows from what is left).
+   */
+  private async moveBookedLine(
+    tx: Prisma.TransactionClient,
+    planned: PlannedLine,
+    ctx: {
+      readonly orderId: string;
+      readonly shipmentId: string;
+      readonly staffId: string;
+      readonly originWarehouseId: string;
+      readonly ids: Map<string, string[]>;
+      readonly targetsByRow: Map<string, RestockTarget>;
+      readonly unclaimedHeld: Array<{ shipmentItemId: string; quantity: number }>;
+    },
+  ): Promise<void> {
+    const { line } = planned;
+    const { allocations, leftover } = splitHeldAcrossRows(planned.rows, planned.held ?? []);
+    if (leftover > 0) ctx.unclaimedHeld.push({ shipmentItemId: line.id, quantity: leftover });
+    const sellerId = line.orderItem.order.sellerId;
+    const variantId = line.orderItem.variantId;
+
+    for (const { rowIndex, sources } of allocations) {
+      const row = planned.rows[rowIndex];
+      if (row === undefined) continue;
+      const key = rowKey(line.id, rowIndex);
+      const rowIds: string[] = [];
+      for (const source of sources) {
+        const common = {
+          sellerId,
+          variantId,
+          warehouseId: source.warehouseId,
+          batchId: source.batchId,
+          quantity: source.quantity,
+          staffId: ctx.staffId,
+          orderId: ctx.orderId,
+          orderItemId: line.orderItemId,
+          shipmentId: ctx.shipmentId,
+          holdBinId: source.binId,
+        };
+        const meta = {
+          disposition: row.disposition,
+          inspectionRow: rowIndex + 1,
+          bookedAtReceive: true,
+        };
+        const land = (binId: string): void => {
+          if (!ctx.targetsByRow.has(key)) {
+            ctx.targetsByRow.set(key, {
+              warehouseId: source.warehouseId,
+              binId,
+              batchId: source.batchId,
+              crossWarehouse: source.warehouseId !== ctx.originWarehouseId,
+            });
+          }
+        };
+        switch (row.disposition) {
+          case RtoDisposition.RESTOCK: {
+            const destination = await this.restockTargets.sellableDestination(tx, {
+              warehouseId: source.warehouseId,
+              candidateBinIds: [...source.leftFromBinIds, line.pickedBinId],
+            });
+            rowIds.push(
+              await this.moveOutOfHold(tx, {
+                ...common,
+                toBinId: destination.binId,
+                reason: `RTO restock: rtoCondition=${row.condition}`,
+                metadata: { ...meta, destination: destination.reason },
+              }),
+            );
+            land(destination.binId);
+            break;
+          }
+          case RtoDisposition.HOLD_DAMAGED: {
+            const damagedBinId = await this.restockTargets.damagedBinId(tx, source.warehouseId);
+            rowIds.push(
+              await this.moveOutOfHold(tx, {
+                ...common,
+                toBinId: damagedBinId,
+                reason: `RTO kept aside (damaged): rtoCondition=${row.condition}`,
+                metadata: meta,
+              }),
+            );
+            land(damagedBinId);
+            break;
+          }
+          case RtoDisposition.WRITE_OFF: {
+            const result = await this.mutation.apply(tx, {
+              sellerId,
+              variantId,
+              warehouseId: source.warehouseId,
+              binId: source.binId,
+              batchId: source.batchId,
+              qtyChange: -source.quantity, // −qty — leaves the returns hold for good
+              type: StockMovementType.ADJUSTMENT_DECREASE,
+              actorType: ActorType.STAFF,
+              actorId: ctx.staffId,
+              // INV-7: an adjustment carries its reason.
+              reasonCode: writeOffReasonCode(row.condition),
+              reason: `RTO write-off: rtoCondition=${row.condition}`,
+              orderId: ctx.orderId,
+              orderItemId: line.orderItemId,
+              shipmentId: ctx.shipmentId,
+              metadata: meta,
+            });
+            rowIds.push(result.movementId);
+            break;
+          }
+          case RtoDisposition.INSPECT_LATER:
+            // Refused before any movement (RTO_DISPOSITION_UNDECIDED).
+            throw new ConflictException({
+              code: 'RTO_DISPOSITION_UNDECIDED',
+              message: `item ${line.id} is still marked for later inspection`,
+            });
+        }
+      }
+      ctx.ids.set(key, rowIds);
+    }
+  }
+
+  /**
+   * A paired TRANSFER_OUT (from the returns hold) / TRANSFER_IN (to the
+   * destination) through the sole stock writer (INV-1), same batch — the
+   * move changes WHERE the goods are, never what they are. Returns the
+   * TRANSFER_IN id, the movement that says where the unit landed.
+   */
+  private async moveOutOfHold(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly sellerId: string;
+      readonly variantId: string;
+      readonly warehouseId: string;
+      readonly holdBinId: string;
+      readonly toBinId: string;
+      readonly batchId: string;
+      readonly quantity: number;
+      readonly staffId: string;
+      readonly orderId: string;
+      readonly orderItemId: string;
+      readonly shipmentId: string;
+      readonly reason: string;
+      readonly metadata: Prisma.InputJsonValue;
+    },
+  ): Promise<string> {
+    const transferGroupId = randomUUID();
+    const common = {
+      sellerId: input.sellerId,
+      variantId: input.variantId,
+      warehouseId: input.warehouseId,
+      batchId: input.batchId,
+      actorType: ActorType.STAFF,
+      actorId: input.staffId,
+      reasonCode: null,
+      reason: input.reason,
+      orderId: input.orderId,
+      orderItemId: input.orderItemId,
+      shipmentId: input.shipmentId,
+      transferGroupId,
+      fromBinId: input.holdBinId,
+      toBinId: input.toBinId,
+      metadata: input.metadata,
+    };
+    await this.mutation.apply(tx, {
+      ...common,
+      binId: input.holdBinId,
+      qtyChange: -input.quantity,
+      type: StockMovementType.TRANSFER_OUT,
+    });
+    const landed = await this.mutation.apply(tx, {
+      ...common,
+      binId: input.toBinId,
+      qtyChange: input.quantity,
+      type: StockMovementType.TRANSFER_IN,
+    });
+    return landed.movementId;
+  }
+
   /** Move one unsplit line's serialized units to match its disposition. */
   private async settleUnits(
     shipmentId: string,
     line: LoadedLine,
     row: InspectionRow,
     target: RestockTarget | undefined,
-    ctx: { restockWarehouseId: string; staffId: string },
+    ctx: { restockWarehouseId: string; staffId: string; fromStatus: StockUnitStatus },
   ): Promise<void> {
     const common = {
       shipmentId,
       shipmentItemId: line.id,
-      fromStatus: StockUnitStatus.RTO_RECEIVED,
+      fromStatus: ctx.fromStatus,
       actorType: ActorType.STAFF,
       actorId: ctx.staffId,
     };
@@ -622,7 +872,7 @@ export class RtoDispositionService {
     switch (row.disposition) {
       case RtoDisposition.RESTOCK:
       case RtoDisposition.HOLD_DAMAGED:
-        // Back IN_STOCK at the bin the aggregate was credited to — for a
+        // IN_STOCK at the bin the aggregate was credited to — for a
         // kept-aside unit that is the DAMAGED bin, whose type is what keeps
         // it unsellable (BIN-2); the unit's status says where it is.
         input = {
@@ -656,42 +906,18 @@ export class RtoDispositionService {
   }
 
   /**
-   * The order's pack evidence, read by ORDER (CUR-3), then matched to the
-   * lines by the pure resolver — each line asking for its RETURNING
-   * quantity. Read-only and outside any transaction: the ledger is
-   * append-only, so a retry computes the same answer.
+   * The order's pack evidence (read by ORDER, CUR-3), matched to the
+   * unbooked lines by the pure resolver — each line asking for its
+   * RETURNING quantity.
    */
   private async resolveSources(
     orderId: string,
     originWarehouseId: string,
     returningLines: readonly PlannedLine[],
   ): Promise<RestockSourceResolution> {
-    const leftMovements = await this.prisma.client.stockMovement.findMany({
-      where: {
-        orderId,
-        type: { in: [StockMovementType.PACK_CONFIRM, StockMovementType.DISPATCH] },
-      },
-      select: {
-        id: true,
-        warehouseId: true,
-        binId: true,
-        batchId: true,
-        qtyChange: true,
-        orderItemId: true,
-        variantId: true,
-      },
-    });
-    const reversed =
-      leftMovements.length === 0
-        ? []
-        : await this.prisma.client.stockMovement.findMany({
-            where: { orderId, type: StockMovementType.PACK_REVERSED },
-            select: { metadata: true },
-          });
-    const reversedMovementIds = new Set(
-      reversed
-        .map((m) => (m.metadata as { reversesMovementId?: string } | null)?.reversesMovementId)
-        .filter((id): id is string => typeof id === 'string'),
+    const { leftMovements, reversedMovementIds } = await loadPackEvidence(
+      this.prisma.client,
+      orderId,
     );
     return resolveRestockSources({
       lines: returningLines.map(({ line, returningQty }) => ({

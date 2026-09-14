@@ -89,19 +89,19 @@ export const DISPOSITION_OPTIONS = [
     value: 'RESTOCK',
     label: 'Put back in stock',
     effect:
-      'Goes to the returns hold at finalise, and becomes sellable once it is shelved from “On the bench”.',
+      'Sellable immediately: at finalise it moves out of the returns hold onto the floor bin — or, when this warehouse tracks bins, back to the shelf it was picked from.',
   },
   {
     value: 'HOLD_DAMAGED',
     label: 'Keep aside (damaged)',
     effect:
-      'Goes into this warehouse’s Damaged bin at finalise — kept for the seller, never sellable, and no inbound freight is charged. Finalise refuses if the warehouse has no Damaged bin. To send it back or scrap it later: Inventory → Adjustments, a decrease from the Damaged bin with reason “returned to seller” or “damaged in warehouse”.',
+      'Moves from the returns hold into this warehouse’s Damaged bin at finalise — kept for the seller, never sellable, and no inbound freight is charged. Finalise refuses if the warehouse has no Damaged bin. To send it back or scrap it later: Inventory → Adjustments, a decrease from the Damaged bin with reason “returned to seller” or “damaged in warehouse”.',
   },
   {
     value: 'WRITE_OFF',
     label: 'Write off (not sellable)',
     effect:
-      'Nothing goes back into stock. The seller is charged this unit’s share of inbound freight; any refund for the goods is decided on the damage ticket.',
+      'Removed from the returns hold at finalise, and from stock for good. The seller is charged this unit’s share of inbound freight; any refund for the goods is decided on the damage ticket.',
   },
   {
     value: 'INSPECT_LATER',
@@ -111,8 +111,12 @@ export const DISPOSITION_OPTIONS = [
   },
 ] as const;
 
+/**
+ * WMS-8e: a received return is already IN the returns hold (booked at
+ * receive), so each choice says where it goes FROM there at finalise.
+ */
 const DISPOSITION_HINT =
-  'Put back in stock: returns hold, sellable once shelved. Keep aside (damaged): the Damaged bin, kept for the seller and never sold. Write off: nothing goes back into stock and the seller is charged its share of inbound freight. Decide later: keeps it in the returns hold; the parcel cannot be finalised until you choose.';
+  'Everything received waits in the returns hold until you decide. Put back in stock: sellable immediately (the floor bin, or its old shelf when bins are tracked). Keep aside (damaged): the Damaged bin, kept for the seller and never sold. Write off: removed from the returns hold and from stock, and the seller is charged its share of inbound freight. Decide later: stays in the returns hold; the parcel cannot be finalised until you choose.';
 
 /**
  * A combination that is allowed but usually a slip — said out loud, never

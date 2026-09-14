@@ -45,6 +45,18 @@ describe('RTO disposition labels', () => {
     expect(keep?.effect).toMatch(/Inventory → Adjustments/);
   });
 
+  it('says where each choice takes a unit out of the returns hold (WMS-8e)', () => {
+    const effect = (v: string): string =>
+      DISPOSITION_OPTIONS.find((o) => o.value === v)?.effect ?? '';
+    // Put back in stock is sellable at once — no shelving step after.
+    expect(effect('RESTOCK')).toMatch(/Sellable immediately/);
+    expect(effect('RESTOCK')).toMatch(/floor bin/);
+    expect(effect('RESTOCK')).not.toMatch(/On the bench|once it is shelved/);
+    expect(effect('HOLD_DAMAGED')).toMatch(/from the returns hold into .*Damaged bin/);
+    expect(effect('WRITE_OFF')).toMatch(/Removed from the returns hold/);
+    expect(effect('INSPECT_LATER')).toMatch(/Stays in the returns hold/);
+  });
+
   it('names a combination that is usually a slip, without refusing it', () => {
     expect(dispositionMismatch('DAMAGED', 'RESTOCK')).toMatch(/sold to the next customer/);
     expect(dispositionMismatch('MISSING', 'RESTOCK')).toMatch(/Write off/);

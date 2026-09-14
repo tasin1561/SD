@@ -116,6 +116,15 @@ export function resolveRestockSources(input: {
   readonly reversedMovementIds: ReadonlySet<string>;
   /** The shipment's origin warehouse — where a hint-only line is credited. */
   readonly originWarehouseId: string;
+  /**
+   * WMS-8e — the RECEIVE booking asks "how much of this line left our
+   * stock, and from where?", not "can all of it come back?". With this
+   * set, a line with less pack evidence than its quantity resolves to
+   * exactly what left (never a shortfall), so the part that never left
+   * through us is simply not booked. Finalize never sets it: there, more
+   * coming back than left is still refused.
+   */
+  readonly allowPartial?: boolean;
 }): RestockSourceResolution {
   // Pools of what left, net of give-backs, keyed by order item (or by
   // variant when a movement names no order item).
@@ -173,7 +182,7 @@ export function resolveRestockSources(input: {
       }
       continue;
     }
-    if (available < line.quantity) {
+    if (available < line.quantity && input.allowPartial !== true) {
       shortfalls.push({
         shipmentItemId: line.shipmentItemId,
         quantity: line.quantity,
@@ -182,7 +191,7 @@ export function resolveRestockSources(input: {
       continue;
     }
 
-    let needed = line.quantity;
+    let needed = Math.min(line.quantity, available);
     const sources: RestockSource[] = [];
     for (const e of candidates) {
       if (needed === 0) break;

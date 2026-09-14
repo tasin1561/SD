@@ -4,6 +4,7 @@ import {
   OrderStatus,
   RtoDisposition,
   RtoItemCondition,
+  StockMovementReasonCode,
   StockMovementType,
 } from '@skydrop/db';
 import { RtoDispositionService } from '../../src/modules/warehouse-rto/services/rto-disposition.service';
@@ -99,6 +100,8 @@ function makeService(
     reversals?: AnyArgs[];
     /** WMS-8d — the receiving warehouse has no DAMAGED bin. */
     noDamagedBin?: boolean;
+    /** WMS-8e — RETURN_RECEIVE bookings for the shipment. Default: none. */
+    heldMovements?: AnyArgs[];
   } = {},
 ) {
   const defaultItems = opts.items ?? [item('si-1', RtoDisposition.RESTOCK)];
@@ -116,9 +119,11 @@ function makeService(
     opts.existingMovement === undefined ? null : opts.existingMovement,
   );
   const stockMovementFindMany = jest.fn(async (args: { where: { type: unknown } }) =>
-    args.where.type === StockMovementType.PACK_REVERSED
-      ? (opts.reversals ?? [])
-      : (opts.leftMovements ?? []),
+    args.where.type === StockMovementType.RETURN_RECEIVE
+      ? (opts.heldMovements ?? [])
+      : args.where.type === StockMovementType.PACK_REVERSED
+        ? (opts.reversals ?? [])
+        : (opts.leftMovements ?? []),
   );
   const client = {
     shipment: { findFirst: shipmentFindFirst },
@@ -172,7 +177,20 @@ function makeService(
       crossWarehouse: i['receivedWarehouseId'] !== i['originWarehouseId'],
     };
   });
-  const restockTargets = { resolve: resolveTarget, resolveDamagedHold };
+  // WMS-8e: where a booked unit goes when it leaves the hold.
+  const sellableDestination = jest.fn(async () => ({ binId: 'bin-floor', reason: 'FLOOR' }));
+  const damagedBinId = jest.fn(async () => {
+    if (opts.noDamagedBin === true) {
+      throw new ConflictException({ code: 'RTO_NO_DAMAGED_BIN', message: 'no damaged bin' });
+    }
+    return 'bin-damaged';
+  });
+  const restockTargets = {
+    resolve: resolveTarget,
+    resolveDamagedHold,
+    sellableDestination,
+    damagedBinId,
+  };
   // R3: a written-off unit's freight share. Default fixture charges
   // nothing (goods from no billed consignment), so the existing
   // assertions are unaffected.
@@ -202,9 +220,18 @@ function makeService(
     auditLog,
     resolveTarget,
     resolveDamagedHold,
+    sellableDestination,
+    damagedBinId,
     debitForWrittenOffItems,
     advanceUnits: unitLedger.advanceUnitsForShipment,
   };
+}
+
+/** The pack-evidence query (PACK_CONFIRM / DISPATCH), as opposed to the held one. */
+function packEvidenceCalls(findMany: jest.Mock): Array<Record<string, unknown>> {
+  return findMany.mock.calls
+    .map((c) => (c[0] as { where: Record<string, unknown> }).where)
+    .filter((w) => typeof w['type'] === 'object' && w['type'] !== null);
 }
 
 describe('RtoDispositionService.finalize — Model A retry-state matrix', () => {
@@ -437,8 +464,7 @@ describe('RtoDispositionService.finalize — where a restock goes back to (2026-
       leftMovements: [{ ...packConfirm('m-1'), shipmentId: 'ship-ORIGINAL' }],
     });
     await svc.finalize(SHIP, STAFF);
-    const where = (stockMovementFindMany.mock.calls[0]![0] as { where: Record<string, unknown> })
-      .where;
+    const where = packEvidenceCalls(stockMovementFindMany)[0] ?? {};
     expect(where['orderId']).toBe(ORDER);
     expect(where).not.toHaveProperty('shipmentId');
     expect(apply).toHaveBeenCalledTimes(1);
@@ -493,7 +519,7 @@ describe('RtoDispositionService.finalize — where a restock goes back to (2026-
       items: [item('si-1', RtoDisposition.WRITE_OFF, noHint)],
     });
     await svc.finalize(SHIP, STAFF);
-    expect(stockMovementFindMany).not.toHaveBeenCalled();
+    expect(packEvidenceCalls(stockMovementFindMany)).toEqual([]);
   });
 });
 
@@ -900,5 +926,254 @@ describe('RtoDispositionService.finalize — guards', () => {
     // Only the RESTOCK line moves stock; the write-off's dispatch
     // decrement stands (Model A).
     expect(apply).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── WMS-8e: booked into the returns hold at receive, moved at finalize ────
+
+/** A RETURN_RECEIVE booking for a line (what receive wrote into the hold). */
+function heldBooking(
+  opts: { line?: string; qty?: number; batch?: string; leftFrom?: string } = {},
+): AnyArgs {
+  return {
+    warehouseId: WH,
+    binId: 'bin-hold',
+    batchId: opts.batch ?? 'bat-held',
+    qtyChange: opts.qty ?? 2,
+    metadata: {
+      shipmentItemId: opts.line ?? 'si-1',
+      leftFromWarehouseId: WH,
+      leftFromBinId: opts.leftFrom ?? 'shelf-1',
+      leftFromBatchId: opts.batch ?? 'bat-held',
+    },
+  };
+}
+
+describe('RtoDispositionService.finalize — a line BOOKED into the returns hold (WMS-8e)', () => {
+  const GOOD_RESTOCK = {
+    quantity: 1,
+    condition: RtoItemCondition.GOOD,
+    disposition: RtoDisposition.RESTOCK,
+  };
+  const DAMAGED_HOLD = {
+    quantity: 1,
+    condition: RtoItemCondition.DAMAGED,
+    disposition: RtoDisposition.HOLD_DAMAGED,
+  };
+
+  it('RESTOCK: a paired TRANSFER hold → sellable destination, same batch — no RETURN_RESTOCK', async () => {
+    const {
+      svc,
+      apply,
+      resolveTarget,
+      sellableDestination,
+      transitionStatus,
+      stockMovementFindMany,
+    } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+      heldMovements: [heldBooking()],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+
+    const moves = apply.mock.calls.map((c) => c[1]);
+    expect(moves).toEqual([
+      expect.objectContaining({
+        type: StockMovementType.TRANSFER_OUT,
+        binId: 'bin-hold',
+        batchId: 'bat-held',
+        qtyChange: -2,
+        fromBinId: 'bin-hold',
+        toBinId: 'bin-floor',
+        shipmentId: SHIP,
+        orderId: ORDER,
+      }),
+      expect.objectContaining({
+        type: StockMovementType.TRANSFER_IN,
+        binId: 'bin-floor',
+        batchId: 'bat-held',
+        qtyChange: 2,
+      }),
+    ]);
+    // The pair shares one transfer group.
+    expect(moves[0]!['transferGroupId']).toBe(moves[1]!['transferGroupId']);
+    // Where it left from first, then the pick hint.
+    expect((sellableDestination.mock.calls[0] as unknown[])[1]).toEqual({
+      warehouseId: WH,
+      candidateBinIds: ['shelf-1', 'bin-1'],
+    });
+    // A booked line never goes through the unbooked-line path.
+    expect(resolveTarget).not.toHaveBeenCalled();
+    expect(packEvidenceCalls(stockMovementFindMany)).toEqual([]);
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.RTO_RESTOCKED }),
+    );
+    // The row reports the movement that landed it.
+    expect(r.items[0]?.movementIds).toEqual(['mv-2']);
+  });
+
+  it('1 RESTOCK + 1 HOLD_DAMAGED: one unit to the sellable bin, one to the DAMAGED bin', async () => {
+    const { svc, apply } = makeService({
+      items: [
+        item('si-1', RtoDisposition.RESTOCK, {
+          quantity: 2,
+          rows: [GOOD_RESTOCK, DAMAGED_HOLD],
+        }),
+      ],
+      heldMovements: [heldBooking()],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    const moves = apply.mock.calls.map((c) => [c[1]['type'], c[1]['binId'], c[1]['qtyChange']]);
+    expect(moves).toEqual([
+      [StockMovementType.TRANSFER_OUT, 'bin-hold', -1],
+      [StockMovementType.TRANSFER_IN, 'bin-floor', 1],
+      [StockMovementType.TRANSFER_OUT, 'bin-hold', -1],
+      [StockMovementType.TRANSFER_IN, 'bin-damaged', 1],
+    ]);
+    expect(r).toMatchObject({
+      status: OrderStatus.RTO_RESTOCKED,
+      restockedUnits: 1,
+      heldDamagedUnits: 1,
+    });
+  });
+
+  it('WRITE_OFF: an ADJUSTMENT_DECREASE out of the hold (INV-7 reason), freight still charged once', async () => {
+    const { svc, apply, transitionStatus, debitForWrittenOffItems } = makeService({
+      items: [item('si-1', RtoDisposition.WRITE_OFF, { rtoCondition: RtoItemCondition.DAMAGED })],
+      heldMovements: [heldBooking()],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![1]).toMatchObject({
+      type: StockMovementType.ADJUSTMENT_DECREASE,
+      binId: 'bin-hold',
+      batchId: 'bat-held',
+      qtyChange: -2,
+      reasonCode: StockMovementReasonCode.DAMAGED_IN_WAREHOUSE,
+      shipmentId: SHIP,
+    });
+    expect(debitForWrittenOffItems).toHaveBeenCalledTimes(1);
+    expect(debitForWrittenOffItems).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ lines: [{ shipmentItemId: 'si-1', quantity: 2 }] }),
+    );
+    expect(transitionStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ to: OrderStatus.RTO_DAMAGED }),
+    );
+    expect(r.items[0]?.movementIds).toEqual(['mv-1']);
+  });
+
+  it('a MISSING unit written off leaves the hold as LOST', async () => {
+    const { svc, apply } = makeService({
+      items: [item('si-1', RtoDisposition.WRITE_OFF, { rtoCondition: RtoItemCondition.MISSING })],
+      heldMovements: [heldBooking()],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(apply.mock.calls[0]![1]).toMatchObject({
+      reasonCode: StockMovementReasonCode.LOST,
+    });
+  });
+
+  it('more coming back than was booked → RTO_RESTOCK_EXCEEDS_STOCK_LEFT, nothing moved', async () => {
+    const { svc, apply, transitionStatus } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK, { quantity: 2 })],
+      heldMovements: [heldBooking({ qty: 1 })],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_RESTOCK_EXCEEDS_STOCK_LEFT' },
+    });
+    expect(apply).not.toHaveBeenCalled();
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('no DAMAGED bin for a booked kept-aside unit ⇒ RTO_NO_DAMAGED_BIN, no transition', async () => {
+    const { svc, transitionStatus } = makeService({
+      noDamagedBin: true,
+      items: [
+        item('si-1', RtoDisposition.HOLD_DAMAGED, { rtoCondition: RtoItemCondition.DAMAGED }),
+      ],
+      heldMovements: [heldBooking()],
+    });
+    await expect(svc.finalize(SHIP, STAFF)).rejects.toMatchObject({
+      response: { code: 'RTO_NO_DAMAGED_BIN' },
+    });
+    expect(transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it('gate 2: a finalize movement already on the ledger ⇒ nothing re-applied, transition still runs', async () => {
+    const { svc, apply, runWithRetry, transitionStatus, stockMovementFindFirst } = makeService({
+      existingMovement: { id: 'mv-prior' },
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+      heldMovements: [heldBooking()],
+    });
+    const r = await svc.finalize(SHIP, STAFF);
+    expect(runWithRetry).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+    expect(transitionStatus).toHaveBeenCalled();
+    expect(r.movementsAlreadyApplied).toBe(true);
+    // The gate looks for EVERY type a finalize writes.
+    expect(stockMovementFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          shipmentId: SHIP,
+          type: {
+            in: [
+              StockMovementType.RETURN_RESTOCK,
+              StockMovementType.TRANSFER_OUT,
+              StockMovementType.ADJUSTMENT_DECREASE,
+            ],
+          },
+        },
+      }),
+    );
+  });
+
+  it('a booked line and an unbooked line finalize together, in ONE movement transaction', async () => {
+    const { svc, apply, runWithRetry, resolveTarget } = makeService({
+      items: [
+        item('si-1', RtoDisposition.RESTOCK),
+        // si-2 was not booked (nothing in hold for it) but left through us.
+        item('si-2', RtoDisposition.RESTOCK, { pickedBin: null, pickedBatch: null }),
+      ],
+      heldMovements: [heldBooking({ line: 'si-1' })],
+      leftMovements: [packConfirm('m-2', { orderItemId: 'oi-si-2', variantId: 'v-si-2' })],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect(runWithRetry).toHaveBeenCalledTimes(1);
+    const types = apply.mock.calls.map((c) => c[1]['type']);
+    expect(types.sort()).toEqual(
+      [
+        StockMovementType.RETURN_RESTOCK,
+        StockMovementType.TRANSFER_IN,
+        StockMovementType.TRANSFER_OUT,
+      ].sort(),
+    );
+    expect(resolveTarget).toHaveBeenCalledTimes(1);
+    expect(resolveTarget.mock.calls[0]![1]).toMatchObject({ pickedBinId: 'mv-bin' });
+  });
+
+  it('the unit ledger follows: a booked unit is moved from IN_STOCK (at the hold) to its new bin', async () => {
+    const { svc, advanceUnits } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+      heldMovements: [heldBooking()],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect((advanceUnits.mock.calls[0] as unknown[])[1]).toMatchObject({
+      shipmentItemId: 'si-1',
+      fromStatus: 'IN_STOCK',
+      toStatus: 'IN_STOCK',
+      gate: 'RTO_RESTOCK',
+      binId: 'bin-floor',
+      batchId: 'bat-held',
+    });
+  });
+
+  it('an unbooked line’s units still move from RTO_RECEIVED', async () => {
+    const { svc, advanceUnits } = makeService({
+      items: [item('si-1', RtoDisposition.RESTOCK)],
+    });
+    await svc.finalize(SHIP, STAFF);
+    expect((advanceUnits.mock.calls[0] as unknown[])[1]).toMatchObject({
+      fromStatus: 'RTO_RECEIVED',
+    });
   });
 });

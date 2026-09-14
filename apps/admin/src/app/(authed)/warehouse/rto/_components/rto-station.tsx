@@ -39,11 +39,12 @@ import {
  *     line, or, on a line of more than one unit, split BY QUANTITY
  *     (WMS-8d: "one good, one damaged"). The disposition decides what
  *     happens at finalize.
- *  3. Finalize: WMS-8 saga, per row — restocked units get a
- *     RETURN_RESTOCK into the returns hold; kept-aside units a
- *     RETURN_RESTOCK into the Damaged bin (never sellable); written-off
- *     units stand (no movement). The order lands RTO_RESTOCKED when any
- *     unit was restocked, else RTO_DAMAGED.
+ *  3. Finalize: WMS-8 saga, per row (WMS-8e — receive already booked the
+ *     units into the returns hold) — restocked units move to a sellable
+ *     bin (floor, or their old shelf when bins are tracked); kept-aside
+ *     units to the Damaged bin (never sellable); written-off units out of
+ *     the hold. The order lands RTO_RESTOCKED when any unit was
+ *     restocked, else RTO_DAMAGED.
  *
  * FE-2 verdict surfacing on every server error (`serverVerdict`).
  */
@@ -148,7 +149,12 @@ export function RtoStation(): ReactElement {
       toast.success(
         r.alreadyReceived
           ? `Already received earlier — opening shipment ${r.shipmentId.slice(0, 8)}.`
-          : `Received — order ${r.orderId.slice(0, 8)} → ${r.orderStatus}.`,
+          : `Received — order ${r.orderId.slice(0, 8)} → ${r.orderStatus}.` +
+              // WMS-8e: said plainly, because the stock ledger will not
+              // show this return until it is finalised.
+              (r.holdBooking?.outcome === 'NO_HOLD_BIN'
+                ? ' This warehouse has no returns hold bin, so the units are not on the stock ledger until you finalise — create one under Warehouse → Bins.'
+                : ''),
       );
     } catch (err) {
       setError(fmtError(err));
@@ -300,9 +306,10 @@ export function RtoStation(): ReactElement {
           </Card>
         )}
 
-        {/* After finalise, whatever came back GOOD is sitting in a hold bin
-          and is not sellable. The panel renders nothing when there is
-          nothing in hold, so it appears exactly when there is work. */}
+        {/* Only for a unit an OLDER finalise left in the returns hold (a
+          return finalised now is already sellable — WMS-8e). The panel
+          renders nothing when there is nothing to shelve, so it appears
+          exactly when there is work. */}
         {shipmentId !== null && <PutawayPanel shipmentId={shipmentId} />}
       </div>
 

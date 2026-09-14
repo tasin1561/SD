@@ -17,6 +17,7 @@ import { InboundFreightModule } from '../inbound-freight/inbound-freight.module'
 import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-wallet-accrual.module';
 import { TrackingEventsModule } from '../tracking-events/tracking-events.module';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
+import { SystemIssuesModule } from '../system-issues/system-issues.module';
 
 /**
  * Module 8 warehouse-rto module — reverted to a dispatch/pack-time
@@ -30,11 +31,14 @@ import { CatalogReadModule } from '../catalog-read/catalog-read.module';
  *     reachable (see rto-disposition.service.ts's top-of-file doc for
  *     why finalize does not need to know which matrix edge fulfilled
  *     it).
- *   - putaway — the restocked units land in RTO_HOLD, which is not
- *     pickable, because at finalize they are on the returns bench and
- *     not on a shelf. Putaway is the person who inspected them walking
- *     them somewhere and saying where; only then does INV-3 count them
- *     as available.
+ *   - WMS-8e (2026-09-14): receive BOOKS the returned units into the
+ *     receiving warehouse's RTO_HOLD bin (RETURN_RECEIVE +qty), so a
+ *     received-but-undecided return is on the ledger where it physically
+ *     is; finalize MOVES them out — to a sellable bin (FLOOR, or the
+ *     shelf they were picked from when bin tracking is on), to the
+ *     DAMAGED bin, or out of stock by an adjustment.
+ *   - putaway — kept only for units a pre-WMS-8e finalize restocked into
+ *     RTO_HOLD; a return finalized since is already on a sellable bin.
  *
  * Imports OrderModule (the read + saga transitions) and
  * InventorySharedModule for StockMutationService (INV-1 — the
@@ -64,6 +68,8 @@ import { CatalogReadModule } from '../catalog-read/catalog-read.module';
     SellerRestrictionModule,
     // The product picture beside each line on the inspect screen.
     CatalogReadModule,
+    // WMS-8e: a receive that could not book into a returns hold says so.
+    SystemIssuesModule,
   ],
   controllers: [WarehouseRtoController],
   providers: [
