@@ -40,6 +40,8 @@ import { TreasuryReadService } from './services/treasury-read.service';
     SellerCashAttributionService,
     ManualExpenseService,
   ],
-  exports: [BankLedgerService, SellerCashAttributionService],
+  // PnlService: the carry-forward P&L freezes and re-runs the SAME engine
+  // /pnl prints (PNL-CF-1), rather than a second computation that drifts.
+  exports: [BankLedgerService, SellerCashAttributionService, PnlService],
 })
 export class TreasuryModule {}

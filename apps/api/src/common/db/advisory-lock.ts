@@ -84,6 +84,16 @@ export const AdvisoryLock = {
    * concurrent CREATE; the `nextval` after it needs no lock.
    */
   TICKET_NUMBER: 0x0544b,
+  /**
+   * 'PL' — closing a P&L month and writing carry-forwards (PNL-CF-1).
+   *
+   * Detection reads a closed month's snapshot plus every carry-forward
+   * already written for it and inserts the difference; two runs at once
+   * would each read the same baseline and each carry the same change.
+   * Closing takes it too, so "the month a carry-forward lands in is still
+   * open" is checked and acted on under one lock.
+   */
+  PNL_PERIOD: 0x0504c,
 } as const;
 
 /**

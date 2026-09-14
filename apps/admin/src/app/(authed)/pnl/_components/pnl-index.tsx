@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Fragment, useMemo, useState, type ReactElement } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
 import {
@@ -57,6 +58,13 @@ export function PnlIndex(): ReactElement {
       <PageHeader
         title="Profit & loss"
         subtitle="What each part of the business earns, against what it costs — and how much of that we can actually see."
+        action={
+          // The same figures frozen month by month — for a month that must
+          // not move after it has been reported (PNL-CF-1).
+          <Link href="/pnl/carry-forward" className="text-accent text-sm hover:underline">
+            Carry-forward P&amp;L
+          </Link>
+        }
       />
 
       <Card>

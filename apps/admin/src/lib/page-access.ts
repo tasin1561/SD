@@ -80,6 +80,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // and charge tables — everything it shows is money, so the treasury
   // gate is the right one rather than a new permission nobody holds.
   ['/pnl', 'money.treasury.view'],
+  // The same P&L, frozen month by month (PNL-CF-1). Reading it is the same
+  // question; closing a month is gated in the page and at the API on
+  // money.pnl.close.
+  ['/pnl/carry-forward', 'money.treasury.view'],
   // Expenses and investments are OUR money by construction: client
   // money is neither spendable nor investable, so this never widens
   // beyond the treasury view.

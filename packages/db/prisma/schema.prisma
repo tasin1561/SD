@@ -111,6 +111,7 @@ model StaffUser {
   bankEntriesCreated        BankEntry[]             @relation("BankEntryCreatedBy")
   bankTransfersCreated      BankTransfer[]          @relation("BankTransferCreatedBy")
   notificationBroadcasts    NotificationBroadcast[] @relation("BroadcastCreatedBy")
+  pnlPeriodsClosed          PnlPeriod[]             @relation("PnlPeriodClosedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -7978,4 +7979,103 @@ enum AuditSeverity {
   CRITICAL @map("critical")
 
   @@map("audit_severity")
+}
+
+/// How a P&L month came to be closed (PNL-CF-1).
+enum PnlCloseKind {
+  /// The scheduled close on the 1st, after every nightly job succeeded.
+  AUTO     @map("auto")
+  /// A person closed it — usually after fixing a nightly job that failed.
+  MANUAL   @map("manual")
+  /// The one-off close of the months that existed before this did.
+  BACKFILL @map("backfill")
+
+  @@map("pnl_close_kind")
+}
+
+/// A CLOSED P&L month (PNL-CF-1). The row existing IS the month being
+/// closed; there is no reopen, and nothing updates it.
+///
+/// `report` is the whole P&L as it stood at close — every line, its basis,
+/// its coverage notes, its warnings — exactly what /pnl printed for that
+/// window at that moment. Anything that changes the month afterwards is a
+/// `pnl_carry_forwards` row carried into a LATER month, never an edit here.
+model PnlPeriod {
+  id                   String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// `YYYY-MM`, an INDIAN calendar month: [1st 00:00 IST, next 1st 00:00 IST).
+  month                String       @unique @db.VarChar(7)
+  periodStart          DateTime     @map("period_start") @db.Timestamptz
+  periodEnd            DateTime     @map("period_end") @db.Timestamptz
+  closedAt             DateTime     @default(now()) @map("closed_at") @db.Timestamptz
+  /// Null for the scheduled close — nobody decided it.
+  closedByStaffId      String?      @map("closed_by_staff_id") @db.Uuid
+  closeKind            PnlCloseKind @map("close_kind")
+  reason               String?      @db.Text
+  grossMarginInr       Decimal      @map("gross_margin_inr") @db.Decimal(14, 2)
+  operatingExpensesInr Decimal      @map("operating_expenses_inr") @db.Decimal(14, 2)
+  netInr               Decimal      @map("net_inr") @db.Decimal(14, 2)
+  complete             Boolean
+  report               Json
+  /// What the nightly jobs reported when the month was closed.
+  nightlyJobs          Json?        @map("nightly_jobs")
+
+  closedByStaff StaffUser?        @relation("PnlPeriodClosedBy", fields: [closedByStaffId], references: [id], onDelete: SetNull)
+  rows          PnlSnapshotRow[]
+  carryForwards PnlCarryForward[]
+
+  @@map("pnl_periods")
+}
+
+/// One record behind one line of a closed month, frozen (PNL-CF-1).
+///
+/// `refKey` is the record's STABLE identity (an order id, a bank entry id,
+/// `<courier account>|<txn id>`), so the month recomputed later can be
+/// compared with it row by row. A null figure is one the line did not
+/// count at close (not recorded, no rate) — never a zero.
+model PnlSnapshotRow {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  periodId   String   @map("period_id") @db.Uuid
+  lineKey    String   @map("line_key") @db.VarChar(40)
+  refKey     String   @map("ref_key") @db.VarChar(200)
+  revenueInr Decimal? @map("revenue_inr") @db.Decimal(14, 2)
+  costInr    Decimal? @map("cost_inr") @db.Decimal(14, 2)
+  /// `{ ref, subRef, at }` as the drill-down showed it.
+  label      Json
+
+  period PnlPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, lineKey, refKey], map: "pnl_snapshot_rows_period_line_ref_key")
+  @@map("pnl_snapshot_rows")
+}
+
+/// A change to a CLOSED month, found later and carried into an OPEN one
+/// (PNL-CF-1). APPEND-ONLY: never updated, never deleted.
+///
+/// `landedMonth` is the month it counts in — always one that was OPEN when
+/// the row was written. The deltas are live minus (snapshot + every earlier
+/// carry-forward for the same record), so the closed month's frozen figure
+/// plus its carry-forwards is what the month is worth today.
+model PnlCarryForward {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  originPeriodId   String   @map("origin_period_id") @db.Uuid
+  originMonth      String   @map("origin_month") @db.VarChar(7)
+  landedMonth      String   @map("landed_month") @db.VarChar(7)
+  lineKey          String   @map("line_key") @db.VarChar(40)
+  refKey           String   @map("ref_key") @db.VarChar(200)
+  revenueDeltaInr  Decimal  @map("revenue_delta_inr") @db.Decimal(14, 2)
+  costDeltaInr     Decimal  @map("cost_delta_inr") @db.Decimal(14, 2)
+  revenueBeforeInr Decimal? @map("revenue_before_inr") @db.Decimal(14, 2)
+  revenueAfterInr  Decimal? @map("revenue_after_inr") @db.Decimal(14, 2)
+  costBeforeInr    Decimal? @map("cost_before_inr") @db.Decimal(14, 2)
+  costAfterInr     Decimal? @map("cost_after_inr") @db.Decimal(14, 2)
+  reason           String   @db.Text
+  /// `{ ref, subRef, at }` of the record as it stands now (or as it was, when it is gone).
+  label            Json
+  detectedAt       DateTime @default(now()) @map("detected_at") @db.Timestamptz
+
+  originPeriod PnlPeriod @relation(fields: [originPeriodId], references: [id], onDelete: Restrict)
+
+  @@index([landedMonth, originMonth, lineKey], map: "pnl_carry_forwards_landed_origin_line_idx")
+  @@index([originPeriodId, lineKey, refKey], map: "pnl_carry_forwards_origin_line_ref_idx")
+  @@map("pnl_carry_forwards")
 }

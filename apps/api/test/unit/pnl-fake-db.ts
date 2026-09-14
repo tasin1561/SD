@@ -74,7 +74,36 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
     events: { model: 'orderEvent', local: 'id', foreign: 'orderId', many: true },
   },
   courierAccount: { courier: one('courier', 'courierId') },
+  // The carry-forward P&L's own tables (PNL-CF-1).
+  pnlPeriod: {
+    rows: { model: 'pnlSnapshotRow', local: 'id', foreign: 'periodId', many: true },
+    carryForwards: {
+      model: 'pnlCarryForward',
+      local: 'id',
+      foreign: 'originPeriodId',
+      many: true,
+    },
+    closedByStaff: one('staffUser', 'closedByStaffId'),
+  },
+  pnlSnapshotRow: { period: one('pnlPeriod', 'periodId') },
+  pnlCarryForward: { originPeriod: one('pnlPeriod', 'originPeriodId') },
 };
+
+/** Ids the fake mints sort in creation order, as uuidv7 ids do. */
+let minted = 0;
+const mint = (model: string): string => `${model}-${String(++minted).padStart(8, '0')}`;
+
+/** A decimal written as a string (Prisma accepts either) is read back as a Decimal. */
+function coerce(data: Row): Row {
+  const out: Row = {};
+  for (const [k, v] of Object.entries(data)) {
+    out[k] =
+      typeof v === 'string' && k.endsWith('Inr') && /^-?\d+(\.\d+)?$/.test(v)
+        ? new Prisma.Decimal(v)
+        : v;
+  }
+  return out;
+}
 
 const isDecimal = (v: unknown): v is Prisma.Decimal => Prisma.Decimal.isDecimal(v);
 const isPlain = (v: unknown): v is Record<string, unknown> =>
@@ -199,6 +228,16 @@ export class FakeDb {
     const out: Row = {};
     for (const [k, v] of Object.entries(select)) {
       if (v === false || v === undefined) continue;
+      if (k === '_count') {
+        // `_count: { select: { rows: true } }` — related rows, counted.
+        const counts: Row = {};
+        const of = ((v as Record<string, unknown>)['select'] ?? {}) as Record<string, unknown>;
+        for (const name of Object.keys(of)) {
+          counts[name] = this.related(model, row, name)?.rows.length ?? 0;
+        }
+        out[k] = counts;
+        continue;
+      }
       const r = this.related(model, row, k);
       if (r !== null) {
         const sub = (v === true ? {} : v) as Record<string, unknown>;
@@ -317,7 +356,21 @@ export class FakeDb {
       all().filter((r) =>
         this.matches(model, r, args['where'] as Record<string, unknown> | undefined),
       );
+    const insert = (data: Row): Row => {
+      const row: Row = { id: mint(model), ...coerce(data) };
+      (this.tables[model] ??= []).push(row);
+      return row;
+    };
     return {
+      create: async (args = {}) => {
+        const row = insert(args['data'] as Row);
+        return this.project(model, row, args['select'] as Record<string, unknown> | undefined);
+      },
+      createMany: async (args = {}) => {
+        const data = args['data'] as Row[];
+        for (const d of data) insert(d);
+        return { count: data.length };
+      },
       findMany: async (args = {}) => this.shape(model, all(), args),
       findFirst: async (args = {}) => this.shape(model, all(), { ...args, take: 1 })[0] ?? null,
       findUnique: async (args = {}) => this.shape(model, all(), { ...args, take: 1 })[0] ?? null,
@@ -354,13 +407,25 @@ export class FakeDb {
     };
   }
 
-  /** A `prisma.client` stand-in: every model name resolves to a delegate over its table. */
+  /**
+   * A `prisma.client` stand-in: every model name resolves to a delegate
+   * over its table. `$transaction(fn)` runs `fn` against the same client
+   * (one process, nothing to isolate) and `$executeRaw` — the advisory
+   * lock — is a no-op.
+   */
   client(): unknown {
-    return new Proxy(
+    const proxy: object = new Proxy(
       {},
       {
-        get: (_t, model: string) => this.delegate(model),
+        get: (_t, model: string) => {
+          if (model === '$transaction') {
+            return async (fn: (tx: unknown) => Promise<unknown>) => fn(proxy);
+          }
+          if (model === '$executeRaw') return async () => 0;
+          return this.delegate(model);
+        },
       },
     );
+    return proxy;
   }
 }

@@ -491,8 +491,23 @@ export interface PnlReport {
   } | null;
 }
 
+/**
+ * Every line a month's snapshot freezes (PNL-CF-1): the report's lines,
+ * plus operating expenses, which the report nets off gross and which moves
+ * as much as any line (an expense typed with last month's date).
+ */
+export const PNL_SNAPSHOT_KEYS = [...PNL_LINE_KEYS, 'operating_expenses'] as const;
+export type PnlSnapshotKey = (typeof PNL_SNAPSHOT_KEYS)[number];
+
 /** One record behind a line. Null means NOT RECORDED / not counted — never zero. */
 export interface PnlLineItem {
+  /**
+   * The STABLE identity of the record behind the row — an order id, a
+   * bank entry id, a wallet entry id, `<courier account>|<txn id>` — the
+   * same whenever the report is re-run, so a frozen month can be compared
+   * with the same month recomputed later (PNL-CF-1). Never shown.
+   */
+  readonly id: string;
   readonly ref: string;
   readonly subRef: string | null;
   readonly at: string;
@@ -569,6 +584,8 @@ interface FateCohort {
 
 /** A courier charge on a waybill that is no live Skydrop parcel. */
 interface UnmatchedCharge {
+  /** The charging courier account — a waybill is unique only within one. */
+  readonly accountId: string;
   readonly awb: string;
   readonly net: Prisma.Decimal;
   readonly at: Date;
@@ -1479,6 +1496,7 @@ export class PnlService {
     rates: RateBook,
   ): Promise<
     Array<{
+      id: string;
       ref: string;
       subRef: string;
       at: Date;
@@ -1503,13 +1521,20 @@ export class PnlService {
         },
       },
     });
-    const out: Array<{ ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }> = [];
+    const out: Array<{
+      id: string;
+      ref: string;
+      subRef: string;
+      at: Date;
+      inr: Prisma.Decimal | null;
+    }> = [];
     for (const r of rows) {
       const rate =
         transferRate(r.currency, r.transfer) ??
         remittanceRate(r.currency, r.remittance) ??
         (await this.inrPerUnit(r.currency, r.occurredAt, rates, `bank_entries:${r.id}`));
       out.push({
+        id: r.id,
         ref: r.reference ?? r.account.label,
         subRef:
           r.currency === Currency.INR
@@ -1631,6 +1656,7 @@ export class PnlService {
   ): Promise<{
     cutover: Date | null;
     rows: Array<{
+      courierAccountId: string;
       txnId: string;
       awb: string | null;
       shipmentStatus: string | null;
@@ -1673,6 +1699,7 @@ export class PnlService {
         const before = r.occurredAt.getTime() < countFrom.getTime();
         const ours = before && match(key(r)) !== null;
         return {
+          courierAccountId: r.courierAccountId,
           txnId: r.txnId,
           awb: r.awbNumber,
           shipmentStatus: r.shipmentStatus,
@@ -1922,37 +1949,87 @@ export class PnlService {
     to: Date,
     rates: RateBook,
   ): Promise<{ total: Prisma.Decimal; unconverted: number }> {
-    const where = {
-      type: BankEntryType.EXPENSE,
-      occurredAt: win(from, to),
-      inboundFreightChargeId: null,
-      // A courier's COD fee is its own line (courierCodFees); counted
-      // here too it would come off gross and off net.
-      settlementId: null,
-    } as const;
-    const inr = await this.prisma.client.bankEntry.aggregate({
-      where: { ...where, currency: Currency.INR },
-      _sum: { signedAmount: true },
+    // Summed from the SAME rows a frozen month keeps (PNL-CF-1), so the
+    // figure and its rows cannot come to disagree.
+    const rows = await this.expenseRows(from, to, rates);
+    return {
+      total: sum(rows.map((r) => r.inr)),
+      unconverted: rows.filter((r) => r.inr === null).length,
+    };
+  }
+
+  /**
+   * Operating expenses in `[from, to)`, one row per bank entry, each in
+   * rupees (a COST: positive) — or null when it had no rate to rupees and
+   * is therefore not counted.
+   *
+   * Expenses are posted negative (money leaving); a cost is its negation.
+   * Rent or salaries paid from a taka account are put in rupees at the
+   * rate in force at the time. Added as they stood, they were taka read as
+   * rupees — wrong by the exchange rate, silently.
+   */
+  private async expenseRows(
+    from: Date,
+    to: Date,
+    rates: RateBook,
+  ): Promise<
+    Array<{ id: string; ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }>
+  > {
+    const rows = await this.prisma.client.bankEntry.findMany({
+      where: {
+        type: BankEntryType.EXPENSE,
+        occurredAt: win(from, to),
+        inboundFreightChargeId: null,
+        // A courier's COD fee is its own line (courierCodFees); counted
+        // here too it would come off gross and off net.
+        settlementId: null,
+      },
+      orderBy: { occurredAt: 'desc' },
+      select: {
+        id: true,
+        signedAmount: true,
+        currency: true,
+        occurredAt: true,
+        reference: true,
+        account: { select: { label: true } },
+        expenseCategory: { select: { name: true } },
+      },
     });
-    // Expenses are posted negative (money leaving); a cost is its negation.
-    let total = (inr._sum.signedAmount ?? ZERO).negated();
-    // Rent or salaries paid from a taka account: put in rupees at the
-    // rate in force at the time. Added as they stood, they were taka read
-    // as rupees — wrong by the exchange rate, silently.
-    const other = await this.prisma.client.bankEntry.findMany({
-      where: { ...where, currency: { not: Currency.INR } },
-      select: { id: true, signedAmount: true, currency: true, occurredAt: true },
-    });
-    let unconverted = 0;
-    for (const o of other) {
-      const rate = await this.inrPerUnit(o.currency, o.occurredAt, rates, `bank_entries:${o.id}`);
-      if (rate === null) {
-        unconverted += 1;
-        continue;
-      }
-      total = total.add(o.signedAmount.negated().mul(rate).toDecimalPlaces(2));
+    const out: Array<{
+      id: string;
+      ref: string;
+      subRef: string;
+      at: Date;
+      inr: Prisma.Decimal | null;
+    }> = [];
+    for (const r of rows) {
+      const rate =
+        r.currency === Currency.INR
+          ? new Prisma.Decimal(1)
+          : await this.inrPerUnit(r.currency, r.occurredAt, rates, `bank_entries:${r.id}`);
+      const cost = r.signedAmount.negated();
+      out.push({
+        id: r.id,
+        ref: r.reference ?? r.expenseCategory?.name ?? r.account.label,
+        subRef:
+          [
+            r.expenseCategory?.name ?? null,
+            r.currency === Currency.INR
+              ? r.account.label
+              : `${r.account.label} · ${cost.toFixed(2)} ${r.currency}`,
+          ]
+            .filter((p): p is string => p !== null)
+            .join(' · ') + (rate === null ? ' · no rate to rupees — not counted' : ''),
+        at: r.occurredAt,
+        inr:
+          rate === null
+            ? null
+            : r.currency === Currency.INR
+              ? cost
+              : cost.mul(rate).toDecimalPlaces(2),
+      });
     }
-    return { total, unconverted };
+    return out;
   }
 
   /**
@@ -2067,6 +2144,7 @@ export class PnlService {
     directions: WalletEntryDirection[],
   ): Promise<
     Array<{
+      id: string;
       amount: Prisma.Decimal;
       createdAt: Date;
       orderNumber: string | null;
@@ -2082,6 +2160,7 @@ export class PnlService {
       },
       orderBy: { createdAt: 'desc' },
       select: {
+        id: true,
         amount: true,
         createdAt: true,
         linkedOrder: { select: { orderNumber: true } },
@@ -2089,6 +2168,7 @@ export class PnlService {
       },
     });
     return rows.map((r) => ({
+      id: r.id,
       amount: r.amount,
       createdAt: r.createdAt,
       orderNumber: r.linkedOrder?.orderNumber ?? null,
@@ -2390,12 +2470,14 @@ export class PnlService {
       if (found === 'live') continue;
       if (found === 'dead') {
         const w = windowNet.get(key);
-        if (w !== undefined) out.push({ awb, net: w.net, at: w.at, kind: 'dead' });
+        if (w !== undefined) {
+          out.push({ accountId: k.accountId, awb, net: w.net, at: w.at, kind: 'dead' });
+        }
         continue;
       }
       const since = sinceCutoverNet.get(key);
       if (since === undefined) continue;
-      out.push({ awb, net: since.net, at: since.at, kind: 'stray' });
+      out.push({ accountId: k.accountId, awb, net: since.net, at: since.at, kind: 'stray' });
     }
     out.sort((a, b) => b.at.getTime() - a.at.getTime());
     return out;
@@ -2550,6 +2632,7 @@ export class PnlService {
     rates: RateBook,
   ): Promise<
     Array<{
+      id: string;
       ref: string;
       subRef: string;
       at: Date;
@@ -2577,6 +2660,7 @@ export class PnlService {
       },
     });
     const out: Array<{
+      id: string;
       ref: string;
       subRef: string;
       at: Date;
@@ -2587,6 +2671,7 @@ export class PnlService {
       const rate = await this.inrPerUnit(r.currency, r.occurredAt, rates, `bank_entries:${r.id}`);
       const opening = r.isOpeningBalance;
       out.push({
+        id: r.id,
         ref: r.reference ?? r.account.label,
         subRef:
           (r.currency === Currency.INR
@@ -2670,7 +2755,9 @@ export class PnlService {
     from: Date,
     to: Date,
     rates: RateBook,
-  ): Promise<Array<{ ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }>> {
+  ): Promise<
+    Array<{ id: string; ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }>
+  > {
     const rows = await this.prisma.client.investment.findMany({
       where: { closedAt: win(from, to) },
       orderBy: { closedAt: 'desc' },
@@ -2684,12 +2771,19 @@ export class PnlService {
         closedAt: true,
       },
     });
-    const out: Array<{ ref: string; subRef: string; at: Date; inr: Prisma.Decimal | null }> = [];
+    const out: Array<{
+      id: string;
+      ref: string;
+      subRef: string;
+      at: Date;
+      inr: Prisma.Decimal | null;
+    }> = [];
     for (const r of rows) {
       const at = r.closedAt ?? from;
       const rate = await this.inrPerUnit(r.currency, at, rates, `investments:${r.id}`);
       const earned = r.returnedInr.sub(r.placedInr);
       out.push({
+        id: r.id,
         ref: r.label,
         subRef:
           (r.currency === Currency.INR
@@ -2816,15 +2910,50 @@ export class PnlService {
     to: Date,
     limit = 500,
   ): Promise<{ key: string; items: ReadonlyArray<PnlLineItem>; truncated: boolean }> {
-    const take = Math.min(Math.max(limit, 1), 1000);
+    if (!isLineKey(key)) return { key, items: [], truncated: false };
+    return this.rowsFor(key, from, to, Math.min(Math.max(limit, 1), 1000));
+  }
+
+  /**
+   * EVERY row behind a line — or behind operating expenses — UNCAPPED:
+   * what a month's snapshot freezes and what carry-forward detection
+   * compares it with (PNL-CF-1). The same computation as the drill-down,
+   * so the rows add up to the figure the report prints.
+   */
+  async allLineItems(key: PnlSnapshotKey, from: Date, to: Date): Promise<PnlLineItem[]> {
+    if (key === 'operating_expenses') {
+      const rows = await this.expenseRows(from, to, new RateBook());
+      return rows.map((r) => ({
+        id: r.id,
+        ref: r.ref,
+        subRef: r.subRef,
+        at: r.at.toISOString(),
+        revenueInr: null,
+        costInr: r.inr?.toFixed(2) ?? null,
+      }));
+    }
+    return [...(await this.rowsFor(key, from, to, null)).items];
+  }
+
+  /** A line's rows, capped at `take` — or every one of them when `take` is null. */
+  private async rowsFor(
+    key: PnlLineKey,
+    from: Date,
+    to: Date,
+    take: number | null,
+  ): Promise<{ key: string; items: PnlLineItem[]; truncated: boolean }> {
     const capped = (
       items: PnlLineItem[],
       moreInDb = false,
     ): { key: string; items: PnlLineItem[]; truncated: boolean } => {
       const sorted = [...items].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+      if (take === null) return { key, items: sorted, truncated: false };
       return { key, items: sorted.slice(0, take), truncated: moreInDb || sorted.length > take };
     };
-    if (!isLineKey(key)) return { key, items: [], truncated: false };
+    // One more than asked for, so "there are more" can be said; nothing
+    // at all when every row is wanted.
+    const limitRows: { take?: number } = take === null ? {} : { take: take + 1 };
+    const more = (n: number): boolean => take !== null && n > take;
     const rates = new RateBook();
 
     switch (key) {
@@ -2832,8 +2961,9 @@ export class PnlService {
         const rows = await this.prisma.client.inboundFreightCharge.findMany({
           where: { createdAt: win(from, to) },
           orderBy: { createdAt: 'desc' },
-          take: take + 1,
+          ...limitRows,
           select: {
+            id: true,
             totalInr: true,
             ourCostInr: true,
             status: true,
@@ -2845,6 +2975,7 @@ export class PnlService {
         });
         return capped(
           rows.map((r) => ({
+            id: r.id,
             ref: r.consignment?.consignmentNumber ?? '—',
             subRef: r.seller?.companyName ?? null,
             at: r.createdAt.toISOString(),
@@ -2867,6 +2998,7 @@ export class PnlService {
         ]);
         return capped(
           [...cohort.orders, ...(calledOff?.orders ?? [])].map((o) => ({
+            id: o.orderId,
             ref: o.orderNumber,
             subRef:
               (o.parcels.length === 0 ? 'no live parcel' : o.parcels.join(', ')) +
@@ -2909,8 +3041,9 @@ export class PnlService {
               createdAt: win(from, to),
             },
             orderBy: { createdAt: 'desc' },
-            take: take + 1,
+            ...limitRows,
             select: {
+              id: true,
               amount: true,
               createdAt: true,
               linkedOrder: { select: { orderNumber: true } },
@@ -2922,6 +3055,7 @@ export class PnlService {
         return capped(
           [
             ...rows.map((e) => ({
+              id: e.id,
               ref: e.linkedOrder?.orderNumber ?? '—',
               subRef: e.seller?.companyName ?? null,
               at: e.createdAt.toISOString(),
@@ -2931,6 +3065,7 @@ export class PnlService {
             // Given back on a COD the courier reversed: comes OFF the line,
             // as it does in the total.
             ...returned.map((r) => ({
+              id: r.id,
               ref: r.orderNumber ?? '—',
               subRef: `${r.companyName ?? '—'} · returned on a reversed COD`,
               at: r.createdAt.toISOString(),
@@ -2938,7 +3073,7 @@ export class PnlService {
               costInr: null,
             })),
           ],
-          rows.length > take,
+          more(rows.length),
         );
       }
 
@@ -2946,6 +3081,7 @@ export class PnlService {
         const rows = await this.fxRows(from, to, rates);
         return capped(
           rows.map((r) => ({
+            id: r.id,
             ref: r.ref,
             subRef: r.subRef,
             at: r.at.toISOString(),
@@ -2970,6 +3106,7 @@ export class PnlService {
                 t.oursBeforeCutover ? 'a Skydrop parcel — counted before the cutover' : null,
               ].filter((p): p is string => p !== null);
               return {
+                id: `${t.courierAccountId}|${t.txnId}`,
                 ref: t.txnId,
                 subRef: parts.length === 0 ? null : parts.join(' · '),
                 at: t.at.toISOString(),
@@ -2985,6 +3122,7 @@ export class PnlService {
         const charges = await this.unmatchedCharges(from, to);
         return capped(
           charges.map((c) => ({
+            id: `${c.accountId}|${c.awb}`,
             ref: c.awb,
             subRef:
               c.kind === 'dead'
@@ -3005,8 +3143,9 @@ export class PnlService {
             createdAt: win(from, to),
           },
           orderBy: { createdAt: 'desc' },
-          take: take + 1,
+          ...limitRows,
           select: {
+            id: true,
             signedAmount: true,
             createdAt: true,
             reference: true,
@@ -3015,13 +3154,14 @@ export class PnlService {
         });
         return capped(
           rows.map((e) => ({
+            id: e.id,
             ref: e.reference ?? '—',
             subRef: e.account.label,
             at: e.createdAt.toISOString(),
             revenueInr: null,
             costInr: e.signedAmount.abs().toFixed(2),
           })),
-          rows.length > take,
+          more(rows.length),
         );
       }
 
@@ -3032,8 +3172,9 @@ export class PnlService {
             createdAt: win(from, to),
           },
           orderBy: { createdAt: 'desc' },
-          take: take + 1,
+          ...limitRows,
           select: {
+            id: true,
             shortfallInr: true,
             createdAt: true,
             order: { select: { orderNumber: true } },
@@ -3042,6 +3183,7 @@ export class PnlService {
         });
         return capped(
           rows.map((l) => ({
+            id: l.id,
             ref: l.order.orderNumber,
             // Recorded when `at` says; the typed receipt date kept visible.
             subRef: `${l.settlement.reference} · received ${istDate(l.settlement.receivedAt)}`,
@@ -3050,7 +3192,7 @@ export class PnlService {
             // Signed: a recovery shows as a negative cost.
             costInr: l.shortfallInr.toFixed(2),
           })),
-          rows.length > take,
+          more(rows.length),
         );
       }
 
@@ -3062,8 +3204,9 @@ export class PnlService {
             createdAt: win(from, to),
           },
           orderBy: { createdAt: 'desc' },
-          take: take + 1,
+          ...limitRows,
           select: {
+            id: true,
             amount: true,
             createdAt: true,
             linkedOrder: { select: { orderNumber: true } },
@@ -3072,13 +3215,14 @@ export class PnlService {
         });
         return capped(
           rows.map((e) => ({
+            id: e.id,
             ref: e.linkedOrder?.orderNumber ?? '—',
             subRef: e.seller?.companyName ?? null,
             at: e.createdAt.toISOString(),
             revenueInr: null,
             costInr: e.amount.toFixed(2),
           })),
-          rows.length > take,
+          more(rows.length),
         );
       }
 
@@ -3092,8 +3236,9 @@ export class PnlService {
             createdAt: win(from, to),
           },
           orderBy: { createdAt: 'desc' },
-          take: take + 1,
+          ...limitRows,
           select: {
+            id: true,
             direction: true,
             amount: true,
             note: true,
@@ -3103,6 +3248,7 @@ export class PnlService {
         });
         return capped(
           rows.map((e) => ({
+            id: e.id,
             ref: e.seller?.companyName ?? '—',
             subRef: e.note,
             at: e.createdAt.toISOString(),
@@ -3110,7 +3256,7 @@ export class PnlService {
               e.direction === WalletEntryDirection.STAFF_DEBIT ? e.amount.toFixed(2) : null,
             costInr: e.direction === WalletEntryDirection.STAFF_CREDIT ? e.amount.toFixed(2) : null,
           })),
-          rows.length > take,
+          more(rows.length),
         );
       }
 
@@ -3118,6 +3264,7 @@ export class PnlService {
         const rows = await this.reconciliationRows(from, to, rates);
         return capped(
           rows.map((r) => ({
+            id: r.id,
             ref: r.ref,
             subRef: r.subRef,
             at: r.at.toISOString(),
@@ -3133,6 +3280,7 @@ export class PnlService {
         const rows = await this.investmentRows(from, to, rates);
         return capped(
           rows.map((r) => ({
+            id: r.id,
             ref: r.ref,
             subRef: r.subRef,
             at: r.at.toISOString(),

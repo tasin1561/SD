@@ -506,6 +506,14 @@ export const PERMISSIONS = [
     dangerous: true,
   },
   {
+    key: 'money.pnl.close',
+    label: 'Close a P&L month',
+    description:
+      'Freeze a finished month’s profit and loss for good. A closed month is never reopened — anything that changes it later is carried into the month then open. Also closes the months that existed before carry-forward did.',
+    group: 'Money',
+    dangerous: true,
+  },
+  {
     key: 'money.wallet.transfer',
     label: "Debit or credit a seller's wallet",
     description:
