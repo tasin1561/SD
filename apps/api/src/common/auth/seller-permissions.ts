@@ -301,10 +301,9 @@ export const SELLER_PERMISSIONS = [
     key: 'stores.wallet',
     label: 'Manage reseller store wallets',
     description:
-      'Coming with reseller store wallets: top up a store you manage, and record paying it. Granting it changes nothing yet.',
+      'See each reseller store’s wallet; for a store whose wallet you manage, top it up from your own wallet and record paying it; and set how far below zero a store may go.',
     group: 'Reseller stores',
     sensitive: true,
-    reserved: true,
   },
 ] as const satisfies readonly SellerPermissionDef[];
 

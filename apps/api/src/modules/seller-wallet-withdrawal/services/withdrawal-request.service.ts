@@ -19,6 +19,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { FxRateService } from '../../fx/services/fx-rate.service';
+import { storeExposure } from '../../treasury/services/store-wallet-balances';
 
 const MIN_THRESHOLD_KEY = 'wallet.withdrawal_min_threshold_inr';
 const MAX_PER_DAY_KEY = 'wallet.withdrawal_max_per_day';
@@ -234,7 +235,17 @@ export class WithdrawalRequestService {
     });
     const held = pending._sum.amountRequested ?? new Prisma.Decimal(0);
 
-    const available = balance.minus(min).minus(held);
+    // RS-6 — a reseller store's negative balance is the SELLER's exposure
+    // (decision 7: one pot in the bank book for the seller and every one
+    // of their stores). Money the seller could otherwise take out is what
+    // stands behind a store's debt, so the stores' shortfall — net of what
+    // other stores are owed and have already asked for — comes off what
+    // the seller may withdraw. A store in credit takes nothing away (its
+    // money is the store's, not the seller's), and a seller with no
+    // reseller stores reads exactly as before: `storeExposure` is zero.
+    const exposure = await storeExposure(db, sellerId);
+
+    const available = balance.minus(min).minus(held).add(exposure);
     return available.isNegative() ? new Prisma.Decimal(0) : available;
   }
 

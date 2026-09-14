@@ -159,6 +159,11 @@ export function AuthedShell({
           icon: <ArrowLeftRight size={15} />,
         },
         { href: '/topups', label: 'Top-ups', icon: <Wallet size={15} /> },
+        {
+          href: '/reseller-store-wallets',
+          label: 'Reseller store wallets',
+          icon: <Wallet size={15} />,
+        },
         { href: '/treasury', label: 'Treasury', icon: <Vault size={15} /> },
         { href: '/courier-wallet', label: 'Courier wallets', icon: <Wallet size={15} /> },
         { href: '/pnl', label: 'Profit & loss', icon: <TrendingUp size={15} /> },

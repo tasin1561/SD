@@ -2334,3 +2334,31 @@ describe('staff wallet adjustments', () => {
     expect(rows).toMatchObject({ revenue: '500.00', cost: '120.00' });
   });
 });
+
+describe('RS-6 — money between a seller and their reseller stores is on NO line', () => {
+  // A seller-managed store's top-up (STORE_TOPUP_OUT) and a recorded payout
+  // to one (STORE_PAYOUT_IN) move money between two wallets of ONE pot:
+  // nothing is earned or spent by Skydrop, so neither may appear as revenue
+  // or cost anywhere (RS-8: our own P&L carries only our fees).
+  const build = (withStoreMoves: boolean): World => {
+    const w = new World();
+    w.order({ events: [['DELIVERED', IN]], charges: [['BASE_SHIPPING', '200']] });
+    w.wallet('STAFF_DEBIT', '50', IN, { note: 'Carton lost by the seller’s own forwarder' });
+    w.wallet('SCRAP_REFUND', '25', IN);
+    if (withStoreMoves) {
+      w.wallet('STORE_TOPUP_OUT', '5000', IN, { note: 'Moved to Kolkata Kurtis' });
+      w.wallet('STORE_PAYOUT_IN', '1200', IN, { note: 'Paid Kolkata Kurtis — UPI' });
+      w.wallet('STORE_TOPUP_OUT', '80', T('2026-08-16T12:00:00.000Z'));
+    }
+    return w;
+  };
+  const figures = (r: Report): Array<[string, string | null, string | null]> =>
+    r.lines.map((l) => [l.key, l.revenueInr, l.costInr]);
+
+  it('changes no line’s revenue or cost', async () => {
+    const plain = await build(false).svc().report(FROM, TO);
+    const moved = await build(true).svc().report(FROM, TO);
+    expect(figures(moved)).toEqual(figures(plain));
+    expect(figures(plain).length).toBeGreaterThan(0);
+  });
+});

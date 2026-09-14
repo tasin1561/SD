@@ -1356,6 +1356,22 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxDecimal: '10000000',
   },
   {
+    // RS-6 — the cap Skydrop puts on how far below zero a seller may let
+    // one of their reseller stores go. The seller sets the store's own
+    // limit (their risk); this caps it. Also inserted by
+    // 20260914230000_reseller_store_wallet (the seed is create-only).
+    key: 'reseller.store_negative_limit_cap_inr',
+    category: 'wallet',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '25000.00',
+    displayName: 'Reseller stores: the most a seller may let one store go below zero (INR)',
+    description:
+      "A seller decides how far below zero each of their reseller stores may go — their risk, since a store's negative balance is money the seller is owed by that store. This caps that choice: whatever the seller sets, a store is never allowed further below zero than this. Per-seller override, for a seller we know and want to allow more (or less). Order create refuses an order that would take a store past the lower of the two.",
+    sellerOverridable: true,
+    overrideMinDecimal: '0',
+    overrideMaxDecimal: '10000000',
+  },
+  {
     key: 'wallet.negative_balance_stock_backed',
     category: 'wallet',
     valueType: SettingValueType.BOOLEAN,

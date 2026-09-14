@@ -578,4 +578,94 @@ describe('cross-tenant isolation (e2e)', () => {
       }
     }
   });
+
+  // ─── Reseller store wallets (RS-6) ─────────────────────────────────────
+
+  it('a store sees only its own wallet, and cannot read another store’s top-up proof', async () => {
+    const storeA = await makeStoreUser(alpha, 'store-a');
+    const storeB = await makeStoreUser(beta, 'store-b');
+    const account = await h.prisma.platformBankAccount.create({
+      data: {
+        label: 'HDFC current',
+        bankName: 'HDFC Bank',
+        accountName: 'Skydrop',
+        accountNumber: '50200000000009',
+        currency: 'INR',
+      },
+      select: { id: true },
+    });
+    const bClaim = await h.prisma.storeTopupRequest.create({
+      data: {
+        storeId: storeB.storeId,
+        sellerId: beta.sellerId,
+        bankAccountId: account.id,
+        amountInr: '500',
+        proofSpacesKey: `stores/${storeB.storeId}/topup-proofs/x.png`,
+        proofMimeType: 'image/png',
+      },
+      select: { id: true },
+    });
+
+    const mine = await request(h.baseUrl).get('/store/wallet').set(storeA.auth).expect(200);
+    expect((mine.body as { storeId: string }).storeId).toBe(storeA.storeId);
+    expect(JSON.stringify(mine.body)).not.toContain(storeB.storeId);
+
+    const claims = await request(h.baseUrl)
+      .get('/store/wallet/topups')
+      .set(storeA.auth)
+      .expect(200);
+    expect(JSON.stringify(claims.body)).not.toContain(bClaim.id);
+
+    const proof = await request(h.baseUrl)
+      .get(`/store/wallet/topups/${bClaim.id}/proof`)
+      .set(storeA.auth);
+    expectDenied(proof.status, proof.body, "another store's top-up proof");
+  });
+
+  it('a seller cannot read or move money on another seller’s reseller store', async () => {
+    const storeA = await makeStoreUser(alpha, 'store-a');
+    await request(h.baseUrl)
+      .get(`/seller/reseller-stores/${storeA.storeId}/wallet`)
+      .set(alpha.auth)
+      .expect(200);
+
+    for (const [method, path, body] of [
+      ['get', `/seller/reseller-stores/${storeA.storeId}/wallet`, {}],
+      ['get', `/seller/reseller-stores/${storeA.storeId}/wallet/entries`, {}],
+      ['post', `/seller/reseller-stores/${storeA.storeId}/wallet/top-up`, { amountInr: '1.00' }],
+      [
+        'post',
+        `/seller/reseller-stores/${storeA.storeId}/wallet/payouts`,
+        { amountInr: '1.00', note: 'Paid by UPI' },
+      ],
+      [
+        'patch',
+        `/seller/reseller-stores/${storeA.storeId}/wallet/negative-limit`,
+        { negativeLimitInr: '100.00' },
+      ],
+    ] as const) {
+      const res = await request(h.baseUrl)[method](path).set(beta.auth).send(body);
+      expectDenied(res.status, res.body, `another seller's store wallet via ${method} ${path}`);
+    }
+    expect(await h.prisma.storeWalletEntry.count({ where: { storeId: storeA.storeId } })).toBe(0);
+    expect(await h.prisma.storeWalletSettings.count({ where: { storeId: storeA.storeId } })).toBe(
+      0,
+    );
+  });
+
+  it('a store token is refused on the seller and admin store-wallet surfaces, and theirs on the store’s', async () => {
+    const storeA = await makeStoreUser(alpha, 'store-a');
+    for (const path of [
+      `/seller/reseller-stores/${storeA.storeId}/wallet`,
+      `/admin/reseller-store-wallets/stores/${storeA.storeId}`,
+      '/admin/reseller-store-wallets/topups',
+    ]) {
+      const res = await request(h.baseUrl).get(path).set(storeA.auth);
+      expect([401, 403]).toContain(res.status);
+    }
+    for (const auth of [alpha.auth, staffAuth]) {
+      const res = await request(h.baseUrl).get('/store/wallet').set(auth);
+      expect(res.status).toBe(401);
+    }
+  });
 });

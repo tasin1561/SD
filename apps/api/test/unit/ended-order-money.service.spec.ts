@@ -42,7 +42,8 @@ function make(
     { client } as never,
     { recomputeCacheAfterCommit: recompute } as never,
     { reverseForOrder } as never,
-    { walletBalance, takeToCapital } as never,
+    // RS-6 — the group balance (no reseller stores here, so the seller's own).
+    { walletBalance, groupBalance: walletBalance, takeToCapital } as never,
     { log: audit } as never,
   );
   return { svc, updateMany, reverseForOrder, takeToCapital, recompute, audit, tx };

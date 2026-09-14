@@ -11,6 +11,11 @@ import { BankLedgerService } from '../../src/modules/treasury/services/bank-ledg
 import { BankTransferService } from '../../src/modules/treasury/services/bank-transfer.service';
 import { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
 import { StaffWalletTransferService } from '../../src/modules/admin-wallet-transfer/services/staff-wallet-transfer.service';
+import { SellerManagedStoreWalletService } from '../../src/modules/reseller-store-wallet/services/seller-managed-store-wallet.service';
+import { StoreTopupService } from '../../src/modules/reseller-store-wallet/services/store-topup.service';
+import { StoreWalletService } from '../../src/modules/reseller-store-wallet/services/store-wallet.service';
+import { StoreWithdrawalService } from '../../src/modules/reseller-store-wallet/services/store-withdrawal.service';
+import { WithdrawalRequestService } from '../../src/modules/seller-wallet-withdrawal/services/withdrawal-request.service';
 
 /**
  * TRE-4 / TRE-8, end to end in memory: after every payout, the cash the
@@ -32,6 +37,8 @@ const CREDITS = new Set([
   'TOPUP',
   'ORDER_CHARGES_REFUND',
   'STAFF_CREDIT',
+  // RS-6 — a store the seller manages, paid back off-platform.
+  'STORE_PAYOUT_IN',
 ]);
 
 interface WalletRow {
@@ -61,10 +68,114 @@ interface Topup {
   credited: Prisma.Decimal;
 }
 
+interface StoreRow {
+  id: string;
+  storeId: string;
+  sellerId: string;
+  direction: string;
+  amount: Prisma.Decimal;
+  runningBalanceAfter: Prisma.Decimal;
+}
+
+/**
+ * An in-memory request table (store top-up claims, store withdrawals) that
+ * applies the where-clauses the services send: by id, by a status or a set
+ * of statuses, by seller, and `id: { not }` for "every other request".
+ */
+function requestTable(rows: Array<Record<string, unknown> & { id: string; status: string }>) {
+  let n = 0;
+  const statusOk = (want: unknown, have: string): boolean =>
+    want === undefined ||
+    (typeof want === 'string'
+      ? want === have
+      : ((want as { in: string[] }).in ?? []).includes(have));
+  const match =
+    (w: Record<string, unknown>) => (r: Record<string, unknown> & { id: string; status: string }) =>
+      (w['id'] === undefined ||
+        (typeof w['id'] === 'string'
+          ? r.id === w['id']
+          : r.id !== (w['id'] as { not: string }).not)) &&
+      (w['sellerId'] === undefined || r['sellerId'] === w['sellerId']) &&
+      (w['storeId'] === undefined || r['storeId'] === w['storeId']) &&
+      statusOk(w['status'], r.status);
+  const withInclude = (r: Record<string, unknown>): Record<string, unknown> => ({
+    ...r,
+    store: { name: r['storeId'], displayName: null, seller: { companyName: 'Menev Store' } },
+    bankAccount: { label: 'HDFC', bankName: 'HDFC Bank', accountNumber: '0001' },
+    paidFromAccount: r['paidFromAccountId'] === undefined ? null : { label: 'HDFC' },
+  });
+  return {
+    create: jest.fn(async (a: { data: Record<string, unknown> }) => {
+      n += 1;
+      const row = {
+        status: 'PENDING',
+        createdAt: new Date(),
+        reviewNote: null,
+        reviewedAt: null,
+        resolvedAt: null,
+        rejectionReason: null,
+        bankReference: null,
+        paidAt: null,
+        note: null,
+        transactionRef: null,
+        proofSpacesKey: null,
+        ...a.data,
+        id: `req-${String(n).padStart(4, '0')}`,
+      };
+      rows.push(row);
+      return withInclude(row);
+    }),
+    findUnique: jest.fn(
+      async (a: { where: { id?: string } }) => rows.find((r) => r.id === a.where.id) ?? null,
+    ),
+    findUniqueOrThrow: jest.fn(async (a: { where: { id: string } }) => {
+      const r = rows.find((x) => x.id === a.where.id);
+      if (r === undefined) throw new Error('not found');
+      return withInclude(r);
+    }),
+    updateMany: jest.fn(
+      async (a: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const hit = rows.filter(match(a.where));
+        for (const r of hit) Object.assign(r, a.data);
+        return { count: hit.length };
+      },
+    ),
+    update: jest.fn(async (a: { where: { id: string }; data: Record<string, unknown> }) => {
+      const r = rows.find((x) => x.id === a.where.id);
+      if (r !== undefined) Object.assign(r, a.data);
+      return r;
+    }),
+    count: jest.fn(
+      async (a: { where: Record<string, unknown> }) => rows.filter(match(a.where)).length,
+    ),
+    groupBy: jest.fn(async (a: { where: Record<string, unknown> }) => {
+      const by = new Map<string, Prisma.Decimal>();
+      for (const r of rows.filter(match(a.where))) {
+        const k = String(r['storeId']);
+        by.set(k, (by.get(k) ?? ZERO).add(r['amountInr'] as Prisma.Decimal));
+      }
+      return [...by].map(([storeId, sum]) => ({ storeId, _sum: { amountInr: sum } }));
+    }),
+    aggregate: jest.fn(async (a: { where: Record<string, unknown> }) => {
+      const hit = rows.filter(match(a.where));
+      return {
+        _sum: { amountInr: hit.reduce((t, r) => t.add(r['amountInr'] as Prisma.Decimal), ZERO) },
+        _count: { _all: hit.length },
+      };
+    }),
+  };
+}
+
 function makeWorld(
   orders: Array<{ id: string; sellerId: string; cod: string }>,
   /** The two independent COD fees, as percents. Both off by default. */
   fees: { collection?: string; instant?: string } = {},
+  /**
+   * RS-6 — the seller's reseller stores in this world, and who manages each
+   * one's wallet. Empty for every scenario written before stores existed,
+   * which therefore run exactly as they did.
+   */
+  stores: ReadonlyArray<{ id: string; sellerId: string; managedBy: 'SELLER' | 'SKYDROP' }> = [],
 ) {
   const wallet: WalletRow[] = [];
   const bank: BankRow[] = [];
@@ -76,6 +187,10 @@ function makeWorld(
     shortfallInr: Prisma.Decimal;
   }> = [];
   let seq = 0;
+  // RS-6 — the store wallet ledger and the two request queues.
+  const storeRows: StoreRow[] = [];
+  const topupReqs: Array<Record<string, unknown> & { id: string; status: string }> = [];
+  const withdrawalReqs: Array<Record<string, unknown> & { id: string; status: string }> = [];
   const nextId = (): string => `id-${String((seq += 1)).padStart(6, '0')}`;
 
   const dirMatch = (direction: unknown, d: string): boolean =>
@@ -121,6 +236,19 @@ function makeWorld(
           )
           .reduce((t, b) => t.add(b.signedAmount), ZERO),
     ),
+    // As the real one: a seller's units (and rupee book) in one account.
+    sellerBook: jest.fn(async (sellerId: string, accountId: string, currency: string) => {
+      const units = bank
+        .filter(
+          (b) =>
+            b.ownerKind === 'SELLER' &&
+            b.sellerId === sellerId &&
+            b.accountId === accountId &&
+            b.currency === currency,
+        )
+        .reduce((t, b) => t.add(b.signedAmount), ZERO);
+      return { units, book: units };
+    }),
   };
   const attribution = new SellerCashAttributionService(ledger as never);
 
@@ -253,6 +381,50 @@ function makeWorld(
     },
     shipment: { findMany: jest.fn(async () => []) },
     systemSetting: { findUnique: jest.fn(async () => ({ valueDecimal: '100' })) },
+    // ── RS-6: reseller stores, their wallets and requests ─────────────
+    sellerStore: {
+      findMany: jest.fn(async (a: { where: { sellerId?: string } }) =>
+        stores
+          .filter((x) => a.where.sellerId === undefined || x.sellerId === a.where.sellerId)
+          .map((x) => ({ id: x.id, sellerId: x.sellerId })),
+      ),
+      findFirst: jest.fn(async (a: { where: { id: string; sellerId?: string } }) => {
+        const x = stores.find(
+          (y) =>
+            y.id === a.where.id &&
+            (a.where.sellerId === undefined || y.sellerId === a.where.sellerId),
+        );
+        return x === undefined
+          ? null
+          : {
+              id: x.id,
+              sellerId: x.sellerId,
+              name: x.id,
+              displayName: null,
+              status: 'ACTIVE',
+              walletManagedBy: x.managedBy,
+              seller: { companyName: 'Menev Store' },
+            };
+      }),
+    },
+    storeWalletEntry: {
+      findFirst: jest.fn(
+        async (a: { where: { storeId: string } }) =>
+          storeRows.filter((r) => r.storeId === a.where.storeId).at(-1) ?? null,
+      ),
+      findUnique: jest.fn(async () => null),
+      create: jest.fn(async (a: { data: Omit<StoreRow, 'id'> }) => {
+        const row: StoreRow = { ...a.data, id: nextId() };
+        storeRows.push(row);
+        return { id: row.id, runningBalanceAfter: row.runningBalanceAfter };
+      }),
+    },
+    storeWalletSettings: { findUnique: jest.fn(async () => null) },
+    withdrawalRequest: {
+      aggregate: jest.fn(async () => ({ _sum: { amountRequested: null } })),
+    },
+    storeTopupRequest: requestTable(topupReqs),
+    storeWithdrawalRequest: requestTable(withdrawalReqs),
   };
   tx['$transaction'] = async (fn: (t: unknown) => unknown) => fn(tx);
 
@@ -295,6 +467,11 @@ function makeWorld(
       },
     ),
     recomputeCacheAfterCommit: jest.fn(async () => undefined),
+    // The seller-managed top-up reads the seller's balance under the lock.
+    balanceLive: jest.fn(
+      async (sellerId: string) =>
+        wallet.filter((r) => r.sellerId === sellerId).at(-1)?.runningBalanceAfter ?? ZERO,
+    ),
   };
   const settings = {
     resolve: jest.fn(async (_s: string, key: string) => ({
@@ -346,6 +523,138 @@ function makeWorld(
     ledger as never,
     attribution,
   );
+
+  // ── RS-6: the REAL store wallet services over the same book ─────────
+  const audit = { log: jest.fn(async () => 'a1') };
+  // The negative-limit cap and the seller's minimum balance: both 0 here.
+  const zeroSettings = { resolve: jest.fn(async () => ({ value: '0' })) };
+  const storeWallet = new StoreWalletService(
+    { client: tx } as never,
+    attribution,
+    zeroSettings as never,
+    audit as never,
+  );
+  const withdrawalGuard = new WithdrawalRequestService(
+    { client: tx } as never,
+    {} as never,
+    audit as never,
+    walletService as never,
+    zeroSettings as never,
+    {} as never,
+  );
+  const sellerMoves = new SellerManagedStoreWalletService(
+    { client: tx } as never,
+    storeWallet,
+    walletService as never,
+    withdrawalGuard,
+    audit as never,
+  );
+  const storeTopups = new StoreTopupService(
+    { client: tx } as never,
+    {} as never,
+    audit as never,
+    storeWallet,
+    ledger as never,
+    attribution,
+  );
+  const storeWithdrawals = new StoreWithdrawalService(
+    { client: tx } as never,
+    audit as never,
+    storeWallet,
+    ledger as never,
+    attribution,
+  );
+  const storeUser = (storeId: string): never =>
+    ({
+      id: 'store-user-1',
+      storeId,
+      sellerId: stores.find((x) => x.id === storeId)?.sellerId ?? '',
+      email: 'owner@store.test',
+      fullName: 'Store Owner',
+      emailVerifiedAt: null,
+      jti: null,
+      roleKey: 'owner',
+      roleName: 'Owner',
+      permissions: [],
+    }) as never;
+  const sellerOf = (storeId: string): string =>
+    stores.find((x) => x.id === storeId)?.sellerId ?? '';
+  /** The seller moves money into a store they manage. */
+  const storeTopUpBySeller = (storeId: string, amountInr: string) =>
+    sellerMoves.topUp(sellerOf(storeId), storeId, { amountInr }, { sellerUserId: 'su-1' });
+  /** The seller records paying a store they manage, off-platform. */
+  const storePayoutBySeller = (storeId: string, amountInr: string) =>
+    sellerMoves.recordPayout(
+      sellerOf(storeId),
+      storeId,
+      { amountInr, note: 'Paid by UPI on 14 September' },
+      { sellerUserId: 'su-1' },
+    );
+  /** A charge on the store (phase 3b's fee share), written by the one writer. */
+  const storeCharge = (storeId: string, amount: string) =>
+    storeWallet.applyEntry(tx as never, {
+      storeId,
+      sellerId: sellerOf(storeId),
+      direction: 'FEE_SHARE' as never,
+      shareOf: 'ORDER_CHARGES' as never,
+      amount: D(amount),
+      actorType: 'SYSTEM' as never,
+    });
+  /** A store fee share given back. */
+  const storeRefund = (storeId: string, amount: string) =>
+    storeWallet.applyEntry(tx as never, {
+      storeId,
+      sellerId: sellerOf(storeId),
+      direction: 'SHARE_REFUND' as never,
+      shareOf: 'ORDER_CHARGES' as never,
+      amount: D(amount),
+      actorType: 'SYSTEM' as never,
+    });
+  /** A Skydrop-managed store's claim, submitted and accepted. */
+  const storeClaimAccepted = async (storeId: string, amountInr: string): Promise<void> => {
+    const claim = await storeTopups.submit(storeUser(storeId), {
+      bankAccountId: 'hdfc',
+      amountInr,
+      transactionRef: `UTR-${nextId()}`,
+    });
+    await storeTopups.accept(claim.id, 'staff-1', null);
+  };
+  const storeWithdrawRequest = (storeId: string, amountInr: string) =>
+    storeWithdrawals.request(storeUser(storeId), {
+      amountInr,
+      payeeName: 'Kolkata Kurtis',
+      payeeAccountNumber: '50100012345678',
+      payeeIfsc: 'HDFC0001234',
+      payeeBankName: 'HDFC Bank',
+    });
+  /** A Skydrop-managed store's withdrawal: requested, approved, paid from HDFC. */
+  const storeWithdraw = async (storeId: string, amountInr: string): Promise<void> => {
+    const req = await storeWithdrawRequest(storeId, amountInr);
+    await storeWithdrawals.approve(req.id, 'staff-1');
+    await storeWithdrawals.pay(req.id, 'staff-1', {
+      paidFromAccountId: 'hdfc',
+      bankReference: `NEFT-${nextId()}`,
+      paidAt: '2026-09-14T10:00:00.000Z',
+    });
+  };
+  const storeBalanceOf = (storeId: string): Prisma.Decimal =>
+    storeRows.filter((r) => r.storeId === storeId).at(-1)?.runningBalanceAfter ?? ZERO;
+  /** max(0, seller wallet + Σ that seller's store wallets) — the RS-6 invariant's right side. */
+  const groupOwed = (sellerId: string): string => {
+    const own = wallet.filter((r) => r.sellerId === sellerId).at(-1)?.runningBalanceAfter ?? ZERO;
+    const group = stores
+      .filter((x) => x.sellerId === sellerId)
+      .reduce((t, x) => t.add(storeBalanceOf(x.id)), own);
+    return (group.lessThan(0) ? ZERO : group).toFixed(2);
+  };
+  /** What the seller may withdraw — the ONE WAL-3 method, stores included. */
+  const sellerWithdrawable = async (sellerId: string): Promise<string> => {
+    const balance =
+      wallet.filter((r) => r.sellerId === sellerId).at(-1)?.runningBalanceAfter ?? ZERO;
+    return (
+      await withdrawalGuard.withdrawableBalance(sellerId, Currency.INR, balance, tx as never)
+    ).toFixed(2);
+  };
 
   /** A charge taken while the seller held nothing: a receivable, no bank entry. */
   const owe = async (sellerId: string, amount: string): Promise<void> => {
@@ -505,6 +814,17 @@ function makeWorld(
     fundCapital,
     /** How many bank rows exist — a staff debit on a seller holding nothing must add none. */
     bankRows: (): number => bank.length,
+    // RS-6
+    storeTopUpBySeller,
+    storePayoutBySeller,
+    storeCharge,
+    storeRefund,
+    storeClaimAccepted,
+    storeWithdrawRequest,
+    storeWithdraw,
+    storeBalance: (storeId: string): string => storeBalanceOf(storeId).toFixed(2),
+    groupOwed,
+    sellerWithdrawable,
   };
 }
 
@@ -1168,5 +1488,202 @@ describe('a staff wallet transfer keeps the book equal to the wallet', () => {
     }
     expect(seen.has(`${AdvisoryLock.BANK_RECONCILE}|${account}`)).toBe(true);
     expect(ranks).toEqual([...ranks].sort((x, y) => x - y));
+  });
+});
+
+/**
+ * RS-6 — decision 7: our bank book knows ONLY the seller. A reseller store's
+ * wallet is a ledger between the seller and that store; the cash behind it is
+ * the SELLER's. So the TRE-8 invariant becomes
+ *
+ *   held for a seller = max(0, seller wallet + Σ that seller's store wallets)
+ *
+ * and is asserted after EVERY step below, through the REAL store wallet
+ * services (the one writer, the seller-managed moves, the Skydrop-managed
+ * claim and withdrawal) running over the same in-memory wallet and book.
+ */
+describe('RS-6 — a seller and their reseller stores are ONE pot in the bank book', () => {
+  const STORES = [
+    { id: 'st-a', sellerId: 's', managedBy: 'SELLER' as const },
+    { id: 'st-b', sellerId: 's', managedBy: 'SKYDROP' as const },
+  ];
+  const world = (orders: Array<{ id: string; sellerId: string; cod: string }> = []): World =>
+    makeWorld(orders, {}, STORES);
+  const agrees = (w: World): void => {
+    expect(w.held('s')).toBe(w.groupOwed('s'));
+  };
+
+  it('a SELLER-managed top-up moves money between two wallets and NO cash', async () => {
+    const w = world([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    agrees(w);
+    const rows = w.bankRows();
+    const out = await w.storeTopUpBySeller('st-a', '500');
+    expect(out.storeBalanceAfterInr).toBe('500.00');
+    expect(w.balance('s')).toBe('347.46');
+    expect(w.storeBalance('st-a')).toBe('500.00');
+    // No bank entry either way: the pot did not change.
+    expect(w.bankRows()).toBe(rows);
+    expect(w.held('s')).toBe('847.46');
+    agrees(w);
+  });
+
+  it('a recorded payout is the reverse — store −X, seller +X — and moves no cash either', async () => {
+    const w = world([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    await w.storeTopUpBySeller('st-a', '500');
+    const rows = w.bankRows();
+    await w.storePayoutBySeller('st-a', '200');
+    expect(w.storeBalance('st-a')).toBe('300.00');
+    expect(w.balance('s')).toBe('547.46');
+    expect(w.bankRows()).toBe(rows);
+    agrees(w);
+  });
+
+  it('a top-up beyond what the seller could withdraw is refused, and nothing is written', async () => {
+    const w = world([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    await expect(w.storeTopUpBySeller('st-a', '900')).rejects.toMatchObject({
+      response: { code: 'STORE_TOPUP_EXCEEDS_WITHDRAWABLE' },
+    });
+    expect(w.storeBalance('st-a')).toBe('0.00');
+    expect(w.balance('s')).toBe('847.46');
+    agrees(w);
+  });
+
+  it('a payout beyond the store’s balance is refused', async () => {
+    const w = world();
+    await expect(w.storePayoutBySeller('st-a', '50')).rejects.toMatchObject({
+      response: { code: 'STORE_PAYOUT_EXCEEDS_BALANCE' },
+    });
+    agrees(w);
+  });
+
+  it('a store going negative: its charge makes the seller’s cash ours, clamped — and the seller can withdraw that much less', async () => {
+    const w = world([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    expect(await w.sellerWithdrawable('s')).toBe('847.46');
+    await w.storeCharge('st-a', '300');
+    expect(w.storeBalance('st-a')).toBe('-300.00');
+    expect(w.held('s')).toBe('547.46');
+    agrees(w);
+    // The store's debt is the seller's exposure: it comes off what they may take.
+    expect(await w.sellerWithdrawable('s')).toBe('547.46');
+    // A refund on the store gives the cash back — to the group.
+    await w.storeRefund('st-a', '100');
+    expect(w.storeBalance('st-a')).toBe('-200.00');
+    expect(w.held('s')).toBe('647.46');
+    agrees(w);
+  });
+
+  it('a store charge on a group already in debt writes NO bank entry — it is a receivable', async () => {
+    const w = world();
+    await w.owe('s', '300');
+    const rows = w.bankRows();
+    await w.storeCharge('st-a', '100');
+    expect(w.bankRows()).toBe(rows);
+    expect(w.held('s')).toBe('0.00');
+    agrees(w);
+  });
+
+  it('a refund on a store while the GROUP is in debt repays that debt before any of it is cash of theirs', async () => {
+    const w = world([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    await w.storeCharge('st-a', '1000'); // group 847.46 − 1000 = −152.54
+    expect(w.held('s')).toBe('0.00');
+    agrees(w);
+    await w.storeRefund('st-a', '200'); // group +47.46
+    expect(w.held('s')).toBe('47.46');
+    agrees(w);
+  });
+
+  it('a SKYDROP-managed top-up is held as the SELLER’s cash', async () => {
+    const w = world();
+    const before = w.accountTotal();
+    await w.storeClaimAccepted('st-b', '1000');
+    expect(w.storeBalance('st-b')).toBe('1000.00');
+    expect(w.held('s')).toBe('1000.00');
+    expect(D(w.accountTotal()).sub(D(before)).toFixed(2)).toBe('1000.00');
+    agrees(w);
+  });
+
+  it('a SKYDROP-managed top-up while the seller’s group is in debt repays the debt first', async () => {
+    const w = world();
+    await w.owe('s', '300');
+    await w.storeClaimAccepted('st-b', '1000');
+    expect(w.held('s')).toBe('700.00');
+    expect(w.capital()).toBe('300.00');
+    agrees(w);
+  });
+
+  it('a SKYDROP-managed withdrawal pays the store out of the seller’s cash, and the book falls by exactly that', async () => {
+    const w = world();
+    await w.storeClaimAccepted('st-b', '1000');
+    await w.storeWithdraw('st-b', '400');
+    expect(w.storeBalance('st-b')).toBe('600.00');
+    expect(w.held('s')).toBe('600.00');
+    expect(w.accountTotal()).toBe('600.00');
+    agrees(w);
+  });
+
+  it('a store owed money while its seller is in debt cannot draw cash we do not hold', async () => {
+    const w = world();
+    await w.owe('s', '500');
+    await w.storeClaimAccepted('st-b', '300'); // group −200: all of it repaid debt
+    expect(w.held('s')).toBe('0.00');
+    agrees(w);
+    await expect(w.storeWithdrawRequest('st-b', '100')).rejects.toMatchObject({
+      response: { code: 'STORE_WITHDRAWAL_EXCEEDS_WITHDRAWABLE' },
+    });
+  });
+
+  it('a seller with two stores: every step keeps held = max(0, seller + Σ stores)', async () => {
+    const w = world([
+      { id: 'a', sellerId: 's', cod: '1000' },
+      { id: 'b', sellerId: 's', cod: '2000' },
+    ]);
+    await w.pay('1000', [['a', '1000']]);
+    agrees(w);
+    await w.storeTopUpBySeller('st-a', '400');
+    agrees(w);
+    await w.storeClaimAccepted('st-b', '500');
+    agrees(w);
+    await w.storeCharge('st-a', '600'); // st-a → −200
+    agrees(w);
+    await w.storeRefund('st-a', '50');
+    agrees(w);
+    await w.storeWithdraw('st-b', '300');
+    agrees(w);
+    await w.owe('s', '2000'); // the whole group into the red
+    agrees(w);
+    expect(w.held('s')).toBe('0.00');
+    await w.storeClaimAccepted('st-b', '100'); // repays debt, holds nothing
+    agrees(w);
+    await w.pay('2000', [['b', '2000']]); // a COD lands on a group in debt
+    agrees(w);
+    // The account holds exactly what landed less what was paid out.
+    expect(w.accountTotal()).toBe('3300.00');
+  });
+
+  it('a store payout takes WALLET, then the account key, then the attribution key — never back down', async () => {
+    const w = world([{ id: 'a', sellerId: 's', cod: '1000' }]);
+    await w.pay('1000', [['a', '1000']]);
+    await w.storeClaimAccepted('st-b', '100');
+    w.locks.mockClear();
+    // Paid from HDFC where the seller holds enough: cash leaves as theirs.
+    await w.storeWithdraw('st-b', '50');
+    const attribution = advisoryKey(ATTRIBUTION_RECONCILE_KEY);
+    const seen = new Set<string>();
+    const ranks: number[] = [];
+    for (const [, ns, key] of w.locks.mock.calls as Array<[unknown, number, number]>) {
+      const id = `${ns}|${key}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (ns === AdvisoryLock.WALLET) ranks.push(0);
+      else if (ns === AdvisoryLock.BANK_RECONCILE) ranks.push(key === attribution ? 2 : 1);
+    }
+    expect(ranks[0]).toBe(0);
+    expect(ranks).toEqual([...ranks].sort((x, y) => x - y));
+    agrees(w);
   });
 });

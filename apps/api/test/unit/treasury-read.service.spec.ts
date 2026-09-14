@@ -47,6 +47,8 @@ function makeSut(opts: { wallets: string[]; rows: Row[] }) {
       },
     },
     courierAccount: { findMany: async () => [] },
+    // RS-6 — no reseller stores: what is owed is the sellers' own wallets.
+    sellerStore: { findMany: async () => [] },
   };
   const ledger = { balances: async () => [] } as unknown as BankLedgerService;
   return new TreasuryReadService({ client } as unknown as PrismaService, ledger);

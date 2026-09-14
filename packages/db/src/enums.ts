@@ -153,3 +153,5 @@ export {
   ResellerWalletManager,
   ResellerStoreEventKind,
 } from '@prisma/client';
+// RS-6 — reseller store wallets.
+export { StoreWalletEntryDirection } from '@prisma/client';

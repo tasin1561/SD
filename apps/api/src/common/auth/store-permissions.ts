@@ -24,7 +24,7 @@ export interface StorePermissionDef {
   readonly sensitive?: true;
 }
 
-export const STORE_PERMISSION_GROUPS = ['Store', 'Team'] as const;
+export const STORE_PERMISSION_GROUPS = ['Store', 'Team', 'Money'] as const;
 
 export type StorePermissionGroup = (typeof STORE_PERMISSION_GROUPS)[number];
 
@@ -52,6 +52,31 @@ export const STORE_PERMISSIONS = [
     label: 'Manage the team',
     description: 'Invite a colleague, change what somebody may do, or remove their access.',
     group: 'Team',
+    sensitive: true,
+  },
+  // ── RS-6 — the store wallet ────────────────────────────────────────
+  {
+    key: 'wallet.view',
+    label: 'See the wallet',
+    description:
+      'The store’s balance, every movement of it, and its top-up and withdrawal requests.',
+    group: 'Money',
+    sensitive: true,
+  },
+  {
+    key: 'wallet.topups.manage',
+    label: 'Top up the wallet',
+    description:
+      'Tell Skydrop about money sent to its bank for this store. Nothing is credited until Skydrop has seen it arrive. Only for a wallet Skydrop manages.',
+    group: 'Money',
+    sensitive: true,
+  },
+  {
+    key: 'wallet.withdrawals.manage',
+    label: 'Ask to withdraw',
+    description:
+      'Ask Skydrop to pay out the store’s balance, and say which bank account to pay it into. Only for a wallet Skydrop manages.',
+    group: 'Money',
     sensitive: true,
   },
 ] as const satisfies readonly StorePermissionDef[];
@@ -105,8 +130,17 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
   {
     key: 'finance',
     name: 'Finance',
-    description: 'The money side, when it arrives. Sees the store and its team.',
-    permissions: ['store.profile.view', 'team.view'],
+    description:
+      'The money side: the wallet, top-ups and withdrawals. Sees the store and its team.',
+    permissions: [
+      'store.profile.view',
+      'team.view',
+      // RS-6. Also granted to existing finance roles by
+      // 20260914230000_reseller_store_wallet.
+      'wallet.view',
+      'wallet.topups.manage',
+      'wallet.withdrawals.manage',
+    ],
   },
   {
     key: 'viewer',

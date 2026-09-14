@@ -78,12 +78,16 @@ function world(opts: {
     const rows = reqs.filter((r) => r.status === status);
     return (a.orderBy as AnyArgs | undefined) !== undefined ? [...rows].reverse() : rows;
   });
+  // RS-6 — no reseller stores, so no store exposure.
+  const sellerStore = { findMany: jest.fn(async () => []) };
   const tx = {
     $executeRaw: lock,
     withdrawalRequest: { findUnique, updateMany, aggregate },
+    sellerStore,
   };
   const client = {
     withdrawalRequest: { findMany, findUnique, updateMany, aggregate },
+    sellerStore,
     systemIssue: { findMany: jest.fn(async () => [] as AnyArgs[]) },
     $transaction: jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx)),
   };

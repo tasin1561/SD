@@ -19,6 +19,7 @@ import type { StoreMe } from '@skydrop/api-client';
 export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permission: string]> = [
   ['/team', 'team.view'], // GET /store/team
   ['/settings', 'store.profile.view'], // GET /store/profile
+  ['/wallet', 'wallet.view'], // GET /store/wallet (RS-6)
 ];
 
 export function permissionForPath(pathname: string | null): string | null {

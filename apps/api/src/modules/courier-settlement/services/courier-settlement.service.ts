@@ -588,8 +588,10 @@ export class CourierSettlementService {
       for (const r of rtoReversals) {
         const order = byId.get(r.orderId);
         if (!order) continue; // refused before the transaction
-        // What they were owed before this reversal, under their wallet lock.
-        const before = await this.attribution.walletBalance(tx, order.sellerId);
+        // What they were owed before this reversal, under their wallet lock —
+        // the seller and their reseller stores together, as the bank book
+        // holds them (RS-6, decision 7).
+        const before = await this.attribution.groupBalance(tx, order.sellerId);
         const res = await this.codCredit.reverseForOrder(tx, {
           orderId: order.id,
           sellerId: order.sellerId,

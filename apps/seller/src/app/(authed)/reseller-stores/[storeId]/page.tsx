@@ -31,6 +31,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
+import { StoreWalletSection } from './_components/store-wallet-section';
 import {
   useApproveResellerStore,
   useCloseResellerStore,
@@ -114,6 +115,7 @@ export default function ResellerStorePage(): ReactElement {
       </Card>
 
       <WalletCard store={s} disabled={final} />
+      <StoreWalletSection store={s} />
       <TeamSection store={s} canInvite={open} />
 
       <Section title="History">
@@ -404,7 +406,7 @@ function WalletCard({
     <Card>
       <CardHeader
         title="Who manages the store’s wallet"
-        subtitle="Recorded now; the store wallet itself arrives in a later release."
+        subtitle="You: you top the store up from your wallet and pay it yourself. Skydrop: the store tops up to Skydrop’s bank and withdraws through Skydrop. It cannot change while the store has a top-up or withdrawal waiting on Skydrop."
       />
       <CardBody>
         <div className="flex flex-wrap items-end gap-2">
