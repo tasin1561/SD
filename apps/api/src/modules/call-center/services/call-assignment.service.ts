@@ -25,6 +25,20 @@ import { AssignmentExpirationService } from './assignment-expiration.service';
 // The ONE list of "still waiting to be confirmed" (CC-2 discipline).
 import { CONFIRMATION_CALL_STATUSES } from './call-attempt.service';
 import { CallQueueReason } from '@skydrop/db';
+import {
+  CUSTOMER_BRAND_ORDER_SELECT,
+  customerFacingBrand,
+} from '../../../common/brand/customer-facing-brand';
+
+/** RS-10 — whom the agent is calling on behalf of. */
+export interface CallCustomerBrand {
+  readonly kind: 'RESELLER_STORE' | 'SELLER';
+  /** The store's name at order time, or the seller's company. */
+  readonly name: string | null;
+  /** The reseller store's own contact; null for a seller order. */
+  readonly storeContactPhone: string | null;
+  readonly storeContactEmail: string | null;
+}
 
 /** Effective concurrent-assignment cap when an agent has no settings
  *  row — mirrors agent_call_settings.maxActiveCalls @default(1). */
@@ -52,6 +66,17 @@ export interface PulledAssignment {
    * the recipient block, which must stay as it was at order time.
    */
   seller: { id: string; companyName: string; contactPersonName: string; phone: string } | null;
+  /**
+   * RS-10 — WHOM the agent is calling on behalf of, from the one rule
+   * (`customerFacingBrand`). For an order sold by a reseller store it is
+   * THE STORE — the customer bought from that business and has never
+   * heard of the seller behind it — plus the store's own contact for the
+   * questions an agent cannot answer. For every other order it is the
+   * seller's company, exactly what `seller.companyName` already said.
+   * Null only when it could not be read (fail-open: the screen falls
+   * back to the seller line it always showed).
+   */
+  customerBrand: CallCustomerBrand | null;
   /**
    * Picture and description per variant on the order, keyed by
    * variantId.
@@ -290,6 +315,9 @@ export class CallAssignmentService {
       scheduledAttempts: picked.scheduledAttempts,
       order,
       seller: order ? await this.loadSeller(order.sellerId) : null,
+      customerBrand: order
+        ? ((await this.loadCustomerBrands([order.orderId])).get(order.orderId) ?? null)
+        : null,
       itemDisplay: await this.loadItemDisplay(order),
       priorAttempts: await this.loadPriorAttempts(order),
       ...(await this.callContext(picked.orderId, order?.status ?? null, picked.reason)),
@@ -543,6 +571,63 @@ export class CallAssignmentService {
     return (await this.loadSellers([sellerId])).get(sellerId) ?? null;
   }
 
+  /**
+   * RS-10 — who each order presents as, batched (one query for the page).
+   *
+   * Through `customerFacingBrand`, the rule every customer surface shares.
+   * FAILS OPEN to an empty map: a read failure costs the line, and the
+   * screen falls back to the seller name it has always shown — the
+   * agent can still make the call.
+   */
+  private async loadCustomerBrands(
+    orderIds: readonly string[],
+  ): Promise<ReadonlyMap<string, CallCustomerBrand>> {
+    const out = new Map<string, CallCustomerBrand>();
+    const ids = [...new Set(orderIds)];
+    if (ids.length === 0) return out;
+    try {
+      const rows = await this.prisma.client.order.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          ...CUSTOMER_BRAND_ORDER_SELECT,
+          store: {
+            select: {
+              ...CUSTOMER_BRAND_ORDER_SELECT.store.select,
+              contactPhone: true,
+              contactEmail: true,
+            },
+          },
+        },
+      });
+      for (const r of rows) {
+        const brand = customerFacingBrand(r);
+        out.set(
+          r.id,
+          brand.kind === 'RESELLER_STORE'
+            ? {
+                kind: 'RESELLER_STORE',
+                name: brand.name,
+                storeContactPhone: r.store?.contactPhone ?? null,
+                storeContactEmail: r.store?.contactEmail ?? null,
+              }
+            : {
+                kind: 'SELLER',
+                name: brand.name,
+                storeContactPhone: null,
+                storeContactEmail: null,
+              },
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'CallAssignmentService: could not read who the orders present as; falling back to the seller',
+      );
+    }
+    return out;
+  }
+
   /** Batch form — one query however many assignments are in flight. */
 
   private async loadSellers(
@@ -585,6 +670,7 @@ export class CallAssignmentService {
     if (rows.length === 0) return [];
     const orders = await this.orders.getManyByIds(rows.map((r) => r.orderId));
     const sellers = await this.loadSellers([...orders.values()].map((o) => o.sellerId));
+    const brands = await this.loadCustomerBrands([...orders.keys()]);
     // One catalogue read for every in-flight assignment, not one each.
     const allVariantIds = [...orders.values()].flatMap((o) => o.items.map((i) => i.variantId));
     const displayByVariant = await this.catalog.displayInfoByVariant(allVariantIds);
@@ -624,6 +710,7 @@ export class CallAssignmentService {
         scheduledAttempts: r.scheduledAttempts,
         order,
         seller: order ? (sellers.get(order.sellerId) ?? null) : null,
+        customerBrand: brands.get(r.orderId) ?? null,
         itemDisplay: displayByOrder.get(r.orderId) ?? {},
         priorAttempts: attemptsByOrder.get(r.orderId) ?? [],
         ...(contextByOrder.get(r.orderId) ?? {

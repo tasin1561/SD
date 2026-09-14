@@ -300,3 +300,37 @@ function makeServiceWithPickup(name: string) {
   );
   return { svc, request, prisma };
 }
+
+/**
+ * RS-10 — `seller_name` ("sold by" on their label). A channel order's
+ * shipment is exactly what it was; a reseller order changes that ONE key.
+ */
+describe('DelhiveryAwbService — RS-10 seller_name', () => {
+  const OK = { success: true, packages: [{ waybill: 'DLV1', refnum: 'SH-2026-05-000042' }] };
+
+  async function shipmentFor(req: DelhiveryAwbRequest): Promise<Record<string, unknown>> {
+    const { svc, request } = makeServiceWithPickup('Skydrop-CCU-01');
+    request.mockResolvedValueOnce(OK);
+    await svc.generateAwb(req);
+    return request.mock.calls[0][0].body.shipments[0] as Record<string, unknown>;
+  }
+
+  it('a channel order keeps the present-but-empty seller_name, as before', async () => {
+    const s = await shipmentFor(awbReq());
+    expect(s.seller_name).toBe('');
+    expect(s.seller_add).toBe('');
+    expect(s).not.toHaveProperty('return_name');
+  });
+
+  it('a reseller order sends the store name (sanitised) and changes no other key', async () => {
+    const plain = await shipmentFor(awbReq());
+    const store = await shipmentFor(awbReq({ sellerName: 'Priya; Kurtis' }));
+    // ';' is on their rejected-character list: sanitised, not refused.
+    expect(store.seller_name).toBe('Priya Kurtis');
+    const { seller_name: _a, ...restStore } = store;
+    const { seller_name: _b, ...restPlain } = plain;
+    void _a;
+    void _b;
+    expect(JSON.stringify(restStore)).toBe(JSON.stringify(restPlain));
+  });
+});

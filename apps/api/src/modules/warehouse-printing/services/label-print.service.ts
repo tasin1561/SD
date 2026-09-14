@@ -7,6 +7,10 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { LabelSheetService } from './label-sheet.service';
 import { ManualLabelPdfService, type ManualLabelPayload } from './manual-label-pdf.service';
+import {
+  CUSTOMER_BRAND_ORDER_SELECT,
+  customerFacingBrand,
+} from '../../../common/brand/customer-facing-brand';
 
 export interface LabelSheetResult {
   readonly pdfBase64: string;
@@ -374,7 +378,9 @@ export class LabelPrintService {
               select: {
                 orderNumber: true,
                 codAmountInr: true,
-                seller: { select: { companyName: true } },
+                // RS-10 — the printed "from" is who the customer bought
+                // from (includes `seller.companyName`).
+                ...CUSTOMER_BRAND_ORDER_SELECT,
               },
             },
           },
@@ -401,7 +407,10 @@ export class LabelPrintService {
         destPostalCode: r.destPostalCode,
         totalWeightGrams: r.totalWeightGrams,
         orderNumber: order?.orderNumber ?? '—',
-        sellerCompanyName: order?.seller?.companyName ?? null,
+        // RS-10: the name printed on the label beside the order number —
+        // a reseller store's name on its orders, the seller's company on
+        // every other order (unchanged).
+        sellerCompanyName: order ? customerFacingBrand(order).name : null,
         codAmountInr: order?.codAmountInr?.toString() ?? null,
         items: r.items.map((i) => ({
           name: i.productName,

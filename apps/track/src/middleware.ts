@@ -9,8 +9,14 @@ import { createCspMiddleware } from '../../../packages/config/csp-middleware.mjs
  * The policy itself lives in packages/config/csp-middleware.mjs so the
  * apps cannot drift. See that file for why 'strict-dynamic' is required
  * and what the nonce actually buys over the previous 'unsafe-inline'.
+ *
+ * RS-10: `img-src` admits Spaces — and only images, never connect-src —
+ * because a reseller store's logo is shown as a short-lived presigned
+ * GET straight from the bucket (nothing in it is public, so there is no
+ * stable URL to proxy). Without it the browser blocks the logo silently.
+ * Pinned by apps/api test/unit/track-csp-store-logo.spec.ts.
  */
-const build = createCspMiddleware({});
+const build = createCspMiddleware({ imgExtra: ['https://*.digitaloceanspaces.com'] });
 
 export function middleware(request: NextRequest): NextResponse {
   const { requestHeaders, csp } = build(request) as {

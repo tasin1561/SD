@@ -16,6 +16,8 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
+import { ApiError } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 import type {
   CustomerDeliveryFeeView,
   ApiClient,
@@ -1549,7 +1551,22 @@ export function useRemoveLogo(): UseMutationResult<LogoView, Error, void> {
 
 import type { SellerInvoiceView, GenerateInvoiceResponse } from '@skydrop/api-client';
 
-export function useOrderInvoice(orderId: string): UseQueryResult<SellerInvoiceView | null> {
+/**
+ * RS-10 / decision 8 — the server's refusal of a tax invoice for an order
+ * sold by a reseller store (`[INVOICE_NOT_FOR_RESELLER_ORDER] …`). Carried
+ * as data, not an error, so the section can show the verdict VERBATIM and
+ * offer no "Generate now" (FE-2: the hide is cosmetic, the refusal is the
+ * server's).
+ */
+export interface InvoiceRefused {
+  readonly refused: string;
+}
+
+export const INVOICE_NOT_FOR_RESELLER_ORDER = 'INVOICE_NOT_FOR_RESELLER_ORDER';
+
+export function useOrderInvoice(
+  orderId: string,
+): UseQueryResult<SellerInvoiceView | InvoiceRefused | null> {
   const client = useApiClient();
   return useQuery({
     queryKey: ['seller-invoice', orderId],
@@ -1561,6 +1578,12 @@ export function useOrderInvoice(orderId: string): UseQueryResult<SellerInvoiceVi
         // surfacing as a query error.
         const err = e as { status?: number };
         if (err.status === 404) return null;
+        if (
+          e instanceof ApiError &&
+          (e.body as { code?: unknown } | null)?.code === INVOICE_NOT_FOR_RESELLER_ORDER
+        ) {
+          return { refused: serverVerdict(e) } satisfies InvoiceRefused;
+        }
         throw e;
       }
     },

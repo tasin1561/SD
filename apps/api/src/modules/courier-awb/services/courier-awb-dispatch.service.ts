@@ -69,6 +69,20 @@ export interface DispatchAwbInput {
   readonly lengthCm: number;
   readonly breadthCm: number;
   readonly heightCm: number;
+
+  /**
+   * RS-10 — the name the customer sees as the SELLER ("sold by" on the
+   * courier's label), set ONLY when the order was sold by a reseller
+   * store: then it is the store's name, never the underlying seller's.
+   *
+   * ABSENT for every other order, and absent means the courier payload
+   * is exactly what it was before RS-10 — Delhivery's `seller_name`
+   * stays the present-but-empty key their sample sends, Shiprocket gets
+   * no `reseller_name` at all. Only the displayed name changes: the
+   * pickup location, the return address and everything a courier
+   * matches on are untouched.
+   */
+  readonly soldByName?: string;
 }
 
 export interface DispatchLabelInput {
@@ -341,6 +355,10 @@ export class CourierAwbDispatchService {
       // `breadth`. Same box; the dispatcher is where that stops mattering.
       widthCm: input.breadthCm,
       heightCm: input.heightCm,
+      // RS-10: a reseller store's name as `seller_name` ("sold by" on
+      // the label). Absent for any other order, so its payload is
+      // byte-identical to before.
+      ...(input.soldByName === undefined ? {} : { sellerName: input.soldByName }),
     };
     const r = await this.delhivery.generateAwb(req, actor, input.courierAccountId);
     return {
@@ -402,6 +420,8 @@ export class CourierAwbDispatchService {
       lengthCm: input.lengthCm,
       breadthCm: input.breadthCm,
       heightCm: input.heightCm,
+      // RS-10: the reseller store's name. Absent for any other order.
+      ...(input.soldByName === undefined ? {} : { resellerName: input.soldByName }),
     };
     const r = await this.shiprocket.generateAwb(
       req,

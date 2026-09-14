@@ -16,6 +16,10 @@ import { CourierAwbDispatchService } from './courier-awb-dispatch.service';
 import { CourierDistributionService } from '../../courier-shared/services/courier-distribution.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
+import {
+  CUSTOMER_BRAND_ORDER_SELECT,
+  customerFacingBrand,
+} from '../../../common/brand/customer-facing-brand';
 
 /** Magic bytes of the two image formats a courier label may arrive as. */
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -191,7 +195,13 @@ export class AwbGenerationService {
         orderShipments: {
           select: {
             order: {
-              select: { sellerId: true, orderNumber: true, paymentMode: true },
+              select: {
+                sellerId: true,
+                orderNumber: true,
+                paymentMode: true,
+                // RS-10 — who the customer bought from ("sold by").
+                ...CUSTOMER_BRAND_ORDER_SELECT,
+              },
             },
           },
           orderBy: { shipmentSequence: 'asc' },
@@ -337,6 +347,9 @@ export class AwbGenerationService {
 
     const runner = courierActor.runner('awb-generation', shipmentId);
     const sellerId = shipment.orderShipments[0]?.order.sellerId ?? null;
+    // RS-10: a reseller-store order books with the STORE as the seller
+    // the customer sees; every other order sends nothing new.
+    const brand = customerFacingBrand(shipment.orderShipments[0]?.order ?? {});
 
     const dispatchInput = {
       courierCode: shipment.courierCode,
@@ -369,6 +382,7 @@ export class AwbGenerationService {
       lengthCm: Number(shipment.lengthCm ?? 10),
       breadthCm: Number(shipment.widthCm ?? 10),
       heightCm: Number(shipment.heightCm ?? 10),
+      ...(brand.kind === 'RESELLER_STORE' ? { soldByName: brand.name } : {}),
     };
 
     // ── WHICH CARRIER (CUR-17) ───────────────────────────────────────

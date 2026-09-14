@@ -73,6 +73,10 @@ export class OrderDeliveredInvoiceListener implements OnApplicationBootstrap, On
 
   private async handle(event: OrderLifecycleEvent): Promise<void> {
     if (event.to !== OrderStatus.DELIVERED) return;
+    // RS-10 / decision 8: a reseller-store order gets no tax invoice.
+    // Skipped quietly here — the refusal is the rule working, not an
+    // error worth a log line on every delivery.
+    if (await this.invoices.isResellerOrder(event.orderId)) return;
     await this.invoices.generateForOrder(event.orderId);
   }
 }

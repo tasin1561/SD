@@ -3339,9 +3339,9 @@ const notificationTemplates: TemplateSeed[] = [
     subject:
       'Your order {{ order_number }} was delivered / आपका ऑर्डर {{ order_number }} डिलीवर हो गया',
     bodyTemplate:
-      'Hi {{ customer_name }}, your order {{ order_number }} was delivered on {{ delivered_at }}. Thank you for shopping with {{ seller_company_name }}. Questions? Reply or visit {{ tracking_url }}.\n\n' +
+      'Hi {{ customer_name }}, your order {{ order_number }} was delivered on {{ delivered_at }}. Thank you for shopping with {{ store_name }}. Questions? Reply or visit {{ tracking_url }}.\n\n' +
       '---\n\n' +
-      'नमस्ते {{ customer_name }}, आपका ऑर्डर {{ order_number }} {{ delivered_at }} को डिलीवर हो गया है। {{ seller_company_name }} से खरीदारी करने के लिए धन्यवाद। प्रश्न? उत्तर दें या यहाँ जाएँ: {{ tracking_url }}',
+      'नमस्ते {{ customer_name }}, आपका ऑर्डर {{ order_number }} {{ delivered_at }} को डिलीवर हो गया है। {{ store_name }} से खरीदारी करने के लिए धन्यवाद। प्रश्न? उत्तर दें या यहाँ जाएँ: {{ tracking_url }}',
   },
   // ---- Module 11 — Lifecycle-event fan-out templates -----------------
   // Customer templates: bilingual body (EN + HI in one email; Q6 — per-
@@ -3359,9 +3359,9 @@ const notificationTemplates: TemplateSeed[] = [
     subject:
       'Your order {{ order_number }} has shipped (AWB {{ awb_number }}) / आपका ऑर्डर {{ order_number }} शिप हो गया',
     bodyTemplate:
-      'Hi {{ customer_name }}, your order {{ order_number }} from {{ seller_company_name }} has been dispatched via {{ courier_name }} (AWB {{ awb_number }}). Track its progress any time at {{ tracking_url }}. Expected delivery: {{ expected_delivery_at }}.\n\n' +
+      'Hi {{ customer_name }}, your order {{ order_number }} from {{ store_name }} has been dispatched via {{ courier_name }} (AWB {{ awb_number }}). Track its progress any time at {{ tracking_url }}. Expected delivery: {{ expected_delivery_at }}.\n\n' +
       '---\n\n' +
-      'नमस्ते {{ customer_name }}, {{ seller_company_name }} से आपका ऑर्डर {{ order_number }} {{ courier_name }} के माध्यम से शिप कर दिया गया है (AWB {{ awb_number }})। यहाँ ट्रैक करें: {{ tracking_url }}. अनुमानित डिलीवरी: {{ expected_delivery_at }}.',
+      'नमस्ते {{ customer_name }}, {{ store_name }} से आपका ऑर्डर {{ order_number }} {{ courier_name }} के माध्यम से शिप कर दिया गया है (AWB {{ awb_number }})। यहाँ ट्रैक करें: {{ tracking_url }}. अनुमानित डिलीवरी: {{ expected_delivery_at }}.',
   },
   {
     code: 'customer.order_out_for_delivery.email',
@@ -3395,9 +3395,9 @@ const notificationTemplates: TemplateSeed[] = [
     subject:
       'Your order {{ order_number }} was cancelled / आपका ऑर्डर {{ order_number }} रद्द कर दिया गया',
     bodyTemplate:
-      'Hi {{ customer_name }}, your order {{ order_number }} from {{ seller_company_name }} has been cancelled. Reason: {{ cancellation_reason }}. If this was unexpected, please reply to this email or contact {{ support_email }}.\n\n' +
+      'Hi {{ customer_name }}, your order {{ order_number }} from {{ store_name }} has been cancelled. Reason: {{ cancellation_reason }}. If this was unexpected, please reply to this email or contact {{ support_email }}.\n\n' +
       '---\n\n' +
-      'नमस्ते {{ customer_name }}, {{ seller_company_name }} से आपका ऑर्डर {{ order_number }} रद्द कर दिया गया है। कारण: {{ cancellation_reason }}। यदि यह अप्रत्याशित था, तो कृपया इस ईमेल का उत्तर दें या {{ support_email }} से संपर्क करें।',
+      'नमस्ते {{ customer_name }}, {{ store_name }} से आपका ऑर्डर {{ order_number }} रद्द कर दिया गया है। कारण: {{ cancellation_reason }}। यदि यह अप्रत्याशित था, तो कृपया इस ईमेल का उत्तर दें या {{ support_email }} से संपर्क करें।',
   },
   // Seller lifecycle templates (EN only — Q6). Some lifecycle events
   // already had seeded seller templates from earlier modules and are

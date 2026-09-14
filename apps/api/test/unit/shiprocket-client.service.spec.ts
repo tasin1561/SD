@@ -351,3 +351,60 @@ describe('ShiprocketClientService — a refusal is not a timeout', () => {
     expect(classify('pincode not serviceable')).toBe('NON_SERVICEABLE');
   });
 });
+
+/**
+ * RS-10 — `reseller_name` on the adhoc create. A channel order's body is
+ * exactly what it was; a reseller order adds that ONE key.
+ */
+describe('ShiprocketClientService — RS-10 reseller_name', () => {
+  const BODY_KEYS_BEFORE_RS10 = [
+    'order_id',
+    'order_date',
+    'pickup_location',
+    'billing_customer_name',
+    'billing_last_name',
+    'billing_address',
+    'billing_address_2',
+    'billing_city',
+    'billing_pincode',
+    'billing_state',
+    'billing_country',
+    'billing_email',
+    'billing_phone',
+    'shipping_is_billing',
+    'order_items',
+    'payment_method',
+    'sub_total',
+    'length',
+    'breadth',
+    'height',
+    'weight',
+  ];
+
+  async function createBody(req: ShiprocketAwbRequest): Promise<Record<string, unknown>> {
+    const sut = makeSut({
+      responses: { 'orders/create/adhoc': OK_CREATE, 'courier/assign/awb': OK_ASSIGN },
+    });
+    await sut.svc.generateAwb(req, 'acct-1');
+    const call = sut.calls.find((c) => c.path.includes('orders/create/adhoc'));
+    return { ...(call?.body as Record<string, unknown>) };
+  }
+
+  it('a channel order: the create body has exactly the pre-RS-10 keys, no reseller_name', async () => {
+    const body = await createBody(REQ);
+    expect(Object.keys(body)).toEqual(BODY_KEYS_BEFORE_RS10);
+    expect(body).not.toHaveProperty('reseller_name');
+  });
+
+  it('a reseller order: reseller_name is the store and nothing else changes', async () => {
+    const plain = await createBody(REQ);
+    const store = await createBody({ ...REQ, resellerName: 'Kurta Corner' });
+    expect(store.reseller_name).toBe('Kurta Corner');
+    // The pickup location — what Shiprocket matches on — is untouched.
+    expect(store.pickup_location).toBe(plain.pickup_location);
+    delete store.reseller_name;
+    delete store.order_date;
+    delete plain.order_date;
+    expect(store).toEqual(plain);
+  });
+});

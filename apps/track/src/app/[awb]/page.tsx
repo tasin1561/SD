@@ -199,6 +199,32 @@ export default async function AwbPage({
             </div>
 
             <dl className="mt-5 pt-5 border-t border-line grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              {/* RS-10: only a reseller store's order carries soldBy —
+                  the customer bought from THAT business, so that is the
+                  name they see. Every other order renders as before. */}
+              {data.soldBy && (
+                <div data-sold-by>
+                  <dt className="telemetry text-fg-muted mb-1">{t(locale, 'soldBy')}</dt>
+                  <dd className="text-fg-strong m-0 flex items-center gap-2">
+                    {data.soldBy.logoUrl && (
+                      // A 15-minute presigned Spaces URL: next/image would
+                      // need the bucket as a remote pattern and would cache
+                      // an expiring signature, so a plain <img> is correct.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={data.soldBy.logoUrl}
+                        alt=""
+                        aria-hidden="true"
+                        width={28}
+                        height={28}
+                        className="h-7 w-7 shrink-0 rounded-md object-contain bg-surface"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    <span>{data.soldBy.name}</span>
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="telemetry text-fg-muted mb-1">{t(locale, 'destination')}</dt>
                 <dd className="text-fg-strong m-0">{data.destinationCity}</dd>

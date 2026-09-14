@@ -14,6 +14,10 @@ import {
 import type { Subscription } from 'rxjs';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { stripSellerPrefix } from '../../../common/text/recipient-name';
+import {
+  CUSTOMER_BRAND_ORDER_SELECT,
+  customerFacingBrand,
+} from '../../../common/brand/customer-facing-brand';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
@@ -195,6 +199,20 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
       ? `${this.env.publicTrackingUrl}/${encodeURIComponent(ctx.awbNumber)}`
       : '';
     const variables = this.buildVariables(ctx, event, trackingUrl);
+    // RS-10 — what a CUSTOMER target renders with. For a reseller-store
+    // order the seller's company is replaced by the store's name in
+    // EVERY company-ish variable, so no template — including one still
+    // on its pre-RS-10 wording in the database until the deploy's
+    // re-seed — can put the underlying seller in front of the customer.
+    // For every other order it is the same object: nothing changes.
+    const customerVariables: EmailVariables = ctx.isResellerOrder
+      ? {
+          ...variables,
+          company_name: ctx.customerBrandName,
+          seller_company_name: ctx.customerBrandName,
+          store_name: ctx.customerBrandName,
+        }
+      : variables;
     const eventIdBase = `order_status:${event.statusEventId}`;
     const triggerEvent = `order_status:${event.from}_to_${event.to}`;
 
@@ -238,7 +256,8 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
         templateCode: target.templateCode,
         locale,
         toEmail: resolved.toEmail,
-        variables,
+        // RS-10: a customer of a reseller store is told about THE STORE.
+        variables: target.recipientType === 'CUSTOMER' ? customerVariables : variables,
         orderId: ctx.orderId,
         // DELIBERATELY null: a notification_logs.shipment_id FK
         // INSERT acquires a PG `FOR KEY SHARE` row lock on the
@@ -461,6 +480,10 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
       order_number: ctx.orderNumber,
       company_name: ctx.companyName ?? '',
       seller_company_name: ctx.companyName ?? '',
+      // RS-10 — the business the CUSTOMER bought from: a reseller store's
+      // name, otherwise the seller's company (never blank for an order
+      // that has one, so a channel order's email reads exactly as before).
+      store_name: ctx.customerBrandName,
       customer_name: ctx.recipientName ?? '',
       // Recipient block (from order snapshot per ORD-6)
       recipient_name: ctx.recipientName ?? '',
@@ -518,6 +541,10 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
             initials: true,
           },
         },
+        // RS-10 — who the customer bought from (the helper's columns;
+        // `seller.companyName` is already above).
+        storeNameSnapshot: CUSTOMER_BRAND_ORDER_SELECT.storeNameSnapshot,
+        store: CUSTOMER_BRAND_ORDER_SELECT.store,
         // The live shipment (excluding CANCELLED / FAILED_AT_CREATION
         // — same predicate transitionWithDispatch uses) so we get the
         // AWB + courier display name. M13 CP2.A.1 added the latest
@@ -567,6 +594,7 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
     // → empty (the NDR templates read naturally without it; the M11
     // generic-copy fallback from the original M11 work remains the
     // intent).
+    const brand = customerFacingBrand(order);
     const latestAttempt = liveShipment?.deliveryAttempts?.[0] ?? null;
     const ndrReason: string | null = latestAttempt?.failureReason
       ? humanizeFailureReason(latestAttempt.failureReason)
@@ -577,6 +605,8 @@ export class NotificationListener implements OnApplicationBootstrap, OnModuleDes
       sellerId: order.sellerId,
       sellerEmail: order.seller.email,
       companyName: order.seller.companyName ?? null,
+      isResellerOrder: brand.kind === 'RESELLER_STORE',
+      customerBrandName: brand.name ?? '',
       customerId: order.customerId,
       customerLanguage: order.customer?.preferredLanguage ?? null,
       // The stored name carries the seller's code (see
@@ -617,6 +647,11 @@ interface OrderContext {
   readonly sellerId: string;
   readonly sellerEmail: string;
   readonly companyName: string | null;
+  /** RS-10 — sold by a reseller store (`seller_stores.kind = RESELLER`). */
+  readonly isResellerOrder: boolean;
+  /** RS-10 — the business the customer bought from: the store's name on
+   *  a reseller order, the seller's company otherwise ('' only if none). */
+  readonly customerBrandName: string;
   readonly customerId: string | null;
   /** Their stored preference. Null when the order has no customer row. */
   readonly customerLanguage: string | null;

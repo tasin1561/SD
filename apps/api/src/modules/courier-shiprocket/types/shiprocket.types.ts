@@ -90,6 +90,13 @@ export interface ShiprocketCreateOrderRequest {
   readonly height: number;
   /** KILOGRAMS. Ours are grams everywhere — converted at the boundary. */
   readonly weight: number;
+  /**
+   * RS-10 — the business the customer bought from, on a reseller-store
+   * order ONLY. An optional field of their adhoc create; never sent for
+   * any other order, so those bodies are unchanged. Display only — the
+   * pickup location (what they match on) is untouched.
+   */
+  readonly reseller_name?: string;
 }
 
 export interface ShiprocketCreateOrderResponse {
@@ -203,6 +210,9 @@ export interface ShiprocketAwbRequest {
   readonly lengthCm: number;
   readonly breadthCm: number;
   readonly heightCm: number;
+  /** RS-10 — the reseller store the customer bought from. Sent as
+   *  `reseller_name`; absent for every other order. */
+  readonly resellerName?: string;
 }
 
 export type ShiprocketAwbFailure = 'NON_SERVICEABLE' | 'TRANSIENT';

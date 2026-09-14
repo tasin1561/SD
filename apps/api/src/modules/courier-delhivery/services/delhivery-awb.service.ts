@@ -364,7 +364,13 @@ export class DelhiveryAwbService implements Pick<DelhiveryClient, 'generateAwb'>
       ...(req.fragile === undefined ? {} : { fragile_shipment: req.fragile }),
       ...(req.dangerousGood === undefined ? {} : { dangerous_good: req.dangerousGood }),
       ...(req.plasticPackaging === undefined ? {} : { plastic_packaging: req.plasticPackaging }),
-      ...(req.sellerName === undefined ? {} : { seller_name: req.sellerName }),
+      // RS-10: set only for a reseller-store order (the store's name).
+      // Sanitised like every other free text we send — a store called
+      // "Priya's; Kurtis" must not fail the create on their rejected
+      // characters. Absent ⇒ the '' above, exactly as before.
+      ...(req.sellerName === undefined
+        ? {}
+        : { seller_name: sanitiseForDelhivery(req.sellerName) }),
       ...(req.sellerAddress === undefined ? {} : { seller_add: req.sellerAddress }),
       ...(req.sellerInvoiceNumber === undefined ? {} : { seller_inv: req.sellerInvoiceNumber }),
       ...(req.ewaybillNumber === undefined ? {} : { ewbn: req.ewaybillNumber }),

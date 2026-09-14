@@ -53,6 +53,8 @@ export class SellerInvoiceController {
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
   ) {
     await this.assertOwned(seller.id, id);
+    // RS-10: named refusal for a reseller-store order (decision 8).
+    await this.svc.assertInvoiceable(id);
     const inv = await this.svc.getForSellerOrder(seller.id, id);
     if (!inv) {
       throw new NotFoundException({
@@ -97,6 +99,7 @@ export class SellerInvoiceController {
     @Res() res: Response,
   ): Promise<void> {
     await this.assertOwned(seller.id, id);
+    await this.svc.assertInvoiceable(id);
     const inv = await this.svc.getForSellerOrder(seller.id, id);
     if (inv === null || inv.pdfUrl === null) {
       throw new NotFoundException({
