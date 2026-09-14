@@ -23,7 +23,7 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
 import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
-import { parseAmount, StoreWalletService } from './store-wallet.service';
+import { parseAmount, StoreWalletService, STORE_WALLET_TX_OPTIONS } from './store-wallet.service';
 
 const PROOF_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const PROOF_PUT_TTL_SECONDS = 15 * 60;
@@ -207,7 +207,7 @@ export class StoreTopupService {
         },
         include: VIEW_INCLUDE,
       });
-    });
+    }, STORE_WALLET_TX_OPTIONS);
 
     await this.audit.log({
       actorType: ActorType.STORE,
@@ -381,7 +381,7 @@ export class StoreTopupService {
         data: { storeEntryId: entry.id },
       });
       return { entryId: entry.id, repaid: split.toCapital };
-    });
+    }, STORE_WALLET_TX_OPTIONS);
 
     await this.audit.log({
       actorType: ActorType.STAFF,

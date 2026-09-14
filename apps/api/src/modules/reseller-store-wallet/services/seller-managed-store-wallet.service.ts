@@ -17,7 +17,12 @@ import {
   isUniqueViolation,
 } from '../../treasury/services/bank-ledger.service';
 import { storeWalletBalance } from '../../treasury/services/store-wallet-balances';
-import { parseAmount, StoreWalletService, type WalletStore } from './store-wallet.service';
+import {
+  parseAmount,
+  StoreWalletService,
+  type WalletStore,
+  STORE_WALLET_TX_OPTIONS,
+} from './store-wallet.service';
 
 const MIN_PAYOUT_NOTE = 5;
 const MAX_NOTE = 500;
@@ -128,7 +133,7 @@ export class SellerManagedStoreWalletService {
           after: storeEntry.runningBalanceAfter,
           store,
         };
-      });
+      }, STORE_WALLET_TX_OPTIONS);
     } catch (err) {
       const raced = isUniqueViolation(err)
         ? await this.replay(key, storeId, StoreWalletEntryDirection.SELLER_TOPUP, amount)
@@ -225,7 +230,7 @@ export class SellerManagedStoreWalletService {
           sellerEntryId: sellerEntry.id,
           after: storeEntry.runningBalanceAfter,
         };
-      });
+      }, STORE_WALLET_TX_OPTIONS);
     } catch (err) {
       const raced = isUniqueViolation(err)
         ? await this.replay(key, storeId, StoreWalletEntryDirection.SELLER_PAYOUT, amount)

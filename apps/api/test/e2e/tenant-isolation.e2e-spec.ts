@@ -736,7 +736,9 @@ describe('cross-tenant isolation (e2e)', () => {
     await request(h.baseUrl)
       .put(`/seller/reseller-price-list/${onB}`)
       .set(beta.auth)
-      .send({ transferPriceInr: '99.00' })
+      // A figure that cannot appear inside another price on store A's
+      // response ('99.00' is inside '399.00', A's suggested retail).
+      .send({ transferPriceInr: '87.65' })
       .expect(200);
     await request(h.baseUrl)
       .put(`/seller/reseller-stores/${storeB.storeId}/catalogue/${onB}`)
@@ -751,7 +753,7 @@ describe('cross-tenant isolation (e2e)', () => {
     // Nothing in the warehouse ⇒ nothing to show, never a guess.
     expect(items[0]?.availableQty).toBe(0);
     const text = JSON.stringify(cat.body);
-    for (const leak of [offA, onB, storeB.storeName, '99.00']) expect(text).not.toContain(leak);
+    for (const leak of [offA, onB, storeB.storeName, '87.65']) expect(text).not.toContain(leak);
     for (const key of [
       'hiddenPercent',
       'setAside',

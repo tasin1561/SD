@@ -24,7 +24,7 @@ import {
   isUniqueViolation,
 } from '../../treasury/services/bank-ledger.service';
 import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
-import { parseAmount, StoreWalletService } from './store-wallet.service';
+import { parseAmount, StoreWalletService, STORE_WALLET_TX_OPTIONS } from './store-wallet.service';
 
 const ZERO = new Prisma.Decimal(0);
 const OPEN: readonly WithdrawalRequestStatus[] = [
@@ -152,7 +152,7 @@ export class StoreWithdrawalService {
         },
         include: VIEW_INCLUDE,
       });
-    });
+    }, STORE_WALLET_TX_OPTIONS);
 
     await this.audit.log({
       actorType: ActorType.STORE,
@@ -227,7 +227,7 @@ export class StoreWithdrawalService {
           message: 'Someone else resolved this request first',
         });
       }
-    });
+    }, STORE_WALLET_TX_OPTIONS);
     await this.audit.log({
       actorType: ActorType.STAFF,
       staffUserId: staffId,
@@ -444,7 +444,7 @@ export class StoreWithdrawalService {
           data: { storeEntryId: entry.id },
         });
         return entry.id;
-      });
+      }, STORE_WALLET_TX_OPTIONS);
     } catch (err) {
       const raced = isUniqueViolation(err)
         ? await this.replay(key, id, input.paidFromAccountId, reference)

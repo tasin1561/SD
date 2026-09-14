@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { HttpException } from '@nestjs/common';
 import request from 'supertest';
 import {
   ActorType,
@@ -141,6 +142,21 @@ describe('Store wallet concurrency (e2e)', () => {
     );
   }
 
+  /** A refusal's code (or the error message), so a failed count says WHY. */
+  function codeOf(reason: unknown): string {
+    if (reason instanceof HttpException) {
+      const body = reason.getResponse();
+      if (typeof body === 'object' && body !== null && 'code' in body) {
+        return String((body as { code: unknown }).code);
+      }
+    }
+    return reason instanceof Error ? reason.message : String(reason);
+  }
+
+  function refusals(out: PromiseSettledResult<unknown>[]): string[] {
+    return out.flatMap((p) => (p.status === 'rejected' ? [codeOf(p.reason)] : []));
+  }
+
   /** Every running balance equals the one before plus this entry — a correct chain. */
   async function expectStoreChain(storeId: string): Promise<Prisma.Decimal> {
     const rows = await h.prisma.storeWalletEntry.findMany({
@@ -222,6 +238,10 @@ describe('Store wallet concurrency (e2e)', () => {
       ),
     );
     // Exactly eight fit in ₹800; the other two were refused, not overdrawn.
+    expect(refusals(payouts)).toEqual([
+      'STORE_PAYOUT_EXCEEDS_BALANCE',
+      'STORE_PAYOUT_EXCEEDS_BALANCE',
+    ]);
     expect(payouts.filter((p) => p.status === 'fulfilled')).toHaveLength(8);
     expect((await expectStoreChain(storeId)).toFixed(2)).toBe('0.00');
     expect((await sellerBalance()).toFixed(2)).toBe('1000.00');
@@ -234,6 +254,11 @@ describe('Store wallet concurrency (e2e)', () => {
     const out = await Promise.allSettled(
       Array.from({ length: 5 }, () => moves.topUp(sellerId, storeId, { amountInr: '100' }, actor)),
     );
+    expect(refusals(out)).toEqual([
+      'STORE_TOPUP_EXCEEDS_WITHDRAWABLE',
+      'STORE_TOPUP_EXCEEDS_WITHDRAWABLE',
+      'STORE_TOPUP_EXCEEDS_WITHDRAWABLE',
+    ]);
     expect(out.filter((p) => p.status === 'fulfilled')).toHaveLength(2);
     expect((await sellerBalance()).toFixed(2)).toBe('50.00');
     expect((await expectStoreChain(storeId)).toFixed(2)).toBe('200.00');

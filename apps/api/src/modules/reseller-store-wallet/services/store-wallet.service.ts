@@ -28,6 +28,16 @@ import {
   storeWithdrawalsHeld,
 } from '../../treasury/services/store-wallet-balances';
 
+/**
+ * Every store-wallet money transaction serialises on the SELLER's WALLET
+ * lock, so under contention a caller legitimately waits for the ones ahead
+ * of it. Prisma's defaults (2 s to get a connection, 5 s for the whole
+ * transaction) turn that ordinary queue into failures: the store-wallet
+ * concurrency e2e timed out at eight concurrent top-ups. Same shape as
+ * `pnl-period.service.ts`'s TX_OPTIONS.
+ */
+export const STORE_WALLET_TX_OPTIONS = { maxWait: 15_000, timeout: 30_000 } as const;
+
 type TxClient = Prisma.TransactionClient;
 
 const ZERO = new Prisma.Decimal(0);
@@ -515,7 +525,7 @@ export class StoreWalletService {
           amountInr: (withdrawals._sum.amountInr ?? ZERO).toFixed(2),
         },
       };
-    });
+    }, STORE_WALLET_TX_OPTIONS);
   }
 
   /**
