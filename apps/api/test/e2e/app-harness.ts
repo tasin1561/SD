@@ -463,6 +463,14 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // but it references courier_accounts, so it must be cleared here or
         // one suite's transactions leak into the next suite's netting.
         'courier_wallet_transactions',
+        // PNL-CF-1 closed months and their carry-forwards. pnl_periods FKs
+        // staff_users (SET NULL); carry-forwards FK-RESTRICT the periods,
+        // so they go first. A closed month leaking into the next suite
+        // would refuse that suite's closes as "a later month is closed"
+        // (MUST #12).
+        'pnl_carry_forwards',
+        'pnl_snapshot_rows',
+        'pnl_periods',
         // Shiprocket cost readings: a leaf referencing shipments and
         // courier_accounts (RESTRICT) — cleared here for the same reason.
         'courier_cost_readings',

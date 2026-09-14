@@ -162,6 +162,11 @@ export function AuthedShell({
         { href: '/treasury', label: 'Treasury', icon: <Vault size={15} /> },
         { href: '/courier-wallet', label: 'Courier wallets', icon: <Wallet size={15} /> },
         { href: '/pnl', label: 'Profit & loss', icon: <TrendingUp size={15} /> },
+        {
+          href: '/pnl/carry-forward',
+          label: 'Carry-forward P&L',
+          icon: <TrendingUp size={15} />,
+        },
         { href: '/expenses', label: 'Expenses', icon: <ReceiptText size={15} /> },
         { href: '/liabilities', label: 'What we owe', icon: <Scale size={15} /> },
         { href: '/bank-accounts', label: 'Bank accounts', icon: <Landmark size={15} /> },
