@@ -4,7 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, AuditSeverity, Prisma } from '@skydrop/db';
+import { ActorType, AuditSeverity, Prisma, SellerStoreKind } from '@skydrop/db';
+
+/**
+ * RS-1 (2026-09-14): this service is the CHANNEL stores' writer and
+ * reader. Every query carries `kind: CHANNEL`, so a reseller store — a
+ * separate business with its own lifecycle, owned by ResellerStoreService
+ * — never appears in the order form's selector, the channel settings
+ * page or the admin channel list, and cannot be renamed, defaulted or
+ * closed through here.
+ */
+const CHANNEL = SellerStoreKind.CHANNEL;
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 
@@ -137,7 +147,7 @@ export class SellerStoreService {
         companyName: true,
         email: true,
         stores: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, kind: CHANNEL },
           orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
           select: {
             id: true,
@@ -171,6 +181,7 @@ export class SellerStoreService {
     const rows = await this.prisma.client.sellerStore.findMany({
       where: {
         sellerId,
+        kind: CHANNEL,
         deletedAt: null,
         ...(includeInactive ? {} : { isActive: true }),
       },
@@ -220,10 +231,19 @@ export class SellerStoreService {
         // sellerId in the WHERE, never fetched-then-compared: a miss is
         // a 404 that says nothing about whether the row exists.
         where: { id: storeId, sellerId, deletedAt: null },
-        select: { id: true, name: true, isActive: true },
+        select: { id: true, name: true, isActive: true, kind: true },
       });
       if (store === null) {
         throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such store' });
+      }
+      if (store.kind !== CHANNEL) {
+        // RS-11: a reseller store places its own orders from its own
+        // portal (phase 3), carrying the RS-4 snapshot. Filing a seller
+        // order under one here would skip every term that makes it one.
+        throw new ConflictException({
+          code: 'STORE_IS_RESELLER',
+          message: `“${store.name}” is a reseller store. Its orders are placed from its own portal.`,
+        });
       }
       if (!store.isActive) {
         throw new ConflictException({
@@ -308,7 +328,7 @@ export class SellerStoreService {
     actor: StoreActor,
   ): Promise<StoreView> {
     const before = await this.prisma.client.sellerStore.findFirst({
-      where: { id: storeId, sellerId, deletedAt: null },
+      where: { id: storeId, sellerId, kind: CHANNEL, deletedAt: null },
       select: { name: true, note: true },
     });
     if (before === null) {
@@ -365,7 +385,7 @@ export class SellerStoreService {
    */
   async makeDefault(sellerId: string, storeId: string, actor: StoreActor): Promise<StoreView> {
     const target = await this.prisma.client.sellerStore.findFirst({
-      where: { id: storeId, sellerId, deletedAt: null },
+      where: { id: storeId, sellerId, kind: CHANNEL, deletedAt: null },
       select: { id: true, name: true, isActive: true, isDefault: true },
     });
     if (target === null) {
@@ -415,7 +435,7 @@ export class SellerStoreService {
     actor: StoreActor,
   ): Promise<StoreView> {
     const store = await this.prisma.client.sellerStore.findFirst({
-      where: { id: storeId, sellerId, deletedAt: null },
+      where: { id: storeId, sellerId, kind: CHANNEL, deletedAt: null },
       select: { name: true, isDefault: true },
     });
     if (store === null) {
@@ -432,7 +452,7 @@ export class SellerStoreService {
     // Guarded on what was read: a concurrent promote-to-default must
     // not have its store closed underneath it.
     const changed = await this.prisma.client.sellerStore.updateMany({
-      where: { id: storeId, sellerId, deletedAt: null, isDefault: store.isDefault },
+      where: { id: storeId, sellerId, kind: CHANNEL, deletedAt: null, isDefault: store.isDefault },
       data: { isActive },
     });
     if (changed.count === 0) {

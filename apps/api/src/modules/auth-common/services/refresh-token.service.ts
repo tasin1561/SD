@@ -10,7 +10,13 @@ type DbClient = PrismaClient | Prisma.TransactionClient;
 
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days, per spec
 
-export type SubjectKind = 'staff' | 'seller';
+/**
+ * Whose session. RS-2 added `store` — a reseller store user — as the
+ * third identity; every branch below is an exhaustive switch over this
+ * union, so a fourth fails to compile until somebody decides where its
+ * tokens live.
+ */
+export type SubjectKind = 'staff' | 'seller' | 'store';
 
 export interface IssueRefreshInput {
   subject: SubjectKind;
@@ -39,6 +45,24 @@ export interface RotateOutput {
   issued: IssuedRefresh;
 }
 
+interface TokenRow {
+  id: string;
+  userId: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+}
+
+function actorTypeFor(subject: SubjectKind): ActorType {
+  switch (subject) {
+    case 'staff':
+      return ActorType.STAFF;
+    case 'seller':
+      return ActorType.SELLER;
+    case 'store':
+      return ActorType.STORE;
+  }
+}
+
 /**
  * Implements the rotation + reuse-detection refresh-token flow described in
  * the auth spec.
@@ -55,6 +79,11 @@ export interface RotateOutput {
  *               4. throw UnauthorizedException.
  *             Otherwise: revoke the presented row, insert a fresh one, return
  *             the new plaintext. Whole rotate path is wrapped in a tx.
+ *
+ * The three subjects keep SEPARATE tables (staff / seller / store refresh
+ * tokens): a token is only ever looked up in its own subject's table, so
+ * presenting a seller's refresh cookie to the store refresh endpoint finds
+ * nothing.
  */
 @Injectable()
 export class RefreshTokenService {
@@ -77,20 +106,33 @@ export class RefreshTokenService {
       expiresAt,
     };
 
-    const recordId =
-      input.subject === 'staff'
-        ? (
-            await client.staffRefreshToken.create({
-              data: { ...data, staffUserId: input.userId },
-              select: { id: true },
-            })
-          ).id
-        : (
-            await client.sellerRefreshToken.create({
-              data: { ...data, sellerUserId: input.userId },
-              select: { id: true },
-            })
-          ).id;
+    let recordId: string;
+    switch (input.subject) {
+      case 'staff':
+        recordId = (
+          await client.staffRefreshToken.create({
+            data: { ...data, staffUserId: input.userId },
+            select: { id: true },
+          })
+        ).id;
+        break;
+      case 'seller':
+        recordId = (
+          await client.sellerRefreshToken.create({
+            data: { ...data, sellerUserId: input.userId },
+            select: { id: true },
+          })
+        ).id;
+        break;
+      case 'store':
+        recordId = (
+          await client.storeRefreshToken.create({
+            data: { ...data, storeUserId: input.userId },
+            select: { id: true },
+          })
+        ).id;
+        break;
+    }
 
     return { token, tokenHash, expiresAt, recordId };
   }
@@ -140,11 +182,11 @@ export class RefreshTokenService {
 
       await this.audit.log(
         {
-          actorType: input.subject === 'staff' ? ActorType.STAFF : ActorType.SELLER,
+          actorType: actorTypeFor(input.subject),
           staffUserId: input.subject === 'staff' ? existing.userId : null,
-          // existing.userId is the SellerUser id for seller subject;
-          // audit_logs.seller_id is the COMPANY id and is left null
-          // here. The action + refresh-token entity_id carry the trace.
+          // For seller/store subjects existing.userId is the PERSON's id;
+          // audit_logs.seller_id is the COMPANY id and is left null here.
+          actorId: input.subject === 'staff' ? null : existing.userId,
           sellerId: null,
           action: `${input.subject}.refresh.rotated`,
           entityType: 'refresh_token',
@@ -164,19 +206,7 @@ export class RefreshTokenService {
 
   /** Revoke every active refresh token for a given user (e.g., logout-all). */
   async revokeAllForUser(input: { subject: SubjectKind; userId: string }): Promise<number> {
-    const now = new Date();
-    if (input.subject === 'staff') {
-      const r = await this.prisma.client.staffRefreshToken.updateMany({
-        where: { staffUserId: input.userId, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      return r.count;
-    }
-    const r = await this.prisma.client.sellerRefreshToken.updateMany({
-      where: { sellerUserId: input.userId, revokedAt: null },
-      data: { revokedAt: now },
-    });
-    return r.count;
+    return this.revokeFamily(this.prisma.client, input.subject, input.userId);
   }
 
   /**
@@ -186,11 +216,11 @@ export class RefreshTokenService {
    * other state (missing / expired / revoked) — NEVER throws, NEVER
    * rotates, NEVER writes anything.
    *
-   * The SSR flow (`GET /auth/{staff,seller}/me` via cookie, no bearer)
-   * depends on this. The browser holds the access token in MEMORY ONLY,
-   * so the server-rendered page boot has only the `__Host-` cookie to
-   * authenticate with — but it must NOT rotate (a server-side rotate
-   * would race the client's own silent-refresh and trip the
+   * The SSR flow (`GET /auth/{staff,seller,store}/me` via cookie, no
+   * bearer) depends on this. The browser holds the access token in
+   * MEMORY ONLY, so the server-rendered page boot has only the `__Host-`
+   * cookie to authenticate with — but it must NOT rotate (a server-side
+   * rotate would race the client's own silent-refresh and trip the
    * reuse-detection family-burn against a legitimate session).
    *
    * Strict separation from `rotate()`:
@@ -220,18 +250,16 @@ export class RefreshTokenService {
   async revokeByPlaintext(subject: SubjectKind, plaintext: string): Promise<boolean> {
     const tokenHash = this.hashes.sha256Hex(plaintext);
     const now = new Date();
-    if (subject === 'staff') {
-      const r = await this.prisma.client.staffRefreshToken.updateMany({
-        where: { tokenHash, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      return r.count > 0;
+    const where = { tokenHash, revokedAt: null };
+    const data = { revokedAt: now };
+    switch (subject) {
+      case 'staff':
+        return (await this.prisma.client.staffRefreshToken.updateMany({ where, data })).count > 0;
+      case 'seller':
+        return (await this.prisma.client.sellerRefreshToken.updateMany({ where, data })).count > 0;
+      case 'store':
+        return (await this.prisma.client.storeRefreshToken.updateMany({ where, data })).count > 0;
     }
-    const r = await this.prisma.client.sellerRefreshToken.updateMany({
-      where: { tokenHash, revokedAt: null },
-      data: { revokedAt: now },
-    });
-    return r.count > 0;
   }
 
   // --- internals ---
@@ -240,33 +268,51 @@ export class RefreshTokenService {
     tx: DbClient,
     subject: SubjectKind,
     tokenHash: string,
-  ): Promise<{
-    id: string;
-    userId: string;
-    expiresAt: Date;
-    revokedAt: Date | null;
-  } | null> {
-    if (subject === 'staff') {
-      const row = await tx.staffRefreshToken.findFirst({
-        where: { tokenHash },
-        select: { id: true, staffUserId: true, expiresAt: true, revokedAt: true },
-      });
-      return row
-        ? {
-            id: row.id,
-            userId: row.staffUserId,
-            expiresAt: row.expiresAt,
-            revokedAt: row.revokedAt,
-          }
-        : null;
+  ): Promise<TokenRow | null> {
+    switch (subject) {
+      case 'staff': {
+        const row = await tx.staffRefreshToken.findFirst({
+          where: { tokenHash },
+          select: { id: true, staffUserId: true, expiresAt: true, revokedAt: true },
+        });
+        return row
+          ? {
+              id: row.id,
+              userId: row.staffUserId,
+              expiresAt: row.expiresAt,
+              revokedAt: row.revokedAt,
+            }
+          : null;
+      }
+      case 'seller': {
+        const row = await tx.sellerRefreshToken.findFirst({
+          where: { tokenHash },
+          select: { id: true, sellerUserId: true, expiresAt: true, revokedAt: true },
+        });
+        return row
+          ? {
+              id: row.id,
+              userId: row.sellerUserId,
+              expiresAt: row.expiresAt,
+              revokedAt: row.revokedAt,
+            }
+          : null;
+      }
+      case 'store': {
+        const row = await tx.storeRefreshToken.findFirst({
+          where: { tokenHash },
+          select: { id: true, storeUserId: true, expiresAt: true, revokedAt: true },
+        });
+        return row
+          ? {
+              id: row.id,
+              userId: row.storeUserId,
+              expiresAt: row.expiresAt,
+              revokedAt: row.revokedAt,
+            }
+          : null;
+      }
     }
-    const row = await tx.sellerRefreshToken.findFirst({
-      where: { tokenHash },
-      select: { id: true, sellerUserId: true, expiresAt: true, revokedAt: true },
-    });
-    return row
-      ? { id: row.id, userId: row.sellerUserId, expiresAt: row.expiresAt, revokedAt: row.revokedAt }
-      : null;
   }
 
   private async revokeById(
@@ -274,11 +320,45 @@ export class RefreshTokenService {
     subject: SubjectKind,
     id: string,
   ): Promise<void> {
-    const now = new Date();
-    if (subject === 'staff') {
-      await tx.staffRefreshToken.update({ where: { id }, data: { revokedAt: now } });
-    } else {
-      await tx.sellerRefreshToken.update({ where: { id }, data: { revokedAt: now } });
+    const data = { revokedAt: new Date() };
+    switch (subject) {
+      case 'staff':
+        await tx.staffRefreshToken.update({ where: { id }, data });
+        return;
+      case 'seller':
+        await tx.sellerRefreshToken.update({ where: { id }, data });
+        return;
+      case 'store':
+        await tx.storeRefreshToken.update({ where: { id }, data });
+        return;
+    }
+  }
+
+  /** Revoke every live token of one user. Returns how many were revoked. */
+  private async revokeFamily(tx: DbClient, subject: SubjectKind, userId: string): Promise<number> {
+    const data = { revokedAt: new Date() };
+    switch (subject) {
+      case 'staff':
+        return (
+          await tx.staffRefreshToken.updateMany({
+            where: { staffUserId: userId, revokedAt: null },
+            data,
+          })
+        ).count;
+      case 'seller':
+        return (
+          await tx.sellerRefreshToken.updateMany({
+            where: { sellerUserId: userId, revokedAt: null },
+            data,
+          })
+        ).count;
+      case 'store':
+        return (
+          await tx.storeRefreshToken.updateMany({
+            where: { storeUserId: userId, revokedAt: null },
+            data,
+          })
+        ).count;
     }
   }
 
@@ -289,31 +369,18 @@ export class RefreshTokenService {
     context: { presentedRecordId: string; userAgent: string | null; ipAddress: string | null },
   ): Promise<void> {
     // Revoke EVERY active token for this user — burn the family.
-    const now = new Date();
-    let revokedCount: number;
-    if (subject === 'staff') {
-      const r = await tx.staffRefreshToken.updateMany({
-        where: { staffUserId: userId, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      revokedCount = r.count;
-    } else {
-      const r = await tx.sellerRefreshToken.updateMany({
-        where: { sellerUserId: userId, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      revokedCount = r.count;
-    }
+    const revokedCount = await this.revokeFamily(tx, subject, userId);
 
     // Write audit row BEFORE the surrounding throw so the event survives
     // even if the HTTP response fails downstream.
     await this.audit.log(
       {
-        actorType: subject === 'staff' ? ActorType.STAFF : ActorType.SELLER,
+        actorType: actorTypeFor(subject),
         staffUserId: subject === 'staff' ? userId : null,
-        // userId is the SellerUser id for seller subject; audit_logs.seller_id
-        // is the COMPANY id and is left null here. The refresh-token entity
-        // id below carries the trace.
+        actorId: subject === 'staff' ? null : userId,
+        // userId is the person's id for seller/store subjects;
+        // audit_logs.seller_id is the COMPANY id and is left null here.
+        // The refresh-token entity id below carries the trace.
         sellerId: null,
         action: 'security.refresh_replay_detected',
         entityType: 'refresh_token',

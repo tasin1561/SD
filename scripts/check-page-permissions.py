@@ -83,6 +83,14 @@ APPS = [
         "decorator": "RequireSellerPermissions",
         "self_service": "SellerSelfService",
     },
+    # RS-2: the reseller store portal and its own guard.
+    {
+        "name": "reseller",
+        "app": "apps/reseller",
+        "guard": "StoreJwtGuard",
+        "decorator": "RequireStorePermissions",
+        "self_service": "StoreSelfService",
+    },
 ]
 
 HTTP = "Get|Post|Patch|Put|Delete"

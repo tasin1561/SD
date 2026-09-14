@@ -17,9 +17,21 @@
  */
 import { AccessTokenStore } from './auth/token-store';
 import { SingleFlightRefresh, type RefreshOutcome } from './refresh/single-flight';
-import type { AccessTokenResponse, LoginRequest, StaffMe, SellerMe } from './endpoints/auth';
+import type {
+  AccessTokenResponse,
+  LoginRequest,
+  StaffMe,
+  SellerMe,
+  StoreMe,
+} from './endpoints/auth';
 
-export type IdentityKind = 'staff' | 'seller';
+/**
+ * Whose session this client carries. RS-2 (2026-09-14) added `store` — a
+ * reseller store user on reseller.skydrop.online — as the third identity:
+ * a PARAMETER, not a fork (FE-5). It selects `/api/auth/<kind>/*`, and
+ * nothing else in the client knows about it.
+ */
+export type IdentityKind = 'staff' | 'seller' | 'store';
 
 export interface ApiClientOptions {
   /** Same-origin base — usually empty string so all requests are
@@ -111,6 +123,13 @@ export class ApiClient {
 
   async meSeller(opts: { suppressRefresh?: boolean } = {}): Promise<SellerMe> {
     return this.request<SellerMe>('/api/auth/seller/me', {
+      method: 'GET',
+      ...(opts.suppressRefresh !== undefined ? { suppressRefresh: opts.suppressRefresh } : {}),
+    });
+  }
+
+  async meStore(opts: { suppressRefresh?: boolean } = {}): Promise<StoreMe> {
+    return this.request<StoreMe>('/api/auth/store/me', {
       method: 'GET',
       ...(opts.suppressRefresh !== undefined ? { suppressRefresh: opts.suppressRefresh } : {}),
     });

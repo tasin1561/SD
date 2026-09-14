@@ -66,6 +66,8 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     const body = (req['body'] as Record<string, unknown> | undefined) ?? {};
     const staff = req['staff'] as { id?: string } | undefined;
     const seller = req['seller'] as { id?: string } | undefined;
+    // RS-2: a store user is bucketed by THEIR id, not their store's.
+    const storeUser = req['storeUser'] as { id?: string } | undefined;
     const apiKey = req['apiKey'] as { id?: string } | undefined;
 
     if (!strategy) return `ip:${ip}`;
@@ -84,7 +86,12 @@ export class AppThrottlerGuard extends ThrottlerGuard {
       case 'ip':
         return `ip:${ip}`;
       case 'auth-user': {
-        const id = staff?.id ?? seller?.id ?? apiKey?.id ?? `ip-${ip}`;
+        const id =
+          staff?.id ??
+          seller?.id ??
+          (storeUser?.id === undefined ? undefined : `store-${storeUser.id}`) ??
+          apiKey?.id ??
+          `ip-${ip}`;
         return `user:${id}`;
       }
     }

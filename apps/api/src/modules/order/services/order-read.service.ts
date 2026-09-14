@@ -180,6 +180,29 @@ export class OrderReadService {
   }
 
   /**
+   * RS-1 — does any order filed under this store still have somewhere to
+   * go? A reseller store is closed only when none does.
+   *
+   * "In flight" is every non-terminal status, decided by the state
+   * machine (never a local list), over the DISTINCT statuses the store's
+   * orders sit in — one small grouped query however many orders there
+   * are. Takes the caller's transaction so the check can run AFTER the
+   * store's status has moved, inside the same tx (see
+   * ResellerStoreService.close).
+   */
+  async hasOrdersInFlightForStore(
+    storeId: string,
+    client?: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const db = client ?? this.prisma.client;
+    const statuses = await db.order.groupBy({
+      by: ['status'],
+      where: { storeId, deletedAt: null },
+    });
+    return statuses.some((s) => !this.stateMachine.isTerminal(s.status));
+  }
+
+  /**
    * The two figures a seller wants on a dashboard: what is still coming
    * to them, and what has arrived but not yet reached their wallet.
    *

@@ -2,6 +2,7 @@ import type {
   EarlyReservationReviewStatus,
   InboundFreightStatus,
   OrderStatus,
+  ResellerStoreStatus,
   ShipmentStatus,
   StockUnitStatus,
   TicketStatus,
@@ -12,6 +13,8 @@ import {
   inboundFreightStatusKind,
   kindTokens,
   orderStatusKind,
+  resellerStoreStatusKind,
+  resellerStoreStatusLabel,
   shipmentStatusKind,
   statusLabel,
   withdrawalStatusLabel,
@@ -88,6 +91,17 @@ export function SellerStatusBadge({
           ? 'rto' // orange — needs attention but not failed
           : 'failed'; // REJECTED — red
   return <StatusBadge kind={kind} label={status.toLowerCase()} />;
+}
+
+/** RS-1 reseller store — the same words on the seller, admin and reseller screens. */
+export function ResellerStoreStatusBadge({
+  status,
+}: {
+  readonly status: ResellerStoreStatus;
+}): ReactElement {
+  return (
+    <StatusBadge kind={resellerStoreStatusKind(status)} label={resellerStoreStatusLabel(status)} />
+  );
 }
 
 /** R7 scrap/damage + seller-issue ticket. */

@@ -5,7 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
  *   - admin     (port 3002, apps/admin)
  *   - seller    (port 3003, apps/seller)
  *   - track     (port 3004, apps/track)
- *   - marketing (port 3005, apps/marketing)
+ *   - marketing (port 3006, apps/marketing)
+ *   - reseller  (port 3005, apps/reseller — RS-2)
  *
  * Each project's specs live under apps/<name>/e2e/. Specs under
  * `e2e-shared/` run against EVERY project — that is where checks which
@@ -36,7 +37,12 @@ import { defineConfig, devices } from '@playwright/test';
 const ADMIN_PORT = 3002;
 const SELLER_PORT = 3003;
 const TRACK_PORT = 3004;
-const MARKETING_PORT = 3005;
+// RS-12 (2026-09-14): 3005 is the reseller portal's port everywhere —
+// production pm2 (`skydrop-reseller`) and local dev. Marketing moved to
+// 3006; in production it is a static export served by Caddy from disk,
+// so no process ever held 3005 for it there.
+const RESELLER_PORT = 3005;
+const MARKETING_PORT = 3006;
 
 /** Specs that must hold for every frontend, not just one. */
 const SHARED = 'e2e-shared/**/*.spec.ts';
@@ -63,6 +69,7 @@ export default defineConfig({
     'apps/seller/e2e/**/*.spec.ts',
     'apps/track/e2e/**/*.spec.ts',
     'apps/marketing/e2e/**/*.spec.ts',
+    'apps/reseller/e2e/**/*.spec.ts',
     SHARED,
   ],
   fullyParallel: false,
@@ -108,6 +115,16 @@ export default defineConfig({
         baseURL: `http://localhost:${MARKETING_PORT}`,
       },
     },
+    {
+      // RS-2 — the reseller store portal. A project, so the shared nonce
+      // CSP and responsive specs run against it by construction.
+      name: 'reseller',
+      testMatch: ['apps/reseller/e2e/**/*.spec.ts', SHARED],
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${RESELLER_PORT}`,
+      },
+    },
   ],
   webServer: [
     {
@@ -140,6 +157,13 @@ export default defineConfig({
       url: `http://localhost:${MARKETING_PORT}/`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+    },
+    {
+      command: APP_COMMAND('reseller'),
+      url: `http://localhost:${RESELLER_PORT}/login`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: { API_ORIGIN },
     },
   ],
 });

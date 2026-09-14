@@ -2678,9 +2678,41 @@ model SellerStore {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  seller      Seller       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  orders      Order[]
-  sellerUsers SellerUser[]
+  /// RS-1 (2026-09-14, docs/reseller-stores.md). CHANNEL is every store
+  /// that existed before — a sales channel inside one seller account,
+  /// unchanged. RESELLER is a separate business selling ONE seller's
+  /// stock under its own name, with its own login (store_users).
+  kind SellerStoreKind @default(CHANNEL)
+
+  /// ── RESELLER ONLY ────────────────────────────────────────────────
+  /// Every column below is NULL on a CHANNEL store and set on a
+  /// RESELLER one. A CHECK constraint in the migration
+  /// (`seller_stores_reseller_fields_ck`) makes the two shapes the only
+  /// representable ones — Prisma cannot express it, so it lives there.
+  /// `ResellerStoreService` is the only writer of the lifecycle.
+  status          ResellerStoreStatus?
+  origin          ResellerStoreOrigin?
+  walletManagedBy ResellerWalletManager? @map("wallet_managed_by")
+  /// What the customer will see (RS-10) — falls back to `name`.
+  displayName     String?                @map("display_name")
+  /// A Spaces KEY, read through a presigned URL. Nothing in the bucket
+  /// is public, so no URL is ever stored.
+  logoKey         String?                @map("logo_key")
+  logoMimeType    String?                @map("logo_mime_type")
+  contactEmail    String?                @map("contact_email")
+  /// E.164.
+  contactPhone    String?                @map("contact_phone")
+  /// When `status` last moved. Written only by a transition, so unlike
+  /// `updatedAt` it means what it says (rule 4b).
+  statusChangedAt DateTime?              @map("status_changed_at") @db.Timestamptz
+
+  seller               Seller                @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orders               Order[]
+  sellerUsers          SellerUser[]
+  storeUsers           StoreUser[]
+  storeRoles           StoreRoleDefinition[]
+  storeUserInvitations StoreUserInvitation[]
+  resellerEvents       ResellerStoreEvent[]
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -2689,7 +2721,195 @@ model SellerStore {
 
   @@unique([sellerId, name])
   @@index([sellerId, isActive])
+  @@index([kind, status])
   @@map("seller_stores")
+}
+
+/// RS-1 — every change to a reseller store's life, APPEND-ONLY.
+///
+/// The store detail's history. Written in the SAME transaction as the
+/// transition it records, which is why it is a table rather than a read
+/// of `audit_logs`: an audit write is best-effort by design and may be
+/// lost, and a history with a gap in it is worse than none. The actor
+/// is a plain id (no FK), like `audit_logs`: a history row must outlive
+/// the person who acted.
+model ResellerStoreEvent {
+  id         String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId    String                 @map("store_id") @db.Uuid
+  kind       ResellerStoreEventKind
+  fromStatus ResellerStoreStatus?   @map("from_status")
+  toStatus   ResellerStoreStatus?   @map("to_status")
+  actorType  ActorType              @map("actor_type")
+  actorId    String?                @map("actor_id") @db.Uuid
+  note       String?                @db.Text
+  data       Json?
+  createdAt  DateTime               @default(now()) @map("created_at") @db.Timestamptz
+
+  store SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
+  @@map("reseller_store_events")
+}
+
+/// RS-2 — a person who signs in to reseller.skydrop.online for ONE store.
+///
+/// A third identity beside staff and seller users, with its own tokens
+/// and its own audience on the access JWT. Never a seller user: a store
+/// is a separate business, and a store login must not be able to reach
+/// anything the seller owns.
+model StoreUser {
+  id              String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId         String    @map("store_id") @db.Uuid
+  /// Globally unique across store users (the login key). Independent of
+  /// seller_users — the same person may hold both kinds of login.
+  email           String    @unique
+  emailDisplay    String    @map("email_display")
+  passwordHash    String    @map("password_hash")
+  fullName        String    @map("full_name")
+  roleId          String    @map("role_id") @db.Uuid
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+
+  store                   SellerStore                   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  role                    StoreRoleDefinition           @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  refreshTokens           StoreRefreshToken[]
+  passwordResetTokens     StorePasswordResetToken[]
+  emailVerificationTokens StoreEmailVerificationToken[]
+  invitationsAccepted     StoreUserInvitation[]         @relation("StoreInvitationAcceptedBy")
+
+  @@index([storeId])
+  @@index([roleId])
+  @@map("store_users")
+}
+
+/// A role inside ONE reseller store — the seller-role shape, scoped by
+/// store. Five created with every store (OWNER/ADMIN/OPS/FINANCE/VIEWER);
+/// the permission KEYS are code (apps/api/src/common/auth/store-permissions.ts).
+model StoreRoleDefinition {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId     String    @map("store_id") @db.Uuid
+  key         String
+  name        String
+  description String?
+  isSystem    Boolean   @default(false) @map("is_system")
+  /// Holds every permission implicitly; its last holder cannot be moved
+  /// off it or removed.
+  isOwner     Boolean   @default(false) @map("is_owner")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  store       SellerStore           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  permissions StoreRolePermission[]
+  users       StoreUser[]
+  invitations StoreUserInvitation[]
+
+  @@unique([storeId, key])
+  @@index([storeId])
+  @@map("store_roles")
+}
+
+/// One granted store permission key. Absence IS the denial.
+model StoreRolePermission {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
+  permission String
+  grantedAt  DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  role StoreRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
+  @@index([roleId])
+  @@map("store_role_permissions")
+}
+
+/// An invitation to join a reseller store's team. The token is stored
+/// HASHED; the plaintext exists only in the email. Invited by the
+/// seller (on creating or approving the store) or by the store's own
+/// team — `invitedByActorType` says which, and the id is a plain uuid
+/// because the two live in different tables.
+model StoreUserInvitation {
+  id                 String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId            String    @map("store_id") @db.Uuid
+  email              String
+  fullName           String    @map("full_name")
+  token              String    @unique
+  roleId             String    @map("role_id") @db.Uuid
+  invitedByActorType ActorType @map("invited_by_actor_type")
+  invitedById        String?   @map("invited_by_id") @db.Uuid
+  acceptedById       String?   @map("accepted_by_id") @db.Uuid
+  expiresAt          DateTime  @map("expires_at") @db.Timestamptz
+  usedAt             DateTime? @map("used_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+
+  store      SellerStore         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  role       StoreRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  acceptedBy StoreUser?          @relation("StoreInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([storeId])
+  @@index([email])
+  @@index([expiresAt])
+  @@map("store_user_invitations")
+}
+
+model StoreRefreshToken {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeUserId String    @map("store_user_id") @db.Uuid
+  tokenHash   String    @map("token_hash")
+  userAgent   String?   @map("user_agent")
+  ipAddress   String?   @map("ip_address") @db.Inet
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  storeUser StoreUser @relation(fields: [storeUserId], references: [id], onDelete: Cascade)
+
+  @@index([storeUserId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("store_refresh_tokens")
+}
+
+model StorePasswordResetToken {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeUserId String    @map("store_user_id") @db.Uuid
+  tokenHash   String    @map("token_hash")
+  ipAddress   String?   @map("ip_address") @db.Inet
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  usedAt      DateTime? @map("used_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  storeUser StoreUser @relation(fields: [storeUserId], references: [id], onDelete: Cascade)
+
+  @@index([storeUserId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("store_password_reset_tokens")
+}
+
+model StoreEmailVerificationToken {
+  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeUserId String    @map("store_user_id") @db.Uuid
+  tokenHash   String    @map("token_hash")
+  email       String
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  usedAt      DateTime? @map("used_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  storeUser StoreUser @relation(fields: [storeUserId], references: [id], onDelete: Cascade)
+
+  @@index([storeUserId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("store_email_verification_tokens")
 }
 
 model Customer {
@@ -4812,8 +5032,60 @@ enum ActorType {
   SELLER @map("seller")
   SYSTEM @map("system")
   API    @map("api")
+  /// RS-2: a reseller store user (store_users). Its own value because
+  /// "the store did this" and "the seller did this" are different facts.
+  STORE  @map("store")
 
   @@map("actor_type")
+}
+
+/// RS-1 — what a `seller_stores` row is.
+enum SellerStoreKind {
+  CHANNEL  @map("channel")
+  RESELLER @map("reseller")
+
+  @@map("seller_store_kind")
+}
+
+/// RS-1 — a reseller store's life. PENDING → ACTIVE ↔ PAUSED → CLOSED;
+/// PENDING → REJECTED. REJECTED and CLOSED are terminal.
+enum ResellerStoreStatus {
+  PENDING_SELLER_APPROVAL @map("pending_seller_approval")
+  ACTIVE                  @map("active")
+  PAUSED                  @map("paused")
+  CLOSED                  @map("closed")
+  REJECTED                @map("rejected")
+
+  @@map("reseller_store_status")
+}
+
+/// RS-1 — who brought a reseller store in.
+enum ResellerStoreOrigin {
+  SELLER @map("seller")
+  ADMIN  @map("admin")
+
+  @@map("reseller_store_origin")
+}
+
+/// RS-6 decision 6 — who manages the store's wallet (phase 3 reads it).
+enum ResellerWalletManager {
+  SELLER  @map("seller")
+  SKYDROP @map("skydrop")
+
+  @@map("reseller_wallet_manager")
+}
+
+/// RS-1 — the kinds of row in `reseller_store_events`.
+enum ResellerStoreEventKind {
+  CREATED                @map("created")
+  APPROVED               @map("approved")
+  REJECTED               @map("rejected")
+  PAUSED                 @map("paused")
+  RESUMED                @map("resumed")
+  CLOSED                 @map("closed")
+  WALLET_MANAGER_CHANGED @map("wallet_manager_changed")
+
+  @@map("reseller_store_event_kind")
 }
 
 enum AddressOwnerType {
@@ -5902,10 +6174,12 @@ enum NotificationSubjectType {
 }
 
 enum NotificationRecipientType {
-  CUSTOMER @map("customer")
-  SELLER   @map("seller")
-  STAFF    @map("staff")
-  ADMIN    @map("admin")
+  CUSTOMER   @map("customer")
+  SELLER     @map("seller")
+  STAFF      @map("staff")
+  ADMIN      @map("admin")
+  /// RS-2: a reseller store user — the store's credential emails.
+  STORE_USER @map("store_user")
 
   @@map("notification_recipient_type")
 }

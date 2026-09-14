@@ -6,6 +6,8 @@ declare global {
       requestId?: string;
       staff?: AuthenticatedStaff;
       seller?: AuthenticatedSeller;
+      /** RS-2 — set by StoreJwtGuard. */
+      storeUser?: AuthenticatedStoreUser;
       apiKey?: AuthenticatedApiKey;
     }
   }
@@ -68,6 +70,27 @@ export interface AuthenticatedSeller {
   permissions: readonly string[];
   /** SellerUser.fullName — for audit + UI display. */
   fullName: string;
+}
+
+/**
+ * RS-2 — a reseller store user, resolved per request by StoreJwtGuard.
+ *
+ * `storeId` is the ONLY store this person may act on, and every store
+ * endpoint scopes by it in the WHERE clause. `sellerId` is carried for
+ * audit attribution, never as authority over the seller's account.
+ */
+export interface AuthenticatedStoreUser {
+  /** StoreUser.id — the person who authenticated. */
+  id: string;
+  storeId: string;
+  sellerId: string;
+  email: string;
+  fullName: string;
+  emailVerifiedAt: Date | null;
+  jti: string | null;
+  roleKey: string;
+  roleName: string;
+  permissions: readonly string[];
 }
 
 export interface AuthenticatedApiKey {

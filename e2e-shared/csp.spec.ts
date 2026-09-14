@@ -47,13 +47,14 @@ const ENTRY: Record<string, string> = {
   seller: '/login',
   track: '/',
   marketing: '/',
+  reseller: '/login',
 };
 
 /**
  * Projects whose own server emits the nonce CSP. Anything outside this
  * set is skipped with its reason named, never silently.
  */
-const SERVES_OWN_CSP = new Set(['admin', 'seller', 'track']);
+const SERVES_OWN_CSP = new Set(['admin', 'seller', 'track', 'reseller']);
 
 const SKIP_REASON: Record<string, string> = {
   marketing:

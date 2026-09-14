@@ -19,7 +19,8 @@ section.
 
 | Subdomain | Process | Port | Purpose |
 |---|---|---|---|
-| `skydrop.online` | skydrop-marketing | 3005 | Public marketing landing |
+| `skydrop.online` | — (static export, Caddy serves `/var/www/skydrop-marketing`; local dev on 3006) | 3006 | Public marketing landing |
+| `reseller.skydrop.online` | skydrop-reseller | 3005 | Reseller store portal (RS-2) |
 | `app.skydrop.online` | skydrop-seller | 3003 | Seller dashboard |
 | `admin.skydrop.online` | skydrop-admin | 3002 | Internal staff |
 | `track.skydrop.online` | skydrop-track | 3004 | Public AWB tracking (EN+HI) |
@@ -47,7 +48,8 @@ $ pnpm --filter @skydrop/api start:dev                # api on :4000
 $ pnpm --filter @skydrop/admin dev                    # admin on :3002 (separate terminal)
 $ pnpm --filter @skydrop/seller dev                   # seller on :3003 (separate terminal)
 $ pnpm --filter @skydrop/track  dev                   # track on :3004  (separate terminal)
-$ pnpm --filter @skydrop/marketing dev                # marketing on :3005 (separate terminal)
+$ pnpm --filter @skydrop/marketing dev                # marketing on :3006 (separate terminal)
+$ pnpm --filter @skydrop/reseller dev                 # reseller portal on :3005 (separate terminal)
 ```
 
 In dev mode each frontend's `/api/[...path]/route.ts` proxy forwards

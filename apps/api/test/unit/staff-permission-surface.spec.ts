@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALL_PERMISSION_KEYS } from '../../src/common/auth/permissions';
+import { ALL_PERMISSION_KEYS, RESERVED_PERMISSION_KEYS } from '../../src/common/auth/permissions';
 
 /**
  * WHICH staff endpoints are gated, and by what.
@@ -150,7 +150,23 @@ describe('staff permission surface', () => {
         (h) => h.permissions !== null && h.permissions !== 'self-service',
       ).flatMap((h) => h.permissions as readonly string[]),
     );
-    const orphaned = ALL_PERMISSION_KEYS.filter((k) => !used.has(k));
+    // RESERVED keys (RS-2 registers phase 3's) are the one named
+    // exception, and the next test pins that they stay unused.
+    const reserved = new Set(RESERVED_PERMISSION_KEYS);
+    const orphaned = ALL_PERMISSION_KEYS.filter((k) => !used.has(k) && !reserved.has(k));
     expect(orphaned).toEqual([]);
+  });
+
+  it('a reserved permission is declared by no endpoint (drop the flag when one arrives)', () => {
+    const reserved = new Set(RESERVED_PERMISSION_KEYS);
+    const declaring = STAFF_HANDLERS.filter(
+      (h) => h.permissions !== null && h.permissions !== 'self-service',
+    ).flatMap((h) =>
+      (h.permissions as readonly string[])
+        .filter((p) => reserved.has(p))
+        .map((p) => `${h.file} ${h.name}() → '${p}'`),
+    );
+    expect(declaring).toEqual([]);
+    expect([...reserved].sort()).toEqual(['reseller.credit_after_confirmation.enable']);
   });
 });

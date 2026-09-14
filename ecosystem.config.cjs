@@ -114,10 +114,15 @@ module.exports = {
     nextApp('skydrop-admin', 3002),
     nextApp('skydrop-seller', 3003),
     nextApp('skydrop-track', 3004),
+    // RS-12 (2026-09-14) — the reseller store portal, reseller.skydrop.online.
+    // Caddy reverse-proxies that host to 127.0.0.1:3005 (see
+    // docs/infrastructure.md). Loopback like the others.
+    nextApp('skydrop-reseller', 3005),
     // NO marketing process, and do not add one back. apps/marketing is
     // `output: 'export'`; `next start` refuses to run that build and
     // exits, so an entry here does nothing but respawn forever. Caddy
     // file-serves the export from /var/www/skydrop-marketing (published
-    // by scripts/deploy.sh) and nothing proxies to port 3005.
+    // by scripts/deploy.sh). Port 3005 now belongs to skydrop-reseller;
+    // marketing's LOCAL dev/serve port is 3006.
   ],
 };

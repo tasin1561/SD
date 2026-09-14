@@ -94,7 +94,7 @@ jobs:
           # change can break an API test and a frontend build equally.
           API=false; FE=false
           match '^(apps/api/|packages/db/|\.github/)' && API=true
-          match '^(apps/(admin|seller|track|marketing)/|packages/(ui|api-client|auth|db)/|e2e-shared/|playwright\.config|\.github/)' && FE=true
+          match '^(apps/(admin|seller|track|marketing|reseller)/|packages/(ui|api-client|auth|db)/|e2e-shared/|playwright\.config|\.github/)' && FE=true
           echo "api=$API"      >> "$GITHUB_OUTPUT"
           echo "frontend=$FE"  >> "$GITHUB_OUTPUT"
           echo "→ api=$API frontend=$FE"
@@ -184,6 +184,9 @@ jobs:
 
       - name: Unit tests — seller (vitest)
         run: pnpm --filter @skydrop/seller test
+
+      - name: Unit tests — reseller (vitest)
+        run: pnpm --filter @skydrop/reseller test
 
       - name: Unit tests — packages
         run: pnpm --filter './packages/*' --if-present test
@@ -522,17 +525,21 @@ jobs:
             apps/seller/.next/cache
             apps/track/.next/cache
             apps/marketing/.next/cache
+            apps/reseller/.next/cache
           key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/*/src/**', 'packages/ui/src/**') }}
           restore-keys: |
             next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
             next-${{ runner.os }}-
 
-      - name: Build the API and the four frontends
+      - name: Build the API and the five frontends
         run: |
           pnpm --filter @skydrop/api build
           pnpm --filter @skydrop/admin build
           pnpm --filter @skydrop/seller build
           pnpm --filter @skydrop/track build
+          # RS-2 — the reseller store portal. This build IS its build
+          # check; nothing else in CI builds it.
+          pnpm --filter @skydrop/reseller build
           # Marketing is a static export; its `start` serves out/ via
           # scripts/serve-static.mjs, so the build must run first here
           # even though nothing else in this job consumes it.

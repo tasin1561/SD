@@ -3,7 +3,23 @@ import { randomUUID } from 'node:crypto';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { EnvService } from '../../../config/env.service';
 
-export type TokenAudience = 'skydrop-staff' | 'skydrop-seller';
+export type TokenAudience = 'skydrop-staff' | 'skydrop-seller' | 'skydrop-store';
+
+/**
+ * RS-2 — a reseller store user's access token. Its OWN audience, so a
+ * store token is refused by `verifySellerAccess` and a seller token by
+ * `verifyStoreAccess` at the signature check, before anything is looked
+ * up. That is what makes "a store login cannot reach the seller's
+ * account" a property of the token rather than of each guard.
+ */
+export interface StoreAccessClaims extends JwtPayload {
+  /** StoreUser.id. */
+  sub: string;
+  aud: 'skydrop-store';
+  storeId: string;
+  sellerId: string;
+  jti: string;
+}
 
 const ACCESS_TTL_SECONDS = 5 * 60; // 5 min, per spec
 
@@ -56,6 +72,22 @@ export class JwtService {
       subject: input.subject,
       audience: 'skydrop-seller',
     });
+  }
+
+  signStoreAccess(input: {
+    subject: string;
+    storeId: string;
+    sellerId: string;
+  }): SignedAccessToken {
+    return this.sign({
+      payload: { storeId: input.storeId, sellerId: input.sellerId },
+      subject: input.subject,
+      audience: 'skydrop-store',
+    });
+  }
+
+  verifyStoreAccess(token: string): StoreAccessClaims {
+    return this.verify<StoreAccessClaims>(token, 'skydrop-store');
   }
 
   verifyStaffAccess(token: string): StaffAccessClaims {

@@ -91,6 +91,7 @@ SD/
 │   ├── seller/            # ✅ app.skydrop.online — seller dashboard
 │   ├── admin/             # ✅ admin.skydrop.online — internal staff
 │   ├── track/             # ✅ track.skydrop.online — public tracking page
+│   ├── reseller/          # ✅ reseller.skydrop.online — reseller store portal (RS-2, port 3005)
 │   ├── api/               # ✅ api.skydrop.online — NestJS REST API
 │   └── workers/           # ⚠️ BUILT BUT NOT DEPLOYED — see the note below
 ├── packages/
@@ -119,7 +120,8 @@ SD/
 listener, and `@skydrop/workers` starts it from `apps/api/dist/workers-main.js`
 (no second build). pm2 on the droplet runs FIVE processes (corrected
 2026-09-09 — this said four for months): `skydrop-api`, `skydrop-admin`,
-`skydrop-seller`, `skydrop-track` and **`skydrop-portal`**. `@skydrop/workers`
+`skydrop-seller`, `skydrop-track` and **`skydrop-portal`** (plus
+`skydrop-reseller` on 3005 once started — RS-12, 2026-09-14). `@skydrop/workers`
 is still not among them, so **all 17 BullMQ workers run in-process inside
 `skydrop-api`** under SCALE-1's `WORKERS_ENABLED` (default true).
 
@@ -1037,6 +1039,11 @@ Plan doc: `~/.claude/plans/silly-bouncing-cloud.md` (gap analysis + per-phase de
 | R4 | STRICT-mode per-unit inventory (serials) + scan gates + discrepancy report | ✅ DONE |
 | R3 | Inbound BD→India freight billing (pay-now / pay-later, amortised per unit by weight) | ✅ DONE |
 | R9 | Two-leg consignments (BD intake → India, per-leg counts, one labelling station, seller timeline) | ✅ DONE — `docs/consignment-two-leg.md` |
+| RS | Reseller stores (RS-1..RS-12) — a store sells a seller's goods under its own name | Phase 1 ✅ (2026-09-14) — `docs/reseller-stores.md` |
+
+**RS-1 (2026-09-14): a reseller store is a `seller_stores` row with `kind = RESELLER`, and `ResellerStoreService` is the ONLY writer of its status.** Transitions are guarded `updateMany` on the status read, with a `reseller_store_events` row in the same tx; approve / reject / close audit HIGH; an admin-created store lands PENDING_SELLER_APPROVAL and the seller is told (in-app + OPERATIONAL email); close is refused while any order on it is in flight. **CHANNEL stores are unchanged** — every `SellerStoreService` query filters `kind: CHANNEL`, and an order cannot be placed on a reseller store until phase 3 (`STORE_IS_RESELLER`). Details: `docs/reseller-stores.md` "Phase 1 as built".
+
+**RS-2 (2026-09-14): a store login is a THIRD identity (`IdentityKind` `'store'`), and `StoreJwtGuard` fails CLOSED.** `/auth/store/*`, audience `skydrop-store`, cookie `__Host-storeRefresh`, login 5/15 min. Every request re-reads the user, role and store; a store that is not ACTIVE/PAUSED under an APPROVED seller is refused, and every store query takes the store id from the TOKEN. A store endpoint must carry `@StoreSelfService` or `@RequireStorePermissions` (`store-permission-surface.spec.ts`). `stores.pricing`, `stores.wallet` and `reseller.credit_after_confirmation.enable` are RESERVED keys — registered for later phases, exempt from the "every key has an endpoint" specs by name.
 
 **Key invariants added by the R-phases:**
 

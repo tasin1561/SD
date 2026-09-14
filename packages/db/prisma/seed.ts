@@ -3453,6 +3453,72 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ company_name }}, we tried to confirm order {{ order_number }} for {{ recipient_name }} and could not reach them. We have STOPPED calling and are holding the order for your decision: ask us to keep trying, or release it. Any stock held for this order stays reserved until you decide. Decide at {{ app_url }}.',
   },
+  // RS-1 (2026-09-14) — Skydrop opened a reseller store on a seller's
+  // account; it waits for them. OPERATIONAL (the code matches no
+  // credential word), so its in-app twin can be silenced per person.
+  {
+    code: 'seller.reseller_store_pending.email',
+    name: 'Reseller store awaiting the seller’s approval (RS-1)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject: 'Approve or reject the reseller store “{{ store_name }}”',
+    bodyTemplate:
+      'Hi {{ company_name }}, Skydrop opened a reseller store called “{{ store_name }}” on your account. Nothing can be ordered through it until you approve it — or you can reject it. Decide at {{ store_url }}.',
+  },
+  // RS-2 (2026-09-14) — the reseller store portal's CREDENTIAL messages.
+  // Every code matches `categoryForTemplate`'s credential pattern
+  // (invitation / password_reset / password_changed / email_verification),
+  // so NOTIF-9 keeps them email-only and unmutable.
+  {
+    code: 'store.invitation.email',
+    name: 'Reseller store team invitation — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: 'You are invited to {{ store_name }} on Skydrop',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ inviter_name }} invited you to the {{ store_name }} team on Skydrop.',
+      '',
+      'Role: {{ role }}',
+      '',
+      'Set up your login here:',
+      '{{ invite_url }}',
+      '',
+      'This invitation expires on {{ expires_at_display }}.',
+      '',
+      "If you weren't expecting this, you can safely ignore this email.",
+      '',
+      '— The Skydrop team',
+    ].join('\n'),
+  },
+  {
+    code: 'store.password_reset.email',
+    name: 'Reseller store password reset — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: 'Reset your {{ store_name }} password',
+    bodyTemplate:
+      'Hi {{ full_name }}, somebody asked to reset the password for your {{ store_name }} login on Skydrop. Set a new one here: {{ reset_url }} — the link works for {{ expires_minutes }} minutes. If it was not you, ignore this email; nothing has changed.',
+  },
+  {
+    code: 'store.password_changed.email',
+    name: 'Reseller store password changed — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: 'Your Skydrop store password was changed',
+    bodyTemplate:
+      'Hi {{ full_name }}, the password for {{ email }} was changed at {{ changed_at }} (from {{ ip_address }}). Every signed-in session was ended. If this was you, sign in again at {{ login_url }}. If it was not, write to {{ support_email }} straight away.',
+  },
+  {
+    code: 'store.email_verification.email',
+    name: 'Reseller store email verification — email',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: 'Confirm your email for Skydrop',
+    bodyTemplate:
+      'Hi {{ full_name }}, confirm this is your email address: {{ verify_url }} — the link works for {{ expires_hours }} hours.',
+  },
 ];
 
 /**

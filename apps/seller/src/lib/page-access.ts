@@ -58,6 +58,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/holds', 'holds.manage'],
   ['/wallet', 'wallet.view'],
   ['/freight', 'freight.view'],
+  // RS-1: a reseller store's team and history belong to a separate
+  // business, so even the READ is stores.manage (the controller's
+  // class-level permission) — never open to VIEWER.
+  ['/reseller-stores', 'stores.manage'], // @Controller seller/reseller-stores
   ['/team/roles', 'roles.manage'],
   ['/team', 'team.view'],
   ['/profile', 'profile.view'],

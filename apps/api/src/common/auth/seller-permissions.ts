@@ -36,6 +36,14 @@ export interface SellerPermissionDef {
   readonly group: SellerPermissionGroup;
   /** Moves money, or exposes something a company would not show everyone. */
   readonly sensitive?: true;
+  /**
+   * Declared ahead of the endpoints that will check it, so roles can be
+   * prepared (RS-2 registers the reseller-store keys of later phases).
+   * No endpoint may declare a reserved key — the permission-surface spec
+   * fails if one does, which is the prompt to drop this flag. Its
+   * description says plainly that granting it changes nothing yet.
+   */
+  readonly reserved?: true;
 }
 
 export const SELLER_PERMISSION_GROUPS = [
@@ -45,6 +53,7 @@ export const SELLER_PERMISSION_GROUPS = [
   'Money',
   'Support',
   'Company',
+  'Reseller stores',
 ] as const;
 
 export type SellerPermissionGroup = (typeof SELLER_PERMISSION_GROUPS)[number];
@@ -269,7 +278,40 @@ export const SELLER_PERMISSIONS = [
     description: 'Which emails this company receives, and about what.',
     group: 'Company',
   },
+
+  // ── Reseller stores (RS-2, docs/reseller-stores.md) ────────────────
+  {
+    key: 'stores.manage',
+    label: 'Manage reseller stores',
+    description:
+      'Open a reseller store, approve or reject one Skydrop opened for you, pause, resume or close it, choose who manages its wallet, and invite its team.',
+    group: 'Reseller stores',
+    sensitive: true,
+  },
+  {
+    key: 'stores.pricing',
+    label: 'Set reseller prices and terms',
+    description:
+      'Coming with reseller pricing: which products a store may sell, at what price, how stock is shared, and who pays which fee. Granting it changes nothing yet.',
+    group: 'Reseller stores',
+    sensitive: true,
+    reserved: true,
+  },
+  {
+    key: 'stores.wallet',
+    label: 'Manage reseller store wallets',
+    description:
+      'Coming with reseller store wallets: top up a store you manage, and record paying it. Granting it changes nothing yet.',
+    group: 'Reseller stores',
+    sensitive: true,
+    reserved: true,
+  },
 ] as const satisfies readonly SellerPermissionDef[];
+
+/** Keys declared for a later phase; no endpoint checks them yet. */
+export const RESERVED_SELLER_PERMISSION_KEYS: readonly string[] = SELLER_PERMISSIONS.filter(
+  (p) => 'reserved' in p && p.reserved === true,
+).map((p) => p.key);
 
 export type SellerPermissionKey = (typeof SELLER_PERMISSIONS)[number]['key'];
 

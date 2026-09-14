@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolveStaffSsrIdentity, resolveSellerSsrIdentity } from '../server/identity';
+import {
+  resolveStaffSsrIdentity,
+  resolveSellerSsrIdentity,
+  resolveStoreSsrIdentity,
+} from '../server/identity';
 
 function jsonResponse(status: number, body: unknown = null): Response {
   return new Response(body === null ? '' : JSON.stringify(body), {
@@ -130,5 +134,60 @@ describe('resolveSellerSsrIdentity', () => {
     });
     expect(result.state).toBe('forbidden');
     if (result.state === 'forbidden') expect(result.code).toBe('ACCOUNT_NOT_ACTIVE');
+  });
+});
+
+describe('resolveStoreSsrIdentity (RS-2)', () => {
+  it('uses the store cookie name + store /me path, and never /refresh', async () => {
+    const fetchImpl = vi.fn(async (url, init) => {
+      expect(String(url)).toBe('https://api.skydrop.online/auth/store/me');
+      const headers = new Headers((init as RequestInit | undefined)?.headers);
+      expect(headers.get('cookie')).toBe('__Host-storeRefresh=st-cookie');
+      return jsonResponse(200, {
+        id: 'u1',
+        email: 'o@store.in',
+        emailDisplay: 'o@store.in',
+        fullName: 'Owner',
+        emailVerifiedAt: null,
+        roleKey: 'owner',
+        roleName: 'Owner',
+        permissions: ['team.view'],
+        store: {
+          id: 's1',
+          name: 'Kolkata Kurtas',
+          displayName: null,
+          status: 'ACTIVE',
+          walletManagedBy: 'SELLER',
+          logoUrl: null,
+          contactEmail: null,
+          contactPhone: null,
+        },
+        seller: { id: 'sel1', companyName: 'Acme' },
+      });
+    });
+    const result = await resolveStoreSsrIdentity({
+      apiOrigin: 'https://api.skydrop.online',
+      identityKind: 'store',
+      cookieValue: 'st-cookie',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result.state).toBe('authenticated');
+    if (result.state === 'authenticated') {
+      expect(result.identity.store.name).toBe('Kolkata Kurtas');
+      expect(result.identity.seller.companyName).toBe('Acme');
+    }
+  });
+
+  it('403 STORE_NOT_ACTIVE (a closed store) → forbidden with code', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(403, { code: 'STORE_NOT_ACTIVE' }));
+    const result = await resolveStoreSsrIdentity({
+      apiOrigin: 'https://api.skydrop.online',
+      identityKind: 'store',
+      cookieValue: 'st-cookie',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result.state).toBe('forbidden');
+    if (result.state === 'forbidden') expect(result.code).toBe('STORE_NOT_ACTIVE');
   });
 });

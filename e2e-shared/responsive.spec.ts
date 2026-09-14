@@ -54,6 +54,7 @@ const PUBLIC_ENTRY: Record<string, readonly string[]> = {
   seller: ['/login'],
   track: ['/'],
   marketing: ['/', '/request-invite'],
+  reseller: ['/login', '/password-reset'],
 };
 
 /**
@@ -64,6 +65,7 @@ const PUBLIC_ENTRY: Record<string, readonly string[]> = {
 const AUTHED_ROUTES: Record<string, readonly string[]> = {
   admin: ['/dashboard', '/orders', '/settings', '/staff', '/fx', '/reports'],
   seller: ['/dashboard', '/orders', '/orders/new', '/wallet', '/settings', '/products'],
+  reseller: ['/dashboard', '/team', '/settings', '/account'],
 };
 
 const WIDTHS = [320, 360, 414, 768] as const;

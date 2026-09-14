@@ -94,6 +94,50 @@ export interface SellerMe {
   readonly fullName: string;
 }
 
+/** A reseller store's lifecycle (RS-1). Mirrors the API's ResellerStoreStatus. */
+export type ResellerStoreStatusValue =
+  | 'PENDING_SELLER_APPROVAL'
+  | 'ACTIVE'
+  | 'PAUSED'
+  | 'CLOSED'
+  | 'REJECTED';
+
+/**
+ * GET /auth/store/me — a reseller store user (RS-2; matches the API's
+ * StoreAuthService.StoreMe). The third identity: a person at a store that
+ * resells ONE seller's stock.
+ */
+export interface StoreMe {
+  /** StoreUser.id — the person signed in. */
+  readonly id: string;
+  readonly email: string;
+  readonly emailDisplay: string;
+  readonly fullName: string;
+  readonly emailVerifiedAt: string | null;
+  /** `store_roles.key`. */
+  readonly roleKey: string;
+  readonly roleName: string;
+  /**
+   * What this person may do. The reseller app hides what is not in here
+   * — a courtesy, not a control (FE-2): the API refuses regardless.
+   */
+  readonly permissions: readonly string[];
+  readonly store: {
+    readonly id: string;
+    readonly name: string;
+    /** What customers will see; null means `name`. */
+    readonly displayName: string | null;
+    readonly status: ResellerStoreStatusValue | null;
+    readonly walletManagedBy: 'SELLER' | 'SKYDROP' | null;
+    /** Presigned, short-lived. */
+    readonly logoUrl: string | null;
+    readonly contactEmail: string | null;
+    readonly contactPhone: string | null;
+  };
+  /** The one seller this store resells for. */
+  readonly seller: { readonly id: string; readonly companyName: string };
+}
+
 export interface LoginRequest {
   readonly email: string;
   readonly password: string;

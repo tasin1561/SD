@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
 import { SellerStatus, StaffRole } from '@skydrop/db';
 import {
@@ -409,5 +410,172 @@ describe('cross-tenant isolation (e2e)', () => {
       .get('/seller/orders')
       .set({ Authorization: `Bearer ${header}.${payload}.` });
     expect(res.status).toBe(401);
+  });
+
+  // ─── Reseller stores (RS-2) ────────────────────────────────────────────
+  //
+  // A store login is a THIRD identity. Every store endpoint takes the store
+  // from the token and never from the request, so the question here is not
+  // "can store A name store B's id" on a read (there is no id to name) but:
+  // does anything that DOES take an id — a member, an invitation — reach
+  // outside the caller's store, and does any other identity's token open a
+  // store surface (or a store token open theirs)?
+
+  interface StoreLogin {
+    storeId: string;
+    storeName: string;
+    storeUserId: string;
+    auth: { Authorization: string };
+  }
+
+  /**
+   * Opens a reseller store for `owner` through the real seller endpoint,
+   * inviting its first user, then accepts that invitation through the real
+   * store endpoint. The invitation token only ever leaves the API in an
+   * email, so the stored hash is pointed at a plaintext this test knows —
+   * the row, its role and its expiry are exactly what the service wrote.
+   */
+  async function makeStoreUser(owner: Tenant, label: string): Promise<StoreLogin> {
+    const email = `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@store.test`;
+    const storeName = `${label} Store ${Math.random().toString(36).slice(2, 8)}`;
+    const created = await request(h.baseUrl)
+      .post('/seller/reseller-stores')
+      .set(owner.auth)
+      .send({
+        name: storeName,
+        invite: { email, fullName: `${label} Owner`, roleKey: 'owner' },
+      })
+      .expect(201);
+    const storeId = (created.body as { id: string }).id;
+
+    const invitation = await h.prisma.storeUserInvitation.findFirstOrThrow({
+      where: { storeId, usedAt: null, deletedAt: null },
+      select: { id: true },
+    });
+    const plaintext = `e2e-invite-${randomBytes(24).toString('hex')}`;
+    await h.prisma.storeUserInvitation.update({
+      where: { id: invitation.id },
+      data: { token: createHash('sha256').update(plaintext, 'utf8').digest('hex') },
+    });
+
+    const accepted = await request(h.baseUrl)
+      .post('/auth/store/invitations/accept')
+      .send({ token: plaintext, password: 'StorePass-1234', fullName: `${label} Owner` })
+      .expect(201);
+
+    const user = await h.prisma.storeUser.findFirstOrThrow({
+      where: { storeId, deletedAt: null },
+      select: { id: true },
+    });
+    return {
+      storeId,
+      storeName,
+      storeUserId: user.id,
+      auth: { Authorization: `Bearer ${(accepted.body as { accessToken: string }).accessToken}` },
+    };
+  }
+
+  it('a store user sees only their own store, and cannot touch another store’s team', async () => {
+    const storeA = await makeStoreUser(alpha, 'store-a');
+    const storeB = await makeStoreUser(beta, 'store-b');
+
+    // Own profile and team — proves the login works, so the denials below
+    // are denials and not a broken token. The profile names its store
+    // rather than carrying an id: the store is the token's, not a parameter.
+    const profile = await request(h.baseUrl).get('/store/profile').set(storeA.auth).expect(200);
+    expect((profile.body as { name: string }).name).toBe(storeA.storeName);
+    expect(JSON.stringify(profile.body)).not.toContain(storeB.storeName);
+    const team = await request(h.baseUrl).get('/store/team').set(storeA.auth).expect(200);
+    expect(JSON.stringify(team.body)).not.toContain(storeB.storeUserId);
+
+    // Store B's member and invitation, reached by id from store A.
+    const bInvite = await request(h.baseUrl)
+      .post('/store/team/invitations')
+      .set(storeB.auth)
+      .send({
+        email: `b-colleague-${Date.now()}@store.test`,
+        fullName: 'B Colleague',
+        roleKey: 'viewer',
+      })
+      .expect(201);
+    const bInvitationId = await h.prisma.storeUserInvitation.findFirstOrThrow({
+      where: { storeId: storeB.storeId, usedAt: null, deletedAt: null },
+      select: { id: true },
+    });
+    expect(bInvite.status).toBe(201);
+
+    for (const [method, path, body] of [
+      ['patch', `/store/team/members/${storeB.storeUserId}/role`, { roleKey: 'viewer' }],
+      ['delete', `/store/team/members/${storeB.storeUserId}`, {}],
+      ['post', `/store/team/invitations/${bInvitationId.id}/revoke`, {}],
+    ] as Array<['patch' | 'delete' | 'post', string, object]>) {
+      const res = await request(h.baseUrl)[method](path).set(storeA.auth).send(body);
+      expectDenied(res.status, res.body, `another store's team via ${method} ${path}`);
+    }
+
+    // And nothing moved.
+    const bUser = await h.prisma.storeUser.findUniqueOrThrow({
+      where: { id: storeB.storeUserId },
+      select: { deletedAt: true, role: { select: { key: true } } },
+    });
+    expect(bUser.deletedAt).toBeNull();
+    expect(bUser.role.key).toBe('owner');
+    const bInv = await h.prisma.storeUserInvitation.findUniqueOrThrow({
+      where: { id: bInvitationId.id },
+      select: { deletedAt: true },
+    });
+    expect(bInv.deletedAt).toBeNull();
+  });
+
+  it('a seller cannot read or move another seller’s reseller store', async () => {
+    const storeA = await makeStoreUser(alpha, 'store-a');
+
+    await request(h.baseUrl)
+      .get(`/seller/reseller-stores/${storeA.storeId}`)
+      .set(alpha.auth)
+      .expect(200);
+
+    const read = await request(h.baseUrl)
+      .get(`/seller/reseller-stores/${storeA.storeId}`)
+      .set(beta.auth);
+    expectDenied(read.status, read.body, "another seller's reseller store");
+
+    const pause = await request(h.baseUrl)
+      .post(`/seller/reseller-stores/${storeA.storeId}/pause`)
+      .set(beta.auth)
+      .send({});
+    expectDenied(pause.status, pause.body, "pausing another seller's reseller store");
+
+    const after = await h.prisma.sellerStore.findUniqueOrThrow({
+      where: { id: storeA.storeId },
+      select: { status: true },
+    });
+    expect(after.status).toBe('ACTIVE');
+  });
+
+  it('a store token is refused on every seller and admin surface', async () => {
+    const storeA = await makeStoreUser(alpha, 'store-a');
+    for (const path of [
+      '/seller/orders',
+      '/seller/reseller-stores',
+      `/seller/reseller-stores/${storeA.storeId}`,
+      '/admin/reseller-stores',
+      '/admin/orders',
+      '/admin/sellers',
+    ]) {
+      const res = await request(h.baseUrl).get(path).set(storeA.auth);
+      expect([401, 403]).toContain(res.status);
+    }
+  });
+
+  it('a seller or staff token is refused on every store surface', async () => {
+    for (const auth of [alpha.auth, staffAuth]) {
+      for (const path of ['/store/profile', '/store/team', '/auth/store/me']) {
+        const res = await request(h.baseUrl).get(path).set(auth);
+        // 401 specifically: the audience check fails before any permission
+        // question is asked, and a 404 would mean the path is wrong.
+        expect(res.status).toBe(401);
+      }
+    }
   });
 });

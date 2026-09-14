@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALL_SELLER_PERMISSION_KEYS } from '../../src/common/auth/seller-permissions';
+import {
+  ALL_SELLER_PERMISSION_KEYS,
+  RESERVED_SELLER_PERMISSION_KEYS,
+} from '../../src/common/auth/seller-permissions';
 
 /**
  * WHICH seller endpoints are gated, and by what. The staff spec's twin.
@@ -135,7 +138,25 @@ describe('seller permission surface', () => {
         (h) => h.permissions !== null && h.permissions !== 'self-service',
       ).flatMap((h) => h.permissions as readonly string[]),
     );
-    const orphaned = ALL_SELLER_PERMISSION_KEYS.filter((k) => !used.has(k));
+    // RESERVED keys (RS-2 registers later phases' reseller keys) are the
+    // one named exception, and the next test pins that they stay unused.
+    const reserved = new Set(RESERVED_SELLER_PERMISSION_KEYS);
+    const orphaned = ALL_SELLER_PERMISSION_KEYS.filter((k) => !used.has(k) && !reserved.has(k));
     expect(orphaned).toEqual([]);
+  });
+
+  it('a reserved permission is declared by no endpoint (drop the flag when one arrives)', () => {
+    const reserved = new Set(RESERVED_SELLER_PERMISSION_KEYS);
+    const declaring = STAFF_HANDLERS.filter(
+      (h) => h.permissions !== null && h.permissions !== 'self-service',
+    ).flatMap((h) =>
+      (h.permissions as readonly string[])
+        .filter((p) => reserved.has(p))
+        .map((p) => `${h.file} ${h.name}() → '${p}'`),
+    );
+    expect(declaring).toEqual([]);
+    // Pinned by name, so a key cannot be quietly reserved to dodge the
+    // orphan check above.
+    expect([...reserved].sort()).toEqual(['stores.pricing', 'stores.wallet']);
   });
 });

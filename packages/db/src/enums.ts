@@ -145,3 +145,11 @@ export { BankOwnerKind, BankEntryType } from '@prisma/client';
 export { DeliveryActionKind, DeliveryActionStatus } from '@prisma/client';
 export { AuditSeverity } from '@prisma/client';
 export { PnlCloseKind, PnlLockState, PnlVersionKind } from '@prisma/client';
+// RS-1 / RS-2 — reseller stores (docs/reseller-stores.md).
+export {
+  SellerStoreKind,
+  ResellerStoreStatus,
+  ResellerStoreOrigin,
+  ResellerWalletManager,
+  ResellerStoreEventKind,
+} from '@prisma/client';

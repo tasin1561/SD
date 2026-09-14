@@ -76,6 +76,10 @@ function openedByOf(row: {
   switch (row.events?.[0]?.actorType) {
     case ActorType.SELLER:
     case ActorType.API:
+    case ActorType.STORE:
+      // RS-2: no store user opens a ticket in phase 1. When store ↔ seller
+      // disputes arrive (RS-7), a store is on the customer-facing side of
+      // us, not ours — decided then, not guessed now.
       return 'SELLER';
     case ActorType.STAFF:
       return 'STAFF';

@@ -196,4 +196,68 @@ customer emails carry the store's name and logo. No tax invoices.
 `apps/reseller` on port 3005, pm2 `skydrop-reseller`, Caddy
 `reseller.skydrop.online` (Cloudflare-proxied like the others), security
 headers + nonce CSP + responsive + CSP Playwright projects, deploy.sh
-build/restart lines. The DNS record is an owner action.
+build/restart lines. The DNS record is an owner action. apps/marketing's
+LOCAL dev/start port moved 3005 → 3006 so 3005 is the reseller portal's
+everywhere (production marketing is a static export under Caddy, no port).
+
+## Phase 1 as built (2026-09-14)
+
+**Schema** (`20260914200000_reseller_stores_phase1`). `seller_stores.kind`
+CHANNEL (default) | RESELLER; every existing row becomes CHANNEL with the
+reseller columns NULL. Reseller columns: `status`, `origin`,
+`wallet_managed_by`, `display_name`, `logo_key`/`logo_mime_type`,
+`contact_email`/`contact_phone`, `status_changed_at`; the CHECK
+`seller_stores_reseller_fields_ck` makes a CHANNEL row carry none of
+status/origin/wallet manager and a RESELLER row carry all three and never
+be `is_default`. New tables: `reseller_store_events` (append-only history,
+written in the transition's own tx), `store_users` (email unique across the
+platform), `store_role_definitions` + `store_role_permissions` (five fixed
+roles provisioned per store), `store_user_invitations` (hashed token, one
+LIVE invitation per email by partial unique on `lower(email)`),
+`store_refresh_tokens`, `store_password_reset_tokens`,
+`store_email_verification_tokens`. `actor_type` += `store`,
+`notification_recipient_type` += `store_user`.
+
+**RS-1 lifecycle.** `ResellerStoreService` is the only writer of a
+reseller store's status; the rules are the pure `reseller-store-lifecycle.ts`.
+Seller-created → ACTIVE; admin-created → PENDING_SELLER_APPROVAL and the
+seller is told in-app (`SELLER_PERMISSION stores.manage`) and by email
+(`seller.reseller_store_pending.email`, OPERATIONAL), post-commit and never
+throwing. Approve / reject / pause / resume / close / wallet-manager are
+guarded `updateMany` on the status READ (`RESELLER_STORE_CHANGED` on a race)
+with an event row in the same tx; approve, reject and close audit HIGH.
+Close is refused while any order on the store is not terminal (checked
+INSIDE the tx after the move, via `OrderReadService`); phase 3's order
+create must lock the store row FOR SHARE to close the remaining window.
+REJECTED / CLOSED revoke every store refresh token and live invitation.
+CHANNEL stores behave exactly as before: every `SellerStoreService` query
+carries `kind: CHANNEL`, and `resolveForOrder` refuses a reseller store
+(`STORE_IS_RESELLER`) until phase 3.
+
+**RS-2 identity.** `IdentityKind` gains `'store'`. `/auth/store/*`: login
+(5/15 min per email+IP), refresh, logout, logout-all, me (hybrid FE-4),
+password-reset request/confirm, email-verification request/confirm,
+invitations preview/accept. Audience `skydrop-store`; cookie
+`__Host-storeRefresh`. `StoreJwtGuard` fails CLOSED: bearer only, re-reads
+user, role and store on every request, refuses a store that is not
+RESELLER + ACTIVE/PAUSED under an APPROVED seller (`STORE_NOT_ACTIVE`,
+audited), and an endpoint with neither `@StoreSelfService` nor
+`@RequireStorePermissions` (`ENDPOINT_NOT_AUTHORIZED`). Every store query
+takes the store id from the token. Store permissions: `store.profile.view`,
+`store.profile.manage`, `team.view`, `team.manage`; roles owner (implicit
+all), admin, ops, finance, viewer. Pinned by `store-permission-surface.spec.ts`
+and the store cases in `tenant-isolation.e2e-spec.ts`.
+
+**Permissions.** Seller: `stores.manage` (the screens), `stores.pricing`
+and `stores.wallet` RESERVED (registered, no endpoint yet — the surface
+specs exempt reserved keys by name and fail if one gains an endpoint
+without dropping the flag). Staff: `reseller.stores.view`,
+`reseller.stores.manage`, `reseller.credit_after_confirmation.enable`
+(dangerous, reserved).
+
+**Screens.** apps/reseller: login, forgot/reset, verify email, accept
+invitation, dashboard, team, store settings (logo via presigned Spaces PUT,
+1 MB), my account. apps/seller `/reseller-stores` (+ detail: decide,
+pause/resume/close, wallet manager, team, history). apps/admin
+`/reseller-stores` (list across sellers, create for a seller, read-only
+detail with history).

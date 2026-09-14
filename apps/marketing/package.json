@@ -4,10 +4,10 @@
   "private": true,
   "description": "Skydrop public marketing site — skydrop.online — Bangladeshi sellers shipping into India.",
   "scripts": {
-    "dev": "next dev -p 3005",
+    "dev": "next dev -p 3006",
     "build": "next build",
-    "start": "node ../../scripts/serve-static.mjs out 3005",
-    "serve": "node ../../scripts/serve-static.mjs out 3005",
+    "start": "node ../../scripts/serve-static.mjs out 3006",
+    "serve": "node ../../scripts/serve-static.mjs out 3006",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf .next out .turbo dist *.tsbuildinfo"

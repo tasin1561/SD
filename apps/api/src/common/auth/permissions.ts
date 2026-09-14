@@ -57,6 +57,14 @@ export interface PermissionDef {
   readonly group: PermissionGroup;
   /** Moves money, reaches the physical world, or bypasses an invariant. */
   readonly dangerous?: true;
+  /**
+   * Declared ahead of the endpoint that will check it (RS-2 registers
+   * `reseller.credit_after_confirmation.enable` for phase 3). No endpoint
+   * may declare a reserved key — `staff-permission-surface.spec.ts` fails
+   * if one does, which is the prompt to drop this flag. Its description
+   * says plainly that granting it changes nothing yet.
+   */
+  readonly reserved?: true;
 }
 
 export const PERMISSION_GROUPS = [
@@ -417,6 +425,29 @@ export const PERMISSIONS = [
     group: 'Sellers',
     dangerous: true,
   },
+  // ── Reseller stores (RS-2, docs/reseller-stores.md) ───────────────
+  {
+    key: 'reseller.stores.view',
+    label: 'View reseller stores',
+    description: 'Every seller’s reseller stores, their status history and their teams.',
+    group: 'Sellers',
+  },
+  {
+    key: 'reseller.stores.manage',
+    label: 'Open a reseller store for a seller',
+    description:
+      'Create a reseller store on a seller’s account. It waits for the seller to approve or reject it; nothing about it is live until they do.',
+    group: 'Sellers',
+  },
+  {
+    key: 'reseller.credit_after_confirmation.enable',
+    label: 'Allow credit after confirmation for a seller',
+    description:
+      'Coming with reseller store money: let a seller’s stores be credited N days after confirmation — money fronted before the customer pays. Granting it changes nothing yet.',
+    group: 'Sellers',
+    dangerous: true,
+    reserved: true,
+  },
   {
     key: 'leads.view',
     label: 'View invite requests',
@@ -647,6 +678,11 @@ export type PermissionKey = (typeof PERMISSIONS)[number]['key'];
 
 /** Every key, for validation and for the "super admin holds everything" case. */
 export const ALL_PERMISSION_KEYS: readonly PermissionKey[] = PERMISSIONS.map((p) => p.key);
+
+/** Keys declared for a later phase; no endpoint checks them yet. */
+export const RESERVED_PERMISSION_KEYS: readonly string[] = PERMISSIONS.filter(
+  (p) => 'reserved' in p && p.reserved === true,
+).map((p) => p.key);
 
 const KEY_SET = new Set<string>(ALL_PERMISSION_KEYS);
 

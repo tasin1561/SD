@@ -76,6 +76,11 @@ export class EnvService {
     return this.env.ADMIN_APP_URL;
   }
 
+  /** RS-2 — the reseller store portal (reseller.skydrop.online). */
+  get resellerAppUrl(): string {
+    return this.env.RESELLER_APP_URL;
+  }
+
   get publicTrackingUrl(): string {
     return this.env.PUBLIC_TRACKING_URL;
   }
@@ -129,7 +134,7 @@ export class EnvService {
   }
 
   get corsOrigins(): string[] {
-    return [this.env.SELLER_APP_URL, this.env.ADMIN_APP_URL];
+    return [this.env.SELLER_APP_URL, this.env.ADMIN_APP_URL, this.env.RESELLER_APP_URL];
   }
 
   /**

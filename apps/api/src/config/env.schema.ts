@@ -36,6 +36,12 @@ export const envSchema = z.object({
 
   SELLER_APP_URL: z.string().url(),
   ADMIN_APP_URL: z.string().url(),
+  // RS-2 (2026-09-14): the reseller store portal — where a store user's
+  // invitation, password-reset and verification links point. Defaulted
+  // rather than required so an environment that has not configured it
+  // yet (CI, a dev machine, the droplet before the owner sets it) still
+  // boots; production should set it explicitly.
+  RESELLER_APP_URL: z.string().url().default('https://reseller.skydrop.online'),
   // Module 11: base URL of the customer-facing tracking page (the
   // future apps/track SSR; the M10 GET /public/tracking/:awb endpoint
   // is the API side). M11 customer notifications template

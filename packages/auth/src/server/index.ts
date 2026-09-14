@@ -3,5 +3,9 @@
  * Components / route handlers. NOT safe in the browser bundle (no
  * React APIs; depends only on global fetch).
  */
-export { resolveStaffSsrIdentity, resolveSellerSsrIdentity } from './identity';
+export {
+  resolveStaffSsrIdentity,
+  resolveSellerSsrIdentity,
+  resolveStoreSsrIdentity,
+} from './identity';
 export type { SsrIdentityRequest, SsrIdentityResult } from './identity';

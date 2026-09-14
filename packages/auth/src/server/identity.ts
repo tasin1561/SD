@@ -27,11 +27,17 @@
  * session — see CLAUDE.md / M12 commit 1 / Decision #1.
  */
 
-import type { IdentityKind, SellerMe, StaffMe } from '@skydrop/api-client';
+import type { IdentityKind, SellerMe, StaffMe, StoreMe } from '@skydrop/api-client';
 
+/**
+ * The refresh cookie each identity's app is anchored on. A `Record` over
+ * `IdentityKind`, so a fourth identity fails to compile until somebody
+ * names its cookie. RS-2 added `store` (apps/reseller).
+ */
 const COOKIE_BY_KIND: Record<IdentityKind, string> = {
   staff: '__Host-staffRefresh',
   seller: '__Host-sellerRefresh',
+  store: '__Host-storeRefresh',
 };
 
 export interface SsrIdentityRequest {
@@ -76,6 +82,13 @@ export async function resolveSellerSsrIdentity(
   req: SsrIdentityRequest,
 ): Promise<SsrIdentityResult<SellerMe>> {
   return resolveSsrIdentity<SellerMe>(req);
+}
+
+/** RS-2 — a reseller store user (apps/reseller). Read-only, like the others (FE-4). */
+export async function resolveStoreSsrIdentity(
+  req: SsrIdentityRequest,
+): Promise<SsrIdentityResult<StoreMe>> {
+  return resolveSsrIdentity<StoreMe>(req);
 }
 
 async function resolveSsrIdentity<T>(req: SsrIdentityRequest): Promise<SsrIdentityResult<T>> {

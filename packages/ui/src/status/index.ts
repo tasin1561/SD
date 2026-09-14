@@ -30,6 +30,7 @@ import {
   WithdrawalRequestStatus,
   InviteLeadStatus,
   WalletEntryDirection,
+  ResellerStoreStatus,
 } from '@skydrop/db';
 
 export const STATUS_KINDS = [
@@ -315,6 +316,49 @@ export function withdrawalStatusKind(status: WithdrawalRequestStatus): StatusKin
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled WithdrawalRequestStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * RS-1 reseller store → kind. Read by apps/seller, apps/admin and
+ * apps/reseller alike; a new status fails to compile until it is placed.
+ */
+export function resellerStoreStatusKind(status: ResellerStoreStatus): StatusKind {
+  switch (status) {
+    case ResellerStoreStatus.PENDING_SELLER_APPROVAL:
+      return 'pending';
+    case ResellerStoreStatus.ACTIVE:
+      return 'delivered';
+    case ResellerStoreStatus.PAUSED:
+      return 'rto';
+    case ResellerStoreStatus.CLOSED:
+      return 'cancelled';
+    case ResellerStoreStatus.REJECTED:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled ResellerStoreStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** The words a person reads for each reseller store status. */
+export function resellerStoreStatusLabel(status: ResellerStoreStatus): string {
+  switch (status) {
+    case ResellerStoreStatus.PENDING_SELLER_APPROVAL:
+      return 'awaiting approval';
+    case ResellerStoreStatus.ACTIVE:
+      return 'active';
+    case ResellerStoreStatus.PAUSED:
+      return 'paused';
+    case ResellerStoreStatus.CLOSED:
+      return 'closed';
+    case ResellerStoreStatus.REJECTED:
+      return 'rejected';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled ResellerStoreStatus: ${String(exhaustive)}`);
     }
   }
 }

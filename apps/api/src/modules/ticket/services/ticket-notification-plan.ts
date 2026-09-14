@@ -44,6 +44,8 @@ export function sideOf(actor: ActorType): TicketSide {
       return 'US';
     case ActorType.SELLER:
     case ActorType.API:
+    case ActorType.STORE:
+      // RS-2: a store never writes on a ticket in phase 1; not ours, so not US.
       return 'SELLER';
   }
 }

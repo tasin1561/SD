@@ -10,7 +10,14 @@ export type { AccessTokenSnapshot, AccessTokenListener } from './auth/token-stor
 export { SingleFlightRefresh } from './refresh/single-flight';
 export type { RefreshFn, RefreshOutcome } from './refresh/single-flight';
 
-export type { AccessTokenResponse, LoginRequest, StaffMe, SellerMe } from './endpoints/auth';
+export type {
+  AccessTokenResponse,
+  LoginRequest,
+  StaffMe,
+  SellerMe,
+  StoreMe,
+  ResellerStoreStatusValue,
+} from './endpoints/auth';
 export type {
   ListSellersQuery,
   SellerListItem,

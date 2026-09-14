@@ -160,6 +160,27 @@ Email change/verification.
 
 **Indexes:** `<entity>Id`, `tokenHash`, `expiresAt`
 
+## Reseller stores — RS-1 / RS-2 *(2026-09-14, `20260914200000_reseller_stores_phase1`; design `docs/reseller-stores.md`)*
+
+**`seller_stores` columns added:** `kind: SellerStoreKind` (CHANNEL default | RESELLER); reseller-only `status: ResellerStoreStatus` (PENDING_SELLER_APPROVAL / ACTIVE / PAUSED / CLOSED / REJECTED), `origin: ResellerStoreOrigin` (SELLER / ADMIN), `walletManagedBy: ResellerWalletManager` (SELLER / SKYDROP), `displayName`, `logoKey`, `logoMimeType`, `contactEmail`, `contactPhone`, `statusChangedAt`. CHECK `seller_stores_reseller_fields_ck`: CHANNEL ⇒ status/origin/wallet manager NULL; RESELLER ⇒ all three NOT NULL and `is_default = false`. Index `(kind, status)`.
+
+## reseller_store_events
+APPEND-ONLY history of a reseller store (`kind: ResellerStoreEventKind` CREATED / APPROVED / REJECTED / PAUSED / RESUMED / CLOSED / WALLET_MANAGER_CHANGED, `fromStatus`, `toStatus`, `actorType`, `actorId`, `note` — the reason given, `data`), written in the transition's own tx. FK store CASCADE. **Indexes:** `(storeId, createdAt)`.
+
+## store_users
+A reseller store's logins. `email` (lower-cased) UNIQUE across the platform (one store per login) + `emailDisplay`, `passwordHash`, `fullName`, `emailVerifiedAt`, `lastLoginAt`, `deletedAt`. FK store RESTRICT, role (`store_role_definitions`) RESTRICT.
+
+## store_role_definitions / store_role_permissions
+Five fixed roles per store (owner / admin / ops / finance / viewer), provisioned when the store is created; UNIQUE `(storeId, key)`, cascade from the store. Permissions are rows `(roleId, permissionKey)`; owner holds everything implicitly.
+
+## store_user_invitations
+`email`, `fullName`, `token` (SHA-256 of the emailed plaintext, UNIQUE), `roleId`, `invitedByActorType` + `invitedById` (a seller user or a store user — plain id, no FK), `expiresAt` (7 days), `usedAt`, `acceptedById` (SET NULL), `deletedAt` (revoked/retired). Partial unique `store_user_invitations_one_live_uq` on `lower(email) WHERE used_at IS NULL AND deleted_at IS NULL` — one live invitation per address.
+
+## store_refresh_tokens / store_password_reset_tokens / store_email_verification_tokens
+Same shapes as the seller equivalents above, keyed on `storeUserId`.
+
+**Enum values added:** `ActorType.STORE`, `NotificationRecipientType.STORE_USER`.
+
 ## seller_notes
 Admin notes about sellers (replaces simple `rejectionReason` field).
 

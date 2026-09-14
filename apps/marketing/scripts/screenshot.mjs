@@ -7,7 +7,7 @@ import { mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const url = process.argv[2] ?? 'http://localhost:3005/';
+const url = process.argv[2] ?? 'http://localhost:3006/';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = join(__dirname, 'screenshots');
 mkdirSync(outDir, { recursive: true });

@@ -1,0 +1,153 @@
+/*
+ * apps/seller global stylesheet — mirrors apps/admin (FE-6).
+ *
+ * Layer order:
+ *   1. @skydrop/ui tokens.css — every CSS variable (color, type,
+ *      spacing, radii) lives here. Dark theme primary; light theme
+ *      under [data-theme='light'].
+ *   2. Tailwind v4 — utilities layered on top, configured to use
+ *      our tokens via @theme.
+ *   3. A small set of base resets / element styles.
+ *
+ * The token .css import is side-effectful (declared in the
+ * @skydrop/ui package.json sideEffects). It's the ONLY route to
+ * body-color etc. Apps NEVER hardcode hex.
+ */
+
+@import '@skydrop/ui/tokens.css';
+@import 'tailwindcss';
+
+/*
+ * Scan @skydrop/ui sources so Tailwind picks up classes used in
+ * the shared component primitives. Tailwind v4 auto-scans only
+ * the current app's directory; without this, utilities used ONLY
+ * in packages/ui (e.g. Modal's centering / overlay) never reach
+ * the production CSS. See apps/admin/src/app/globals.css.
+ */
+@source '../../../../packages/ui/src';
+
+/*
+ * Tailwind v4 @theme — map our CSS variables to Tailwind's utility
+ * tokens so `bg-surface`, `text-body`, etc. work alongside raw
+ * var(--…) references. Keeps the utility-class fluency without
+ * duplicating the palette.
+ */
+@theme {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-text-faint: var(--color-text-faint);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-body: var(--color-text-body);
+  --color-text-strong: var(--color-text-strong);
+  --color-text-bright: var(--color-text-bright);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  /* The accent as a BACKGROUND. Split from the text accent because no
+     single value clears both 4.5:1 as text on a dark ground and 4.5:1
+     for white sitting on it. */
+  --color-accent-fill: var(--color-accent-fill);
+  --color-accent-fill-hover: var(--color-accent-fill-hover);
+  --color-accent-fg: var(--color-accent-fg);
+  --color-critical: var(--color-critical);
+  /*
+   * THE STATUS TOKENS, as real Tailwind colours (2026-09-03).
+   *
+   * They were declared in tokens.css and mapped NOWHERE, so
+   * `bg-status-pending-fg` and friends generated no CSS at all — the
+   * class was accepted, the utility did not exist, and the element got
+   * nothing. Every status colour on the dashboard was invisible for
+   * exactly that reason, which is a silent failure: a typo'd Tailwind
+   * class looks identical to a working one until you look at the page.
+   *
+   * `StatusBadge` never hit it because it applies the variables through
+   * an inline style rather than a utility. Registering them here means
+   * both routes work, and the next component to reach for a status
+   * colour gets the one it expected.
+   */
+  --color-status-draft-bg: var(--status-draft-bg);
+  --color-status-draft-fg: var(--status-draft-fg);
+  --color-status-draft-ring: var(--status-draft-ring);
+  --color-status-pending-bg: var(--status-pending-bg);
+  --color-status-pending-fg: var(--status-pending-fg);
+  --color-status-pending-ring: var(--status-pending-ring);
+  --color-status-confirmed-bg: var(--status-confirmed-bg);
+  --color-status-confirmed-fg: var(--status-confirmed-fg);
+  --color-status-confirmed-ring: var(--status-confirmed-ring);
+  --color-status-in-transit-bg: var(--status-in-transit-bg);
+  --color-status-in-transit-fg: var(--status-in-transit-fg);
+  --color-status-in-transit-ring: var(--status-in-transit-ring);
+  --color-status-delivered-bg: var(--status-delivered-bg);
+  --color-status-delivered-fg: var(--status-delivered-fg);
+  --color-status-delivered-ring: var(--status-delivered-ring);
+  --color-status-rto-bg: var(--status-rto-bg);
+  --color-status-rto-fg: var(--status-rto-fg);
+  --color-status-rto-ring: var(--status-rto-ring);
+  --color-status-failed-bg: var(--status-failed-bg);
+  --color-status-failed-fg: var(--status-failed-fg);
+  --color-status-failed-ring: var(--status-failed-ring);
+  --color-status-cancelled-bg: var(--status-cancelled-bg);
+  --color-status-cancelled-fg: var(--status-cancelled-fg);
+  --color-status-cancelled-ring: var(--status-cancelled-ring);
+  --color-accent-tint: var(--color-accent-tint);
+  --color-accent-ring: var(--color-accent-ring);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  /*
+   * The TYPE SCALE, which was missing here — so `text-xs` and `text-sm`
+   * used Tailwind's defaults while tokens.css declared its own numbers
+   * that nothing applied. Mapping them makes the token file the single
+   * source it already claimed to be (FE-6), and means the scale can be
+   * tuned in one place instead of across ~890 call sites.
+   */
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --radius-1: var(--radius-1);
+  --radius-2: var(--radius-2);
+  --radius-3: var(--radius-3);
+}
+
+/* Body baseline — applied via the layout's <html> class. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-body);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Default focus ring — accessible, subtle, matches the accent. */
+:focus-visible {
+  outline: 2px solid var(--color-accent-ring);
+  outline-offset: 1px;
+  border-radius: var(--radius-1);
+}
+
+/* Selection — quiet, on-brand. */
+::selection {
+  background: var(--color-accent-tint);
+  color: var(--color-text-bright);
+}

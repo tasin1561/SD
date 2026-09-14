@@ -115,6 +115,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/leads', 'leads.view'],
   ['/sellers', 'sellers.view'],
   ['/stores', 'sellers.view'],
+  // RS-1: the class-level read of @Controller admin/reseller-stores;
+  // opening one for a seller needs reseller.stores.manage at the handler.
+  ['/reseller-stores', 'reseller.stores.view'],
   ['/courier-accounts', 'courier.accounts.view'],
   // Reading whether the cost sync works is a report about a courier
   // account's money; RUNNING it needs `.manage` and is gated in the

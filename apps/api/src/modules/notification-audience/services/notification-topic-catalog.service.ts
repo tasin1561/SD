@@ -134,6 +134,16 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
       'A goods receipt counted more units than were declared. The extra units carry on with the rest of your goods; nothing to do.',
     group: 'Inventory',
   },
+  {
+    // Sent by ResellerStoreNotifier (RS-1) when Skydrop opens a reseller
+    // store on the seller's account. The spec pins this key to the
+    // notifier's exported constant.
+    topic: 'seller.reseller_store_pending',
+    label: 'A reseller store waits for your approval',
+    description:
+      'Skydrop opened a reseller store on your account. Nothing about it is live until you approve or reject it.',
+    group: 'Reseller stores',
+  },
 ];
 
 /**

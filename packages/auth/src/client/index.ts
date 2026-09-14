@@ -9,6 +9,7 @@ export {
   useApiClient,
   useStaffIdentity,
   useSellerIdentity,
+  useStoreIdentity,
   useSetIdentity,
   useHasAccessToken,
   hasStaffRole,

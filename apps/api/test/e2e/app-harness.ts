@@ -492,6 +492,19 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'remittances',
         // GST invoices (M25)
         'invoices',
+        // RS-1 / RS-2 reseller stores (MUST #12). store_users FK-RESTRICT
+        // seller_stores and store_roles, so they — and everything hanging
+        // off them — go here, BEFORE resetOrderState truncates
+        // seller_stores. Named one by one rather than left to CASCADE, so
+        // a changed FK cannot quietly leave rows behind.
+        'store_refresh_tokens',
+        'store_password_reset_tokens',
+        'store_email_verification_tokens',
+        'store_user_invitations',
+        'store_users',
+        'store_role_permissions',
+        'store_roles',
+        'reseller_store_events',
         // Seller-team RBAC
         'seller_user_invitations',
         'seller_users',

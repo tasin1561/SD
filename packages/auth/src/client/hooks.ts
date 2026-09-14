@@ -11,7 +11,7 @@
 'use client';
 
 import type { StaffRole } from '@skydrop/db';
-import type { ApiClient, StaffMe, SellerMe } from '@skydrop/api-client';
+import type { ApiClient, StaffMe, SellerMe, StoreMe } from '@skydrop/api-client';
 import { useAuthCtx } from './context';
 
 export function useApiClient(): ApiClient {
@@ -27,6 +27,11 @@ export function useStaffIdentity(): StaffMe | null {
 
 export function useSellerIdentity(): SellerMe | null {
   return useAuthCtx<SellerMe>().identity;
+}
+
+/** RS-2 — the reseller store user (apps/reseller). */
+export function useStoreIdentity(): StoreMe | null {
+  return useAuthCtx<StoreMe>().identity;
 }
 
 export function useSetIdentity<Identity>(): (next: Identity | null) => void {

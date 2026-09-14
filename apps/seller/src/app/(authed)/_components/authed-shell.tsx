@@ -21,6 +21,7 @@ import {
   Package,
   PackageOpen,
   Settings,
+  Store,
   Truck,
   Users,
   Wallet,
@@ -94,6 +95,11 @@ export function AuthedShell({
         { href: '/wallet', label: 'Wallet', icon: <Wallet size={15} /> },
         { href: '/freight', label: 'Inbound freight', icon: <Truck size={15} /> },
       ],
+    },
+    {
+      // RS-1 — separate businesses reselling this seller's stock.
+      heading: 'Reselling',
+      items: [{ href: '/reseller-stores', label: 'Reseller stores', icon: <Store size={15} /> }],
     },
     {
       heading: 'Account',

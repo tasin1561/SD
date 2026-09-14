@@ -121,12 +121,15 @@ fi
 
 # Per-app dirty bits
 APPS_CHANGED=()
-did_change '^packages/(db|api-client|auth)/'                       && APPS_CHANGED+=(skydrop-api skydrop-admin skydrop-seller skydrop-track skydrop-portal)
-did_change '^packages/ui/'                                         && APPS_CHANGED+=(skydrop-admin skydrop-seller skydrop-track)
+did_change '^packages/(db|api-client|auth)/'                       && APPS_CHANGED+=(skydrop-api skydrop-admin skydrop-seller skydrop-track skydrop-portal skydrop-reseller)
+did_change '^packages/ui/'                                         && APPS_CHANGED+=(skydrop-admin skydrop-seller skydrop-track skydrop-reseller)
+did_change '^packages/config/'                                     && APPS_CHANGED+=(skydrop-admin skydrop-seller skydrop-track skydrop-reseller)
 did_change '^apps/api/'                                            && APPS_CHANGED+=(skydrop-api skydrop-portal)
 did_change '^apps/admin/'                                          && APPS_CHANGED+=(skydrop-admin)
 did_change '^apps/seller/'                                         && APPS_CHANGED+=(skydrop-seller)
 did_change '^apps/track/'                                          && APPS_CHANGED+=(skydrop-track)
+# RS-12 — the reseller store portal (reseller.skydrop.online, port 3005).
+did_change '^apps/reseller/'                                       && APPS_CHANGED+=(skydrop-reseller)
 # de-dup
 APPS_CHANGED=($(printf '%s\n' "${APPS_CHANGED[@]:-}" | awk 'NF' | sort -u))
 
@@ -173,6 +176,7 @@ pnpm --filter @skydrop/api build
 pnpm --filter @skydrop/admin build
 pnpm --filter @skydrop/seller build
 pnpm --filter @skydrop/track build
+pnpm --filter @skydrop/reseller build
 pnpm --filter @skydrop/marketing build
 
 # ── 6b. Publish marketing static export ─────────────────────────────
@@ -242,6 +246,16 @@ for url in \
   http://127.0.0.1:3004/; do
   check_url "$url" || exit 1
 done
+
+# RS-12 — the reseller portal is polled only once pm2 knows it. Its first
+# start is an owner step on the droplet (`pm2 start ecosystem.config.cjs
+# --only skydrop-reseller && pm2 save`); until then a missing process
+# must not fail every deploy for a reason the deploy did not cause.
+if pm2 jlist 2>/dev/null | grep -q '"name":"skydrop-reseller"'; then
+  check_url http://127.0.0.1:3005/login || exit 1
+else
+  echo "  skydrop-reseller not registered with pm2 yet — skipping its health check"
+fi
 
 # The portal worker has no port to poll — it is a browser, not a server.
 # So it is checked the only way it can be: pm2 says it is online and has

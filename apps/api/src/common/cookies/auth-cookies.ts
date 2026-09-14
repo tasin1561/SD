@@ -34,6 +34,21 @@ export function setSellerRefreshCookie(res: Response, plaintext: string, expires
   });
 }
 
+/** RS-2 — the reseller store portal's session anchor. */
+export const STORE_REFRESH_COOKIE = '__Host-storeRefresh';
+
+export function setStoreRefreshCookie(res: Response, plaintext: string, expiresAt: Date): void {
+  res.cookie(STORE_REFRESH_COOKIE, plaintext, {
+    ...REFRESH_COOKIE_OPTIONS,
+    expires: expiresAt,
+    maxAge: Math.min(SEVEN_DAYS_MS, Math.max(0, expiresAt.getTime() - Date.now())),
+  });
+}
+
+export function clearStoreRefreshCookie(res: Response): void {
+  res.clearCookie(STORE_REFRESH_COOKIE, REFRESH_COOKIE_OPTIONS);
+}
+
 export function clearStaffRefreshCookie(res: Response): void {
   res.clearCookie(STAFF_REFRESH_COOKIE, REFRESH_COOKIE_OPTIONS);
 }

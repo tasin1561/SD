@@ -184,6 +184,7 @@ export function AuthedShell({
         { href: '/leads', label: 'Invite requests', icon: <Inbox size={15} /> },
         { href: '/sellers', label: 'Sellers', icon: <Store size={15} /> },
         { href: '/stores', label: 'Seller stores', icon: <Building2 size={15} /> },
+        { href: '/reseller-stores', label: 'Reseller stores', icon: <Store size={15} /> },
         { href: '/courier-accounts', label: 'Courier accounts', icon: <Building2 size={15} /> },
         { href: '/delhivery', label: 'Delhivery', icon: <Gauge size={15} /> },
         { href: '/cost-sync', label: 'Courier cost sync', icon: <RefreshCw size={15} /> },

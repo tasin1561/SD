@@ -97,6 +97,8 @@ import { SellerTrackingModule } from './modules/seller-tracking/seller-tracking.
 import { TreasuryModule } from './modules/treasury/treasury.module';
 import { PnlCarryForwardModule } from './modules/pnl-carry-forward/pnl-carry-forward.module';
 import { SellerStoreModule } from './modules/seller-store/seller-store.module';
+import { StoreAuthModule } from './modules/store-auth/store-auth.module';
+import { ResellerStoreModule } from './modules/reseller-store/reseller-store.module';
 import { CourierWalletModule } from './modules/courier-wallet/courier-wallet.module';
 import { AdminRemittanceModule } from './modules/admin-remittance/admin-remittance.module';
 import { AdminReportsModule } from './modules/admin-reports/admin-reports.module';
@@ -233,6 +235,9 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     AdminRemittanceModule,
     TreasuryModule,
     SellerStoreModule,
+    // RS-1 / RS-2 — reseller stores (docs/reseller-stores.md), phase 1.
+    StoreAuthModule,
+    ResellerStoreModule,
     CourierWalletModule,
     AdminSellerWalletModule,
     AdminWalletTransferModule,
