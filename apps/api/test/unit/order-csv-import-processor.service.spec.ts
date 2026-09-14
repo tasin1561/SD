@@ -61,6 +61,8 @@ function makeService(opts: {
     // Staging is exercised in its own suite and end to end; here it
     // must not be able to fail the import loop.
     { stage: jest.fn(async () => undefined) } as unknown as StagedOrderRowService,
+    // RS-5: a store upload's rows go here; these are seller uploads.
+    { create: jest.fn(async () => ({ id: 'o-store' })) } as never,
   );
   return { svc, findUnique, update, spaces, audit, catalog, orders };
 }

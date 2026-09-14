@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CustomerRiskLevel, Prisma } from '@skydrop/db';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 type TxOrClient = Prisma.TransactionClient | PrismaService['client'];
@@ -28,6 +29,13 @@ export type CustomerView = Prisma.CustomerGetPayload<{ select: typeof VIEW_SELEC
 
 export interface FindOrCreateCustomerInput {
   sellerId: string;
+  /**
+   * RS-5: the reseller store that sold to this person, when it was one.
+   * A store's customer is a separate identity from the seller's own
+   * customer with the same phone (ORD-7 generalised). Omitted/null = the
+   * seller's own customer, exactly as before.
+   */
+  resellerStoreId?: string | null;
   phoneE164: string;
   name?: string | null;
   email?: string | null;
@@ -71,6 +79,15 @@ const E164 = /^\+[1-9]\d{6,14}$/;
 export class CustomerService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * RS-5: identity is per OWNER — the seller, or one of their reseller
+   * stores — held by two PARTIAL uniques Prisma cannot target, so this is
+   * find-then-create under `AdvisoryLock.CUSTOMER_IDENTITY` on (owner,
+   * phone) rather than an upsert. Call it inside the caller's transaction
+   * (every caller does): the lock is transaction-scoped, and a second
+   * concurrent order for the same new phone waits here and then finds the
+   * row, instead of hitting the unique and aborting its whole order.
+   */
   async findOrCreate(client: TxOrClient, input: FindOrCreateCustomerInput): Promise<CustomerView> {
     const phoneE164 = input.phoneE164.trim();
     if (!E164.test(phoneE164)) {
@@ -78,19 +95,35 @@ export class CustomerService {
         `customer phone must be E.164 (+<country><number>), got "${input.phoneE164}"`,
       );
     }
-    return client.customer.upsert({
-      where: { sellerId_phoneE164: { sellerId: input.sellerId, phoneE164 } },
-      create: {
+    const resellerStoreId = input.resellerStoreId ?? null;
+    await takeAdvisoryLock(
+      client,
+      AdvisoryLock.CUSTOMER_IDENTITY,
+      `${resellerStoreId ?? input.sellerId}|${phoneE164}`,
+    );
+    const existing = await client.customer.findFirst({
+      where: { sellerId: input.sellerId, resellerStoreId, phoneE164 },
+      select: { id: true, deletedAt: true },
+    });
+    if (existing !== null) {
+      // Re-encounter: do NOT overwrite curated name/email from a new
+      // order's recipient fields; only revive if it had been removed.
+      return client.customer.update({
+        where: { id: existing.id },
+        data: existing.deletedAt === null ? {} : { deletedAt: null },
+        select: VIEW_SELECT,
+      });
+    }
+    return client.customer.create({
+      data: {
         sellerId: input.sellerId,
+        resellerStoreId,
         phoneE164,
         name: input.name ?? null,
         email: input.email ?? null,
         altPhoneE164: input.altPhoneE164 ?? null,
         preferredLanguage: input.preferredLanguage ?? 'en',
       },
-      // Re-encounter: do NOT overwrite seller-curated name/email from a
-      // new order's recipient fields; only revive if it had been removed.
-      update: { deletedAt: null },
       select: VIEW_SELECT,
     });
   }
@@ -115,9 +148,15 @@ export class CustomerService {
     });
   }
 
+  /**
+   * The SELLER's own customer. RS-5: a reseller store's customer is never
+   * reachable here — `resellerStoreId: null` in the WHERE — so a seller
+   * cannot read, edit or delete a person a store sold to (a miss is a 404
+   * that says nothing about whether the row exists).
+   */
   async getById(sellerId: string, id: string): Promise<CustomerView> {
     const customer = await this.prisma.client.customer.findFirst({
-      where: { id, sellerId, deletedAt: null },
+      where: { id, sellerId, resellerStoreId: null, deletedAt: null },
       select: VIEW_SELECT,
     });
     if (!customer) {
@@ -126,13 +165,41 @@ export class CustomerService {
     return customer;
   }
 
+  /** RS-5 — one of a reseller store's OWN customers (the id is the token's store). */
+  async getForStore(storeId: string, id: string): Promise<CustomerView> {
+    const customer = await this.prisma.client.customer.findFirst({
+      where: { id, resellerStoreId: storeId, deletedAt: null },
+      select: VIEW_SELECT,
+    });
+    if (!customer) {
+      throw new NotFoundException({ code: 'CUSTOMER_NOT_FOUND', message: 'No such customer' });
+    }
+    return customer;
+  }
+
+  /** RS-5 — a reseller store's own customers, newest buyer first. */
+  async listForStore(
+    storeId: string,
+    query: ListCustomersQuery,
+  ): Promise<{ items: CustomerView[]; total: number; page: number; pageSize: number }> {
+    return this.listWhere({ resellerStoreId: storeId, deletedAt: null }, query);
+  }
+
   async list(
     sellerId: string,
     query: ListCustomersQuery,
   ): Promise<{ items: CustomerView[]; total: number; page: number; pageSize: number }> {
+    // RS-5: the seller's OWN customers; never a reseller store's.
+    return this.listWhere({ sellerId, resellerStoreId: null, deletedAt: null }, query);
+  }
+
+  private async listWhere(
+    base: Prisma.CustomerWhereInput,
+    query: ListCustomersQuery,
+  ): Promise<{ items: CustomerView[]; total: number; page: number; pageSize: number }> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const where: Prisma.CustomerWhereInput = { sellerId, deletedAt: null };
+    const where: Prisma.CustomerWhereInput = { ...base };
     if (query.search) {
       where.OR = [
         { phoneE164: { contains: query.search, mode: 'insensitive' } },

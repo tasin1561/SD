@@ -804,3 +804,273 @@ whether to prefix with the seller's code at all.
 **Dormant until RS-5.** `resolveForOrder` still refuses a reseller store, so
 no reseller order exists yet; every branch above is exercised by unit tests
 only until store orders land.
+
+## Store orders as built (RS-5, 2026-09-14)
+
+Migration `20260914240000_reseller_store_orders`. **No money yet**: phase 3c
+wires the fee split, the prepaid debit and the reversals onto these orders;
+this phase posts no wallet entry of any kind.
+
+### The master switch — OFF until 3c
+
+`reseller.orders_enabled` (SET-1, BOOLEAN, seeded FALSE, seller-overridable,
+editable by staff — per seller from the seller's settings; also inserted by
+the migration because the seed is create-only). While it is off every store
+order is refused `RESELLER_ORDERS_DISABLED`. **It must stay off until 3c
+lands**: a delivered reseller order goes through today's money path, which
+knows nothing of the store, so the SELLER would be credited the whole COD
+(the store's retail margin included) and the store nothing. Read in ONE
+place (`ResellerOrderService.assertOrdersEnabled`) and it FAILS CLOSED — an
+unreadable switch is an off switch, because it guards money.
+
+### Placing an order — three doors, one path
+
+- **Portal** `POST /store/orders` (`orders.create`), **CSV** `/store/order-imports/*`
+  (`orders.create`; the seller's CSV machinery — parser, `order-csv-import`
+  queue and worker, processor — with the store on the upload row), and
+  **API key** `POST /store-api/v1/orders` (`sks_…` key, `StoreApiKeyGuard`).
+  All three call `ResellerOrderService.create` (order-core), the ONLY caller of
+  `OrderService.create`'s `reseller` option. `resolveForOrder` still refuses
+  a reseller store (`STORE_IS_RESELLER`), so the seller's own form cannot file
+  an order under one.
+- The order belongs to the SELLER (stock, warehouse, courier, WMS, CUR
+  unchanged) with `store_id` = the store, `store_kind = RESELLER`, and
+  `store_name_snapshot` = the store's `display_name ?? name` at create — the
+  name the customer sees (RS-10 reads exactly that column; its meaning for
+  CHANNEL stores is unchanged). It is created straight into
+  PENDING_CONFIRMATION (a store has no drafts) and joins the call queue
+  (CC-6) like any other order. Source: MANUAL (portal) / BULK_UPLOAD (CSV) /
+  API (key). The actor on the order's events is `STORE` (the store user) or
+  `API` (the key).
+- **The refusals, in this order, before anything is written**
+  (`ResellerOrderService.create`, pinned by `reseller-order.service.spec.ts`):
+  1. the store is a live RESELLER store, ACTIVE, under an APPROVED seller —
+     PAUSED is `RESELLER_STORE_PAUSED` (in-flight orders carry on), anything
+     else `RESELLER_STORE_NOT_ACTIVE`;
+  2. `reseller.orders_enabled` → `RESELLER_ORDERS_DISABLED`;
+  3. `orderReadiness` ready (terms published, accepted, not flagged) →
+     `RESELLER_TERMS_NOT_READY` with the reasons;
+  4. every line's variant ENABLED for the store, resellable, with an
+     effective transfer price → `RESELLER_VARIANT_NOT_OFFERED`;
+  5. each line's retail inside the seller's [min, max] where set →
+     `RETAIL_OUT_OF_RANGE`, naming the range;
+  6. PREPAID → `RESELLER_PREPAID_NOT_YET_AVAILABLE` (the payment mode is
+     carried through untouched, so 3c only swaps this refusal for the
+     `STORE_BALANCE_INSUFFICIENT` wallet check);
+  7. no line (summed per product) asks for more than the store is SHOWN →
+     `RESELLER_QTY_EXCEEDS_VISIBLE`.
+  Then `OrderService.create` runs what it runs for every order (seller
+  restriction, seller credit block, address validation, the duplicate
+  check — scoped to THIS store's orders).
+- **ORD-10 is AMENDED for check 7 only.** Still no reservation at create and
+  no real-availability refusal at create — a SHARED line's stock is judged at
+  confirmation. But a store may never order more than it was SHOWN: the hidden
+  share and the other stores' set-asides would mean nothing if it could. The
+  visible quantity is the catalogue's own figure
+  (`ResellerStockGateService.offersFor` → `reseller-visible-stock.ts`, with
+  the store's real consumption — the same number `/catalogue` shows).
+- A COD order with no amount stated collects Σ retail × qty + the customer's
+  delivery fee − discount − advance (`toCreateOrderDto`). Store notes go on
+  `seller_notes` (the store is the order's seller-side voice); a store may
+  not write Skydrop's internal notes.
+
+### The snapshot (ORD-6; RS-4 "later edits never re-price")
+
+- **Order**: `reseller_terms_version_id` (FK RESTRICT; versions are
+  append-only, so the id pins the terms), the six store shares
+  `reseller_*_store_percent` (DECIMAL(5,2)), and both timings
+  (`reseller_store_credit_trigger/_days`, `reseller_seller_credit_trigger/_days`)
+  — copied so 3c and reports never join back.
+- **Each line**: `reseller_transfer_price_inr`, `reseller_retail_unit_inr`,
+  `reseller_min_retail_inr`, `reseller_max_retail_inr` (the range in force),
+  `reseller_stock_mode` (the store's mode for the variant when placed), all
+  DECIMAL(12,2). `unit_price_inr` carries the same retail, so every reader
+  that already shows a unit price is right without knowing about stores.
+- **CHECKs**: `orders_reseller_snapshot_ck` — a CHANNEL order carries none of
+  the snapshot columns, a RESELLER order all of them (shares 0–100, days
+  0–365). `order_items_reseller_snapshot_ck` — transfer (> 0), retail (≥ 0)
+  and stock mode together or not at all, retail inside min/max where set.
+  **The order's kind is its store's kind by FOREIGN KEY**: `orders.store_kind`
+  + composite FK `(store_id, store_kind) → seller_stores (id, kind)` (new
+  unique `seller_stores (id, kind)`), replacing `orders_store_id_fkey` with the
+  same actions. So a reseller order on a channel store, or the reverse, is
+  unrepresentable, and the CHECK is tied to the real store.
+- The terms are read INSIDE the create transaction, after the store lock
+  (`lockAndReadTerms`), so the version snapshotted is the one in force when
+  the order committed; a version published unaccepted in between refuses it.
+- **A reseller order cannot be edited from the seller's side**
+  (`RESELLER_ORDER_NOT_EDITABLE` — an edit would re-price it outside the
+  store's terms, and the seller cannot read the recipient it would correct),
+  nor CSV-patched. **ORD-9 for a store's CSV: a reference already placed is an
+  error row, never a PATCH** — cancel and re-upload to change one. The store
+  may cancel its own order (`POST /store/orders/:id/cancel`, `orders.cancel`)
+  through the SAME seller cancel (`OrderWriteService.cancelBySeller`: until it
+  is packed, the open-box check, CC-6, the stock saga); the seller may still
+  cancel it too (their stock).
+
+### Set-aside at CONFIRMATION (RS-3's consumption half)
+
+- **`consumedByStore` is answered**: Σ the store's orders' ACTIVE
+  reservations of the variant (phase-1 + phase-2) —
+  `StockReadService.activeReservedByResellerStore` (inventory-stock's read
+  surface). The catalogue's visible quantity follows automatically.
+- **The rule** (`reseller-order-gate/reseller-set-aside-rules.ts`, pure):
+  a line of a store whose live row is SET_ASIDE may use
+  `min(own unused set-aside, real available)`; a line of a SHARED store
+  `real available − Σ OTHER live stores' unused set-asides`; **a CHANNEL
+  (seller's own) order `real available − Σ every live store's unused
+  set-aside`**. `unused = max(0, set_aside − consumed)`; a store's consumed
+  units are already out of real availability (they are reservations), so the
+  whole set-aside is protected exactly once. The store's mode AT CONFIRMATION
+  decides (the commitment in force when stock is reserved); the line's
+  snapshot records the mode it was placed under.
+- **Where it runs**: M5 `reserve()` gained an optional `guard`, run INSIDE the
+  reservation's own transaction before its availability read and insert.
+  `OrderWriteService.transitionWithReserve` passes
+  `ResellerStockGateService.guardFor(line)` for EVERY order; the guard takes
+  `AdvisoryLock.RESELLER_SET_ASIDE` on (seller, variant) — the key the
+  set-aside save and the shrink sweep take — reads the commitments and real
+  availability inside that transaction, and throws `InsufficientStockError`,
+  which the existing saga routes to OUT_OF_STOCK (visible), never a 500. The
+  lock is held until the reservation commits, so the next confirm for the
+  variant counts it — and no second pool connection is needed (a lock held
+  across the reserve call would need two per confirm).
+- **Behaviour change for sellers who run reseller stores**: a seller's own
+  order can no longer eat a store's unused set-aside — it lands OUT_OF_STOCK
+  where it used to reserve. A seller with no set-asides is untouched: a
+  CHANNEL line of a variant nobody set aside returns straight after reading
+  the commitments (no stock read, same result as before).
+- **R3**: `reseller-order-gate` is a dependency-free primitive (imports the
+  catalogue read boundary and inventory-stock only). The order module
+  (confirm), order-core (create's offers) and the reseller catalogue
+  (consumption) import it; it imports none of them.
+
+### The close race (RS-1, finished)
+
+- Order create's transaction locks the store row `FOR SHARE` first
+  (`ResellerOrderService.lockAndReadTerms`) and re-checks ACTIVE — before an
+  order number is allocated. `ResellerStoreService.transition` (close, pause,
+  every transition) now takes the row `FOR UPDATE` first, then moves the
+  status and counts in-flight orders under it. The two conflict: a close
+  waits for an order already being placed to commit and then counts it
+  (`STORE_HAS_ORDERS_IN_FLIGHT`), or the order waits for the close and then
+  sees CLOSED and is refused. Concurrent orders do not block each other.
+  Pinned deterministically in both directions by
+  `reseller-store-orders.e2e-spec.ts`.
+
+### Customers belong to the store (ORD-7 generalised)
+
+- `customers.reseller_store_id` (nullable, FK seller_stores RESTRICT). The
+  `(seller_id, phone_e164)` unique is REPLACED by two partial uniques:
+  `customers_seller_phone_own_uq (seller_id, phone_e164) WHERE reseller_store_id
+  IS NULL` and `customers_store_phone_uq (reseller_store_id, phone_e164) WHERE
+  reseller_store_id IS NOT NULL`. Every existing row is the seller's own and
+  lands in the first on the same key. Prisma cannot target a partial unique,
+  so `CustomerService.findOrCreate` is find-then-create under
+  `AdvisoryLock.CUSTOMER_IDENTITY` (owner, phone) — every caller passes its
+  own transaction.
+- **The seller never sees a store customer's name, phone, email or street
+  address.** ONE mask on the seller read path: `order/reseller-privacy.ts`
+  (`maskResellerRecipient`), applied by `OrderService.list` and
+  `OrderService.loadOwnedForSeller` (detail, display and the cancel response);
+  city, state, PIN and country stay; `recipientMasked: true` says why the
+  gap is there. Seller search by name or phone matches CHANNEL orders only (a
+  phone match on a reseller order would tell the seller who the store sold
+  to). `CustomerService.list/getById/update/softDelete` are the seller's OWN
+  customers only (`reseller_store_id IS NULL`); the reputation lookup and the
+  duplicate check see channel orders for a seller and the store's orders for
+  a store; seller CSV references never match a store's order; the address
+  autocomplete cache is not fed by a store order; a store's CSV upload is
+  never parked in the seller's staged-row queue; a store's uploads and
+  webhook endpoints are invisible to the seller's screens. Staff see
+  everything (admin reads are never masked); the store sees its own in full.
+  Pinned by `reseller-privacy.spec.ts` and `tenant-isolation.e2e-spec.ts`.
+- **Known, recorded**: other seller surfaces that show a recipient (tickets
+  on a parcel, NSA / return worklists, invoices, notification emails to the
+  seller) are not yet masked for reseller orders. None is reachable before
+  `reseller.orders_enabled` is on; RS-10 is reworking the customer-facing
+  half. Mask them through `maskResellerRecipient` before 3c turns orders on.
+
+### Integrations
+
+- **API keys** — `store_api_keys` (hash only, `sks_` prefix, shown once),
+  `GET/POST/DELETE /store/api-keys` (`integrations.manage`),
+  `StoreApiKeyGuard` (a revoked / expired / unknown key is one generic 401,
+  audited; the store must be usable now — `storeMayBeUsed`). A key places and
+  reads its OWN store's orders (`/store-api/v1/orders`, `GET …/:id`); it
+  cannot cancel, see customers or manage keys. The seller's `skd_` keys are
+  untouched.
+- **Webhooks** — the existing machinery, scoped: a store's endpoints are
+  `seller_webhook_endpoints` rows under the store's seller with
+  `reseller_store_id` set, managed at `/store/webhook-endpoints`
+  (`integrations.manage`, SSRF-checked like the seller's). The ONE listener
+  routes a reseller order's events to that store's endpoints ONLY (payload
+  gains `storeId`), and a channel order's to the seller's own
+  (`reseller_store_id IS NULL`) ONLY — the seller's integration never hears
+  what a store sold. `SellerWebhookService` filters `reseller_store_id IS
+  NULL` on every query.
+
+### Permissions (store)
+
+`orders.view`, `orders.create`, `orders.cancel`, `customers.view`,
+`integrations.manage`. Defaults: admin all; ops view/create/cancel orders
+and customers; finance view orders and customers; viewer view orders only
+(the customer list is a list of people); integrations admin only (and the
+owner, implicitly). Granted to existing stores' system roles by the
+migration. `orders.create` and `orders.cancel` are named in
+`store-permission-surface.spec.ts` as deliberate non-`.manage` write keys.
+
+### Seams for 3c (money)
+
+No money listener is added here. 3c subscribes to the existing
+`OrderLifecycleEventBus` and, for each event, calls
+**`ResellerOrderReadService.snapshotFor(orderId)`** (exported by
+`ResellerOrderModule`) — null for a channel order (leave today's path
+alone), else the terms version, the six store shares as Decimals (feed
+`splitFeeLines`), both timings, each line's transfer price / retail /
+range / stock mode, and the transfer and retail totals. Where it hooks:
+- **DELIVERED** (either writer — transition or god mode, WAL-8): split the
+  delivery fee and COD fees/tax per the shares, credit each party at its
+  trigger (store: retail − COD tax share − transfer − store fee shares;
+  seller: transfer − seller fee shares). Today's `OrderDeliveredAccrualListener`
+  must skip reseller orders (or delegate) once 3c lands, or it credits the
+  seller the whole COD.
+- **RTO_RECEIVED** (`RtoReceiptService` → `RtoFeeAccrualService`): split the
+  return fee by `resellerReturnFeeStorePercent`.
+- **CANCELLED / CANCELLED_BY_ADMIN / REJECTED\*** and **LOST_IN_TRANSIT**:
+  reverse per party (WAL-6 / WAL-8), refund a prepaid debit (RS-5).
+- **CONFIRMED**: the prepaid debit of the store wallet (and, where Skydrop
+  enabled it, AFTER_CONFIRMATION credits).
+- **Create**: replace refusal 6 (`RESELLER_PREPAID_NOT_YET_AVAILABLE`) with
+  the store-balance check (`STORE_BALANCE_INSUFFICIENT`), then turn
+  `reseller.orders_enabled` on per seller.
+
+### Screens
+
+apps/reseller: **Orders** (`/orders` — status filter, search, pagination;
+`/orders/[id]` — customer, money (sold for / pay the seller / terms
+version), lines, waybill, timeline, cancel; `/orders/new` — picker from the
+store's catalogue with the retail range and the available quantity shown;
+`/orders/import` — the CSV flow with the store template and error report),
+**Customers** (`/customers`), **Integrations** (`/integrations` — API keys
+and webhooks, secrets shown once). apps/seller: orders list shows "via
+<store>" and a masked customer, the store filter includes the seller's
+reseller stores (with `stores.manage`), and the store filter now actually
+filters (the list hook was dropping `storeId`); order detail replaces a
+masked recipient with a note and offers no Edit on a reseller order.
+apps/admin: order detail gains a "Reseller store" section (store, terms
+version, shares, timings, each line's transfer price and retail as placed).
+
+### Tests
+
+Unit: `reseller-order.service.spec.ts` (the refusal order, fail-closed switch,
+the snapshot, `lockAndReadTerms` FOR SHARE and re-check), `reseller-set-aside-rules.spec.ts`,
+`reseller-stock-gate.service.spec.ts` (lock first, channel orders respect
+set-asides, consumption), `reseller-privacy.spec.ts` (the mask, and that every
+seller read goes through it), `customer.service.spec.ts` (owner identity under
+the lock), `order-write.service.spec.ts` (the guard on every reserve),
+`store-permission-surface.spec.ts` (the RS-5 surface and defaults). E2E (CI):
+`reseller-store-orders.e2e-spec.ts` (the refusals, the snapshot and masking
+end to end, confirm with set-aside / shared / channel and OUT_OF_STOCK
+routing, the close race both ways) and the RS-5 cases in
+`tenant-isolation.e2e-spec.ts`.

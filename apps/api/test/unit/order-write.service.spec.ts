@@ -108,6 +108,14 @@ function makeService(
   const runWithRetry = jest.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
   const mutation = { apply: mutationApply, runWithRetry };
 
+  // RS-5: the reseller set-aside gate. Its guard is handed to reserve()
+  // (which runs it inside the reservation's own transaction); here it is
+  // an inert marker the tests can recognise on the reserve call.
+  const guardFor = jest.fn(
+    (_line: { resellerStoreId: string | null }) => async (): Promise<void> => undefined,
+  );
+  const setAsideGate = { guardFor };
+
   const enqueueOrder = jest.fn(async () => ({ entry: {}, created: true }));
   const dequeueOrder = jest.fn(async () => ({ dequeued: 0, preemptedAssigned: false }));
   const callQueue = { enqueueOrder, dequeueOrder };
@@ -170,9 +178,11 @@ function makeService(
     reservations as never,
     mutation as never,
     postCommit,
+    setAsideGate as never,
   );
   return {
     svc,
+    guardFor,
     orderUpdate,
     orderFindFirst,
     orderShipmentFindFirst,
@@ -196,6 +206,53 @@ function makeService(
     settingsResolve,
   };
 }
+
+describe('OrderWriteService — RS-5 reseller set-aside guard at confirmation', () => {
+  it('a CHANNEL order reserves through the gate with no store (it must respect set-asides too)', async () => {
+    const { svc, reserve, guardFor } = makeService();
+    await svc.transitionStatus({ orderId: 'o1', to: OrderStatus.CONFIRMED, actor: ACTOR });
+    expect(guardFor).toHaveBeenCalledWith({
+      sellerId: 's1',
+      variantId: 'v1',
+      qty: 2,
+      resellerStoreId: null,
+    });
+    const arg = reserve.mock.calls[0]![0] as unknown as AnyArgs;
+    expect(typeof arg['guard']).toBe('function');
+  });
+
+  it('a RESELLER order reserves through the gate naming its store', async () => {
+    const { svc, guardFor } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.PENDING_CONFIRMATION,
+        storeId: 'store-r',
+        storeKind: 'RESELLER',
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 3 }],
+      },
+    });
+    await svc.transitionStatus({ orderId: 'o1', to: OrderStatus.CONFIRMED, actor: ACTOR });
+    expect(guardFor).toHaveBeenCalledWith({
+      sellerId: 's1',
+      variantId: 'v1',
+      qty: 3,
+      resellerStoreId: 'store-r',
+    });
+  });
+
+  it('a gate refusal lands OUT_OF_STOCK exactly like a warehouse shortfall', async () => {
+    const { svc } = makeService({ reserveThrows: true });
+    const res = await svc.transitionStatus({
+      orderId: 'o1',
+      to: OrderStatus.CONFIRMED,
+      actor: ACTOR,
+    });
+    expect(res.status).toBe(OrderStatus.OUT_OF_STOCK);
+    expect(res.reservationOutcome).toBe('OUT_OF_STOCK');
+  });
+});
 
 describe('OrderWriteService.transitionStatus', () => {
   it('reserves per line then commits CONFIRMED (RESERVE pre-tx)', async () => {

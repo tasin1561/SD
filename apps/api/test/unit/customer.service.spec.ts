@@ -5,7 +5,7 @@ type AnyArgs = Record<string, unknown>;
 
 function makeService() {
   const customer = {
-    upsert: jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({ id: 'c1', ...a })),
+    create: jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({ id: 'c-new', ...a })),
     update: jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ id: 'c1' })),
     findUnique: jest.fn<Promise<{ firstOrderAt: Date | null } | null>, [AnyArgs]>(async () => ({
       firstOrderAt: null,
@@ -17,38 +17,80 @@ function makeService() {
     findMany: jest.fn<Promise<AnyArgs[]>, [AnyArgs]>(async () => [{ id: 'c1' }]),
     count: jest.fn<Promise<number>, [AnyArgs]>(async () => 1),
   };
-  const client = { customer } as unknown as PrismaService['client'];
+  const order: string[] = [];
+  const $executeRaw = jest.fn(async () => {
+    order.push('lock');
+    return 1;
+  });
+  const client = { customer, $executeRaw } as unknown as PrismaService['client'];
   const svc = new CustomerService({ client } as unknown as PrismaService);
-  return { svc, client, customer };
+  return { svc, client, customer, $executeRaw, order };
 }
 
 describe('CustomerService', () => {
-  describe('findOrCreate (per-seller dedup, ORD-7)', () => {
-    it('upserts on the (sellerId, phoneE164) compound key', async () => {
+  describe('findOrCreate (identity per OWNER — ORD-7 generalised, RS-5)', () => {
+    it('creates the SELLER’s customer when none exists (reseller_store_id NULL)', async () => {
       const { svc, client, customer } = makeService();
+      customer.findFirst.mockResolvedValueOnce(null);
       await svc.findOrCreate(client, {
         sellerId: 's1',
         phoneE164: '+919876543210',
         name: 'Asha',
       });
-      expect(customer.upsert).toHaveBeenCalledTimes(1);
-      const arg = customer.upsert.mock.calls[0]![0] as AnyArgs;
-      expect(arg.where).toEqual({
-        sellerId_phoneE164: { sellerId: 's1', phoneE164: '+919876543210' },
-      });
-      expect(arg.create).toMatchObject({
+      expect(customer.findFirst.mock.calls[0]![0].where).toEqual({
         sellerId: 's1',
+        resellerStoreId: null,
+        phoneE164: '+919876543210',
+      });
+      const arg = customer.create.mock.calls[0]![0] as AnyArgs;
+      expect(arg.data).toMatchObject({
+        sellerId: 's1',
+        resellerStoreId: null,
         phoneE164: '+919876543210',
         name: 'Asha',
         preferredLanguage: 'en',
       });
     });
 
-    it('revives a soft-deleted customer without clobbering name/email', async () => {
+    it('a STORE’s customer is a separate identity, keyed by the store', async () => {
       const { svc, client, customer } = makeService();
+      customer.findFirst.mockResolvedValueOnce(null);
+      await svc.findOrCreate(client, {
+        sellerId: 's1',
+        resellerStoreId: 'store-1',
+        phoneE164: '+919876543210',
+      });
+      expect(customer.findFirst.mock.calls[0]![0].where).toEqual({
+        sellerId: 's1',
+        resellerStoreId: 'store-1',
+        phoneE164: '+919876543210',
+      });
+      expect((customer.create.mock.calls[0]![0].data as AnyArgs).resellerStoreId).toBe('store-1');
+    });
+
+    it('takes the CUSTOMER_IDENTITY lock BEFORE looking, so two new orders cannot both create', async () => {
+      const { svc, client, customer, order } = makeService();
+      customer.findFirst.mockImplementationOnce(async () => {
+        order.push('find');
+        return null;
+      });
       await svc.findOrCreate(client, { sellerId: 's1', phoneE164: '+919876543210' });
-      // update branch only resets deletedAt — no name/email overwrite
-      expect(customer.upsert.mock.calls[0]![0].update).toEqual({ deletedAt: null });
+      expect(order).toEqual(['lock', 'find']);
+    });
+
+    it('a re-encounter never overwrites curated name/email; a removed customer is revived', async () => {
+      const { svc, client, customer } = makeService();
+      customer.findFirst.mockResolvedValueOnce({ id: 'c1', deletedAt: new Date() });
+      await svc.findOrCreate(client, {
+        sellerId: 's1',
+        phoneE164: '+919876543210',
+        name: 'Somebody Else',
+      });
+      expect(customer.create).not.toHaveBeenCalled();
+      expect(customer.update.mock.calls[0]![0]).toMatchObject({
+        where: { id: 'c1' },
+        data: { deletedAt: null },
+      });
     });
 
     it('rejects a non-E.164 phone', async () => {
@@ -88,10 +130,12 @@ describe('CustomerService', () => {
       const { svc, customer } = makeService();
       customer.findFirst.mockResolvedValueOnce(null);
       await expect(svc.getById('s1', 'cX')).rejects.toThrow(/not found/);
-      // scope is enforced in the query filter
+      // scope is enforced in the query filter — and a reseller store's
+      // customer is never the seller's to read (RS-5)
       expect(customer.findFirst.mock.calls[0]![0].where).toEqual({
         id: 'cX',
         sellerId: 's1',
+        resellerStoreId: null,
         deletedAt: null,
       });
     });
@@ -130,11 +174,33 @@ describe('CustomerService', () => {
       const res = await svc.list('s1', { page: 2, pageSize: 10, search: 'asha' });
       const where = customer.findMany.mock.calls[0]![0].where as AnyArgs;
       expect(where.sellerId).toBe('s1');
+      expect(where.resellerStoreId).toBeNull();
       expect(where.deletedAt).toBeNull();
       expect(where.OR).toHaveLength(3);
       expect(customer.findMany.mock.calls[0]![0].skip).toBe(10);
       expect(customer.findMany.mock.calls[0]![0].take).toBe(10);
       expect(res).toEqual({ items: [{ id: 'c1' }], total: 1, page: 2, pageSize: 10 });
+    });
+  });
+
+  describe('a reseller store’s own customers (RS-5)', () => {
+    it('listForStore scopes by the store, never the seller', async () => {
+      const { svc, customer } = makeService();
+      await svc.listForStore('store-1', {});
+      const where = customer.findMany.mock.calls[0]![0].where as AnyArgs;
+      expect(where.resellerStoreId).toBe('store-1');
+      expect('sellerId' in where).toBe(false);
+    });
+
+    it('getForStore is a 404 for any customer that is not that store’s', async () => {
+      const { svc, customer } = makeService();
+      customer.findFirst.mockResolvedValueOnce(null);
+      await expect(svc.getForStore('store-1', 'c-other')).rejects.toThrow();
+      expect(customer.findFirst.mock.calls[0]![0].where).toEqual({
+        id: 'c-other',
+        resellerStoreId: 'store-1',
+        deletedAt: null,
+      });
     });
   });
 

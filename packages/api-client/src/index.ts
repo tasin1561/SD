@@ -43,6 +43,7 @@ export type {
   ReleaseReservationsResult,
   RestoreReservationsRequest,
   RestoreReservationsResult,
+  StoreKindValue,
 } from './endpoints/admin-orders';
 export type {
   CustomerDeliveryFeeView,

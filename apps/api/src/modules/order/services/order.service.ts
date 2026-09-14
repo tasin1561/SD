@@ -11,9 +11,12 @@ import {
   OrderStatus,
   PaymentMode,
   Prisma,
+  SellerStoreKind,
   VariantStatus,
   SellerCapability,
 } from '@skydrop/db';
+import { maskResellerRecipient, type Masked } from '../reseller-privacy';
+import { resellerOrderColumns, type ResellerCreateContext } from '../reseller-order-snapshot';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -49,6 +52,14 @@ const ORDER_VIEW_INCLUDE = {
       unitDeclaredValueInr: true,
       unitPriceInr: true,
       qtyReserved: true,
+      // RS-5: a reseller line's terms as placed (all null on a channel
+      // order). The transfer price is the SELLER's own figure, so both
+      // the seller and Skydrop may read it.
+      resellerTransferPriceInr: true,
+      resellerRetailUnitInr: true,
+      resellerMinRetailInr: true,
+      resellerMaxRetailInr: true,
+      resellerStockMode: true,
     },
   },
 } as const;
@@ -82,6 +93,11 @@ const ORDER_LIST_SELECT = {
   customerId: true,
   placedAt: true,
   createdAt: true,
+  // RS-5: which shopfront — a reseller store's orders are listed with
+  // its name, and `storeKind` is what the seller-side mask reads.
+  storeId: true,
+  storeKind: true,
+  storeNameSnapshot: true,
 } satisfies Prisma.OrderSelect;
 
 export type OrderListItem = Prisma.OrderGetPayload<{ select: typeof ORDER_LIST_SELECT }>;
@@ -166,6 +182,15 @@ export interface CreateOrderOptions {
   initialStatus?: OrderStatus;
   /** Set on the order when created by a bulk upload. */
   bulkUploadId?: string;
+  /**
+   * RS-5 — a RESELLER STORE's order. Supplied ONLY by
+   * `ResellerOrderService`, after every refusal has run: the order is
+   * filed under the store (never resolved through `resolveForOrder`,
+   * which refuses a reseller store), its customer is the STORE's, each
+   * line carries its terms, and `lockAndReadTerms` runs first inside the
+   * create transaction (FOR SHARE on the store row — RS-1's close race).
+   */
+  reseller?: ResellerCreateContext;
 }
 
 /**
@@ -303,7 +328,22 @@ export class OrderService {
     // refused before an order number is burned. Given none, the
     // seller's default; the CSV importer reaches this same line, which
     // is why a row that names no store still lands somewhere.
-    const store = await this.stores.resolveForOrder(sellerId, input.storeId);
+    //
+    // RS-5: a reseller store's order names its store in `reseller`, set
+    // only by ResellerOrderService — `resolveForOrder` refuses a reseller
+    // store by design (STORE_IS_RESELLER), so the seller's own form can
+    // never file an order under one.
+    const reseller = options.reseller ?? null;
+    if (reseller !== null && reseller.lines.length !== input.items.length) {
+      throw new BadRequestException({
+        code: 'RESELLER_LINES_MISMATCH',
+        message: 'Every line of a reseller order needs its terms',
+      });
+    }
+    const store =
+      reseller === null
+        ? await this.stores.resolveForOrder(sellerId, input.storeId)
+        : { id: reseller.storeId, name: reseller.storeName };
     // A seller on hold cannot start new work. Checked here rather than
     // in the controller so the CSV importer — which reaches this same
     // method with no screen in front of it — is covered by the same
@@ -340,7 +380,7 @@ export class OrderService {
 
     this.assertPayment(input);
     const lines = await this.resolveLines(sellerId, input.items);
-    await this.assertNotDuplicate(sellerId, input, lines);
+    await this.assertNotDuplicate(sellerId, input, lines, reseller?.storeId ?? null);
 
     const declaredValueInr =
       input.declaredValueInr !== undefined
@@ -360,6 +400,12 @@ export class OrderService {
     let created;
     try {
       created = await this.prisma.client.$transaction(async (tx) => {
+        // RS-5 FIRST: lock the reseller store row FOR SHARE and re-check
+        // it is still ACTIVE — before a number is allocated, so a store
+        // closed or paused a moment ago burns none. A close takes the row
+        // for UPDATE, so the two cannot interleave: whichever commits
+        // first, the other sees it (RS-1).
+        const resellerTerms = reseller === null ? null : await reseller.lockAndReadTerms(tx);
         const orderNumber = await this.numbering.nextOrderNumber(tx, now);
 
         // The stored recipient name carries the seller's code. Composed
@@ -377,6 +423,10 @@ export class OrderService {
 
         const customer = await this.customers.findOrCreate(tx, {
           sellerId,
+          // RS-5 (ORD-7 generalised): a reseller order's customer is the
+          // STORE's, a separate identity from the seller's own customer
+          // with the same phone.
+          resellerStoreId: reseller?.storeId ?? null,
           phoneE164: input.recipientPhoneE164.trim(),
           // The CUSTOMER record stays clean — it is a person, and the
           // same person may buy from two sellers.
@@ -392,6 +442,10 @@ export class OrderService {
             sellerId,
             customerId: customer.id,
             storeId: store.id,
+            // RS-5: the composite FK makes this the store's own kind; the
+            // CHECK then demands the whole snapshot on a reseller order.
+            storeKind: reseller === null ? SellerStoreKind.CHANNEL : SellerStoreKind.RESELLER,
+            ...(resellerTerms === null ? {} : resellerOrderColumns(resellerTerms)),
             // ORD-6: the NAME as it was. Renaming the store later must
             // not rewrite what a past customer was told, and the live
             // row cannot answer what it used to be called.
@@ -437,17 +491,32 @@ export class OrderService {
             internalNotes: input.internalNotes ?? null,
             placedAt: now,
             items: {
-              create: lines.map((l) => ({
-                variantId: l.variantId,
-                skuCode: l.skuCode,
-                productName: l.productName,
-                variantLabel: l.variantLabel,
-                imageUrl: l.imageUrl,
-                quantity: l.quantity,
-                unitWeightGrams: l.unitWeightGrams,
-                unitDeclaredValueInr: l.unitDeclaredValueInr,
-                unitPriceInr: l.unitPriceInr,
-              })),
+              create: lines.map((l, i) => {
+                // RS-5: the line's terms as placed. Retail is ALSO the
+                // unit price, so every reader that already shows one is
+                // right without knowing about stores.
+                const terms = reseller?.lines[i];
+                return {
+                  variantId: l.variantId,
+                  skuCode: l.skuCode,
+                  productName: l.productName,
+                  variantLabel: l.variantLabel,
+                  imageUrl: l.imageUrl,
+                  quantity: l.quantity,
+                  unitWeightGrams: l.unitWeightGrams,
+                  unitDeclaredValueInr: l.unitDeclaredValueInr,
+                  unitPriceInr: terms?.retailUnitInr ?? l.unitPriceInr,
+                  ...(terms === undefined
+                    ? {}
+                    : {
+                        resellerTransferPriceInr: terms.transferPriceInr,
+                        resellerRetailUnitInr: terms.retailUnitInr,
+                        resellerMinRetailInr: terms.minRetailInr,
+                        resellerMaxRetailInr: terms.maxRetailInr,
+                        resellerStockMode: terms.stockMode,
+                      }),
+                };
+              }),
             },
           },
           include: ORDER_VIEW_INCLUDE,
@@ -464,8 +533,10 @@ export class OrderService {
         );
 
         // Locked decision #4: feed the autocomplete cache for MANUAL
-        // entry only (bulk imports must not pollute suggestions).
-        if (source === OrderSource.MANUAL) {
+        // entry only (bulk imports must not pollute suggestions). RS-5:
+        // never for a reseller order — the cache is read on the SELLER's
+        // form, and a store customer's address is not the seller's to see.
+        if (source === OrderSource.MANUAL && reseller === null) {
           await this.addressCache.recordAddress(
             tx,
             customer.id,
@@ -494,6 +565,12 @@ export class OrderService {
               source,
               itemCount: lines.length,
               customerId: customer.id,
+              ...(reseller === null
+                ? {}
+                : {
+                    resellerStoreId: reseller.storeId,
+                    resellerTermsVersionId: resellerTerms?.termsVersionId ?? null,
+                  }),
               ipAddress: ctx.ipAddress,
               userAgent: ctx.userAgent,
               requestId: ctx.requestId,
@@ -523,7 +600,9 @@ export class OrderService {
     if (initialStatus === OrderStatus.PENDING_CONFIRMATION) {
       await this.enqueueForCall(created.id, ctx);
       // R5: stage 1 of two-stage booking (no-op unless the seller opted in).
-      await this.reserveAtPlacementAsync(created.id);
+      // RS-5: never for a reseller order — an at-placement hold would
+      // take stock outside the confirm-time set-aside rule.
+      if (reseller === null) await this.reserveAtPlacementAsync(created.id);
     }
     // M15→M6: auto-compute order charges post-commit (best-effort).
     await this.computeChargesAsync(created.id);
@@ -556,6 +635,8 @@ export class OrderService {
     sellerId: string,
     input: CreateOrderDto,
     lines: ReadonlyArray<{ variantId: string }>,
+    /** RS-5: a reseller store's order is checked against that store's orders only. */
+    resellerStoreId: string | null,
   ): Promise<void> {
     if (input.acknowledgeDuplicate === true) return;
 
@@ -563,6 +644,7 @@ export class OrderService {
       sellerId,
       input.recipientPhoneE164,
       lines.map((l) => l.variantId),
+      resellerStoreId === null ? { kind: 'SELLER' } : { kind: 'STORE', storeId: resellerStoreId },
     );
     if (open.length === 0) return;
 
@@ -719,6 +801,18 @@ export class OrderService {
     ctx: ClientContext,
   ): Promise<OrderView> {
     const order = await this.loadOwned(sellerId, id);
+
+    // RS-5: a reseller store's order is the STORE's deal — its retail, its
+    // customer, its terms snapshot. An edit from the seller's side would
+    // re-price it outside the store's terms (and the seller cannot even
+    // read the recipient it would be correcting).
+    if (order.storeKind === SellerStoreKind.RESELLER) {
+      throw new ConflictException({
+        code: 'RESELLER_ORDER_NOT_EDITABLE',
+        message:
+          'This order was placed by a reseller store. Only the store can change it — ask them to cancel it and place it again.',
+      });
+    }
 
     const isDraft = order.status === OrderStatus.DRAFT;
     const isPending = order.status === OrderStatus.PENDING_CONFIRMATION;
@@ -1067,13 +1161,23 @@ export class OrderService {
    * have no use for a picture, and presigning on a write path would be
    * work nobody reads.
    */
-  async loadOwnedForDisplay(sellerId: string, id: string): Promise<OrderView> {
-    const order = await this.loadOwned(sellerId, id);
+  async loadOwnedForDisplay(sellerId: string, id: string): Promise<Masked<OrderView>> {
+    const order = await this.loadOwnedForSeller(sellerId, id);
     const thumbs = await this.catalog.thumbnailUrlsByVariant(order.items.map((i) => i.variantId));
     return {
       ...order,
       items: order.items.map((i) => ({ ...i, imageUrl: thumbs.get(i.variantId) ?? null })),
     };
+  }
+
+  /**
+   * The order as its SELLER may read it — a reseller store customer's
+   * identity taken off (RS-5, `reseller-privacy.ts`). Every seller-facing
+   * read of one order returns this, never `loadOwned`, which is the
+   * mutators' internal load.
+   */
+  async loadOwnedForSeller(sellerId: string, id: string): Promise<Masked<OrderView>> {
+    return maskResellerRecipient(await this.loadOwned(sellerId, id));
   }
 
   async loadOwned(sellerId: string, id: string): Promise<OrderView> {
@@ -1090,7 +1194,7 @@ export class OrderService {
   async list(
     sellerId: string,
     query: ListOrdersQuery,
-  ): Promise<{ items: OrderListItem[]; total: number; page: number; pageSize: number }> {
+  ): Promise<{ items: Masked<OrderListItem>[]; total: number; page: number; pageSize: number }> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const where: Prisma.OrderWhereInput = { sellerId, deletedAt: null };
@@ -1104,8 +1208,18 @@ export class OrderService {
       where.OR = [
         { orderNumber: { contains: query.search, mode: 'insensitive' } },
         { sellerOrderRef: { contains: query.search, mode: 'insensitive' } },
-        { recipientName: { contains: query.search, mode: 'insensitive' } },
-        { recipientPhoneE164: { contains: query.search, mode: 'insensitive' } },
+        // RS-5: a name or phone matches the seller's OWN (channel) orders
+        // only. Matching a reseller order by its customer's phone would
+        // tell the seller who that store sold to — the very thing the
+        // mask on the rows withholds.
+        {
+          storeKind: SellerStoreKind.CHANNEL,
+          recipientName: { contains: query.search, mode: 'insensitive' },
+        },
+        {
+          storeKind: SellerStoreKind.CHANNEL,
+          recipientPhoneE164: { contains: query.search, mode: 'insensitive' },
+        },
         // The WAYBILL. It is the number a courier quotes, a customer
         // reads off a text message and a seller pastes from an email —
         // and it was the one identifier on the parcel that this search
@@ -1135,7 +1249,8 @@ export class OrderService {
       }),
       this.prisma.client.order.count({ where }),
     ]);
-    return { items, total, page, pageSize };
+    // RS-5: the seller's list, with every reseller store customer masked.
+    return { items: items.map((o) => maskResellerRecipient(o)), total, page, pageSize };
   }
 
   /**
@@ -1351,7 +1466,12 @@ export class OrderService {
         sellerId,
         sellerOrderRef: ref,
         deletedAt: null,
-        ...(storeId == null || storeId === '' ? {} : { storeId }),
+        // RS-5: with no store named, only the seller's OWN (channel)
+        // orders — a seller's CSV row must never match, and so PATCH, an
+        // order a reseller store placed under the same reference.
+        ...(storeId == null || storeId === ''
+          ? { storeKind: SellerStoreKind.CHANNEL }
+          : { storeId }),
       },
       select: { id: true, status: true },
     });
@@ -1388,10 +1508,21 @@ export class OrderService {
         recipientCountryCode: true,
         codAmountInr: true,
         customerId: true,
+        storeKind: true,
         items: { select: { id: true, variantId: true, quantity: true }, take: 1 },
       },
     });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+    // RS-5: a patch re-snapshots the line from the live catalogue with no
+    // reseller terms, which would re-price a store's order outside them.
+    // The store's CSV path never calls this (a repeated reference is an
+    // error row there); refused here too so no future caller can.
+    if (order.storeKind === SellerStoreKind.RESELLER) {
+      throw new ConflictException({
+        code: 'RESELLER_ORDER_NOT_EDITABLE',
+        message: 'A reseller store’s order cannot be changed by a CSV re-upload',
+      });
+    }
     if (order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.PENDING_CONFIRMATION) {
       throw new ConflictException({
         code: 'BULK_PATCH_NOT_ALLOWED',

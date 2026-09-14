@@ -23,6 +23,8 @@ export interface ListSellerOrdersQuery {
   /** ISO instants; either end alone is a valid filter. */
   readonly placedFrom?: string;
   readonly placedTo?: string;
+  /** Which shopfront — a channel store or (RS-5) one of the seller's reseller stores. */
+  readonly storeId?: string;
   readonly page?: number;
   readonly pageSize?: number;
 }

@@ -22,7 +22,11 @@ export type OrderCsvField =
   | 'state'
   | 'pinCode'
   | 'codAmount'
-  | 'externalRef';
+  | 'externalRef'
+  // RS-5 — what a reseller store sells one unit for. Required on a
+  // STORE's upload (ORDER_CSV_STORE_REQUIRED_FIELDS); a seller's own
+  // upload may carry the column and it is ignored there.
+  | 'retailUnitPrice';
 
 export const ORDER_CSV_ALIAS_MAP: Record<OrderCsvField, string[]> = {
   productSku: ['product sku', 'sku', 'sku code', 'variant sku'],
@@ -38,6 +42,7 @@ export const ORDER_CSV_ALIAS_MAP: Record<OrderCsvField, string[]> = {
   pinCode: ['pin code', 'pincode', 'pin', 'postal code', 'postcode', 'zip'],
   codAmount: ['cod amount', 'cod', 'cod amount inr', 'amount to collect'],
   externalRef: ['external ref', 'order ref', 'order id', 'reference', 'ref'],
+  retailUnitPrice: ['retail price', 'retail unit price', 'selling price', 'unit price', 'price'],
 };
 
 /** A row needs all of these mapped to be importable. */
@@ -66,6 +71,18 @@ export const ORDER_CSV_REQUIRED_FIELDS: OrderCsvField[] = [
   'addressLine2',
   'pinCode',
   'externalRef',
+];
+
+/**
+ * RS-5 — a RESELLER STORE's upload needs everything a seller's does plus
+ * the retail price per unit: a store order states what the store sells at,
+ * checked against the seller's range and snapshotted with the transfer
+ * price. COD Amount stays optional — left out, the row collects the
+ * retail total (`toCreateOrderDto`).
+ */
+export const ORDER_CSV_STORE_REQUIRED_FIELDS: OrderCsvField[] = [
+  ...ORDER_CSV_REQUIRED_FIELDS,
+  'retailUnitPrice',
 ];
 
 export const ORDER_CSV_TARGET_FIELDS = Object.keys(ORDER_CSV_ALIAS_MAP) as OrderCsvField[];

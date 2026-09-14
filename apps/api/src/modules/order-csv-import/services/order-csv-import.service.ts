@@ -220,7 +220,13 @@ export class OrderCsvImportService {
     page = 1,
     pageSize = 20,
   ): Promise<{ items: BulkOrderUploadView[]; total: number; page: number; pageSize: number }> {
-    const where: Prisma.BulkOrderUploadWhereInput = { sellerId, deletedAt: null };
+    // RS-5: the seller's OWN uploads — never a reseller store's, whose rows
+    // are the store's customers.
+    const where: Prisma.BulkOrderUploadWhereInput = {
+      sellerId,
+      resellerStoreId: null,
+      deletedAt: null,
+    };
     const [rows, total] = await Promise.all([
       this.prisma.client.bulkOrderUpload.findMany({
         where,
@@ -236,7 +242,7 @@ export class OrderCsvImportService {
 
   async getUpload(sellerId: string, id: string): Promise<BulkOrderUploadView> {
     const row = await this.prisma.client.bulkOrderUpload.findFirst({
-      where: { id, sellerId, deletedAt: null },
+      where: { id, sellerId, resellerStoreId: null, deletedAt: null },
       select: UPLOAD_VIEW_SELECT,
     });
     if (!row) {
@@ -253,7 +259,7 @@ export class OrderCsvImportService {
     id: string,
   ): Promise<{ buffer: Buffer; fileName: string }> {
     const upload = await this.prisma.client.bulkOrderUpload.findFirst({
-      where: { id, sellerId, deletedAt: null },
+      where: { id, sellerId, resellerStoreId: null, deletedAt: null },
       select: { id: true, fileName: true, errorReportKey: true },
     });
     if (!upload) {

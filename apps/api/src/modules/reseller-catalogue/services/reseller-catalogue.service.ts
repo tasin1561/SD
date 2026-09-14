@@ -22,14 +22,17 @@ import {
   type ResellableVariant,
 } from '../../catalog-read/services/catalog-read.service';
 import { StockReadService } from '../../inventory-stock/services/stock-read.service';
+import { ResellerStockGateService } from '../../reseller-order-gate/services/reseller-stock-gate.service';
 import { checkPrice, normaliseAmount, type PriceInput } from './reseller-price-rules';
 import {
-  CONSUMED_BY_STORE_BEFORE_ORDERS,
   MAX_HIDDEN_PERCENT,
   freeToSetAside,
   othersUnusedSetAside,
   visibleQuantity,
 } from './reseller-visible-stock';
+
+/** RS-5: per store, per variant — Σ that store's orders' ACTIVE reservations. */
+type Consumption = ReadonlyMap<string, ReadonlyMap<string, number>>;
 
 /**
  * Store statuses whose set-asides HOLD stock. A pending store may be set
@@ -225,6 +228,9 @@ export class ResellerCatalogueService {
     private readonly stock: StockReadService,
     private readonly audit: AuditLogService,
     private readonly spaces: SpacesService,
+    // RS-5: a store's consumption of its set-aside, from its own orders'
+    // ACTIVE reservations — the answer to phase 2's `consumedByStore` seam.
+    private readonly gate: ResellerStockGateService,
   ) {}
 
   // ── The seller's default price list ────────────────────────────────
@@ -397,7 +403,7 @@ export class ResellerCatalogueService {
     ];
     const ids = listed.map((v) => v.variantId);
 
-    const [prices, stock, thumbs, others, shrinks] = await Promise.all([
+    const [prices, stock, thumbs, others, shrinks, consumed] = await Promise.all([
       this.prisma.client.resellerPriceListItem.findMany({
         where: { sellerId: store.sellerId, variantId: { in: ids } },
       }),
@@ -409,6 +415,7 @@ export class ResellerCatalogueService {
         orderBy: { createdAt: 'desc' },
         take: 50,
       }),
+      this.gate.consumption(store.sellerId, ids),
     ]);
     const priceBy = new Map(prices.map((p) => [p.variantId, p]));
 
@@ -458,7 +465,7 @@ export class ResellerCatalogueService {
         realAvailable: s.available,
         otherStoresSetAside: otherSum,
         freeToSetAside: freeToSetAside(s.onHand, otherSum),
-        visibleQty: this.visibleFor(store.id, v.variantId, {
+        visibleQty: this.visibleFor(store.id, v.variantId, consumed, {
           stockMode,
           setAsideQty: row?.setAsideQty ?? null,
           hiddenPercent,
@@ -810,13 +817,14 @@ export class ResellerCatalogueService {
       rows.map((r) => r.variantId),
     );
     const ids = variants.map((v) => v.variantId);
-    const [prices, stock, thumbs, others] = await Promise.all([
+    const [prices, stock, thumbs, others, consumed] = await Promise.all([
       this.prisma.client.resellerPriceListItem.findMany({
         where: { sellerId: store.sellerId, variantId: { in: ids } },
       }),
       this.stock.getSellableStockLive(store.sellerId, ids),
       this.thumbnails(ids),
       this.otherStoresSetAside(store.sellerId, store.id, ids),
+      this.gate.consumption(store.sellerId, ids),
     ]);
     const priceBy = new Map(prices.map((p) => [p.variantId, p]));
 
@@ -841,7 +849,7 @@ export class ResellerCatalogueService {
         minRetailInr: effective.minRetailInr,
         maxRetailInr: effective.maxRetailInr,
         suggestedRetailInr: effective.suggestedRetailInr,
-        availableQty: this.visibleFor(store.id, v.variantId, {
+        availableQty: this.visibleFor(store.id, v.variantId, consumed, {
           stockMode: row.stockMode,
           setAsideQty: row.setAsideQty,
           hiddenPercent: row.hiddenPercent,
@@ -857,20 +865,24 @@ export class ResellerCatalogueService {
   // ── internals ──────────────────────────────────────────────────────
 
   /**
-   * THE PHASE-3 SEAM: how much of a store's set-aside it has already
-   * used. Store orders do not exist yet, so nothing is consumed; phase 3
-   * answers from the store's own ACTIVE reservations here, and every
-   * visible quantity (the seller's preview and the store's page alike)
-   * follows because both come through `visibleFor`.
+   * How much of a store's set-aside it has already used: Σ its own
+   * orders' ACTIVE reservations of the variant (RS-5 — this was phase
+   * 2's seam, returning 0 before store orders existed). Every visible
+   * quantity — the seller's preview and the store's page alike — follows,
+   * because both come through `visibleFor`; store order create reads the
+   * same figure through `ResellerStockGateService.offersFor`.
    */
-  private consumedByStore(key: { readonly storeId: string; readonly variantId: string }): number {
-    void key;
-    return CONSUMED_BY_STORE_BEFORE_ORDERS;
+  private consumedByStore(
+    consumed: Consumption,
+    key: { readonly storeId: string; readonly variantId: string },
+  ): number {
+    return consumed.get(key.storeId)?.get(key.variantId) ?? 0;
   }
 
   private visibleFor(
     storeId: string,
     variantId: string,
+    consumed: Consumption,
     input: {
       readonly stockMode: ResellerStockMode;
       readonly setAsideQty: number | null;
@@ -887,10 +899,10 @@ export class ResellerCatalogueService {
       othersUnusedSetAside: othersUnusedSetAside(
         input.otherRows.map((r) => ({
           setAsideQty: r.setAsideQty,
-          consumedByStore: this.consumedByStore({ storeId: r.storeId, variantId }),
+          consumedByStore: this.consumedByStore(consumed, { storeId: r.storeId, variantId }),
         })),
       ),
-      consumedByStore: this.consumedByStore({ storeId, variantId }),
+      consumedByStore: this.consumedByStore(consumed, { storeId, variantId }),
     });
   }
 

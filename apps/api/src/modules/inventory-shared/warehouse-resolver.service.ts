@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { WarehouseStatus } from '@skydrop/db';
+import { type Prisma, WarehouseStatus } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 
 /** system_settings key holding the CCU-01 (Phase 1A single-warehouse) uuid. */
@@ -158,8 +158,11 @@ export class WarehouseResolverService {
    * Stock in an intake-only site is on its way to India and is not
    * sellable from anywhere yet.
    */
-  async fulfillingWarehouseIds(): Promise<readonly string[]> {
-    const rows = await this.prisma.client.warehouse.findMany({
+  async fulfillingWarehouseIds(
+    /** RS-5: read inside the caller's transaction when it holds a lock. */
+    db?: Prisma.TransactionClient,
+  ): Promise<readonly string[]> {
+    const rows = await (db ?? this.prisma.client).warehouse.findMany({
       where: { deletedAt: null, fulfilsOrders: true },
       select: { id: true },
       orderBy: { id: 'asc' },

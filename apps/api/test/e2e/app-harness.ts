@@ -499,6 +499,11 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // a changed FK cannot quietly leave rows behind.
         // RS-4 terms first: acceptances FK-RESTRICT store_users and the
         // versions; versions FK-RESTRICT seller_stores.
+        // RS-5 store API keys — FK seller_stores (CASCADE); named so a leaked
+        // key cannot authenticate against a later suite's store (MUST #12).
+        // Store orders, their customers and store CSV uploads live in the
+        // order reset's tables (orders / customers / bulk_order_uploads).
+        'store_api_keys',
         'reseller_store_terms_acceptances',
         'reseller_store_terms_versions',
         // RS-3 reseller catalogue — FK seller_stores / sellers (CASCADE) and

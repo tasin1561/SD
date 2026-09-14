@@ -222,6 +222,22 @@ Per-store, seller-set: `storeId` PK (FK CASCADE), `negativeLimitInr` (default 0,
 
 **Enum values added:** `WalletEntryDirection.STORE_TOPUP_OUT` (debit) and `STORE_PAYOUT_IN` (credit) — the seller-side twins of a seller-managed top-up and a recorded payout, both moving no cash. **Setting added:** `reseller.store_negative_limit_cap_inr` (DECIMAL 25,000, seller-overridable 0–10,000,000). **Existing store roles:** admin and finance gained `wallet.view` / `wallet.topups.manage` / `wallet.withdrawals.manage`.
 
+## Reseller store orders — RS-5 *(2026-09-14, `20260914240000_reseller_store_orders`; design `docs/reseller-stores.md` "Store orders as built")*
+
+A reseller store's order is an ordinary `orders` row (the SELLER's stock, warehouse and courier) filed under the store, carrying the store's terms AS PLACED. No new enum.
+
+- **`seller_stores`**: new UNIQUE `(id, kind)` — the target of the orders FK below.
+- **`orders`** += `storeKind: SellerStoreKind` (NOT NULL, default CHANNEL; every existing row CHANNEL — the migration refuses to run if any order already sits on a reseller store), `resellerTermsVersionId` (FK `reseller_store_terms_versions` RESTRICT, indexed), `resellerDeliveryFeeStorePercent`, `resellerReturnFeeStorePercent`, `resellerCustomerReturnFeeStorePercent`, `resellerCodFeeStorePercent`, `resellerCodTaxStorePercent`, `resellerInstantPayFeeStorePercent` (all `Decimal(5,2)`), `resellerStoreCreditTrigger` / `resellerSellerCreditTrigger` (`ResellerCreditTrigger`), `resellerStoreCreditDays` / `resellerSellerCreditDays` (Int). The store FK is now COMPOSITE: `(storeId, storeKind) → seller_stores (id, kind)` (`orders_store_id_store_kind_fkey`, RESTRICT / CASCADE — it replaces `orders_store_id_fkey` with the same actions). CHECK `orders_reseller_snapshot_ck`: CHANNEL ⇒ every snapshot column NULL; RESELLER ⇒ every one NOT NULL, shares 0–100, days 0–365. `storeNameSnapshot` on a reseller order is the store's `displayName ?? name` at create (RS-10 reads it).
+- **`order_items`** += `resellerTransferPriceInr`, `resellerRetailUnitInr`, `resellerMinRetailInr`, `resellerMaxRetailInr` (`Decimal(12,2)`), `resellerStockMode` (`ResellerStockMode`). CHECK `order_items_reseller_snapshot_ck`: all NULL, or transfer > 0, retail ≥ 0, stock mode set, and retail inside min/max where set. `unitPriceInr` carries the same retail.
+- **`customers`** += `resellerStoreId` (nullable, FK seller_stores RESTRICT, indexed). The `(sellerId, phoneE164)` unique is REPLACED by two partial uniques — `customers_seller_phone_own_uq (seller_id, phone_e164) WHERE reseller_store_id IS NULL` and `customers_store_phone_uq (reseller_store_id, phone_e164) WHERE reseller_store_id IS NOT NULL` (not visible to Prisma; `CustomerService.findOrCreate` resolves identity under `AdvisoryLock.CUSTOMER_IDENTITY`).
+- **`bulk_order_uploads`** += `resellerStoreId` (FK seller_stores RESTRICT, indexed) and `uploadedByStoreUserId` (plain uuid) — a store's CSV upload, listed to that store only.
+- **`seller_webhook_endpoints`** += `resellerStoreId` (FK seller_stores CASCADE, indexed) — a store's own endpoint; the listener sends a reseller order's events to its store's endpoints only and a channel order's to `resellerStoreId IS NULL` endpoints only.
+
+## store_api_keys *(RS-5)*
+A reseller store's machine key (`Authorization: Bearer sks_…`). `storeId` (FK seller_stores CASCADE), `sellerId` (denormalised), `name`, `keyPrefix`, `keyHash` (UNIQUE, SHA-256 — the plaintext is shown once and never stored), `createdByStoreUserId` (plain uuid), `lastUsedAt`, `expiresAt`, `revokedAt`, `deletedAt`. Index `(storeId)`. Written only by `StoreApiKeyService`; checked only by `StoreApiKeyGuard`. Reaches its own store's orders only (`/store-api/v1/orders`).
+
+**Migration grants:** existing stores' system roles — admin += `orders.view`, `orders.create`, `orders.cancel`, `customers.view`, `integrations.manage`; ops += `orders.view`, `orders.create`, `orders.cancel`, `customers.view`; finance += `orders.view`, `customers.view`; viewer += `orders.view`. **Setting:** `reseller.orders_enabled` (BOOLEAN, FALSE, seller-overridable) — store orders are refused until phase 3c wires the money.
+
 ## seller_notes
 Admin notes about sellers (replaces simple `rejectionReason` field).
 
@@ -697,8 +713,10 @@ End customers (Indian recipients). **Per-seller** phone-keyed identity dedup
 - `preferredLanguage @default("en")` ("en"/"hi")
 - `firstOrderAt`, `lastOrderAt`
 
-**Constraints:** `@@unique([sellerId, phoneE164])`
-**Indexes:** `sellerId`, `phoneE164`, `riskLevel`, `lastOrderAt`, `deletedAt`
+- `resellerStoreId?` (RS-5) — set when this is a reseller STORE's customer; NULL is the seller's own
+
+**Constraints:** ~~`@@unique([sellerId, phoneE164])`~~ replaced (RS-5) by two partial uniques — `(sellerId, phoneE164) WHERE resellerStoreId IS NULL` and `(resellerStoreId, phoneE164) WHERE resellerStoreId IS NOT NULL` (migration-only; see "Reseller store orders — RS-5").
+**Indexes:** `sellerId`, `resellerStoreId`, `phoneE164`, `riskLevel`, `lastOrderAt`, `deletedAt`
 
 > **Module 6 deviation:** the pre-M6 canonical design was a GLOBAL phone-keyed
 > customer with cross-seller risk aggregation (rtoCount/fakeOrdersCount/
@@ -724,6 +742,7 @@ Central order record.
 - Notes: `internalNotes`, `sellerNotes`, `callNotes` (latest summary)
 - SLA: `slaDeadline`, `expectedDeliveryAt`
 - `placedAt`
+- **RS-5 reseller orders:** `storeKind` (composite FK with `storeId` → `seller_stores (id, kind)`), `resellerTermsVersionId`, the six `reseller*StorePercent` shares, `resellerStoreCreditTrigger/Days`, `resellerSellerCreditTrigger/Days` — all NULL on a channel order, all set on a reseller one (CHECK). See "Reseller store orders — RS-5".
 
 **Constraints:** `@@unique([sellerId, sellerOrderRef])`
 **Indexes:** `(sellerId, status)`, `customerId`, `orderNumber`, `recipientPhoneE164`, `recipientPostalCode`, `(status, placedAt)`, `placedAt`, `confirmedAt`, `deletedAt`
@@ -767,6 +786,7 @@ Line items with fulfillment-state quantities.
 - Economic: `unitPriceInr`
 - Fulfillment quantities: `qtyReserved`, `qtyPicked`, `qtyPacked`, `qtyShipped`, `qtyDelivered`, `qtyReturned`
 - Pick context: `pickedBatchId`, `pickedBinId` (filled at pick time)
+- **RS-5 reseller line snapshot:** `resellerTransferPriceInr`, `resellerRetailUnitInr`, `resellerMinRetailInr`, `resellerMaxRetailInr`, `resellerStockMode` (CHECK: all-or-none; retail inside min/max)
 
 **Indexes:** `orderId`, `variantId`, `pickedBatchId`
 

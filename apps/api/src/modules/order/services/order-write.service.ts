@@ -12,10 +12,12 @@ import {
   PackBoxStatus,
   Prisma,
   ReservationReleaseReason,
+  SellerStoreKind,
   ShipmentStatus,
   StockMovementType,
   SellerCapability,
 } from '@skydrop/db';
+import { ResellerStockGateService } from '../../reseller-order-gate/services/reseller-stock-gate.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -179,6 +181,11 @@ export class OrderWriteService {
     // cannot drift; the stock saga stays HERE, because god mode opts
     // out of it.
     private readonly postCommit: OrderPostCommitHooksService,
+    // RS-5: the reseller set-aside rule at confirmation. Its guard runs
+    // inside each reservation's own transaction (M5 `reserve({ guard })`),
+    // for EVERY order — a seller's own order must not eat a store's
+    // set-aside any more than another store's order may.
+    private readonly setAsideGate: ResellerStockGateService,
   ) {}
 
   /**
@@ -238,6 +245,9 @@ export class OrderWriteService {
         sellerId: true,
         orderNumber: true,
         status: true,
+        // RS-5: which store's set-aside a confirmation may draw on.
+        storeId: true,
+        storeKind: true,
         // M8 commit-16 shipment-provision snapshot fields (recipient
         // block + per-line snapshot; immutable per ORD-6 so pre-tx read
         // is identical to post-tx). Selected here so the post-commit
@@ -476,6 +486,8 @@ export class OrderWriteService {
       id: string;
       sellerId: string;
       orderNumber: string;
+      storeId: string;
+      storeKind: SellerStoreKind;
       items: Array<{ id: string; variantId: string; quantity: number }>;
     },
     from: OrderStatus,
@@ -484,6 +496,7 @@ export class OrderWriteService {
   ): Promise<InternalTransitionResult> {
     const warehouseId = await this.resolveDefaultWarehouseId();
     const createdReservationIds: string[] = [];
+    const resellerStoreId = order.storeKind === SellerStoreKind.RESELLER ? order.storeId : null;
 
     try {
       for (const item of order.items) {
@@ -494,6 +507,15 @@ export class OrderWriteService {
           qtyToReserve: item.quantity,
           orderId: order.id,
           orderItemId: item.id,
+          // RS-5: runs inside the reservation's own transaction under the
+          // RESELLER_SET_ASIDE lock. A refusal is an InsufficientStockError,
+          // so it lands OUT_OF_STOCK exactly like a warehouse shortfall.
+          guard: this.setAsideGate.guardFor({
+            sellerId: order.sellerId,
+            variantId: item.variantId,
+            qty: item.quantity,
+            resellerStoreId,
+          }),
         });
         createdReservationIds.push(r.id);
       }

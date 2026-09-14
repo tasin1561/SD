@@ -6,6 +6,7 @@ import {
   type OnModuleDestroy,
 } from '@nestjs/common';
 import type { Subscription } from 'rxjs';
+import { SellerStoreKind } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import {
   OrderLifecycleEventBus,
@@ -98,10 +99,23 @@ export class OutboundWebhookListener implements OnApplicationBootstrap, OnModule
     const eventCode = this.mapping.resolveForOrderStatus(event.to);
     if (eventCode === null) return;
 
+    // RS-5: WHOSE integration hears about this order. A reseller store's
+    // order goes to that store's endpoints only; a channel order to the
+    // seller's own endpoints only (`reseller_store_id IS NULL`). The
+    // seller's integration never learns what a store sold, and a store's
+    // never learns the seller's own sales.
+    const order = await this.prisma.client.order.findUnique({
+      where: { id: event.orderId },
+      select: { storeId: true, storeKind: true },
+    });
+    if (order === null) return;
+    const resellerStoreId = order.storeKind === SellerStoreKind.RESELLER ? order.storeId : null;
+
     // Load active endpoints subscribing to this code.
     const endpoints = await this.prisma.client.sellerWebhookEndpoint.findMany({
       where: {
         sellerId: event.sellerId,
+        resellerStoreId,
         isActive: true,
         deletedAt: null,
         autoDisabledAt: null,
@@ -120,6 +134,8 @@ export class OutboundWebhookListener implements OnApplicationBootstrap, OnModule
       eventId: event.statusEventId,
       orderId: event.orderId,
       sellerId: event.sellerId,
+      // A store's endpoint is told which of its stores the order is.
+      ...(resellerStoreId === null ? {} : { storeId: resellerStoreId }),
       from: event.from,
       to: event.to,
       occurredAt: event.occurredAt.toISOString(),

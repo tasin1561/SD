@@ -70,13 +70,22 @@ function generateSecret(): string {
   return randomBytes(32).toString('hex');
 }
 
+/**
+ * RS-5: every query here carries `resellerStoreId: null`. A reseller
+ * store's own endpoints live in the same table (under the seller, scoped
+ * by `reseller_store_id`) and are managed ONLY by `StoreWebhookService` on
+ * the store's portal — the seller can neither list, read the settings of,
+ * rotate nor delete them.
+ */
+const OWN = { resellerStoreId: null } as const;
+
 @Injectable()
 export class SellerWebhookService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(sellerId: string): Promise<WebhookEndpointView[]> {
     return this.prisma.client.sellerWebhookEndpoint.findMany({
-      where: { sellerId, deletedAt: null },
+      where: { sellerId, ...OWN, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       select: VIEW_SELECT,
     });
@@ -84,7 +93,7 @@ export class SellerWebhookService {
 
   async getOwned(sellerId: string, id: string): Promise<WebhookEndpointView> {
     const row = await this.prisma.client.sellerWebhookEndpoint.findFirst({
-      where: { id, sellerId, deletedAt: null },
+      where: { id, sellerId, ...OWN, deletedAt: null },
       select: VIEW_SELECT,
     });
     if (!row) throw new NotFoundException('Webhook endpoint not found.');
@@ -141,7 +150,7 @@ export class SellerWebhookService {
     body: UpdateWebhookEndpointDto,
   ): Promise<WebhookEndpointView> {
     const owned = await this.prisma.client.sellerWebhookEndpoint.findFirst({
-      where: { id, sellerId, deletedAt: null },
+      where: { id, sellerId, ...OWN, deletedAt: null },
       select: { id: true },
     });
     if (!owned) throw new NotFoundException('Webhook endpoint not found.');
@@ -165,7 +174,7 @@ export class SellerWebhookService {
 
   async rotateSecret(sellerId: string, id: string): Promise<WebhookEndpointWithSecret> {
     const owned = await this.prisma.client.sellerWebhookEndpoint.findFirst({
-      where: { id, sellerId, deletedAt: null },
+      where: { id, sellerId, ...OWN, deletedAt: null },
       select: { id: true, secretKey: true },
     });
     if (!owned) throw new NotFoundException('Webhook endpoint not found.');
@@ -188,7 +197,7 @@ export class SellerWebhookService {
 
   async softDelete(sellerId: string, id: string): Promise<void> {
     const owned = await this.prisma.client.sellerWebhookEndpoint.findFirst({
-      where: { id, sellerId, deletedAt: null },
+      where: { id, sellerId, ...OWN, deletedAt: null },
       select: { id: true },
     });
     if (!owned) throw new NotFoundException('Webhook endpoint not found.');

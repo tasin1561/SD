@@ -270,6 +270,9 @@ EXPECTED_ORPHANS = {
     # Seller B2B integration surface: called by the SELLER's own systems
     # with an API key. A dashboard caller would be the surprise.
     'v1/',
+    # RS-5 — a reseller store's integration surface, called by the STORE's
+    # own systems with a `sks_` key (StoreApiKeyGuard). Same reasoning.
+    'store-api/',
     # Decided, not overlooked: the seller-addresses screen was REMOVED on
     # purpose (we do not store a seller's own address — goods ship to our
     # Indian warehouse, and the pickup location is ours). The endpoints

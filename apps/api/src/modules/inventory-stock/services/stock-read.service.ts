@@ -119,16 +119,19 @@ export class StockReadService {
   async getSellableStockLive(
     sellerId: string,
     variantIds: readonly string[],
+    /** RS-5: the caller's transaction, when the read decides a write in it. */
+    db?: Prisma.TransactionClient,
   ): Promise<ReadonlyMap<string, { readonly onHand: number; readonly available: number }>> {
+    const client = db ?? this.prisma.client;
     const ids = [...new Set(variantIds)];
     const out = new Map<string, { onHand: number; available: number }>();
     for (const id of ids) out.set(id, { onHand: 0, available: 0 });
     if (ids.length === 0) return out;
-    const warehouseIds = [...(await this.warehouses.fulfillingWarehouseIds())];
+    const warehouseIds = [...(await this.warehouses.fulfillingWarehouseIds(db))];
     if (warehouseIds.length === 0) return out;
 
     const [levels, reservations] = await Promise.all([
-      this.prisma.client.stockLevel.groupBy({
+      client.stockLevel.groupBy({
         by: ['variantId'],
         where: {
           sellerId,
@@ -138,7 +141,7 @@ export class StockReadService {
         },
         _sum: { qtyOnHand: true },
       }),
-      this.prisma.client.stockReservation.groupBy({
+      client.stockReservation.groupBy({
         by: ['variantId'],
         where: {
           sellerId,
@@ -157,6 +160,40 @@ export class StockReadService {
         onHand,
         available: Math.max(0, onHand - (reserved.get(l.variantId) ?? 0)),
       });
+    }
+    return out;
+  }
+
+  /**
+   * RS-5 — how much of each variant each RESELLER STORE is currently
+   * holding: Σ ACTIVE reservations (phase-1 and phase-2 alike) of orders
+   * filed under a reseller store, per (store, variant). This is what a
+   * store's set-aside has been CONSUMED by — `unused = set_aside −
+   * consumed` (RS-3) — and it is read from the reservations, never
+   * stored, so a released or fulfilled hold stops counting the moment it
+   * does. Channel orders are not in it: their holds are the seller's.
+   */
+  async activeReservedByResellerStore(
+    sellerId: string,
+    variantIds: readonly string[],
+    db?: Prisma.TransactionClient,
+  ): Promise<ReadonlyMap<string, ReadonlyMap<string, number>>> {
+    const ids = [...new Set(variantIds)];
+    const out = new Map<string, Map<string, number>>();
+    if (ids.length === 0) return out;
+    const rows = await (db ?? this.prisma.client).stockReservation.findMany({
+      where: {
+        sellerId,
+        variantId: { in: ids },
+        status: 'ACTIVE',
+        order: { storeKind: 'RESELLER' },
+      },
+      select: { variantId: true, qtyReserved: true, order: { select: { storeId: true } } },
+    });
+    for (const r of rows) {
+      const byVariant = out.get(r.order.storeId) ?? new Map<string, number>();
+      byVariant.set(r.variantId, (byVariant.get(r.variantId) ?? 0) + r.qtyReserved);
+      out.set(r.order.storeId, byVariant);
     }
     return out;
   }

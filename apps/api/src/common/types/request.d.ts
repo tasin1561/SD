@@ -9,8 +9,22 @@ declare global {
       /** RS-2 — set by StoreJwtGuard. */
       storeUser?: AuthenticatedStoreUser;
       apiKey?: AuthenticatedApiKey;
+      /** RS-5 — set by StoreApiKeyGuard. */
+      storeApiKey?: AuthenticatedStoreApiKey;
     }
   }
+}
+
+/**
+ * RS-5 — a reseller store's machine key, resolved per request by
+ * StoreApiKeyGuard. `storeId` is the ONLY store it may act on; it never
+ * reaches the seller's account.
+ */
+export interface AuthenticatedStoreApiKey {
+  id: string;
+  storeId: string;
+  sellerId: string;
+  keyPrefix: string;
 }
 
 export interface AuthenticatedStaff {

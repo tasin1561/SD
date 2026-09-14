@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
+  Prisma,
   ReservationBookingStage,
   ReservationReleaseReason,
   ReservationStatus,
@@ -41,6 +42,18 @@ export interface ReserveInput {
    *  holds use a shorter window, since they back orders nobody has
    *  spoken to yet. */
   ttlHoursOverride?: number;
+  /**
+   * RS-5 — a check that must hold for THIS reservation to be made, run
+   * INSIDE the transaction that inserts it (and before the availability
+   * read). The reseller set-aside rule uses it: it takes
+   * `AdvisoryLock.RESELLER_SET_ASIDE` for the (seller, variant) and
+   * refuses with `InsufficientStockError` when the line may not use the
+   * units. Held by the reservation's OWN transaction so the lock lasts
+   * until the reservation is committed — the next confirm for the same
+   * variant then sees it — and no second pool connection is needed.
+   * Absent = the pre-RS-5 behaviour, unchanged.
+   */
+  guard?: (tx: Prisma.TransactionClient) => Promise<void>;
   /** Test seam. */
   now?: Date;
 }
@@ -154,39 +167,54 @@ export class StockReservationService {
       });
     }
     const now = input.now ?? new Date();
-
-    // INV-2: availability MUST be read live (never the display cache) on a
-    // mutation path. The shared primitive clamps to ≥0 — the best-effort
-    // soft guard below is unchanged for any positive qty (the HARD guard
-    // is phase-2 version-CAS allocation, see class JSDoc).
-    const available = await this.availability.compute({
-      sellerId: input.sellerId,
-      variantId: input.variantId,
-      warehouseId: input.warehouseId,
-    });
-    if (qty > available) {
-      throw new InsufficientStockError(qty, available);
-    }
-
+    // Resolved BEFORE any transaction opens: a settings read inside one
+    // would hold its connection for nothing.
     const ttlHours = input.ttlHoursOverride ?? (await this.resolveTtlHours(input.sellerId));
     const expiresAt = new Date(now.getTime() + ttlHours * 3_600_000);
 
-    const row = await this.prisma.client.stockReservation.create({
-      data: {
+    const insert = async (tx?: Prisma.TransactionClient): Promise<ReservationView> => {
+      // INV-2: availability MUST be read live (never the display cache) on a
+      // mutation path. The shared primitive clamps to ≥0 — the best-effort
+      // soft guard below is unchanged for any positive qty (the HARD guard
+      // is phase-2 version-CAS allocation, see class JSDoc).
+      const available = await this.availability.compute({
         sellerId: input.sellerId,
         variantId: input.variantId,
         warehouseId: input.warehouseId,
-        binId: null, // phase-1
-        batchId: null, // phase-1
-        qtyReserved: qty,
-        orderId: input.orderId,
-        orderItemId: input.orderItemId,
-        status: ReservationStatus.ACTIVE,
-        bookingStage: input.bookingStage ?? ReservationBookingStage.AT_CONFIRMATION,
-        expiresAt,
-      },
-      select: RESERVATION_SELECT,
-    });
+        ...(tx === undefined ? {} : { tx }),
+      });
+      if (qty > available) {
+        throw new InsufficientStockError(qty, available);
+      }
+      return (tx ?? this.prisma.client).stockReservation.create({
+        data: {
+          sellerId: input.sellerId,
+          variantId: input.variantId,
+          warehouseId: input.warehouseId,
+          binId: null, // phase-1
+          batchId: null, // phase-1
+          qtyReserved: qty,
+          orderId: input.orderId,
+          orderItemId: input.orderItemId,
+          status: ReservationStatus.ACTIVE,
+          bookingStage: input.bookingStage ?? ReservationBookingStage.AT_CONFIRMATION,
+          expiresAt,
+        },
+        select: RESERVATION_SELECT,
+      });
+    };
+
+    // RS-5: a guarded reservation runs its guard, the availability read
+    // and the insert in ONE transaction, so whatever lock the guard took
+    // is held until the reservation is visible to the next reader.
+    const guard = input.guard;
+    const row =
+      guard === undefined
+        ? await insert()
+        : await this.prisma.client.$transaction(async (tx) => {
+            await guard(tx);
+            return insert(tx);
+          });
     this.logger.log(
       {
         reservationId: row.id,

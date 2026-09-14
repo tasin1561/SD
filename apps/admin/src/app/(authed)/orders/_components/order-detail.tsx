@@ -27,6 +27,7 @@ import { StuckOrderRecovery } from './stuck-order-recovery';
 import { useOrderJourney } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { ConsigneePanel } from './consignee-panel';
+import { ResellerOrderPanel } from './reseller-order-panel';
 
 /**
  * Order detail. Single-fetch (admin /orders/:id). Renders:
@@ -130,6 +131,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               </CardBody>
             </Card>
           </Section>
+
+          {/* RS-5 — a reseller store's order: the store and the terms
+              snapshot it was placed under. Nothing for a channel order. */}
+          <ResellerOrderPanel order={detail.data} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <Card>

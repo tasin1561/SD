@@ -100,6 +100,10 @@ async function fetchOrders(
   if (query.search) sp.set('search', query.search);
   if (query.placedFrom) sp.set('placedFrom', query.placedFrom);
   if (query.placedTo) sp.set('placedTo', query.placedTo);
+  // The store filter. It was carried in the query and never sent, so
+  // choosing a store in the filter changed nothing (found while adding
+  // reseller stores to it, RS-5).
+  if (query.storeId) sp.set('storeId', query.storeId);
   if (query.page) sp.set('page', String(query.page));
   if (query.pageSize) sp.set('pageSize', String(query.pageSize));
   const qs = sp.toString();

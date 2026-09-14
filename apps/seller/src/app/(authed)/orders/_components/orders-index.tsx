@@ -6,7 +6,8 @@ import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { OrderStatus } from '@skydrop/db';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useOrderStatusSummary, usePendingRows, useOrdersList } from '@/lib/api-hooks';
-import { canSeePath } from '@/lib/page-access';
+import { can, canSeePath } from '@/lib/page-access';
+import { useResellerStores } from '@/lib/reseller-store-hooks';
 import { Plus, Search } from 'lucide-react';
 import {
   Button,
@@ -175,7 +176,20 @@ export function OrdersIndex(): ReactElement {
   const [searchInput, setSearchInput] = useState(params.search);
   // CLOSED stores are still listed: they hold past orders, and a filter
   // that could not reach them would make those orders unfindable.
-  const stores = useStores().data ?? [];
+  const channelStores = useStores().data ?? [];
+  // RS-5: the seller's reseller stores join the filter — their orders are
+  // the seller's too (the customer is masked). Read only with the
+  // permission that endpoint needs, so a login without it sees its
+  // channel stores and no refusal.
+  const resellerStores =
+    useResellerStores(identity !== null && can(identity, 'stores.manage')).data ?? [];
+  const stores = [
+    ...channelStores.map((s) => ({ id: s.id, name: s.name })),
+    ...resellerStores.map((s) => ({
+      id: s.id,
+      name: `${s.displayName ?? s.name} (reseller store)`,
+    })),
+  ];
   const pendingCount = usePendingRows().data?.length ?? 0;
   const summary = useOrderStatusSummary();
 
@@ -549,9 +563,23 @@ export function OrdersIndex(): ReactElement {
                       ref {o.sellerOrderRef}
                     </div>
                   )}
+                  {/* RS-5: which reseller store placed it. */}
+                  {o.storeKind === 'RESELLER' && (
+                    <div className="text-text-muted mt-0.5 text-xs">
+                      via {o.storeNameSnapshot ?? 'a reseller store'}
+                    </div>
+                  )}
                 </Td>
                 <Td>
-                  <div className="text-text-body">{o.recipientName}</div>
+                  {/* A reseller store's customer is the store's (RS-5): the
+                      server sends a placeholder name and no phone. */}
+                  <div
+                    className={
+                      o.recipientMasked === true ? 'text-text-muted italic' : 'text-text-body'
+                    }
+                  >
+                    {o.recipientName}
+                  </div>
                   {/* City is blank on everything placed since the form
                       stopped asking (ORD-5), so the PIN carries the
                       destination and the city joins it when present. */}
