@@ -470,6 +470,7 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // (MUST #12).
         'pnl_carry_forwards',
         'pnl_snapshot_rows',
+        'pnl_snapshot_versions',
         'pnl_periods',
         // Shiprocket cost readings: a leaf referencing shipments and
         // courier_accounts (RESTRICT) — cleared here for the same reason.

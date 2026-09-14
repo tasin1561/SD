@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, type PnlCloseKind } from '@skydrop/db';
+import { Prisma, type PnlCloseKind, type PnlLockState, type PnlVersionKind } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { PnlService, type PnlReport } from '../../treasury/services/pnl.service';
 import { LINE_NAMES, readLabel } from './pnl-carry-forward-diff';
@@ -30,12 +30,28 @@ export interface CarriedGroup {
   readonly lines: readonly CarriedLine[];
 }
 
+export interface VersionView {
+  readonly version: number;
+  readonly kind: PnlVersionKind;
+  readonly lockState: PnlLockState;
+  readonly createdAt: string;
+  readonly by: string | null;
+  readonly reason: string | null;
+  readonly netBeforeInr: string | null;
+  readonly netInr: string;
+  readonly current: boolean;
+}
+
 export interface PnlMonthView {
   readonly month: string;
   readonly name: string;
   readonly status: PnlMonthStatus;
+  /** Null for a month not closed. */
+  readonly lockState: PnlLockState | null;
   readonly window: { readonly from: string; readonly to: string };
-  /** Frozen for a closed month; live for an open one. */
+  /** The version shown (the current one unless another was asked for); null when not closed. */
+  readonly shownVersion: number | null;
+  /** Frozen for a closed month (the shown version); live for an open one. */
   readonly report: PnlReport;
   readonly closed: {
     readonly at: string;
@@ -43,6 +59,13 @@ export interface PnlMonthView {
     readonly kind: PnlCloseKind;
     readonly reason: string | null;
     readonly nightlyJobs: unknown;
+  } | null;
+  /** Every locked version, newest first. */
+  readonly versions: readonly VersionView[];
+  /** The shown version's nightly-job results and what it left out as already carried. */
+  readonly shown: {
+    readonly nightlyJobs: unknown;
+    readonly carriedOut: unknown;
   } | null;
   /** Changes to earlier months counted in this one, by origin month then line. */
   readonly carriedIn: readonly CarriedGroup[];
@@ -129,6 +152,8 @@ export class PnlPeriodReadService {
       month: string;
       name: string;
       status: PnlMonthStatus;
+      lockState: PnlLockState | null;
+      version: number | null;
       closedAt: string | null;
       closedBy: string | null;
       closeKind: PnlCloseKind | null;
@@ -144,10 +169,11 @@ export class PnlPeriodReadService {
       this.prisma.client.pnlPeriod.findMany({
         orderBy: { month: 'asc' },
         select: {
+          id: true,
           month: true,
           closedAt: true,
           closeKind: true,
-          netInr: true,
+          lockState: true,
           closedByStaff: { select: { emailDisplay: true } },
         },
       }),
@@ -162,6 +188,11 @@ export class PnlPeriodReadService {
         _count: { _all: true },
       }),
     ]);
+    const currentVersions = await this.prisma.client.pnlSnapshotVersion.findMany({
+      where: { supersededAt: null, periodId: { in: periods.map((p) => p.id) } },
+      select: { periodId: true, version: true, netInr: true },
+    });
+    const versionOf = new Map(currentVersions.map((v) => [v.periodId, v]));
     const byMonth = new Map(periods.map((p) => [p.month, p]));
     const landedBy = new Map(landed.map((g) => [g.landedMonth, g]));
     const originBy = new Map(origin.map((g) => [g.originMonth, g]));
@@ -173,6 +204,7 @@ export class PnlPeriodReadService {
       .reverse()
       .map((month) => {
         const p = byMonth.get(month);
+        const v = p === undefined ? undefined : versionOf.get(p.id);
         return {
           month,
           name: monthName(month),
@@ -181,10 +213,12 @@ export class PnlPeriodReadService {
             : month === current
               ? 'OPEN'
               : 'AWAITING_CLOSE') as PnlMonthStatus,
+          lockState: p?.lockState ?? null,
+          version: v?.version ?? null,
           closedAt: p?.closedAt.toISOString() ?? null,
           closedBy: p?.closedByStaff?.emailDisplay ?? null,
           closeKind: p?.closeKind ?? null,
-          frozenNetInr: p?.netInr.toFixed(2) ?? null,
+          frozenNetInr: v?.netInr.toFixed(2) ?? null,
           carriedInNetInr: netOf(landedBy.get(month)),
           carriedInCount: landedBy.get(month)?._count._all ?? 0,
           laterChangesNetInr: netOf(originBy.get(month)),
@@ -194,8 +228,16 @@ export class PnlPeriodReadService {
     return { currentMonth: current, months };
   }
 
-  /** One month: frozen when closed, live when open, with what was carried into and out of it. */
-  async view(month: string, now: Date = new Date()): Promise<PnlMonthView> {
+  /**
+   * One month: a closed month shows its CURRENT version (or `version`, read
+   * only) with the changes found later; an open one its live figures, with
+   * what earlier months carried into it.
+   */
+  async view(
+    month: string,
+    version: number | null = null,
+    now: Date = new Date(),
+  ): Promise<PnlMonthView> {
     this.assertMonth(month);
     const current = monthOf(now);
     if (month > current) {
@@ -216,11 +258,11 @@ export class PnlPeriodReadService {
       this.prisma.client.pnlPeriod.findUnique({
         where: { month },
         select: {
+          id: true,
           closedAt: true,
           closeKind: true,
+          lockState: true,
           reason: true,
-          report: true,
-          netInr: true,
           nightlyJobs: true,
           closedByStaff: { select: { emailDisplay: true } },
         },
@@ -236,39 +278,101 @@ export class PnlPeriodReadService {
     ]);
     const carriedIn = groupCarried(carriedRows, 'originMonth');
     const carriedInNet = net(carriedIn);
-    const report =
-      period !== null ? (period.report as unknown as PnlReport) : await this.pnl.report(from, to);
-    const own = period !== null ? period.netInr : new Prisma.Decimal(report.netInr);
+    const totals = (own: Prisma.Decimal): PnlMonthView['totals'] => ({
+      ownNetInr: own.toFixed(2),
+      carriedInNetInr: carriedInNet.toFixed(2),
+      netInr: own.add(carriedInNet).toFixed(2),
+    });
+
+    if (period === null) {
+      if (version !== null) {
+        throw new NotFoundException({
+          code: 'PNL_MONTH_NOT_CLOSED',
+          message: `${monthName(month)} is not closed, so it has no locked versions.`,
+        });
+      }
+      const report = await this.pnl.report(from, to);
+      return {
+        month,
+        name: monthName(month),
+        status: month === current ? 'OPEN' : 'AWAITING_CLOSE',
+        lockState: null,
+        window: { from: from.toISOString(), to: to.toISOString() },
+        shownVersion: null,
+        report,
+        closed: null,
+        versions: [],
+        shown: null,
+        carriedIn,
+        laterChanges: [],
+        totals: totals(new Prisma.Decimal(report.netInr)),
+      };
+    }
+
+    const versions = await this.prisma.client.pnlSnapshotVersion.findMany({
+      where: { periodId: period.id },
+      orderBy: { version: 'desc' },
+      select: {
+        version: true,
+        kind: true,
+        lockState: true,
+        createdAt: true,
+        reason: true,
+        netBeforeInr: true,
+        netInr: true,
+        supersededAt: true,
+        report: true,
+        nightlyJobs: true,
+        carriedOut: true,
+        createdByStaff: { select: { emailDisplay: true } },
+      },
+    });
+    const currentVersion = versions.find((v) => v.supersededAt === null) ?? versions[0];
+    const shown = version === null ? currentVersion : versions.find((v) => v.version === version);
+    if (shown === undefined) {
+      throw new NotFoundException({
+        code: 'PNL_VERSION_NOT_FOUND',
+        message: `${monthName(month)} has no version ${String(version)}.`,
+      });
+    }
     return {
       month,
       name: monthName(month),
-      status: period !== null ? 'CLOSED' : month === current ? 'OPEN' : 'AWAITING_CLOSE',
+      status: 'CLOSED',
+      lockState: period.lockState,
       window: { from: from.toISOString(), to: to.toISOString() },
-      report,
-      closed:
-        period === null
-          ? null
-          : {
-              at: period.closedAt.toISOString(),
-              by: period.closedByStaff?.emailDisplay ?? null,
-              kind: period.closeKind,
-              reason: period.reason,
-              nightlyJobs: period.nightlyJobs,
-            },
-      carriedIn,
-      laterChanges: period === null ? [] : groupCarried(laterRows, 'landedMonth'),
-      totals: {
-        ownNetInr: own.toFixed(2),
-        carriedInNetInr: carriedInNet.toFixed(2),
-        netInr: own.add(carriedInNet).toFixed(2),
+      shownVersion: shown.version,
+      report: shown.report as unknown as PnlReport,
+      closed: {
+        at: period.closedAt.toISOString(),
+        by: period.closedByStaff?.emailDisplay ?? null,
+        kind: period.closeKind,
+        reason: period.reason,
+        nightlyJobs: period.nightlyJobs,
       },
+      versions: versions.map((v) => ({
+        version: v.version,
+        kind: v.kind,
+        lockState: v.lockState,
+        createdAt: v.createdAt.toISOString(),
+        by: v.createdByStaff?.emailDisplay ?? null,
+        reason: v.reason,
+        netBeforeInr: v.netBeforeInr?.toFixed(2) ?? null,
+        netInr: v.netInr.toFixed(2),
+        current: v === currentVersion,
+      })),
+      shown: { nightlyJobs: shown.nightlyJobs, carriedOut: shown.carriedOut },
+      carriedIn,
+      laterChanges: groupCarried(laterRows, 'landedMonth'),
+      totals: totals(shown.netInr),
     };
   }
 
-  /** The records frozen behind one line of a closed month. */
+  /** The records frozen behind one line of a closed month's version (the current one by default). */
   async frozenRows(
     month: string,
     lineKey: string,
+    version: number | null = null,
     limit = 2000,
   ): Promise<{
     rows: ReadonlyArray<{
@@ -292,8 +396,22 @@ export class PnlPeriodReadService {
         message: `${monthName(month)} is not closed, so nothing is frozen for it.`,
       });
     }
+    const v = await this.prisma.client.pnlSnapshotVersion.findFirst({
+      where:
+        version === null
+          ? { periodId: period.id, supersededAt: null }
+          : { periodId: period.id, version },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    });
+    if (v === null) {
+      throw new NotFoundException({
+        code: 'PNL_VERSION_NOT_FOUND',
+        message: `${monthName(month)} has no version ${String(version)}.`,
+      });
+    }
     const rows = await this.prisma.client.pnlSnapshotRow.findMany({
-      where: { periodId: period.id, lineKey },
+      where: { versionId: v.id, lineKey },
       orderBy: { id: 'asc' },
       take: limit + 1,
       select: { refKey: true, revenueInr: true, costInr: true, label: true },
@@ -306,7 +424,9 @@ export class PnlPeriodReadService {
           return {
             refKey: r.refKey,
             ref: l.ref,
-            subRef: l.subRef,
+            subRef: l.present
+              ? l.subRef
+              : `${l.subRef ?? ''} · left the month — already carried forward`.replace(/^ · /, ''),
             at: l.at,
             revenueInr: r.revenueInr?.toFixed(2) ?? null,
             costInr: r.costInr?.toFixed(2) ?? null,

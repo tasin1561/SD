@@ -1,5 +1,5 @@
 import { Prisma } from '@skydrop/db';
-import type { PnlSnapshotKey } from '../../treasury/services/pnl.service';
+import type { PnlReport, PnlSnapshotKey } from '../../treasury/services/pnl.service';
 import { istDateLabel } from './pnl-month';
 
 /**
@@ -21,6 +21,13 @@ export interface RowLabel {
   readonly subRef: string | null;
   readonly at: string;
   readonly present: boolean;
+  /**
+   * On a RE-LOCKED version's row only: the record's full figure when the
+   * month was re-locked. The row itself holds that figure MINUS what had
+   * already been carried forward, so the "before" of a later change is
+   * read from here, not from the row.
+   */
+  readonly atLock?: { readonly revenue: string | null; readonly cost: string | null };
 }
 
 /** One record behind one line, as the engine answers today. Null = not counted. */
@@ -75,6 +82,8 @@ export interface StoredCarryForward {
   readonly revenueAfterInr: Prisma.Decimal | null;
   readonly costAfterInr: Prisma.Decimal | null;
   readonly label: unknown;
+  /** When it was found. Needed to tell a carry-forward from before a re-lock from one after. */
+  readonly detectedAt?: Date;
 }
 
 /** The line names reasons use. A Record, so a new snapshot key fails to compile until named. */
@@ -109,27 +118,84 @@ export function readLabel(raw: unknown, fallbackRef: string): RowLabel {
   };
 }
 
+const dec = (v: unknown): Prisma.Decimal | null =>
+  typeof v === 'string' && v !== '' ? new Prisma.Decimal(v) : null;
+
+/** A re-locked row's full figure at the lock, when the label carries one. */
+export function readLockFigures(
+  raw: unknown,
+): { revenue: Prisma.Decimal | null; cost: Prisma.Decimal | null } | null {
+  const o = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const at = o['atLock'];
+  if (typeof at !== 'object' || at === null) return null;
+  const a = at as Record<string, unknown>;
+  return { revenue: dec(a['revenue']), cost: dec(a['cost']) };
+}
+
 /**
- * A closed month's baseline: its snapshot, then every carry-forward in the
- * order written (ids are uuidv7, so ascending id is written order).
+ * A closed month's baseline: its CURRENT version's rows, then every
+ * carry-forward in the order written.
+ *
+ * Every carry-forward counts in the numbers, whenever it was found. When
+ * the current version is a RE-LOCK (`rebasedAt`), a carry-forward found
+ * before it was already subtracted from that version's rows, so it adds
+ * back only numerically — the state last reported for the record is the
+ * one the re-lock froze (`atLock`), not what the older carry-forward said.
  */
 export function buildBaseline(
   snapshot: readonly StoredSnapshotRow[],
   carryForwards: readonly StoredCarryForward[],
+  rebasedAt: Date | null = null,
 ): Map<string, BaselineRow> {
   const out = new Map<string, BaselineRow>();
   for (const s of snapshot) {
+    const lock = readLockFigures(s.label);
+    const label = readLabel(s.label, s.refKey);
     out.set(rowKey(s.lineKey, s.refKey), {
       lineKey: s.lineKey as PnlSnapshotKey,
       refKey: s.refKey,
       revenue: s.revenueInr ?? ZERO,
       cost: s.costInr ?? ZERO,
-      lastRevenue: s.revenueInr,
-      lastCost: s.costInr,
-      present: true,
-      label: readLabel(s.label, s.refKey),
+      lastRevenue: lock === null ? s.revenueInr : lock.revenue,
+      lastCost: lock === null ? s.costInr : lock.cost,
+      present: label.present,
+      label,
     });
   }
+  for (const c of carryForwards) {
+    const k = rowKey(c.lineKey, c.refKey);
+    const prev = out.get(k);
+    const beforeRelock =
+      rebasedAt !== null &&
+      c.detectedAt !== undefined &&
+      c.detectedAt.getTime() < rebasedAt.getTime();
+    const label = readLabel(c.label, c.refKey);
+    out.set(k, {
+      lineKey: c.lineKey as PnlSnapshotKey,
+      refKey: c.refKey,
+      revenue: (prev?.revenue ?? ZERO).add(c.revenueDeltaInr),
+      cost: (prev?.cost ?? ZERO).add(c.costDeltaInr),
+      lastRevenue: beforeRelock ? (prev?.lastRevenue ?? null) : c.revenueAfterInr,
+      lastCost: beforeRelock ? (prev?.lastCost ?? null) : c.costAfterInr,
+      present: beforeRelock ? (prev?.present ?? false) : label.present,
+      label: beforeRelock ? (prev?.label ?? { ...label, present: false }) : label,
+    });
+  }
+  return out;
+}
+
+/** What has already been carried forward for each record of one month. */
+export interface CarriedSum {
+  readonly lineKey: PnlSnapshotKey;
+  readonly refKey: string;
+  readonly revenue: Prisma.Decimal;
+  readonly cost: Prisma.Decimal;
+  readonly label: RowLabel;
+}
+
+/** Every carry-forward recorded against a month, summed per record. */
+export function sumCarried(carryForwards: readonly StoredCarryForward[]): Map<string, CarriedSum> {
+  const out = new Map<string, CarriedSum>();
   for (const c of carryForwards) {
     const k = rowKey(c.lineKey, c.refKey);
     const prev = out.get(k);
@@ -138,13 +204,109 @@ export function buildBaseline(
       refKey: c.refKey,
       revenue: (prev?.revenue ?? ZERO).add(c.revenueDeltaInr),
       cost: (prev?.cost ?? ZERO).add(c.costDeltaInr),
-      lastRevenue: c.revenueAfterInr,
-      lastCost: c.costAfterInr,
-      present: readLabel(c.label, c.refKey).present,
       label: readLabel(c.label, c.refKey),
     });
   }
   return out;
+}
+
+/**
+ * THE RE-LOCK FORMULA, per record: new row = live − Σ carry-forwards
+ * already recorded against the month.
+ *
+ * Carry-forward rows are append-only and stay counted in the months they
+ * landed in; the re-locked month must not count them a second time. So
+ * the new version holds only the part of today's figure that no later
+ * month has already reported. A record that has left the month but was
+ * carried forward keeps a row of minus what was carried, so the month and
+ * its carry-forwards still net to the record's live figure (zero).
+ */
+export function rebaseRows(
+  live: readonly LiveRow[],
+  carried: ReadonlyMap<string, CarriedSum>,
+): LiveRow[] {
+  const minus = (a: Prisma.Decimal | null, c: Prisma.Decimal): Prisma.Decimal | null =>
+    c.isZero() ? a : (a ?? ZERO).sub(c);
+  const fig = (d: Prisma.Decimal | null): string | null => d?.toFixed(2) ?? null;
+  const out: LiveRow[] = [];
+  const seen = new Set<string>();
+  for (const r of live) {
+    const k = rowKey(r.lineKey, r.refKey);
+    seen.add(k);
+    const c = carried.get(k);
+    out.push({
+      ...r,
+      revenue: c === undefined ? r.revenue : minus(r.revenue, c.revenue),
+      cost: c === undefined ? r.cost : minus(r.cost, c.cost),
+      label: { ...r.label, present: true, atLock: { revenue: fig(r.revenue), cost: fig(r.cost) } },
+    });
+  }
+  for (const [k, c] of carried) {
+    if (seen.has(k) || (c.revenue.isZero() && c.cost.isZero())) continue;
+    out.push({
+      lineKey: c.lineKey,
+      refKey: c.refKey,
+      revenue: c.revenue.isZero() ? null : c.revenue.negated(),
+      cost: c.cost.isZero() ? null : c.cost.negated(),
+      label: { ...c.label, present: false, atLock: { revenue: null, cost: null } },
+    });
+  }
+  return out;
+}
+
+/** The carried sums, per line. */
+export function carriedByLine(
+  carried: ReadonlyMap<string, CarriedSum>,
+): Map<string, { revenue: Prisma.Decimal; cost: Prisma.Decimal }> {
+  const out = new Map<string, { revenue: Prisma.Decimal; cost: Prisma.Decimal }>();
+  for (const c of carried.values()) {
+    const s = out.get(c.lineKey) ?? { revenue: ZERO, cost: ZERO };
+    out.set(c.lineKey, { revenue: s.revenue.add(c.revenue), cost: s.cost.add(c.cost) });
+  }
+  return out;
+}
+
+/**
+ * The re-lock formula applied to a whole report: each line's revenue and
+ * cost, operating expenses, gross and net, less what was already carried
+ * forward — the figures that sit beside the rebased rows.
+ */
+export function subtractCarriedFromReport(
+  report: PnlReport,
+  byLine: ReadonlyMap<string, { revenue: Prisma.Decimal; cost: Prisma.Decimal }>,
+): PnlReport {
+  const lines = report.lines.map((l) => {
+    const c = byLine.get(l.key);
+    if (c === undefined || (c.revenue.isZero() && c.cost.isZero())) return l;
+    const revenue = new Prisma.Decimal(l.revenueInr).sub(c.revenue);
+    const cost = new Prisma.Decimal(l.costInr).sub(c.cost);
+    const margin = revenue.sub(cost);
+    return {
+      ...l,
+      revenueInr: revenue.toFixed(2),
+      costInr: cost.toFixed(2),
+      marginInr: margin.toFixed(2),
+      marginPercent: revenue.isZero() ? null : margin.div(revenue).mul(100).toFixed(1),
+    };
+  });
+  const opexCarried = byLine.get('operating_expenses')?.cost ?? ZERO;
+  const opex = new Prisma.Decimal(report.operatingExpensesInr).sub(opexCarried);
+  const gross = lines.reduce((t, l) => t.add(l.marginInr), ZERO);
+  const carriedNet = [...byLine.values()].reduce((t, c) => t.add(c.revenue).sub(c.cost), ZERO);
+  return {
+    ...report,
+    lines,
+    grossMarginInr: gross.toFixed(2),
+    operatingExpensesInr: opex.toFixed(2),
+    netInr: gross.sub(opex).toFixed(2),
+    warnings: carriedNet.isZero()
+      ? report.warnings
+      : [
+          ...report.warnings,
+          `₹${carriedNet.toFixed(2)} net of this month's live figure had already been carried ` +
+            'into later months, so it is left out of this version rather than counted twice.',
+        ],
+  };
 }
 
 /** Extra words about a record, from outside the diff (an order's status today). */

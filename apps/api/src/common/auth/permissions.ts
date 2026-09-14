@@ -514,6 +514,14 @@ export const PERMISSIONS = [
     dangerous: true,
   },
   {
+    key: 'money.pnl.god_mode',
+    label: 'Re-lock a finished P&L month (god mode)',
+    description:
+      'Replace a permanently locked month’s figures with what the ledgers say today, less everything already carried into later months. Every earlier version is kept. For correcting a month that must be restated, not for routine late costs.',
+    group: 'Money',
+    dangerous: true,
+  },
+  {
     key: 'money.wallet.transfer',
     label: "Debit or credit a seller's wallet",
     description:

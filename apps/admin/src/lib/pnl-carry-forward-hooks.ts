@@ -15,11 +15,33 @@ import type { PnlReportView } from './ops-hooks';
 
 export type PnlMonthStatus = 'CLOSED' | 'OPEN' | 'AWAITING_CLOSE';
 export type PnlCloseKindView = 'AUTO' | 'MANUAL' | 'BACKFILL';
+export type PnlLockStateView = 'PROVISIONAL' | 'FINAL';
+export type PnlVersionKindView =
+  | 'AUTO_FINAL'
+  | 'AUTO_PROVISIONAL'
+  | 'LOCK_PERMANENTLY'
+  | 'GOD_MODE'
+  | 'BACKFILL'
+  | 'MANUAL';
+
+export interface PnlVersionView {
+  readonly version: number;
+  readonly kind: PnlVersionKindView;
+  readonly lockState: PnlLockStateView;
+  readonly createdAt: string;
+  readonly by: string | null;
+  readonly reason: string | null;
+  readonly netBeforeInr: string | null;
+  readonly netInr: string;
+  readonly current: boolean;
+}
 
 export interface PnlMonthListItemView {
   readonly month: string;
   readonly name: string;
   readonly status: PnlMonthStatus;
+  readonly lockState: PnlLockStateView | null;
+  readonly version: number | null;
   readonly closedAt: string | null;
   readonly closedBy: string | null;
   readonly closeKind: PnlCloseKindView | null;
@@ -54,8 +76,12 @@ export interface PnlMonthView {
   readonly month: string;
   readonly name: string;
   readonly status: PnlMonthStatus;
+  readonly lockState: PnlLockStateView | null;
   readonly window: { readonly from: string; readonly to: string };
+  readonly shownVersion: number | null;
   readonly report: PnlReportView;
+  readonly versions: readonly PnlVersionView[];
+  readonly shown: { readonly nightlyJobs: unknown; readonly carriedOut: unknown } | null;
   readonly closed: {
     readonly at: string;
     readonly by: string | null;
@@ -159,27 +185,86 @@ export function usePnlPeriods(): UseQueryResult<{
   });
 }
 
-export function usePnlMonth(month: string | null): UseQueryResult<PnlMonthView> {
+/** A month; a closed one at its current version, or `version` read-only. */
+export function usePnlMonth(
+  month: string | null,
+  version: number | null = null,
+): UseQueryResult<PnlMonthView> {
   const client = useApiClient();
   const m = month === null ? '' : month;
+  const qs = version === null ? '' : `?version=${version}`;
   return useQuery({
-    queryKey: [KEY, 'month', month],
+    queryKey: [KEY, 'month', month, version],
     enabled: month !== null,
-    queryFn: () => client.request<PnlMonthView>(`/api/admin/treasury/pnl-periods/${m}`),
+    queryFn: () => client.request<PnlMonthView>(`/api/admin/treasury/pnl-periods/${m}${qs}`),
   });
 }
 
 export function usePnlFrozenRows(
   month: string,
   line: string,
+  version: number | null = null,
 ): UseQueryResult<{ rows: readonly FrozenRowView[]; truncated: boolean }> {
   const client = useApiClient();
+  const qs = version === null ? '' : `?version=${version}`;
   return useQuery({
-    queryKey: [KEY, 'frozen-rows', month, line],
+    queryKey: [KEY, 'frozen-rows', month, line, version],
     queryFn: () =>
       client.request<{ rows: readonly FrozenRowView[]; truncated: boolean }>(
-        `/api/admin/treasury/pnl-periods/${month}/lines/${line}/rows`,
+        `/api/admin/treasury/pnl-periods/${month}/lines/${line}/rows${qs}`,
       ),
+  });
+}
+
+export interface RelockResultView {
+  readonly month: string;
+  readonly version: number;
+  readonly kind: PnlVersionKindView;
+  readonly lockState: PnlLockStateView;
+  readonly netBeforeInr: string;
+  readonly netInr: string;
+  readonly rows: number;
+  readonly carriedOutNetInr: string;
+  readonly gatePassed: boolean;
+}
+
+/** PROVISIONAL → FINAL, re-snapshotted with everything that has arrived. */
+export function useLockPnlPermanently(): UseMutationResult<
+  RelockResultView,
+  Error,
+  { month: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ month, reason }) =>
+      client.request<RelockResultView>(
+        `/api/admin/treasury/pnl-periods/${month}/lock-permanently`,
+        { method: 'POST', body: { reason } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [KEY] });
+    },
+  });
+}
+
+/** GOD MODE: re-lock a month as the ledgers say today, less what was already carried forward. */
+export function useGodModeRelockPnl(): UseMutationResult<
+  RelockResultView,
+  Error,
+  { month: string; reason: string; confirmMonth: string; acknowledgeRisk: boolean }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ month, ...body }) =>
+      client.request<RelockResultView>(`/api/admin/treasury/pnl-periods/${month}/god-mode-relock`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [KEY] });
+    },
   });
 }
 

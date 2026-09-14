@@ -112,6 +112,7 @@ model StaffUser {
   bankTransfersCreated      BankTransfer[]          @relation("BankTransferCreatedBy")
   notificationBroadcasts    NotificationBroadcast[] @relation("BroadcastCreatedBy")
   pnlPeriodsClosed          PnlPeriod[]             @relation("PnlPeriodClosedBy")
+  pnlVersionsCreated        PnlSnapshotVersion[]    @relation("PnlVersionCreatedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -8018,12 +8019,69 @@ model PnlPeriod {
   report               Json
   /// What the nightly jobs reported when the month was closed.
   nightlyJobs          Json?        @map("nightly_jobs")
+  /// PROVISIONAL: closed on time with a nightly job missing — nothing is
+  /// carried out of it, and it is locked permanently later. FINAL: frozen.
+  lockState            PnlLockState @map("lock_state")
 
-  closedByStaff StaffUser?        @relation("PnlPeriodClosedBy", fields: [closedByStaffId], references: [id], onDelete: SetNull)
+  closedByStaff StaffUser?           @relation("PnlPeriodClosedBy", fields: [closedByStaffId], references: [id], onDelete: SetNull)
   rows          PnlSnapshotRow[]
   carryForwards PnlCarryForward[]
+  versions      PnlSnapshotVersion[]
 
   @@map("pnl_periods")
+}
+
+/// Whether a closed month may still take in late data (PNL-CF-1).
+enum PnlLockState {
+  PROVISIONAL @map("provisional")
+  FINAL       @map("final")
+
+  @@map("pnl_lock_state")
+}
+
+/// How a version of a closed month came to be written (PNL-CF-1).
+enum PnlVersionKind {
+  AUTO_FINAL       @map("auto_final")
+  AUTO_PROVISIONAL @map("auto_provisional")
+  LOCK_PERMANENTLY @map("lock_permanently")
+  GOD_MODE         @map("god_mode")
+  BACKFILL         @map("backfill")
+  MANUAL           @map("manual")
+
+  @@map("pnl_version_kind")
+}
+
+/// One frozen version of a closed month (PNL-CF-1). Never deleted and
+/// never edited except to stamp `supersededAt` when a newer version is
+/// locked; the current one is the one with no stamp. A re-lock's figures
+/// are the month live MINUS every carry-forward already recorded from it.
+model PnlSnapshotVersion {
+  id                   String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  periodId             String         @map("period_id") @db.Uuid
+  version              Int
+  kind                 PnlVersionKind
+  lockState            PnlLockState   @map("lock_state")
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  createdByStaffId     String?        @map("created_by_staff_id") @db.Uuid
+  reason               String?        @db.Text
+  grossMarginInr       Decimal        @map("gross_margin_inr") @db.Decimal(14, 2)
+  operatingExpensesInr Decimal        @map("operating_expenses_inr") @db.Decimal(14, 2)
+  netInr               Decimal        @map("net_inr") @db.Decimal(14, 2)
+  /// The current version's net just before this one replaced it.
+  netBeforeInr         Decimal?       @map("net_before_inr") @db.Decimal(14, 2)
+  complete             Boolean
+  report               Json
+  nightlyJobs          Json?          @map("nightly_jobs")
+  /// Per line, what had already been carried forward and was left out.
+  carriedOut           Json?          @map("carried_out")
+  supersededAt         DateTime?      @map("superseded_at") @db.Timestamptz
+
+  period         PnlPeriod        @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  createdByStaff StaffUser?       @relation("PnlVersionCreatedBy", fields: [createdByStaffId], references: [id], onDelete: SetNull)
+  rows           PnlSnapshotRow[]
+
+  @@unique([periodId, version])
+  @@map("pnl_snapshot_versions")
 }
 
 /// One record behind one line of a closed month, frozen (PNL-CF-1).
@@ -8035,6 +8093,8 @@ model PnlPeriod {
 model PnlSnapshotRow {
   id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   periodId   String   @map("period_id") @db.Uuid
+  /// The version this row belongs to; a month has one set of rows per version.
+  versionId  String   @map("version_id") @db.Uuid
   lineKey    String   @map("line_key") @db.VarChar(40)
   refKey     String   @map("ref_key") @db.VarChar(200)
   revenueInr Decimal? @map("revenue_inr") @db.Decimal(14, 2)
@@ -8042,9 +8102,11 @@ model PnlSnapshotRow {
   /// `{ ref, subRef, at }` as the drill-down showed it.
   label      Json
 
-  period PnlPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  period  PnlPeriod          @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  version PnlSnapshotVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
-  @@unique([periodId, lineKey, refKey], map: "pnl_snapshot_rows_period_line_ref_key")
+  @@unique([versionId, lineKey, refKey], map: "pnl_snapshot_rows_version_line_ref_key")
+  @@index([periodId])
   @@map("pnl_snapshot_rows")
 }
 

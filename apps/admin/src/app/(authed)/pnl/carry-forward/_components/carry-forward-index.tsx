@@ -35,6 +35,8 @@ import { usePermission } from '@/lib/use-permission';
 import {
   useBackfillPnlClose,
   useClosePnlMonth,
+  useGodModeRelockPnl,
+  useLockPnlPermanently,
   usePnlCarryForwardRows,
   usePnlFrozenRows,
   usePnlMonth,
@@ -44,6 +46,7 @@ import {
   type CarriedGroupView,
   type CarryForwardFilter,
   type PnlMonthStatus,
+  type PnlVersionKindView,
 } from '@/lib/pnl-carry-forward-hooks';
 
 /**
@@ -63,6 +66,8 @@ export function CarryForwardIndex(): ReactElement {
   // Closing is irreversible and has its own permission; the page is
   // readable by anyone who can read /pnl. Cosmetic only — the API decides.
   const canClose = usePermission('money.pnl.close');
+  // Restating a permanently locked month is its own, stronger permission.
+  const canGodMode = usePermission('money.pnl.god_mode');
   const month = picked ?? periods.data?.currentMonth ?? null;
 
   return (
@@ -94,6 +99,7 @@ export function CarryForwardIndex(): ReactElement {
                     {periods.data.months.map((m) => (
                       <option key={m.month} value={m.month}>
                         {m.name} — {statusWord(m.status)}
+                        {m.lockState === 'PROVISIONAL' ? ' (provisional)' : ''}
                       </option>
                     ))}
                   </Select>
@@ -101,7 +107,9 @@ export function CarryForwardIndex(): ReactElement {
               </div>
             </CardBody>
           </Card>
-          {month !== null && <MonthView month={month} canClose={canClose} />}
+          {month !== null && (
+            <MonthView key={month} month={month} canClose={canClose} canGodMode={canGodMode} />
+          )}
           {canClose && <BackfillPanel />}
         </>
       )}
@@ -155,11 +163,15 @@ function Delta({ amount }: { readonly amount: string }): ReactElement {
 function MonthView({
   month,
   canClose,
+  canGodMode,
 }: {
   readonly month: string;
   readonly canClose: boolean;
+  readonly canGodMode: boolean;
 }): ReactElement {
-  const q = usePnlMonth(month);
+  // A locked version other than the current one, opened read-only.
+  const [version, setVersion] = useState<number | null>(null);
+  const q = usePnlMonth(month, version);
   if (q.isLoading) return <LoadingState />;
   if (q.isError || q.data === undefined) {
     return (
@@ -172,23 +184,42 @@ function MonthView({
   const v = q.data;
   const closed = v.status === 'CLOSED';
   const carriedCount = v.carriedIn.reduce((n, g) => n + g.count, 0);
+  const currentVersion = v.versions.find((x) => x.current)?.version ?? null;
+  const viewingOld = closed && v.shownVersion !== null && v.shownVersion !== currentVersion;
 
   return (
     <div className="space-y-4">
       {v.closed !== null ? (
         <Card>
           <CardBody>
-            <p className="flex flex-wrap items-center gap-2 text-sm">
-              <Lock className="h-4 w-4 shrink-0" aria-hidden />
-              <span>
-                Closed on {istDateTime(v.closed.at)}{' '}
-                {v.closed.by === null ? 'by the scheduled close' : `by ${v.closed.by}`}
-                {v.closed.kind === 'BACKFILL'
-                  ? ', with the months that existed before carry-forward'
-                  : ''}
-                .{v.closed.reason !== null && v.closed.reason !== '' ? ` “${v.closed.reason}”` : ''}
-              </span>
-            </p>
+            <div className="space-y-2 text-sm">
+              <p className="flex flex-wrap items-center gap-2">
+                <Lock className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="rounded-[4px] border border-border px-1.5 py-0.5 text-xs font-semibold tracking-wide">
+                  {v.lockState === 'PROVISIONAL' ? 'PROVISIONAL' : 'LOCKED PERMANENTLY'}
+                </span>
+                <span>
+                  Closed on {istDateTime(v.closed.at)}{' '}
+                  {v.closed.by === null ? 'by the scheduled close' : `by ${v.closed.by}`}
+                  {v.closed.kind === 'BACKFILL'
+                    ? ', with the months that existed before carry-forward'
+                    : ''}
+                  .
+                  {v.closed.reason !== null && v.closed.reason !== ''
+                    ? ` “${v.closed.reason}”`
+                    : ''}
+                </span>
+              </p>
+              {viewingOld && (
+                <p className="text-warning flex flex-wrap items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+                  You are looking at version {v.shownVersion}, which has been replaced — read only.
+                  <Button variant="ghost" size="sm" onClick={() => setVersion(null)}>
+                    Back to the current version
+                  </Button>
+                </p>
+              )}
+            </div>
           </CardBody>
         </Card>
       ) : v.status === 'AWAITING_CLOSE' ? (
@@ -219,7 +250,7 @@ function MonthView({
           report={v.report}
           renderRows={(key) =>
             closed ? (
-              <FrozenRows month={month} lineKey={key} />
+              <FrozenRows month={month} lineKey={key} version={v.shownVersion} />
             ) : key === 'operating_expenses' ? (
               <p className="text-text-faint py-2 text-xs">
                 Listed on <Link href="/expenses">Expenses</Link>.
@@ -277,6 +308,303 @@ function MonthView({
           )}
         </Section>
       )}
+
+      {closed && !viewingOld && v.lockState === 'PROVISIONAL' && (
+        <LockPermanentlyPanel
+          month={month}
+          name={v.name}
+          nightlyJobs={v.shown?.nightlyJobs ?? null}
+          canClose={canClose}
+        />
+      )}
+
+      {closed && v.versions.length > 0 && (
+        <Section title="Locked versions">
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Version</Th>
+                <Th>How</Th>
+                <Th>When</Th>
+                <Th>Who</Th>
+                <Th>Reason</Th>
+                <Th align="right">Net before → after</Th>
+                <Th />
+              </Tr>
+            </THead>
+            <TBody>
+              {v.versions.map((x) => (
+                <Tr key={x.version}>
+                  <Td className="tabular-nums">
+                    v{x.version}
+                    {x.current ? ' (current)' : ''}
+                  </Td>
+                  <Td>
+                    {versionKindLabel(x.kind)}
+                    <div className="text-text-faint text-xs">
+                      {x.lockState === 'PROVISIONAL' ? 'provisional' : 'final'}
+                    </div>
+                  </Td>
+                  <Td className="whitespace-nowrap">{istDateTime(x.createdAt)}</Td>
+                  <Td>{x.by ?? 'the scheduled close'}</Td>
+                  <Td className="text-xs">{x.reason ?? '—'}</Td>
+                  <Td align="right" className="whitespace-nowrap">
+                    {x.netBeforeInr === null ? (
+                      '—'
+                    ) : (
+                      <Money amount={x.netBeforeInr} currency="INR" convert={false} />
+                    )}{' '}
+                    → <Money amount={x.netInr} currency="INR" convert={false} />
+                  </Td>
+                  <Td>
+                    {x.version === v.shownVersion ? (
+                      <span className="text-text-faint text-xs">shown</span>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setVersion(x.current ? null : x.version)}
+                      >
+                        Open
+                      </Button>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </Section>
+      )}
+
+      {closed && !viewingOld && v.lockState === 'FINAL' && canGodMode && (
+        <GodModePanel month={month} name={v.name} />
+      )}
+    </div>
+  );
+}
+
+function versionKindLabel(kind: PnlVersionKindView): string {
+  switch (kind) {
+    case 'AUTO_FINAL':
+      return 'Scheduled close';
+    case 'AUTO_PROVISIONAL':
+      return 'Scheduled close (provisional)';
+    case 'LOCK_PERMANENTLY':
+      return 'Locked permanently';
+    case 'GOD_MODE':
+      return 'God mode re-lock';
+    case 'BACKFILL':
+      return 'Backfill';
+    case 'MANUAL':
+      return 'Closed by hand';
+    default: {
+      const unreachable: never = kind;
+      return unreachable;
+    }
+  }
+}
+
+/** The nightly jobs a stored gate result says did not succeed. */
+function failedJobs(raw: unknown): Array<{ label: string; detail: string }> {
+  const jobs =
+    typeof raw === 'object' && raw !== null && Array.isArray((raw as { jobs?: unknown }).jobs)
+      ? ((raw as { jobs: unknown[] }).jobs as Array<Record<string, unknown>>)
+      : [];
+  return jobs
+    .filter((j) => j['status'] !== 'OK')
+    .map((j) => ({
+      label: typeof j['label'] === 'string' ? j['label'] : 'A nightly job',
+      detail: typeof j['detail'] === 'string' ? j['detail'] : '',
+    }));
+}
+
+/** A PROVISIONAL month: which jobs failed, and "Lock permanently". */
+function LockPermanentlyPanel({
+  month,
+  name,
+  nightlyJobs,
+  canClose,
+}: {
+  readonly month: string;
+  readonly name: string;
+  readonly nightlyJobs: unknown;
+  readonly canClose: boolean;
+}): ReactElement {
+  const lock = useLockPnlPermanently();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const failed = failedJobs(nightlyJobs);
+  return (
+    <Section title="Provisional lock">
+      <Card>
+        <CardBody>
+          <div className="space-y-3 text-sm">
+            <p className="text-warning flex gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              {name} was closed on time, but not every nightly job had succeeded, so some of its
+              costs may be missing. Nothing is carried out of it while it is provisional — late data
+              stays in the month. Fix and re-run the job, then lock it permanently.
+            </p>
+            {failed.length > 0 && (
+              <ul className="space-y-1">
+                {failed.map((j) => (
+                  <li key={j.label} className="flex items-start gap-2 text-xs">
+                    <AlertTriangle
+                      className="text-warning mt-0.5 h-3.5 w-3.5 shrink-0"
+                      aria-hidden
+                    />
+                    <span>
+                      <strong>{j.label}</strong> — {j.detail}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {canClose && (
+              <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+                Lock {name} permanently
+              </Button>
+            )}
+          </div>
+          <Modal
+            open={open}
+            onOpenChange={setOpen}
+            tone="critical"
+            title={`Lock ${name} permanently`}
+            description="It is re-snapshotted with everything that has arrived and becomes final. The provisional version is kept. Changes after this are carried into the open month."
+          >
+            <FormField label="Why it is being locked now">
+              <Textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                placeholder="e.g. Shiprocket wallet sync fixed and re-run on 3 Oct"
+              />
+            </FormField>
+            {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
+            <ModalFooter>
+              <Button variant="ghost" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={lock.isPending}
+                onClick={() =>
+                  lock.mutate(
+                    { month, reason },
+                    {
+                      onSuccess: () => {
+                        setOpen(false);
+                        setError(null);
+                      },
+                      onError: (e) => setError(serverVerdict(e)),
+                    },
+                  )
+                }
+              >
+                {lock.isPending ? 'Locking…' : 'Lock permanently'}
+              </Button>
+            </ModalFooter>
+          </Modal>
+        </CardBody>
+      </Card>
+    </Section>
+  );
+}
+
+/**
+ * God mode for a FINAL month — the escalating chrome of the order god mode:
+ * a red panel, a reason, a risk acknowledgement and the month typed out.
+ * Cosmetic only (FE-2): every guardrail is the server's, and its refusal is
+ * shown verbatim.
+ */
+function GodModePanel({
+  month,
+  name,
+}: {
+  readonly month: string;
+  readonly name: string;
+}): ReactElement {
+  const relock = useGodModeRelockPnl();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [ack, setAck] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-4 py-3">
+      <div className="text-critical flex items-start gap-2 text-sm">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+        <div className="space-y-2">
+          <p>
+            <strong>God mode.</strong> Re-lock {name} as the ledgers say today. Everything already
+            carried into later months stays there and is left out of the new version, so nothing is
+            counted twice. Every earlier version is kept.
+          </p>
+          <Button variant="override" size="sm" onClick={() => setOpen(true)}>
+            Re-lock {name}
+          </Button>
+        </div>
+      </div>
+      <Modal
+        open={open}
+        onOpenChange={setOpen}
+        tone="critical"
+        size="lg"
+        title={`God mode: re-lock ${name}`}
+        description="This restates a month that was locked permanently. It is audited as CRITICAL."
+      >
+        <div className="space-y-4">
+          <FormField label="Justification (at least 30 characters)">
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={4}
+              placeholder="What was wrong with the locked figures, and where the corrected data came from"
+            />
+          </FormField>
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              type="checkbox"
+              checked={ack}
+              onChange={(e) => setAck(e.target.checked)}
+              className="mt-0.5 accent-[var(--color-critical)]"
+            />
+            <span className="text-text-body text-sm">
+              I understand this replaces {name}&apos;s locked figures. A report already sent for
+              that month will no longer match the page.
+            </span>
+          </label>
+          <FormField label={`Type ${month} to confirm`}>
+            <Input value={typed} onChange={(e) => setTyped(e.target.value)} className="font-mono" />
+          </FormField>
+          {error !== null && <p className="text-danger text-sm">{error}</p>}
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="override"
+            disabled={relock.isPending}
+            onClick={() =>
+              relock.mutate(
+                { month, reason, confirmMonth: typed, acknowledgeRisk: ack },
+                {
+                  onSuccess: () => {
+                    setOpen(false);
+                    setError(null);
+                  },
+                  onError: (e) => setError(serverVerdict(e)),
+                },
+              )
+            }
+          >
+            {relock.isPending ? 'Re-locking…' : `Re-lock ${name}`}
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }
@@ -303,8 +631,9 @@ function AwaitingClose({
         <div className="space-y-3 text-sm">
           <p className="text-warning flex gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            {name} has ended and is not closed yet. It closes by itself from 06:00 IST on the 1st
-            once every nightly job has succeeded; until then its figures below are live.
+            {name} has ended and is not closed yet. It closes by itself at 06:00 IST on the 1st —
+            permanently when every nightly job has succeeded, provisionally when one has not. Until
+            then its figures below are live.
           </p>
           {jobs.isLoading ? (
             <p className="text-text-muted text-xs">Checking the nightly jobs…</p>
@@ -571,11 +900,13 @@ function RowsTable({
 function FrozenRows({
   month,
   lineKey,
+  version,
 }: {
   readonly month: string;
   readonly lineKey: string;
+  readonly version: number | null;
 }): ReactElement {
-  const q = usePnlFrozenRows(month, lineKey);
+  const q = usePnlFrozenRows(month, lineKey, version);
   if (q.isLoading) return <p className="text-text-muted py-2 text-xs">Loading rows…</p>;
   if (q.isError || q.data === undefined) {
     return (

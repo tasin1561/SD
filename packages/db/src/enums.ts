@@ -144,4 +144,4 @@ export {
 export { BankOwnerKind, BankEntryType } from '@prisma/client';
 export { DeliveryActionKind, DeliveryActionStatus } from '@prisma/client';
 export { AuditSeverity } from '@prisma/client';
-export { PnlCloseKind } from '@prisma/client';
+export { PnlCloseKind, PnlLockState, PnlVersionKind } from '@prisma/client';

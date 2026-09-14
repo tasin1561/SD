@@ -157,10 +157,16 @@ class World {
     return this.t['pnlCarryForward'] ?? [];
   }
 
-  frozenReport(month: string): PnlReport {
+  versions(month: string): Row[] {
     const p = this.periods().find((r) => r['month'] === month);
-    if (p === undefined) throw new Error(`${month} is not closed`);
-    return p['report'] as PnlReport;
+    return (this.t['pnlSnapshotVersion'] ?? []).filter((v) => v['periodId'] === p?.['id']);
+  }
+
+  /** The month's CURRENT frozen version — what the page shows and the invariant reads. */
+  frozenReport(month: string): PnlReport {
+    const v = this.versions(month).find((r) => r['supersededAt'] == null);
+    if (v === undefined) throw new Error(`${month} is not closed`);
+    return v['report'] as PnlReport;
   }
 }
 
@@ -465,7 +471,7 @@ describe('PnlPeriodService — close, carry forward, never reopen', () => {
     // ── 30 Sep: one more change, then September closes on 1 Oct 06:30 IST ─
     w.adjustment('DEBIT', '10', T('2026-07-25T06:00:00.000Z'));
     const auto = await s.periods.autoClose(T('2026-10-01T01:00:00.000Z'));
-    expect(auto.closed).toEqual(['2026-09']);
+    expect(auto.closed).toEqual([{ month: '2026-09', lockState: 'FINAL' }]);
     // Carried into September while it was still open — part of its frozen view.
     expect(w.carryForwards().filter((r) => r['landedMonth'] === '2026-09')).toHaveLength(5);
 
@@ -481,20 +487,20 @@ describe('PnlPeriodService — close, carry forward, never reopen', () => {
 
     // ── What the page shows ──────────────────────────────────────────────
     const now = T('2026-10-03T02:00:00.000Z');
-    const sepView = await s.read.view('2026-09', now);
+    const sepView = await s.read.view('2026-09', null, now);
     expect(sepView.status).toBe('CLOSED');
     expect(sepView.carriedIn.map((g) => [g.originMonth, g.count])).toEqual([
       ['2026-08', 3],
       ['2026-07', 2],
     ]);
-    const augView = await s.read.view('2026-08', now);
+    const augView = await s.read.view('2026-08', null, now);
     expect(augView.totals.ownNetInr).toBe('60.00');
     expect(augView.laterChanges.map((g) => [g.landedMonth, g.netInr])).toEqual([
       ['2026-10', '-10.00'],
       // B leaves delivery (−200 + 90), a ₹75 expense, a ₹40 credit.
       ['2026-09', '-145.00'],
     ]);
-    const octView = await s.read.view('2026-10', now);
+    const octView = await s.read.view('2026-10', null, now);
     expect(octView.status).toBe('OPEN');
     expect(octView.totals.carriedInNetInr).toBe('-10.00');
 
@@ -562,7 +568,7 @@ describe('PnlPeriodService — close, carry forward, never reopen', () => {
     );
   });
 
-  it('the scheduled close waits for 06:00 IST and the nightly jobs, and says why it did not close', async () => {
+  it('closes ON TIME as PROVISIONAL when a nightly job failed, carries nothing out of it, and "lock permanently" puts the late data IN it', async () => {
     const w = new World();
     w.expense('50', T('2026-08-12T06:00:00.000Z'));
     const failed: NightlyGate = {
@@ -595,24 +601,224 @@ describe('PnlPeriodService — close, carry forward, never reopen', () => {
       nightlyJobs: null,
       now: T('2026-09-14T06:00:00.000Z'),
     });
+    w.expense('30', T('2026-09-10T06:00:00.000Z'));
 
     // 05:40 IST on the 1st: too early, the jobs are not even asked.
     const early = await s.periods.autoClose(T('2026-10-01T00:10:00.000Z'));
     expect(early.closed).toEqual([]);
     expect(s.gateSvc.check).not.toHaveBeenCalled();
 
-    // 06:30 IST: a job has not run — not closed, a HIGH MONEY issue names it.
-    const blocked = await s.periods.autoClose(T('2026-10-01T01:00:00.000Z'));
-    expect(blocked.closed).toEqual([]);
-    expect(blocked.blocked?.month).toBe('2026-09');
-    expect(w.periods().map((p) => p['month'])).toEqual(['2026-08']);
+    // 06:30 IST: a job has not run — closed anyway, PROVISIONAL, and a HIGH
+    // MONEY issue names the job and what to do. The retired issue is resolved.
+    const auto = await s.periods.autoClose(T('2026-10-01T01:00:00.000Z'));
+    expect(auto.closed).toEqual([{ month: '2026-09', lockState: 'PROVISIONAL' }]);
+    const sep = w.periods().find((p) => p['month'] === '2026-09');
+    expect(sep?.['lockState']).toBe('PROVISIONAL');
+    expect(w.versions('2026-09').map((v) => v['kind'])).toEqual(['AUTO_PROVISIONAL']);
     expect(s.issues.raise).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: 'MONEY',
         severity: 'HIGH',
-        dedupeKey: 'pnl-close:2026-09',
+        dedupeKey: 'pnl-close-provisional:2026-09',
         detail: expect.stringContaining('Shiprocket wallet sync (03:50 IST)'),
       }),
     );
+    expect(s.issues.resolveByKey).toHaveBeenCalledWith(
+      'pnl-close:2026-09',
+      expect.any(String),
+      null,
+    );
+
+    // Late September data is NOT carried out of a provisional month.
+    w.expense('20', T('2026-09-20T06:00:00.000Z'), T('2026-10-02T06:00:00.000Z'));
+    const skipped = await s.periods.detect('2026-10', T('2026-10-03T01:00:00.000Z'));
+    expect(skipped.rowsAdded).toBe(0);
+    expect(skipped.provisionalSkipped).toEqual(['2026-09']);
+
+    // Lock permanently: re-snapshotted now, the ₹20 lands IN September.
+    const now = T('2026-10-03T02:00:00.000Z');
+    expect(
+      await codeOf(
+        s.periods.lockPermanently({ month: '2026-09', staffId: 'staff-1', reason: 'short', now }),
+      ),
+    ).toBe('PNL_REASON_TOO_SHORT');
+    const locked = await s.periods.lockPermanently({
+      month: '2026-09',
+      staffId: 'staff-1',
+      reason: 'Shiprocket sync fixed and re-run by hand',
+      now,
+    });
+    expect(locked).toMatchObject({
+      version: 2,
+      kind: 'LOCK_PERMANENTLY',
+      lockState: 'FINAL',
+      netBeforeInr: '-30.00',
+      netInr: '-50.00',
+      gatePassed: false,
+    });
+    expect(sep?.['lockState']).toBe('FINAL');
+    expect(s.audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'treasury.pnl_period.locked_permanently',
+        entityId: null,
+        severity: 'HIGH',
+        metadata: expect.objectContaining({ month: '2026-09', lockedDespiteNightlyJobs: true }),
+      }),
+      expect.anything(),
+    );
+    expect(s.issues.resolveByKey).toHaveBeenCalledWith(
+      'pnl-close-provisional:2026-09',
+      expect.any(String),
+      'staff-1',
+    );
+    // The provisional version is KEPT, superseded, rows and all.
+    const [v1, v2] = w.versions('2026-09');
+    expect(v1?.['supersededAt']).toEqual(now);
+    expect(v2?.['supersededAt'] ?? null).toBeNull();
+    const rowsOf = (v: Row | undefined): Row[] =>
+      (w.t['pnlSnapshotRow'] ?? []).filter((r) => r['versionId'] === v?.['id']);
+    expect(rowsOf(v1)).toHaveLength(1);
+    expect(rowsOf(v2)).toHaveLength(2);
+    expect(
+      await codeOf(
+        s.periods.lockPermanently({
+          month: '2026-09',
+          staffId: 'staff-1',
+          reason: 'again, which is refused',
+          now,
+        }),
+      ),
+    ).toBe('PNL_ALREADY_FINAL');
+
+    // FINAL now: detection resumes for it.
+    w.expense('5', T('2026-09-25T06:00:00.000Z'), T('2026-10-04T06:00:00.000Z'));
+    const resumed = await s.periods.detect('2026-10', T('2026-10-05T01:00:00.000Z'));
+    expect(resumed.byOrigin).toEqual([{ originMonth: '2026-09', rows: 1, netInr: '-5.00' }]);
+    expectSameTotals(
+      carried(
+        w.carryForwards().filter((r) => r['originMonth'] === '2026-09'),
+        totalsOf([w.frozenReport('2026-09')]),
+      ),
+      totalsOf([await live(s.pnl, '2026-09')]),
+    );
+  });
+
+  it('god mode re-locks a FINAL month as live − Σ carry-forwards already recorded, keeps every version, and the invariant still holds', async () => {
+    const w = new World();
+    const A = w.delivered({
+      at: T('2026-08-10T06:00:00.000Z'),
+      billed: '200',
+      cost: null,
+      number: 'SD-A',
+    });
+    w.expense('50', T('2026-08-12T06:00:00.000Z'));
+    const s = services(w);
+    await s.periods.close({
+      month: '2026-08',
+      kind: 'MANUAL',
+      staffId: 'staff-1',
+      reason: 'closing by hand for the test',
+      nightlyJobs: null,
+      now: T('2026-09-14T06:00:00.000Z'),
+    });
+    expect(w.frozenReport('2026-08').netInr).toBe('150.00');
+
+    // Two changes found and carried into September…
+    w.lateCost(A.shipmentId, '104.38');
+    w.expense('75', T('2026-08-28T06:00:00.000Z'), T('2026-09-05T06:00:00.000Z'));
+    expect((await s.periods.detect('2026-09', T('2026-09-20T01:00:00.000Z'))).rowsAdded).toBe(2);
+    // …and one not yet found when god mode runs.
+    w.expense('10', T('2026-08-29T06:00:00.000Z'), T('2026-09-21T00:30:00.000Z'));
+
+    const now = T('2026-09-21T01:00:00.000Z');
+    const god = (over: Partial<Parameters<PnlPeriodService['godModeRelock']>[0]>) =>
+      s.periods.godModeRelock({
+        month: '2026-08',
+        staffId: 'staff-1',
+        reason: 'The August forwarder invoice was re-issued with a corrected total',
+        confirmMonth: '2026-08',
+        acknowledgeRisk: true,
+        now,
+        ...over,
+      });
+    expect(await codeOf(god({ reason: 'too short' }))).toBe('PNL_GOD_MODE_REASON_TOO_SHORT');
+    expect(await codeOf(god({ confirmMonth: '2026-8' }))).toBe(
+      'PNL_GOD_MODE_CONFIRMATION_MISMATCH',
+    );
+    expect(await codeOf(god({ acknowledgeRisk: false }))).toBe(
+      'PNL_GOD_MODE_RISK_NOT_ACKNOWLEDGED',
+    );
+    expect(await codeOf(god({ month: '2026-09', confirmMonth: '2026-09' }))).toBe(
+      'PNL_MONTH_NOT_ENDED',
+    );
+    expect(await codeOf(god({ month: '2026-07', confirmMonth: '2026-07' }))).toBe(
+      'PNL_MONTH_NOT_CLOSED',
+    );
+
+    const re = await god({});
+    // live net: 200 − 104.38 − 50 − 75 − 10 = −39.38; carried so far: −179.38;
+    // the new version is the difference — the undetected ₹10 absorbed.
+    expect(re).toMatchObject({
+      version: 2,
+      kind: 'GOD_MODE',
+      netBeforeInr: '150.00',
+      netInr: '140.00',
+      carriedOutNetInr: '-179.38',
+    });
+    expect(s.audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'treasury.pnl_period.god_mode_relocked',
+        entityId: null,
+        severity: 'CRITICAL',
+        metadata: expect.objectContaining({ month: '2026-08', version: 2 }),
+      }),
+      expect.anything(),
+    );
+
+    // Carry-forward rows are untouched and still count in September.
+    expect(w.carryForwards()).toHaveLength(2);
+    expect(w.carryForwards().every((r) => r['landedMonth'] === '2026-09')).toBe(true);
+    const invariant = async (): Promise<void> => {
+      // The month: frozen current version + its carry-forwards = the month live.
+      expectSameTotals(
+        carried(
+          w.carryForwards().filter((r) => r['originMonth'] === '2026-08'),
+          totalsOf([w.frozenReport('2026-08')]),
+        ),
+        totalsOf([await live(s.pnl, '2026-08')]),
+      );
+      // The span: frozen + every carry-forward + the open month = live over both.
+      expectSameTotals(
+        carried(
+          w.carryForwards(),
+          totalsOf([w.frozenReport('2026-08'), await live(s.pnl, '2026-09')]),
+        ),
+        totalsOf([await live(s.pnl, '2026-08', '2026-09')]),
+      );
+    };
+    await invariant();
+
+    // Nothing new to carry: the undetected change went into the re-lock, not a row.
+    expect((await s.periods.detect('2026-09', T('2026-09-21T02:00:00.000Z'))).rowsAdded).toBe(0);
+
+    // A change after the re-lock is carried as usual, its "before" the re-locked figure.
+    w.lateCost(A.shipmentId, '120');
+    await s.periods.detect('2026-09', T('2026-09-22T01:00:00.000Z'));
+    const after = w.carryForwards().at(-1);
+    expect(after?.['reason']).toBe('Courier cost ₹104.38 → ₹120.00');
+    expect((after?.['costDeltaInr'] as Prisma.Decimal).toFixed(2)).toBe('15.62');
+    await invariant();
+
+    // Every version is kept and can be opened.
+    const view = await s.read.view('2026-08', null, T('2026-09-22T02:00:00.000Z'));
+    expect(
+      view.versions.map((v) => [v.version, v.kind, v.current, v.netBeforeInr, v.netInr]),
+    ).toEqual([
+      [2, 'GOD_MODE', true, '150.00', '140.00'],
+      [1, 'MANUAL', false, null, '150.00'],
+    ]);
+    const old = await s.read.view('2026-08', 1, T('2026-09-22T02:00:00.000Z'));
+    expect(old.shownVersion).toBe(1);
+    expect(old.report.netInr).toBe('150.00');
   });
 });

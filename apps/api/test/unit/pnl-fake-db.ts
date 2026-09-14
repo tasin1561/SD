@@ -84,8 +84,17 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
       many: true,
     },
     closedByStaff: one('staffUser', 'closedByStaffId'),
+    versions: { model: 'pnlSnapshotVersion', local: 'id', foreign: 'periodId', many: true },
   },
-  pnlSnapshotRow: { period: one('pnlPeriod', 'periodId') },
+  pnlSnapshotVersion: {
+    period: one('pnlPeriod', 'periodId'),
+    createdByStaff: one('staffUser', 'createdByStaffId'),
+    rows: { model: 'pnlSnapshotRow', local: 'id', foreign: 'versionId', many: true },
+  },
+  pnlSnapshotRow: {
+    period: one('pnlPeriod', 'periodId'),
+    version: one('pnlSnapshotVersion', 'versionId'),
+  },
   pnlCarryForward: { originPeriod: one('pnlPeriod', 'originPeriodId') },
 };
 
@@ -370,6 +379,11 @@ export class FakeDb {
         const data = args['data'] as Row[];
         for (const d of data) insert(d);
         return { count: data.length };
+      },
+      updateMany: async (args = {}) => {
+        const hit = filtered(args);
+        for (const r of hit) Object.assign(r, coerce(args['data'] as Row));
+        return { count: hit.length };
       },
       findMany: async (args = {}) => this.shape(model, all(), args),
       findFirst: async (args = {}) => this.shape(model, all(), { ...args, take: 1 })[0] ?? null,

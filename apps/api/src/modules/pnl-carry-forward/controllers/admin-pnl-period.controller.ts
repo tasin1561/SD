@@ -17,19 +17,38 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../../common/types/request';
-import { BackfillPnlCloseDto, ClosePnlMonthDto } from '../dto/pnl-period.dto';
+import {
+  BackfillPnlCloseDto,
+  ClosePnlMonthDto,
+  GodModeRelockDto,
+  LockPermanentlyDto,
+} from '../dto/pnl-period.dto';
 import { PnlNightlyGateService } from '../services/pnl-nightly-gate.service';
 import { PnlPeriodReadService } from '../services/pnl-period-read.service';
 import { PnlPeriodService } from '../services/pnl-period.service';
 import { monthWindow } from '../services/pnl-month';
 
+/** An optional `?version=`: absent or blank means the current one. */
+function versionParam(v: string | undefined): number | null {
+  if (v === undefined || v === '') return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new BadRequestException({
+      code: 'INVALID_VERSION',
+      message: `"${v}" is not a version number`,
+    });
+  }
+  return n;
+}
+
 /**
  * The carry-forward P&L (PNL-CF-1).
  *
  * Reading is the same question /pnl answers and carries the same gate.
- * Closing a month is irreversible — there is no reopen endpoint, by the
- * owner's decision — so it has its own permission, SUPER_ADMIN until a
- * role is given it.
+ * Closing and locking a month permanently are `money.pnl.close`; restating
+ * a permanently locked month is god mode, `money.pnl.god_mode`, a separate
+ * permission so that closing months never implies rewriting them. Nothing
+ * reopens a month: every lock is a new version and every earlier one is kept.
  */
 @ApiTags('admin-treasury')
 @ApiBearerAuth('staff-jwt')
@@ -53,19 +72,25 @@ export class AdminPnlPeriodController {
   @Get('pnl-periods/:month')
   @ApiOperation({
     summary:
-      'One month: frozen when closed (with the changes found later), live when open (with what earlier months carried into it).',
+      'One month: a closed month shows its current version (or ?version=N, read only) and the changes found later; an open one its live figures and what earlier months carried into it.',
   })
-  monthView(@Param('month') month: string): ReturnType<PnlPeriodReadService['view']> {
-    return this.read.view(month);
+  @ApiQuery({ name: 'version', required: false, description: 'A locked version to open' })
+  monthView(
+    @Param('month') month: string,
+    @Query('version') version?: string,
+  ): ReturnType<PnlPeriodReadService['view']> {
+    return this.read.view(month, versionParam(version));
   }
 
   @Get('pnl-periods/:month/lines/:line/rows')
-  @ApiOperation({ summary: 'The records frozen behind one line of a closed month.' })
+  @ApiOperation({ summary: 'The records frozen behind one line of a closed month’s version.' })
+  @ApiQuery({ name: 'version', required: false, description: 'A locked version to open' })
   frozenRows(
     @Param('month') month: string,
     @Param('line') line: string,
+    @Query('version') version?: string,
   ): ReturnType<PnlPeriodReadService['frozenRows']> {
-    return this.read.frozenRows(month, line);
+    return this.read.frozenRows(month, line, versionParam(version));
   }
 
   @Get('pnl-carry-forwards')
@@ -90,7 +115,7 @@ export class AdminPnlPeriodController {
   @Get('pnl-periods/:month/nightly-jobs')
   @ApiOperation({
     summary:
-      'Whether every nightly job has succeeded since the month ended — what the scheduled close waits for.',
+      'Whether every nightly job has succeeded since the month ended — what decides FINAL or PROVISIONAL at the scheduled close.',
   })
   nightlyJobs(@Param('month') month: string): ReturnType<PnlNightlyGateService['check']> {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
@@ -106,8 +131,7 @@ export class AdminPnlPeriodController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('money.pnl.close')
   @ApiOperation({
-    summary:
-      'Close a finished month by hand — for when a nightly job failed and was dealt with. Never reopened.',
+    summary: 'Close a finished month by hand, FINAL. Never reopened.',
   })
   closeMonth(
     @Param('month') month: string,
@@ -130,12 +154,48 @@ export class AdminPnlPeriodController {
     });
   }
 
+  @Post('pnl-periods/:month/lock-permanently')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('money.pnl.close')
+  @ApiOperation({
+    summary:
+      'Lock a PROVISIONAL month permanently: re-snapshot it with everything that has arrived and make it FINAL. The earlier version is kept.',
+  })
+  lockPermanently(
+    @Param('month') month: string,
+    @Body() body: LockPermanentlyDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<PnlPeriodService['lockPermanently']> {
+    return this.periods.lockPermanently({ month, staffId: staff.id, reason: body.reason });
+  }
+
+  @Post('pnl-periods/:month/god-mode-relock')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('money.pnl.god_mode')
+  @ApiOperation({
+    summary:
+      'GOD MODE: re-lock a month as the ledgers say today, less everything already carried into later months. Every earlier version is kept. Audited CRITICAL.',
+  })
+  godModeRelock(
+    @Param('month') month: string,
+    @Body() body: GodModeRelockDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): ReturnType<PnlPeriodService['godModeRelock']> {
+    return this.periods.godModeRelock({
+      month,
+      staffId: staff.id,
+      reason: body.reason,
+      confirmMonth: body.confirmMonth,
+      acknowledgeRisk: body.acknowledgeRisk,
+    });
+  }
+
   @Post('pnl-periods/backfill-close')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('money.pnl.close')
   @ApiOperation({
     summary:
-      'Close every month with P&L activity through `throughMonth` (default last month), oldest first. DRY RUN unless dryRun is false.',
+      'Close every month with P&L activity through `throughMonth` (default last month), oldest first, FINAL. DRY RUN unless dryRun is false.',
   })
   backfill(
     @Body() body: BackfillPnlCloseDto,

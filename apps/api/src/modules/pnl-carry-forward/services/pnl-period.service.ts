@@ -1,8 +1,16 @@
-import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   ActorType,
   OrderStatus,
   PnlCloseKind,
+  PnlLockState,
+  PnlVersionKind,
   Prisma,
   SystemIssueKind,
   SystemIssueSeverity,
@@ -20,8 +28,12 @@ import {
 } from '../../treasury/services/pnl.service';
 import {
   buildBaseline,
+  carriedByLine,
   diffMonth,
+  rebaseRows,
   rowKey,
+  subtractCarriedFromReport,
+  sumCarried,
   type BaselineRow,
   type CarryForwardDraft,
   type LiveRow,
@@ -37,15 +49,25 @@ import {
 } from './pnl-month';
 import { PnlNightlyGateService, type NightlyGate } from './pnl-nightly-gate.service';
 
-/** Every close and every carry-forward write takes this one key (see AdvisoryLock.PNL_PERIOD). */
+/** Every close, re-lock and carry-forward write takes this one key (see AdvisoryLock.PNL_PERIOD). */
 const LOCK_KEY = 'pnl-periods';
 /** A month is closed from 06:00 IST on the 1st — after the last nightly job (04:30). */
 const CLOSE_AFTER_MONTH_END_MS = 6 * 60 * 60 * 1000;
-/** A month's snapshot can be thousands of rows; the default 5s would not write them. */
-const TX_OPTIONS = { timeout: 120_000, maxWait: 15_000 } as const;
+/**
+ * A month's snapshot can be thousands of rows, and detection and re-lock
+ * compute the month while holding the lock; the default 5s would not do.
+ */
+const TX_OPTIONS = { timeout: 300_000, maxWait: 30_000 } as const;
 const CHUNK = 500;
 const ZERO = new Prisma.Decimal(0);
+const GOD_MODE_MIN_REASON = 30;
+const LOCK_MIN_REASON = 10;
 
+/** Raised when a month closes PROVISIONAL; cleared when it is locked permanently. */
+export const PNL_PROVISIONAL_ISSUE_PREFIX = 'pnl-close-provisional:';
+/** Raised when the scheduled close itself throws (the engine refused, the database failed). */
+export const PNL_CLOSE_FAILED_ISSUE_PREFIX = 'pnl-close-failed:';
+/** RETIRED 2026-09-14 — the old "waiting for the nightly jobs" issue; resolved wherever seen. */
 export const PNL_CLOSE_ISSUE_PREFIX = 'pnl-close:';
 export const PNL_NEVER_CLOSED_ISSUE = 'pnl-close:never-closed';
 
@@ -53,15 +75,31 @@ export interface CloseResult {
   readonly month: string;
   readonly alreadyClosed: boolean;
   readonly closedAt: string;
+  readonly lockState: PnlLockState;
+  readonly version: number;
   readonly netInr: string;
   readonly rows: number;
   /** Carry-forwards from earlier closed months written into this one just before it closed. */
   readonly carriedIn: number;
 }
 
+export interface RelockResult {
+  readonly month: string;
+  readonly version: number;
+  readonly kind: PnlVersionKind;
+  readonly lockState: PnlLockState;
+  readonly netBeforeInr: string;
+  readonly netInr: string;
+  readonly rows: number;
+  /** Net of what had already been carried into later months and was left out. */
+  readonly carriedOutNetInr: string;
+  readonly gatePassed: boolean;
+}
+
 export interface DetectResult {
   readonly landedMonth: string;
   readonly monthsChecked: number;
+  readonly provisionalSkipped: readonly string[];
   readonly rowsAdded: number;
   readonly byOrigin: ReadonlyArray<{
     readonly originMonth: string;
@@ -71,12 +109,8 @@ export interface DetectResult {
 }
 
 export interface AutoCloseResult {
-  readonly closed: readonly string[];
-  readonly blocked: {
-    readonly month: string;
-    readonly gate: NightlyGate | null;
-    readonly error: string | null;
-  } | null;
+  readonly closed: ReadonlyArray<{ readonly month: string; readonly lockState: PnlLockState }>;
+  readonly failed: { readonly month: string; readonly error: string } | null;
   readonly neverClosed: boolean;
 }
 
@@ -170,25 +204,47 @@ function orderNow(line: PnlSnapshotKey, status: OrderStatus): string {
   }
 }
 
+/** Which version kind a first close writes. */
+function firstVersionKind(kind: PnlCloseKind, lockState: PnlLockState): PnlVersionKind {
+  switch (kind) {
+    case PnlCloseKind.AUTO:
+      return lockState === PnlLockState.FINAL
+        ? PnlVersionKind.AUTO_FINAL
+        : PnlVersionKind.AUTO_PROVISIONAL;
+    case PnlCloseKind.MANUAL:
+      return PnlVersionKind.MANUAL;
+    case PnlCloseKind.BACKFILL:
+      return PnlVersionKind.BACKFILL;
+    default: {
+      const unreachable: never = kind;
+      return unreachable;
+    }
+  }
+}
+
 /**
- * Closing P&L months and carrying later changes forward (PNL-CF-1).
+ * Closing P&L months, locking them, and carrying later changes forward
+ * (PNL-CF-1, amended 2026-09-14).
  *
- * CLOSE freezes a finished month: the whole report exactly as /pnl prints
- * it for that window, and every record behind every line, keyed by the
- * record's stable id. A closed month is NEVER reopened.
+ * CLOSE freezes a finished month as VERSION 1: the whole report exactly as
+ * /pnl prints it for that window, and every record behind every line, keyed
+ * by the record's stable id. On the scheduled close it is FINAL when every
+ * nightly job succeeded and PROVISIONAL when one did not — the month still
+ * closes on time, and the failure is raised for a person.
  *
- * DETECT recomputes every closed month with the live engine and compares
- * it, record by record, with what has been reported for it so far (its
- * snapshot plus every carry-forward already written). Each difference is
- * an append-only carry-forward counted in the month that is OPEN when it
- * is found — so a month's figure stops moving once it closes, and nothing
- * later is lost: the frozen months plus everything carried forward plus the
- * open month's own figure is always what the live engine says for the
- * whole span.
+ * DETECT recomputes every FINAL month with the live engine and compares it,
+ * record by record, with what has been reported for it so far (its current
+ * version plus every carry-forward written against it). Each difference is
+ * an append-only carry-forward counted in the month OPEN when it is found.
+ * A PROVISIONAL month is skipped: its late data belongs IN it, and goes in
+ * when it is locked permanently.
  *
- * Just before a month closes, changes to the months before it are carried
- * INTO it — while it is still open — so its frozen view includes every
- * change found up to the moment it closed.
+ * RE-LOCK writes a new version and keeps every earlier one: "lock
+ * permanently" (PROVISIONAL → FINAL) and god mode (a FINAL month restated).
+ * The new version is the month live MINUS every carry-forward already
+ * recorded against it, per record and per line — those rows stay counted
+ * in the months they landed in, so nothing is counted twice and frozen
+ * versions plus carry-forwards still equal the live engine to the paisa.
  */
 @Injectable()
 export class PnlPeriodService {
@@ -239,29 +295,26 @@ export class PnlPeriodService {
   }
 
   /**
-   * Close `month`. Idempotent: a month already closed is returned as it
-   * was. Refused for a month that has not ended, and for a month earlier
-   * than one already closed (months close in order, so a carry-forward
-   * always lands after the month it came from).
+   * Close `month` as version 1. Idempotent: a month already closed is
+   * returned as it is. Refused for a month that has not ended, and for a
+   * month earlier than one already closed (months close in order, so a
+   * carry-forward always lands after the month it came from).
    */
   async close(input: {
     readonly month: string;
     readonly kind: PnlCloseKind;
+    readonly lockState?: PnlLockState;
     readonly staffId: string | null;
     readonly reason: string | null;
     readonly nightlyJobs: NightlyGate | null;
     readonly now?: Date;
   }): Promise<CloseResult> {
     const now = input.now ?? new Date();
+    const lockState = input.lockState ?? PnlLockState.FINAL;
     const { month } = input;
     this.assertMonth(month);
     const { from, to } = monthWindow(month);
-    if (to.getTime() > now.getTime()) {
-      throw new BadRequestException({
-        code: 'PNL_MONTH_NOT_ENDED',
-        message: `${monthName(month)} has not ended yet. A month can be closed from midnight IST on the 1st of the next.`,
-      });
-    }
+    this.assertEnded(month, to, now);
     const existing = await this.closedSummary(month);
     if (existing !== null) return existing;
     await this.assertNoLaterClosed(this.prisma.client, month);
@@ -271,15 +324,7 @@ export class PnlPeriodService {
 
     const report = await this.pnl.report(from, to);
     const rows = await this.liveRows(month);
-    const problems = rowsDisagree(report, rows);
-    if (problems.length > 0) {
-      throw new ConflictException({
-        code: 'PNL_ROWS_DISAGREE',
-        message:
-          `${monthName(month)} was not closed: a line's rows do not add up to its figure, so a ` +
-          `frozen month could never be reconciled. ${problems.join(' · ')}`,
-      });
-    }
+    this.assertRowsTile(month, report, rows);
 
     let created: { closedAt: Date; netInr: Prisma.Decimal } | null = null;
     try {
@@ -296,6 +341,7 @@ export class PnlPeriodService {
             closedAt: now,
             closedByStaffId: input.staffId,
             closeKind: input.kind,
+            lockState,
             reason: input.reason,
             grossMarginInr: report.grossMarginInr,
             operatingExpensesInr: report.operatingExpensesInr,
@@ -308,18 +354,20 @@ export class PnlPeriodService {
           },
           select: { id: true, closedAt: true, netInr: true },
         });
-        for (let i = 0; i < rows.length; i += CHUNK) {
-          await tx.pnlSnapshotRow.createMany({
-            data: rows.slice(i, i + CHUNK).map((r) => ({
-              periodId: period.id,
-              lineKey: r.lineKey,
-              refKey: r.refKey,
-              revenueInr: r.revenue,
-              costInr: r.cost,
-              label: r.label as unknown as Prisma.InputJsonValue,
-            })),
-          });
-        }
+        await this.writeVersion(tx, {
+          periodId: period.id,
+          version: 1,
+          kind: firstVersionKind(input.kind, lockState),
+          lockState,
+          staffId: input.staffId,
+          reason: input.reason,
+          report,
+          rows,
+          nightlyJobs: input.nightlyJobs,
+          netBefore: null,
+          carriedOut: null,
+          now,
+        });
         await this.audit.log(
           {
             actorType: input.staffId === null ? ActorType.SYSTEM : ActorType.STAFF,
@@ -334,6 +382,7 @@ export class PnlPeriodService {
               month,
               periodId: period.id,
               kind: input.kind,
+              lockState,
               reason: input.reason,
               netInr: report.netInr,
               complete: report.complete,
@@ -351,8 +400,14 @@ export class PnlPeriodService {
       // The unique month is the last word: whoever lost the race gets the winner.
       if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
     }
+    // The retired "waiting for the nightly jobs" issue, and a failed close, are over either way.
     await this.issues.resolveByKey(
       `${PNL_CLOSE_ISSUE_PREFIX}${month}`,
+      `${monthName(month)} is closed.`,
+      input.staffId,
+    );
+    await this.issues.resolveByKey(
+      `${PNL_CLOSE_FAILED_ISSUE_PREFIX}${month}`,
       `${monthName(month)} is closed.`,
       input.staffId,
     );
@@ -364,11 +419,13 @@ export class PnlPeriodService {
         message: `${monthName(month)} could not be closed; try again.`,
       });
     }
-    this.logger.log({ month, kind: input.kind, rows: rows.length }, 'P&L month closed');
+    this.logger.log({ month, kind: input.kind, lockState, rows: rows.length }, 'P&L month closed');
     return {
       month,
       alreadyClosed: false,
       closedAt: created.closedAt.toISOString(),
+      lockState,
+      version: 1,
       netInr: created.netInr.toFixed(2),
       rows: rows.length,
       carriedIn: carried.rowsAdded,
@@ -376,21 +433,244 @@ export class PnlPeriodService {
   }
 
   /**
-   * Carry into `landedMonth` every change to every closed month before it.
+   * "Lock permanently": a PROVISIONAL month becomes FINAL, re-snapshotted
+   * with the live engine now — the missing data lands IN the month it
+   * belongs to. Allowed whatever the nightly jobs now say: the owner
+   * decides, and the audit records what the gate said.
+   */
+  async lockPermanently(input: {
+    readonly month: string;
+    readonly staffId: string;
+    readonly reason: string;
+    readonly now?: Date;
+  }): Promise<RelockResult> {
+    if (input.reason.trim().length < LOCK_MIN_REASON) {
+      throw new BadRequestException({
+        code: 'PNL_REASON_TOO_SHORT',
+        message: `Say why this month is being locked permanently (at least ${LOCK_MIN_REASON} characters).`,
+      });
+    }
+    return this.relock({ ...input, kind: PnlVersionKind.LOCK_PERMANENTLY });
+  }
+
+  /**
+   * God mode: re-lock a month with the live engine now. On a FINAL month the
+   * new version is live − Σ carry-forwards already recorded from it (see
+   * `rebaseRows`); on a PROVISIONAL one it is the same as locking it
+   * permanently, under the stricter guardrails and a CRITICAL audit.
+   */
+  async godModeRelock(input: {
+    readonly month: string;
+    readonly staffId: string;
+    readonly reason: string;
+    readonly confirmMonth: string;
+    readonly acknowledgeRisk: boolean;
+    readonly now?: Date;
+  }): Promise<RelockResult> {
+    if (input.reason.trim().length < GOD_MODE_MIN_REASON) {
+      throw new BadRequestException({
+        code: 'PNL_GOD_MODE_REASON_TOO_SHORT',
+        message: `God mode needs a reason of at least ${GOD_MODE_MIN_REASON} characters.`,
+      });
+    }
+    if (input.confirmMonth !== input.month) {
+      throw new BadRequestException({
+        code: 'PNL_GOD_MODE_CONFIRMATION_MISMATCH',
+        message: `Type the month exactly as "${input.month}" to confirm.`,
+      });
+    }
+    if (input.acknowledgeRisk !== true) {
+      throw new BadRequestException({
+        code: 'PNL_GOD_MODE_RISK_NOT_ACKNOWLEDGED',
+        message: 'Acknowledge that this restates a locked month before re-locking it.',
+      });
+    }
+    return this.relock({ ...input, kind: PnlVersionKind.GOD_MODE });
+  }
+
+  private async relock(input: {
+    readonly month: string;
+    readonly staffId: string;
+    readonly reason: string;
+    readonly kind: PnlVersionKind;
+    readonly now?: Date;
+  }): Promise<RelockResult> {
+    const now = input.now ?? new Date();
+    const { month } = input;
+    this.assertMonth(month);
+    const { from, to } = monthWindow(month);
+    this.assertEnded(month, to, now);
+    const gate = await this.gate.check(to, now);
+    const reason = input.reason.trim();
+
+    const result = await this.prisma.client.$transaction(async (tx) => {
+      // The live month is computed UNDER the lock, so no carry-forward can
+      // be written between reading the month and subtracting what was carried.
+      await takeAdvisoryLock(tx, AdvisoryLock.PNL_PERIOD, LOCK_KEY);
+      const period = await tx.pnlPeriod.findUnique({
+        where: { month },
+        select: { id: true, lockState: true },
+      });
+      if (period === null) {
+        throw new NotFoundException({
+          code: 'PNL_MONTH_NOT_CLOSED',
+          message: `${monthName(month)} is not closed, so there is nothing to re-lock. Close it first.`,
+        });
+      }
+      if (
+        input.kind === PnlVersionKind.LOCK_PERMANENTLY &&
+        period.lockState !== PnlLockState.PROVISIONAL
+      ) {
+        throw new ConflictException({
+          code: 'PNL_ALREADY_FINAL',
+          message: `${monthName(month)} is already locked permanently. Restating it now is god mode.`,
+        });
+      }
+      const current = await tx.pnlSnapshotVersion.findFirst({
+        where: { periodId: period.id, supersededAt: null },
+        orderBy: { version: 'desc' },
+        select: { id: true, version: true, netInr: true },
+      });
+      if (current === null) {
+        throw new ConflictException({
+          code: 'PNL_VERSION_MISSING',
+          message: `${monthName(month)} has no current version to replace.`,
+        });
+      }
+      const report = await this.pnl.report(from, to);
+      const live = await this.liveRows(month);
+      this.assertRowsTile(month, report, live);
+      const carryForwards = await tx.pnlCarryForward.findMany({
+        where: { originPeriodId: period.id },
+        select: {
+          lineKey: true,
+          refKey: true,
+          revenueDeltaInr: true,
+          costDeltaInr: true,
+          revenueAfterInr: true,
+          costAfterInr: true,
+          label: true,
+          detectedAt: true,
+        },
+      });
+      const carried = sumCarried(carryForwards);
+      const byLine = carriedByLine(carried);
+      const rows = rebaseRows(live, carried);
+      const frozen = subtractCarriedFromReport(report, byLine);
+      const carriedOutNet = [...byLine.values()].reduce(
+        (t, c) => t.add(c.revenue).sub(c.cost),
+        ZERO,
+      );
+      const superseded = await tx.pnlSnapshotVersion.updateMany({
+        where: { id: current.id, supersededAt: null },
+        data: { supersededAt: now },
+      });
+      if (superseded.count === 0) {
+        throw new ConflictException({
+          code: 'PNL_VERSION_MOVED',
+          message: `${monthName(month)} was re-locked by somebody else just now; reload it.`,
+        });
+      }
+      const version = current.version + 1;
+      await this.writeVersion(tx, {
+        periodId: period.id,
+        version,
+        kind: input.kind,
+        lockState: PnlLockState.FINAL,
+        staffId: input.staffId,
+        reason,
+        report: frozen,
+        rows,
+        nightlyJobs: gate,
+        netBefore: current.netInr,
+        carriedOut: Object.fromEntries(
+          [...byLine].map(([k, v]) => [
+            k,
+            { revenueInr: v.revenue.toFixed(2), costInr: v.cost.toFixed(2) },
+          ]),
+        ),
+        now,
+      });
+      await tx.pnlPeriod.updateMany({
+        where: { id: period.id },
+        data: { lockState: PnlLockState.FINAL },
+      });
+      const godMode = input.kind === PnlVersionKind.GOD_MODE;
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          actorId: input.staffId,
+          staffUserId: input.staffId,
+          action: godMode
+            ? 'treasury.pnl_period.god_mode_relocked'
+            : 'treasury.pnl_period.locked_permanently',
+          entityType: 'pnl_period',
+          // The month is not a uuid; it goes in metadata.
+          entityId: null,
+          severity: godMode ? 'CRITICAL' : 'HIGH',
+          metadata: {
+            month,
+            periodId: period.id,
+            kind: input.kind,
+            reason,
+            fromLockState: period.lockState,
+            version,
+            supersededVersion: current.version,
+            netBeforeInr: current.netInr.toFixed(2),
+            netInr: frozen.netInr,
+            carriedOutNetInr: carriedOutNet.toFixed(2),
+            carryForwardsLeftOut: carryForwards.length,
+            rows: rows.length,
+            gatePassed: gate.passed,
+            // The owner decides; say so when the jobs had not all succeeded.
+            lockedDespiteNightlyJobs: !gate.passed,
+            nightlyJobs: gate.jobs.map((j) => ({ key: j.key, status: j.status, detail: j.detail })),
+          },
+        },
+        tx,
+      );
+      return {
+        month,
+        version,
+        kind: input.kind,
+        lockState: PnlLockState.FINAL,
+        netBeforeInr: current.netInr.toFixed(2),
+        netInr: frozen.netInr,
+        rows: rows.length,
+        carriedOutNetInr: carriedOutNet.toFixed(2),
+        gatePassed: gate.passed,
+      };
+    }, TX_OPTIONS);
+    await this.issues.resolveByKey(
+      `${PNL_PROVISIONAL_ISSUE_PREFIX}${month}`,
+      `${monthName(month)} was locked permanently: ${reason}`,
+      input.staffId,
+    );
+    this.logger.log({ month, kind: input.kind, version: result.version }, 'P&L month re-locked');
+    return result;
+  }
+
+  /**
+   * Carry into `landedMonth` every change to every FINAL month before it.
    * `landedMonth` must be OPEN — checked under the same lock a close takes,
-   * so a carry-forward can never land in a month that has closed.
-   * Idempotent: a second run finds the baseline already moved.
+   * so a carry-forward can never land in a month that has closed. A
+   * PROVISIONAL month is skipped: its late data stays in it. Idempotent: a
+   * second run finds the baseline already moved.
    */
   async detect(landedMonth: string, now: Date = new Date()): Promise<DetectResult> {
     this.assertMonth(landedMonth);
     const periods = await this.prisma.client.pnlPeriod.findMany({
       where: { month: { lt: landedMonth } },
       orderBy: { month: 'asc' },
-      select: { id: true, month: true },
+      select: { id: true, month: true, lockState: true },
     });
     const byOrigin: Array<{ originMonth: string; rows: number; netInr: string }> = [];
+    const provisionalSkipped: string[] = [];
     for (const period of periods) {
-      const live = await this.liveRows(period.month);
+      if (period.lockState !== PnlLockState.FINAL) {
+        provisionalSkipped.push(period.month);
+        continue;
+      }
       const drafts = await this.prisma.client.$transaction(async (tx) => {
         await takeAdvisoryLock(tx, AdvisoryLock.PNL_PERIOD, LOCK_KEY);
         const landed = await tx.pnlPeriod.findUnique({
@@ -403,9 +683,23 @@ export class PnlPeriodService {
             message: `${monthName(landedMonth)} is closed; nothing more can be carried into it.`,
           });
         }
+        const still = await tx.pnlPeriod.findUnique({
+          where: { id: period.id },
+          select: { lockState: true },
+        });
+        if (still?.lockState !== PnlLockState.FINAL) return [];
+        const current = await tx.pnlSnapshotVersion.findFirst({
+          where: { periodId: period.id, supersededAt: null },
+          orderBy: { version: 'desc' },
+          select: { id: true, version: true, createdAt: true },
+        });
+        if (current === null) return [];
+        // Computed UNDER the lock, so a re-lock cannot move the baseline
+        // between reading the month and comparing it.
+        const live = await this.liveRows(period.month);
         const [snapshot, earlier] = await Promise.all([
           tx.pnlSnapshotRow.findMany({
-            where: { periodId: period.id },
+            where: { versionId: current.id },
             select: { lineKey: true, refKey: true, revenueInr: true, costInr: true, label: true },
           }),
           tx.pnlCarryForward.findMany({
@@ -419,10 +713,15 @@ export class PnlPeriodService {
               revenueAfterInr: true,
               costAfterInr: true,
               label: true,
+              detectedAt: true,
             },
           }),
         ]);
-        const baseline = buildBaseline(snapshot, earlier);
+        const baseline = buildBaseline(
+          snapshot,
+          earlier,
+          current.version > 1 ? current.createdAt : null,
+        );
         const context = await this.reasonContext(tx, baseline, live);
         const found = diffMonth(baseline, live, context);
         for (let i = 0; i < found.length; i += CHUNK) {
@@ -449,18 +748,24 @@ export class PnlPeriodService {
         entityType: 'pnl_period',
         entityId: null,
         severity: 'MEDIUM',
-        metadata: { landedMonth, byOrigin },
+        metadata: { landedMonth, byOrigin, provisionalSkipped },
       });
     }
-    return { landedMonth, monthsChecked: periods.length, rowsAdded, byOrigin };
+    return {
+      landedMonth,
+      monthsChecked: periods.length - provisionalSkipped.length,
+      provisionalSkipped,
+      rowsAdded,
+      byOrigin,
+    };
   }
 
   /**
    * The scheduled close (hourly; acts from 06:00 IST on the 1st). Closes
-   * every ended month after the last closed one, oldest first, each only
-   * when every nightly job has succeeded since that month ended. A month it
-   * cannot close raises a HIGH MONEY issue naming why, and is tried again
-   * next hour; nothing after it is closed out of order.
+   * every ended month after the last closed one, oldest first, ON TIME:
+   * FINAL when every nightly job has succeeded since the month ended,
+   * PROVISIONAL (with a HIGH MONEY issue naming each job) when one has not.
+   * Only a close that throws stops it, and that is retried next hour.
    */
   async autoClose(now: Date = new Date()): Promise<AutoCloseResult> {
     const last = await this.prisma.client.pnlPeriod.findFirst({
@@ -480,44 +785,53 @@ export class PnlPeriodService {
         source: 'PnlPeriodService',
         dedupeKey: PNL_NEVER_CLOSED_ISSUE,
       });
-      return { closed: [], blocked: null, neverClosed: true };
+      return { closed: [], failed: null, neverClosed: true };
     }
     await this.issues.resolveByKey(PNL_NEVER_CLOSED_ISSUE, 'A P&L month has been closed.');
 
-    const closed: string[] = [];
+    const closed: Array<{ month: string; lockState: PnlLockState }> = [];
     for (const month of monthsBetween(nextMonth(last.month), prevMonth(monthOf(now)))) {
       const { to } = monthWindow(month);
       if (now.getTime() < to.getTime() + CLOSE_AFTER_MONTH_END_MS) break;
       const gate = await this.gate.check(to, now);
-      if (!gate.passed) {
-        await this.raiseNotClosed(month, gate, null);
-        return { closed, blocked: { month, gate, error: null }, neverClosed: false };
-      }
+      const lockState = gate.passed ? PnlLockState.FINAL : PnlLockState.PROVISIONAL;
       try {
         await this.close({
           month,
           kind: PnlCloseKind.AUTO,
+          lockState,
           staffId: null,
           reason: null,
           nightlyJobs: gate,
           now,
         });
-        closed.push(month);
+        closed.push({ month, lockState });
+        if (lockState === PnlLockState.PROVISIONAL) await this.raiseProvisional(month, gate);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger.error({ month, err: message }, 'Scheduled P&L close failed');
-        await this.raiseNotClosed(month, gate, message);
-        return { closed, blocked: { month, gate, error: message }, neverClosed: false };
+        await this.issues.raise({
+          kind: SystemIssueKind.MONEY,
+          severity: SystemIssueSeverity.HIGH,
+          title: `The P&L for ${monthName(month)} could not be closed`,
+          detail:
+            `Closing it failed: ${message}\n\nIt is tried again every hour. Once the cause is ` +
+            'fixed it closes by itself, or somebody holding "Close a P&L month" can close it on ' +
+            '/pnl/carry-forward.',
+          source: 'PnlPeriodService',
+          dedupeKey: `${PNL_CLOSE_FAILED_ISSUE_PREFIX}${month}`,
+          metadata: { month, error: message },
+        });
+        return { closed, failed: { month, error: message }, neverClosed: false };
       }
     }
-    return { closed, blocked: null, neverClosed: false };
+    return { closed, failed: null, neverClosed: false };
   }
 
   /**
    * Close every month from the first with any P&L activity through
    * `throughMonth` (default: last month), oldest first — the months that
-   * existed before carry-forward did. Dry run by default: says what it
-   * would close and each month's figure, and writes nothing.
+   * existed before carry-forward did. FINAL. Dry run by default.
    */
   async backfill(input: {
     readonly dryRun: boolean;
@@ -537,7 +851,7 @@ export class PnlPeriodService {
       });
     }
     const reason = input.reason?.trim() ?? '';
-    if (!input.dryRun && reason.length < 10) {
+    if (!input.dryRun && reason.length < LOCK_MIN_REASON) {
       throw new BadRequestException({
         code: 'PNL_REASON_TOO_SHORT',
         message: 'Say why these months are being closed (at least 10 characters).',
@@ -646,6 +960,62 @@ export class PnlPeriodService {
     return null;
   }
 
+  private async writeVersion(
+    tx: Prisma.TransactionClient,
+    v: {
+      periodId: string;
+      version: number;
+      kind: PnlVersionKind;
+      lockState: PnlLockState;
+      staffId: string | null;
+      reason: string | null;
+      report: PnlReport;
+      rows: readonly LiveRow[];
+      nightlyJobs: NightlyGate | null;
+      netBefore: Prisma.Decimal | null;
+      carriedOut: Record<string, unknown> | null;
+      now: Date;
+    },
+  ): Promise<void> {
+    const created = await tx.pnlSnapshotVersion.create({
+      data: {
+        periodId: v.periodId,
+        version: v.version,
+        kind: v.kind,
+        lockState: v.lockState,
+        createdAt: v.now,
+        createdByStaffId: v.staffId,
+        reason: v.reason,
+        grossMarginInr: v.report.grossMarginInr,
+        operatingExpensesInr: v.report.operatingExpensesInr,
+        netInr: v.report.netInr,
+        netBeforeInr: v.netBefore,
+        complete: v.report.complete,
+        report: v.report as unknown as Prisma.InputJsonValue,
+        ...(v.nightlyJobs === null
+          ? {}
+          : { nightlyJobs: v.nightlyJobs as unknown as Prisma.InputJsonValue }),
+        ...(v.carriedOut === null
+          ? {}
+          : { carriedOut: v.carriedOut as unknown as Prisma.InputJsonValue }),
+      },
+      select: { id: true },
+    });
+    for (let i = 0; i < v.rows.length; i += CHUNK) {
+      await tx.pnlSnapshotRow.createMany({
+        data: v.rows.slice(i, i + CHUNK).map((r) => ({
+          periodId: v.periodId,
+          versionId: created.id,
+          lineKey: r.lineKey,
+          refKey: r.refKey,
+          revenueInr: r.revenue,
+          costInr: r.cost,
+          label: r.label as unknown as Prisma.InputJsonValue,
+        })),
+      });
+    }
+  }
+
   private toRow(
     period: { id: string; month: string },
     landedMonth: string,
@@ -704,31 +1074,25 @@ export class PnlPeriodService {
     return out;
   }
 
-  private async raiseNotClosed(
-    month: string,
-    gate: NightlyGate,
-    error: string | null,
-  ): Promise<void> {
+  private async raiseProvisional(month: string, gate: NightlyGate): Promise<void> {
     const failing = gate.jobs.filter((j) => j.status !== 'OK');
     await this.issues.raise({
       kind: SystemIssueKind.MONEY,
       severity: SystemIssueSeverity.HIGH,
-      title: `The P&L for ${monthName(month)} was not closed`,
+      title: `The P&L for ${monthName(month)} is locked PROVISIONALLY`,
       detail:
-        (error !== null
-          ? `Closing it failed: ${error}\n\n`
-          : 'Not every nightly job has succeeded since the month ended, so its courier costs ' +
-            'may not all be in:\n' +
-            failing.map((j) => `• ${j.label} — ${j.detail}`).join('\n') +
-            '\n\n') +
-        'It is tried again every hour and closes by itself once every nightly job has ' +
-        'succeeded (a manual re-run counts). If one cannot — switched off, or a portal that will ' +
-        'not sign in — somebody holding "Close a P&L month" can close it on /pnl/carry-forward.',
+        `${monthName(month)} was closed on time, but not every nightly job had succeeded since it ` +
+        'ended, so some of its courier costs may be missing:\n' +
+        failing.map((j) => `• ${j.label} — ${j.detail}`).join('\n') +
+        '\n\nWhat to do: fix the run and re-run it (from /cost-sync) so the missing data is in. ' +
+        'Nothing is carried out of a provisional month — late data stays in it. Then open ' +
+        `${monthName(month)} on /pnl/carry-forward and choose "Lock permanently": it is ` +
+        're-snapshotted with everything that has arrived, and changes after that are carried ' +
+        'forward as usual.',
       source: 'PnlPeriodService',
-      dedupeKey: `${PNL_CLOSE_ISSUE_PREFIX}${month}`,
+      dedupeKey: `${PNL_PROVISIONAL_ISSUE_PREFIX}${month}`,
       metadata: {
         month,
-        error,
         jobs: gate.jobs.map((j) => ({ key: j.key, status: j.status, detail: j.detail })),
       },
     });
@@ -737,15 +1101,22 @@ export class PnlPeriodService {
   private async closedSummary(month: string): Promise<CloseResult | null> {
     const p = await this.prisma.client.pnlPeriod.findUnique({
       where: { month },
-      select: { closedAt: true, netInr: true, _count: { select: { rows: true } } },
+      select: { id: true, closedAt: true, lockState: true },
     });
     if (p === null) return null;
+    const current = await this.prisma.client.pnlSnapshotVersion.findFirst({
+      where: { periodId: p.id, supersededAt: null },
+      orderBy: { version: 'desc' },
+      select: { version: true, netInr: true, _count: { select: { rows: true } } },
+    });
     return {
       month,
       alreadyClosed: true,
       closedAt: p.closedAt.toISOString(),
-      netInr: p.netInr.toFixed(2),
-      rows: p._count.rows,
+      lockState: p.lockState,
+      version: current?.version ?? 1,
+      netInr: current?.netInr.toFixed(2) ?? '0.00',
+      rows: current?._count.rows ?? 0,
       carriedIn: 0,
     };
   }
@@ -765,6 +1136,27 @@ export class PnlPeriodService {
         message:
           `${monthName(later.month)} is already closed, and months close in order — a change ` +
           `to ${monthName(month)} is carried into the open month instead.`,
+      });
+    }
+  }
+
+  private assertRowsTile(month: string, report: PnlReport, rows: readonly LiveRow[]): void {
+    const problems = rowsDisagree(report, rows);
+    if (problems.length > 0) {
+      throw new ConflictException({
+        code: 'PNL_ROWS_DISAGREE',
+        message:
+          `${monthName(month)} was not locked: a line's rows do not add up to its figure, so a ` +
+          `frozen month could never be reconciled. ${problems.join(' · ')}`,
+      });
+    }
+  }
+
+  private assertEnded(month: string, to: Date, now: Date): void {
+    if (to.getTime() > now.getTime()) {
+      throw new BadRequestException({
+        code: 'PNL_MONTH_NOT_ENDED',
+        message: `${monthName(month)} has not ended yet. A month can be locked from midnight IST on the 1st of the next.`,
       });
     }
   }
