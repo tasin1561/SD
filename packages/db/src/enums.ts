@@ -154,3 +154,5 @@ export {
   ResellerStoreEventKind,
   ResellerStockMode,
 } from '@prisma/client';
+// RS-4 — reseller store terms: when each party is credited.
+export { ResellerCreditTrigger } from '@prisma/client';

@@ -23,6 +23,7 @@ import { RestrictionPanel } from './restriction-panel';
 import { StatusActionPanel } from './status-action-panel';
 import { IdentityCorrectionPanel } from './identity-correction-panel';
 import { SellerSettingsSection } from './seller-settings-section';
+import { CreditAfterConfirmationPanel } from './credit-after-confirmation-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 
 // Was a check against the role NAME, which cannot see a role somebody
@@ -180,6 +181,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
               page because "what is this seller on" is a question you ask
               while looking at the seller. */}
           <SellerSettingsSection sellerId={detail.data.id} />
+          <CreditAfterConfirmationPanel sellerId={detail.data.id} />
         </>
       )}
     </div>

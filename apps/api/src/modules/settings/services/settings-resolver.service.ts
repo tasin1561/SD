@@ -61,6 +61,33 @@ export async function assertCodFeesWithinLimit(
 }
 
 /**
+ * Seller-overridable keys that only ONE endpoint may write.
+ *
+ * A key here still resolves through `resolve()` like any other (SET-1),
+ * but the generic override writers — the admin seller-settings PATCH /
+ * DELETE and any seller self-service caller — are refused, and the
+ * refusal names the endpoint that owns the key. The dedicated endpoint
+ * carries its own permission, reason and audit; without this list the
+ * generic `sellers.settings.manage` would be a second, weaker door onto
+ * the same decision.
+ *
+ * RS-4 / decision 10: crediting a reseller party N days after
+ * confirmation fronts money before the customer pays, so it is switched
+ * on per seller only behind `reseller.credit_after_confirmation.enable`.
+ */
+export const DEDICATED_OVERRIDE_KEYS: Readonly<Record<string, string>> = {
+  'reseller.credit_after_confirmation_enabled':
+    'PUT /admin/sellers/:sellerId/reseller-credit-after-confirmation (the seller page’s “Credit after confirmation” card)',
+};
+
+function refuseDedicated(key: string): never {
+  throw new ConflictException({
+    code: 'SETTING_HAS_DEDICATED_ENDPOINT',
+    message: `Setting '${key}' is changed only through ${DEDICATED_OVERRIDE_KEYS[key] ?? 'its own endpoint'}.`,
+  });
+}
+
+/**
  * Generic per-seller settings override — the R0 foundation of the
  * revised-plan roadmap. Replaces the pattern of hand-adding a bespoke
  * nullable column to `Seller` for every new per-seller-configurable
@@ -197,10 +224,19 @@ export class SettingsResolverService {
     sellerId: string,
     key: string,
     input: SetSellerSettingOverrideInput,
-    actor: string | { readonly staffId?: string; readonly sellerActor?: true },
+    actor:
+      | string
+      | {
+          readonly staffId?: string;
+          readonly sellerActor?: true;
+          /** Set ONLY by the endpoint named in `DEDICATED_OVERRIDE_KEYS` for this key. */
+          readonly dedicated?: true;
+        },
   ): Promise<SellerSettingOverrideView> {
     const staffId = typeof actor === 'string' ? actor : (actor.staffId ?? null);
     const bySeller = staffId === null;
+    const viaDedicated = typeof actor !== 'string' && actor.dedicated === true;
+    if (key in DEDICATED_OVERRIDE_KEYS && !viaDedicated) refuseDedicated(key);
     return this.prisma.client.$transaction(async (tx) => {
       const system = await tx.systemSetting.findUnique({ where: { key } });
       if (!system) {
@@ -282,6 +318,9 @@ export class SettingsResolverService {
 
   /** Deletes the seller's override for `key`, reverting to the system default. No-op if none exists. */
   async clearOverride(sellerId: string, key: string, staffId: string): Promise<void> {
+    // A dedicated key is switched, never cleared: clearing would silently
+    // fall back to whatever the global default says at the time.
+    if (key in DEDICATED_OVERRIDE_KEYS) refuseDedicated(key);
     await this.prisma.client.$transaction(async (tx) => {
       const existing = await tx.sellerSettingOverride.findUnique({
         where: { sellerId_key: { sellerId, key } },

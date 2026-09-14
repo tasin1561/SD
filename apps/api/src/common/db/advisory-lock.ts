@@ -104,6 +104,17 @@ export const AdvisoryLock = {
    * raising.
    */
   RESELLER_SET_ASIDE: 0x05241,
+  /**
+   * 'RT' — a reseller store's TERMS (RS-4), per store.
+   *
+   * Publishing reads the store's latest version and inserts the next
+   * number; two sellers' tabs publishing at once would both read "v3" and
+   * both try v4 (the unique on (store, version) refuses the second, but
+   * with a 500-shaped surprise rather than an answer). Accepting takes it
+   * too, so "the version being accepted is still the current one" is
+   * checked and written under the same lock a publish holds.
+   */
+  RESELLER_TERMS: 0x05254,
 } as const;
 
 /**

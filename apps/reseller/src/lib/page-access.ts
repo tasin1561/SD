@@ -20,6 +20,7 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/team', 'team.view'], // GET /store/team
   ['/settings', 'store.profile.view'], // GET /store/profile
   ['/catalogue', 'catalogue.view'], // GET /store/catalogue (RS-3)
+  ['/terms', 'terms.view'], // GET /store/terms (RS-4); accepting needs terms.accept
 ];
 
 export function permissionForPath(pathname: string | null): string | null {

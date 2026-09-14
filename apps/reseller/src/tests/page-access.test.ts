@@ -36,4 +36,10 @@ describe('reseller page access', () => {
     expect(canSeePath({ permissions: ['store.profile.view'] }, '/catalogue')).toBe(false);
     expect(canSeePath({ permissions: ['catalogue.view'] }, '/catalogue')).toBe(true);
   });
+
+  it('RS-4: the terms page opens on terms.view (every role has it)', () => {
+    expect(permissionForPath('/terms')).toBe('terms.view');
+    expect(canSeePath({ permissions: ['terms.view'] }, '/terms')).toBe(true);
+    expect(canSeePath({ permissions: ['store.profile.view'] }, '/terms')).toBe(false);
+  });
 });

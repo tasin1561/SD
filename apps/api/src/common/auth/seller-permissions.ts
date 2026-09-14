@@ -292,7 +292,7 @@ export const SELLER_PERMISSIONS = [
     key: 'stores.pricing',
     label: 'Set reseller prices and terms',
     description:
-      'Your default reseller price list, and for each store: which products it may sell, at what price, how much stock it is shown or given, and what it calls each product.',
+      'Publish a reseller store’s terms — who pays which Skydrop fee and when each side is credited — and, with reseller pricing, which products a store may sell, at what price and how stock is shared.',
     group: 'Reseller stores',
     sensitive: true,
   },

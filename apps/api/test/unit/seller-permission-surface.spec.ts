@@ -157,6 +157,7 @@ describe('seller permission surface', () => {
     expect(declaring).toEqual([]);
     // Pinned by name, so a key cannot be quietly reserved to dodge the
     // orphan check above.
+    // `stores.pricing` left the list with RS-3, `reseller.credit_after_confirmation.enable` with RS-4.
     expect([...reserved].sort()).toEqual(['stores.wallet']);
   });
 });

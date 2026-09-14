@@ -54,6 +54,11 @@ type SystemSettingSeed = {
   // silently did not exist.
   overrideMinDecimal?: string;
   overrideMaxDecimal?: string;
+  // Whether /settings may change the GLOBAL value. Unset = true (the
+  // column default). Written on CREATE only, like every value column:
+  // a setting that must only ever be switched per seller, through its
+  // own endpoint, says false here.
+  isEditableByAdmin?: boolean;
 };
 
 // 28 Indian States + 8 Union Territories (Module 6 address validation).
@@ -1410,6 +1415,23 @@ const systemSettings: SystemSettingSeed[] = [
     sellerOverridable: true,
   },
   {
+    // RS-4 / decision 10 (docs/reseller-stores.md). Per seller only: the
+    // global row is NOT editable from /settings (that would switch it on
+    // for every seller at once), and the generic per-seller override
+    // endpoint refuses the key — `SettingsResolverService` routes it to
+    // POST /admin/sellers/:sellerId/reseller-credit-after-confirmation.
+    // Also inserted by 20260914220000_reseller_store_terms.
+    key: 'reseller.credit_after_confirmation_enabled',
+    category: 'reseller',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'Reseller stores — allow credit after confirmation',
+    description:
+      "Whether this seller's reseller-store terms may credit a party N days after the order is confirmed on the phone — money fronted before the customer has paid. Off by default. Turned on per seller only, by Skydrop, on the seller's page (it needs the \"Allow credit after confirmation for a seller\" permission); the global value is not editable. Switching it off never rewrites a store's terms: new versions using it are refused, and stores whose current version uses it are flagged until the seller publishes a new one.",
+    sellerOverridable: true,
+    isEditableByAdmin: false,
+  },
+  {
     key: 'wallet.withdrawal_sla_hours',
     category: 'wallet',
     valueType: SettingValueType.INT,
@@ -1623,6 +1645,7 @@ async function seedSystemSettings() {
         overrideMaxInt: s.overrideMaxInt ?? null,
         overrideMinDecimal: s.overrideMinDecimal ?? null,
         overrideMaxDecimal: s.overrideMaxDecimal ?? null,
+        isEditableByAdmin: s.isEditableByAdmin ?? true,
       },
       update: {
         category: s.category,
@@ -3464,6 +3487,26 @@ const notificationTemplates: TemplateSeed[] = [
     subject: 'Approve or reject the reseller store “{{ store_name }}”',
     bodyTemplate:
       'Hi {{ company_name }}, Skydrop opened a reseller store called “{{ store_name }}” on your account. Nothing can be ordered through it until you approve it — or you can reject it. Decide at {{ store_url }}.',
+  },
+  // RS-4 (2026-09-14) — the seller published new terms for a reseller
+  // store; sent to each store user who may accept them. OPERATIONAL (no
+  // credential word in the code), and the portal carries the same notice
+  // as a banner until the version is accepted.
+  {
+    code: 'store.terms_published.email',
+    name: 'Reseller store — new terms to accept (RS-4)',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} published new terms for {{ store_name }} — version {{ version }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} published version {{ version }} of the terms for {{ store_name }}: who pays which Skydrop fee on your orders, and when you and they are credited.',
+      '',
+      'Your store cannot place new orders until somebody who may accept terms reads and accepts this version.',
+      '',
+      'Read and accept it at {{ terms_url }}',
+    ].join('\n'),
   },
   // RS-2 (2026-09-14) — the reseller store portal's CREDENTIAL messages.
   // Every code matches `categoryForTemplate`'s credential pattern

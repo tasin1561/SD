@@ -443,10 +443,9 @@ export const PERMISSIONS = [
     key: 'reseller.credit_after_confirmation.enable',
     label: 'Allow credit after confirmation for a seller',
     description:
-      'Coming with reseller store money: let a seller’s stores be credited N days after confirmation — money fronted before the customer pays. Granting it changes nothing yet.',
+      'Switch on, for one seller, reseller-store terms that credit a party N days after the order is confirmed — money fronted before the customer pays. Switching it off flags stores whose terms still use it.',
     group: 'Sellers',
     dangerous: true,
-    reserved: true,
   },
   {
     key: 'leads.view',

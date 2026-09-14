@@ -24,7 +24,7 @@ export interface StorePermissionDef {
   readonly sensitive?: true;
 }
 
-export const STORE_PERMISSION_GROUPS = ['Store', 'Team', 'Catalogue'] as const;
+export const STORE_PERMISSION_GROUPS = ['Store', 'Team', 'Catalogue', 'Terms'] as const;
 
 export type StorePermissionGroup = (typeof STORE_PERMISSION_GROUPS)[number];
 
@@ -64,6 +64,26 @@ export const STORE_PERMISSIONS = [
     description:
       'The products this store may sell, the price it pays for each, the retail range, and how many are available.',
     group: 'Catalogue',
+  },
+  // RS-4 — the seller's terms: who pays which Skydrop fee on the store's
+  // orders, and when each side is credited.
+  {
+    key: 'terms.view',
+    label: 'See the seller’s terms',
+    description:
+      'Who pays which Skydrop fee on this store’s orders, when the store and the seller are credited, and every earlier version.',
+    group: 'Terms',
+  },
+  {
+    // Deliberately not `terms.manage`: the store cannot change terms, only
+    // agree to them on the store's behalf — and agreeing binds every
+    // later order, which is why it is its own permission.
+    key: 'terms.accept',
+    label: 'Accept the seller’s terms',
+    description:
+      'Agree to a new version of the terms on the store’s behalf. Until somebody does, the store cannot place new orders.',
+    group: 'Terms',
+    sensitive: true,
   },
 ] as const satisfies readonly StorePermissionDef[];
 
@@ -111,20 +131,24 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
     key: 'ops',
     name: 'Operations',
     description:
-      'Day-to-day work. Sees the store, its team and its catalogue; changes neither store nor team.',
-    permissions: ['store.profile.view', 'team.view', 'catalogue.view'],
+      'Day-to-day work. Sees the store, its team, its catalogue and its terms; changes none of them.',
+    permissions: ['store.profile.view', 'team.view', 'catalogue.view', 'terms.view'],
   },
   {
     key: 'finance',
     name: 'Finance',
-    description: 'The money side, when it arrives. Sees the store, its team and its catalogue.',
-    permissions: ['store.profile.view', 'team.view', 'catalogue.view'],
+    description:
+      'The money side, when it arrives. Sees the store, its team, its catalogue and its terms.',
+    permissions: ['store.profile.view', 'team.view', 'catalogue.view', 'terms.view'],
   },
   {
     key: 'viewer',
     name: 'Viewer',
     description: 'Read-only. The narrowest login there is.',
-    permissions: ['store.profile.view', 'catalogue.view'],
+    // Terms are visible to everyone at the store: they decide what every
+    // order costs, and the portal banner that says "new terms to accept"
+    // must be able to read them for whoever is signed in.
+    permissions: ['store.profile.view', 'catalogue.view', 'terms.view'],
   },
 ];
 

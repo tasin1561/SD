@@ -109,14 +109,31 @@ describe('store permission surface (RS-2)', () => {
   });
 
   it('every store WRITE outside auth needs a manage permission, never a view one', () => {
+    // RS-4's `terms.accept` is the ONE named write key that is not a
+    // `.manage`: the store cannot change terms, only agree to them, and
+    // agreeing binds every later order — so it is its own permission,
+    // never folded into a view one. Named here so a second exception has
+    // to be argued for.
+    const WRITE_KEYS_NOT_MANAGE = new Set(['terms.accept']);
     const loose = HANDLERS.filter(
       (h) =>
         h.method !== 'Get' &&
         h.permissions !== 'self-service' &&
         h.permissions !== null &&
-        !h.permissions.every((p) => p.endsWith('.manage')),
+        !h.permissions.every((p) => p.endsWith('.manage') || WRITE_KEYS_NOT_MANAGE.has(p)),
     ).map((h) => `${h.file} ${h.method} ${h.name}()`);
     expect(loose).toEqual([]);
+  });
+
+  it('RS-4: every role can read the terms; only admin (and the owner) may accept them', () => {
+    const byKey = new Map(DEFAULT_STORE_ROLES.map((r) => [r.key, r.permissions]));
+    for (const key of ['admin', 'ops', 'finance', 'viewer'] as const) {
+      expect(byKey.get(key)).toContain('terms.view');
+    }
+    expect(byKey.get('admin')).toContain('terms.accept');
+    for (const key of ['ops', 'finance', 'viewer'] as const) {
+      expect(byKey.get(key)).not.toContain('terms.accept');
+    }
   });
 
   it('the five RS-2 roles, one owner, and only real keys', () => {

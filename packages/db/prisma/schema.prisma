@@ -2710,7 +2710,7 @@ model SellerStore {
   /// `updatedAt` it means what it says (rule 4b).
   statusChangedAt DateTime?              @map("status_changed_at") @db.Timestamptz
 
-  seller               Seller                 @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  seller               Seller                         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   orders               Order[]
   sellerUsers          SellerUser[]
   storeUsers           StoreUser[]
@@ -2719,6 +2719,9 @@ model SellerStore {
   resellerEvents       ResellerStoreEvent[]
   /// RS-3 — what this store may sell, at what price, with how much stock.
   resellerVariants     ResellerStoreVariant[]
+  /// RS-4 — the store's versioned terms, and every acceptance of them.
+  termsVersions        ResellerStoreTermsVersion[]
+  termsAcceptances     ResellerStoreTermsAcceptance[]
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -2779,12 +2782,14 @@ model StoreUser {
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
 
-  store                   SellerStore                   @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  role                    StoreRoleDefinition           @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  store                   SellerStore                    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  role                    StoreRoleDefinition            @relation(fields: [roleId], references: [id], onDelete: Restrict)
   refreshTokens           StoreRefreshToken[]
   passwordResetTokens     StorePasswordResetToken[]
   emailVerificationTokens StoreEmailVerificationToken[]
-  invitationsAccepted     StoreUserInvitation[]         @relation("StoreInvitationAcceptedBy")
+  invitationsAccepted     StoreUserInvitation[]          @relation("StoreInvitationAcceptedBy")
+  /// RS-4 — the terms versions this person accepted on the store's behalf.
+  termsAcceptances        ResellerStoreTermsAcceptance[]
 
   @@index([storeId])
   @@index([roleId])
@@ -8557,4 +8562,101 @@ model ResellerSetAsideShrink {
   @@index([storeId, createdAt])
   @@index([sellerId, createdAt])
   @@map("reseller_set_aside_shrinks")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// RS-4 — reseller store TERMS (2026-09-14, docs/reseller-stores.md
+// "Terms as built", migration 20260914220000_reseller_store_terms).
+// Kept in one block so the parallel RS-3 / RS-6 schema additions do not
+// interleave with it.
+// ════════════════════════════════════════════════════════════════════
+
+/// When a party to a reseller order is credited (RS-4). Days live beside
+/// it on the terms version; INSTANT takes none (a CHECK says so).
+/// AFTER_CONFIRMATION fronts money before the customer has paid, so it is
+/// selectable only when Skydrop enabled `reseller.credit_after_confirmation_enabled`
+/// for the seller (decision 10).
+enum ResellerCreditTrigger {
+  ON_PAYOUT          @map("on_payout")
+  AFTER_DELIVERY     @map("after_delivery")
+  INSTANT            @map("instant")
+  AFTER_CONFIRMATION @map("after_confirmation")
+
+  @@map("reseller_credit_trigger")
+}
+
+/// RS-4 — one version of a reseller store's terms, APPEND-ONLY.
+///
+/// Who pays which Skydrop fee (the percentage the STORE pays; the seller
+/// pays the rest) and when each party is credited. Written ONLY by
+/// `ResellerStoreTermsService.publish`, never updated or deleted: a store
+/// order (phase 3b) snapshots the version id it was placed under, so an
+/// edit here would re-price orders already placed. A new version is a new
+/// row with the next `version`, allocated under an advisory lock and
+/// backstopped by the unique on (store, version).
+///
+/// One column per fee type rather than a child table, so each share can
+/// carry a CHECK (0–100) and a version can never be missing a fee. The
+/// F2-exhaustive `storePercentOf()` in `reseller-fee-types.ts` is the ONE
+/// place a fee type becomes a column.
+model ResellerStoreTermsVersion {
+  id      String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId String @map("store_id") @db.Uuid
+  /// 1, 2, 3 … per store.
+  version Int
+
+  /// The share of each Skydrop fee the STORE pays, 0–100, two decimals.
+  deliveryFeeStorePercent       Decimal @map("delivery_fee_store_percent") @db.Decimal(5, 2)
+  returnFeeStorePercent         Decimal @map("return_fee_store_percent") @db.Decimal(5, 2)
+  customerReturnFeeStorePercent Decimal @map("customer_return_fee_store_percent") @db.Decimal(5, 2)
+  codFeeStorePercent            Decimal @map("cod_fee_store_percent") @db.Decimal(5, 2)
+  codTaxStorePercent            Decimal @map("cod_tax_store_percent") @db.Decimal(5, 2)
+  instantPayFeeStorePercent     Decimal @map("instant_pay_fee_store_percent") @db.Decimal(5, 2)
+
+  storeCreditTrigger  ResellerCreditTrigger @map("store_credit_trigger")
+  storeCreditDays     Int                   @map("store_credit_days")
+  sellerCreditTrigger ResellerCreditTrigger @map("seller_credit_trigger")
+  sellerCreditDays    Int                   @map("seller_credit_days")
+
+  /// The seller's note to the store about this version (what changed).
+  note               String?   @db.Text
+  createdByActorType ActorType @map("created_by_actor_type")
+  /// A plain id (no FK), like `reseller_store_events.actor_id`.
+  createdById        String?   @map("created_by_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  store       SellerStore                    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  acceptances ResellerStoreTermsAcceptance[]
+
+  @@unique([storeId, version])
+  /// The target of the acceptance's composite FK — what makes an acceptance
+  /// of another store's version unrepresentable.
+  @@unique([id, storeId])
+  @@index([storeId, createdAt])
+  @@map("reseller_store_terms_versions")
+}
+
+/// RS-4 — a store accepting ONE terms version, APPEND-ONLY.
+///
+/// Unique per version: a version is accepted once, by one store user, and
+/// a second click (or a second person) finds it already accepted. The
+/// composite FK (terms_version_id, store_id) → versions (id, store_id)
+/// makes "store A accepted store B's terms" impossible to store, not
+/// merely unlikely.
+model ResellerStoreTermsAcceptance {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId        String   @map("store_id") @db.Uuid
+  termsVersionId String   @unique @map("terms_version_id") @db.Uuid
+  storeUserId    String   @map("store_user_id") @db.Uuid
+  acceptedAt     DateTime @default(now()) @map("accepted_at") @db.Timestamptz
+  ipAddress      String?  @map("ip_address") @db.Inet
+  userAgent      String?  @map("user_agent") @db.Text
+
+  store        SellerStore               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  termsVersion ResellerStoreTermsVersion @relation(fields: [termsVersionId, storeId], references: [id, storeId], onDelete: Restrict)
+  storeUser    StoreUser                 @relation(fields: [storeUserId], references: [id], onDelete: Restrict)
+
+  @@index([storeId, acceptedAt])
+  @@index([storeUserId])
+  @@map("reseller_store_terms_acceptances")
 }

@@ -418,3 +418,162 @@ read-only "Catalogue terms" section on the store detail page.
 real availability AND the store's set-aside, retail within [min, max]
 enforced on a store order, and snapshotting the effective price onto the
 order (RS-4). No order path reads any of this yet.
+## Terms as built (RS-4, 2026-09-14)
+
+Migration `20260914220000_reseller_store_terms`; module
+`apps/api/src/modules/reseller-store-terms/` (its own module, EXPORTING
+`ResellerStoreTermsService`, importing nothing order-shaped, so phase 3b's
+order module can import it without a cycle).
+
+**Schema.** `reseller_store_terms_versions` — APPEND-ONLY, one row per
+version, `version` 1, 2, 3… per store (unique `(store_id, version)`), one
+`DECIMAL(5,2)` column per fee for the share the STORE pays
+(`delivery_fee_…`, `return_fee_…`, `customer_return_fee_…`, `cod_fee_…`,
+`cod_tax_…`, `instant_pay_fee_store_percent`), `store_credit_trigger` +
+`store_credit_days`, `seller_credit_trigger` + `seller_credit_days` (enum
+`reseller_credit_trigger`: ON_PAYOUT / AFTER_DELIVERY / INSTANT /
+AFTER_CONFIRMATION), `note`, `created_by_actor_type` / `created_by_id`,
+`created_at`. CHECKs: every share 0–100; days 0–365; INSTANT ⇒ 0 days;
+AFTER_DELIVERY ⇒ ≥ 1 day; version ≥ 1. `reseller_store_terms_acceptances` —
+APPEND-ONLY, UNIQUE per version, the store user, `accepted_at`,
+`ip_address` (INET), `user_agent`; a COMPOSITE FK `(terms_version_id,
+store_id) → versions (id, store_id)` makes "store A accepted store B's
+terms" unrepresentable. Both FK-RESTRICT the store (and the store user); the
+e2e reset truncates them before `store_users`.
+
+**Fee split (the ONE arithmetic — `terms/fee-split.ts`, pure).**
+`splitFee(amountInr, storePercent)`: `storeInr = round_half_up(amount ×
+pct / 100, paisa)`, `sellerInr = amount − storeInr`. The two always add up to
+the fee, neither is ever negative, 0% and 100% are exact; the rounding
+half-paisa falls on the STORE's side. A negative fee, a fraction of a paisa,
+a percent outside 0–100 or with more than two decimals is refused
+(`FEE_SPLIT_*`) — a refund reverses the shares it recorded, it never splits
+a negative amount. `splitFeeLines(lines, percents)` splits EACH line on its
+own and totals the per-line shares (never a split of the total, so the
+per-line wallet entries add up to the order's split). Fee types are an
+F2-exhaustive TypeScript union (`terms/reseller-fee-types.ts`):
+`storePercentField` (the one place a fee becomes a column) and
+`walletDirectionForFee` (DELIVERY_FEE → ORDER_CHARGES, RETURN_FEE → RTO_FEE,
+CUSTOMER_RETURN_FEE, COD_FEE → COD_COLLECTION_FEE, COD_TAX →
+GST_WITHHOLDING, INSTANT_PAY_FEE). Inbound freight is not a fee type — it is
+the seller's alone. Kept a TS union, not a Prisma enum, because nothing
+stores a fee type as a value yet; phase 3b's per-order split lines are the
+first column that will need one — promote it then.
+
+**Credit timings (`terms/terms-rules.ts`, pure).** Per party, per version.
+Decisions made here: INSTANT takes no days; **AFTER_DELIVERY needs at least
+one day** — zero days after delivery IS Instant, which carries the Instant
+Pay fee, so AFTER_DELIVERY(0) would be Instant with its fee left off; days
+are capped at 365. Every trigger has plain words (`timingWords`), which both
+portals show rather than composing their own.
+
+**Credit after confirmation (decision 10).** SET-1 seller-overridable
+boolean `reseller.credit_after_confirmation_enabled`, seeded FALSE, global
+row `is_editable_by_admin = false` (flipping it globally would switch it on
+for every seller) — inserted by the migration too, since the seed is
+create-only. ONE writer: `CreditAfterConfirmationService.set`, through
+`SettingsResolverService.setOverride(…, { dedicated: true })`; the generic
+admin seller-settings PATCH/DELETE and any seller self-service writer are
+refused `SETTING_HAS_DEDICATED_ENDPOINT` (`DEDICATED_OVERRIDE_KEYS`). The
+endpoint is `PUT /admin/sellers/:sellerId/reseller-credit-after-confirmation`
+(`reseller.credit_after_confirmation.enable`, dangerous, reason ≥ 20,
+audited HIGH with the stores it flags). ONE reader: `isEnabled`, which
+**fails CLOSED** (unreadable ⇒ off — it is fronted money). **Switching it
+off rewrites no terms.** Instead: (1) publish refuses a new version using it
+(`CREDIT_AFTER_CONFIRMATION_NOT_ENABLED`); (2) every live store whose CURRENT
+version uses it is FLAGGED — derived on read, never stored, so it clears
+itself when the seller publishes a version without it or the switch comes
+back on — shown on the admin seller card, as `needsRevision` on all three
+terms views, and in the seller's in-app notice at the moment of the switch;
+(3) `orderReadiness` reports `AFTER_CONFIRMATION_NOT_ENABLED`, so phase 3b
+refuses new orders on a flagged store rather than front money Skydrop has
+withdrawn. Placed on the **admin SELLER page** (not a store page): it is
+Skydrop agreeing to front money for that seller, and it governs every store
+they run.
+
+**Versions and acceptance.** `ResellerStoreTermsService.publish` (seller,
+`stores.pricing`) is the only writer of versions: store must be non-terminal
+(`STORE_IS_FINAL`; a PENDING_SELLER_APPROVAL store may be given terms before
+approval), shares and timings validated, then under
+`AdvisoryLock.RESELLER_TERMS` (per store) it reads the latest version and
+inserts the next — unique `(store, version)` the backstop. `basedOnVersion`
+(the version the seller was editing, 0 for none) refuses a stale edit
+(`TERMS_CHANGED`); identical terms are refused (`TERMS_UNCHANGED`). Audited
+MEDIUM `reseller_store.terms_published` with before/after. No
+`reseller_store_events` row is written (the versions table IS that history,
+and adding an event kind would alter a phase-1 enum the parallel phases also
+touch). `accept` (store, `terms.accept`) takes the same lock, looks the
+version up scoped by the TOKEN's store (another store's id is a 404), refuses
+a replaced version (`TERMS_NOT_CURRENT`), and records who, when, IP and user
+agent; already accepted is an idempotent success; audited MEDIUM
+`reseller_store.terms_accepted`. A new version supersedes acceptance —
+`acceptedCurrentTerms` asks about the LATEST version only.
+
+**The surface phase 3b calls** (`ResellerStoreTermsService`, pass the order's
+own tx as `db`, after the FOR SHARE lock on the store RS-1 asks for):
+`currentTerms(storeId, db?) → StoreTermsSnapshot | null` (`termsVersionId`,
+`version`, `storePercents` as Decimals, `storeCredit`, `sellerCredit`,
+`acceptedAt`); `acceptedCurrentTerms(storeId, db?) → boolean`;
+`orderReadiness(storeId, db?) → { ready, termsVersionId, reasons, message }`
+with reasons `NO_TERMS` / `TERMS_NOT_ACCEPTED` /
+`AFTER_CONFIRMATION_NOT_ENABLED`. Refuse the order when `ready` is false;
+snapshot `termsVersionId` when true; split with `splitFeeLines(lines,
+snapshot.storePercents)`.
+
+**Permissions.** Store: `terms.view` (every default role — the terms decide
+what every order costs, and the portal banner must read them for whoever is
+signed in) and `terms.accept` (admin; the owner holds all implicitly) —
+provisioned for EXISTING stores' system roles by the migration.
+`store-permission-surface.spec.ts` names `terms.accept` as the ONE write key
+that is not a `.manage` (the store cannot change terms, only agree to them).
+Seller: `stores.pricing` is no longer reserved — reading terms needs
+`stores.manage` OR `stores.pricing`, publishing `stores.pricing` alone.
+Staff: `reseller.credit_after_confirmation.enable` is no longer reserved;
+reading terms and the switch needs `reseller.stores.view`.
+
+**Endpoints.** `GET /seller/reseller-stores/:storeId/terms`, `GET
+…/terms/preview` (a draft through the real split — the Terms tab's live
+worked example), `POST …/terms`; `GET /store/terms`, `POST
+/store/terms/:versionId/accept`; `GET /admin/reseller-stores/:storeId/terms`;
+`GET` / `PUT /admin/sellers/:sellerId/reseller-credit-after-confirmation`.
+
+**Notifications.** Published → an EMAIL (`store.terms_published.email`,
+OPERATIONAL, recipient STORE_USER) to each store user who may accept it.
+Store users have no inbox in phase 1, so the in-app half is the **portal-wide
+banner** (`TermsBanner`) shown on every page while the version in force is
+unaccepted (or flagged) — stronger than a dismissible notice. Accepted →
+in-app to the seller's `stores.pricing` holders
+(`seller.reseller_terms_accepted`); switched off with stores flagged → in-app
+to the same people (`seller.reseller_terms_need_revision`). Both topics are
+in the catalogue and pinned by `notification-topic-catalog.service.spec.ts`.
+`ResellerTermsNotifier` is AWAITED after the commit and never throws, so it
+leaves no in-flight write for the e2e reset to drain (NOTIF-19).
+
+**Worked examples.** Served by the API from `splitFee`: the delivery, return
+and customer-return fees use what THIS seller is charged (their SET-1
+`pricing.flat_delivery_fee_inr` / `flat_rto_fee_inr` /
+`customer_return_fee_inr`, fail-open to the seeded 200 / 30 / 200); the
+percentage-shaped fees are worked on ₹100 of the fee.
+
+**Screens.** apps/seller: an Overview | Terms tab on
+`/reseller-stores/[storeId]` — the version in force and its acceptance, the
+worked example table, both timings in words, a publish form (gated
+cosmetically on `stores.pricing`) with the live API preview ("on a ₹200.00
+delivery fee the store pays ₹160.00, you pay ₹40.00"), and every version.
+AFTER_CONFIRMATION is offered labelled "needs Skydrop to enable it" when off
+(the server refuses verbatim — FE-2, no client mirror of the rule).
+apps/reseller: `/terms` (plain words, the example, Accept with confirm,
+history) and the banner. apps/admin: a read-only Terms section on the store
+detail (with the acceptance IP), and the switch card on the seller page.
+**Who sees the acceptance IP:** Skydrop and the store itself; the seller sees
+who and when.
+
+**Tests.** Unit: `reseller-fee-split.spec.ts` (odd paisa, 33.33 %, zero,
+0/100 %, a sweep asserting the shares always sum and never go negative,
+F2 mappings), `reseller-terms-rules.spec.ts`,
+`reseller-store-terms.service.spec.ts` (lock before read, every refusal,
+acceptance, readiness), `credit-after-confirmation.service.spec.ts` (dedicated
+writer, flags, fails closed, the generic door refused). E2E (CI):
+`reseller-terms-flow.e2e-spec.ts` (publish → accept → superseded, five
+concurrent publishes get 1…5, the CHECKs, the switch end to end) and the RS-4
+cases in `tenant-isolation.e2e-spec.ts`.

@@ -23,6 +23,10 @@ import {
 import { RECEIPT_SURPLUS_TOPIC } from '../../src/modules/inventory-receipt/services/receipt-shortfall-ticket.service';
 import { RESELLER_STORE_PENDING_TOPIC } from '../../src/modules/reseller-store/services/reseller-store-notifier.service';
 import { RESELLER_SET_ASIDE_SHRUNK_TOPIC } from '../../src/modules/reseller-catalogue/services/reseller-set-aside-notifier.service';
+import {
+  RESELLER_TERMS_ACCEPTED_TOPIC,
+  RESELLER_TERMS_NEED_REVISION_TOPIC,
+} from '../../src/modules/reseller-store-terms/services/reseller-terms-notifier.service';
 
 /** Seller topics sent by something other than the lifecycle listener,
  *  each named by its sender's own constant. */
@@ -36,6 +40,9 @@ const OTHER_SELLER_SENDERS = [
   RESELLER_STORE_PENDING_TOPIC,
   // RS-3: the hourly sweep cut a reseller set-aside.
   RESELLER_SET_ASIDE_SHRUNK_TOPIC,
+  // RS-4: a store accepted the seller's terms; stores needing new terms.
+  RESELLER_TERMS_ACCEPTED_TOPIC,
+  RESELLER_TERMS_NEED_REVISION_TOPIC,
 ];
 
 /** Staff topics that are not system issues (TKT-3), by their sender's constant. */
