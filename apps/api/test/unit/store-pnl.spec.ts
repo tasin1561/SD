@@ -77,6 +77,37 @@ describe('store P&L (RS-8)', () => {
     expect(r.lines.flatMap((l) => l.rows).some((row) => row.ref === 'SD-9')).toBe(false);
   });
 
+  it('places the order-money and dispute directions (RS-6 3c, RS-7)', () => {
+    const at = (direction: D): ReturnType<typeof placeDirection> =>
+      placeDirection(
+        {
+          id: 'e-0001',
+          direction,
+          amount: d(10),
+          shareOf: null,
+          linkedOrderId: null,
+          linkedEntryId: null,
+          createdAt: new Date('2026-09-15T00:00:00Z'),
+        },
+        undefined,
+      );
+    // Sold below the transfer price: the difference is part of the order's
+    // margin, as a minus; its give-back is a plus on the same line.
+    expect(at(D.TRANSFER_PRICE)).toEqual({ kind: 'line', line: 'order_margin', sign: -1 });
+    expect(at(D.TRANSFER_PRICE_REFUND)).toEqual({ kind: 'line', line: 'order_margin', sign: 1 });
+    // A dispute settled between store and seller is profit or loss, not cash.
+    expect(at(D.DISPUTE_SETTLEMENT_IN)).toEqual({
+      kind: 'line',
+      line: 'dispute_settlements',
+      sign: 1,
+    });
+    expect(at(D.DISPUTE_SETTLEMENT_OUT)).toEqual({
+      kind: 'line',
+      line: 'dispute_settlements',
+      sign: -1,
+    });
+  });
+
   it('every store wallet direction has a place (F2)', () => {
     for (const direction of Object.values(D)) {
       const placed = placeDirection(
