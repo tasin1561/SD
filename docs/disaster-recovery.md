@@ -9,7 +9,7 @@ after each practice restore** — see "Practice restores" at the end.
 | What | Lives in | Copies |
 |---|---|---|
 | Database (`skydrop-db-prod`, PostgreSQL 18 + TimescaleDB 2.28, basic tier, primary only) | DigitalOcean, SGP1 | DigitalOcean daily backups, 7 days (automatic on managed databases). **Off-site: Google Drive every 6 hours.** No point-in-time recovery on the basic tier. |
-| Stored files (`skydrop-prod-storage` Space: labels, invoices, top-up proofs, portal probes) | DigitalOcean Spaces, SGP1 | **Google Drive every 6 hours** (`files/current`, with anything overwritten or deleted kept in `files/changed/<run>` for 180 days). Spaces object versioning: off. |
+| Stored files (`skydrop-prod-storage` Space: labels, invoices, top-up proofs, portal probes) | DigitalOcean Spaces, SGP1 | **Google Drive every 6 hours** (`files/current`, with anything overwritten or deleted kept in `files/changed/<run>` for 180 days). **Spaces object versioning ON since 2026-09-15**, with a lifecycle rule (`expire-old-versions-90d`) that removes a replaced or deleted object's old copy after 90 days — so a file overwritten or deleted by mistake can be brought back from the bucket itself within 90 days. |
 | Main server `skydrop-app-prod` (API, admin, seller, track, reseller, portal worker, Caddy, Redis) | DigitalOcean droplet, SGP1 | Code: GitHub. Settings and secrets: **Google Drive every 6 hours**. DigitalOcean droplet backups: **off**. |
 | India egress server `Skydrop-India-Socket` (Shiprocket panel tunnel) | DigitalOcean droplet, BLR1 | Its few settings ride in the same secrets bundle every 6 hours. |
 | Redis (job queues) | the main server | Saved to disk (AOF). Not copied off-site: every job is re-created by the app or its cron. |
