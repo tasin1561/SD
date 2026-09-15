@@ -56,10 +56,29 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
 - **`packages/types`, `packages/i18n` and `packages/utils` are README-only
   placeholders.** Nothing imports them. They are not a plan.
 
-- **Eight dependency advisories remain, all in build/test tooling** whose
-  vulnerable path we never run (the vite dev server, `vitest --ui`). Every
-  production-reachable one was closed on 2026-07-28. The fix is a two-major
-  vitest migration, reasoned about in `pnpm-workspace.yaml`.
+- **Dependency advisories: 13 on the PRODUCTION path (2 critical), 35 in
+  total** — measured 2026-09-15, not inherited. The "eight, all build/test
+  tooling" line that stood here and in CLAUDE.md was true on 2026-07-28 and is
+  now stale; advisories accrue with time, so a dated count is a claim with a
+  shelf life. What matters today:
+    - **`next` 15.5.22 → 15.5.24** closes two CRITICAL advisories (an
+      unauthenticated RCE on Windows, which does not apply to a Linux droplet,
+      and one in Image Optimization, which may). `apps/marketing` is exempt —
+      it is `output: 'export'` with `images.unoptimized`, so no optimizer runs;
+      admin, seller, track and reseller all have the optimizer enabled by
+      default.
+    - **`sharp` 0.35.3 → 0.35.4** closes a HIGH (libheif). This one processes
+      SELLER-UPLOADED images inside the API, which is untrusted input by
+      definition, so it is the most directly reachable of the set.
+    - **`multer` 2.2.0 → 2.3.0** closes three DoS advisories; it is transitive
+      via `@nestjs/platform-express` and needs an override or a Nest bump.
+    - `qs`, `js-yaml`, `nanoid` and `deepmerge-ts` are transitive and lower
+      severity.
+  **`next` and `sharp` are already inside their declared ranges** (`^15.5.22`,
+  `^0.35.0`) — the lockfile is simply stale, so a `pnpm update` closes both
+  criticals and the sharp HIGH with no package.json change. **Pick up:** needs
+  the owner's go-ahead (MUST NOT #5) and a full CI run behind it.
+  Re-measure with `pnpm audit --prod` rather than trusting this paragraph.
 
 - **The e2e suite and the Playwright projects cannot run on the dev machine** —
   this WSL distro has no Docker — so CI is the first place they execute. A
