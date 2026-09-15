@@ -41,11 +41,20 @@ failed or nothing has succeeded for 13 hours. Both clear themselves.
 and with the owner OFF Google (password manager or paper). **Without it the
 Drive copy cannot be opened.** It is six dot-separated groups (dots are not
 in rclone's obscured alphabet), and it is set in the rclone config with
-`rclone obscure` + `--no-obscure`, never as a plain `password=` value. Google's side is the `skydrop-backups` folder,
-reachable only by files rclone created (`drive.file` scope).
+`rclone obscure` + `--no-obscure`, never as a plain `password=` value. Google's side is the `skydrop-backups` folder, reached through
+**Skydrop's own Google app** (Cloud project `skydrop-508714`, published
+*In production* — in *Testing* Google ends every sign-in after 7 days —
+Desktop client, `drive.file` scope: it can reach only files it created).
+Its client id and secret are needed only to reconnect the SERVER; the owner
+keeps them with the password. A backup can always be opened without them
+(below). Because of `drive.file`, a different app cannot see these files:
+changing the app means starting a fresh folder, as on 2026-09-15 when the
+backups moved off rclone's shared app (the earlier copy is
+`skydrop-backups-rclone-app`).
 
 Server paths: rclone config `~/.config/rclone/rclone.conf` (remotes
-`skydrop-gdrive:` and the crypt `skydrop-backup:`), log
+`skydrop-gdrive:` — Skydrop's own app — and the crypt `skydrop-backup:` over
+it), log
 `~/.local/state/skydrop-backup/backup.log`, a run by hand
 `~/app/scripts/backup/skydrop-backup.sh`.
 
