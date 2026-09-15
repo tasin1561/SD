@@ -244,10 +244,16 @@ describe('reseller order money (e2e)', () => {
   }
 
   async function creditsOf(orderId: string) {
-    return h.prisma.resellerOrderCredit.findMany({
-      where: { orderId },
-      orderBy: { party: 'asc' },
-    });
+    // Sorted by the party's NAME, deliberately not by `orderBy: { party }`.
+    // Postgres orders an enum by its DECLARATION order, and
+    // ResellerMoneyParty declares STORE before SELLER — so the database's
+    // "ascending" is [STORE, SELLER] while every caller below destructures
+    // [seller, store]. That read as a money bug on the first CI run of this
+    // spec: a store balance compared against the seller's net. Sorting by
+    // name here makes the positional reads honest and keeps them that way
+    // if the enum is ever reordered.
+    const rows = await h.prisma.resellerOrderCredit.findMany({ where: { orderId } });
+    return [...rows].sort((a, b) => a.party.localeCompare(b.party));
   }
 
   async function accountTotal(): Promise<string> {
