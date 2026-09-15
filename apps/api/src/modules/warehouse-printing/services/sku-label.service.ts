@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ActorType } from '@skydrop/db';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ActorType, InventoryMode } from '@skydrop/db';
 import { printableBarcode } from '../../../common/barcode/printable-barcode';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
 
 /** One audit row per sticker sheet built — the record of what was printed. */
 export const SKU_LABELS_BUILT_ACTION = 'warehouse.sku_labels.built';
@@ -41,6 +42,12 @@ export interface SkuLabelSheet {
   readonly title: string;
   readonly labels: readonly SkuLabel[];
   readonly totalStickers: number;
+  /**
+   * SKUs left OUT because they run in STRICT mode (owner, 2026-09-15):
+   * a strict product carries only its own unit serials, printed once from
+   * the consignment, so a reusable SKU sticker is not made for it.
+   */
+  readonly skippedStrict: readonly string[];
 }
 
 /**
@@ -93,6 +100,7 @@ export class SkuLabelService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly modes: InventoryModeService,
   ) {}
 
   /**
@@ -111,6 +119,7 @@ export class SkuLabelService {
       where: { id: goodsReceiptId },
       select: {
         receiptNumber: true,
+        sellerId: true,
         lines: {
           select: {
             receivedQty: true,
@@ -134,14 +143,26 @@ export class SkuLabelService {
       });
     }
 
-    const labels = receipt.lines
-      .filter((l) => l.receivedQty > 0)
+    const counted = receipt.lines.filter((l) => l.receivedQty > 0);
+    const modes = await this.modes.resolveForVariants(
+      receipt.sellerId,
+      counted.map((l) => l.variant.id),
+    );
+    // A STRICT product is labelled with its own unit serials, once, from
+    // the consignment — skipped here and NAMED, never silently dropped.
+    const isStrict = (id: string): boolean => modes.get(id) === InventoryMode.STRICT;
+    const labels = counted
+      .filter((l) => !isStrict(l.variant.id))
       .map((l) => this.toLabel(l.variant, l.receivedQty));
+    const skippedStrict = [
+      ...new Set(counted.filter((l) => isStrict(l.variant.id)).map((l) => l.variant.skuCode)),
+    ];
 
     const sheet: SkuLabelSheet = {
       title: `Product labels — ${receipt.receiptNumber}`,
       labels,
       totalStickers: labels.reduce((n, l) => n + l.quantity, 0),
+      skippedStrict,
     };
     await this.record(staffId, sheet, {
       source: 'GOODS_RECEIPT',
@@ -162,6 +183,7 @@ export class SkuLabelService {
       where: { id: { in: ids }, deletedAt: null },
       select: {
         id: true,
+        sellerId: true,
         skuCode: true,
         barcode: true,
         variantLabel: true,
@@ -169,6 +191,28 @@ export class SkuLabelService {
       },
     });
     const byId = new Map(variants.map((v) => [v.id, v]));
+
+    // A STRICT product has no reusable SKU sticker (owner, 2026-09-15):
+    // each unit carries its own serial, printed once; a damaged one is
+    // replaced through a re-print REQUEST on its consignment, approved by
+    // somebody else. Refused by name rather than printed anyway.
+    const strictSkus: string[] = [];
+    const bySeller = new Map<string, string[]>();
+    for (const v of variants) bySeller.set(v.sellerId, [...(bySeller.get(v.sellerId) ?? []), v.id]);
+    for (const [sellerId, ids] of bySeller) {
+      const m = await this.modes.resolveForVariants(sellerId, ids);
+      for (const id of ids) {
+        if (m.get(id) === InventoryMode.STRICT) strictSkus.push(byId.get(id)?.skuCode ?? id);
+      }
+    }
+    if (strictSkus.length > 0) {
+      throw new ConflictException({
+        code: 'STRICT_PRODUCT_USES_SERIALS',
+        message:
+          `${strictSkus.join(', ')} ${strictSkus.length === 1 ? 'is' : 'are'} in strict mode: each unit carries its own barcode, printed once. ` +
+          'For a damaged one, request a re-print of that unit on its consignment.',
+      });
+    }
 
     const labels: SkuLabel[] = [];
     for (const want of input) {
@@ -185,6 +229,7 @@ export class SkuLabelService {
       title: 'Product labels',
       labels,
       totalStickers: labels.reduce((n, l) => n + l.quantity, 0),
+      skippedStrict: [],
     };
     await this.record(staffId, sheet, {
       source: 'FIND_A_PRODUCT',
@@ -241,6 +286,7 @@ export class SkuLabelService {
         source: where.source,
         receiptNumber: where.receiptNumber,
         totalStickers: sheet.totalStickers,
+        skippedStrict: sheet.skippedStrict,
         lines: sheet.labels.map((l) => ({
           variantId: l.variantId,
           skuCode: l.skuCode,

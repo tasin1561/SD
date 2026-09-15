@@ -372,8 +372,8 @@ function PickingTab(): ReactElement {
             </p>
             {list.strictMode && (
               <p className="text-text-muted">
-                Strict mode: the sheet shows no SKU barcodes. Each unit is scanned by its own serial
-                at the packing table.
+                Strict products on this sheet show no SKU barcode — each of their units is scanned
+                by its own serial at the packing table. Normal products keep their barcode.
               </p>
             )}
             {list.shortfalls.length > 0 && (
@@ -802,6 +802,7 @@ function SkippedNotice({
 // ── tab 4 ─────────────────────────────────────────────────────────────
 
 function LocateTab(): ReactElement {
+  const toast = useToast();
   const [q, setQ] = useState('');
   const results = useProductLocations(q);
   const reprint = useSkuLabelsForVariants();
@@ -872,6 +873,9 @@ function LocateTab(): ReactElement {
                           if (!Number.isFinite(quantity) || quantity < 1) return;
                           reprint.mutate([{ variantId: r.variantId, quantity }], {
                             onSuccess: (sheet) => setReprintSheet(sheet),
+                            // A strict product is refused by the server with the
+                            // reason — show it verbatim (FE-2), never silently.
+                            onError: (e) => toast.error(serverVerdict(e)),
                           });
                         }}
                       >

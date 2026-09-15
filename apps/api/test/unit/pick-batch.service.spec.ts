@@ -27,6 +27,8 @@ function makeService(opts: {
   shipments?: Any[];
   reservations?: Any[];
   mode?: InventoryMode;
+  /** Per-variant mode, beating `mode` — for a batch mixing both kinds. */
+  modeByVariant?: Record<string, InventoryMode>;
   claimCount?: number;
 }) {
   const shipments = opts.shipments ?? [shipment()];
@@ -80,6 +82,8 @@ function makeService(opts: {
   };
 
   const allocateForPick = jest.fn(async () => ({}) as never);
+  const pdf = new PickListPdfService();
+  const render = jest.spyOn(pdf, 'render');
   const svc = new PickBatchService(
     { client } as unknown as PrismaService,
     { log: jest.fn() } as unknown as AuditLogService,
@@ -91,14 +95,17 @@ function makeService(opts: {
       listActiveForOrderWithLocations: jest.fn(async () => opts.reservations ?? []),
     } as unknown as StockReservationService,
     {
-      resolveForVariant: jest.fn(async () => opts.mode ?? InventoryMode.NORMAL),
+      resolveForVariant: jest.fn(
+        async (_sellerId: string, variantId: string) =>
+          opts.modeByVariant?.[variantId] ?? opts.mode ?? InventoryMode.NORMAL,
+      ),
     } as unknown as InventoryModeService,
     {
       transitionStatus: jest.fn(async () => ({ status: 'PENDING_PICK' })),
     } as unknown as OrderWriteService,
-    new PickListPdfService(),
+    pdf,
   );
-  return { svc, shipmentUpdateMany, allocateForPick, client };
+  return { svc, shipmentUpdateMany, allocateForPick, client, render };
 }
 
 describe('PickBatchService.create — a batch is a walk', () => {
@@ -200,12 +207,48 @@ describe('PickBatchService.buildList — the sheet', () => {
     // In strict mode every unit carries its own serial and the scan is
     // against THAT (UNIT-2). Printing a SKU barcode invites scanning the
     // wrong thing and having it accepted.
-    const { svc } = makeService({
+    const { svc, render } = makeService({
       reservations: [reservation()],
       mode: InventoryMode.STRICT,
     });
     const r = await svc.buildList('b1', 'staff-1');
     expect(r.strictMode).toBe(true);
+    const lines = render.mock.calls[0]?.[0]?.lines ?? [];
+    expect(lines[0]).toMatchObject({ barcode: null, strict: true });
+  });
+
+  it('the barcode is decided PER PRODUCT — a normal line keeps it beside a strict one', async () => {
+    // Owner, 2026-09-15. It used to be per sheet: one strict product
+    // blanked every barcode on the walk.
+    const { svc, render } = makeService({
+      reservations: [
+        reservation(),
+        reservation({
+          id: 'r2',
+          variantId: 'v2',
+          binId: 'bin-2',
+          bin: { code: 'B-01-01', zone: null },
+          variant: {
+            skuCode: 'SKU-2',
+            barcode: null,
+            variantLabel: null,
+            product: { name: 'Strict' },
+          },
+        }),
+      ],
+      modeByVariant: { v2: InventoryMode.STRICT },
+    });
+    const r = await svc.buildList('b1', 'staff-1');
+    expect(r.strictMode).toBe(true);
+    const lines = render.mock.calls[0]?.[0]?.lines ?? [];
+    expect(lines.find((l) => l.skuCode === 'SKU-1')).toMatchObject({
+      barcode: '8901234567890',
+      strict: false,
+    });
+    expect(lines.find((l) => l.skuCode === 'SKU-2')).toMatchObject({
+      barcode: null,
+      strict: true,
+    });
   });
 
   it('NORMAL mode carries the barcode, for scanning at the packing table', async () => {

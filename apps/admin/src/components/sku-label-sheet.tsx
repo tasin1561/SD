@@ -65,6 +65,12 @@ export function SkuLabelSheetView({
               later.
             </p>
           )}
+          {sheet.skippedStrict.length > 0 && (
+            <p className="text-text-muted mt-1 text-xs">
+              Not on this sheet (strict mode — each unit carries its own barcode from the
+              consignment): {sheet.skippedStrict.join(', ')}.
+            </p>
+          )}
           {sheet.labels.some((l) => l.barcodeWidths === null) && (
             <p className="text-status-failed-fg mt-1 text-xs">
               One or more codes cannot be printed as a barcode and will show as text only. Give

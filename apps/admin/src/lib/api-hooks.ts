@@ -2423,6 +2423,9 @@ export interface SkuLabelSheet {
   title: string;
   labels: SkuLabel[];
   totalStickers: number;
+  /** SKUs left out because they run in STRICT mode — each unit carries
+   *  its own serial instead of a reusable SKU sticker. */
+  skippedStrict: string[];
 }
 
 /**

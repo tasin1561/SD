@@ -7,6 +7,9 @@ import {
 import { encodeCode128B } from '../../src/common/barcode/code128';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
+import type { InventoryModeService } from '../../src/modules/inventory-shared/inventory-mode.service';
+import { ConflictException } from '@nestjs/common';
+import { InventoryMode } from '@skydrop/db';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -21,16 +24,33 @@ function variant(over: AnyArgs = {}): AnyArgs {
   };
 }
 
-function make(receipt: AnyArgs | null, variants: AnyArgs[] = [], auditRows: AnyArgs[] = []) {
+function make(
+  receipt: AnyArgs | null,
+  variants: AnyArgs[] = [],
+  auditRows: AnyArgs[] = [],
+  strictIds: readonly string[] = [],
+) {
   const client = {
     goodsReceipt: { findUnique: jest.fn(async () => receipt) },
     productVariant: { findMany: jest.fn(async () => variants) },
     auditLog: { findMany: jest.fn(async () => auditRows) },
   };
   const audit = { log: jest.fn(async () => undefined) };
+  const modes = {
+    resolveForVariants: jest.fn(
+      async (_sellerId: string, ids: readonly string[]) =>
+        new Map(
+          ids.map((id) => [
+            id,
+            strictIds.includes(id) ? InventoryMode.STRICT : InventoryMode.NORMAL,
+          ]),
+        ),
+    ),
+  };
   const svc = new SkuLabelService(
     { client } as unknown as PrismaService,
     audit as unknown as AuditLogService,
+    modes as unknown as InventoryModeService,
   );
   return { svc, audit, client };
 }
@@ -134,6 +154,7 @@ describe('SkuLabelService.forGoodsReceipt', () => {
           source: 'GOODS_RECEIPT',
           receiptNumber: 'GR-2026-09-0001',
           totalStickers: 5,
+          skippedStrict: [],
           lines: [
             {
               variantId: 'v-1',
@@ -240,5 +261,50 @@ describe('SkuLabelService.history — what was printed', () => {
     );
     const [p] = await svc.history();
     expect(p).toMatchObject({ by: null, source: null, totalStickers: 0, lines: [] });
+  });
+});
+
+describe('STRICT products get no reusable SKU sticker (owner, 2026-09-15)', () => {
+  it('a receipt sheet leaves strict lines out and NAMES them', async () => {
+    const { svc, audit } = make(
+      {
+        receiptNumber: 'GR-1',
+        sellerId: 's-1',
+        lines: [
+          { receivedQty: 4, variant: variant({ id: 'v-normal', skuCode: 'NORMAL-1' }) },
+          { receivedQty: 3, variant: variant({ id: 'v-strict', skuCode: 'STRICT-1' }) },
+        ],
+      },
+      [],
+      [],
+      ['v-strict'],
+    );
+    const sheet = await svc.forGoodsReceipt('gr-1', 'staff-1');
+    expect(sheet.labels.map((l) => l.skuCode)).toEqual(['NORMAL-1']);
+    expect(sheet.totalStickers).toBe(4);
+    expect(sheet.skippedStrict).toEqual(['STRICT-1']);
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ skippedStrict: ['STRICT-1'] }),
+      }),
+    );
+  });
+
+  it('Find a product refuses a strict SKU by name and records nothing', async () => {
+    const { svc, audit } = make(
+      null,
+      [variant({ id: 'v-strict', sellerId: 's-1', skuCode: 'STRICT-1' })],
+      [],
+      ['v-strict'],
+    );
+    const err = await svc
+      .forVariants([{ variantId: 'v-strict', quantity: 1 }], 'staff-1')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      code: 'STRICT_PRODUCT_USES_SERIALS',
+      message: expect.stringContaining('STRICT-1'),
+    });
+    expect(audit.log).not.toHaveBeenCalled();
   });
 });

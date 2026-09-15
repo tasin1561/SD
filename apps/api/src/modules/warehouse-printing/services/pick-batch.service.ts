@@ -757,16 +757,20 @@ export class PickBatchService {
       shipmentByOrder.set(l.orderId, byShipment.get(l.shipmentId) ?? '');
     }
 
-    // STRICT anywhere in the batch means the whole sheet is strict: a
-    // sheet that shows barcodes for some lines and not others invites
-    // scanning the SKU where a unit serial was required.
-    const modePairs = await Promise.all(
+    // The barcode is decided PER PRODUCT (owner, 2026-09-15): a NORMAL
+    // product carries its SKU barcode and a STRICT one carries none. It
+    // used to be per sheet — one strict product blanked every barcode on
+    // the walk. The risk that guarded against (scanning a SKU where a
+    // serial was required) is handled per line instead: the PDF prints
+    // "STRICT — scan each unit" in that line's barcode cell.
+    const modeByKey = new Map<string, InventoryMode>();
+    await Promise.all(
       [...new Set(reservations.map((r) => `${r.sellerId}|${r.variantId}`))].map(async (key) => {
         const [sellerId, variantId] = key.split('|');
-        return this.modes.resolveForVariant(sellerId ?? '', variantId ?? '');
+        modeByKey.set(key, await this.modes.resolveForVariant(sellerId ?? '', variantId ?? ''));
       }),
     );
-    const strictMode = modePairs.some((m) => m === InventoryMode.STRICT);
+    const strictMode = [...modeByKey.values()].some((m) => m === InventoryMode.STRICT);
 
     const grouped = new Map<string, PickListLine & { forSet: Set<string> }>();
     let totalUnits = 0;
@@ -785,6 +789,7 @@ export class PickBatchService {
         });
         continue;
       }
+      const lineStrict = modeByKey.get(`${r.sellerId}|${r.variantId}`) === InventoryMode.STRICT;
       grouped.set(key, {
         skuCode: r.variant?.skuCode ?? '—',
         productName: r.variant?.product?.name ?? '—',
@@ -808,11 +813,12 @@ export class PickBatchService {
           the sheet and the sticker disagreeing about what is printed on
           the sticker is exactly the drift one function prevents.
         */
-        barcode: strictMode
+        barcode: lineStrict
           ? null
           : r.variant === null || r.variant === undefined
             ? null
             : scannableCodeFor({ barcode: r.variant.barcode, skuCode: r.variant.skuCode }).value,
+        strict: lineStrict,
         forShipments: [],
         forSet: new Set(forShipment === '' ? [] : [forShipment]),
       });

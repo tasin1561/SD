@@ -31,6 +31,7 @@ function payload(over: Partial<PickListPayload> = {}): PickListPayload {
         binCode: 'FLOOR',
         zoneName: 'Main',
         barcode: 'AVIATO-BLAC-BLAC',
+        strict: false,
         forShipments: ['SH-2026-09-000021'],
       },
     ],
@@ -68,8 +69,28 @@ describe('PickListPdfService — the barcode is a barcode (LBL-1/LBL-3)', () => 
     // UNIT-2: each unit carries its own serial and the scan is against
     // THAT. A SKU barcode here invites scanning the right product and
     // the wrong unit, and having it accepted.
-    const bars = await barCount(payload({ strictMode: true }));
+    const bars = await barCount(
+      payload({
+        strictMode: true,
+        lines: [{ ...payload().lines[0]!, barcode: null, strict: true }],
+      }),
+    );
     expect(bars).toBeLessThan(10);
+  });
+
+  it('a MIXED sheet still draws bars for its normal line (per product, owner 2026-09-15)', async () => {
+    // It used to be per sheet: one strict product blanked every barcode.
+    const normal = payload().lines[0]!;
+    const bars = await barCount(
+      payload({
+        strictMode: true,
+        lines: [
+          normal,
+          { ...normal, skuCode: 'STRICT-1', barcode: null, strict: true, binCode: 'A-01-01' },
+        ],
+      }),
+    );
+    expect(bars).toBeGreaterThan(50);
   });
 
   it('a real SKU prints wide enough for a warehouse scanner', () => {

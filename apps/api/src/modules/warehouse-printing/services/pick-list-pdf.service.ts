@@ -14,9 +14,12 @@ export interface PickListLine {
    *  floor when bin tracking is off. */
   readonly binCode: string;
   readonly zoneName: string | null;
-  /** The SKU's own barcode, for scanning at the packing table. NULL in
-   *  STRICT mode, where each unit carries its own serial instead. */
+  /** The SKU's own barcode, for scanning at the packing table. NULL for
+   *  a STRICT product, where each unit carries its own serial instead. */
   readonly barcode: string | null;
+  /** This line's product runs in STRICT mode: no SKU barcode is printed
+   *  for it, and its cell tells the picker to scan each unit's serial. */
+  readonly strict: boolean;
   /** Which parcels this line is destined for — printed small, so a
    *  picker holding a short line knows which orders are affected. */
   readonly forShipments: readonly string[];
@@ -29,6 +32,7 @@ export interface PickListPayload {
   readonly printedByName: string;
   readonly shipmentCount: number;
   readonly totalUnits: number;
+  /** True when ANY line is a STRICT product. */
   readonly strictMode: boolean;
   readonly lines: readonly PickListLine[];
   /**
@@ -50,10 +54,13 @@ export interface PickListPayload {
  * expensive part of picking is walking. A list ordered by order number
  * sends somebody up the same aisle four times.
  *
- * The barcode column is present only when the warehouse is in NORMAL
- * mode. In STRICT mode every unit carries its own serial and the scan at
- * the packing table is against THAT (UNIT-2) — printing a SKU barcode
- * there would invite scanning the wrong thing and having it accepted.
+ * The barcode is decided PER PRODUCT (owner, 2026-09-15). A NORMAL
+ * product carries its SKU barcode; a STRICT product carries none — every
+ * unit has its own serial and the scan at the packing table is against
+ * THAT (UNIT-2), so a SKU barcode beside it would invite scanning the
+ * wrong thing and having it accepted. Its cell says so in words instead,
+ * which is what stops a mixed sheet being read as "scan the SKU" for
+ * every line. The column exists whenever any line is NORMAL.
  */
 @Injectable()
 export class PickListPdfService {
@@ -93,28 +100,35 @@ export class PickListPdfService {
       { width: right - left },
     );
 
+    const showBarcodes = p.lines.some((l) => !l.strict);
     if (p.strictMode) {
-      // Worth saying on the paper: in strict mode the picker must scan a
-      // serial per unit, and a sheet that looks the same in both modes is
-      // how somebody grabs the right SKU and the wrong unit.
+      // Worth saying on the paper: a strict product needs a serial scanned
+      // per unit, and a sheet that looks the same for both kinds is how
+      // somebody grabs the right SKU and the wrong unit.
       doc
         .fontSize(8)
         .font('Helvetica-Bold')
         .fillColor('#000000')
-        .text('STRICT MODE — scan each unit serial; SKU barcodes are not shown', left, 94);
+        .text(
+          showBarcodes
+            ? 'Lines marked STRICT: scan each unit serial — no SKU barcode is shown for them'
+            : 'STRICT MODE — scan each unit serial; SKU barcodes are not shown',
+          left,
+          94,
+        );
     }
 
     let y = p.strictMode ? 112 : 100;
     doc.moveTo(left, y).lineTo(right, y).lineWidth(1).strokeColor('#000000').stroke();
     y += 8;
 
-    const cols = this.columns(left, right, p.strictMode);
+    const cols = this.columns(left, right, !showBarcodes);
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
     doc.text('DONE', cols.tick, y);
     doc.text('LOCATION', cols.loc, y);
     doc.text('QTY', cols.qty, y);
     doc.text('SKU / PRODUCT', cols.sku, y);
-    if (!p.strictMode) doc.text('BARCODE', cols.barcode, y);
+    if (showBarcodes) doc.text('BARCODE', cols.barcode, y);
     y += 12;
     doc.moveTo(left, y).lineTo(right, y).lineWidth(0.5).stroke();
     y += 6;
@@ -125,7 +139,7 @@ export class PickListPdfService {
         doc.addPage();
         y = 40;
       }
-      y = this.drawRow(doc, line, cols, y, p.strictMode, left, right);
+      y = this.drawRow(doc, line, cols, y, showBarcodes, left, right);
     }
 
     if (p.lines.length === 0) {
@@ -198,7 +212,7 @@ export class PickListPdfService {
     line: PickListLine,
     cols: ReturnType<PickListPdfService['columns']>,
     y: number,
-    strict: boolean,
+    showBarcodes: boolean,
     left: number,
     right: number,
   ): number {
@@ -227,7 +241,15 @@ export class PickListPdfService {
       line.variantName === null ? line.productName : `${line.productName} — ${line.variantName}`;
     doc.text(name, cols.sku, y + 11, { width: cols.skuWidth, ellipsis: true });
 
-    if (!strict) this.drawBarcodeCell(doc, line.barcode, cols.barcode, y);
+    const drawsBars = showBarcodes && !line.strict;
+    if (drawsBars) {
+      this.drawBarcodeCell(doc, line.barcode, cols.barcode, y);
+    } else if (showBarcodes) {
+      // A STRICT line on a sheet that has a barcode column: say what to
+      // scan instead, so an empty cell is never read as "no barcode yet".
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
+      doc.text('STRICT — scan each unit', cols.barcode, y + 2, { width: BARCODE_COLUMN_WIDTH });
+    }
 
     // Which parcels need it — small, and only when it is short enough to
     // be useful. A line for fourteen parcels is noise on paper.
@@ -240,11 +262,11 @@ export class PickListPdfService {
       });
     }
 
-    // A non-strict row is always full height: the bars plus the value
-    // printed under them need it, and a row that shrinks to fit would
-    // put the next line's location on top of this one's barcode. In
-    // strict mode there is no barcode cell, so the old height stands.
-    const next = y + (!strict || hasShipmentLine ? ROW_HEIGHT : 28);
+    // A row that draws bars is always full height: the bars plus the
+    // value printed under them need it, and a row that shrinks to fit
+    // would put the next line's location on top of this one's barcode.
+    // A strict row draws none, so the old height stands.
+    const next = y + (drawsBars || hasShipmentLine ? ROW_HEIGHT : 28);
     doc
       .moveTo(left, next - 4)
       .lineTo(right, next - 4)
