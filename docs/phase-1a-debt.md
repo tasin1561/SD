@@ -4,6 +4,68 @@ Tracking explicit deferrals from the original module specs. Each entry names
 the gap, why we deferred it, and where (which later module) we expect to
 pick it up.
 
+**Coverage, read this first (reviewed 2026-09-15).** The module sections below
+were written against Phase 1A and the R-phases and were last revised on
+2026-08-21. Everything after that date — the two-leg consignments, the treasury
+and P&L audits, the courier cost and invoice work, labelling and scanning, the
+carry-forward P&L, and reseller stores (RS-1..RS-12) — is recorded in
+`CLAUDE.md`, not here, and `CLAUDE.md` is the authority where the two disagree.
+The "Open as of 2026-09-15" section directly below is this doc's current list;
+an older entry marked RESOLVED stays for the reasoning that produced it.
+
+---
+
+## Open as of 2026-09-15
+
+Verified against the code on the day of writing, not inherited from an older
+list. Everything here is deferred on purpose; none of it blocks the pilot.
+
+- **A freight share charged before WAL-8 has no reversal.** WAL-8 now withholds
+  the inbound-freight share on an order with no carriage evidence, so this
+  cannot recur — but an order billed a share BEFORE that rule and later called
+  off keeps it. Correcting one is a manual wallet credit. **Pick up:** only if a
+  real order is found in that state; the set is closed and small.
+
+- **`courier.delhivery_invoice_dispute_days` (15) is OUR assumption.** It
+  decides whether a disagreement on a Delhivery invoice is raised HIGH or
+  MEDIUM. Delhivery's actual dispute window is unknown and has never been
+  confirmed with them. **Pick up:** ask Delhivery; the setting is editable, so
+  this is a question, not a code change.
+
+- **Invoices Delhivery will not hand over.** `delhivery-invoice-file:<invoice>`
+  issues stay open by design for an invoice whose itemized file fails to
+  download in their own panel as well as ours (EPH26251703, 13 Sep). They close
+  themselves if the file ever appears. **Pick up:** raise with Delhivery.
+
+- **MPS (multi-piece shipments) and RVP QC are still unwired**, as recorded in
+  the D-phase section below. Neither is blocked on wiring: MPS needs a
+  `shipment_boxes` model, N-waybill claiming, and an AWB saga that breaks
+  CUR-9's once-only gate; RVP QC needs a reverse-pickup creation flow, and RTO
+  today is entirely courier-initiated.
+
+- **Reseller store orders are built and deployed but switched OFF.**
+  `reseller.orders_enabled` is seeded false and is meant to be enabled per
+  seller (`PATCH /admin/sellers/:id/settings/reseller.orders_enabled`) after one
+  clean end-to-end run. This is a rollout gate, not unfinished work.
+
+- **`apps/workers` is built and not deployed.** All 17 BullMQ workers run
+  in-process inside `skydrop-api` under SCALE-1's `WORKERS_ENABLED`. Any design
+  that depends on background work running in a process that serves no HTTP must
+  split the process first, not assume the separation is in effect.
+
+- **`packages/types`, `packages/i18n` and `packages/utils` are README-only
+  placeholders.** Nothing imports them. They are not a plan.
+
+- **Eight dependency advisories remain, all in build/test tooling** whose
+  vulnerable path we never run (the vite dev server, `vitest --ui`). Every
+  production-reachable one was closed on 2026-07-28. The fix is a two-major
+  vitest migration, reasoned about in `pnpm-workspace.yaml`.
+
+- **The e2e suite and the Playwright projects cannot run on the dev machine** —
+  this WSL distro has no Docker — so CI is the first place they execute. A
+  behaviour change must be grepped against the e2e specs before pushing, because
+  nothing local will catch a spec that still asserts the old behaviour.
+
 ---
 
 ## Auth module (Module 1)
@@ -890,8 +952,19 @@ pick it up.
 ### M12 design deferrals
 
 - **`ORDER_VIEW_INCLUDE` is items-only on the admin order detail
-  endpoint** — no `events`, no `delivery_attempts`. This is a single
-  shared root that blocks TWO M12 follow-ups:
+  endpoint — ✅ BOTH HALVES RESOLVED.** The NDR half landed with M13
+  (`NotificationListener.loadOrderContext` reads the latest
+  `delivery_attempts` row per live shipment and humanises
+  `failureReason` into `ndr_reason`). The timeline half landed as the
+  admin ORDER JOURNEY (938a0ab3), which is a different and better
+  answer than the one this entry anticipated: rather than widen the
+  order include and add an events endpoint, the journey composes the
+  history and filters what a seller may see. The endpoint this entry
+  proposed — `GET /admin/orders/:id/events` — was in fact BUILT and
+  then retired on 2026-09-15 once the journey superseded it and the
+  route checker showed nothing called it. Original text follows.
+
+  ~~This is a single shared root that blocks TWO M12 follow-ups:~~
     1. **Lifecycle history timeline on the order detail page.** The
        UI currently renders Recipient / Payment / Physical / Items /
        Notes but NOT the order_events history. A future admin
