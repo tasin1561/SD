@@ -39,9 +39,20 @@ export default function TermsPage(): ReactElement {
   const me = useStoreIdentity();
   const terms = useStoreTerms();
 
-  if (terms.isPending) return <LoadingState label="Loading the terms" rows={4} />;
-  if (terms.isError) {
-    return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
+  if (terms.isPending || terms.isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Terms"
+          subtitle="Who pays which Skydrop fee on your orders, and when you and your seller are paid."
+        />
+        {terms.isPending ? (
+          <LoadingState label="Loading the terms" rows={4} />
+        ) : (
+          <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />
+        )}
+      </div>
+    );
   }
   const t = terms.data;
   return (

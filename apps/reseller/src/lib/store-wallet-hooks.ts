@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
+  type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -100,6 +103,8 @@ export interface SubmitTopupInput {
   readonly amountInr: string;
   readonly transactionRef?: string;
   readonly proof?: File;
+  /** IDEM-1 — minted when the form opens, reused on a retry. */
+  readonly idempotencyKey: string;
 }
 
 export interface RequestWithdrawalInput {
@@ -109,7 +114,12 @@ export interface RequestWithdrawalInput {
   readonly payeeIfsc: string;
   readonly payeeBankName: string;
   readonly note?: string;
+  /** IDEM-1 — minted when the form opens, reused on a retry. */
+  readonly idempotencyKey: string;
 }
+
+/** How many ledger rows one page asks for. */
+export const LEDGER_PAGE_SIZE = 50;
 
 const KEY = ['store-wallet'] as const;
 
@@ -122,11 +132,25 @@ export function useStoreWallet(enabled = true): UseQueryResult<StoreWalletSummar
   });
 }
 
-export function useStoreWalletEntries(enabled = true): UseQueryResult<StoreWalletLedger> {
+/**
+ * The ledger, newest first, a page at a time: each older page asks for
+ * the entries before the last one already shown (`before`), so nothing is
+ * silently cut off at a fixed limit.
+ */
+export function useStoreWalletEntries(
+  enabled = true,
+): UseInfiniteQueryResult<InfiniteData<StoreWalletLedger>> {
   const client = useApiClient();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: [...KEY, 'entries'],
-    queryFn: () => client.request<StoreWalletLedger>('/api/store/wallet/entries?limit=100'),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      client.request<StoreWalletLedger>(
+        `/api/store/wallet/entries?limit=${LEDGER_PAGE_SIZE}${
+          pageParam === null ? '' : `&before=${encodeURIComponent(pageParam)}`
+        }`,
+      ),
+    getNextPageParam: (last) => last.nextCursor,
     enabled,
   });
 }
@@ -199,6 +223,7 @@ export function useSubmitStoreTopup(): UseMutationResult<StoreTopupView, Error, 
         body: {
           bankAccountId: input.bankAccountId,
           amountInr: input.amountInr,
+          idempotencyKey: input.idempotencyKey,
           ...(input.transactionRef === undefined || input.transactionRef === ''
             ? {}
             : { transactionRef: input.transactionRef }),

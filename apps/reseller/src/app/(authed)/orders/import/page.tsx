@@ -14,22 +14,26 @@ import {
   LoadingState,
   PageHeader,
   Section,
+  UploadStatusBadge,
   TBody,
   THead,
   Table,
   Td,
+  TablePaginator,
   Th,
   Tr,
   useToast,
 } from '@skydrop/ui/components';
+import type { BulkUploadStatus } from '@skydrop/db';
 import { serverVerdict } from '@/lib/server-verdict';
 
 const BASE = '/api/store/order-imports';
+const UPLOADS_PAGE_SIZE = 10;
 
 interface UploadRow {
   readonly id: string;
   readonly fileName: string;
-  readonly status: string;
+  readonly status: BulkUploadStatus;
   readonly rowCount: number;
   readonly ordersCreated: number;
   readonly rowsFailed: number;
@@ -78,10 +82,14 @@ export default function StoreOrderImportPage(): ReactElement {
     fileName: string;
     preview: Preview;
   } | null>(null);
+  const [uploadsPage, setUploadsPage] = useState(1);
 
   const uploads = useQuery({
-    queryKey: ['store-order-imports'],
-    queryFn: () => client.request<{ items: readonly UploadRow[] }>(`${BASE}?page=1&pageSize=10`),
+    queryKey: ['store-order-imports', uploadsPage],
+    queryFn: () =>
+      client.request<{ items: readonly UploadRow[]; total: number }>(
+        `${BASE}?page=${uploadsPage}&pageSize=${UPLOADS_PAGE_SIZE}`,
+      ),
     refetchInterval: (q) =>
       (q.state.data?.items ?? []).some((u) => u.status === 'PENDING' || u.status === 'PROCESSING')
         ? 5_000
@@ -142,6 +150,7 @@ export default function StoreOrderImportPage(): ReactElement {
       setPending(null);
       setPicked('');
       if (fileRef.current) fileRef.current.value = '';
+      setUploadsPage(1);
       void qc.invalidateQueries({ queryKey: ['store-order-imports'] });
       void qc.invalidateQueries({ queryKey: ['store-orders'] });
     } catch (err) {
@@ -248,40 +257,55 @@ export default function StoreOrderImportPage(): ReactElement {
             description="Upload a CSV above to place many orders at once."
           />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>File</Th>
-                <Th>Status</Th>
-                <Th align="right">Orders</Th>
-                <Th align="right">Failed</Th>
-                <Th />
-              </Tr>
-            </THead>
-            <TBody>
-              {uploads.data.items.map((u) => (
-                <Tr key={u.id}>
-                  <Td>{u.fileName}</Td>
-                  <Td className="text-xs">{u.status.toLowerCase().replace(/_/g, ' ')}</Td>
-                  <Td align="right">{u.ordersCreated}</Td>
-                  <Td align="right">{u.rowsFailed}</Td>
-                  <Td align="right">
-                    {u.errorReportKey !== null ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          void downloadText(`${BASE}/${u.id}/error-report`, `errors-${u.fileName}`)
-                        }
-                      >
-                        Error report
-                      </Button>
-                    ) : null}
-                  </Td>
+          <>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>File</Th>
+                  <Th>Status</Th>
+                  <Th align="right">Orders</Th>
+                  <Th align="right">Failed</Th>
+                  <Th />
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {uploads.data.items.map((u) => (
+                  <Tr key={u.id}>
+                    <Td>{u.fileName}</Td>
+                    <Td>
+                      <UploadStatusBadge status={u.status} />
+                    </Td>
+                    <Td align="right">{u.ordersCreated}</Td>
+                    <Td align="right">{u.rowsFailed}</Td>
+                    <Td align="right">
+                      {u.errorReportKey !== null ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            void downloadText(
+                              `${BASE}/${u.id}/error-report`,
+                              `errors-${u.fileName}`,
+                            )
+                          }
+                        >
+                          Error report
+                        </Button>
+                      ) : null}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+            <div className="mt-2">
+              <TablePaginator
+                page={uploadsPage}
+                pageSize={UPLOADS_PAGE_SIZE}
+                total={uploads.data.total}
+                onPageChange={setUploadsPage}
+              />
+            </div>
+          </>
         )}
       </Section>
     </div>

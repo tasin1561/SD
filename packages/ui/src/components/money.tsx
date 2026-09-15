@@ -79,6 +79,18 @@ function formatAmount(value: string | number, opts: { decimals: boolean }): stri
   }).format(Math.abs(n));
 }
 
+/**
+ * The same INR formatting as `<Money>`, as a plain string — for the few
+ * places a figure sits inside a sentence (a toast, a dialog title) where
+ * a component cannot go. Never a display conversion: text read next to a
+ * rupee input must stay in rupees.
+ */
+export function formatInr(value: string | number, opts: { decimals?: boolean } = {}): string {
+  const n = typeof value === 'number' ? value : Number(value);
+  const sign = Number.isFinite(n) && n < 0 ? '−' : '';
+  return `${sign}₹${formatAmount(value, { decimals: opts.decimals ?? true })}`;
+}
+
 export interface MoneyProps {
   /** Decimal string (preferred — no float rounding) or number. */
   readonly amount: string | number;

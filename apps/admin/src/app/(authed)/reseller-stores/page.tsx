@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState, type FormEvent, type ReactElement } from 'react';
 import {
   Button,
   EmptyState,
@@ -43,11 +44,39 @@ const STATUSES = [
  * lands it awaiting their approval and tells them; the seller drives the
  * lifecycle after that, so this screen reads it rather than steering it.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function ResellerStoresPage(): ReactElement {
-  const [status, setStatus] = useState('');
-  const stores = useAdminResellerStores({ status });
+  // The filters live in the URL (`?status=&sellerId=`) so a link — a
+  // seller's page, a store's "their other stores" — can open it pre-filled.
+  return (
+    <Suspense fallback={<LoadingState label="Loading reseller stores" rows={5} />}>
+      <ResellerStoresIndex />
+    </Suspense>
+  );
+}
+
+function ResellerStoresIndex(): ReactElement {
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const status = params.get('status') ?? '';
+  const rawSeller = params.get('sellerId') ?? '';
+  const sellerId = UUID_RE.test(rawSeller) ? rawSeller : '';
+  const stores = useAdminResellerStores({ status, sellerId });
+  const sellers = useSellersList({ status: 'APPROVED', search: '', pageSize: 100 });
   const mayCreate = usePermission('reseller.stores.manage');
   const [creating, setCreating] = useState(false);
+
+  function setFilter(key: 'status' | 'sellerId', value: string): void {
+    const next = new URLSearchParams(params.toString());
+    if (value === '') next.delete(key);
+    else next.set(key, value);
+    const qs = next.toString();
+    router.replace(qs === '' ? pathname : `${pathname}?${qs}`);
+  }
+  const sellerOptions = sellers.data?.items ?? [];
+  const sellerKnown = sellerId === '' || sellerOptions.some((o) => o.id === sellerId);
 
   return (
     <div className="space-y-6">
@@ -64,10 +93,29 @@ export default function ResellerStoresPage(): ReactElement {
       />
       <Toolbar>
         <FormField label="Status" htmlFor="rs-status">
-          <Select id="rs-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <Select
+            id="rs-status"
+            value={status}
+            onChange={(e) => setFilter('status', e.target.value)}
+          >
             {STATUSES.map(([v, label]) => (
               <option key={v} value={v}>
                 {label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label="Seller" htmlFor="rs-seller">
+          <Select
+            id="rs-seller"
+            value={sellerId}
+            onChange={(e) => setFilter('sellerId', e.target.value)}
+          >
+            <option value="">Every seller</option>
+            {!sellerKnown ? <option value={sellerId}>The seller in the link</option> : null}
+            {sellerOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.companyName}
               </option>
             ))}
           </Select>
@@ -82,9 +130,9 @@ export default function ResellerStoresPage(): ReactElement {
         <EmptyState
           title="No reseller stores"
           description={
-            status === ''
+            status === '' && sellerId === ''
               ? 'Sellers open their own from their portal; you can open one for a seller here.'
-              : 'None in this status. Choose another.'
+              : 'None match these filters. Choose others.'
           }
         />
       ) : (
@@ -111,7 +159,15 @@ export default function ResellerStoresPage(): ReactElement {
                     {s.name}
                   </Link>
                 </Td>
-                <Td>{s.sellerCompanyName}</Td>
+                <Td>
+                  <Link
+                    href={`/reseller-stores?sellerId=${s.sellerId}`}
+                    className="hover:underline"
+                    title="Only this seller’s stores"
+                  >
+                    {s.sellerCompanyName}
+                  </Link>
+                </Td>
                 <Td>
                   <ResellerStoreStatusBadge status={s.status} />
                 </Td>

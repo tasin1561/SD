@@ -7,6 +7,7 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
+import type { ResellerStoreStatusValue } from '@skydrop/api-client';
 import { useApiClient } from '@skydrop/auth/client';
 
 /**
@@ -50,7 +51,7 @@ export interface StoreScoreRow {
   readonly storeId: string;
   readonly name: string;
   readonly displayName: string | null;
-  readonly status: string | null;
+  readonly status: ResellerStoreStatusValue | null;
   readonly balanceInr: string;
   readonly scorecard: Scorecard;
   readonly sellerNetInr: string;
@@ -110,6 +111,9 @@ export interface StockForecast {
     readonly variantId: string;
     readonly skuCode: string;
     readonly label: string | null;
+    /** The product's name, and a short-lived thumbnail (null when none). */
+    readonly productName: string;
+    readonly imageUrl: string | null;
     readonly onHand: number;
     readonly available: number;
     readonly unitsSold: number;

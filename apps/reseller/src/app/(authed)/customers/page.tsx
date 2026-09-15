@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import {
   EmptyState,
@@ -25,6 +27,7 @@ import { useStoreCustomers } from '@/lib/order-hooks';
  * names or numbers, and no other store does either.
  */
 export default function CustomersPage(): ReactElement {
+  const router = useRouter();
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -83,8 +86,12 @@ export default function CustomersPage(): ReactElement {
               </THead>
               <TBody>
                 {list.data.items.map((c) => (
-                  <Tr key={c.id}>
-                    <Td>{c.name ?? '—'}</Td>
+                  <Tr key={c.id} onActivate={() => router.push(`/customers/${c.id}`)}>
+                    <Td>
+                      <Link href={`/customers/${c.id}`} className="text-accent hover:underline">
+                        {c.name ?? 'No name given'}
+                      </Link>
+                    </Td>
                     <Td className="font-mono text-xs">{c.phoneE164}</Td>
                     <Td className="text-xs">{c.email ?? '—'}</Td>
                     <Td align="right">{c.totalOrdersCount}</Td>

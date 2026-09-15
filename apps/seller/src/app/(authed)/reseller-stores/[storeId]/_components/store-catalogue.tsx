@@ -5,6 +5,7 @@ import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactElement 
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
   Button,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   FormField,
@@ -246,6 +247,7 @@ function EditTermsModal({
   const save = useSaveResellerStoreTerms();
   const upload = useUploadResellerOverlayImage();
   const removeImage = useRemoveResellerOverlayImage();
+  const [removingImageId, setRemovingImageId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState(row.enabled);
   const [ownPrice, setOwnPrice] = useState(row.override !== null);
   const [price, setPrice] = useState<PriceDraft>(draftFrom(row.override ?? row.defaultPrice));
@@ -384,18 +386,38 @@ function EditTermsModal({
                   variant="secondary"
                   size="sm"
                   disabled={removeImage.isPending}
-                  onClick={() =>
-                    removeImage.mutate(
-                      { storeId, variantId: row.variantId, imageId: img.id },
-                      { onError: (err) => toast.error(serverVerdict(err)) },
-                    )
-                  }
+                  onClick={() => setRemovingImageId(img.id)}
                 >
                   Remove
                 </Button>
               </div>
             ))}
           </div>
+          <ConfirmDialog
+            open={removingImageId !== null}
+            onOpenChange={(o) => {
+              if (!o) setRemovingImageId(null);
+            }}
+            title="Remove this picture?"
+            description="The store stops showing it straight away. You can add it again later."
+            confirmLabel="Remove the picture"
+            confirmVariant="destructive"
+            disabled={removeImage.isPending}
+            onConfirm={async () => {
+              if (removingImageId === null) return;
+              try {
+                await removeImage.mutateAsync({
+                  storeId,
+                  variantId: row.variantId,
+                  imageId: removingImageId,
+                });
+                toast.success('Picture removed.');
+              } catch (err) {
+                toast.error(serverVerdict(err));
+              }
+              setRemovingImageId(null);
+            }}
+          />
           <FormField
             label="Add a picture"
             htmlFor="terms-picture"

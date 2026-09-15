@@ -52,9 +52,17 @@ export default function TeamPage(): ReactElement {
   const manage = can(me, 'team.manage');
   const [inviting, setInviting] = useState(false);
 
-  if (team.isPending) return <LoadingState label="Loading the team" rows={4} />;
-  if (team.isError) {
-    return <ErrorState message={serverVerdict(team.error)} retry={() => void team.refetch()} />;
+  if (team.isPending || team.isError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Team" subtitle="Everybody with a login for this store." />
+        {team.isPending ? (
+          <LoadingState label="Loading the team" rows={4} />
+        ) : (
+          <ErrorState message={serverVerdict(team.error)} retry={() => void team.refetch()} />
+        )}
+      </div>
+    );
   }
   const { members, invitations, roles } = team.data;
 
@@ -242,6 +250,7 @@ function InvitationRow({
 }): ReactElement {
   const toast = useToast();
   const revoke = useRevokeStoreInvitation();
+  const [confirming, setConfirming] = useState(false);
   return (
     <Tr>
       <Td>{invitation.fullName}</Td>
@@ -254,18 +263,28 @@ function InvitationRow({
             variant="secondary"
             size="sm"
             disabled={revoke.isPending}
-            onClick={() =>
-              revoke.mutate(
-                { invitationId: invitation.id },
-                {
-                  onSuccess: () => toast.success('Invitation withdrawn.'),
-                  onError: (err) => toast.error(serverVerdict(err)),
-                },
-              )
-            }
+            onClick={() => setConfirming(true)}
           >
             Withdraw
           </Button>
+          <ConfirmDialog
+            open={confirming}
+            onOpenChange={setConfirming}
+            title={`Withdraw the invitation to ${invitation.fullName}?`}
+            description={`The link sent to ${invitation.email} stops working. You can invite them again later.`}
+            confirmLabel="Withdraw invitation"
+            confirmVariant="destructive"
+            disabled={revoke.isPending}
+            onConfirm={async () => {
+              try {
+                await revoke.mutateAsync({ invitationId: invitation.id });
+                toast.success('Invitation withdrawn.');
+              } catch (err) {
+                toast.error(serverVerdict(err));
+              }
+              setConfirming(false);
+            }}
+          />
         </Td>
       ) : null}
     </Tr>

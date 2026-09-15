@@ -14,7 +14,9 @@ import {
   ModalFooter,
   Money,
   PageHeader,
+  ResellerStoreStatusBadge,
   Section,
+  Switch,
   TBody,
   THead,
   Table,
@@ -53,7 +55,7 @@ export default function ResellerReportsPage(): ReactElement {
   const [editing, setEditing] = useState<StoreScoreRow | null>(null);
 
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
         title="Reseller store reports"
         subtitle="How each of your reseller stores is doing, what it earned you, and when one pauses itself for too many returns."
@@ -63,7 +65,7 @@ export default function ResellerReportsPage(): ReactElement {
           </Link>
         }
       />
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
         <FormField label="From" htmlFor="from">
           <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </FormField>
@@ -72,9 +74,9 @@ export default function ResellerReportsPage(): ReactElement {
         </FormField>
       </div>
 
-      {cards.isPending && <LoadingState rows={5} />}
+      {cards.isPending && <LoadingState label="Loading the scorecards" rows={5} />}
       {cards.isError && (
-        <ErrorState message={cards.error.message} retry={() => void cards.refetch()} />
+        <ErrorState message={serverVerdict(cards.error)} retry={() => void cards.refetch()} />
       )}
       {cards.data !== undefined &&
         (cards.data.stores.length === 0 ? (
@@ -83,7 +85,7 @@ export default function ResellerReportsPage(): ReactElement {
             action={<Link href="/reseller-stores">Open a reseller store</Link>}
           />
         ) : (
-          <>
+          <div className="space-y-6">
             <Section
               title="Scorecards"
               subtitle="Orders the store placed in the window. Rates leave out orders whose outcome is not known yet. Margin is transfer price − your unit cost, where the cost is known."
@@ -107,8 +109,17 @@ export default function ResellerReportsPage(): ReactElement {
                   {cards.data.stores.map((s) => (
                     <Tr key={s.storeId}>
                       <Td>
-                        <Link href={`/reseller-stores/${s.storeId}`}>{s.name}</Link>
-                        <span className="text-text-muted block text-xs">{s.status ?? ''}</span>
+                        <Link
+                          href={`/reseller-stores/${s.storeId}`}
+                          className="text-accent hover:underline"
+                        >
+                          {s.name}
+                        </Link>
+                        {s.status !== null ? (
+                          <div className="mt-0.5">
+                            <ResellerStoreStatusBadge status={s.status} />
+                          </div>
+                        ) : null}
                       </Td>
                       <Td align="right">{s.scorecard.placed}</Td>
                       <Td align="right">{pct(s.scorecard.confirmationRatePct)}</Td>
@@ -159,7 +170,14 @@ export default function ResellerReportsPage(): ReactElement {
                   {cards.data.ranking.map((r) => (
                     <Tr key={r.storeId}>
                       <Td>{r.rank}</Td>
-                      <Td>{r.name}</Td>
+                      <Td>
+                        <Link
+                          href={`/reseller-stores/${r.storeId}`}
+                          className="text-accent hover:underline"
+                        >
+                          {r.name}
+                        </Link>
+                      </Td>
                       <Td align="right">
                         <Money amount={r.profitInr} />
                       </Td>
@@ -171,16 +189,16 @@ export default function ResellerReportsPage(): ReactElement {
                 </TBody>
               </Table>
             </Section>
-          </>
+          </div>
         ))}
 
       <Section
         title="Transfer revenue by store"
         subtitle="Every entry on your wallet in the window that names one of the store's orders — credits add, charges subtract. Beside it, the transfer value of orders delivered in the window."
       >
-        {revenue.isPending && <LoadingState rows={3} />}
+        {revenue.isPending && <LoadingState label="Loading transfer revenue" rows={3} />}
         {revenue.isError && (
-          <ErrorState message={revenue.error.message} retry={() => void revenue.refetch()} />
+          <ErrorState message={serverVerdict(revenue.error)} retry={() => void revenue.refetch()} />
         )}
         {revenue.data !== undefined && (
           <Table>
@@ -199,7 +217,12 @@ export default function ResellerReportsPage(): ReactElement {
                 return (
                   <Tr key={s.storeId}>
                     <Td>
-                      {s.name}
+                      <Link
+                        href={`/reseller-stores/${s.storeId}`}
+                        className="text-accent hover:underline"
+                      >
+                        {s.name}
+                      </Link>
                       <span className="text-text-muted block text-xs">
                         {s.rows.length} entries
                         {s.rows[0] === undefined
@@ -229,7 +252,7 @@ export default function ResellerReportsPage(): ReactElement {
       </Section>
 
       {editing !== null && <AutoPauseModal store={editing} onClose={() => setEditing(null)} />}
-    </>
+    </div>
   );
 }
 
@@ -256,10 +279,9 @@ function AutoPauseModal({
       title={`Auto-pause “${store.name}”`}
       description="Pause this store automatically — no new orders — when more of its parcels come back than you allow. Orders already placed carry on; you resume it yourself. After you resume, only parcels that come back afterwards count."
     >
-      <label className="mb-3 flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        Pause automatically
-      </label>
+      <div className="mb-3">
+        <Switch checked={enabled} onChange={setEnabled} label="Pause automatically" />
+      </div>
       <FormField label="Return rate above (%)" htmlFor="rate">
         <Input
           id="rate"

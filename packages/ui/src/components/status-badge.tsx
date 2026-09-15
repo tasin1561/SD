@@ -1,4 +1,5 @@
 import type {
+  BulkUploadStatus,
   EarlyReservationReviewStatus,
   InboundFreightStatus,
   OrderStatus,
@@ -6,6 +7,7 @@ import type {
   ShipmentStatus,
   StockUnitStatus,
   TicketStatus,
+  TopupRequestStatus,
   WithdrawalRequestStatus,
 } from '@skydrop/db';
 import {
@@ -21,6 +23,10 @@ import {
   stockUnitStatusKind,
   ticketStatusKind,
   ticketStatusLabel,
+  topupStatusKind,
+  uploadStatusKind,
+  uploadStatusLabel,
+  topupStatusLabel,
   withdrawalStatusKind,
   type StatusKind,
 } from '@skydrop/ui/status';
@@ -133,6 +139,23 @@ export function WithdrawalStatusBadge({
       label={withdrawalStatusLabel(status, audience)}
     />
   );
+}
+
+/** WAL-2 / RS-6 top-up claim. */
+export function TopupStatusBadge({
+  status,
+  audience = 'staff',
+}: {
+  readonly status: TopupRequestStatus;
+  /** The payer reads a different vocabulary — see `topupStatusLabel`. */
+  readonly audience?: 'staff' | 'payer';
+}): ReactElement {
+  return <StatusBadge kind={topupStatusKind(status)} label={topupStatusLabel(status, audience)} />;
+}
+
+/** ORD-9 CSV upload (orders, products). */
+export function UploadStatusBadge({ status }: { readonly status: BulkUploadStatus }): ReactElement {
+  return <StatusBadge kind={uploadStatusKind(status)} label={uploadStatusLabel(status)} />;
 }
 
 /** R5 early-reservation (at-placement hold) review. */

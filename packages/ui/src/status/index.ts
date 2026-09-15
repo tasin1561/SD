@@ -20,6 +20,7 @@
  * every surface updates.
  */
 import {
+  BulkUploadStatus,
   ConsignmentStatus,
   EarlyReservationReviewStatus,
   InboundFreightStatus,
@@ -27,6 +28,7 @@ import {
   ShipmentStatus,
   StockUnitStatus,
   TicketStatus,
+  TopupRequestStatus,
   WithdrawalRequestStatus,
   InviteLeadStatus,
   WalletEntryDirection,
@@ -318,6 +320,92 @@ export function withdrawalStatusKind(status: WithdrawalRequestStatus): StatusKin
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled WithdrawalRequestStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** WAL-2 / RS-6 top-up claim (seller or reseller store) → kind. */
+export function topupStatusKind(status: TopupRequestStatus): StatusKind {
+  switch (status) {
+    case TopupRequestStatus.PENDING:
+      return 'pending';
+    case TopupRequestStatus.ACCEPTED:
+      return 'delivered';
+    case TopupRequestStatus.REJECTED:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled TopupRequestStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * A CSV upload (orders, products) → kind + words. ORD-9: an import that
+ * finished with error rows is NOT a failure — the good rows are orders —
+ * so it reads as its own thing rather than green or red.
+ */
+export function uploadStatusKind(status: BulkUploadStatus): StatusKind {
+  switch (status) {
+    case BulkUploadStatus.PENDING:
+      return 'pending';
+    case BulkUploadStatus.PROCESSING:
+      return 'in-transit';
+    case BulkUploadStatus.COMPLETED:
+      return 'delivered';
+    case BulkUploadStatus.COMPLETED_WITH_ERRORS:
+      return 'rto';
+    case BulkUploadStatus.FAILED:
+      return 'failed';
+    case BulkUploadStatus.CANCELLED:
+      return 'cancelled';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled BulkUploadStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+export function uploadStatusLabel(status: BulkUploadStatus): string {
+  switch (status) {
+    case BulkUploadStatus.PENDING:
+      return 'Waiting';
+    case BulkUploadStatus.PROCESSING:
+      return 'Importing';
+    case BulkUploadStatus.COMPLETED:
+      return 'Done';
+    case BulkUploadStatus.COMPLETED_WITH_ERRORS:
+      return 'Done, some rows failed';
+    case BulkUploadStatus.FAILED:
+      return 'Failed';
+    case BulkUploadStatus.CANCELLED:
+      return 'Cancelled';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled BulkUploadStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * A top-up claim, in the words of whoever reads it. Staff work a queue
+ * ("is it on the statement yet"); the payer is asking whether their
+ * money is in the wallet.
+ */
+export function topupStatusLabel(
+  status: TopupRequestStatus,
+  audience: 'staff' | 'payer' = 'staff',
+): string {
+  switch (status) {
+    case TopupRequestStatus.PENDING:
+      return audience === 'payer' ? 'Waiting for Skydrop to see it' : 'Waiting for review';
+    case TopupRequestStatus.ACCEPTED:
+      return 'Credited';
+    case TopupRequestStatus.REJECTED:
+      return audience === 'payer' ? 'Not credited' : 'Rejected';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled TopupRequestStatus: ${String(exhaustive)}`);
     }
   }
 }

@@ -6,6 +6,10 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { CreateWebhookEndpointDto } from '../../seller-webhook/dto/create-webhook-endpoint.dto';
 import type { UpdateWebhookEndpointDto } from '../../seller-webhook/dto/update-webhook-endpoint.dto';
+import {
+  unknownWebhookEvents,
+  WEBHOOK_EVENT_CATALOGUE,
+} from '../../seller-webhook-delivery/webhook-event-catalogue';
 
 export interface StoreWebhookView {
   readonly id: string;
@@ -46,6 +50,17 @@ const SELECT = {
 
 type StoreUserRef = { readonly id: string; readonly storeId: string; readonly sellerId: string };
 
+/** A store may subscribe only to codes the pipeline actually sends. */
+function assertKnownEvents(events: readonly string[]): void {
+  const unknown = unknownWebhookEvents(events);
+  if (unknown.length > 0) {
+    throw new BadRequestException({
+      code: 'UNKNOWN_WEBHOOK_EVENT',
+      message: `We never send ${unknown.map((e) => `“${e}”`).join(', ')}. Choose events from the list.`,
+    });
+  }
+}
+
 /**
  * RS-5 — a reseller store's OWN outbound webhook endpoints.
  *
@@ -73,10 +88,16 @@ export class StoreWebhookService {
     });
   }
 
+  /** What a store endpoint may subscribe to — the form's list. */
+  events(): ReadonlyArray<{ readonly code: string; readonly description: string }> {
+    return WEBHOOK_EVENT_CATALOGUE;
+  }
+
   async create(
     user: StoreUserRef,
     body: CreateWebhookEndpointDto,
   ): Promise<StoreWebhookWithSecret> {
+    assertKnownEvents(body.subscribedEvents);
     await this.assertDeliverableUrl(body.url);
     const secretKey = randomBytes(32).toString('hex');
     const row = await this.prisma.client.sellerWebhookEndpoint.create({
@@ -109,8 +130,20 @@ export class StoreWebhookService {
     }
     if (body.name !== undefined) data.name = body.name;
     if (body.description !== undefined) data.description = body.description;
-    if (body.subscribedEvents !== undefined) data.subscribedEvents = body.subscribedEvents;
-    if (body.isActive !== undefined) data.isActive = body.isActive;
+    if (body.subscribedEvents !== undefined) {
+      assertKnownEvents(body.subscribedEvents);
+      data.subscribedEvents = body.subscribedEvents;
+    }
+    if (body.isActive !== undefined) {
+      data.isActive = body.isActive;
+      // Switching an endpoint back on after the pipeline turned it off is a
+      // person saying "try again": the failure streak starts over.
+      if (body.isActive) {
+        data.autoDisabledAt = null;
+        data.autoDisabledReason = null;
+        data.consecutiveFailureCount = 0;
+      }
+    }
     const row = await this.prisma.client.sellerWebhookEndpoint.update({
       where: { id },
       data,

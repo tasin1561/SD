@@ -20,12 +20,7 @@ import {
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
-
-function localNow(): string {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
+import { localNow } from '@/lib/datetime-local';
 
 /**
  * Money leaving for something we bought.

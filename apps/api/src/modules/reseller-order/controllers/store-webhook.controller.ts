@@ -46,6 +46,12 @@ export class StoreWebhookController {
     return this.webhooks.list(user.storeId);
   }
 
+  @Get('events')
+  @ApiOperation({ summary: 'The event codes an endpoint may subscribe to' })
+  events(): ReadonlyArray<{ readonly code: string; readonly description: string }> {
+    return this.webhooks.events();
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Add an endpoint — the signing secret is in this response only' })

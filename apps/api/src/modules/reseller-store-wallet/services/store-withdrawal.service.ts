@@ -67,6 +67,8 @@ export interface StoreWithdrawalRequestInput {
   readonly payeeIfsc: string;
   readonly payeeBankName: string;
   readonly note?: string | null;
+  /** IDEM-1: minted when the store's form opens, reused on a retry. */
+  readonly idempotencyKey?: string | null;
 }
 
 export interface StoreWithdrawalPayInput {
@@ -119,8 +121,86 @@ export class StoreWithdrawalService {
       payeeBankName: required(input.payeeBankName, 'the bank', 2, 120),
     };
     const note = input.note?.trim() || null;
+    const key = input.idempotencyKey ?? null;
+    const material = { storeId: user.storeId, amount, ...payee, note };
 
-    const row = await this.prisma.client.$transaction(async (tx) => {
+    // IDEM-1: the same form sent twice answers with the request it made.
+    const replayed = await this.replayRequest(key, material);
+    if (replayed !== null) return replayed;
+
+    let row: WithdrawalRow;
+    try {
+      row = await this.createRequest(user, amount, payee, note, key);
+    } catch (err) {
+      if (key !== null && isUniqueViolation(err)) {
+        const winner = await this.replayRequest(key, material);
+        if (winner !== null) return winner;
+      }
+      throw err;
+    }
+
+    await this.audit.log({
+      actorType: ActorType.STORE,
+      actorId: user.id,
+      sellerId: user.sellerId,
+      action: 'reseller_store.withdrawal_requested',
+      entityType: 'store_withdrawal_request',
+      entityId: row.id,
+      severity: 'MEDIUM',
+      metadata: { storeId: user.storeId, amountInr: amount.toFixed(2) },
+    });
+    return toView(row);
+  }
+
+  /**
+   * IDEM-1 replay for the store's request form: the row this key wrote, if
+   * it is the same request (amount, payee, note); else refused.
+   */
+  private async replayRequest(
+    key: string | null,
+    m: {
+      storeId: string;
+      amount: Prisma.Decimal;
+      payeeName: string;
+      payeeAccountNumber: string;
+      payeeIfsc: string;
+      payeeBankName: string;
+      note: string | null;
+    },
+  ): Promise<StoreWithdrawalView | null> {
+    if (key === null) return null;
+    const prior = await this.prisma.client.storeWithdrawalRequest.findUnique({
+      where: { idempotencyKey: key },
+      include: VIEW_INCLUDE,
+    });
+    if (prior === null) return null;
+    if (
+      prior.storeId !== m.storeId ||
+      !prior.amountInr.equals(m.amount) ||
+      prior.payeeName !== m.payeeName ||
+      prior.payeeAccountNumber !== m.payeeAccountNumber ||
+      prior.payeeIfsc !== m.payeeIfsc ||
+      prior.payeeBankName !== m.payeeBankName ||
+      prior.note !== m.note
+    ) {
+      throw idempotencyKeyReused('store withdrawal request');
+    }
+    return toView(prior);
+  }
+
+  private async createRequest(
+    user: AuthenticatedStoreUser,
+    amount: Prisma.Decimal,
+    payee: {
+      payeeName: string;
+      payeeAccountNumber: string;
+      payeeIfsc: string;
+      payeeBankName: string;
+    },
+    note: string | null,
+    key: string | null,
+  ): Promise<WithdrawalRow> {
+    return this.prisma.client.$transaction(async (tx) => {
       await this.storeWallet.lockSeller(tx, user.sellerId);
       const store = await this.storeWallet.loadStore(tx, { storeId: user.storeId });
       if (store.walletManagedBy !== ResellerWalletManager.SKYDROP) {
@@ -149,22 +229,11 @@ export class StoreWithdrawalService {
           ...payee,
           note,
           requestedByStoreUserId: user.id,
+          idempotencyKey: key,
         },
         include: VIEW_INCLUDE,
       });
     }, STORE_WALLET_TX_OPTIONS);
-
-    await this.audit.log({
-      actorType: ActorType.STORE,
-      actorId: user.id,
-      sellerId: user.sellerId,
-      action: 'reseller_store.withdrawal_requested',
-      entityType: 'store_withdrawal_request',
-      entityId: row.id,
-      severity: 'MEDIUM',
-      metadata: { storeId: user.storeId, amountInr: amount.toFixed(2) },
-    });
-    return toView(row);
   }
 
   async listForStore(storeId: string): Promise<readonly StoreWithdrawalView[]> {

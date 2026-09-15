@@ -82,9 +82,20 @@ export default function ResellerStorePage(): ReactElement {
   const store = useResellerStore(storeId);
   const [tab, setTab] = useState<StoreTab>('overview');
 
-  if (store.isPending) return <LoadingState label="Loading the store" rows={5} />;
-  if (store.isError) {
-    return <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />;
+  if (store.isPending || store.isError) {
+    // The way back and the page's name stay put while it loads or fails —
+    // an error with nothing around it reads as a broken app, not a store.
+    return (
+      <div className="space-y-6">
+        <BackLink />
+        <PageHeader title="Reseller store" />
+        {store.isPending ? (
+          <LoadingState label="Loading the store" rows={5} />
+        ) : (
+          <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />
+        )}
+      </div>
+    );
   }
   const s = store.data;
   const open = s.status === 'ACTIVE' || s.status === 'PAUSED';
@@ -92,12 +103,24 @@ export default function ResellerStorePage(): ReactElement {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/reseller-stores" className="text-accent hover:text-accent-hover text-sm">
-          ← All reseller stores
-        </Link>
-      </div>
-      <PageHeader title={s.name} subtitle={<ResellerStoreStatusBadge status={s.status} />} />
+      <BackLink />
+      <PageHeader
+        title={s.name}
+        subtitle={<ResellerStoreStatusBadge status={s.status} />}
+        action={
+          <div className="flex flex-wrap gap-3 text-sm">
+            <Link
+              href={`/orders?storeId=${encodeURIComponent(s.id)}`}
+              className="text-accent hover:underline"
+            >
+              Its orders →
+            </Link>
+            <Link href="/reseller-stores/reports" className="text-accent hover:underline">
+              Reports →
+            </Link>
+          </div>
+        }
+      />
 
       <div role="tablist" aria-label="Store sections" className="flex flex-wrap gap-2">
         {(
@@ -123,6 +146,16 @@ export default function ResellerStorePage(): ReactElement {
       {tab === 'catalogue' ? <StoreCatalogue storeId={s.id} final={final} /> : null}
       {tab === 'terms' ? <TermsSection storeId={s.id} final={final} /> : null}
       {tab === 'overview' ? <OverviewTab store={s} open={open} final={final} /> : null}
+    </div>
+  );
+}
+
+function BackLink(): ReactElement {
+  return (
+    <div>
+      <Link href="/reseller-stores" className="text-accent hover:text-accent-hover text-sm">
+        ← All reseller stores
+      </Link>
     </div>
   );
 }
@@ -446,6 +479,7 @@ function WalletCard({
   const toast = useToast();
   const set = useSetWalletManager();
   const [value, setValue] = useState<WalletManager>(store.walletManagedBy);
+  const [confirming, setConfirming] = useState(false);
   return (
     <Card>
       <CardHeader
@@ -469,20 +503,37 @@ function WalletCard({
             variant="secondary"
             size="md"
             disabled={disabled || set.isPending || value === store.walletManagedBy}
-            onClick={() =>
-              set.mutate(
-                { storeId: store.id, body: { walletManagedBy: value } },
-                {
-                  onSuccess: () => toast.success('Saved.'),
-                  onError: (err) => toast.error(serverVerdict(err)),
-                },
-              )
-            }
+            onClick={() => setConfirming(true)}
           >
             Save
           </Button>
         </div>
       </CardBody>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={
+          value === 'SKYDROP'
+            ? `Let Skydrop manage “${store.name}”’s wallet?`
+            : `Manage “${store.name}”’s wallet yourself?`
+        }
+        description={
+          value === 'SKYDROP'
+            ? 'From now on the store tops up to Skydrop’s bank and withdraws through Skydrop. You stop topping it up and paying it yourself.'
+            : 'From now on you top the store up from your own wallet and pay it yourself. It stops topping up to Skydrop’s bank and withdrawing through Skydrop.'
+        }
+        confirmLabel="Change who manages it"
+        disabled={set.isPending}
+        onConfirm={async () => {
+          try {
+            await set.mutateAsync({ storeId: store.id, body: { walletManagedBy: value } });
+            toast.success('Saved.');
+          } catch (err) {
+            toast.error(serverVerdict(err));
+          }
+          setConfirming(false);
+        }}
+      />
     </Card>
   );
 }
@@ -497,6 +548,7 @@ function TeamSection({
   const toast = useToast();
   const invite = useInviteToResellerStore();
   const revoke = useRevokeResellerInvitation();
+  const [withdrawing, setWithdrawing] = useState<{ id: string; email: string } | null>(null);
   const [inviting, setInviting] = useState(false);
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -547,7 +599,10 @@ function TeamSection({
               <Th>Email</Th>
               <Th>Role</Th>
               <Th>State</Th>
-              <Th>Actions</Th>
+              {/* Only an invitation can be acted on here: there is no seller
+                  endpoint to change a store member's role or remove them —
+                  the store's own admins do that on the reseller portal. */}
+              {store.team.invitations.length > 0 ? <Th>Actions</Th> : null}
             </Tr>
           </THead>
           <TBody>
@@ -557,7 +612,7 @@ function TeamSection({
                 <Td>{m.email}</Td>
                 <Td>{m.roleName}</Td>
                 <Td>Last signed in {when(m.lastLoginAt)}</Td>
-                <Td>—</Td>
+                {store.team.invitations.length > 0 ? <Td /> : null}
               </Tr>
             ))}
             {store.team.invitations.map((i) => (
@@ -571,15 +626,7 @@ function TeamSection({
                     variant="secondary"
                     size="sm"
                     disabled={revoke.isPending}
-                    onClick={() =>
-                      revoke.mutate(
-                        { storeId: store.id, invitationId: i.id },
-                        {
-                          onSuccess: () => toast.success('Invitation withdrawn.'),
-                          onError: (err) => toast.error(serverVerdict(err)),
-                        },
-                      )
-                    }
+                    onClick={() => setWithdrawing({ id: i.id, email: i.email })}
                   >
                     Withdraw
                   </Button>
@@ -589,6 +636,27 @@ function TeamSection({
           </TBody>
         </Table>
       )}
+      <ConfirmDialog
+        open={withdrawing !== null}
+        onOpenChange={(o) => {
+          if (!o) setWithdrawing(null);
+        }}
+        title={`Withdraw the invitation to ${withdrawing?.email ?? ''}?`}
+        description="The link in their email stops working. You can invite them again later."
+        confirmLabel="Withdraw it"
+        confirmVariant="destructive"
+        disabled={revoke.isPending}
+        onConfirm={async () => {
+          if (withdrawing === null) return;
+          try {
+            await revoke.mutateAsync({ storeId: store.id, invitationId: withdrawing.id });
+            toast.success('Invitation withdrawn.');
+          } catch (err) {
+            toast.error(serverVerdict(err));
+          }
+          setWithdrawing(null);
+        }}
+      />
       <Modal
         open={inviting}
         onOpenChange={setInviting}

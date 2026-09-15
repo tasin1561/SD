@@ -7,6 +7,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  ConfirmDialog,
   DescriptionList,
   ErrorState,
   FormActions,
@@ -35,10 +36,19 @@ export default function StoreSettingsPage(): ReactElement {
   const profile = useStoreProfile();
   const manage = can(me, 'store.profile.manage');
 
-  if (profile.isPending) return <LoadingState label="Loading store settings" rows={4} />;
-  if (profile.isError) {
+  if (profile.isPending || profile.isError) {
     return (
-      <ErrorState message={serverVerdict(profile.error)} retry={() => void profile.refetch()} />
+      <div className="max-w-3xl space-y-6">
+        <PageHeader
+          title="Store settings"
+          subtitle="How your store presents itself to customers."
+        />
+        {profile.isPending ? (
+          <LoadingState label="Loading store settings" rows={4} />
+        ) : (
+          <ErrorState message={serverVerdict(profile.error)} retry={() => void profile.refetch()} />
+        )}
+      </div>
     );
   }
   const p = profile.data;
@@ -163,6 +173,7 @@ function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean
   const toast = useToast();
   const upload = useUploadStoreLogo();
   const remove = useRemoveStoreLogo();
+  const [confirming, setConfirming] = useState(false);
 
   function pick(e: ChangeEvent<HTMLInputElement>): void {
     const file = e.target.files?.[0];
@@ -207,12 +218,7 @@ function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean
                   variant="secondary"
                   size="sm"
                   disabled={remove.isPending}
-                  onClick={() =>
-                    remove.mutate(undefined, {
-                      onSuccess: () => toast.success('Logo removed.'),
-                      onError: (err) => toast.error(serverVerdict(err)),
-                    })
-                  }
+                  onClick={() => setConfirming(true)}
                 >
                   Remove logo
                 </Button>
@@ -221,6 +227,24 @@ function LogoCard({ logoUrl, manage }: { logoUrl: string | null; manage: boolean
           ) : null}
         </div>
       </CardBody>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Remove your logo?"
+        description="Customers see your store’s name without a logo on tracking and anywhere else it shows, until you upload another."
+        confirmLabel="Remove logo"
+        confirmVariant="destructive"
+        disabled={remove.isPending}
+        onConfirm={async () => {
+          try {
+            await remove.mutateAsync();
+            toast.success('Logo removed.');
+          } catch (err) {
+            toast.error(serverVerdict(err));
+          }
+          setConfirming(false);
+        }}
+      />
     </Card>
   );
 }

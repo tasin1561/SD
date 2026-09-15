@@ -8,6 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
+import type { StoreWalletEntryDirection } from '@skydrop/db';
 
 /**
  * The store's OWN reports and expense book (RS-8 / RS-9). Every path is
@@ -52,7 +53,7 @@ export interface StorePnlReport {
     readonly inInr: string;
     readonly outInr: string;
     readonly byDirection: ReadonlyArray<{
-      readonly direction: string;
+      readonly direction: StoreWalletEntryDirection;
       readonly amountInr: string;
       readonly count: number;
     }>;
@@ -249,10 +250,12 @@ export function useStorePnlMonth(month: string | null): UseQueryResult<StorePnlM
   });
 }
 
-export function useStorePnl(window: Window): UseQueryResult<StorePnlReport> {
+/** The P&L over any half-open window — the "Custom range" on /reports. */
+export function useStorePnl(window: Window, enabled = true): UseQueryResult<StorePnlReport> {
   const client = useApiClient();
   return useQuery({
     queryKey: [...KEY, 'pnl', window.from, window.to],
+    enabled,
     queryFn: () => client.request<StorePnlReport>(`/api/store/reports/pnl?${qs(window)}`),
   });
 }

@@ -96,6 +96,11 @@ export class SubmitStoreTopupDto {
   @IsString()
   @MaxLength(80)
   proofMimeType?: string;
+
+  @ApiPropertyOptional({ description: 'IDEM-1 — generated when the form opens.' })
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }
 
 export class RequestStoreWithdrawalDto {
@@ -129,6 +134,11 @@ export class RequestStoreWithdrawalDto {
   @IsString()
   @MaxLength(500)
   note?: string;
+
+  @ApiPropertyOptional({ description: 'IDEM-1 — generated when the form opens.' })
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }
 
 export class StoreTopupAcceptDto {

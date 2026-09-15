@@ -2,15 +2,12 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
+import type { ResellerStoreStatus, TicketStatus } from '@skydrop/db';
 import {
   Button,
   EmptyState,
   ErrorState,
-  FormField,
-  Input,
   LoadingState,
-  Modal,
-  ModalFooter,
   Money,
   PageHeader,
   Section,
@@ -22,11 +19,10 @@ import {
   Td,
   Th,
   Tr,
-  useToast,
 } from '@skydrop/ui/components';
+import { resellerStoreStatusLabel, ticketStatusKind, ticketStatusLabel } from '@skydrop/ui/status';
 import { istDateLabel } from '@/lib/ist-day';
 import {
-  usePauseResellerStore,
   useResellerDisputes,
   useResellerFloat,
   useResellerFraudFlags,
@@ -34,6 +30,7 @@ import {
 } from '@/lib/reseller-analysis-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { PauseStoreModal } from '../_components/pause-store-modal';
 
 /**
  * Reseller stores across sellers (RS-9): fraud flags (a threshold crossed,
@@ -50,7 +47,7 @@ export default function ResellerAnalysisPage(): ReactElement {
   const [pausing, setPausing] = useState<FraudFlag | null>(null);
 
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
         title="Reseller analysis"
         subtitle="Fraud signals, disputes and float across every seller's reseller stores."
@@ -69,9 +66,9 @@ export default function ResellerAnalysisPage(): ReactElement {
             : `${fraud.data.storesChecked} stores with orders in the last ${fraud.data.thresholds.windowDays} days. Thresholds are the reseller.fraud_* settings; each flag raises a system issue that clears itself once back under.`
         }
       >
-        {fraud.isPending && <LoadingState rows={4} />}
+        {fraud.isPending && <LoadingState label="Loading fraud flags" rows={4} />}
         {fraud.isError && (
-          <ErrorState message={fraud.error.message} retry={() => void fraud.refetch()} />
+          <ErrorState message={serverVerdict(fraud.error)} retry={() => void fraud.refetch()} />
         )}
         {fraud.data !== undefined &&
           (fraud.data.flags.length === 0 ? (
@@ -90,7 +87,9 @@ export default function ResellerAnalysisPage(): ReactElement {
                 {fraud.data.flags.map((f) => (
                   <Tr key={`${f.rule}-${f.storeId}`}>
                     <Td>
-                      <Link href={`/reseller-stores/${f.storeId}`}>{f.storeName}</Link>
+                      <Link href={`/reseller-stores/${f.storeId}`} className="text-accent">
+                        {f.storeName}
+                      </Link>
                       <span className="text-text-muted block text-xs">{f.sellerName}</span>
                     </Td>
                     <Td>
@@ -116,9 +115,12 @@ export default function ResellerAnalysisPage(): ReactElement {
       </Section>
 
       <Section title="Disputes" subtitle="Tickets on reseller orders placed in the last year.">
-        {disputes.isPending && <LoadingState rows={3} />}
+        {disputes.isPending && <LoadingState label="Loading disputes" rows={3} />}
         {disputes.isError && (
-          <ErrorState message={disputes.error.message} retry={() => void disputes.refetch()} />
+          <ErrorState
+            message={serverVerdict(disputes.error)}
+            retry={() => void disputes.refetch()}
+          />
         )}
         {disputes.data !== undefined && (
           <>
@@ -147,15 +149,36 @@ export default function ResellerAnalysisPage(): ReactElement {
                   {disputes.data.openTickets.map((t) => (
                     <Tr key={t.id}>
                       <Td>
-                        <Link href={`/tickets/${t.id}`}>{t.ticketNumber}</Link>
+                        <Link href={`/tickets/${t.id}`} className="text-accent">
+                          {t.ticketNumber}
+                        </Link>
                         <span className="text-text-muted block text-xs">{t.subject}</span>
                       </Td>
                       <Td>
-                        {t.storeName}
+                        {t.storeId !== null ? (
+                          <Link href={`/reseller-stores/${t.storeId}`} className="text-accent">
+                            {t.storeName}
+                          </Link>
+                        ) : (
+                          t.storeName
+                        )}
                         <span className="text-text-muted block text-xs">{t.sellerName}</span>
                       </Td>
-                      <Td>{t.orderNumber}</Td>
-                      <Td>{t.status}</Td>
+                      <Td>
+                        {t.orderId !== null ? (
+                          <Link href={`/orders/${t.orderId}`} className="text-accent font-mono">
+                            {t.orderNumber}
+                          </Link>
+                        ) : (
+                          <span className="font-mono">{t.orderNumber || '—'}</span>
+                        )}
+                      </Td>
+                      <Td>
+                        <StatusBadge
+                          kind={ticketStatusKind(t.status as TicketStatus)}
+                          label={ticketStatusLabel(t.status as TicketStatus)}
+                        />
+                      </Td>
                       <Td>{istDateLabel(t.createdAt)}</Td>
                     </Tr>
                   ))}
@@ -171,9 +194,9 @@ export default function ResellerAnalysisPage(): ReactElement {
           title="Float and advances"
           subtitle="Store balances (a negative one is its seller's exposure), money credited to a store before the courier paid, and Instant Pay advanced on reseller orders."
         >
-          {float.isPending && <LoadingState rows={3} />}
+          {float.isPending && <LoadingState label="Loading float and advances" rows={3} />}
           {float.isError && (
-            <ErrorState message={float.error.message} retry={() => void float.refetch()} />
+            <ErrorState message={serverVerdict(float.error)} retry={() => void float.refetch()} />
           )}
           {float.data !== undefined && (
             <>
@@ -229,9 +252,18 @@ export default function ResellerAnalysisPage(): ReactElement {
                     ...s.stores.map((st) => (
                       <Tr key={st.storeId}>
                         <Td>
-                          <span className="pl-4">{st.storeName}</span>
+                          <Link
+                            href={`/reseller-stores/${st.storeId}`}
+                            className="text-accent pl-4"
+                          >
+                            {st.storeName}
+                          </Link>
                           <span className="text-text-muted block pl-4 text-xs">
-                            {st.status ?? ''} · limit ₹{st.negativeLimitInr}
+                            {st.status === null
+                              ? ''
+                              : `${resellerStoreStatusLabel(st.status as ResellerStoreStatus)} · `}
+                            may go below zero by{' '}
+                            <Money amount={st.negativeLimitInr} convert={false} />
                           </span>
                         </Td>
                         <Td align="right">
@@ -254,49 +286,13 @@ export default function ResellerAnalysisPage(): ReactElement {
         </Section>
       )}
 
-      {pausing !== null && <PauseModal flag={pausing} onClose={() => setPausing(null)} />}
-    </>
-  );
-}
-
-function PauseModal({ flag, onClose }: { flag: FraudFlag; onClose: () => void }): ReactElement {
-  const toast = useToast();
-  const pause = usePauseResellerStore();
-  const [reason, setReason] = useState('');
-  return (
-    <Modal
-      open
-      tone="critical"
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-      title={`Pause “${flag.storeName}”?`}
-      description="It stops placing new orders now. Orders already placed carry on, and only its seller can resume it. The seller and the store read your reason."
-    >
-      <FormField label="Why" htmlFor="reason" required>
-        <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-      </FormField>
-      <ModalFooter>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant="destructive"
-          disabled={pause.isPending}
-          onClick={() =>
-            pause.mutate(
-              { storeId: flag.storeId, reason },
-              {
-                onSuccess: () => {
-                  toast.success('Paused.');
-                  onClose();
-                },
-                onError: (err) => toast.error(serverVerdict(err)),
-              },
-            )
-          }
-        >
-          Pause
-        </Button>
-      </ModalFooter>
-    </Modal>
+      {pausing !== null && (
+        <PauseStoreModal
+          storeId={pausing.storeId}
+          storeName={pausing.storeName}
+          onClose={() => setPausing(null)}
+        />
+      )}
+    </div>
   );
 }

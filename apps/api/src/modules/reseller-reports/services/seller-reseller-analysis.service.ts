@@ -99,7 +99,11 @@ export interface TransferRevenueReport {
 export interface StockForecastRow {
   readonly variantId: string;
   readonly skuCode: string;
+  /** The product's name (the SKU code when the catalogue has none). */
+  readonly productName: string;
   readonly label: string | null;
+  /** A presigned thumbnail (rule 5b); null when none, or the lookup failed. */
+  readonly imageUrl: string | null;
   readonly onHand: number;
   readonly available: number;
   readonly unitsSold: number;
@@ -433,9 +437,10 @@ export class SellerResellerAnalysisService {
       });
       for (const i of items) sold.set(i.variantId, (sold.get(i.variantId) ?? 0) + i.quantity);
     }
-    const [stock, variants] = await Promise.all([
+    const [stock, variants, thumbs] = await Promise.all([
       this.stock.getSellableStockLive(sellerId, variantIds),
       this.catalog.getVariantsByIds([...variantIds]),
+      this.thumbnails(variantIds),
     ]);
     const rows: StockForecastRow[] = variantIds.map((id) => {
       const s = stock.get(id) ?? { onHand: 0, available: 0 };
@@ -446,7 +451,9 @@ export class SellerResellerAnalysisService {
       return {
         variantId: id,
         skuCode: v?.skuCode ?? id,
+        productName: v?.productName ?? v?.skuCode ?? id,
         label: v?.variantLabel ?? null,
+        imageUrl: thumbs.get(id) ?? null,
         onHand: s.onHand,
         available: s.available,
         unitsSold: units,
@@ -462,5 +469,14 @@ export class SellerResellerAnalysisService {
         a.skuCode.localeCompare(b.skuCode),
     );
     return { asOf: now.toISOString(), windowDays, reorderDays, rows };
+  }
+
+  /** Rule 5b, fail-open: a lookup failure costs the pictures, never the report. */
+  private async thumbnails(variantIds: readonly string[]): Promise<ReadonlyMap<string, string>> {
+    try {
+      return await this.catalog.thumbnailUrlsByVariant(variantIds);
+    } catch {
+      return new Map();
+    }
   }
 }

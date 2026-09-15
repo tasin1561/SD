@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import type { ShipmentStatus } from '@skydrop/db';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import {
   Button,
@@ -17,6 +18,7 @@ import {
   PageHeader,
   ProductThumb,
   Section,
+  ShipmentStatusBadge,
   TBody,
   THead,
   Table,
@@ -241,9 +243,14 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               {o.shipments
                 .filter((s) => s.awbNumber !== null)
                 .map((s) => (
-                  <div key={s.awbNumber ?? s.courierCode} className="text-sm">
-                    Waybill <span className="font-mono">{s.awbNumber}</span> · {s.courierCode} ·{' '}
-                    {s.status.toLowerCase().replace(/_/g, ' ')}
+                  <div
+                    key={s.awbNumber ?? s.courierCode}
+                    className="flex flex-wrap items-center gap-2 text-sm"
+                  >
+                    <span>
+                      Waybill <span className="font-mono">{s.awbNumber}</span> · {s.courierCode}
+                    </span>
+                    <ShipmentStatusBadge status={s.status as ShipmentStatus} />
                   </div>
                 ))}
             </CardBody>

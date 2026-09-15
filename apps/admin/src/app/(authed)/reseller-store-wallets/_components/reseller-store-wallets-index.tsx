@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import {
   Button,
@@ -21,15 +22,21 @@ import {
   Td,
   Textarea,
   Th,
+  TopupStatusBadge,
   Tr,
   WithdrawalStatusBadge,
+  formatInr,
   openExternalWhenReady,
   useToast,
 } from '@skydrop/ui/components';
+import { topupStatusLabel, withdrawalStatusLabel } from '@skydrop/ui/status';
+import { TopupRequestStatus, WithdrawalRequestStatus } from '@skydrop/db';
+import { localNow } from '@/lib/datetime-local';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import {
   useAcceptStoreTopup,
   useAdminStoreTopups,
+  useAdminStoreWallet,
   useAdminStoreWithdrawals,
   useApproveStoreWithdrawal,
   usePayStoreWithdrawal,
@@ -48,8 +55,19 @@ function when(iso: string | null): string {
     : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-const TOPUP_STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED'] as const;
-const WITHDRAWAL_STATUSES = ['PENDING', 'APPROVED', 'PAID', 'REJECTED'] as const;
+const TOPUP_STATUSES: readonly TopupRequestStatus[] = [
+  TopupRequestStatus.PENDING,
+  TopupRequestStatus.ACCEPTED,
+  TopupRequestStatus.REJECTED,
+];
+const WITHDRAWAL_STATUSES: readonly WithdrawalRequestStatus[] = [
+  WithdrawalRequestStatus.PENDING,
+  WithdrawalRequestStatus.APPROVED,
+  WithdrawalRequestStatus.PAID,
+  WithdrawalRequestStatus.REJECTED,
+];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * RS-6 — the two queues a SKYDROP-managed reseller store feeds.
@@ -61,6 +79,16 @@ const WITHDRAWAL_STATUSES = ['PENDING', 'APPROVED', 'PAID', 'REJECTED'] as const
  * that pays it — the cash leaves as the seller's.
  */
 export function ResellerStoreWalletsIndex(): ReactElement {
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const raw = params.get('storeId');
+  // `?storeId=` scopes both queues to one store (linked from the store's
+  // wallet panel). Anything that is not a uuid is ignored rather than
+  // sent — the API would refuse it, and an empty queue would read as
+  // "nothing waiting" when the truth is "that link was wrong".
+  const storeId = raw !== null && UUID_RE.test(raw) ? raw : null;
+  const scoped = useAdminStoreWallet(storeId ?? '', storeId !== null);
   return (
     <div className="space-y-6">
       <PageHeader
@@ -72,17 +100,33 @@ export function ResellerStoreWalletsIndex(): ReactElement {
           </Link>
         }
       />
-      <TopupQueue />
-      <WithdrawalQueue />
+      {storeId !== null ? (
+        <p className="text-text-muted text-sm" role="status">
+          Showing one store only:{' '}
+          <Link href={`/reseller-stores/${storeId}`} className="text-accent hover:underline">
+            {scoped.data?.storeName ?? 'this store'}
+          </Link>{' '}
+          ·{' '}
+          <button
+            type="button"
+            className="text-accent hover:underline"
+            onClick={() => router.replace(pathname)}
+          >
+            show every store
+          </button>
+        </p>
+      ) : null}
+      <TopupQueue storeId={storeId} />
+      <WithdrawalQueue storeId={storeId} />
     </div>
   );
 }
 
-function TopupQueue(): ReactElement {
+function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElement {
   const toast = useToast();
   const mayReview = usePermission('money.topups.review');
   const [status, setStatus] = useState<string>('PENDING');
-  const list = useAdminStoreTopups(status);
+  const list = useAdminStoreTopups(status, storeId);
   const accept = useAcceptStoreTopup();
   const reject = useRejectStoreTopup();
   const proof = useStoreTopupProofUrl();
@@ -107,7 +151,7 @@ function TopupQueue(): ReactElement {
           topupId: reviewing.id,
           ...(note.trim() === '' ? {} : { note: note.trim() }),
         });
-        toast.success(`Credited ₹${reviewing.amountInr} to ${reviewing.storeName}.`);
+        toast.success(`Credited ${formatInr(reviewing.amountInr)} to ${reviewing.storeName}.`);
       } else {
         await reject.mutateAsync({ topupId: reviewing.id, reason: note.trim() });
         toast.success('Rejected — the store reads your reason.');
@@ -134,7 +178,7 @@ function TopupQueue(): ReactElement {
         <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
           {TOPUP_STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {topupStatusLabel(s)}
             </option>
           ))}
         </Select>
@@ -146,7 +190,11 @@ function TopupQueue(): ReactElement {
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : list.data.length === 0 ? (
         <EmptyState
-          title={status === 'PENDING' ? 'Nothing waiting' : `No ${status.toLowerCase()} claims`}
+          title={
+            status === 'PENDING'
+              ? 'Nothing waiting'
+              : `No claims ${topupStatusLabel(status as TopupRequestStatus).toLowerCase()}`
+          }
           description="Claims appear here when a store records a transfer to us."
         />
       ) : (
@@ -196,7 +244,7 @@ function TopupQueue(): ReactElement {
                   ) : null}
                 </Td>
                 <Td className="text-xs">
-                  {t.status}
+                  <TopupStatusBadge status={t.status} />
                   {t.reviewNote !== null && t.reviewNote !== '' ? (
                     <div className="text-text-faint">{t.reviewNote}</div>
                   ) : null}
@@ -239,7 +287,7 @@ function TopupQueue(): ReactElement {
         onOpenChange={(o) => (o ? undefined : close())}
         title={
           intent === 'ACCEPT'
-            ? `Credit ₹${reviewing?.amountInr ?? ''} to ${reviewing?.storeName ?? ''}?`
+            ? `Credit ${reviewing === null ? '' : formatInr(reviewing.amountInr)} to ${reviewing?.storeName ?? ''}?`
             : `Reject this claim?`
         }
         description={
@@ -282,14 +330,16 @@ function TopupQueue(): ReactElement {
   );
 }
 
-function WithdrawalQueue(): ReactElement {
+function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): ReactElement {
   const toast = useToast();
   const mayReview = usePermission('money.withdrawals.review');
   const mayPay = usePermission('money.remittances.manage');
   const [status, setStatus] = useState<string>('PENDING');
-  const list = useAdminStoreWithdrawals(status);
+  const list = useAdminStoreWithdrawals(status, storeId);
   const approve = useApproveStoreWithdrawal();
   const reject = useRejectStoreWithdrawal();
+  const [approving, setApproving] = useState<AdminStoreWithdrawal | null>(null);
+  const [approveError, setApproveError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<AdminStoreWithdrawal | null>(null);
   const [paying, setPaying] = useState<AdminStoreWithdrawal | null>(null);
   const [reason, setReason] = useState('');
@@ -303,7 +353,7 @@ function WithdrawalQueue(): ReactElement {
         <Select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
           {WITHDRAWAL_STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {withdrawalStatusLabel(s)}
             </option>
           ))}
         </Select>
@@ -315,7 +365,11 @@ function WithdrawalQueue(): ReactElement {
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : list.data.length === 0 ? (
         <EmptyState
-          title={status === 'PENDING' ? 'Nothing waiting' : `No ${status.toLowerCase()} requests`}
+          title={
+            status === 'PENDING'
+              ? 'Nothing waiting'
+              : `No ${withdrawalStatusLabel(status as WithdrawalRequestStatus).toLowerCase()} requests`
+          }
         />
       ) : (
         <Table>
@@ -365,16 +419,10 @@ function WithdrawalQueue(): ReactElement {
                       <Button
                         variant="secondary"
                         size="sm"
-                        disabled={approve.isPending}
-                        onClick={() =>
-                          approve.mutate(
-                            { requestId: w.id },
-                            {
-                              onSuccess: () => toast.success('Approved.'),
-                              onError: (err) => toast.error(serverVerdict(err)),
-                            },
-                          )
-                        }
+                        onClick={() => {
+                          setApproving(w);
+                          setApproveError(null);
+                        }}
                       >
                         Approve
                       </Button>
@@ -404,6 +452,54 @@ function WithdrawalQueue(): ReactElement {
           </TBody>
         </Table>
       )}
+      <Modal
+        open={approving !== null}
+        onOpenChange={(o) => (o ? undefined : setApproving(null))}
+        title={
+          approving === null
+            ? 'Approve this withdrawal?'
+            : `Approve paying ${approving.storeName} ${formatInr(approving.amountInr)}?`
+        }
+        description={
+          approving === null
+            ? undefined
+            : `To ${approving.payeeName} · ${approving.payeeBankName} · ${approving.payeeAccountNumber} · ${approving.payeeIfsc}. Approving re-checks what the store may withdraw; nothing is paid until the payout is recorded.`
+        }
+      >
+        <div className="space-y-4">
+          {approveError !== null ? (
+            <p role="alert" className="text-critical text-sm">
+              {approveError}
+            </p>
+          ) : null}
+          <ModalFooter>
+            <Button type="button" variant="secondary" size="md" onClick={() => setApproving(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              disabled={approve.isPending}
+              onClick={() => {
+                if (approving === null) return;
+                approve.mutate(
+                  { requestId: approving.id },
+                  {
+                    onSuccess: () => {
+                      toast.success('Approved.');
+                      setApproving(null);
+                    },
+                    onError: (err) => setApproveError(serverVerdict(err)),
+                  },
+                );
+              }}
+            >
+              {approve.isPending ? 'Approving…' : 'Approve the withdrawal'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
       <Modal
         open={rejecting !== null}
         onOpenChange={(o) => (o ? undefined : setRejecting(null))}
@@ -465,7 +561,8 @@ function PayModal({
   const accounts = usePlatformBankAccounts();
   const [accountId, setAccountId] = useState('');
   const [reference, setReference] = useState('');
-  const [paidOn, setPaidOn] = useState(() => new Date().toISOString().slice(0, 16));
+  // Local wall clock — the input is read back as LOCAL time (see datetime-local.ts).
+  const [paidOn, setPaidOn] = useState(localNow);
   const [error, setError] = useState<string | null>(null);
   // IDEM-1: generated when the form opens, reused on a retry.
   const [idempotencyKey] = useState(() => crypto.randomUUID());
@@ -481,7 +578,7 @@ function PayModal({
         paidAt: new Date(paidOn).toISOString(),
         idempotencyKey,
       });
-      toast.success(`Recorded paying ${request.storeName} ₹${request.amountInr}.`);
+      toast.success(`Recorded paying ${request.storeName} ${formatInr(request.amountInr)}.`);
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -492,7 +589,7 @@ function PayModal({
     <Modal
       open
       onOpenChange={(o) => (o ? undefined : onClose())}
-      title={`Record paying ${request.storeName} ₹${request.amountInr}`}
+      title={`Record paying ${request.storeName} ${formatInr(request.amountInr)}`}
       description={`To ${request.payeeName} · ${request.payeeBankName} · ${request.payeeAccountNumber} · ${request.payeeIfsc}. The cash leaves as ${request.sellerCompanyName}’s.`}
     >
       <div className="space-y-4">
