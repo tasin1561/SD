@@ -10,7 +10,6 @@ import {
   PageHeader,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { WebhookEndpointView, WebhookEndpointWithSecret } from '@skydrop/api-client';
 import {
   useDeleteWebhookEndpoint,
@@ -20,6 +19,7 @@ import {
 } from '@/lib/api-hooks';
 import { WebhookFormModal } from './webhook-form-modal';
 import { SecretRevealCard } from './secret-reveal-card';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Seller webhook endpoint list. Inline status (active / disabled /
@@ -40,13 +40,7 @@ export function WebhooksIndex(): ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
+    return serverVerdict(e, 'Action failed');
   }
 
   async function onDelete(id: string): Promise<void> {
@@ -168,13 +162,7 @@ function EndpointRow({
   const toast = useToast();
 
   function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
+    return serverVerdict(e, 'Action failed');
   }
 
   async function onRotate(): Promise<void> {

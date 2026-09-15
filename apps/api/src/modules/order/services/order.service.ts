@@ -1410,26 +1410,6 @@ export class OrderService {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  /** Admin / staff timeline — every event regardless of
-   *  isVisibleToSeller. No ownership scoping; staff JWT is the gate. */
-  async listEventsForAdmin(orderId: string): Promise<OrderEventView[]> {
-    const order = await this.prisma.client.order.findFirst({
-      where: { id: orderId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!order) {
-      throw new NotFoundException({
-        code: 'ORDER_NOT_FOUND',
-        message: `Order ${orderId} not found`,
-      });
-    }
-    return this.prisma.client.orderEvent.findMany({
-      where: { orderId },
-      orderBy: { createdAt: 'asc' },
-      select: ORDER_EVENT_SELECT,
-    });
-  }
-
   /**
    * Soft-delete (discard) a DRAFT order. Only DRAFT is discardable — a
    * submitted/active order must be cancelled, not deleted, so its history

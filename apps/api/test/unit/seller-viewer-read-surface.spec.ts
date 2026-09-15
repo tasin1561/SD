@@ -86,7 +86,10 @@ const READABLE_GETS: Readonly<Record<string, readonly string[]>> = {
     // rules stay closed to this role.
     'money-in-flight',
   ],
-  'seller-tracking.controller.ts': ['', 'order/:orderId', ':shipmentId'],
+  // 'order/:orderId' was RETIRED on 2026-09-15: nothing called it —
+  // the seller's order page reads its parcels through the journey,
+  // and the tracking page lists then opens one by shipment id.
+  'seller-tracking.controller.ts': ['', ':shipmentId'],
   'seller-order-journey.controller.ts': [':id/journey'],
 };
 

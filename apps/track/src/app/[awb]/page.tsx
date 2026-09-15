@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import Link from 'next/link';
 import { apiOrigin } from '@/lib/api-origin';
 import type { PublicShipmentDisplayStatus, PublicTrackingResponse } from '@/lib/types';
@@ -12,27 +12,47 @@ import { type Locale, statusKey, t } from '@/lib/i18n';
 
 /**
  * Public AWB detail — MISSION CONTROL skin. Status card as an
- * instrument panel; scan history as a console event log. The API
- * returns one generic 404 body for every miss (TRK-8) so the page
- * shows a single "not found" regardless.
+ * instrument panel; scan history as a console event log.
+ *
+ * Three outcomes, kept apart on purpose:
+ *   - FOUND: the parcel.
+ *   - NOT_FOUND: the API's ONE generic 404 body for every miss (TRK-8),
+ *     so the page shows a single "not found" and never says why.
+ *   - UNAVAILABLE: we could not ask — rate-limited (429), a server error
+ *     (5xx), a malformed body, a network failure or a timeout. Showing
+ *     "not found" here told a customer their parcel did not exist when
+ *     the only thing that failed was the lookup, and gave them nothing
+ *     to do but doubt the AWB. This says "try again" and offers it.
  */
-async function fetchTracking(awb: string): Promise<PublicTrackingResponse | null> {
+type TrackingLookup =
+  | { readonly kind: 'found'; readonly data: PublicTrackingResponse }
+  | { readonly kind: 'not_found' }
+  | { readonly kind: 'unavailable' };
+
+/** Long enough for a slow API, short enough that a hung one still
+ *  answers the customer instead of spinning until the proxy gives up. */
+const LOOKUP_TIMEOUT_MS = 10_000;
+
+async function fetchTracking(awb: string): Promise<TrackingLookup> {
   const url = `${apiOrigin()}/public/tracking/${encodeURIComponent(awb)}`;
   try {
     const res = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       cache: 'no-store',
+      signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
     });
-    if (res.status === 404) return null;
+    if (res.status === 404) return { kind: 'not_found' };
     if (!res.ok) {
+      // 429 and 5xx land here, and so does any other unexpected status:
+      // none of them is evidence that the parcel does not exist.
       console.error('Tracking lookup failed', { awb, status: res.status });
-      return null;
+      return { kind: 'unavailable' };
     }
-    return (await res.json()) as PublicTrackingResponse;
+    return { kind: 'found', data: (await res.json()) as PublicTrackingResponse };
   } catch (e) {
     console.error('Tracking lookup error', { awb, err: (e as Error).message });
-    return null;
+    return { kind: 'unavailable' };
   }
 }
 
@@ -86,6 +106,48 @@ function Header({ locale }: { locale: Locale }): ReactElement {
   );
 }
 
+/** The centred console frame shared by the two "no parcel to show"
+ *  states — not found, and could-not-ask. */
+function MissShell({ locale, children }: { locale: Locale; children: ReactNode }): ReactElement {
+  return (
+    <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
+      <div aria-hidden className="console-grid absolute inset-0" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ opacity: 'var(--map-veil)' }}
+      >
+        <CorridorConsole />
+      </div>
+      <div className="absolute top-4 right-4 sm:top-5 sm:right-6 z-20 flex items-center gap-2">
+        <ThemeToggle />
+        <LocaleSwitcher active={locale} />
+      </div>
+      <div className="relative w-full max-w-md">
+        <div className="mb-8 text-center">
+          <Link
+            href="/"
+            className="font-display inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-fg-strong"
+          >
+            <img
+              src="/brand/skydrop-icon.svg"
+              alt=""
+              aria-hidden="true"
+              width={74}
+              height={36}
+              className="h-9 w-auto shrink-0 select-none"
+              draggable={false}
+            />
+            {t(locale, 'brand')}
+          </Link>
+          <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
+        </div>
+        <div className="panel ticks p-6 sm:p-7">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default async function AwbPage({
   params,
 }: {
@@ -94,61 +156,58 @@ export default async function AwbPage({
   const { awb } = await params;
   const decoded = decodeURIComponent(awb);
   const locale = await getActiveLocale();
-  const data = await fetchTracking(decoded);
+  const lookup = await fetchTracking(decoded);
 
-  if (!data) {
+  if (lookup.kind === 'not_found') {
     return (
-      <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
-        <div aria-hidden className="console-grid absolute inset-0" />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{ opacity: 'var(--map-veil)' }}
+      <MissShell locale={locale}>
+        <div className="telemetry text-saffron mb-3">no signal</div>
+        <h1 className="text-fg-strong text-lg font-semibold mb-2">{t(locale, 'notFoundTitle')}</h1>
+        <p className="font-mono text-sm text-fg-strong mb-2">{decoded}</p>
+        <p className="text-fg-muted text-sm mb-5">{t(locale, 'notFoundBody')}</p>
+        <Link
+          href="/"
+          className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-sky text-accent-fg text-sm font-medium hover:bg-sky-deep transition-colors"
         >
-          <CorridorConsole />
-        </div>
-        <div className="absolute top-4 right-4 sm:top-5 sm:right-6 z-20 flex items-center gap-2">
-          <ThemeToggle />
-          <LocaleSwitcher active={locale} />
-        </div>
-        <div className="relative w-full max-w-md">
-          <div className="mb-8 text-center">
-            <Link
-              href="/"
-              className="font-display inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-fg-strong"
-            >
-              <img
-                src="/brand/skydrop-icon.svg"
-                alt=""
-                aria-hidden="true"
-                width={74}
-                height={36}
-                className="h-9 w-auto shrink-0 select-none"
-                draggable={false}
-              />
-              {t(locale, 'brand')}
-            </Link>
-            <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
-          </div>
-          <div className="panel ticks p-6 sm:p-7">
-            <div className="telemetry text-saffron mb-3">no signal</div>
-            <h1 className="text-fg-strong text-lg font-semibold mb-2">
-              {t(locale, 'notFoundTitle')}
-            </h1>
-            <p className="font-mono text-sm text-fg-strong mb-2">{decoded}</p>
-            <p className="text-fg-muted text-sm mb-5">{t(locale, 'notFoundBody')}</p>
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-sky text-accent-fg text-sm font-medium hover:bg-sky-deep transition-colors"
-            >
-              {t(locale, 'tryAnother')}
-            </Link>
-          </div>
-        </div>
-      </div>
+          {t(locale, 'tryAnother')}
+        </Link>
+      </MissShell>
     );
   }
 
+  if (lookup.kind === 'unavailable') {
+    return (
+      <MissShell locale={locale}>
+        <div className="telemetry text-saffron mb-3" data-tracking-unavailable>
+          link degraded
+        </div>
+        <h1 className="text-fg-strong text-lg font-semibold mb-2">
+          {t(locale, 'unavailableTitle')}
+        </h1>
+        <p className="font-mono text-sm text-fg-strong mb-2">{decoded}</p>
+        <p className="text-fg-muted text-sm mb-5">{t(locale, 'unavailableBody')}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* A plain anchor to the same path is a full reload, which
+              re-runs the no-store lookup — no client script needed, so
+              nothing here has to carry the CSP nonce. */}
+          <a
+            href={`/${encodeURIComponent(decoded)}`}
+            className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-sky text-accent-fg text-sm font-medium hover:bg-sky-deep transition-colors"
+          >
+            {t(locale, 'retry')}
+          </a>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center h-11 px-3 text-fg-muted hover:text-fg-strong text-sm transition-colors"
+          >
+            {t(locale, 'tryAnother')}
+          </Link>
+        </div>
+      </MissShell>
+    );
+  }
+
+  const data = lookup.data;
   const tone = STATUS_TONE[data.currentStatus] ?? 'var(--sky)';
 
   return (

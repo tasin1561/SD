@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
+import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Seller invitation acceptance form. Mirrors LoginForm's pattern
@@ -80,16 +81,7 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
       // via cookie→/me, mounts AuthProvider.
       window.location.assign('/dashboard');
     } catch (err) {
-      if (err instanceof ApiError) {
-        const b = err.body as { code?: unknown; message?: unknown } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const msg = typeof b?.message === 'string' ? b.message : err.message;
-        setError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Registration failed.');
-      }
+      setError(serverVerdict(err, 'Registration failed.'));
       setSubmitting(false);
     }
   }

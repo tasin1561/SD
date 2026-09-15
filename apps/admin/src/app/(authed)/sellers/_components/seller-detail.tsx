@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { ArrowLeft, Copy, Eye } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
-import { ApiError } from '@skydrop/api-client';
 import { useRevealBankAccount, useSellerDetail, useUpdateSellerInitials } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import {
@@ -24,6 +23,8 @@ import { StatusActionPanel } from './status-action-panel';
 import { IdentityCorrectionPanel } from './identity-correction-panel';
 import { SellerSettingsSection } from './seller-settings-section';
 import { CreditAfterConfirmationPanel } from './credit-after-confirmation-panel';
+import { SellerCourierLinksSection } from './seller-courier-links-section';
+import { BulkDequeuePanel } from './bulk-dequeue-panel';
 import { serverVerdict } from '@/lib/server-verdict';
 
 // Was a check against the role NAME, which cannot see a role somebody
@@ -67,6 +68,12 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
             action={
               <div className="flex flex-wrap items-center gap-2">
                 <SellerStatusBadge status={detail.data.status} />
+                <Link
+                  href={`/orders?sellerId=${sellerId}`}
+                  className="text-accent text-sm hover:underline"
+                >
+                  This seller&apos;s orders →
+                </Link>
                 {canTransfer && (
                   <Link
                     href={`/wallet-transfers?sellerId=${sellerId}`}
@@ -162,7 +169,10 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
           </Section>
 
           <Section title="Account hold">
-            <RestrictionPanel sellerId={detail.data.id} canManage={canChangeStatus} />
+            <div className="space-y-4">
+              <RestrictionPanel sellerId={detail.data.id} canManage={canChangeStatus} />
+              <BulkDequeuePanel sellerId={detail.data.id} sellerName={detail.data.companyName} />
+            </div>
           </Section>
 
           <Section title="Bank account">
@@ -181,6 +191,10 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
               page because "what is this seller on" is a question you ask
               while looking at the seller. */}
           <SellerSettingsSection sellerId={detail.data.id} />
+          {/* CACC-1 weighted routing: which courier accounts carry this
+              seller's parcels. Beside the settings because it is the same
+              question — what has been agreed with this seller. */}
+          <SellerCourierLinksSection sellerId={detail.data.id} />
           <CreditAfterConfirmationPanel sellerId={detail.data.id} />
         </>
       )}
@@ -211,14 +225,7 @@ function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): Re
       });
       setRevealed(res.accountNumber ?? '(no account number captured)');
     } catch (e) {
-      if (e instanceof ApiError) {
-        const b = e.body as { code?: unknown; message?: unknown } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const msg = typeof b?.message === 'string' ? b.message : e.message;
-        setError(code ? `[${code}] ${msg}` : msg);
-      } else {
-        setError(e instanceof Error ? e.message : 'Reveal failed');
-      }
+      setError(serverVerdict(e, 'Reveal failed'));
     }
   }
 

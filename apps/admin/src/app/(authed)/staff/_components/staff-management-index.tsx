@@ -14,7 +14,6 @@ import {
   Table,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { CreatedStaffInvitation } from '@skydrop/api-client';
 import {
   useDeactivateStaffUser,
@@ -28,6 +27,7 @@ import { InviteStaffModal } from './invite-staff-modal';
 import { InviteLinkRevealCard } from './invite-link-reveal-card';
 import { useRoles } from '@/lib/rbac-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 
 // The hardcoded seven are gone: roles are rows now, so the options come
 // from the server and include anything created under Roles.
@@ -50,13 +50,7 @@ export function StaffManagementIndex(): ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
+    return serverVerdict(e, 'Action failed');
   }
 
   async function onRoleChange(id: string, roleId: string): Promise<void> {

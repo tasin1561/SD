@@ -47,6 +47,7 @@ import {
   toE164,
   toLocalDigits,
 } from '@/lib/phone';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Manual order form.
@@ -480,26 +481,19 @@ export function NewOrderForm(): ReactElement {
       if (err instanceof ApiError) {
         const b = err.body as {
           code?: unknown;
-          message?: unknown;
           details?: { existingOrders?: unknown };
         } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const msg = typeof b?.message === 'string' ? b.message : err.message;
         // The one refusal that gets a conversation rather than a
         // verdict: the seller has to be able to SEE what they would be
         // duplicating, because the question is "is this the same order?"
-        if (code === 'DUPLICATE_ORDER_SUSPECTED' && Array.isArray(b?.details?.existingOrders)) {
+        if (b?.code === 'DUPLICATE_ORDER_SUSPECTED' && Array.isArray(b.details?.existingOrders)) {
           setDuplicates(b.details.existingOrders as ReadonlyArray<DuplicateCandidate>);
           setPendingAction(action);
           setBusy(null);
           return;
         }
-        setError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to create order.');
       }
+      setError(serverVerdict(err, 'Failed to create order.'));
       setBusy(null);
     }
   }

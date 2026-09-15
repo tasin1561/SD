@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 
 import { AlertTriangle, ShieldAlert } from 'lucide-react';
 import { OrderCancellationReason, OrderStatus, PackageType, PaymentMode } from '@skydrop/db';
 import {
-  ApiError,
   type ForceMutationFields,
   type ForceMutationRequest,
   type ForceMutationResult,
@@ -20,6 +19,7 @@ import {
   Modal,
   ModalFooter,
 } from '@skydrop/ui/components';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * The god-mode override surface (CP2.10).
@@ -217,22 +217,13 @@ export function ForceMutationDialog({
       onSuccess(result);
       onOpenChange(false);
     } catch (err) {
-      if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
-        const b = err.body as { code?: unknown; message?: unknown };
-        const code = typeof b.code === 'string' ? b.code : null;
-        const msg = typeof b.message === 'string' ? b.message : err.message;
-        // Server-verdict verbatim — including
-        //   FORCE_MUTATION_REASON_TOO_SHORT (we already gate but the
-        //     server is the ground truth)
-        //   FORCE_MUTATION_RISK_NOT_ACKNOWLEDGED
-        //   FORCE_MUTATION_NOOP
-        // The UI does NOT reimplement these as client-side errors.
-        setServerError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setServerError(err.message);
-      } else {
-        setServerError('Force mutation failed.');
-      }
+      // Server-verdict verbatim — including
+      //   FORCE_MUTATION_REASON_TOO_SHORT (we already gate but the
+      //     server is the ground truth)
+      //   FORCE_MUTATION_RISK_NOT_ACKNOWLEDGED
+      //   FORCE_MUTATION_NOOP
+      // The UI does NOT reimplement these as client-side errors.
+      setServerError(serverVerdict(err, 'Force mutation failed.'));
       setStage('edit');
     }
   }

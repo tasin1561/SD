@@ -8,6 +8,7 @@ import {
   Input,
   Modal,
   ModalFooter,
+  Money,
   Select,
   Textarea,
   useToast,
@@ -317,7 +318,7 @@ export function RecordFreightModal({
                             )}
                           </td>
                           <td className="px-2 py-1.5 text-right tabular-nums">
-                            {lineTotal(l).toFixed(2)}
+                            <Money amount={lineTotal(l)} currency="INR" convert={false} />
                           </td>
                         </tr>
                       );
@@ -329,7 +330,7 @@ export function RecordFreightModal({
                         Freight total, before any pay-later service charge
                       </td>
                       <td className="text-text-primary px-2 py-1.5 text-right font-medium tabular-nums">
-                        ₹{grandTotal.toFixed(2)}
+                        <Money amount={grandTotal} currency="INR" convert={false} />
                       </td>
                     </tr>
                   </tfoot>

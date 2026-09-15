@@ -306,7 +306,8 @@ export function CourierWalletIndex(): ReactElement {
                             <Money amount={r.amountInr} currency="INR" convert={false} />
                             {r.bankAmountInr !== null && r.bankAmountInr !== r.amountInr ? (
                               <div className="text-status-failed-fg mt-0.5 text-xs">
-                                ours ₹{r.bankAmountInr}
+                                ours{' '}
+                                <Money amount={r.bankAmountInr} currency="INR" convert={false} />
                               </div>
                             ) : null}
                           </Td>

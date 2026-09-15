@@ -247,17 +247,4 @@ export class SellerTrackingService {
       })),
     };
   }
-
-  /** The timeline for an ORDER, so the seller never needs the AWB. */
-  async forOrder(sellerId: string, orderId: string): Promise<TrackedShipmentDetail[]> {
-    const shipments = await this.prisma.client.shipment.findMany({
-      where: {
-        deletedAt: null,
-        orderShipments: { some: { orderId, order: { sellerId, deletedAt: null } } },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    });
-    return Promise.all(shipments.map((s) => this.detail(sellerId, s.id)));
-  }
 }

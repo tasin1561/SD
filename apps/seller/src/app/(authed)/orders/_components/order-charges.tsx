@@ -3,6 +3,7 @@
 import type { ReactElement } from 'react';
 import type { OrderChargeView } from '@skydrop/api-client';
 import { useOrderCharges } from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 import {
   Card,
   CardBody,
@@ -35,7 +36,12 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
     );
   }
   if (charges.isError) {
-    return <ErrorState message={charges.error?.message ?? 'Failed to load charges.'} />;
+    return (
+      <ErrorState
+        message={serverVerdict(charges.error, 'Failed to load charges.')}
+        retry={() => void charges.refetch()}
+      />
+    );
   }
   if (!charges.data || charges.data.length === 0) {
     return (

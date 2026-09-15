@@ -15,7 +15,6 @@ import {
 } from '@skydrop/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import { ApiError } from '@skydrop/api-client';
 import type { CallOrderSnapshot, PulledAssignment } from '@skydrop/api-client';
 import { callBrandLine } from '@/lib/call-brand';
 import { PhoneToCall } from '@/components/phone-to-call';
@@ -33,6 +32,7 @@ import { useServiceabilityCheck } from '@/lib/ops-hooks';
 import { useTransitionTicket } from '@/lib/ops-hooks';
 import Link from 'next/link';
 import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
   value: CallOutcome;
@@ -159,13 +159,7 @@ export function CallCenterStation(): ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(err: unknown): string {
-    if (err instanceof ApiError) {
-      const b = err.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : err.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return err instanceof Error ? err.message : 'Operation failed';
+    return serverVerdict(err, 'Operation failed');
   }
 
   function resetCall(): void {

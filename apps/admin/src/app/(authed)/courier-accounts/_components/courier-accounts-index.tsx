@@ -37,6 +37,8 @@ import { usePermission } from '@/lib/use-permission';
  * carried it, so this list is the root of that traceability. Sellers
  * with no explicit link route to the pair's DEFAULT account, which is
  * why exactly one row per (courier, environment) may hold that flag.
+ * A seller is linked to specific accounts, with weights, from the
+ * "Courier accounts" section of that seller's own page (CACC-1).
  *
  * Credentials are write-only from here: they are encrypted at rest and
  * never returned by any endpoint (CUR-1). There is deliberately no
@@ -51,7 +53,7 @@ export function CourierAccountsIndex(): ReactElement {
     <div>
       <PageHeader
         title="Courier accounts"
-        subtitle="Multiple accounts per courier, with per-seller weighted routing. Every shipment records the account that carried it."
+        subtitle="Multiple accounts per courier. Route a seller to specific accounts, by weight, from that seller's page; every shipment records the account that carried it."
         action={
           canWrite ? (
             <Button variant="primary" size="md" onClick={() => setCreating(true)}>

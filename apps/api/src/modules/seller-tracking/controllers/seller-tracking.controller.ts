@@ -59,24 +59,6 @@ export class SellerTrackingController {
     return { items };
   }
 
-  /**
-   * By ORDER, so the seller never has to know an AWB.
-   *
-   * Declared before `:shipmentId` — Nest matches routes in declaration
-   * order, and `order/...` would otherwise be read as a shipment id.
-   */
-  @Get('order/:orderId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Every parcel on one order, with each one's timeline" })
-  async forOrder(
-    @CurrentSeller() seller: AuthenticatedSeller,
-    @Param('orderId') orderId: string,
-  ): Promise<{ items: TrackedShipmentDetail[] }> {
-    await this.restrictions.assertAllowed(seller.id, SellerCapability.TRACKING_VIEW);
-    const items = await this.svc.forOrder(seller.id, orderId);
-    return { items };
-  }
-
   @Get(':shipmentId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'One parcel, with every scan and every delivery attempt' })

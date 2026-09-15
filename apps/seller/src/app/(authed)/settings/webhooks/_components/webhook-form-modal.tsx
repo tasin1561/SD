@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Button, FormField, Input, Modal, ModalFooter, Textarea } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type {
   CreateWebhookEndpointRequest,
   UpdateWebhookEndpointRequest,
@@ -10,6 +9,7 @@ import type {
   WebhookEndpointWithSecret,
 } from '@skydrop/api-client';
 import { useCreateWebhookEndpoint, useUpdateWebhookEndpoint } from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Create / edit form. Events entered as comma-separated; the server
@@ -50,13 +50,7 @@ export function WebhookFormModal(
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
+    return serverVerdict(e, 'Action failed');
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {

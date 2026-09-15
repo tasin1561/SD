@@ -162,61 +162,12 @@ export interface GoodsReceiptView {
   createdAt: string;
 }
 
-export function useGoodsReceipts(query: {
-  status?: string;
-  page?: number;
-  pageSize?: number;
-}): UseQueryResult<Paginated<GoodsReceiptView>> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['seller-goods-receipts', query],
-    queryFn: () =>
-      client.request<Paginated<GoodsReceiptView>>(`/api/seller/goods-receipts${qs(query)}`),
-  });
-}
-
 export interface DeclareReceiptLine {
   variantId: string;
   expectedQty: number;
   unitCostInr?: number;
   manufacturedAt?: string;
   expiresAt?: string;
-}
-
-export function useCreateGoodsReceipt(): UseMutationResult<
-  GoodsReceiptView,
-  Error,
-  {
-    lines: readonly DeclareReceiptLine[];
-    warehouseId?: string;
-    expectedArrivalAt?: string;
-    sellerReference?: string;
-  }
-> {
-  const client = useApiClient();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body) =>
-      client.request<GoodsReceiptView>('/api/seller/goods-receipts', { method: 'POST', body }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-goods-receipts'] }),
-  });
-}
-
-export function useCancelGoodsReceipt(): UseMutationResult<
-  GoodsReceiptView,
-  Error,
-  { id: string }
-> {
-  const client = useApiClient();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id }) =>
-      client.request<GoodsReceiptView>(`/api/seller/goods-receipts/${id}/cancel`, {
-        method: 'POST',
-        body: {},
-      }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-goods-receipts'] }),
-  });
 }
 
 /**

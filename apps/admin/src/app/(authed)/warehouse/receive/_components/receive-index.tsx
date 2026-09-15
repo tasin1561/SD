@@ -124,7 +124,7 @@ export function ReceiveIndex(): ReactElement {
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No goods receipts match"
-          description="Sellers declare expected stock via /seller/goods-receipts before shipping. Once they do, those receipts appear here for the warehouse team to receive."
+          description="Sellers declare stock as a consignment from Inbound in their portal before shipping. Once it arrives, its goods receipt appears here for the warehouse team to count."
         />
       ) : (
         <Table>

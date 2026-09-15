@@ -3979,16 +3979,6 @@ export function usePickBatches(search: string): UseQueryResult<PickBatchView[], 
   });
 }
 
-export function usePickBatch(batchId: string | null): UseQueryResult<PickBatchView, Error> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['admin', 'pick-batch', batchId],
-    enabled: batchId !== null,
-    queryFn: () =>
-      client.request<PickBatchView>(`/api/admin/warehouse/printing/pick-batches/${batchId ?? ''}`),
-  });
-}
-
 export function useProductLocations(query: string): UseQueryResult<ProductLocationRow[], Error> {
   const client = useApiClient();
   return useQuery({

@@ -6,6 +6,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { AuthConsoleHeader } from '@/components/auth-console/console-shell';
 import { TiltPanel } from '@/lib/tilt';
 import { ApiError } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 
 const labelClass = 'block text-text-muted text-xs mb-1';
 const fieldClass =
@@ -80,13 +81,7 @@ export function AcceptInvitationForm({
   const [dead, setDead] = useState<{ code: string; message: string } | null>(null);
 
   function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Failed to accept invitation';
+    return serverVerdict(e, 'Failed to accept invitation');
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {

@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, ErrorNote, FormField, Input, Modal, useToast } from '@skydrop/ui/components';
+import {
+  Button,
+  ErrorNote,
+  FormField,
+  Input,
+  Modal,
+  Money,
+  useToast,
+} from '@skydrop/ui/components';
 import { useCancelOrder } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -123,7 +131,9 @@ export function CancelOrderDialog({
         {chargedInr != null && Number(chargedInr) > 0 && (
           <div className="text-text-body text-sm">
             The delivery fee of{' '}
-            <span className="font-medium tabular-nums">₹{Number(chargedInr).toFixed(2)}</span>{' '}
+            <span className="font-medium">
+              <Money amount={chargedInr} />
+            </span>{' '}
             already charged for this order goes back to your wallet.
           </div>
         )}

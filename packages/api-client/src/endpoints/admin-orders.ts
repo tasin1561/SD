@@ -21,6 +21,10 @@ export interface ListOrdersQuery {
   readonly source?: OrderSource;
   readonly search?: string;
   readonly sellerId?: string;
+  /** ISO instant, inclusive lower bound on `placedAt`. */
+  readonly placedFrom?: string;
+  /** ISO instant, inclusive upper bound on `placedAt`. */
+  readonly placedTo?: string;
   readonly page?: number;
   readonly pageSize?: number;
 }

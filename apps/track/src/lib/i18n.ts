@@ -41,6 +41,12 @@ type Dict = {
   readonly notFoundTitle: string;
   readonly notFoundBody: string;
   readonly tryAnother: string;
+  /** The lookup itself failed (rate limit, server error, network) —
+   *  deliberately NOT "not found", which would tell a customer their
+   *  parcel does not exist when we simply could not ask. */
+  readonly unavailableTitle: string;
+  readonly unavailableBody: string;
+  readonly retry: string;
   readonly trackAnother: string;
   readonly updated: string;
   readonly destination: string;
@@ -81,6 +87,10 @@ const EN: Dict = {
   notFoundBody:
     "We couldn't find a parcel for this number. Double-check the AWB from your confirmation email or SMS. Tracking may take up to 24 hours to become active after dispatch.",
   tryAnother: 'Try another AWB',
+  unavailableTitle: 'Tracking is temporarily unavailable',
+  unavailableBody:
+    "We couldn't reach the tracking service just now. Your parcel is not affected — please try again in a minute.",
+  retry: 'Try again',
   trackAnother: 'Track another',
   updated: 'Updated',
   destination: 'Destination',
@@ -116,6 +126,10 @@ const HI: Dict = {
   notFoundBody:
     'हमें इस नंबर के लिए कोई पार्सल नहीं मिला। कृपया अपनी कन्फर्मेशन ईमेल या SMS से AWB दोबारा जांचें। डिस्पैच के बाद ट्रैकिंग सक्रिय होने में 24 घंटे तक लग सकते हैं।',
   tryAnother: 'दूसरा AWB आज़माएँ',
+  unavailableTitle: 'ट्रैकिंग अभी अस्थायी रूप से उपलब्ध नहीं है',
+  unavailableBody:
+    'हम अभी ट्रैकिंग सेवा से संपर्क नहीं कर सके। आपके पार्सल पर इसका कोई असर नहीं है — कृपया एक मिनट बाद फिर से प्रयास करें।',
+  retry: 'फिर से प्रयास करें',
   trackAnother: 'दूसरा ट्रैक करें',
   updated: 'अद्यतन',
   destination: 'गंतव्य',

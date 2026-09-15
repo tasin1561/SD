@@ -15,9 +15,9 @@ import {
   Table,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { CreatedSellerApiKey } from '@skydrop/api-client';
 import { useApiKeysList, useCreateApiKey, useRevokeApiKey } from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 
 export function ApiKeysIndex(): ReactElement {
   const list = useApiKeysList();
@@ -31,13 +31,7 @@ export function ApiKeysIndex(): ReactElement {
   const [pendingRevoke, setPendingRevoke] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const m = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${m}` : m;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
+    return serverVerdict(e, 'Action failed');
   }
 
   async function onCreate(e: FormEvent): Promise<void> {

@@ -310,6 +310,17 @@ EXPECTED_ORPHANS = {
     # audit row, both already on screens; the trigger is for a runbook or
     # a terminal after their billing pages change.
     'admin/courier-portal/delhivery-invoice-check',
+    # Superseded by the pack BOX (PACK-1): the bench opens a box by
+    # scanning the label, so nothing on a screen pulls "the next parcel"
+    # any more. Kept because PackQueueService.pullNext is the WMS-2
+    # FOR UPDATE OF s SKIP LOCKED contract, and warehouse-pack-flow.e2e
+    # pins that concurrency through this endpoint.
+    'warehouse/packs/next',
+    # Retired from the seller portal by 46345fe4 (a consignment is the
+    # journey; the seller declares from Inbound). The list / create /
+    # cancel routes stay because ten e2e specs seed stock through them,
+    # and the edit panel still reads and patches one receipt.
+    'seller/goods-receipts',
     # Called, but deliberately not through `request()`: the single-flight
     # refresh in packages/api-client uses the raw `fetchImpl` (a 401 from
     # inside request() would recurse), and it composes the path from

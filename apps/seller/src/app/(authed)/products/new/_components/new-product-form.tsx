@@ -20,7 +20,7 @@ import {
   Tr,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCreateProduct,
   useCreateVariant,
@@ -558,12 +558,8 @@ export function NewProductForm(): ReactElement {
   }
 
   function fmtError(err: unknown): string {
-    if (err instanceof ApiError) {
-      const body = err.body as { code?: string; message?: string } | undefined;
-      // FE-2: the server's verdict, verbatim.
-      return body?.code ? `[${body.code}] ${body.message ?? err.message}` : err.message;
-    }
-    return err instanceof Error ? err.message : 'Something went wrong.';
+    // FE-2: the server's verdict, verbatim.
+    return serverVerdict(err, 'Something went wrong.');
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {

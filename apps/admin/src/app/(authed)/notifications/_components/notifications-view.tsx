@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { Button, Card, CardBody, PageHeader, Section } from '@skydrop/ui/components';
+import { Button, Card, CardBody, PageHeader, Section, SkeletonRows } from '@skydrop/ui/components';
 import { usePermission } from '@/lib/use-permission';
 import {
   useMarkAllNotificationsRead,
@@ -84,7 +84,7 @@ export function NotificationsView(): ReactElement {
       <Card>
         <CardBody>
           {feed.isLoading ? (
-            <p className="text-text-muted text-sm">Loading…</p>
+            <SkeletonRows rows={4} cols={2} />
           ) : items.length === 0 ? (
             <p className="text-text-muted text-sm">
               Nothing yet. Anything needing you will appear here.

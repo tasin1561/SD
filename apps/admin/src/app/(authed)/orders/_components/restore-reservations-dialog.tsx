@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { ApiError, type RestoreReservationsResult } from '@skydrop/api-client';
+import { type RestoreReservationsResult } from '@skydrop/api-client';
 import { useRestoreReservations } from '@/lib/api-hooks';
 import { Button, FormField, Textarea, Modal, ModalFooter } from '@skydrop/ui/components';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * The mirror of the release beside it: giving a committed order back a
@@ -51,16 +52,7 @@ export function RestoreReservationsDialog({
       onSuccess(result);
       close();
     } catch (err) {
-      if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
-        const b = err.body as { code?: unknown; message?: unknown };
-        const code = typeof b.code === 'string' ? b.code : null;
-        const msg = typeof b.message === 'string' ? b.message : err.message;
-        setServerError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setServerError(err.message);
-      } else {
-        setServerError('Failed to restore reservations.');
-      }
+      setServerError(serverVerdict(err, 'Failed to restore reservations.'));
     }
   }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Button,
   Card,
@@ -77,13 +78,32 @@ export function LeadsIndex(): ReactElement {
   const [tab, setTab] = useState(0);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<InviteLead | null>(null);
+  // The page lives in the URL, so a reload or a shared link lands on the
+  // same slice. The list is served 50 at a time; without a page the
+  // 51st request was unreachable.
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const pageParam = Number(params.get('page') ?? '1');
+  const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
+  const setPage = (next: number): void => {
+    const sp = new URLSearchParams(params.toString());
+    if (next <= 1) sp.delete('page');
+    else sp.set('page', String(next));
+    const qs = sp.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const active = TABS[tab] ?? TABS[0]!;
   const q = useInviteLeads({
     ...(active.status ? { status: active.status } : {}),
     ...(search.trim() ? { search: search.trim() } : {}),
+    ...(page > 1 ? { page } : {}),
   });
   const items = q.data?.items ?? [];
+  const total = q.data?.total ?? 0;
+  const pageSize = q.data?.pageSize ?? 50;
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     // No max-width. `<main>` is flex-1 with no cap of its own, so a
@@ -108,7 +128,10 @@ export function LeadsIndex(): ReactElement {
                 key={t.label}
                 variant={i === tab ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setTab(i)}
+                onClick={() => {
+                  setTab(i);
+                  setPage(1);
+                }}
               >
                 {t.label}
                 {count !== undefined && count > 0 ? ` (${count})` : ''}
@@ -118,7 +141,10 @@ export function LeadsIndex(): ReactElement {
         </div>
         <Input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            if (page > 1) setPage(1);
+          }}
           placeholder="Company, name, email or phone"
           className="sm:w-72"
         />
@@ -196,6 +222,35 @@ export function LeadsIndex(): ReactElement {
             })}
           </TBody>
         </Table>
+      )}
+
+      {total > pageSize && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="text-text-muted">
+            {total} request{total === 1 ? '' : 's'}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage(Math.max(1, page - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-text-faint text-xs tabular-nums">
+              {page} / {lastPage}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={page >= lastPage}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
 
       <LeadDrawer lead={selected} onClose={() => setSelected(null)} />

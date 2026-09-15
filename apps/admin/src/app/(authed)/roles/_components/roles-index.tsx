@@ -4,6 +4,7 @@ import { useState, type ReactElement } from 'react';
 import { Lock, Users } from 'lucide-react';
 import {
   Button,
+  ConfirmDialog,
   ErrorState,
   LoadingState,
   PageHeader,
@@ -39,16 +40,24 @@ export function RolesIndex(): ReactElement {
   const remove = useDeleteRole();
   const [editing, setEditing] = useState<RoleView | null>(null);
   const [open, setOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<RoleView | null>(null);
 
-  async function onDelete(role: RoleView): Promise<void> {
-    if (!window.confirm(`Delete ${role.name}? This cannot be undone.`)) return;
+  function onDelete(role: RoleView): void {
+    setPendingDelete(role);
+  }
+
+  async function confirmDelete(): Promise<void> {
+    const role = pendingDelete;
+    if (role === null) return;
     try {
       await remove.mutateAsync({ id: role.id });
       toast.success(`${role.name} deleted`);
+      setPendingDelete(null);
     } catch (e) {
       // The server's refusals here are the useful part — "3 staff still
       // hold this role" tells you exactly what to do next.
       toast.error(serverVerdict(e));
+      setPendingDelete(null);
     }
   }
 
@@ -80,7 +89,7 @@ export function RolesIndex(): ReactElement {
         <LoadingState label="Loading roles…" />
       ) : roles.isError || catalogue.isError ? (
         <ErrorState
-          message={roles.error?.message ?? catalogue.error?.message ?? 'Could not load roles.'}
+          message={serverVerdict(roles.error ?? catalogue.error, 'Could not load roles.')}
           retry={() => {
             void roles.refetch();
             void catalogue.refetch();
@@ -136,7 +145,7 @@ export function RolesIndex(): ReactElement {
                       variant="ghost"
                       size="sm"
                       disabled={role.isSuperAdmin || role.isSystem || role.staffCount > 0}
-                      onClick={() => void onDelete(role)}
+                      onClick={() => onDelete(role)}
                     >
                       Delete
                     </Button>
@@ -147,6 +156,19 @@ export function RolesIndex(): ReactElement {
           </TBody>
         </Table>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => {
+          if (!o) setPendingDelete(null);
+        }}
+        title={`Delete ${pendingDelete?.name ?? 'this role'}?`}
+        description="This cannot be undone. Nobody holds the role now, so no one loses access."
+        confirmLabel="Delete role"
+        confirmVariant="destructive"
+        disabled={remove.isPending}
+        onConfirm={confirmDelete}
+      />
 
       {catalogue.data !== undefined && (
         <RoleEditor

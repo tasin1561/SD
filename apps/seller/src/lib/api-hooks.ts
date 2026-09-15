@@ -1042,15 +1042,6 @@ export function useWebhookEndpointsList(): UseQueryResult<ReadonlyArray<WebhookE
   });
 }
 
-export function useWebhookEndpointDetail(id: string): UseQueryResult<WebhookEndpointView> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['seller-webhooks', 'detail', id],
-    queryFn: () => client.request<WebhookEndpointView>(`/api/seller/webhook-endpoints/${id}`),
-    enabled: Boolean(id),
-  });
-}
-
 export function useCreateWebhookEndpoint(): UseMutationResult<
   WebhookEndpointWithSecret,
   Error,
@@ -1403,18 +1394,6 @@ export function useTrackedShipment(shipmentId: string): UseQueryResult<TrackedSh
   });
 }
 
-/** Every parcel on one order — so the seller never needs the AWB. */
-export function useOrderTracking(
-  orderId: string,
-): UseQueryResult<{ items: TrackedShipmentDetail[] }> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['seller-tracking', 'order', orderId],
-    queryFn: () =>
-      client.request<{ items: TrackedShipmentDetail[] }>(`/api/seller/tracking/order/${orderId}`),
-  });
-}
-
 export function useTopupBankAccounts(): UseQueryResult<TopupBankAccountsResponse> {
   const client = useApiClient();
   return useQuery({
@@ -1473,17 +1452,6 @@ export function useSubmitTopup(): UseMutationResult<TopupRequestView, Error, Sub
       // The list, not the balance — WAL-2 means nothing was credited.
       void queryClient.invalidateQueries({ queryKey: ['seller-wallet', 'topups'] });
     },
-  });
-}
-
-export function useWalletEntries(currency?: 'INR' | 'BDT'): UseQueryResult<WalletEntriesPage> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['seller-wallet', 'entries', currency ?? 'all'],
-    queryFn: () =>
-      client.request<WalletEntriesPage>(
-        `/api/seller/wallet/entries${currency ? `?currency=${currency}` : ''}`,
-      ),
   });
 }
 

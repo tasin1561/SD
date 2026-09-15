@@ -9,6 +9,8 @@ import {
   CardBody,
   ErrorState,
   LoadingState,
+  Modal,
+  ModalFooter,
   PageHeader,
   StatusBadge,
   TBody,
@@ -19,8 +21,13 @@ import {
   Th,
   Tr,
 } from '@skydrop/ui/components';
-import { useExpenseCategories } from '@/lib/ops-hooks';
+import {
+  useExpenseCategories,
+  useUpdateExpenseCategory,
+  type ExpenseCategoryView,
+} from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 import { CategoryModal } from '../../_components/category-modal';
 
 /**
@@ -40,6 +47,8 @@ export function ExpenseCategoriesIndex(): ReactElement {
   const canWrite = usePermission('money.treasury.manage');
   const [showInactive, setShowInactive] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<ExpenseCategoryView | null>(null);
+  const [toggling, setToggling] = useState<ExpenseCategoryView | null>(null);
   const categories = useExpenseCategories(showInactive);
 
   return (
@@ -67,7 +76,7 @@ export function ExpenseCategoriesIndex(): ReactElement {
         <LoadingState />
       ) : categories.isError || categories.data === undefined ? (
         <ErrorState
-          message={categories.error?.message ?? 'Could not read the categories.'}
+          message={serverVerdict(categories.error, 'Could not read the categories.')}
           retry={() => void categories.refetch()}
         />
       ) : (
@@ -96,11 +105,12 @@ export function ExpenseCategoriesIndex(): ReactElement {
                 <Th>Name</Th>
                 <Th>What goes here</Th>
                 <Th>State</Th>
+                {canWrite && <Th className="text-right">Actions</Th>}
               </Tr>
             </THead>
             <TBody>
               {categories.data.length === 0 ? (
-                <TableEmpty colSpan={4}>
+                <TableEmpty colSpan={canWrite ? 5 : 4}>
                   No categories yet. Add one before recording an expense, so the spend can be told
                   apart later.
                 </TableEmpty>
@@ -116,6 +126,18 @@ export function ExpenseCategoriesIndex(): ReactElement {
                         label={c.isActive ? 'Active' : 'Retired'}
                       />
                     </Td>
+                    {canWrite && (
+                      <Td className="text-right">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setToggling(c)}>
+                            {c.isActive ? 'Retire' : 'Restore'}
+                          </Button>
+                        </div>
+                      </Td>
+                    )}
                   </Tr>
                 ))
               )}
@@ -125,6 +147,73 @@ export function ExpenseCategoriesIndex(): ReactElement {
       )}
 
       <CategoryModal open={adding} onOpenChange={setAdding} />
+      <CategoryModal
+        open={editing !== null}
+        onOpenChange={(next) => {
+          if (!next) setEditing(null);
+        }}
+        category={editing}
+      />
+      <RetireCategoryModal category={toggling} onClose={() => setToggling(null)} />
     </div>
+  );
+}
+
+/**
+ * Retire or restore, confirmed. Retiring hides the category from the
+ * expense form's picker; every entry already filed under it keeps it.
+ */
+function RetireCategoryModal({
+  category,
+  onClose,
+}: {
+  readonly category: ExpenseCategoryView | null;
+  readonly onClose: () => void;
+}): ReactElement {
+  const update = useUpdateExpenseCategory();
+  const [error, setError] = useState<string | null>(null);
+  const retiring = category?.isActive ?? true;
+
+  async function confirm(): Promise<void> {
+    if (!category) return;
+    setError(null);
+    try {
+      await update.mutateAsync({ categoryId: category.id, isActive: !category.isActive });
+      onClose();
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  }
+
+  return (
+    <Modal
+      open={category !== null}
+      onOpenChange={(next) => {
+        if (!next) {
+          setError(null);
+          onClose();
+        }
+      }}
+      title={retiring ? `Retire ${category?.name ?? ''}?` : `Restore ${category?.name ?? ''}?`}
+      description={
+        retiring
+          ? 'New spending can no longer be filed under it. Everything already filed keeps it, so past breakdowns do not change.'
+          : 'It will be offered again when recording spending.'
+      }
+    >
+      {error !== null && <p className="text-critical text-sm">{error}</p>}
+      <ModalFooter>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant={retiring ? 'destructive' : 'primary'}
+          onClick={() => void confirm()}
+          disabled={update.isPending}
+        >
+          {update.isPending ? 'Saving…' : retiring ? 'Retire category' : 'Restore category'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }
