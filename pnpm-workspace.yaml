@@ -24,11 +24,11 @@ overrides:
   brace-expansion@2: ^2.0.2
   brace-expansion@5: ^5.0.8
   js-yaml@3: ^3.15.0
-  js-yaml@4: ^4.3.0
+  js-yaml@4: ^4.3.2
   fast-uri: ^3.1.4
   form-data: ^4.0.6
   postcss: ^8.5.18
-  multer: ^2.2.0
+  multer: ^2.3.0
   # Reviewed again 2026-07-28. These four reach production or process
   # untrusted input, which is why they are here and the vite/vitest/turbo
   # advisories from the same audit are not — those are build-time only,
@@ -37,18 +37,38 @@ overrides:
   # sharp: apps/api runs it over SELLER-UPLOADED images to make
   # thumbnails, so a libvips bug is reachable by anyone with an account.
   # Next bundles an older copy; this drags both onto the patched line.
-  sharp: ^0.35.3
+  sharp: ^0.35.4
   # qs + body-parser: express's request parsers, i.e. the first code to
   # touch every unauthenticated request. Both advisories are remotely
   # triggerable DoS.
-  qs: ^6.15.3
+  qs: ^6.16.0
   body-parser: ^2.3.0
   # happy-dom: test-only (vitest DOM), but the advisory is a VM context
   # escape and the cost of being current is nil.
   happy-dom: ^20.11.1
+  # Reviewed again 2026-09-15 (`pnpm audit --prod`: 13 production-path
+  # advisories, 2 critical). next went 15.5.22 -> 15.5.25 and sharp
+  # 0.35.3 -> 0.35.4 in the app manifests, and the overrides above follow:
+  # an override BELOW a manifest's range fails CI's frozen install
+  # ("lockfile ^0.35.4, manifest ^0.35.3") while passing locally, because
+  # an existing node_modules lets pnpm skip the comparison — reproduce in a
+  # fresh worktree, never trust a warm tree. multer ^2.3.0 (three DoS),
+  # js-yaml@4 ^4.3.2 (two CPU-exhaustion), qs ^6.16.0 (two DoS on the
+  # parser every unauthenticated request meets). multer and js-yaml are not
+  # reachable today (no FileInterceptor anywhere; js-yaml comes via
+  # @nestjs/swagger, which 404s in production) but staying current inside a
+  # major costs nothing, the happy-dom argument. nanoid is build-time
+  # (next > postcss) and patch-level, same argument.
+  nanoid@3: ^3.3.18
 #
-# LEFT OPEN, deliberately — 8 advisories remain, all build/test tooling
-# whose vulnerable code path we do not run:
+# LEFT OPEN, deliberately — build/test tooling whose vulnerable code path we
+# do not run, plus one production-graph package that is not on the runtime
+# path:
+#   deepmerge-ts (<8.0.0) — via @prisma/client > prisma > @prisma/config,
+#     the Prisma CLI's config loader (generate / migrate time, never the
+#     query engine at runtime). The fix is 8.x, a MAJOR inside a Prisma we
+#     pin at 6.19.3; forcing it there is how a migrate deploy breaks.
+#     Revisit with the next Prisma upgrade.
 #   vitest / vite / esbuild — the dev server and `vitest --ui`. We run
 #     neither: Next serves the frontends and tests run headless. The fix
 #     is vitest 4.x, two majors up, on the runner that gates every commit
