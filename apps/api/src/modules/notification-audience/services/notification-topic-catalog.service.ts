@@ -171,6 +171,24 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
       'A store’s current terms use a timing Skydrop no longer allows for your account. It cannot order until you publish new terms and it accepts them.',
     group: 'Reseller stores',
   },
+  {
+    // Sent by ResellerReportsNotifier (RS-9) to `stores.manage` when the
+    // store's return rate crossed the limit the seller set, and it paused.
+    topic: 'seller.reseller_store_auto_paused',
+    label: 'A reseller store was paused for too many returns',
+    description:
+      'More of a store’s parcels came back than the limit you set, so it was paused: it cannot place new orders until you resume it.',
+    group: 'Reseller stores',
+  },
+  {
+    // Sent by ResellerReportsNotifier (RS-9) to `stores.reports`, at most
+    // once a week while a product your stores sell stays low.
+    topic: 'seller.reseller_stock_reorder',
+    label: 'Stock your reseller stores sell is running low',
+    description:
+      'At the rate it sold recently, stock of a product your reseller stores sell will run out sooner than your reorder threshold.',
+    group: 'Reseller stores',
+  },
 ];
 
 /**
@@ -251,6 +269,13 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     description:
       'A payment went out or a charge did not land, and nothing downstream would have noticed on its own.',
     group: 'Money',
+  },
+  {
+    topic: topicForIssue(SystemIssueKind.RESELLER_RISK),
+    label: 'A reseller store looks risky',
+    description:
+      'A reseller store crossed a fraud-signal threshold — cancel, return or failed-delivery rate, one customer across many stores, retail far above suggested, or rapid-fire orders.',
+    group: 'Sellers',
   },
   {
     topic: topicForIssue(SystemIssueKind.OTHER),

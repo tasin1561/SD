@@ -64,6 +64,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   // RS-3: the default price list is a single-purpose page whose writes
   // are stores.pricing (@Controller seller/reseller-price-list).
   ['/reseller-stores/price-list', 'stores.pricing'],
+  // RS-8 / RS-9 — reports on the stores (@Controller seller/reseller-reports).
+  // Setting a store's auto-pause rule needs stores.manage, gated in the page.
+  ['/reseller-stores/reports', 'stores.reports'],
+  ['/reseller-stores/stock-forecast', 'stores.reports'],
   ['/reseller-stores', 'stores.manage'], // @Controller seller/reseller-stores
   ['/team/roles', 'roles.manage'],
   ['/team', 'team.view'],

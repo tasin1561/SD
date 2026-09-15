@@ -103,6 +103,7 @@ import { ResellerCatalogueModule } from './modules/reseller-catalogue/reseller-c
 import { ResellerStoreTermsModule } from './modules/reseller-store-terms/reseller-store-terms.module';
 import { ResellerStoreWalletModule } from './modules/reseller-store-wallet/reseller-store-wallet.module';
 import { ResellerOrderModule } from './modules/reseller-order/reseller-order.module';
+import { ResellerReportsModule } from './modules/reseller-reports/reseller-reports.module';
 import { CourierWalletModule } from './modules/courier-wallet/courier-wallet.module';
 import { AdminRemittanceModule } from './modules/admin-remittance/admin-remittance.module';
 import { AdminReportsModule } from './modules/admin-reports/admin-reports.module';
@@ -248,6 +249,8 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     ResellerStoreWalletModule,
     // RS-5 — reseller store orders (portal, API key, webhooks).
     ResellerOrderModule,
+    // RS-8 / RS-9 — reseller reports and analysis (leaf).
+    ResellerReportsModule,
     CourierWalletModule,
     AdminSellerWalletModule,
     AdminWalletTransferModule,

@@ -125,6 +125,15 @@ export const AdvisoryLock = {
    * would abort its whole order transaction on the unique.
    */
   CUSTOMER_IDENTITY: 0x04349,
+  /**
+   * 'SP' — a reseller store's P&L months (RS-8), per store.
+   *
+   * Closing a store month and detecting changes to its closed months both
+   * read "what has been reported" (snapshot + carry-forwards) and insert
+   * the difference; two runs at once would each read the same baseline and
+   * each carry the same change. Both take this key first.
+   */
+  STORE_PNL_PERIOD: 0x05370,
 } as const;
 
 /**

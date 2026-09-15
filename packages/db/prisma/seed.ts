@@ -1463,6 +1463,106 @@ const systemSettings: SystemSettingSeed[] = [
       "Whether this seller's reseller stores may place orders. OFF until the reseller money (fee split at each party's credit trigger, prepaid debit, reversals) is live: without it a delivered reseller order would credit the seller the whole COD. Switch on per seller from the seller's settings.",
     sellerOverridable: true,
   },
+  // ── RS-9 — reseller analysis (2026-09-15). Also inserted by
+  // 20260914260000_reseller_reports (the seed is create-only). The fraud
+  // thresholds are GLOBAL: a signal about a store is judged the same way
+  // for every seller. The stock forecast's two are the seller's to tune.
+  {
+    key: 'reseller.fraud_window_days',
+    category: 'reseller',
+    valueType: SettingValueType.INT,
+    valueInt: 30,
+    displayName: 'Reseller fraud signals: days looked back',
+    description:
+      "The fraud flags on reseller stores (cancel, return and NDR rates, one customer across many stores, retail far above suggested, rapid-fire orders) are judged over the store's orders placed in this many days.",
+  },
+  {
+    key: 'reseller.fraud_min_orders',
+    category: 'reseller',
+    valueType: SettingValueType.INT,
+    valueInt: 10,
+    displayName: 'Reseller fraud signals: fewest orders before a rate is judged',
+    description:
+      'A cancel, return or NDR rate is only flagged once the store has at least this many orders in the window — two cancellations out of three orders say nothing.',
+  },
+  {
+    key: 'reseller.fraud_orders_per_hour',
+    category: 'reseller',
+    valueType: SettingValueType.INT,
+    valueInt: 30,
+    displayName: 'Reseller fraud signals: orders in one hour',
+    description:
+      'A store that places this many orders or more inside any one hour is flagged as rapid-fire ordering.',
+  },
+  {
+    key: 'reseller.fraud_shared_phone_stores',
+    category: 'reseller',
+    valueType: SettingValueType.INT,
+    valueInt: 3,
+    displayName: 'Reseller fraud signals: stores sharing one customer',
+    description:
+      'A customer phone number that appears on orders of at least this many different reseller stores in the window is flagged on each of them.',
+  },
+  {
+    key: 'reseller.fraud_cancel_rate_percent',
+    category: 'reseller',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '40.00',
+    displayName: 'Reseller fraud signals: cancel rate (%)',
+    description:
+      'A reseller store whose orders in the window are cancelled or rejected at this rate or above is flagged. Twice the rate raises it as HIGH.',
+  },
+  {
+    key: 'reseller.fraud_return_rate_percent',
+    category: 'reseller',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '40.00',
+    displayName: 'Reseller fraud signals: return rate (%)',
+    description:
+      'A reseller store whose parcels come back (of those delivered or returned) at this rate or above is flagged. Twice the rate raises it as HIGH.',
+  },
+  {
+    key: 'reseller.fraud_ndr_rate_percent',
+    category: 'reseller',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '50.00',
+    displayName: 'Reseller fraud signals: failed delivery rate (%)',
+    description:
+      'A reseller store whose dispatched parcels have a failed delivery attempt at this rate or above is flagged.',
+  },
+  {
+    key: 'reseller.fraud_retail_markup_percent',
+    category: 'reseller',
+    valueType: SettingValueType.DECIMAL,
+    valueDecimal: '100.00',
+    displayName: 'Reseller fraud signals: retail above suggested (%)',
+    description:
+      'An order line sold at more than the suggested retail plus this percentage is flagged — a store charging a customer double what the seller suggested.',
+  },
+  {
+    key: 'reseller.stock_reorder_days',
+    category: 'reseller',
+    valueType: SettingValueType.INT,
+    valueInt: 14,
+    displayName: 'Reseller stock forecast: reorder when stock lasts fewer days than',
+    description:
+      'A product your reseller stores sell is flagged for reordering when, at the rate it sold recently, the stock on hand lasts fewer than this many days. You are told in-app once a week while it stays low.',
+    sellerOverridable: true,
+    overrideMinInt: 1,
+    overrideMaxInt: 180,
+  },
+  {
+    key: 'reseller.stock_forecast_window_days',
+    category: 'reseller',
+    valueType: SettingValueType.INT,
+    valueInt: 30,
+    displayName: 'Reseller stock forecast: days of sales it learns from',
+    description:
+      'How many days of confirmed orders the stock forecast averages to work out how fast each product sells.',
+    sellerOverridable: true,
+    overrideMinInt: 7,
+    overrideMaxInt: 180,
+  },
   {
     key: 'wallet.withdrawal_sla_hours',
     category: 'wallet',

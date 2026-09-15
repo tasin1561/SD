@@ -1025,4 +1025,106 @@ describe('cross-tenant isolation (e2e)', () => {
     const direct = await request(h.baseUrl).get(`/seller/customers/${customer.id}`).set(alpha.auth);
     expectDenied(direct.status, direct.body, "a store's customer from the seller side");
   });
+
+  // ─── Reseller reports and analysis (RS-8 / RS-9) ───────────────────────
+
+  it("RS-8: a store reads only its own reports and expenses, and cannot remove another store's expense", async () => {
+    const storeA = await makeStoreUser(alpha, 'rep-a');
+    const storeB = await makeStoreUser(beta, 'rep-b');
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    const recorded = await request(h.baseUrl).post('/store/expenses').set(storeB.auth).send({
+      category: 'AD_SPEND',
+      amountInr: '750.00',
+      expenseDate: today,
+      description: 'Store B ads',
+    });
+    expect([200, 201]).toContain(recorded.status);
+    const bExpense = await h.prisma.storeExpense.findFirstOrThrow({
+      where: { storeId: storeB.storeId },
+      select: { id: true },
+    });
+
+    const list = await request(h.baseUrl).get('/store/expenses').set(storeA.auth).expect(200);
+    expect(JSON.stringify(list.body)).not.toContain(bExpense.id);
+    expect(JSON.stringify(list.body)).not.toContain('Store B ads');
+
+    for (const path of [
+      '/store/reports/pnl',
+      '/store/reports/pnl/months',
+      '/store/reports/position',
+      '/store/reports/analysis',
+      '/store/reports/cash-flow',
+    ]) {
+      const res = await request(h.baseUrl).get(path).set(storeA.auth).expect(200);
+      expect(JSON.stringify(res.body)).not.toContain(storeB.storeId);
+      expect(JSON.stringify(res.body)).not.toContain('Store B ads');
+    }
+
+    const removed = await request(h.baseUrl)
+      .post(`/store/expenses/${bExpense.id}/remove`)
+      .set(storeA.auth)
+      .send({ reason: 'Not ours to remove' });
+    expectDenied(removed.status, removed.body, "another store's expense");
+    const still = await h.prisma.storeExpense.findUniqueOrThrow({
+      where: { id: bExpense.id },
+      select: { deletedAt: true },
+    });
+    expect(still.deletedAt).toBeNull();
+  });
+
+  it('RS-8: seller and staff tokens are refused on the store report surfaces, and a store token on theirs', async () => {
+    const storeA = await makeStoreUser(alpha, 'rep-a');
+    for (const path of ['/store/reports/pnl', '/store/reports/position', '/store/expenses']) {
+      for (const auth of [alpha.auth, staffAuth]) {
+        const res = await request(h.baseUrl).get(path).set(auth);
+        expect(res.status).toBe(401);
+      }
+    }
+    for (const path of [
+      '/seller/reseller-reports/scorecards',
+      '/seller/reseller-reports/transfer-revenue',
+      '/seller/reseller-reports/stock-forecast',
+      '/admin/reseller-analysis/fraud-flags',
+      '/admin/reseller-analysis/disputes',
+      '/admin/reseller-analysis/float',
+    ]) {
+      const res = await request(h.baseUrl).get(path).set(storeA.auth);
+      expect([401, 403]).toContain(res.status);
+    }
+  });
+
+  it("RS-9: a seller sees only their own stores' scorecards, cannot set another seller's auto-pause, and has no store expenses or P&L", async () => {
+    const storeA = await makeStoreUser(alpha, 'score-a');
+    const own = await request(h.baseUrl)
+      .get('/seller/reseller-reports/scorecards')
+      .set(alpha.auth)
+      .expect(200);
+    expect(JSON.stringify(own.body)).toContain(storeA.storeId);
+    const other = await request(h.baseUrl)
+      .get('/seller/reseller-reports/scorecards')
+      .set(beta.auth)
+      .expect(200);
+    expect(JSON.stringify(other.body)).not.toContain(storeA.storeId);
+
+    const put = await request(h.baseUrl)
+      .put(`/seller/reseller-reports/stores/${storeA.storeId}/auto-pause`)
+      .set(beta.auth)
+      .send({ enabled: true, returnRatePercent: '10', minDecidedOrders: 5, windowDays: 30 });
+    expectDenied(put.status, put.body, "another seller's store auto-pause rule");
+    expect(
+      await h.prisma.resellerStoreAutoPause.count({ where: { storeId: storeA.storeId } }),
+    ).toBe(0);
+
+    // Decision: the seller sees a store's scorecard and balance, never its
+    // expenses or its P&L — there is no seller route to either.
+    for (const path of [
+      `/seller/reseller-stores/${storeA.storeId}/expenses`,
+      `/seller/reseller-stores/${storeA.storeId}/pnl`,
+      '/seller/reseller-reports/expenses',
+      '/seller/reseller-reports/pnl',
+    ]) {
+      const res = await request(h.baseUrl).get(path).set(alpha.auth);
+      expectDenied(res.status, res.body, `a store's books via ${path}`);
+    }
+  });
 });

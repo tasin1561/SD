@@ -49,6 +49,14 @@ export type ResellerActor =
   | { readonly kind: 'SELLER'; readonly sellerUserId: string; readonly name: string }
   | { readonly kind: 'STAFF'; readonly staffId: string };
 
+/**
+ * RS-9 — the system acting on a seller's standing instruction (the
+ * auto-pause rule). Only a transition takes it, and only through
+ * `autoPause`: the system never approves, closes or creates a store.
+ */
+type SystemActor = { readonly kind: 'SYSTEM'; readonly source: string };
+type TransitionActor = ResellerActor | SystemActor;
+
 export interface ResellerStoreView {
   readonly id: string;
   readonly sellerId: string;
@@ -113,11 +121,12 @@ const VIEW_SELECT = {
 
 type ViewRow = Prisma.SellerStoreGetPayload<{ select: typeof VIEW_SELECT }>;
 
-function actorFields(actor: ResellerActor): {
+function actorFields(actor: TransitionActor): {
   actorType: ActorType;
-  actorId: string;
+  actorId: string | null;
   staffUserId?: string;
 } {
+  if (actor.kind === 'SYSTEM') return { actorType: ActorType.SYSTEM, actorId: null };
   return actor.kind === 'STAFF'
     ? { actorType: ActorType.STAFF, actorId: actor.staffId, staffUserId: actor.staffId }
     : { actorType: ActorType.SELLER, actorId: actor.sellerUserId };
@@ -294,6 +303,16 @@ export class ResellerStoreService {
     return this.transition(sellerId, storeId, 'PAUSE', actor, { reason });
   }
 
+  /**
+   * RS-9 — the auto-pause sweep, acting on the rule the SELLER set
+   * (`reseller_store_auto_pause`). The same guarded PAUSE transition a
+   * person makes — event row, store row lock, audit — recorded as SYSTEM
+   * so the history says nobody clicked it. Pause blocks new orders only.
+   */
+  async autoPause(sellerId: string, storeId: string, reason: string, source: string) {
+    return this.transition(sellerId, storeId, 'PAUSE', { kind: 'SYSTEM', source }, { reason });
+  }
+
   async resume(sellerId: string, storeId: string, actor: ResellerActor) {
     return this.transition(sellerId, storeId, 'RESUME', actor, {});
   }
@@ -316,7 +335,7 @@ export class ResellerStoreService {
     sellerId: string,
     storeId: string,
     action: ResellerStoreAction,
-    actor: ResellerActor,
+    actor: TransitionActor,
     opts: {
       reason?: string | undefined;
       invite?: { email: string; fullName: string; roleKey: StoreRoleKey } | undefined;
@@ -610,7 +629,8 @@ export class ResellerStoreService {
 
   // ── internals ──────────────────────────────────────────────────────
 
-  private eventActor(actor: ResellerActor): { actorType: ActorType; actorId: string } {
+  private eventActor(actor: TransitionActor): { actorType: ActorType; actorId: string | null } {
+    if (actor.kind === 'SYSTEM') return { actorType: ActorType.SYSTEM, actorId: null };
     return actor.kind === 'STAFF'
       ? { actorType: ActorType.STAFF, actorId: actor.staffId }
       : { actorType: ActorType.SELLER, actorId: actor.sellerUserId };

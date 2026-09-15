@@ -238,6 +238,27 @@ A reseller store's machine key (`Authorization: Bearer sks_…`). `storeId` (FK 
 
 **Migration grants:** existing stores' system roles — admin += `orders.view`, `orders.create`, `orders.cancel`, `customers.view`, `integrations.manage`; ops += `orders.view`, `orders.create`, `orders.cancel`, `customers.view`; finance += `orders.view`, `customers.view`; viewer += `orders.view`. **Setting:** `reseller.orders_enabled` (BOOLEAN, FALSE, seller-overridable) — store orders are refused until phase 3c wires the money.
 
+## Reseller reports — RS-8 / RS-9 *(2026-09-15, `20260914260000_reseller_reports`; design `docs/reseller-stores.md` "Reports and analysis as built")*
+
+No report figure is stored: every report derives on read from `store_wallet_entries`, `seller_wallet_entries`, `store_expenses` and the orders. These tables hold the store's own expense book, its frozen months, and the seller's auto-pause rule. Enum `StoreExpenseCategory` (AD_SPEND, STAFF, SOFTWARE, PHOTOGRAPHY, PACKAGING, CUSTOMER_REFUNDS, RENT, OTHER); `SystemIssueKind` += `RESELLER_RISK`.
+
+## store_expenses *(RS-8)*
+The store's own costs — never a bank or wallet entry, never read by the seller. `storeId` (FK seller_stores RESTRICT), `sellerId` (denormalised), `category`, `amountInr` `Decimal(14,2)` (CHECK > 0), `expenseDate` (DATE — the Indian calendar day), `description`, `reference?`, `idempotencyKey?` (UUID, UNIQUE — IDEM-1), `createdByStoreUserId`, `createdAt`, `deletedAt` / `deletedByStoreUserId` / `deleteReason` (CHECK: the reason is present exactly when deleted). Index `(storeId, expenseDate)`. Written ONLY by `StoreExpenseService`; never edited, removed by a soft delete with a reason.
+
+## store_pnl_periods *(RS-8)*
+A store's closed month. `storeId` (FK RESTRICT), `month` (`YYYY-MM`, CHECKed), `closedAt`, `closedByActorType`, `report` (Json — the frozen `buildStorePnl` output). UNIQUE `(storeId, month)`. Never updated or deleted.
+
+## store_pnl_snapshot_rows *(RS-8)*
+Every drill-down row of a closed month, keyed by the record's stable id. `periodId` (FK CASCADE), `lineKey`, `refKey` (the wallet entry or the expense id), `amountInr`, `label` (Json). UNIQUE `(periodId, lineKey, refKey)`.
+
+## store_pnl_carry_forwards *(RS-8)*
+APPEND-ONLY. A change to a closed month, counted in the month open when it was found. `storeId` (FK RESTRICT), `originMonth`, `landedMonth` (CHECK landed > origin), `lineKey`, `refKey`, `amountBeforeInr?`, `amountAfterInr?`, `deltaInr` (CHECK ≠ 0), `reason`, `label`, `detectedAt`. Indexes `(storeId, landedMonth)`, `(storeId, originMonth)`.
+
+## reseller_store_auto_pause *(RS-9)*
+The seller's return-rate rule for one store. `storeId` (PK, FK seller_stores CASCADE), `enabled`, `returnRatePercent` `Decimal(5,2)` (CHECK 0–100), `minDecidedOrders` (default 10, CHECK ≥ 1), `windowDays` (default 30, CHECK 1–365), `updatedBySellerUserId`, `lastEvaluatedAt`, `lastPausedAt`, timestamps. Written by `ResellerAutoPauseService` (the rule and its stamps); the pause itself goes through `ResellerStoreService`.
+
+**Migration grants:** existing stores' admin and finance system roles += `reports.view`, `expenses.view`, `expenses.manage`; seller system ADMIN roles that already hold `stores.manage` += `stores.reports`. **Settings** (all INT/DECIMAL, global): `reseller.fraud_window_days` 30, `reseller.fraud_min_orders` 10, `reseller.fraud_cancel_rate_percent` 40, `reseller.fraud_return_rate_percent` 40, `reseller.fraud_ndr_rate_percent` 50, `reseller.fraud_orders_per_hour` 30, `reseller.fraud_retail_markup_percent` 100, `reseller.fraud_shared_phone_stores` 3; seller-overridable: `reseller.stock_reorder_days` 14 (1–180), `reseller.stock_forecast_window_days` 30 (7–180).
+
 ## seller_notes
 Admin notes about sellers (replaces simple `rejectionReason` field).
 

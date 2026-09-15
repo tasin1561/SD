@@ -440,6 +440,18 @@ export const PERMISSIONS = [
     group: 'Sellers',
   },
   {
+    // RS-9 — the one thing staff DO to a store's lifecycle: stop its new
+    // orders when its fraud signals say so. Resuming stays the seller's.
+    // Its own key because reading the flags (`reseller.stores.view`) is
+    // not the same trust as acting on them.
+    key: 'reseller.stores.pause',
+    label: 'Pause a reseller store',
+    description:
+      'Stop a reseller store placing new orders — for example on a fraud signal. Orders already placed carry on; only the seller can resume it.',
+    group: 'Sellers',
+    dangerous: true,
+  },
+  {
     key: 'reseller.credit_after_confirmation.enable',
     label: 'Allow credit after confirmation for a seller',
     description:

@@ -33,6 +33,7 @@ export const STORE_PERMISSION_GROUPS = [
   'Orders',
   'Customers',
   'Integrations',
+  'Reports',
 ] as const;
 
 export type StorePermissionGroup = (typeof STORE_PERMISSION_GROUPS)[number];
@@ -158,6 +159,30 @@ export const STORE_PERMISSIONS = [
     group: 'Integrations',
     sensitive: true,
   },
+  // ── RS-8 / RS-9 — the store's reports and its own expense book ─────
+  {
+    key: 'reports.view',
+    label: 'See reports',
+    description:
+      'The store’s profit and loss by month, its cash-flow forecast, profit per product, returns by pincode and return on ad spend.',
+    group: 'Reports',
+    sensitive: true,
+  },
+  {
+    key: 'expenses.view',
+    label: 'See expenses',
+    description: 'What the store recorded spending — ads, staff, software and the rest.',
+    group: 'Reports',
+    sensitive: true,
+  },
+  {
+    key: 'expenses.manage',
+    label: 'Record expenses',
+    description:
+      'Record what the store spent, and remove a mistaken entry with a reason. Expenses are the store’s own books; no money moves.',
+    group: 'Reports',
+    sensitive: true,
+  },
 ] as const satisfies readonly StorePermissionDef[];
 
 export type StorePermissionKey = (typeof STORE_PERMISSIONS)[number]['key'];
@@ -233,6 +258,11 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
       'wallet.withdrawals.manage',
       'orders.view',
       'customers.view',
+      // RS-8. Also granted to existing finance roles by
+      // 20260914260000_reseller_reports.
+      'reports.view',
+      'expenses.view',
+      'expenses.manage',
     ],
   },
   {

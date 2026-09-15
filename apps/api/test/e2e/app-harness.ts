@@ -527,6 +527,14 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'store_topup_requests',
         'store_withdrawal_requests',
         'store_wallet_settings',
+        // RS-8 / RS-9 — a store's expense book, its frozen P&L months and
+        // their carry-forwards (RESTRICT on seller_stores), and the seller's
+        // auto-pause rule (CASCADE) — named so none leaks into a later suite.
+        'store_expenses',
+        'store_pnl_carry_forwards',
+        'store_pnl_snapshot_rows',
+        'store_pnl_periods',
+        'reseller_store_auto_pause',
         // Seller-team RBAC
         'seller_user_invitations',
         'seller_users',

@@ -2734,6 +2734,12 @@ model SellerStore {
   storeApiKeys            StoreApiKey[]
   webhookEndpoints        SellerWebhookEndpoint[]
   bulkOrderUploads        BulkOrderUpload[]
+  /// RS-8 / RS-9 — the store's own bookkeeping, its frozen P&L months and
+  /// the seller's auto-pause rule for it.
+  storeExpenses           StoreExpense[]
+  storePnlPeriods         StorePnlPeriod[]
+  storePnlCarryForwards   StorePnlCarryForward[]
+  autoPauseRule           ResellerStoreAutoPause?
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -6032,6 +6038,11 @@ enum SystemIssueKind {
   /// person who can close it is whoever may cancel with the courier, and
   /// because each one is a booking charge not yet credited back.
   LIVE_WAYBILL             @map("live_waybill")
+  /// RS-9 — a reseller store's orders crossed a fraud-signal threshold
+  /// (cancel / return / NDR rate, one customer across many stores,
+  /// retail far above suggested, rapid-fire orders). Its own kind because
+  /// the audience is whoever watches reseller stores.
+  RESELLER_RISK            @map("reseller_risk")
   OTHER                    @map("other")
 
   @@map("system_issue_kind")
@@ -8983,4 +8994,158 @@ model StoreApiKey {
 
   @@index([storeId])
   @@map("store_api_keys")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// RS-8 / RS-9 — reseller REPORTS and ANALYSIS (2026-09-15, migration
+// 20260914260000_reseller_reports; docs/reseller-stores.md "Reports and
+// analysis as built"). ONE contiguous block: the enum, then the models.
+//
+// Every report is DERIVED on read from append-only ledgers
+// (`store_wallet_entries`, `seller_wallet_entries`) and the order
+// snapshot. The only things stored here are the store's own expenses,
+// the frozen months of its P&L (PNL-CF-1's shape, for a store) and the
+// seller's auto-pause rule.
+// ════════════════════════════════════════════════════════════════════
+
+/// What a reseller store spent its own money on. AD_SPEND is what the
+/// return-on-ad-spend figure divides by.
+enum StoreExpenseCategory {
+  AD_SPEND         @map("ad_spend")
+  STAFF            @map("staff")
+  SOFTWARE         @map("software")
+  PHOTOGRAPHY      @map("photography")
+  PACKAGING        @map("packaging")
+  CUSTOMER_REFUNDS @map("customer_refunds")
+  RENT             @map("rent")
+  OTHER            @map("other")
+
+  @@map("store_expense_category")
+}
+
+/// RS-8 — one expense a reseller store records for its OWN books.
+///
+/// Never a bank entry (decision 7: our bank knows only the seller) and
+/// never a wallet movement: it is the store's bookkeeping, read only by
+/// the store's P&L. A mistake is SOFT-deleted with a reason, never
+/// edited, so a closed month's carry-forward can say what changed.
+/// Written only by `StoreExpenseService`.
+model StoreExpense {
+  id                   String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId              String               @map("store_id") @db.Uuid
+  /// Denormalised from the store, for audit.
+  sellerId             String               @map("seller_id") @db.Uuid
+  category             StoreExpenseCategory
+  /// Always positive (CHECK).
+  amountInr            Decimal              @map("amount_inr") @db.Decimal(14, 2)
+  /// The Indian calendar day the money was spent — what the P&L dates it by.
+  expenseDate          DateTime             @map("expense_date") @db.Date
+  description          String               @db.Text
+  reference            String?
+  /// IDEM-1: the key of the form that wrote it.
+  idempotencyKey       String?              @unique @map("idempotency_key") @db.Uuid
+  /// The store user who recorded it — a plain id, like an actor id.
+  createdByStoreUserId String?              @map("created_by_store_user_id") @db.Uuid
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt            DateTime?            @map("deleted_at") @db.Timestamptz
+  deletedByStoreUserId String?              @map("deleted_by_store_user_id") @db.Uuid
+  deleteReason         String?              @map("delete_reason") @db.Text
+
+  store SellerStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@index([storeId, expenseDate])
+  @@map("store_expenses")
+}
+
+/// RS-8 — one CLOSED month of one reseller store's P&L (PNL-CF-1's shape).
+///
+/// Written once, when the month closes, and never updated: the report as
+/// it stood, plus every drill-down row in `store_pnl_snapshot_rows`. A
+/// change found later is a `store_pnl_carry_forwards` row counted in the
+/// month then open — a closed month is never reopened.
+model StorePnlPeriod {
+  id                String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId           String    @map("store_id") @db.Uuid
+  /// `YYYY-MM`, an Indian calendar month (CHECK).
+  month             String
+  closedAt          DateTime  @default(now()) @map("closed_at") @db.Timestamptz
+  /// SYSTEM for the scheduled close.
+  closedByActorType ActorType @map("closed_by_actor_type")
+  /// The report exactly as it was frozen.
+  report            Json
+
+  store SellerStore           @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  rows  StorePnlSnapshotRow[]
+
+  @@unique([storeId, month])
+  @@map("store_pnl_periods")
+}
+
+/// RS-8 — one drill-down row of a closed store month, keyed by the
+/// record's STABLE id (a wallet entry, an expense) so a later
+/// recomputation can be compared record by record.
+model StorePnlSnapshotRow {
+  id        String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  periodId  String  @map("period_id") @db.Uuid
+  lineKey   String  @map("line_key")
+  refKey    String  @map("ref_key")
+  amountInr Decimal @map("amount_inr") @db.Decimal(14, 2)
+  /// How the drill-down showed the record (ref, sub-ref, date).
+  label     Json
+
+  period StorePnlPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, lineKey, refKey])
+  @@map("store_pnl_snapshot_rows")
+}
+
+/// RS-8 — a change to a CLOSED store month, APPEND-ONLY, counted in the
+/// month that was open when it was found (`landed_month`).
+model StorePnlCarryForward {
+  id              String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId         String   @map("store_id") @db.Uuid
+  /// The closed month the record belongs to.
+  originMonth     String   @map("origin_month")
+  /// The month it is counted in.
+  landedMonth     String   @map("landed_month")
+  lineKey         String   @map("line_key")
+  refKey          String   @map("ref_key")
+  /// What had been reported for the record, and what it is now (null = not in the month).
+  amountBeforeInr Decimal? @map("amount_before_inr") @db.Decimal(14, 2)
+  amountAfterInr  Decimal? @map("amount_after_inr") @db.Decimal(14, 2)
+  deltaInr        Decimal  @map("delta_inr") @db.Decimal(14, 2)
+  reason          String   @db.Text
+  label           Json
+  detectedAt      DateTime @default(now()) @map("detected_at") @db.Timestamptz
+
+  store SellerStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@index([storeId, landedMonth])
+  @@index([storeId, originMonth])
+  @@map("store_pnl_carry_forwards")
+}
+
+/// RS-9 — the seller's rule for pausing one of their reseller stores
+/// automatically when too many of its parcels come back. No row ⇒ never.
+/// Written only by `ResellerAutoPauseService`; the pause itself goes
+/// through `ResellerStoreService` (the ONLY writer of a store's status).
+model ResellerStoreAutoPause {
+  storeId               String    @id @map("store_id") @db.Uuid
+  enabled               Boolean   @default(true)
+  /// Pause when more than this share of the store's parcels with a known
+  /// fate came back (0–100, CHECK).
+  returnRatePercent     Decimal   @map("return_rate_percent") @db.Decimal(5, 2)
+  /// …and at least this many parcels reached a fate (≥ 1, CHECK).
+  minDecidedOrders      Int       @default(10) @map("min_decided_orders")
+  /// Over the last N days (1–365, CHECK).
+  windowDays            Int       @default(30) @map("window_days")
+  updatedBySellerUserId String?   @map("updated_by_seller_user_id") @db.Uuid
+  lastEvaluatedAt       DateTime? @map("last_evaluated_at") @db.Timestamptz
+  lastPausedAt          DateTime? @map("last_paused_at") @db.Timestamptz
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  store SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("reseller_store_auto_pause")
 }

@@ -118,6 +118,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // RS-1: the class-level read of @Controller admin/reseller-stores;
   // opening one for a seller needs reseller.stores.manage at the handler.
   ['/reseller-stores', 'reseller.stores.view'],
+  // RS-9: fraud flags and disputes read on reseller.stores.view (the
+  // controller's class gate); the float (money.treasury.view) and pausing
+  // (reseller.stores.pause) are gated in the page and at the handler.
+  ['/reseller-stores/analysis', 'reseller.stores.view'],
   // RS-6: the queues a Skydrop-managed store feeds — the same read gate as
   // the seller money queues (/topups, /withdrawals); accepting, approving
   // and paying are gated in the page and at the API on their own keys.

@@ -49,5 +49,9 @@ import { StoreTeamService } from './services/store-team.service';
     StaffJwtGuard,
     StoreJwtGuard,
   ],
+  // RS-9 — the reports module pauses a store through the ONE writer of a
+  // store's status (the seller's auto-pause rule, and staff acting on a
+  // fraud flag). It imports nothing store-shaped back, so no cycle.
+  exports: [ResellerStoreService],
 })
 export class ResellerStoreModule {}

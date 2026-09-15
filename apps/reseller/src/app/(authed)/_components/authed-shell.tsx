@@ -7,7 +7,9 @@ import { useApiClient } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
 import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
 import {
+  BarChart3,
   Contact,
+  ReceiptText,
   FileSignature,
   LayoutDashboard,
   Package,
@@ -56,6 +58,8 @@ export function AuthedShell({
         { href: '/catalogue', label: 'Catalogue', icon: <Package size={15} /> },
         { href: '/terms', label: 'Terms', icon: <FileSignature size={15} /> },
         { href: '/wallet', label: 'Wallet', icon: <Wallet size={15} /> },
+        { href: '/reports', label: 'Reports', icon: <BarChart3 size={15} /> },
+        { href: '/expenses', label: 'Expenses', icon: <ReceiptText size={15} /> },
       ],
     },
     {

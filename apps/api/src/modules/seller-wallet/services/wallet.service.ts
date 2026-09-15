@@ -112,6 +112,15 @@ function isCredit(d: WalletEntryDirection): boolean {
   return CREDIT_DIRECTIONS.has(d);
 }
 
+/**
+ * Which way a seller wallet direction points, for REPORTS that sum entries
+ * (RS-8's transfer revenue by store). The same set `applyEntry` signs
+ * with — a report must never keep a second copy of it (WAL-1).
+ */
+export function isSellerWalletCredit(d: WalletEntryDirection): boolean {
+  return isCredit(d);
+}
+
 @Injectable()
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);

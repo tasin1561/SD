@@ -12,6 +12,7 @@ import { canSeePath } from '@/lib/page-access';
 import { quickActionsFor } from '@/lib/quick-actions';
 import {
   AlertTriangle,
+  BarChart3,
   Boxes,
   Building2,
   LayoutDashboard,
@@ -20,6 +21,7 @@ import {
   KeyRound,
   Package,
   PackageOpen,
+  PackageSearch,
   Settings,
   Store,
   Tags,
@@ -107,6 +109,17 @@ export function AuthedShell({
           href: '/reseller-stores/price-list',
           label: 'Reseller price list',
           icon: <Tags size={15} />,
+        },
+        // RS-8 / RS-9 — how the stores are doing, and the stock they sell.
+        {
+          href: '/reseller-stores/reports',
+          label: 'Reseller reports',
+          icon: <BarChart3 size={15} />,
+        },
+        {
+          href: '/reseller-stores/stock-forecast',
+          label: 'Stock forecast',
+          icon: <PackageSearch size={15} />,
         },
       ],
     },

@@ -275,6 +275,11 @@ export function permissionsFor(kind: SystemIssueKind): readonly string[] {
       // the consequence — a request that never closed, an order never
       // billed — long before anybody reading a settings page does.
       return [RESOLVER, 'money.treasury.view'];
+    case SystemIssueKind.RESELLER_RISK:
+      // A reseller store's orders look wrong (RS-9 fraud flags). Whoever
+      // reads reseller stores sees the flags; pausing one needs its own
+      // key (`reseller.stores.pause`), held by fewer people.
+      return [RESOLVER, 'reseller.stores.view'];
     case SystemIssueKind.API_ERROR:
       // An endpoint of ours is throwing. Nobody's ROLE fixes that — it
       // is a code change — so it goes to whoever opens the board,

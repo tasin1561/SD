@@ -304,6 +304,18 @@ export const SELLER_PERMISSIONS = [
     group: 'Reseller stores',
     sensitive: true,
   },
+  {
+    // RS-8 / RS-9 — what each store is worth to you: its scorecard and
+    // balance, the transfer revenue it brought in, stores ranked by the
+    // profit they made you, and the stock forecast. Never a store's own
+    // expenses or P&L — those are the store's books.
+    key: 'stores.reports',
+    label: 'See reseller store reports',
+    description:
+      'Each reseller store’s scorecard (delivery, return, confirmation and cancel rates, units, margin) and balance, the transfer revenue it brought you, stores ranked by profit, and how long your stock will last.',
+    group: 'Reseller stores',
+    sensitive: true,
+  },
 ] as const satisfies readonly SellerPermissionDef[];
 
 /** Keys declared for a later phase; no endpoint checks them yet. */

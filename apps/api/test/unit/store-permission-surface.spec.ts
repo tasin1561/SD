@@ -229,6 +229,34 @@ describe('store permission surface (RS-2)', () => {
     ).toBe(true);
   });
 
+  it('RS-8: reports and the expense book — finance and admin by default, and the endpoints behind them', () => {
+    const byKey = new Map(DEFAULT_STORE_ROLES.map((r) => [r.key, r.permissions]));
+    for (const key of ['admin', 'finance'] as const) {
+      expect(byKey.get(key)).toEqual(
+        expect.arrayContaining(['reports.view', 'expenses.view', 'expenses.manage']),
+      );
+    }
+    // A P&L and an expense book are not day-to-day order work.
+    for (const key of ['ops', 'viewer'] as const) {
+      expect(byKey.get(key)).not.toContain('reports.view');
+      expect(byKey.get(key)).not.toContain('expenses.view');
+      expect(byKey.get(key)).not.toContain('expenses.manage');
+    }
+    const got = (file: string): string[] =>
+      HANDLERS.filter((h) => h.file === file).map(
+        (h) =>
+          `${h.method} ${h.name} → ${Array.isArray(h.permissions) ? h.permissions.join(',') : String(h.permissions)}`,
+      );
+    expect(got('store-reports.controller.ts').every((h) => h.endsWith('→ reports.view'))).toBe(
+      true,
+    );
+    expect(got('store-expense.controller.ts')).toEqual([
+      'Get list → expenses.view',
+      'Post record → expenses.manage',
+      'Post remove → expenses.manage',
+    ]);
+  });
+
   it('no store controller reaches for a seller or staff guard', () => {
     // A store route guarded by the wrong identity would accept the wrong
     // token. Every controller mentioning the store guard uses only it.

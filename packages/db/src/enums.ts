@@ -158,3 +158,5 @@ export {
 export { ResellerCreditTrigger } from '@prisma/client';
 // RS-6 — reseller store wallets.
 export { StoreWalletEntryDirection } from '@prisma/client';
+// RS-8 — a reseller store's own expenses.
+export { StoreExpenseCategory } from '@prisma/client';

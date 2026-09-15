@@ -42,6 +42,8 @@ import { TreasuryReadService } from './services/treasury-read.service';
   ],
   // PnlService: the carry-forward P&L freezes and re-runs the SAME engine
   // /pnl prints (PNL-CF-1), rather than a second computation that drifts.
-  exports: [BankLedgerService, SellerCashAttributionService, PnlService],
+  // InstantPayAdvanceService: RS-9's float view reads WAL-9's advance list
+  // rather than restating its predicate.
+  exports: [BankLedgerService, SellerCashAttributionService, PnlService, InstantPayAdvanceService],
 })
 export class TreasuryModule {}

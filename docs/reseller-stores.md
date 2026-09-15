@@ -1074,3 +1074,236 @@ the lock), `order-write.service.spec.ts` (the guard on every reserve),
 end to end, confirm with set-aside / shared / channel and OUT_OF_STOCK
 routing, the close race both ways) and the RS-5 cases in
 `tenant-isolation.e2e-spec.ts`.
+
+## Reports and analysis as built (RS-8 / RS-9, 2026-09-15)
+
+Leaf module `reseller-reports` (imports AuthCommon, CatalogRead,
+InventoryStock, NotificationAudience, ResellerStore, ResellerStoreWallet,
+Settings, Treasury; exports nothing). Migration
+`20260914260000_reseller_reports`. Built beside phase 3c, not on top of it:
+**nothing here computes a fee share, a transfer price, a COD tax or a
+credit.** Every figure is READ from the ledgers by direction, so it is
+correct for whatever 3c posts, and the specs drive it with fixture entries
+of exactly the shapes 3c writes.
+
+### Rules every report follows
+
+- Derived on read, never stored (the frozen months below are the only
+  snapshots, and they are copies of a read).
+- Windows are half-open `[from, to)`, cut at IST midnight
+  (`report-window.ts`: default the last 30 days, `INVALID_DATE`,
+  `INVALID_RANGE`, at most 400 days). Ledger rows are dated by `created_at`;
+  an expense by its IST day (`expenseDate − 330 min`).
+- Every line is the SUM of its rows, and every row has a stable id (the
+  wallet entry, the expense). Two adjacent windows add up to the span.
+- Pure arithmetic lives in `*.ts` modules with no database
+  (`store-pnl-lines.ts`, `store-pnl-carry-forward.ts`,
+  `reseller-scorecard.ts`, `reseller-fraud-rules.ts`, `autoPauseVerdict`);
+  services only load rows.
+
+### Store P&L (store `reports.view`)
+
+`GET /store/reports/pnl?from&to`. The owner's formula — retail − transfer −
+fee shares − return fees − the store's own expenses — read off the store
+wallet by direction (`placeDirection`, F2-exhaustive over
+`StoreWalletEntryDirection`, so a new direction fails to compile until it
+is placed):
+
+| Line | Kind | From |
+|---|---|---|
+| `order_margin` "Order credits" | revenue | ORDER_CREDIT (+), ORDER_CREDIT_REVERSAL (−) |
+| `prepaid_sales` "Prepaid sales" | revenue | the order's snapshot retail on each PREPAID_DEBIT (+) / PREPAID_REFUND (−) |
+| `prepaid_cost` "Paid for prepaid orders" | cost | PREPAID_DEBIT (+) / PREPAID_REFUND (−) |
+| `fee_shares` | cost | FEE_SHARE whose `share_of` is a delivery / COD / Instant Pay fee |
+| `return_fees` | cost | FEE_SHARE whose `share_of` is RTO_FEE or CUSTOMER_RETURN_FEE |
+| `cod_tax_share` | cost | COD_TAX_SHARE, and FEE_SHARE with `share_of` GST_WITHHOLDING |
+| `expenses` | cost | `store_expenses` not deleted, by category |
+
+A SHARE_REFUND comes off the line of the share its `linked_entry_id`
+names (falling back to its own `share_of`). TOPUP / SELLER_TOPUP /
+WITHDRAWAL / SELLER_PAYOUT are CASH, reported beside the P&L as cash in and
+out, never as profit. Net = revenue − cost. **Why this tiles whatever 3c
+decides:** apart from prepaid sales (a snapshot figure, not money that
+passed through us) every non-cash line is the store wallet's own movement,
+so the P&L can never disagree with the store's balance — if 3c credits the
+margin net of shares with no separate share entries, the share lines are
+simply zero. The store also sees its position (`/position` — balance,
+withdrawable, open requests, from `StoreWalletService.summary`), its
+expenses and its withdrawals.
+
+**Months (carry-forward, PNL-CF-1 for a store).** `GET /store/reports/pnl/months`
+and `/pnl/months/:month`. The `reseller-reports` worker closes every ended
+month from the store's first, oldest first, hourly (`12 * * * *` IST):
+under `AdvisoryLock.STORE_PNL_PERIOD` a close first carries changes to the
+months before it INTO the month being closed, then freezes the report and
+every row. Refusals: `STORE_PNL_MONTH_NOT_ENDED`,
+`STORE_PNL_EARLIER_MONTH_OPEN`, `OUT_OF_RANGE`; a closed month answers
+`ALREADY_CLOSED`. Detect (`40 6 * * *` IST) recomputes every closed month,
+diffs it row by row against snapshot + carries already written, and
+appends each change to the month then open with before, after and a reason
+("Expense dated 28 Aug recorded after the month closed", "…removed after
+the month closed: <reason>"). Running it twice adds nothing. **Simpler than
+Skydrop's on purpose:** no provisional state and no re-lock — a store
+ledger waits on no nightly courier job. Invariant (spec): Σ frozen months +
+Σ carry-forwards + the open month live = the live span, per line.
+
+### Store expenses (store `expenses.view` / `expenses.manage`)
+
+`GET /store/expenses?from&to`, `POST /store/expenses` (category, amount,
+IST date, description, reference, IDEM-1 key — a replay returns the
+original, a different request on the same key is `IDEMPOTENCY_KEY_REUSED`),
+`POST /store/expenses/:id/remove` (reason ≥ 5 characters, a guarded
+`updateMany` scoped by the token's store — another store's id is
+`EXPENSE_NOT_FOUND`). Refused: `EXPENSE_DATE_IN_FUTURE`,
+`EXPENSE_BEFORE_STORE` (before the store's first month). Audited MEDIUM
+(`store.expense.recorded` / `.removed`, actor STORE). Never edited, never a
+bank or wallet entry, and never offered to the seller.
+
+### Store analysis (store `reports.view`)
+
+`GET /store/reports/analysis`: confirmation rate, delivery and return rates
+(the scorecard rules below), profit per product (retail − transfer per
+line, from the order snapshot — fee shares are NOT allocated to products,
+and the page says so), returns by pincode (top 50), and return on ad spend
+= order margin ÷ AD_SPEND expenses in the window (null with no ad spend).
+`GET /store/reports/cash-flow`: money already credited, and what is still
+to come for open orders by the store's credit trigger (`creditDue`,
+F2 over `ResellerCreditTrigger`) in IST weeks, plus a "waiting on an
+outcome" bucket — the forecast is retail − transfer BEFORE shares, and
+says so. The store never sees the seller's unit cost.
+
+### Seller reporting (seller `stores.reports`)
+
+`GET /seller/reseller-reports/scorecards` — per store: placed, confirmed,
+called off, delivered, returned, lost; **confirmation = confirmed ÷ decided**
+(decided = ever confirmed + called off before confirmation); **cancel =
+called off ÷ placed**; **delivery / return = delivered or returned ÷
+outcomes** (delivered + returned + lost) — a rate divides only by orders
+whose outcome is known; margin = (transfer − the seller's unit cost) × qty
+where a cost is known (the picked batch, else the latest costed batch),
+coverage stated beside it; the store's wallet balance; the seller's net
+from the store (their wallet entries on its orders, signed by
+`isSellerWalletCredit` — the ONE credit set); COGS, profit, and the stores
+RANKED by profit. **Never the store's expenses or its P&L** (there is no
+seller route to either — pinned in `tenant-isolation.e2e-spec.ts`).
+`GET /seller/reseller-reports/transfer-revenue` — the seller's reporting
+gains transfer revenue BY STORE: one row per seller wallet entry naming a
+reseller order, by `created_at`, rows adding up to each store's total.
+Skydrop's own `PnlService` is untouched.
+
+### Auto-pause (RS-9)
+
+`PUT /seller/reseller-reports/stores/:storeId/auto-pause` (`stores.manage`;
+enabled, limit %, minimum outcomes, window days; audited). Hourly
+(`27 * * * *` IST) for ACTIVE stores only: returned ÷ (delivered +
+returned) over the window, counting only outcomes since the later of the
+window start and a RESUMED event after the last pause (so a store the
+seller just resumed is not paused again by the same history). **Pause when
+outcomes ≥ minimum AND the rate is ABOVE the limit.** The pause is
+`ResellerStoreService.autoPause` — the one status writer, a SYSTEM actor
+(`actorId` null, `ActorType.SYSTEM`), the same guarded PAUSE, event and
+audit — and the seller is told in-app on `seller.reseller_store_auto_paused`
+(to `stores.manage` holders; silenceable). Resume stays the seller's.
+
+### Stock forecast (RS-9)
+
+`GET /seller/reseller-reports/stock-forecast`: per variant enabled on a
+live store, days of stock = sellable available (INV-3, via
+`StockReadService`) ÷ (units confirmed in the last
+`reseller.stock_forecast_window_days` ÷ days); reorder when below
+`reseller.stock_reorder_days` (both SET-1, seller-overridable). An in-app
+reorder alert from a daily job (`15 8 * * *` IST), sent at most once per
+seller per ISO week (event id
+`reseller_stock_reorder:<seller>:<isoWeek>:inapp`) on the silenceable
+`seller.reseller_stock_reorder` topic, to `stores.reports` holders.
+
+### Admin analysis (staff `reseller.stores.view`)
+
+`GET /admin/reseller-analysis/fraud-flags` — the flags, each with its
+reason in words, over `reseller.fraud_window_days` (30):
+
+| Rule | Crossed when | Default |
+|---|---|---|
+| CANCEL_RATE | called off ÷ placed ≥ `fraud_cancel_rate_percent` | 40% |
+| RETURN_RATE | returned ÷ outcomes ≥ `fraud_return_rate_percent` | 40% |
+| NDR_RATE | parcels with a failed delivery attempt ÷ dispatched ≥ `fraud_ndr_rate_percent` | 50% |
+| RAPID_ORDERS | most orders placed inside one hour ≥ `fraud_orders_per_hour` | 30 |
+| RETAIL_MARKUP | a line's retail above the suggested retail by more than `fraud_retail_markup_percent` | 100% |
+| SHARED_CUSTOMER | one customer phone (shown masked) on ≥ `fraud_shared_phone_stores` stores | 3 |
+
+The three rates are judged only once a store has placed
+`fraud_min_orders` (10). Severity MEDIUM when crossed, HIGH at twice the
+threshold. The daily sweep (`5 7 * * *` IST) reads the SAME computation and
+raises one `RESELLER_RISK` issue per (rule, store), keyed
+`reseller-fraud:<rule>:<storeId>`, resolving it when the store is back
+under — so a flag is listed on every read but an issue is raised only when
+a threshold is crossed. `permissionsFor(RESELLER_RISK)` addresses
+`reseller.stores.view`. `POST /admin/reseller-analysis/stores/:id/pause`
+needs the new DANGEROUS `reseller.stores.pause` (reason, audited; resume
+stays the seller's). `GET …/disputes` — tickets on reseller orders from
+the last 365 days, by store, type and status. `GET …/float`
+(`money.treasury.view`) — per seller and store: wallet balances, money
+credited on reseller orders before the courier paid, and the Instant Pay
+advance, read from WAL-9's `InstantPayAdvanceService` (now exported by
+`TreasuryModule`) filtered to reseller orders rather than restating its
+predicate.
+
+### Worker
+
+Queue `reseller-reports` (`ResellerReportsWorker`, gated by
+`WorkerRoleService.shouldStart`, repeat jobs in `Asia/Kolkata`):
+`store-pnl-close` `12 * * * *`, `store-pnl-detect` `40 6 * * *`,
+`reseller-auto-pause` `27 * * * *`, `reseller-fraud-sweep` `5 7 * * *`,
+`reseller-stock-forecast` `15 8 * * *`. Notifications are awaited and never
+throw (no fire-and-forget writer, so no new NOTIF-19 drain hook).
+
+### Permissions
+
+Store: new group "Reports" — `reports.view`, `expenses.view`,
+`expenses.manage` (all sensitive; defaults admin and finance; the owner
+implicitly; granted to existing stores by the migration). Seller:
+`stores.reports` (sensitive; granted to system admin roles that hold
+`stores.manage`, not backfilled to anyone else — a company decides who
+reads store profitability). Staff: `reseller.stores.pause` (dangerous).
+Pinned in `store-permission-surface.spec.ts` (defaults and the expense
+controller's handlers).
+
+### Screens
+
+No chart library exists in the workspace and none was added: every screen
+is tables and `Stat` tiles. apps/reseller: **Reports** (`/reports` — the
+P&L with its lines and rows, cash, months and carry-forwards;
+`/reports/analysis` — rates, products, pincodes, ROAS, cash-flow weeks) and
+**Expenses** (`/expenses` — list, record with an IDEM-1 key per form,
+remove with a reason; writes shown only with `expenses.manage`, FE-2).
+apps/seller: `/reseller-stores/reports` (scorecards, ranking, transfer
+revenue by store, the auto-pause modal behind `stores.manage`) and
+`/reseller-stores/stock-forecast`. apps/admin:
+`/reseller-stores/analysis` (fraud flags, disputes, float; pause behind
+`reseller.stores.pause`, float behind `money.treasury.view`).
+
+### Tests
+
+Unit (fake DB, `pnl-fake-db.ts` with column defaults added in
+`store-pnl-fixtures.ts`): `store-pnl.spec.ts` (6 — placement, a refund
+classified by its link, rows add up with stable ids, adjacent windows tile,
+store scoping, every direction placed), `store-pnl-carry-forward.spec.ts`
+(3 — ordered close and its refusals, back-dated and removed expenses
+carried once with reasons, the close-time carry, the invariant),
+`store-expense.service.spec.ts` (4), `reseller-auto-pause.spec.ts` (4),
+`reseller-scorecard.spec.ts` (4), `reseller-fraud-rules.spec.ts` (6); plus
+`store-permission-surface.spec.ts` and `notification-topic-catalog.service.spec.ts`.
+E2E (CI only): three RS-8 / RS-9 cases in `tenant-isolation.e2e-spec.ts`,
+and the five new tables are in the e2e reset.
+
+### Not done / decided
+
+- Store months have no provisional state or re-lock (see above).
+- Fee shares are not allocated to products; the cash-flow forecast is
+  before shares.
+- The disputes view looks back 365 days.
+- `stores.reports` is granted only to seller admin roles holding
+  `stores.manage`.
+- Nothing here has run against 3c's real entries yet: once 3c lands,
+  re-run `store-pnl.spec.ts` against its fixtures and read a real store's
+  P&L against its wallet balance movement.

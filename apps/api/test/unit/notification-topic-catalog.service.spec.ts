@@ -27,6 +27,10 @@ import {
   RESELLER_TERMS_ACCEPTED_TOPIC,
   RESELLER_TERMS_NEED_REVISION_TOPIC,
 } from '../../src/modules/reseller-store-terms/services/reseller-terms-notifier.service';
+import {
+  RESELLER_STOCK_REORDER_TOPIC,
+  RESELLER_STORE_AUTO_PAUSED_TOPIC,
+} from '../../src/modules/reseller-reports/services/reseller-reports-notifier.service';
 
 /** Seller topics sent by something other than the lifecycle listener,
  *  each named by its sender's own constant. */
@@ -43,6 +47,9 @@ const OTHER_SELLER_SENDERS = [
   // RS-4: a store accepted the seller's terms; stores needing new terms.
   RESELLER_TERMS_ACCEPTED_TOPIC,
   RESELLER_TERMS_NEED_REVISION_TOPIC,
+  // RS-9: a store auto-paused on its return rate; stock running low.
+  RESELLER_STORE_AUTO_PAUSED_TOPIC,
+  RESELLER_STOCK_REORDER_TOPIC,
 ];
 
 /** Staff topics that are not system issues (TKT-3), by their sender's constant. */
