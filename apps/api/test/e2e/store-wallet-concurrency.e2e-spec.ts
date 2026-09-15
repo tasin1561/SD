@@ -294,6 +294,9 @@ describe('Store wallet concurrency (e2e)', () => {
 
     const other = await makeStore();
     await storeWrite(other, StoreWalletEntryDirection.TOPUP, '1');
+    // Paused first (RS-1, amended 2026-09-15): an ACTIVE store cannot be
+    // closed at all, so the wallet refusal is only reachable once paused.
+    await stores.pause(sellerId, other, actor, 'Pausing before closing it for good');
     await expect(
       stores.close(sellerId, other, actor, 'Closing this reseller store for good'),
     ).rejects.toMatchObject({ response: { code: 'STORE_WALLET_NOT_SETTLED' } });
@@ -301,6 +304,6 @@ describe('Store wallet concurrency (e2e)', () => {
       where: { id: other },
       select: { status: true },
     });
-    expect(after.status).toBe(ResellerStoreStatus.ACTIVE);
+    expect(after.status).toBe(ResellerStoreStatus.PAUSED);
   });
 });

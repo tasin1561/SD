@@ -492,7 +492,13 @@ describe('reseller store orders (e2e)', () => {
       expect(await h.prisma.order.count({ where: { storeId: store.storeId } })).toBe(0);
     });
 
-    it('an order committed first: the close waiting on the store row counts it and is refused', async () => {
+    // Since 2026-09-15 (RS-1, amended) a store is closed only from PAUSED,
+    // and a PAUSED store takes no orders — so an order and a CLOSE can no
+    // longer race. The race that remains is an order against the PAUSE,
+    // and the lock that decides it is the same row lock: the pause waits
+    // for an order already being placed, lets it through, and the paused
+    // store then cannot close while that order is still in flight.
+    it('an order committed first: the pause waiting on the store row lets it through, and the store cannot close while it is in flight', async () => {
       await receiveStock(10);
       const store = await makeStore('racing');
       await sellVariant(store.storeId, { stockMode: 'SHARED' });
@@ -550,25 +556,34 @@ describe('reseller store orders (e2e)', () => {
       );
       await isLocked;
 
-      const close = pending(
+      const pause = pending(
         request(h.baseUrl)
-          .post(`/seller/reseller-stores/${store.storeId}/close`)
+          .post(`/seller/reseller-stores/${store.storeId}/pause`)
           .set(sellerAuth)
-          .send({ reason: 'Closing the store for good' })
+          .send({ reason: 'Pausing the store before closing it' })
           .then((r) => r),
       );
       await new Promise((r) => setTimeout(r, 700));
-      expect(close.settled()).toBe(false); // waiting on the row lock
+      expect(pause.settled()).toBe(false); // waiting on the row lock
       release();
       await placing;
-      const res = await close.promise;
+      const paused = await pause.promise;
+      expect(paused.status).toBe(200);
+      expect(paused.body.status).toBe('PAUSED');
+
+      // The order got in before the pause, so the store cannot close yet.
+      const res = await request(h.baseUrl)
+        .post(`/seller/reseller-stores/${store.storeId}/close`)
+        .set(sellerAuth)
+        .send({ reason: 'Closing the store for good' });
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('STORE_HAS_ORDERS_IN_FLIGHT');
+      expect(String(res.body.message)).toContain('SD-2026-98-');
       const after = await h.prisma.sellerStore.findUniqueOrThrow({
         where: { id: store.storeId },
         select: { status: true },
       });
-      expect(after.status).toBe('ACTIVE');
+      expect(after.status).toBe('PAUSED');
     });
   });
 

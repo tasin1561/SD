@@ -126,7 +126,10 @@ export class SellerResellerStoreController {
 
   @Post(':storeId/close')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Close for good — refused while any order is in flight (HIGH audit)' })
+  @ApiOperation({
+    summary:
+      'Close for good — a paused store with every order done, no credit to run and ₹0 in its wallet (HIGH audit)',
+  })
   close(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('storeId', new ParseUUIDPipe({ version: '7' })) storeId: string,
