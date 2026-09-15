@@ -5,6 +5,12 @@ import { OrderChargesRefundService } from '../../src/modules/seller-wallet-accru
 const lockTaken = jest.fn(async () => 1);
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
+/** RS-6 phase 3c — every order in this suite is a channel order. */
+const NO_RESELLER_MONEY = {
+  isResellerOrder: async () => false,
+  head: async () => null,
+} as never;
+
 type AnyArgs = Record<string, unknown>;
 
 function makeSut(
@@ -62,6 +68,7 @@ function makeSut(
     { client } as unknown as PrismaService,
     { applyEntry } as never,
     { log: auditLog } as never,
+    NO_RESELLER_MONEY,
   );
   return { svc, applyEntry, auditLog };
 }

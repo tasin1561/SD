@@ -12,6 +12,9 @@ import { CourierEscalationModule } from '../courier-escalation/courier-escalatio
 import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
 import { SellerNotificationPreferenceModule } from '../seller-notification-preference/seller-notification-preference.module';
+import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order-money.module';
+import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
+import { StoreTicketController } from './controllers/store-ticket.controller';
 
 /**
  * R7 — unified ticket system (scrap/damage + seller-raised issues).
@@ -32,14 +35,19 @@ import { SellerNotificationPreferenceModule } from '../seller-notification-prefe
     NotificationAudienceModule,
     NotificationLedgerModule,
     SellerNotificationPreferenceModule,
+    // RS-7 — the transfer-price cap on a reseller order's compensation, and
+    // the store ↔ seller dispute settlement pair. It sits UNDER ticket and
+    // imports nothing ticket-shaped, so there is no cycle.
+    ResellerOrderMoneyModule,
   ],
-  controllers: [SellerTicketController, AdminTicketController],
+  controllers: [SellerTicketController, AdminTicketController, StoreTicketController],
   providers: [
     TicketService,
     TicketStateMachineService,
     TicketNotifier,
     SellerJwtGuard,
     StaffJwtGuard,
+    StoreJwtGuard,
   ],
   exports: [TicketService],
 })

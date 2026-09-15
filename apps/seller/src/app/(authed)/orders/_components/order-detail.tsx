@@ -56,6 +56,7 @@ import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 import { ConsigneePanel } from '../[id]/_components/consignee-panel';
+import { ResellerMoneyPanel } from '../[id]/_components/reseller-money-panel';
 
 /** The public tracking site. Env-driven so a domain change is a deploy
  *  variable rather than a code edit. */
@@ -602,6 +603,19 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   <OrderChargesSection orderId={orderId} />
                 </Section>
               )}
+
+              {/* RS-6 phase 3c — a reseller store's order: your transfer
+              price, your fee shares, and when. Hidden from a VIEWER,
+              whom the endpoint refuses (cosmetic — FE-2). */}
+              <ResellerMoneyPanel
+                orderId={orderId}
+                enabled={
+                  detail.data.storeKind === 'RESELLER' &&
+                  identity !== null &&
+                  identity.role !== 'VIEWER' &&
+                  can(identity, 'orders.view')
+                }
+              />
 
               <Section title={<Titled icon={FileText}>Invoice</Titled>}>
                 <OrderInvoiceSection orderId={orderId} status={detail.data.status} />

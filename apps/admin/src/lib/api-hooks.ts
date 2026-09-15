@@ -349,6 +349,21 @@ export function useOrderDetail(id: string): UseQueryResult<OrderView> {
   });
 }
 
+// RS-6 phase 3c — a reseller order's money, both parties, both wallets.
+import type { ResellerOrderMoneyView } from '@skydrop/api-client';
+
+export function useResellerOrderMoney(
+  id: string,
+  enabled: boolean,
+): UseQueryResult<ResellerOrderMoneyView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-orders', 'reseller-money', id],
+    queryFn: () => client.request<ResellerOrderMoneyView>(`/api/admin/orders/${id}/reseller-money`),
+    enabled: enabled && Boolean(id),
+  });
+}
+
 // Admin order events — full timeline (all events, including
 // isVisibleToSeller=false ones the seller wouldn't see).
 import type { SellerOrderEventView as AdminOrderEventView } from '@skydrop/api-client';

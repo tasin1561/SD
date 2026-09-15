@@ -8,6 +8,7 @@ import {
   WalletEntryDirection,
 } from '@skydrop/db';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
@@ -31,7 +32,10 @@ import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock
  */
 @Injectable()
 export class OrderChargesAccrualService {
-  constructor(private readonly wallet: WalletService) {}
+  constructor(
+    private readonly wallet: WalletService,
+    private readonly resellerMoney: ResellerOrderMoneyService,
+  ) {}
 
   async debitIfNeeded(
     tx: Prisma.TransactionClient,
@@ -41,6 +45,13 @@ export class OrderChargesAccrualService {
     // WAL-7: the idempotency read must be serialised against a
     // concurrent one, or both see "not charged" and both charge.
     await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
+
+    // RS-6 phase 3c: a reseller store's order splits the fee between the
+    // store and the seller by its snapshot — the SAME moment, the same
+    // total, two wallets. A channel order never enters this branch.
+    if (await this.resellerMoney.isResellerOrder(tx, orderId)) {
+      return this.resellerMoney.chargeDeliveryFee(tx, orderId);
+    }
 
     // Billed means MORE charges than refunds (2026-09-12). A charge that
     // was refunded — the parcel was lost, or the order called off — and

@@ -12,6 +12,7 @@ import {
   ReceiptText,
   FileSignature,
   LayoutDashboard,
+  MessagesSquare,
   Package,
   PlugZap,
   Settings,
@@ -60,6 +61,7 @@ export function AuthedShell({
         { href: '/wallet', label: 'Wallet', icon: <Wallet size={15} /> },
         { href: '/reports', label: 'Reports', icon: <BarChart3 size={15} /> },
         { href: '/expenses', label: 'Expenses', icon: <ReceiptText size={15} /> },
+        { href: '/tickets', label: 'Disputes', icon: <MessagesSquare size={15} /> },
       ],
     },
     {

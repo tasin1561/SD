@@ -11,6 +11,12 @@ import type { BankLedgerService } from '../../src/modules/treasury/services/bank
 import type { SellerCashAttributionService } from '../../src/modules/treasury/services/seller-cash-attribution.service';
 import { AdvisoryLock, advisoryKey } from '../../src/common/db/advisory-lock';
 
+/** RS-6 phase 3c — every order in this suite is a channel order. */
+const NO_RESELLER_MONEY = {
+  isResellerOrder: async () => false,
+  head: async () => null,
+} as never;
+
 type AnyArgs = Record<string, unknown>;
 
 const STAFF = 'staff-1';
@@ -210,7 +216,15 @@ function makeSut(
   } as unknown as SellerCashAttributionService;
 
   return {
-    svc: new CourierSettlementService(prisma, audit, codCredit, wallet, bank, attribution),
+    svc: new CourierSettlementService(
+      prisma,
+      audit,
+      codCredit,
+      wallet,
+      bank,
+      attribution,
+      NO_RESELLER_MONEY,
+    ),
     wallet: wallet as unknown as { recomputeCacheAfterCommit: jest.Mock },
     executeRaw,
     creditForOrder,
@@ -1266,6 +1280,7 @@ describe('CourierSettlementService.allocateMore', () => {
           toSeller: amount,
         })),
       } as unknown as SellerCashAttributionService,
+      NO_RESELLER_MONEY,
     );
     // getById reads back through the same client; stub it out — the
     // return shape is pinned by record()'s own tests.

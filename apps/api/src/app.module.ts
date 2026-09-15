@@ -104,6 +104,7 @@ import { ResellerStoreTermsModule } from './modules/reseller-store-terms/reselle
 import { ResellerStoreWalletModule } from './modules/reseller-store-wallet/reseller-store-wallet.module';
 import { ResellerOrderModule } from './modules/reseller-order/reseller-order.module';
 import { ResellerReportsModule } from './modules/reseller-reports/reseller-reports.module';
+import { ResellerOrderMoneyViewModule } from './modules/reseller-order-money-view/reseller-order-money-view.module';
 import { CourierWalletModule } from './modules/courier-wallet/courier-wallet.module';
 import { AdminRemittanceModule } from './modules/admin-remittance/admin-remittance.module';
 import { AdminReportsModule } from './modules/admin-reports/admin-reports.module';
@@ -251,6 +252,8 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     ResellerOrderModule,
     // RS-8 / RS-9 — reseller reports and analysis (leaf).
     ResellerReportsModule,
+    // RS-6 phase 3c — a reseller order's money, read by store / seller / staff.
+    ResellerOrderMoneyViewModule,
     CourierWalletModule,
     AdminSellerWalletModule,
     AdminWalletTransferModule,

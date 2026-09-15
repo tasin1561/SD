@@ -8,7 +8,9 @@ import {
   ActorType,
   Currency,
   Prisma,
+  ResellerMoneyParty,
   type RtoItemCondition,
+  SellerStoreKind,
   TicketHandling,
   TicketStatus,
   TicketType,
@@ -17,6 +19,7 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
 import { TicketStateMachineService } from './ticket-state-machine.service';
 import { allocateTicketNumber } from './ticket-numbering';
 import { TicketNotifier } from './ticket-notifier.service';
@@ -25,6 +28,13 @@ export interface TicketActor {
   readonly type: ActorType;
   readonly staffId?: string | null;
   readonly sellerUserId?: string | null;
+  /** RS-7 — a reseller store user on its own dispute. */
+  readonly storeUserId?: string | null;
+}
+
+/** The id a ticket event records for whoever acted. */
+function actorIdOf(actor: TicketActor): string | null {
+  return actor.staffId ?? actor.sellerUserId ?? actor.storeUserId ?? null;
 }
 
 /**
@@ -57,6 +67,8 @@ const TICKET_NAMES = {
     select: { receiptNumber: true, consignment: { select: { consignmentNumber: true } } },
   },
   events: OPENING_EVENT,
+  // RS-7 — the reseller store a STORE_DISPUTE is raised by, by name.
+  store: { select: { name: true, displayName: true } },
 } as const;
 
 /**
@@ -66,21 +78,22 @@ const TICKET_NAMES = {
  * write when an RTO inspection opens a scrap ticket read as "You" to the
  * seller who had never said it.
  */
-export type TicketOpener = 'STAFF' | 'SELLER' | 'SYSTEM';
+export type TicketOpener = 'STAFF' | 'SELLER' | 'SYSTEM' | 'STORE';
 
 function openedByOf(row: {
   openedByStaffId: string | null;
   openedBySellerUserId: string | null;
+  openedByStoreUserId?: string | null;
   events?: readonly { actorType: ActorType }[];
 }): TicketOpener {
   switch (row.events?.[0]?.actorType) {
     case ActorType.SELLER:
     case ActorType.API:
-    case ActorType.STORE:
-      // RS-2: no store user opens a ticket in phase 1. When store ↔ seller
-      // disputes arrive (RS-7), a store is on the customer-facing side of
-      // us, not ours — decided then, not guessed now.
       return 'SELLER';
+    case ActorType.STORE:
+      // RS-7 — a reseller store raising a dispute WITH its seller: neither
+      // the seller's words nor ours, so it is named for what it is.
+      return 'STORE';
     case ActorType.STAFF:
       return 'STAFF';
     case ActorType.SYSTEM:
@@ -89,6 +102,7 @@ function openedByOf(row: {
       // `typeof` rather than `!== null`: a caller that did not select the
       // column hands over undefined, which a null check reads as set.
       if (typeof row.openedBySellerUserId === 'string') return 'SELLER';
+      if (typeof row.openedByStoreUserId === 'string') return 'STORE';
       if (typeof row.openedByStaffId === 'string') return 'STAFF';
       return 'SYSTEM';
   }
@@ -162,6 +176,9 @@ export interface OpenTicketInput {
   /** The courier's own category, chosen by the seller. */
   readonly issueCategoryExternalId?: string | null;
   readonly issueSubcategoryExternalId?: string | null;
+  /** RS-7 — STORE_DISPUTE: the reseller store raising it, and who there. */
+  readonly storeId?: string | null;
+  readonly openedByStoreUserId?: string | null;
 }
 
 interface OpenResult {
@@ -228,7 +245,49 @@ export interface TicketView {
   readonly resolutionNotes: string | null;
   readonly resolvedAt: Date | null;
   readonly createdAt: Date;
+  /**
+   * RS-7 — the reseller store on a STORE_DISPUTE (null on every other
+   * ticket), and its name as its customers see it (display name ?? name).
+   */
+  readonly storeId: string | null;
+  readonly storeName: string | null;
+  /** RS-7 — on a settled STORE_DISPUTE, who paid the other. */
+  readonly disputePayer: ResellerMoneyParty | null;
 }
+
+/**
+ * RS-7 — what a reseller store is shown of its OWN dispute.
+ *
+ * Narrower than `TicketView` on purpose: no wallet entry ids (the seller
+ * half is the seller's ledger), no courier or receipt fields (a dispute
+ * has none), no seller-side taxonomy. Tickets carry no customer PII, and
+ * this adds none.
+ */
+export interface StoreTicketView {
+  readonly id: string;
+  readonly ticketNumber: string;
+  readonly openedBy: TicketOpener;
+  readonly ticketType: TicketType;
+  readonly status: TicketStatus;
+  readonly orderId: string | null;
+  readonly orderNumber: string | null;
+  readonly subject: string;
+  readonly description: string | null;
+  readonly resolutionAmountInr: string | null;
+  readonly disputePayer: ResellerMoneyParty | null;
+  readonly resolutionNotes: string | null;
+  readonly resolvedAt: Date | null;
+  readonly createdAt: Date;
+}
+
+export interface SettleStoreDisputeInput {
+  /** Decimal string, > 0, up to 2 dp. */
+  readonly amountInr: string;
+  readonly payer: ResellerMoneyParty;
+  readonly notes?: string | null;
+}
+
+const MONEY_2DP = /^\d+(\.\d{1,2})?$/;
 
 /**
  * R7 — sole writer of `tickets` + `ticket_events`.
@@ -255,6 +314,9 @@ export class TicketService {
     // TKT-3: every event this service writes is handed over for telling
     // the other side. Fire-and-forget and post-commit — see the notifier.
     private readonly notifier: TicketNotifier,
+    // RS-7 — the reseller-order money: the transfer-price cap on a
+    // compensation, and the store ↔ seller settlement pair.
+    private readonly resellerMoney: ResellerOrderMoneyService,
   ) {}
 
   /**
@@ -327,7 +389,7 @@ export class TicketService {
      * read, and letting it land silently is worse than saying no —
      * the seller thinks they have asked, and nobody has been asked.
      */
-    scope?: { sellerId?: string; openOnly?: boolean },
+    scope?: { sellerId?: string; storeId?: string; openOnly?: boolean },
     /**
      * The caller's transaction — the RTO inspection says a corrected
      * finding in the same transaction as the correction, so the seller is
@@ -347,6 +409,10 @@ export class TicketService {
       where: {
         id: ticketId,
         ...(scope?.sellerId === undefined ? {} : { sellerId: scope.sellerId }),
+        // RS-7 — a store's reply: only on a dispute it raised.
+        ...(scope?.storeId === undefined
+          ? {}
+          : { storeId: scope.storeId, ticketType: TicketType.STORE_DISPUTE }),
       },
       select: { id: true, status: true, resolvedAt: true },
     });
@@ -367,7 +433,7 @@ export class TicketService {
         toStatus: ticket.status,
         note: trimmed,
         actorType: actor.type,
-        actorId: actor.staffId ?? actor.sellerUserId ?? null,
+        actorId: actorIdOf(actor),
       },
       select: { id: true, createdAt: true },
     });
@@ -524,6 +590,8 @@ export class TicketService {
         issueSubcategoryExternalId: input.issueSubcategoryExternalId ?? null,
         openedByStaffId: actor.staffId ?? null,
         openedBySellerUserId: actor.sellerUserId ?? null,
+        storeId: input.storeId ?? null,
+        openedByStoreUserId: input.openedByStoreUserId ?? null,
       },
     });
 
@@ -534,7 +602,7 @@ export class TicketService {
         toStatus: TicketStatus.OPEN,
         note: 'Ticket opened',
         actorType: actor.type,
-        actorId: actor.staffId ?? actor.sellerUserId ?? null,
+        actorId: actorIdOf(actor),
       },
       select: { id: true },
     });
@@ -554,6 +622,7 @@ export class TicketService {
           shipmentItemId: input.shipmentItemId ?? null,
           goodsReceiptId: input.goodsReceiptId ?? null,
           rtoCondition: input.rtoCondition ?? null,
+          storeId: input.storeId ?? null,
         },
       },
       client,
@@ -584,6 +653,19 @@ export class TicketService {
         message: `Ticket ${ticketId} not found`,
       });
     }
+    if (
+      existing.ticketType === TicketType.STORE_DISPUTE &&
+      input.to === TicketStatus.RESOLVED_REFUND
+    ) {
+      // RS-7 — a store ↔ seller dispute is settled BETWEEN them. A
+      // SCRAP_REFUND would pay the seller out of OUR money for a
+      // disagreement we only referee.
+      throw new ConflictException({
+        code: 'STORE_DISPUTE_USE_SETTLEMENT',
+        message:
+          'A store dispute is not refunded by Skydrop. Settle it between the store and the seller instead — the money moves between their two wallets.',
+      });
+    }
     if (!this.stateMachine.canTransition(existing.status, input.to)) {
       throw new ConflictException({
         code: 'INVALID_TICKET_TRANSITION',
@@ -607,6 +689,21 @@ export class TicketService {
         throw new BadRequestException({
           code: 'REFUND_AMOUNT_INVALID',
           message: 'refundAmountInr must be > 0',
+        });
+      }
+      // RS-7 — goods lost or damaged in our hands on a RESELLER order are
+      // the seller's at the TRANSFER price, never the retail the store
+      // charged. Null for a channel order: no cap.
+      const cap = await this.resellerMoney.transferCompensationCap(this.prisma.client, {
+        orderId: existing.orderId,
+        shipmentItemId: existing.shipmentItemId,
+      });
+      if (cap !== null && refundAmount.gt(cap)) {
+        throw new BadRequestException({
+          code: 'REFUND_ABOVE_TRANSFER_PRICE',
+          message:
+            `This is a reseller store's order: the seller is compensated at the transfer price, ` +
+            `at most ₹${cap.toFixed(2)} here — not the retail price the store charged.`,
         });
       }
     } else if (input.refundAmountInr) {
@@ -687,7 +784,7 @@ export class TicketService {
             toStatus: input.to,
             note: input.notes ?? null,
             actorType: actor.type,
-            actorId: actor.staffId ?? actor.sellerUserId ?? null,
+            actorId: actorIdOf(actor),
           },
           select: { id: true },
         });
@@ -978,12 +1075,317 @@ export class TicketService {
     }
   }
 
+  // ── RS-7 — reseller store ↔ seller disputes ─────────────────────────
+
+  /**
+   * A reseller store raises a dispute with its seller about ONE OF ITS
+   * OWN orders. The order must be the store's (and a reseller order):
+   * anything else — another store's, the seller's own channel order, an
+   * order that does not exist — is the same 404, so a store cannot probe
+   * for orders it does not own.
+   *
+   * The ticket is the SELLER's (`sellerId` = the order's seller) and the
+   * store's (`storeId`), refereed by us. No one-per-order unique: a second
+   * disagreement about the same order is a second conversation.
+   */
+  async openForStore(input: {
+    storeId: string;
+    storeUserId: string;
+    orderId: string;
+    subject: string;
+    description?: string | null;
+  }): Promise<StoreTicketView> {
+    const order = await this.prisma.client.order.findFirst({
+      where: {
+        id: input.orderId,
+        storeId: input.storeId,
+        storeKind: SellerStoreKind.RESELLER,
+        deletedAt: null,
+      },
+      select: { id: true, sellerId: true },
+    });
+    if (order === null) {
+      throw new NotFoundException({
+        code: 'ORDER_NOT_FOUND',
+        message: 'No such order in your store.',
+      });
+    }
+    const opened = await this.open(
+      {
+        ticketType: TicketType.STORE_DISPUTE,
+        sellerId: order.sellerId,
+        storeId: input.storeId,
+        openedByStoreUserId: input.storeUserId,
+        subject: input.subject.trim(),
+        description: input.description?.trim() || null,
+        orderId: order.id,
+      },
+      { type: ActorType.STORE, storeUserId: input.storeUserId },
+    );
+    return this.getForStore(input.storeId, opened.id);
+  }
+
+  /** The store's own disputes, newest first. Scoped by the TOKEN's store. */
+  async listForStore(
+    storeId: string,
+    filters: { status?: TicketStatus; stage?: TicketStage; page?: number; pageSize?: number },
+  ): Promise<{ items: StoreTicketView[]; total: number; page: number; pageSize: number }> {
+    const page = Math.max(1, filters.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
+    const where: Prisma.TicketWhereInput = {
+      storeId,
+      ticketType: TicketType.STORE_DISPUTE,
+      ...(filters.status !== undefined
+        ? { status: filters.status }
+        : filters.stage === undefined
+          ? {}
+          : { status: { in: [...STAGE_STATUSES[filters.stage]] } }),
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.client.ticket.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: TICKET_NAMES,
+      }),
+      this.prisma.client.ticket.count({ where }),
+    ]);
+    return { items: rows.map((r) => this.toStoreView(r)), total, page, pageSize };
+  }
+
+  /** One of the store's own disputes — another store's is a 404. */
+  async getForStore(storeId: string, ticketId: string): Promise<StoreTicketView> {
+    const row = await this.prisma.client.ticket.findFirst({
+      where: { id: ticketId, storeId, ticketType: TicketType.STORE_DISPUTE },
+      include: TICKET_NAMES,
+    });
+    if (row === null) {
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'No such ticket' });
+    }
+    return this.toStoreView(row);
+  }
+
+  /** The dispute's timeline, oldest first, for the store that raised it. */
+  async eventsForStore(
+    storeId: string,
+    ticketId: string,
+  ): Promise<
+    ReadonlyArray<{
+      id: string;
+      note: string | null;
+      toStatus: TicketStatus;
+      actorType: ActorType;
+      at: Date;
+    }>
+  > {
+    const ticket = await this.prisma.client.ticket.findFirst({
+      where: { id: ticketId, storeId, ticketType: TicketType.STORE_DISPUTE },
+      select: { id: true },
+    });
+    if (ticket === null) {
+      throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'No such ticket' });
+    }
+    const rows = await this.prisma.client.ticketEvent.findMany({
+      where: { ticketId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, note: true, toStatus: true, actorType: true, createdAt: true },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      note: r.note,
+      toStatus: r.toStatus,
+      actorType: r.actorType,
+      at: r.createdAt,
+    }));
+  }
+
+  /** A store replies on its own dispute while it is still open. */
+  addNoteForStore(
+    storeId: string,
+    storeUserId: string,
+    ticketId: string,
+    note: string,
+  ): Promise<{ ticketId: string; at: Date }> {
+    return this.addNote(
+      ticketId,
+      note,
+      { type: ActorType.STORE, storeUserId },
+      { storeId, openOnly: true },
+    );
+  }
+
+  /**
+   * RS-7 — staff settle a store dispute by moving money BETWEEN the store
+   * and the seller, as a pair in one transaction, no bank entry
+   * (`ResellerOrderMoneyService.settleStoreDispute`, under the seller's
+   * WALLET lock). Never our money: the ordinary RESOLVED_REFUND is
+   * refused on this type (`transition`).
+   *
+   * The status move is CLAIMED first with the guarded `updateMany`, so a
+   * second concurrent settlement matches nothing and rolls back before
+   * any money moves — the TKT-1 double-refund lesson.
+   */
+  async settleStoreDispute(
+    ticketId: string,
+    input: SettleStoreDisputeInput,
+    staffId: string,
+  ): Promise<TicketView> {
+    const existing = await this.prisma.client.ticket.findUnique({ where: { id: ticketId } });
+    if (existing === null) {
+      throw new NotFoundException({
+        code: 'TICKET_NOT_FOUND',
+        message: `Ticket ${ticketId} not found`,
+      });
+    }
+    if (existing.ticketType !== TicketType.STORE_DISPUTE || existing.storeId === null) {
+      throw new ConflictException({
+        code: 'TICKET_NOT_A_STORE_DISPUTE',
+        message:
+          'Only a dispute a reseller store raised with its seller is settled between them. Resolve this ticket the ordinary way.',
+      });
+    }
+    const storeId = existing.storeId;
+    if (!MONEY_2DP.test(input.amountInr) || new Prisma.Decimal(input.amountInr).lte(0)) {
+      throw new BadRequestException({
+        code: 'SETTLEMENT_AMOUNT_INVALID',
+        message: 'The amount must be more than ₹0, with at most two decimal places.',
+      });
+    }
+    const amount = new Prisma.Decimal(input.amountInr);
+    const to = TicketStatus.RESOLVED_REFUND;
+    if (!this.stateMachine.canTransition(existing.status, to)) {
+      throw new ConflictException({
+        code: 'INVALID_TICKET_TRANSITION',
+        message: `Cannot settle a ticket that is already ${existing.status}.`,
+      });
+    }
+    const notes = input.notes?.trim() ?? '';
+
+    const { row, eventId, sellerEntryId, storeEntryId } = await this.prisma.client.$transaction(
+      async (tx) => {
+        const claimed = await tx.ticket.updateMany({
+          where: { id: ticketId, status: existing.status },
+          data: {
+            status: to,
+            resolutionNotes: notes === '' ? existing.resolutionNotes : notes,
+            resolvedAt: new Date(),
+            resolvedByStaffId: staffId,
+          },
+        });
+        if (claimed.count === 0) {
+          throw new ConflictException({
+            code: 'TICKET_ALREADY_MOVED',
+            message:
+              `Ticket ${existing.ticketNumber} is no longer ${existing.status} — someone else settled or closed it first. ` +
+              'Reload to see where it landed; no money moved for this request.',
+          });
+        }
+
+        const money = await this.resellerMoney.settleStoreDispute(tx, {
+          storeId,
+          sellerId: existing.sellerId,
+          orderId: existing.orderId,
+          payer: input.payer,
+          amount,
+          ticketNumber: existing.ticketNumber,
+          staffId,
+        });
+
+        const updated = await tx.ticket.update({
+          where: { id: ticketId },
+          data: {
+            resolutionAmountInr: amount,
+            resolutionWalletEntryId: money.sellerEntryId,
+            resolutionStoreEntryId: money.storeEntryId,
+            disputePayer: input.payer,
+          },
+          include: TICKET_NAMES,
+        });
+
+        const event = await tx.ticketEvent.create({
+          data: {
+            ticketId,
+            fromStatus: existing.status,
+            toStatus: to,
+            note: notes === '' ? null : notes,
+            actorType: ActorType.STAFF,
+            actorId: staffId,
+          },
+          select: { id: true },
+        });
+
+        // In the transaction: the money and the record of it commit together.
+        await this.audit.log(
+          {
+            actorType: ActorType.STAFF,
+            staffUserId: staffId,
+            sellerId: existing.sellerId,
+            action: 'ticket.store_dispute_settled',
+            entityType: 'ticket',
+            entityId: ticketId,
+            severity: 'HIGH',
+            changes: { from: existing.status, to },
+            metadata: {
+              ticketNumber: existing.ticketNumber,
+              storeId,
+              orderId: existing.orderId,
+              amountInr: amount.toFixed(2),
+              payer: input.payer,
+              sellerEntryId: money.sellerEntryId,
+              storeEntryId: money.storeEntryId,
+            },
+          },
+          tx,
+        );
+
+        return {
+          row: updated,
+          eventId: event.id,
+          sellerEntryId: money.sellerEntryId,
+          storeEntryId: money.storeEntryId,
+        };
+      },
+    );
+
+    this.notifier.afterEvent(eventId);
+    await this.wallet.recomputeCacheAfterCommit(
+      existing.sellerId,
+      Currency.INR,
+      'post-store-dispute-settlement',
+    );
+    void sellerEntryId;
+    void storeEntryId;
+    return this.toView(row);
+  }
+
+  private toStoreView(row: Parameters<TicketService['toView']>[0]): StoreTicketView {
+    const v = this.toView(row);
+    return {
+      id: v.id,
+      ticketNumber: v.ticketNumber,
+      openedBy: v.openedBy,
+      ticketType: v.ticketType,
+      status: v.status,
+      orderId: v.orderId,
+      orderNumber: v.orderNumber,
+      subject: v.subject,
+      description: v.description,
+      resolutionAmountInr: v.resolutionAmountInr,
+      disputePayer: v.disputePayer,
+      resolutionNotes: v.resolutionNotes,
+      resolvedAt: v.resolvedAt,
+      createdAt: v.createdAt,
+    };
+  }
+
   private toView(
     row: {
       id: string;
       ticketNumber: string;
       openedByStaffId: string | null;
       openedBySellerUserId: string | null;
+      openedByStoreUserId?: string | null;
       /** The opening event (OPENING_EVENT), when the read carried it. */
       events?: readonly { actorType: ActorType }[];
       ticketType: TicketType;
@@ -1010,6 +1412,9 @@ export class TicketService {
         receiptNumber: string;
         consignment: { consignmentNumber: string } | null;
       } | null;
+      storeId?: string | null;
+      store?: { name: string; displayName: string | null } | null;
+      disputePayer?: ResellerMoneyParty | null;
     },
     /**
      * externalId → the courier's word for it. Absent on the WRITE paths
@@ -1053,6 +1458,9 @@ export class TicketService {
       resolutionNotes: row.resolutionNotes,
       resolvedAt: row.resolvedAt,
       createdAt: row.createdAt,
+      storeId: row.storeId ?? null,
+      storeName: row.store == null ? null : (row.store.displayName ?? row.store.name),
+      disputePayer: row.disputePayer ?? null,
     };
   }
 }

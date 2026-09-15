@@ -45,6 +45,12 @@ const RELATIONS: Record<string, Record<string, Relation>> = {
     linkedEntry: one('sellerWalletEntry', 'linkedEntryId'),
     seller: one('seller', 'sellerId'),
   },
+  // A reseller store's wallet (RS-6). Its `linkedOrderId` is a plain id
+  // with no relation, as in the schema.
+  storeWalletEntry: {
+    linkedEntry: one('storeWalletEntry', 'linkedEntryId'),
+    store: one('sellerStore', 'storeId'),
+  },
   inboundFreightCharge: {
     consignment: one('consignment', 'consignmentId'),
     seller: one('seller', 'sellerId'),

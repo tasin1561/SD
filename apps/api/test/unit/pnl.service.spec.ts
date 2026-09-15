@@ -69,6 +69,7 @@ class World {
       { id: 'ca-sr', courierId: 'c-sr' },
     ],
     seller: [{ id: 's-1', companyName: 'Menev Store' }],
+    sellerStore: [{ id: 'st-1', sellerId: 's-1', kind: 'RESELLER', name: 'Kolkata Kurtis' }],
     expenseCategory: [
       { id: 'cat-fwd', code: 'freight_forwarder' },
       { id: 'cat-rent', code: 'rent' },
@@ -180,6 +181,22 @@ class World {
       sellerId: 's-1',
       linkedOrderId: null,
       linkedEntryId: null,
+      ...extra,
+    });
+  }
+
+  /** An entry on the reseller store's wallet (RS-6) — `amount` always positive. */
+  storeEntry(direction: string, amount: string, at: Date, extra: Row = {}): Row {
+    return this.add('storeWalletEntry', {
+      id: nextId('swe'),
+      storeId: 'st-1',
+      sellerId: 's-1',
+      direction,
+      amount: D(amount),
+      shareOf: null,
+      linkedOrderId: null,
+      linkedEntryId: null,
+      createdAt: at,
       ...extra,
     });
   }
@@ -2360,5 +2377,308 @@ describe('RS-6 — money between a seller and their reseller stores is on NO lin
     const moved = await build(true).svc().report(FROM, TO);
     expect(figures(moved)).toEqual(figures(plain));
     expect(figures(plain).length).toBeGreaterThan(0);
+  });
+});
+
+describe('RS-6 phase 3c — a reseller order earns Skydrop exactly what a channel order does', () => {
+  // The store pays 60 % of every fee: its share round_half_up to the paisa,
+  // the seller the remainder (splitFee). Odd paisa on purpose, so a share
+  // rounded the wrong way, or one side left out, cannot add up by luck.
+  //   [whole, seller share, store share]
+  const SPLIT: Record<string, readonly [string, string, string]> = {
+    ORDER_CHARGES: ['200.01', '80.00', '120.01'],
+    RTO_FEE: ['30.01', '12.00', '18.01'],
+    GST_WITHHOLDING: ['152.54', '61.02', '91.52'],
+    COD_COLLECTION_FEE: ['10.01', '4.00', '6.01'],
+    INSTANT_PAY_FEE: ['25.03', '10.01', '15.02'],
+  };
+
+  /**
+   * One Skydrop fee on an order: the whole of it on the seller's wallet for
+   * a channel order; split between the seller's wallet and the store's for
+   * a reseller order.
+   */
+  const fee = (
+    w: World,
+    reseller: boolean,
+    orderId: string,
+    direction: string,
+    at: Date,
+  ): { seller: Row; store: Row | null } => {
+    const [whole, sellerShare, storeShare] = SPLIT[direction] ?? ['0', '0', '0'];
+    if (!reseller) {
+      return { seller: w.wallet(direction, whole, at, { linkedOrderId: orderId }), store: null };
+    }
+    return {
+      seller: w.wallet(direction, sellerShare, at, { linkedOrderId: orderId }),
+      store: w.storeEntry(
+        direction === 'GST_WITHHOLDING' ? 'COD_TAX_SHARE' : 'FEE_SHARE',
+        storeShare,
+        at,
+        { shareOf: direction, linkedOrderId: orderId },
+      ),
+    };
+  };
+
+  /** A COD order delivered at `at`, billed its delivery fee, COD tax and both COD fees. */
+  const delivered = (
+    w: World,
+    reseller: boolean,
+    at = IN,
+  ): { id: string; fees: Record<string, { seller: Row; store: Row | null }> } => {
+    const id = w.order({
+      events: [['DELIVERED', at]],
+      charges: [['BASE_SHIPPING', '200.01']],
+      // Billed here, split or whole, rather than by the World's default.
+      billed: false,
+      shipments: [{ fwd: '90.00' }],
+    });
+    const fees: Record<string, { seller: Row; store: Row | null }> = {};
+    for (const d of ['ORDER_CHARGES', 'GST_WITHHOLDING', 'COD_COLLECTION_FEE', 'INSTANT_PAY_FEE']) {
+      fees[d] = fee(w, reseller, id, d, at);
+    }
+    return { id, fees };
+  };
+
+  /** A parcel received back at `at`, billed its delivery fee and its return fee. */
+  const returned = (w: World, reseller: boolean, at = IN): string => {
+    const id = w.order({
+      events: [['RTO_RECEIVED', at]],
+      charges: [
+        ['BASE_SHIPPING', '200.01'],
+        ['RTO_FEE', '30.01'],
+      ],
+      billed: false,
+      shipments: [{ fwd: '0', rto: '150.00' }],
+    });
+    fee(w, reseller, id, 'ORDER_CHARGES', at);
+    fee(w, reseller, id, 'RTO_FEE', at);
+    return id;
+  };
+
+  const figures = (r: Report): Array<[string, string, string]> =>
+    r.lines.map((l) => [l.key, l.revenueInr, l.costInr]);
+
+  async function rowsAddUp(svc: PnlService, keys: readonly string[]): Promise<void> {
+    const r = await svc.report(FROM, TO);
+    for (const key of keys) {
+      const rows = await drill(svc, key);
+      expect({ key, revenue: rows.revenue, cost: rows.cost }).toEqual({
+        key,
+        revenue: line(r, key)?.revenueInr,
+        cost: line(r, key)?.costInr,
+      });
+      // Stable and unique: the same records, the same ids, every time.
+      const again = await drill(svc, key);
+      expect(again.items.map((i) => i.id)).toEqual(rows.items.map((i) => i.id));
+      expect(new Set(rows.items.map((i) => i.id)).size).toBe(rows.items.length);
+    }
+  }
+
+  it('delivered: the same delivery, COD tax and COD fee lines — rows add up, ids are stable', async () => {
+    const channel = new World();
+    delivered(channel, false);
+    const reseller = new World();
+    const { id } = delivered(reseller, true);
+    const svc = reseller.svc();
+    const [c, r] = await Promise.all([channel.svc().report(FROM, TO), svc.report(FROM, TO)]);
+
+    expect(figures(r)).toEqual(figures(c));
+    expect(r.grossMarginInr).toBe(c.grossMarginInr);
+    expect(line(r, 'delivery')).toMatchObject({ revenueInr: '200.01', costInr: '90.00' });
+    expect(line(r, 'cod_tax')?.revenueInr).toBe('152.54');
+    expect(line(r, 'cod_service_fees')?.revenueInr).toBe('35.04');
+
+    // The store's part is named on its own, from its own wallet.
+    const storePart = (key: string): Array<[string, string]> =>
+      (line(r, key)?.basis.revenue ?? [])
+        .filter((p) => p.source.startsWith('store_wallet_entries'))
+        .map((p) => [p.label, p.amountInr]);
+    expect(storePart('delivery')).toEqual([['Reseller stores’ share of delivery fees', '120.01']]);
+    expect(storePart('cod_tax')).toEqual([
+      ['Reseller stores’ share, taken from their wallets', '91.52'],
+    ]);
+    expect(storePart('cod_service_fees')).toEqual([
+      ['Reseller stores’ share of Instant Pay fees', '15.02'],
+      ['Reseller stores’ share of COD collection fees', '6.01'],
+    ]);
+    // …and every basis still adds up to its line.
+    for (const key of ['delivery', 'cod_tax', 'cod_service_fees']) {
+      expect(total((line(r, key)?.basis.revenue ?? []).map((p) => p.amountInr))).toBe(
+        line(r, key)?.revenueInr,
+      );
+    }
+
+    await rowsAddUp(svc, ['delivery', 'cod_tax', 'cod_service_fees']);
+    // One row per ORDER on delivery, keyed by the order — the split does
+    // not make two.
+    expect((await drill(svc, 'delivery')).items.map((i) => [i.id, i.revenueInr])).toEqual([
+      [id, '200.01'],
+    ]);
+    const tax = (await drill(svc, 'cod_tax')).items.filter((i) => i.id.startsWith('store:'));
+    expect(tax.map((i) => [i.ref, i.revenueInr])).toEqual([[`SD-${id}`, '91.52']]);
+  });
+
+  it('returned: the return fee split between the two wallets earns what the whole of it does', async () => {
+    const channel = new World();
+    returned(channel, false);
+    const reseller = new World();
+    returned(reseller, true);
+    const [c, r] = await Promise.all([
+      channel.svc().report(FROM, TO),
+      reseller.svc().report(FROM, TO),
+    ]);
+    expect(figures(r)).toEqual(figures(c));
+    expect(line(r, 'rto')).toMatchObject({ revenueInr: '230.02', costInr: '150.00' });
+    expect(
+      (line(r, 'rto')?.basis.revenue ?? [])
+        .filter((p) => p.source.startsWith('store_wallet_entries'))
+        .map((p) => [p.label, p.amountInr]),
+    ).toEqual([
+      ['Reseller stores’ share of delivery fees on returned parcels', '120.01'],
+      ['Reseller stores’ share of return fees', '18.01'],
+    ]);
+    await rowsAddUp(reseller.svc(), ['rto']);
+  });
+
+  it('a delivery fee share given back comes off like ORDER_CHARGES_REFUND; a COD tax share given back comes off COD tax', async () => {
+    const channel = new World();
+    const ch = delivered(channel, false);
+    channel.wallet('ORDER_CHARGES_REFUND', '50.00', IN, { linkedOrderId: ch.id });
+    channel.wallet('COD_DEDUCTION_REFUND', '152.54', IN, {
+      linkedOrderId: ch.id,
+      linkedEntryId: ch.fees['GST_WITHHOLDING']?.seller['id'],
+    });
+
+    const reseller = new World();
+    const rs = delivered(reseller, true);
+    // The same ₹50 refund, 20 from the seller's wallet and 30 back to the store's.
+    reseller.wallet('ORDER_CHARGES_REFUND', '20.00', IN, { linkedOrderId: rs.id });
+    reseller.storeEntry('SHARE_REFUND', '30.00', IN, {
+      shareOf: 'ORDER_CHARGES',
+      linkedOrderId: rs.id,
+      linkedEntryId: rs.fees['ORDER_CHARGES']?.store?.['id'],
+    });
+    // The COD reversed: both shares of the tax given back.
+    reseller.wallet('COD_DEDUCTION_REFUND', '61.02', IN, {
+      linkedOrderId: rs.id,
+      linkedEntryId: rs.fees['GST_WITHHOLDING']?.seller['id'],
+    });
+    reseller.storeEntry('SHARE_REFUND', '91.52', IN, {
+      shareOf: 'GST_WITHHOLDING',
+      linkedOrderId: rs.id,
+      linkedEntryId: rs.fees['GST_WITHHOLDING']?.store?.['id'],
+    });
+
+    const svc = reseller.svc();
+    const [c, r] = await Promise.all([channel.svc().report(FROM, TO), svc.report(FROM, TO)]);
+    expect(figures(r)).toEqual(figures(c));
+    expect(line(r, 'delivery')?.revenueInr).toBe('150.01');
+    expect(line(r, 'cod_tax')?.revenueInr).toBe('0.00');
+    // A tax share given back does not touch the COD fees.
+    expect(line(r, 'cod_service_fees')?.revenueInr).toBe('35.04');
+    expect(
+      (line(r, 'delivery')?.basis.revenue ?? []).find(
+        (p) => p.label === 'Refunded to reseller stores on these orders',
+      )?.amountInr,
+    ).toBe('-30.00');
+
+    await rowsAddUp(svc, ['delivery', 'cod_tax', 'cod_service_fees']);
+    const tax = await drill(svc, 'cod_tax');
+    expect(tax.items.filter((i) => i.id.startsWith('store:')).map((i) => i.revenueInr)).toEqual(
+      expect.arrayContaining(['91.52', '-91.52']),
+    );
+  });
+
+  it('a share given back that names its share only through the entry it returns comes off the right line', async () => {
+    const w = new World();
+    const taxShare = w.storeEntry('COD_TAX_SHARE', '91.52', IN, { shareOf: 'GST_WITHHOLDING' });
+    w.storeEntry('FEE_SHARE', '6.01', IN, { shareOf: 'COD_COLLECTION_FEE' });
+    w.storeEntry('SHARE_REFUND', '91.52', IN, { linkedEntryId: taxShare['id'] });
+    const svc = w.svc();
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'cod_tax')?.revenueInr).toBe('0.00');
+    expect(line(r, 'cod_service_fees')?.revenueInr).toBe('6.01');
+    await rowsAddUp(svc, ['cod_tax', 'cod_service_fees']);
+  });
+
+  it('two adjacent windows add up to the whole — for the store’s entries too', async () => {
+    const w = new World();
+    const LATE = T('2026-08-20T06:00:00.000Z');
+    const early = delivered(w, true, IN);
+    delivered(w, true, LATE);
+    returned(w, true, LATE);
+    // Shares given back in the SECOND half on the first half's order.
+    w.storeEntry('SHARE_REFUND', '30.00', LATE, {
+      shareOf: 'ORDER_CHARGES',
+      linkedOrderId: early.id,
+      linkedEntryId: early.fees['ORDER_CHARGES']?.store?.['id'],
+    });
+    w.storeEntry('SHARE_REFUND', '91.52', LATE, {
+      shareOf: 'GST_WITHHOLDING',
+      linkedOrderId: early.id,
+      linkedEntryId: early.fees['GST_WITHHOLDING']?.store?.['id'],
+    });
+    w.storeEntry('SHARE_REFUND', '6.01', LATE, {
+      shareOf: 'COD_COLLECTION_FEE',
+      linkedOrderId: early.id,
+      linkedEntryId: early.fees['COD_COLLECTION_FEE']?.store?.['id'],
+    });
+    const svc = w.svc();
+    await expectTiles(svc, ['delivery', 'rto', 'cod_tax', 'cod_service_fees'], FROM, MID, TO);
+    const [a, b] = await Promise.all([svc.report(FROM, MID), svc.report(MID, TO)]);
+    // Not additivity of zeros: the first half has the early order in full,
+    // the second half the late ones less what went back on the early one.
+    expect(line(a, 'cod_tax')?.revenueInr).toBe('152.54');
+    expect(line(b, 'cod_tax')?.revenueInr).toBe('61.02');
+    expect(line(b, 'cod_service_fees')?.revenueInr).toBe('29.03');
+    expect(line(b, 'rto')?.revenueInr).toBe('230.02');
+  });
+
+  it('money that is not Skydrop’s — the store’s margin, the transfer price, prepaid holds, disputes — is on no line', async () => {
+    const build = (noise: boolean): World => {
+      const w = new World();
+      const { id } = delivered(w, true);
+      if (noise) {
+        for (const direction of [
+          'ORDER_CREDIT',
+          'ORDER_CREDIT_REVERSAL',
+          'TRANSFER_PRICE',
+          'TRANSFER_PRICE_REFUND',
+          'PREPAID_DEBIT',
+          'PREPAID_REFUND',
+          'DISPUTE_SETTLEMENT_IN',
+          'DISPUTE_SETTLEMENT_OUT',
+          'TOPUP',
+          'WITHDRAWAL',
+          'SELLER_TOPUP',
+          'SELLER_PAYOUT',
+        ]) {
+          // Tempting `share_of`s, on the very order: still not ours.
+          for (const shareOf of [null, 'ORDER_CHARGES', 'GST_WITHHOLDING', 'INSTANT_PAY_FEE']) {
+            w.storeEntry(direction, '777.77', IN, { shareOf, linkedOrderId: id });
+          }
+        }
+        for (const direction of [
+          'RESELLER_TRANSFER_CREDIT',
+          'RESELLER_TRANSFER_REVERSAL',
+          'PREPAID_TRANSFER_CREDIT',
+          'PREPAID_TRANSFER_REVERSAL',
+          'STORE_DISPUTE_IN',
+          'STORE_DISPUTE_OUT',
+        ]) {
+          w.wallet(direction, '555.55', IN, { linkedOrderId: id });
+        }
+      }
+      return w;
+    };
+    const [plain, noisy] = await Promise.all([
+      build(false).svc().report(FROM, TO),
+      build(true).svc().report(FROM, TO),
+    ]);
+    expect(figures(noisy)).toEqual(figures(plain));
+    expect(noisy.grossMarginInr).toBe(plain.grossMarginInr);
+    expect(line(noisy, 'delivery')?.revenueInr).toBe('200.01');
+    await rowsAddUp(build(true).svc(), ['delivery', 'cod_tax', 'cod_service_fees']);
   });
 });

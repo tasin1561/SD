@@ -5,9 +5,11 @@ import {
   Currency,
   OrderChargeStatus,
   Prisma,
+  SellerStoreKind,
   WalletEntryDirection,
 } from '@skydrop/db';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
 import { PricingEngineService } from '../../pricing/services/pricing-engine.service';
 import { OrderChargesAccrualService } from './order-charges-accrual.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
@@ -47,6 +49,7 @@ export class RtoFeeAccrualService {
     private readonly wallet: WalletService,
     private readonly pricing: PricingEngineService,
     private readonly chargesAccrual: OrderChargesAccrualService,
+    private readonly resellerMoney: ResellerOrderMoneyService,
   ) {}
 
   /**
@@ -79,17 +82,22 @@ export class RtoFeeAccrualService {
     // and its own wallet direction so the two stay countable apart.
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      select: { customerReturnRequestedAt: true },
+      select: { customerReturnRequestedAt: true, storeKind: true },
     });
     const isCustomerReturn = order?.customerReturnRequestedAt != null;
     const direction = isCustomerReturn
       ? WalletEntryDirection.CUSTOMER_RETURN_FEE
       : WalletEntryDirection.RTO_FEE;
+    // RS-6 phase 3c: a reseller order's return fee is split between the
+    // store and the seller, so "already charged" asks both sides.
+    const reseller = order?.storeKind === SellerStoreKind.RESELLER;
 
-    const already = await tx.sellerWalletEntry.findFirst({
-      where: { linkedOrderId: orderId, direction },
-      select: { id: true },
-    });
+    const already = reseller
+      ? await this.resellerMoney.returnFeeCharged(tx, orderId, direction)
+      : await tx.sellerWalletEntry.findFirst({
+          where: { linkedOrderId: orderId, direction },
+          select: { id: true },
+        });
     if (already) return { deliveryFeeSwept, rtoFeeInr: null };
 
     const fee = { amount: await this.returnFeeFor(sellerId, isCustomerReturn) };
@@ -120,14 +128,18 @@ export class RtoFeeAccrualService {
       },
     });
 
-    await this.wallet.applyEntry(tx, {
-      sellerId,
-      currency: Currency.INR,
-      direction,
-      amount: fee.amount,
-      linkedOrderId: orderId,
-      actorType: ActorType.SYSTEM,
-    });
+    if (reseller) {
+      await this.resellerMoney.chargeReturnFeeSplit(tx, { orderId, direction, amount: fee.amount });
+    } else {
+      await this.wallet.applyEntry(tx, {
+        sellerId,
+        currency: Currency.INR,
+        direction,
+        amount: fee.amount,
+        linkedOrderId: orderId,
+        actorType: ActorType.SYSTEM,
+      });
+    }
 
     return { deliveryFeeSwept, rtoFeeInr: fee.amount.toFixed(2) };
   }

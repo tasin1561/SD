@@ -57,8 +57,16 @@ export interface TicketView {
    * Who opened it, and so whose words the opening message is. A scrap
    * ticket the RTO inspection opened carries OUR message, not the seller's.
    */
-  readonly openedBy: 'STAFF' | 'SELLER' | 'SYSTEM';
+  readonly openedBy: 'STAFF' | 'SELLER' | 'SYSTEM' | 'STORE';
   readonly ticketType: TicketType;
+  /**
+   * RS-7 — the reseller store on a STORE_DISPUTE (null elsewhere), its
+   * name as customers see it, and — once settled — who paid the other.
+   * Optional only so fixtures written before them still type-check.
+   */
+  readonly storeId?: string | null;
+  readonly storeName?: string | null;
+  readonly disputePayer?: 'STORE' | 'SELLER' | null;
   readonly status: TicketStatus;
   readonly sellerId: string;
   readonly orderId: string | null;
@@ -332,6 +340,30 @@ export function useTransitionTicket(): UseMutationResult<
       void qc.invalidateQueries({ queryKey: ['admin-tickets'] });
       // A RESOLVED_REFUND credits the seller's wallet in the same tx,
       // so any ledger view on screen is stale the moment this returns.
+      void qc.invalidateQueries({ queryKey: ['admin-wallet'] });
+    },
+  });
+}
+
+/**
+ * RS-7 — settle a reseller store ↔ seller dispute: money moves between
+ * their two wallets, never from ours. Both wallets are stale afterwards.
+ */
+export function useSettleStoreDispute(): UseMutationResult<
+  TicketView,
+  Error,
+  { ticketId: string; payer: 'STORE' | 'SELLER'; amountInr: string; notes?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ticketId, ...body }) =>
+      client.request<TicketView>(`/api/admin/tickets/${ticketId}/store-dispute-settlement`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-tickets'] });
       void qc.invalidateQueries({ queryKey: ['admin-wallet'] });
     },
   });

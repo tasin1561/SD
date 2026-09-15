@@ -138,9 +138,7 @@ export class SellerResellerAnalysisService {
     private readonly settings: SettingsResolverService,
   ) {}
 
-  private stores(
-    sellerId: string,
-  ): Promise<
+  private stores(sellerId: string): Promise<
     Array<{
       id: string;
       name: string;

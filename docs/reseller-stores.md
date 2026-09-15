@@ -1307,3 +1307,223 @@ and the five new tables are in the e2e reset.
 - Nothing here has run against 3c's real entries yet: once 3c lands,
   re-run `store-pnl.spec.ts` against its fixtures and read a real store's
   P&L against its wallet balance movement.
+
+## Order money as built (RS-6 phase 3c, 2026-09-15)
+
+Migration `20260914250000_reseller_order_money`. **`reseller.orders_enabled`
+stays seeded FALSE** — nothing here turns store orders on; see "Switching it
+on" below.
+
+### One planner, one executor
+
+- **`reseller-order-money/plan/reseller-money-plan.ts`** (pure) is the ONE
+  place a reseller order's money is decided: `codFees` (the channel's
+  `CodCreditService` arithmetic, expression for expression — pinned against
+  the real service), `planCredits` (each party's row), `anchorOf` (what a
+  trigger counts from, F2-exhaustive), `creditMayRun` (money follows fate),
+  `prepaidDebit`, `cashTakenOnReversal`. Every share is `splitFee`.
+- **`ResellerOrderMoneyService`** executes it. Every write goes through
+  `WalletService.applyEntry` (seller) or `StoreWalletService.applyEntry`
+  (store), under the SELLER's WALLET lock, one transaction per event, each
+  credit's status moved by a guarded `updateMany` on the status read.
+- **`reseller_order_credits`** — one row per party per order (UNIQUE
+  `(orderId, party)`), planned once (usually at confirmation; COD rates are
+  the seller's AT THAT MOMENT and never re-priced), status WAITING → DUE →
+  CREDITED (or SKIPPED / REVERSED), `timesCredited` counting re-credits.
+
+### The rule (owner)
+
+On a COD order, each party at its own trigger:
+
+    store  += COD − its tax share − transfer price − its COD-fee and Instant Pay shares
+    seller += transfer price − its tax, COD-fee and Instant Pay shares
+
+and Skydrop's delivery / return / customer-return fees split by the order's
+snapshot as they are billed (seller's share under its usual direction; the
+store's as `FEE_SHARE` with `share_of`). Each fee's two shares add up to the
+fee exactly, so **the two nets add up to what an identical channel order
+credits its seller** and Skydrop's take is unchanged. Inbound freight stays
+the seller's alone.
+
+**Worked example (pinned in `settlement-bank-invariant.spec.ts`):** COD
+₹1,180, transfer ₹700, GST 18% → tax ₹180.00 (post-tax ₹1,000), COD fee 1%
+= ₹10.00, Instant Pay 2.5% = ₹25.00; the store pays 50% of the tax, 50% of
+the COD fee, 100% of Instant Pay, 50% of delivery.
+
+| | settled (both ON_PAYOUT) | store INSTANT |
+|---|---|---|
+| Store: COD − transfer | 1,180.00 − 700.00 | 1,180.00 − 700.00 |
+| Store: tax / COD fee / Instant Pay | −90.00 / −5.00 / — | −90.00 / −5.00 / −25.00 |
+| **Store net** | **385.00** | **360.00** |
+| Seller: transfer − tax / COD fee | 700.00 − 90.00 − 5.00 | same |
+| **Seller net** | **605.00** | **605.00** |
+| Together (= channel credit) | 990.00 = 1,180 − 180 − 10 | 965.00 = 1,180 − 180 − 10 − 25 |
+| Skydrop keeps | 190.00 | 215.00 |
+
+A ₹236 delivery fee at 50% is seller `ORDER_CHARGES` ₹118.00 + store
+`FEE_SHARE` ₹118.00. The odd-paisa case: COD ₹1,299 → tax ₹198.15, 50% store
+share ₹99.075 → **₹99.08** (half up), seller ₹99.07 (the remainder).
+
+### When (triggers)
+
+| Trigger | Counts from | Notes |
+|---|---|---|
+| AFTER_CONFIRMATION (N) | CONFIRMED | only where Skydrop enabled it; FRONTED from capital, counted in the Instant Pay advance float (WAL-9), reversed on any non-delivery |
+| INSTANT | DELIVERED with carriage evidence | the Instant Pay fee applies when EITHER party is INSTANT, split by the Instant Pay share, at the seller's rate |
+| AFTER_DELIVERY (N) | DELIVERED with carriage evidence | the sweep writes it N days on |
+| ON_PAYOUT (+N) | the courier payout line (COD); DELIVERED (prepaid — no payout exists) | |
+
+A due credit is written only while the order still earns it: never on a
+called-off or LOST order, never on one returned without ever being
+delivered; delivery-anchored needs delivery OR a courier payment; a
+payout-anchored one needs the courier's net payment > 0. Credits skipped or
+reversed for want of the courier's payment are re-armed when it pays. Later
+triggers are written by the `reseller-order-money` queue's
+`sweep-reseller-credits` job (every 15 min, SCALE-1 `shouldStart`), per-row
+isolated. A god-mode DELIVERED without carriage evidence arms nothing — the
+courier's payout arms it (the channel's rule, WAL-8).
+
+### The cash (TRE-8c)
+
+**The store's ledger shape** (what the RS-8 reports read): `ORDER_CREDIT` =
+the COD LESS the transfer price (the store's gross order credit, before its
+shares); each share its own entry — `COD_TAX_SHARE`, and `FEE_SHARE` with
+`share_of` per fee (COD fee, Instant Pay, delivery, return); a store that
+sold below the transfer price gets a `TRANSFER_PRICE` debit for the
+difference instead of a credit. Every reversal and share refund names what
+it returns (`linked_entry_id`), and every order-money entry carries
+`linked_order_id`. A prepaid order: `PREPAID_DEBIT` = the transfer price and
+the delivery share as its own `FEE_SHARE` (so it is Skydrop revenue on the
+P&L's delivery line), `PREPAID_REFUND` its give-back.
+
+Each party's own money is FRONTED from capital before its credit is written
+(`front`, reference = the order id — WAL-9): the store's COD − transfer, the
+seller's transfer price — less any part repaying the group's debt;
+deductions and `TRANSFER_PRICE` are TO_CAPITAL; a courier payout on a
+reseller order lands wholly as capital's (it repays the fronts). A reversal
+writes the reversal entry first (NONE), then the refunds (TO_SELLER), then
+takes `max(0, before) − max(0, before − gross)` to capital, referenced by the
+reversal entry. After every step: **held for the seller = max(0, seller
+wallet + Σ store wallets)** — 11 reseller scenarios in
+`settlement-bank-invariant.spec.ts` (settled, instant, after-confirmation,
+prepaid, cancel, RTO, loss, fee split, two stores, idempotency).
+
+### Prepaid (ON)
+
+Create refuses `STORE_BALANCE_INSUFFICIENT` when the store's wallet (within
+its negative limit) cannot cover the transfer price + its delivery share +
+those of its other accepted-but-unconfirmed prepaid orders — `storeCanSpend`
+INSIDE the create transaction under the seller's WALLET lock. At
+CONFIRMATION the store pays `PREPAID_DEBIT` (transfer) + `FEE_SHARE`
+(delivery share); the seller is credited `PREPAID_TRANSFER_CREDIT` (TO_SELLER)
+at the seller's trigger — never before the store has paid
+(`PREPAID_NOT_PAID_BY_STORE`). Cancelled before dispatch, lost or returned:
+`PREPAID_REFUND` to the store and the seller's credit reversed
+(`PREPAID_TRANSFER_REVERSAL`).
+
+### Fates
+
+Cancel / reject with the parcel still here and LOST: pending credits
+skipped; anything written and not covered by a courier payout reversed per
+party; the delivery fee refunded to both sides (`OrderChargesRefundService`
+→ `refundDeliveryFee`). Called off with the parcel gone: credits stay for the
+courier's settlement (channel parity). RTO received, never delivered:
+reversed. Customer return after delivery: COD credits stand until the
+courier reverses the COD on a payout (`reverseOnCourierReversal`, inside the
+settlement's transaction). Return fees split by `resellerReturnFeeStorePercent`
+/ `resellerCustomerReturnFeeStorePercent` (`RtoFeeAccrualService`).
+
+### Where it hooks (channel orders byte-identical)
+
+`OrderChargesAccrualService.debitIfNeeded`, `OrderChargesRefundService`,
+`RtoFeeAccrualService` branch on `isResellerOrder` / `head` (null for a
+channel order → today's code); `AccrualExecutionService` skips the Instant
+Pay block for a reseller order; `CourierSettlementService.record` /
+`allocateMore` / the RTO reversal branch on `storeKind`. A lifecycle-bus
+listener (`ResellerOrderMoneyListener`, drained by the e2e harness) runs
+CONFIRMED / DELIVERED / called-off / LOST / RTO. Pinned: the channel
+scenarios of `settlement-bank-invariant.spec.ts` run unchanged (the world
+passes the no-reseller stub when it has no reseller orders), the channel
+unit specs pass with that stub, and `delivered-money-paths.spec.ts` is
+unchanged.
+
+### P&L
+
+A store's `FEE_SHARE` and `COD_TAX_SHARE` (and their `SHARE_REFUND`s) are
+Skydrop revenue on exactly the line the seller's own debit sits on —
+delivery / returns / called-off / lost (fees billed), COD tax deduction,
+COD handling fees — each named apart ("Reseller stores' share of …"), with
+stable drill-down ids `store:<entry id>` (PNL-CF-1). `storeEntryMeaning` in
+`pnl.service.ts` places every store direction (F2-exhaustive); transfer
+price, store margin, prepaid holds, top-ups and disputes are on no line.
+`pnl.service.spec.ts` proves a reseller order and the identical channel order
+report the same Skydrop figures, per line and in the drill-downs.
+
+### Screens and endpoints
+
+`GET /store/orders/:id/money` (store `orders.view`), `GET
+/seller/orders/:id/reseller-money` (seller `orders.view`, its own controller
+so VIEWER stays closed), `GET /admin/orders/:id/reseller-money` (`orders.view`)
+— module `reseller-order-money-view` (leaf, read-only). Store order detail →
+Money section and wallet ledger lines linking to their order; seller order
+detail → "Reseller store money"; admin order detail → the full split.
+
+### Decisions made here (recorded, not asked)
+
+- COD rates are fixed at plan time (usually confirmation); a god-mode COD
+  edit after that does not re-price the credits.
+- The Instant Pay fee is on whenever either party is INSTANT, charged at the
+  seller's rate.
+- ON_PAYOUT on a prepaid order counts from delivery.
+- `gst_withholdings` is not written for a reseller order (it is read
+  nowhere; the wallet lines carry the tax).
+- A store's COD tax share is its own direction (`COD_TAX_SHARE`, `share_of =
+  GST_WITHHOLDING`).
+- `storeWithdrawable` does not reserve committed prepaid orders; the create
+  check does.
+- A store is not notified of its credits (no store inbox yet).
+
+### Switching it on
+
+1. Deploy (the migration only adds; nothing moves money until an order exists).
+2. For one seller: `PATCH /admin/sellers/:sellerId/settings/reseller.orders_enabled`
+   `{ valueType: 'BOOLEAN', value: true, note }` (SET-1, audited).
+3. Place one COD order through the portal; confirm, deliver, record the
+   courier's payout; check `/admin/orders/:id/reseller-money` and the
+   liabilities page.
+Keep the global default FALSE until that run is clean.
+
+## RS-7 as built (2026-09-15) — returns, damage, disputes
+
+- **Returned goods are the seller's stock** — the RTO path is unchanged.
+- **Lost or damaged in our hands** → the seller is compensated through the
+  existing ticket refund (`SCRAP_REFUND`) at most the **transfer price**
+  (`REFUND_ABOVE_TRANSFER_PRICE`; the ticket's line when it names one, else
+  the whole order) — never the store's retail.
+- **Store ↔ seller disputes are tickets** (`TicketType.STORE_DISPUTE`,
+  `tickets.store_id`, `opened_by_store_user_id`). A store raises one on ITS
+  OWN reseller order only (`POST /store/tickets`, store `tickets.manage`;
+  anything else is the same 404); reads its own (`GET /store/tickets`,
+  `/:id`, `/:id/events`, store `tickets.view`) and replies while open. The
+  seller sees it with their tickets; staff referee. The store's words go to
+  the seller and to staff; nothing is sent TO the store (no inbox) — it reads
+  the portal.
+- **Settlement** — `POST /admin/tickets/:ticketId/store-dispute-settlement`
+  `{ amountInr, payer: STORE | SELLER, notes? }` (`tickets.resolve`): the
+  status is CLAIMED first (guarded `updateMany`), then a PAIR between the two
+  wallets in the same transaction — seller `STORE_DISPUTE_IN` / `_OUT`, store
+  `DISPUTE_SETTLEMENT_OUT` / `_IN` (`linkedSellerEntryId`) — no bank entry
+  (one pot, decision 7), audited HIGH `ticket.store_dispute_settled`, the
+  ticket recording `disputePayer`, `resolutionWalletEntryId` and
+  `resolutionStoreEntryId`. The ordinary refund is refused on this type
+  (`STORE_DISPUTE_USE_SETTLEMENT`). The payer may go negative (the group's
+  exposure, TRE-8c).
+- **Permissions:** store `tickets.view` (See disputes) and `tickets.manage`
+  (Raise disputes); owner/admin/ops hold both, finance/viewer `tickets.view`;
+  granted to existing stores' roles by the migration.
+- **Screens:** apps/reseller `/tickets`, `/tickets/new`, `/tickets/[id]`
+  ("Disputes" in the nav); admin ticket detail gains "Settle between store
+  and seller".
+- **Tests:** `store-dispute.service.spec.ts` (claim before money, amount
+  rules, refused refund, transfer-price cap, store-scoped open); the RS-7
+  case in `tenant-isolation.e2e-spec.ts`.

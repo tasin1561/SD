@@ -106,9 +106,17 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryDirection> = new Set([
   // off-platform: the store's wallet falls, the seller's rises by the same.
   // Omitting it here would take the amount from BOTH wallets.
   WalletEntryDirection.STORE_PAYOUT_IN,
+  // RS-6 phase 3c — a reseller order's transfer price, credited to the
+  // seller (COD: fronted / from the payout; prepaid: from what the store
+  // paid). Omitting either would TAKE the transfer price from the seller.
+  WalletEntryDirection.RESELLER_TRANSFER_CREDIT,
+  WalletEntryDirection.PREPAID_TRANSFER_CREDIT,
+  // RS-7 — a dispute with a reseller store settled in the seller's favour.
+  WalletEntryDirection.STORE_DISPUTE_IN,
 ]);
 
-function isCredit(d: WalletEntryDirection): boolean {
+/** Exported for readers that sign a ledger line (the reseller order money view). */
+export function isCredit(d: WalletEntryDirection): boolean {
   return CREDIT_DIRECTIONS.has(d);
 }
 

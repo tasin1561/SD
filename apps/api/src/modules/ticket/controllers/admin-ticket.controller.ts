@@ -26,6 +26,7 @@ import {
 } from '../services/ticket.service';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
+import { SettleStoreDisputeDto } from '../dto/store-ticket.dto';
 
 /**
  * R7 — the ops resolution panel's backend: one queue for auto-raised
@@ -123,6 +124,35 @@ export class AdminTicketController {
   @ApiOperation({ summary: 'Append-only status history for a ticket' })
   events(@Param('ticketId') ticketId: string) {
     return this.tickets.listEvents(ticketId);
+  }
+
+  /**
+   * RS-7 — settle a reseller store ↔ seller dispute. The money moves
+   * BETWEEN their two wallets as a pair in one transaction, never from
+   * ours; the ordinary refund is refused on this ticket type. Same
+   * permission as every other resolution.
+   */
+  @Post(':ticketId/store-dispute-settlement')
+  @RequirePermissions('tickets.resolve')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Settle a store dispute: the store pays the seller, or the seller pays the store. Rejects TICKET_NOT_A_STORE_DISPUTE / INVALID_TICKET_TRANSITION / TICKET_ALREADY_MOVED / SETTLEMENT_AMOUNT_INVALID',
+  })
+  settleStoreDispute(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
+    @Body() body: SettleStoreDisputeDto,
+  ): Promise<TicketView> {
+    return this.tickets.settleStoreDispute(
+      ticketId,
+      {
+        amountInr: body.amountInr,
+        payer: body.payer,
+        ...(body.notes === undefined ? {} : { notes: body.notes }),
+      },
+      staff.id,
+    );
   }
 
   @Patch(':ticketId')

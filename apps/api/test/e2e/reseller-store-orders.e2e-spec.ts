@@ -294,7 +294,9 @@ describe('reseller store orders (e2e)', () => {
       .post('/store/orders')
       .set(store.auth)
       .send(storeOrder(1, { paymentMode: 'PREPAID' }));
-    expect(prepaid.body.code).toBe('RESELLER_PREPAID_NOT_YET_AVAILABLE');
+    // RS-6 phase 3c: prepaid is ON — paid from the store's wallet, which is empty.
+    expect(prepaid.status).toBe(409);
+    expect(prepaid.body.code).toBe('STORE_BALANCE_INSUFFICIENT');
     // Four set aside — five is more than the store is shown.
     const tooMany = await request(h.baseUrl)
       .post('/store/orders')

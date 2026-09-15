@@ -1127,4 +1127,143 @@ describe('cross-tenant isolation (e2e)', () => {
       expectDenied(res.status, res.body, `a store's books via ${path}`);
     }
   });
+
+  // ─── Store disputes and order money (RS-7 / RS-6 phase 3c) ─────────────
+
+  it('RS-7: a store raises and reads only its own disputes; a sister store and another seller reach neither them nor the order’s money', async () => {
+    // Two stores of the SAME seller — the boundary under test is the store.
+    const storeA = await makeStoreUser(alpha, 'dsp-a');
+    const storeB = await makeStoreUser(alpha, 'dsp-b');
+    const published = await request(h.baseUrl)
+      .post(`/seller/reseller-stores/${storeA.storeId}/terms`)
+      .set(alpha.auth)
+      .send({
+        deliveryFeeStorePercent: '50',
+        returnFeeStorePercent: '50',
+        customerReturnFeeStorePercent: '50',
+        codFeeStorePercent: '50',
+        codTaxStorePercent: '50',
+        instantPayFeeStorePercent: '100',
+        storeCreditTrigger: 'ON_PAYOUT',
+        storeCreditDays: 0,
+        sellerCreditTrigger: 'ON_PAYOUT',
+        sellerCreditDays: 0,
+        basedOnVersion: 0,
+      })
+      .expect(201);
+    const termsVersionId = (published.body as { current: { id: string } }).current.id;
+    // Seeded directly: the scoping is under test, not order placement.
+    const order = await h.prisma.order.create({
+      data: {
+        sellerId: alpha.sellerId,
+        storeId: storeA.storeId,
+        storeKind: 'RESELLER',
+        storeNameSnapshot: storeA.storeName,
+        orderNumber: `SD-2026-94-${Math.floor(Math.random() * 900000 + 100000)}`,
+        status: 'DELIVERED',
+        paymentMode: 'COD',
+        codAmountInr: '1180.00',
+        recipientName: 'Meera Dispute',
+        recipientPhoneE164: '+919876500041',
+        recipientAddressLine1: '9 Quiet Street',
+        recipientAddressLine2: 'Near the post office',
+        recipientCity: 'Pune',
+        recipientStateProvince: 'Maharashtra',
+        recipientPostalCode: '411001',
+        recipientCountryCode: 'IN',
+        declaredValueInr: '0.00',
+        resellerTermsVersionId: termsVersionId,
+        resellerDeliveryFeeStorePercent: '50',
+        resellerReturnFeeStorePercent: '50',
+        resellerCustomerReturnFeeStorePercent: '50',
+        resellerCodFeeStorePercent: '50',
+        resellerCodTaxStorePercent: '50',
+        resellerInstantPayFeeStorePercent: '100',
+        resellerStoreCreditTrigger: 'ON_PAYOUT',
+        resellerStoreCreditDays: 0,
+        resellerSellerCreditTrigger: 'ON_PAYOUT',
+        resellerSellerCreditDays: 0,
+      },
+      select: { id: true },
+    });
+
+    // Store A raises a dispute on its own order — the ids are real, so the
+    // denials below are denials.
+    const raised = await request(h.baseUrl)
+      .post('/store/tickets')
+      .set(storeA.auth)
+      .send({ orderId: order.id, subject: 'Seller sent the wrong colour' })
+      .expect(201);
+    const ticketId = (raised.body as { id: string; ticketType: string }).id;
+    expect((raised.body as { ticketType: string }).ticketType).toBe('STORE_DISPUTE');
+    await request(h.baseUrl).get(`/store/tickets/${ticketId}`).set(storeA.auth).expect(200);
+    await request(h.baseUrl).get(`/store/orders/${order.id}/money`).set(storeA.auth).expect(200);
+
+    // The sister store: cannot raise one on A's order, read A's, or reply on it.
+    const bRaise = await request(h.baseUrl)
+      .post('/store/tickets')
+      .set(storeB.auth)
+      .send({ orderId: order.id, subject: 'Not my order at all' });
+    expectDenied(bRaise.status, bRaise.body, "a dispute on a sister store's order");
+    for (const [method, path, body] of [
+      ['get', `/store/tickets/${ticketId}`, {}],
+      ['get', `/store/tickets/${ticketId}/events`, {}],
+      ['post', `/store/tickets/${ticketId}/notes`, { note: 'Reaching into store A' }],
+      ['get', `/store/orders/${order.id}/money`, {}],
+    ] as Array<['get' | 'post', string, object]>) {
+      const res = await request(h.baseUrl)[method](path).set(storeB.auth).send(body);
+      expectDenied(res.status, res.body, `a sister store's dispute via ${method} ${path}`);
+    }
+    const bList = await request(h.baseUrl).get('/store/tickets').set(storeB.auth).expect(200);
+    expect(JSON.stringify(bList.body)).not.toContain(ticketId);
+    expect(
+      await h.prisma.ticketEvent.count({ where: { ticketId, note: 'Reaching into store A' } }),
+    ).toBe(0);
+
+    // A store cannot raise a dispute on the seller's own channel order either.
+    const store = await defaultStoreFor(h.prisma, alpha.sellerId);
+    const channel = await h.prisma.order.create({
+      data: {
+        sellerId: alpha.sellerId,
+        storeId: store.id,
+        storeNameSnapshot: store.name,
+        orderNumber: `SD-2026-94-${Math.floor(Math.random() * 900000 + 100000)}`,
+        status: 'PENDING_CONFIRMATION',
+        paymentMode: 'PREPAID',
+        recipientName: 'Own Customer',
+        recipientPhoneE164: '+919812345699',
+        recipientAddressLine1: '1 Seller Road',
+        recipientAddressLine2: 'Opposite the park',
+        recipientCity: 'Bengaluru',
+        recipientStateProvince: 'Karnataka',
+        recipientPostalCode: '560001',
+        recipientCountryCode: 'IN',
+        declaredValueInr: '100.00',
+      },
+      select: { id: true },
+    });
+    const onChannel = await request(h.baseUrl)
+      .post('/store/tickets')
+      .set(storeA.auth)
+      .send({ orderId: channel.id, subject: 'A channel order' });
+    expectDenied(onChannel.status, onChannel.body, "a dispute on the seller's own channel order");
+
+    // The seller sees the order's money; another seller does not.
+    await request(h.baseUrl)
+      .get(`/seller/orders/${order.id}/reseller-money`)
+      .set(alpha.auth)
+      .expect(200);
+    const betaMoney = await request(h.baseUrl)
+      .get(`/seller/orders/${order.id}/reseller-money`)
+      .set(beta.auth);
+    expectDenied(betaMoney.status, betaMoney.body, "another seller's reseller order money");
+    // And a store token opens none of the seller or admin surfaces.
+    for (const path of [
+      `/seller/orders/${order.id}/reseller-money`,
+      `/admin/orders/${order.id}/reseller-money`,
+    ]) {
+      const res = await request(h.baseUrl).get(path).set(storeA.auth);
+      expect([401, 403]).toContain(res.status);
+    }
+  });
 });

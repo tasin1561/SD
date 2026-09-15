@@ -31,6 +31,11 @@ const DEBT_CAUSES = [
   WalletEntryDirection.STAFF_DEBIT,
   // A COD the courier took back: the credit it had funded is gone.
   WalletEntryDirection.COD_REVERSAL,
+  // RS-6 phase 3c / RS-7 — a reseller order's transfer price taken back,
+  // and a dispute the seller paid a store.
+  WalletEntryDirection.RESELLER_TRANSFER_REVERSAL,
+  WalletEntryDirection.PREPAID_TRANSFER_REVERSAL,
+  WalletEntryDirection.STORE_DISPUTE_OUT,
 ] as const;
 
 /**
@@ -49,6 +54,11 @@ const DEBT_PAYMENTS = [
   WalletEntryDirection.STAFF_CREDIT,
   // RS-6 — a store the seller manages handing money back (a recorded payout).
   WalletEntryDirection.STORE_PAYOUT_IN,
+  // RS-6 phase 3c / RS-7 — a reseller order's transfer price earned, and a
+  // dispute a store paid the seller.
+  WalletEntryDirection.RESELLER_TRANSFER_CREDIT,
+  WalletEntryDirection.PREPAID_TRANSFER_CREDIT,
+  WalletEntryDirection.STORE_DISPUTE_IN,
 ] as const;
 
 export interface LedgerLine {

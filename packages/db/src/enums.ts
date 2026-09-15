@@ -160,3 +160,5 @@ export { ResellerCreditTrigger } from '@prisma/client';
 export { StoreWalletEntryDirection } from '@prisma/client';
 // RS-8 — a reseller store's own expenses.
 export { StoreExpenseCategory } from '@prisma/client';
+// RS-6 phase 3c — a reseller order's per-party credits.
+export { ResellerMoneyParty, ResellerCreditStatus } from '@prisma/client';

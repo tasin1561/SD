@@ -165,13 +165,33 @@ export class SellerCashAttributionService {
       case WalletEntryDirection.OPENING_BALANCE:
         return 'NONE';
 
-      // RS-6 — money between the seller and a reseller store they manage.
-      // Each is written with its store-side twin in one transaction, so the
-      // seller + stores sum the bank book follows does not move: no cash
-      // changes hands, and none changes owner (decision 7).
+      // RS-6 — money between the seller and a reseller store they manage,
+      // and RS-7's dispute settlement between them. Each is written with its
+      // store-side twin in one transaction, so the seller + stores sum the
+      // bank book follows does not move: no cash changes hands, and none
+      // changes owner (decision 7).
       case WalletEntryDirection.STORE_TOPUP_OUT:
       case WalletEntryDirection.STORE_PAYOUT_IN:
+      case WalletEntryDirection.STORE_DISPUTE_IN:
+      case WalletEntryDirection.STORE_DISPUTE_OUT:
         return 'NONE';
+
+      // RS-6 phase 3c — a reseller COD order's transfer price, credited and
+      // taken back. Real cash (the courier's COD) posted by the flow:
+      // `ResellerOrderMoneyService` fronts the credit from capital and
+      // moves the reversal's cash to capital itself, exactly as Instant Pay
+      // does for COD_COLLECTION / COD_REVERSAL.
+      case WalletEntryDirection.RESELLER_TRANSFER_CREDIT:
+      case WalletEntryDirection.RESELLER_TRANSFER_REVERSAL:
+        return 'NONE';
+
+      // A PREPAID reseller order's transfer price: money the store already
+      // paid (its PREPAID_DEBIT made it ours) becomes the seller's, above any
+      // group debt; taken back, it is ours again, clamped.
+      case WalletEntryDirection.PREPAID_TRANSFER_CREDIT:
+        return 'TO_SELLER';
+      case WalletEntryDirection.PREPAID_TRANSFER_REVERSAL:
+        return 'TO_CAPITAL';
     }
   }
 
@@ -189,15 +209,25 @@ export class SellerCashAttributionService {
       // confirmation and reaches the seller later, at the seller's own
       // trigger — in between it is in neither wallet, so it cannot be held
       // for either; the seller-side credit then moves it back (TO_SELLER).
+      // TRANSFER_PRICE (phase 3c) is what a store that sold below the
+      // transfer price owes on a COD order — a charge like the others.
       case StoreWalletEntryDirection.FEE_SHARE:
       case StoreWalletEntryDirection.COD_TAX_SHARE:
       case StoreWalletEntryDirection.PREPAID_DEBIT:
+      case StoreWalletEntryDirection.TRANSFER_PRICE:
         return 'TO_CAPITAL';
 
       // Given back: the cash is theirs again above any debt.
       case StoreWalletEntryDirection.SHARE_REFUND:
       case StoreWalletEntryDirection.PREPAID_REFUND:
+      case StoreWalletEntryDirection.TRANSFER_PRICE_REFUND:
         return 'TO_SELLER';
+
+      // RS-7 — a dispute settled between the store and its seller: the
+      // seller-side twin is in the same transaction, one pot, no owner change.
+      case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_IN:
+      case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_OUT:
+        return 'NONE';
 
       // The seller's own money moving between their wallet and the store's
       // (SELLER_TOPUP / SELLER_PAYOUT — the seller-side twin is in the same

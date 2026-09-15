@@ -8,6 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type { OrderStatus } from '@skydrop/db';
+import type { ResellerOrderMoneyView } from '@skydrop/api-client';
 import { useApiClient } from '@skydrop/auth/client';
 
 /**
@@ -197,6 +198,19 @@ export function useStoreOrder(id: string): UseQueryResult<StoreOrderView> {
   return useQuery({
     queryKey: [...ORDERS, 'detail', id],
     queryFn: () => client.request<StoreOrderView>(`/api/store/orders/${id}`),
+    enabled: id !== '',
+  });
+}
+
+/**
+ * RS-6 phase 3c — what this order earns the store and pays the seller,
+ * and when. The server answers with the store's own wallet lines only.
+ */
+export function useStoreOrderMoney(id: string): UseQueryResult<ResellerOrderMoneyView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...ORDERS, 'money', id],
+    queryFn: () => client.request<ResellerOrderMoneyView>(`/api/store/orders/${id}/money`),
     enabled: id !== '',
   });
 }

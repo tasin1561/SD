@@ -27,6 +27,7 @@ import { SystemIssuesModule } from '../system-issues/system-issues.module';
 // Instant Pay fronts the COD from our money, as a bank-book pair. No
 // cycle: treasury imports prisma and auth-common only.
 import { TreasuryModule } from '../treasury/treasury.module';
+import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order-money.module';
 
 /**
  * Phase 1B M22 — COD accrual on DELIVERED.
@@ -70,6 +71,9 @@ import { TreasuryModule } from '../treasury/treasury.module';
     // one order at a time — it now says so on the board (MONEY).
     SystemIssuesModule,
     TreasuryModule,
+    // RS-6 phase 3c — a reseller order's fees are split between the store
+    // and the seller. No cycle: that module imports none of this one.
+    ResellerOrderMoneyModule,
   ],
   controllers: [AdminChargesBillingController],
   providers: [

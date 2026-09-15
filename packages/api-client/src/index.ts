@@ -82,6 +82,12 @@ export type { FxRateView, SetFxRateRequest } from './endpoints/admin-fx';
 export type { FxRateHistoryRow } from './endpoints/admin-fx-history';
 export type { OrderChargeView, ComputeOrderChargesResponse } from './endpoints/order-charges';
 export type {
+  ResellerFeeSplitView,
+  ResellerMoneyLineView,
+  ResellerOrderMoneyView,
+  ResellerPartyCreditView,
+} from './endpoints/reseller-order-money';
+export type {
   SellerStockRow,
   SellerStockListResponse,
   SellerStockSummary,
