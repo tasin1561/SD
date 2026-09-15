@@ -43,17 +43,18 @@ import { test, expect } from '@playwright/test';
 /**
  * Pages each project serves without a session.
  *
- * A list rather than one page, because marketing's two routes are
+ * A list rather than one page, because marketing's routes are
  * different layout problems: the landing page is a long scroll of
- * hand-built sections, and `/request-invite` is the only public FORM in
+ * hand-built sections, `/request-invite` is the only public FORM in
  * the estate — which makes it the only place the 16px iOS-zoom rule
- * below can bite outside an authenticated app.
+ * below can bite outside an authenticated app — and `/privacy` is long
+ * running text, where a wide word or list is what overflows a phone.
  */
 const PUBLIC_ENTRY: Record<string, readonly string[]> = {
   admin: ['/login'],
   seller: ['/login'],
   track: ['/'],
-  marketing: ['/', '/request-invite'],
+  marketing: ['/', '/request-invite', '/privacy'],
   reseller: ['/login', '/password-reset'],
 };
 

@@ -10,6 +10,7 @@ const LINKS = [
   { href: 'https://track.skydrop.online', label: 'Track a parcel', external: true },
   { href: 'https://app.skydrop.online', label: 'Seller sign-in', external: true },
   { href: 'mailto:hello@skydrop.online', label: 'Contact' },
+  { href: '/privacy', label: 'Privacy' },
 ];
 
 export function SiteFooter(): ReactElement {
