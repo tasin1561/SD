@@ -31,6 +31,7 @@ import {
   InviteLeadStatus,
   WalletEntryDirection,
   ResellerStoreStatus,
+  ResellerCreditStatus,
   StoreWalletEntryDirection,
 } from '@skydrop/db';
 
@@ -364,6 +365,50 @@ export function resellerStoreStatusLabel(status: ResellerStoreStatus): string {
   }
 }
 
+/**
+ * RS-6 phase 3c — one party's credit on a reseller order → kind. Read by
+ * the reseller portal, the seller's order detail and the admin order
+ * detail alike; a new status fails to compile until it is placed.
+ */
+export function resellerCreditStatusKind(status: ResellerCreditStatus): StatusKind {
+  switch (status) {
+    case ResellerCreditStatus.WAITING:
+      return 'pending';
+    case ResellerCreditStatus.DUE:
+      return 'confirmed';
+    case ResellerCreditStatus.CREDITED:
+      return 'delivered';
+    case ResellerCreditStatus.REVERSED:
+      return 'rto';
+    case ResellerCreditStatus.SKIPPED:
+      return 'cancelled';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled ResellerCreditStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** The words a person reads for a reseller order credit's status. */
+export function resellerCreditStatusLabel(status: ResellerCreditStatus): string {
+  switch (status) {
+    case ResellerCreditStatus.WAITING:
+      return 'waiting';
+    case ResellerCreditStatus.DUE:
+      return 'due';
+    case ResellerCreditStatus.CREDITED:
+      return 'credited';
+    case ResellerCreditStatus.REVERSED:
+      return 'taken back';
+    case ResellerCreditStatus.SKIPPED:
+      return 'not credited';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled ResellerCreditStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
 /** R5 early-reservation review → kind. */
 export function earlyReviewStatusKind(status: EarlyReservationReviewStatus): StatusKind {
   switch (status) {
@@ -539,6 +584,11 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     // RS-6 — a reseller store the seller manages, paid back off-platform:
     // the store's wallet falls and the seller's rises by the same.
     case WalletEntryDirection.STORE_PAYOUT_IN:
+    // RS-6 phase 3c — a reseller store order's transfer price, earned.
+    case WalletEntryDirection.RESELLER_TRANSFER_CREDIT:
+    case WalletEntryDirection.PREPAID_TRANSFER_CREDIT:
+    // RS-7 — a dispute with a reseller store settled in the seller's favour.
+    case WalletEntryDirection.STORE_DISPUTE_IN:
       return true;
     // Everything we charge for. REMITTANCE_OUT is money leaving to the
     // seller's bank, so it is a debit against the wallet even though
@@ -566,6 +616,11 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.STAFF_DEBIT:
     // RS-6 — the seller moving money into a reseller store they manage.
     case WalletEntryDirection.STORE_TOPUP_OUT:
+    // RS-6 phase 3c — a reseller order's transfer price taken back.
+    case WalletEntryDirection.RESELLER_TRANSFER_REVERSAL:
+    case WalletEntryDirection.PREPAID_TRANSFER_REVERSAL:
+    // RS-7 — a dispute settled in the store's favour: the seller pays it.
+    case WalletEntryDirection.STORE_DISPUTE_OUT:
       return false;
     default: {
       const exhaustive: never = direction;
@@ -640,6 +695,18 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
       return 'Moved to a reseller store';
     case WalletEntryDirection.STORE_PAYOUT_IN:
       return 'Reseller store paid (recorded)';
+    case WalletEntryDirection.RESELLER_TRANSFER_CREDIT:
+      return 'Reseller order — your transfer price';
+    case WalletEntryDirection.RESELLER_TRANSFER_REVERSAL:
+      return 'Reseller order — transfer price taken back';
+    case WalletEntryDirection.PREPAID_TRANSFER_CREDIT:
+      return 'Prepaid reseller order — your transfer price';
+    case WalletEntryDirection.PREPAID_TRANSFER_REVERSAL:
+      return 'Prepaid reseller order — transfer price taken back';
+    case WalletEntryDirection.STORE_DISPUTE_IN:
+      return 'Dispute settled — paid by a reseller store';
+    case WalletEntryDirection.STORE_DISPUTE_OUT:
+      return 'Dispute settled — paid to a reseller store';
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);
@@ -663,6 +730,8 @@ export function isStoreWalletCredit(direction: StoreWalletEntryDirection): boole
     case StoreWalletEntryDirection.ORDER_CREDIT:
     case StoreWalletEntryDirection.SHARE_REFUND:
     case StoreWalletEntryDirection.PREPAID_REFUND:
+    case StoreWalletEntryDirection.TRANSFER_PRICE_REFUND:
+    case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_IN:
       return true;
     case StoreWalletEntryDirection.SELLER_PAYOUT:
     case StoreWalletEntryDirection.WITHDRAWAL:
@@ -670,6 +739,8 @@ export function isStoreWalletCredit(direction: StoreWalletEntryDirection): boole
     case StoreWalletEntryDirection.FEE_SHARE:
     case StoreWalletEntryDirection.COD_TAX_SHARE:
     case StoreWalletEntryDirection.PREPAID_DEBIT:
+    case StoreWalletEntryDirection.TRANSFER_PRICE:
+    case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_OUT:
       return false;
     default: {
       const exhaustive: never = direction;
@@ -710,6 +781,14 @@ export function storeWalletDirectionLabel(
       return 'Prepaid order';
     case StoreWalletEntryDirection.PREPAID_REFUND:
       return 'Prepaid order refunded';
+    case StoreWalletEntryDirection.TRANSFER_PRICE:
+      return `Goods at ${seller}’s transfer price`;
+    case StoreWalletEntryDirection.TRANSFER_PRICE_REFUND:
+      return 'Transfer price given back';
+    case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_IN:
+      return `Dispute settled — paid by ${seller}`;
+    case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_OUT:
+      return `Dispute settled — paid to ${seller}`;
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled StoreWalletEntryDirection: ${String(exhaustive)}`);

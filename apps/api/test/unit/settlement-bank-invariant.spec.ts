@@ -1,4 +1,12 @@
-import { BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
+import {
+  BankEntryType,
+  BankOwnerKind,
+  Currency,
+  OrderStatus,
+  PaymentMode,
+  Prisma,
+  ResellerCreditTrigger,
+} from '@skydrop/db';
 import {
   AdvisoryLock,
   ATTRIBUTION_RECONCILE_KEY,
@@ -16,6 +24,13 @@ import { StoreTopupService } from '../../src/modules/reseller-store-wallet/servi
 import { StoreWalletService } from '../../src/modules/reseller-store-wallet/services/store-wallet.service';
 import { StoreWithdrawalService } from '../../src/modules/reseller-store-wallet/services/store-withdrawal.service';
 import { WithdrawalRequestService } from '../../src/modules/seller-wallet-withdrawal/services/withdrawal-request.service';
+import { ResellerOrderMoneyService } from '../../src/modules/reseller-order-money/services/reseller-order-money.service';
+
+/** RS-6 phase 3c — the channel-order scenarios never meet a reseller order. */
+const NO_RESELLER_MONEY = {
+  isResellerOrder: async () => false,
+  head: async () => null,
+} as never;
 
 /**
  * TRE-4 / TRE-8, end to end in memory: after every payout, the cash the
@@ -39,6 +54,10 @@ const CREDITS = new Set([
   'STAFF_CREDIT',
   // RS-6 — a store the seller manages, paid back off-platform.
   'STORE_PAYOUT_IN',
+  // RS-6 phase 3c / RS-7.
+  'RESELLER_TRANSFER_CREDIT',
+  'PREPAID_TRANSFER_CREDIT',
+  'STORE_DISPUTE_IN',
 ]);
 
 interface WalletRow {
@@ -75,6 +94,10 @@ interface StoreRow {
   direction: string;
   amount: Prisma.Decimal;
   runningBalanceAfter: Prisma.Decimal;
+  // RS-6 phase 3c — what an order's entries carry.
+  shareOf?: string | null;
+  linkedOrderId?: string | null;
+  linkedEntryId?: string | null;
 }
 
 /**
@@ -166,6 +189,31 @@ function requestTable(rows: Array<Record<string, unknown> & { id: string; status
   };
 }
 
+/** RS-6 phase 3c — a reseller store's order in the world, as its snapshot says. */
+interface ResellerOrderSpec {
+  id: string;
+  sellerId: string;
+  storeId: string;
+  paymentMode: PaymentMode;
+  cod: string | null;
+  /** Σ transfer price × quantity (one line of one unit). */
+  transfer: string;
+  /** The delivery fee's charge line, when the order has one. */
+  deliveryFee?: string;
+  percents: { delivery?: string; codFee?: string; codTax?: string; instant?: string };
+  storeCredit: [ResellerCreditTrigger, number];
+  sellerCredit: [ResellerCreditTrigger, number];
+}
+
+type CreditRow = Record<string, unknown> & {
+  id: string;
+  orderId: string;
+  party: string;
+  status: string;
+  dueAt: Date | null;
+  timesCredited: number;
+};
+
 function makeWorld(
   orders: Array<{ id: string; sellerId: string; cod: string }>,
   /** The two independent COD fees, as percents. Both off by default. */
@@ -176,6 +224,8 @@ function makeWorld(
    * which therefore run exactly as they did.
    */
   stores: ReadonlyArray<{ id: string; sellerId: string; managedBy: 'SELLER' | 'SKYDROP' }> = [],
+  /** RS-6 phase 3c — reseller orders; empty runs every channel scenario unchanged. */
+  resellerOrders: readonly ResellerOrderSpec[] = [],
 ) {
   const wallet: WalletRow[] = [];
   const bank: BankRow[] = [];
@@ -192,6 +242,113 @@ function makeWorld(
   const topupReqs: Array<Record<string, unknown> & { id: string; status: string }> = [];
   const withdrawalReqs: Array<Record<string, unknown> & { id: string; status: string }> = [];
   const nextId = (): string => `id-${String((seq += 1)).padStart(6, '0')}`;
+
+  // ── RS-6 phase 3c: reseller orders, their credit plan and charge lines ──
+  const rState = new Map(
+    resellerOrders.map((o) => [
+      o.id,
+      {
+        status: OrderStatus.PENDING_CONFIRMATION as OrderStatus,
+        delivered: false,
+        charge: 'ESTIMATED',
+      },
+    ]),
+  );
+  const resellerRow = (o: ResellerOrderSpec): Record<string, unknown> => ({
+    id: o.id,
+    orderNumber: o.id,
+    sellerId: o.sellerId,
+    storeId: o.storeId,
+    status: rState.get(o.id)?.status ?? OrderStatus.PENDING_CONFIRMATION,
+    paymentMode: o.paymentMode,
+    codAmountInr: o.cod === null ? null : D(o.cod),
+    resellerTermsVersionId: 'terms-1',
+    resellerDeliveryFeeStorePercent: D(o.percents.delivery ?? '0'),
+    resellerReturnFeeStorePercent: D('0'),
+    resellerCustomerReturnFeeStorePercent: D('0'),
+    resellerCodFeeStorePercent: D(o.percents.codFee ?? '0'),
+    resellerCodTaxStorePercent: D(o.percents.codTax ?? '0'),
+    resellerInstantPayFeeStorePercent: D(o.percents.instant ?? '0'),
+    resellerStoreCreditTrigger: o.storeCredit[0],
+    resellerStoreCreditDays: o.storeCredit[1],
+    resellerSellerCreditTrigger: o.sellerCredit[0],
+    resellerSellerCreditDays: o.sellerCredit[1],
+    items: [
+      {
+        id: `${o.id}-item`,
+        variantId: 'v-1',
+        quantity: 1,
+        resellerTransferPriceInr: D(o.transfer),
+        resellerRetailUnitInr: D(o.cod ?? o.transfer),
+        resellerMinRetailInr: null,
+        resellerMaxRetailInr: null,
+        resellerStockMode: 'SHARED',
+      },
+    ],
+  });
+  const credits: CreditRow[] = [];
+  const creditMatch =
+    (w: Record<string, unknown>) =>
+    (r: CreditRow): boolean =>
+      (w['id'] === undefined || r.id === w['id']) &&
+      (w['orderId'] === undefined || r.orderId === w['orderId']) &&
+      (w['status'] === undefined ||
+        (typeof w['status'] === 'string'
+          ? r.status === w['status']
+          : (w['status'] as { in: string[] }).in.includes(r.status))) &&
+      (w['dueAt'] === undefined ||
+        (r.dueAt !== null && r.dueAt.getTime() <= (w['dueAt'] as { lte: Date }).lte.getTime()));
+  const creditTable = {
+    findMany: jest.fn(async (a: { where: Record<string, unknown> }) =>
+      credits.filter(creditMatch(a.where)).map((r) => ({ ...r })),
+    ),
+    findUnique: jest.fn(async (a: { where: { id: string } }) => {
+      const r = credits.find((x) => x.id === a.where.id);
+      return r === undefined ? null : { ...r };
+    }),
+    createMany: jest.fn(async (a: { data: Array<Record<string, unknown>> }) => {
+      for (const d of a.data) {
+        if (credits.some((r) => r.orderId === d['orderId'] && r.party === d['party'])) continue;
+        credits.push({
+          status: 'WAITING',
+          dueAt: null,
+          creditedAt: null,
+          reversedAt: null,
+          skippedReason: null,
+          timesCredited: 0,
+          ...d,
+          id: nextId(),
+        } as unknown as CreditRow);
+      }
+      return { count: a.data.length };
+    }),
+    updateMany: jest.fn(
+      async (a: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const hit = credits.filter(creditMatch(a.where));
+        const { timesCredited, ...rest } = a.data;
+        for (const r of hit) {
+          Object.assign(r, rest);
+          if (timesCredited !== undefined) r.timesCredited += 1;
+        }
+        return { count: hit.length };
+      },
+    ),
+  };
+  const valMatch = (want: unknown, have: unknown): boolean =>
+    want === undefined ||
+    (want !== null && typeof want === 'object' && 'in' in want
+      ? (want as { in: unknown[] }).in.includes(have)
+      : want === have);
+  const storeWhere =
+    (w: Record<string, unknown>) =>
+    (r: StoreRow): boolean => {
+      const row = r as unknown as Record<string, unknown>;
+      const base = ['storeId', 'linkedOrderId', 'direction', 'shareOf'].every((k) =>
+        valMatch(w[k], row[k] ?? null),
+      );
+      const or = w['OR'] as Array<Record<string, unknown>> | undefined;
+      return base && (or === undefined || or.some((c) => storeWhere(c)(r)));
+    };
 
   const dirMatch = (direction: unknown, d: string): boolean =>
     direction === undefined ||
@@ -326,6 +483,18 @@ function makeWorld(
       findFirst: jest.fn(async () => ({ companyName: 'Menev Store', status: 'APPROVED' })),
     },
     courierSettlementLine: {
+      // RS-6 phase 3c — has the courier paid on this order, and how much net.
+      count: jest.fn(
+        async (a: { where: { orderId: string } }) =>
+          lines.filter((l) => l.orderId === a.where.orderId).length,
+      ),
+      aggregate: jest.fn(async (a: { where: { orderId: string } }) => ({
+        _sum: {
+          settledInr: lines
+            .filter((l) => l.orderId === a.where.orderId)
+            .reduce((t, l) => t.add(l.settledInr), ZERO),
+        },
+      })),
       groupBy: jest.fn(async (a: { where: { orderId: { in: string[] } } }) => {
         const by = new Map<string, { settled: Prisma.Decimal; short: Prisma.Decimal }>();
         for (const l of lines) {
@@ -368,18 +537,75 @@ function makeWorld(
       })),
     },
     order: {
-      findMany: jest.fn(async (a: { where: { id: { in: string[] } } }) =>
-        orders
+      findMany: jest.fn(async (a: { where: { id: { in: string[] } } }) => [
+        ...orders
           .filter((o) => a.where.id.in.includes(o.id))
           .map((o) => ({
             id: o.id,
             orderNumber: o.id,
             codAmountInr: D(o.cod),
             sellerId: o.sellerId,
+            storeKind: 'CHANNEL',
           })),
+        ...resellerOrders
+          .filter((o) => a.where.id.in.includes(o.id))
+          .map((o) => ({
+            id: o.id,
+            orderNumber: o.id,
+            codAmountInr: o.cod === null ? null : D(o.cod),
+            sellerId: o.sellerId,
+            storeKind: 'RESELLER',
+          })),
+      ]),
+      // A reseller order's head and snapshot (the RESELLER filter is the caller's).
+      findFirst: jest.fn(async (a: { where: { id: string } }) => {
+        const o = resellerOrders.find((x) => x.id === a.where.id);
+        return o === undefined ? null : resellerRow(o);
+      }),
+    },
+    shipment: {
+      findMany: jest.fn(async () => []),
+      // The carrying courier's payout account — HDFC.
+      findFirst: jest.fn(async () => ({
+        courierAccount: {
+          payoutBankAccount: { id: 'hdfc', currency: 'INR', isActive: true, deletedAt: null },
+        },
+      })),
+    },
+    orderEvent: {
+      count: jest.fn(async (a: { where: { orderId: string; toStatus: string } }) =>
+        a.where.toStatus === OrderStatus.DELIVERED &&
+        rState.get(a.where.orderId)?.delivered === true
+          ? 1
+          : 0,
       ),
     },
-    shipment: { findMany: jest.fn(async () => []) },
+    orderCharge: {
+      findMany: jest.fn(async (a: { where: { orderId: string } }) => {
+        const o = resellerOrders.find((x) => x.id === a.where.orderId);
+        const st = rState.get(a.where.orderId);
+        return o?.deliveryFee === undefined || st === undefined
+          ? []
+          : [
+              {
+                id: `${o.id}-charge`,
+                type: 'BASE_SHIPPING',
+                amountInr: D(o.deliveryFee),
+                status: st.charge,
+              },
+            ];
+      }),
+      updateMany: jest.fn(
+        async (a: { where: { id: { in: string[] } }; data: { status: string } }) => {
+          for (const id of a.where.id.in) {
+            const st = rState.get(id.replace(/-charge$/, ''));
+            if (st !== undefined) st.charge = a.data.status;
+          }
+          return { count: a.where.id.in.length };
+        },
+      ),
+    },
+    resellerOrderCredit: creditTable,
     systemSetting: { findUnique: jest.fn(async () => ({ valueDecimal: '100' })) },
     // ── RS-6: reseller stores, their wallets and requests ─────────────
     sellerStore: {
@@ -408,9 +634,20 @@ function makeWorld(
       }),
     },
     storeWalletEntry: {
+      // Applies the where-clauses the services send (store, order, direction, share, OR).
       findFirst: jest.fn(
-        async (a: { where: { storeId: string } }) =>
-          storeRows.filter((r) => r.storeId === a.where.storeId).at(-1) ?? null,
+        async (a: { where: Record<string, unknown> }) =>
+          storeRows.filter(storeWhere(a.where)).at(-1) ?? null,
+      ),
+      findMany: jest.fn(
+        async (a: { where: Record<string, unknown>; orderBy?: { id: 'asc' | 'desc' } }) => {
+          const found = storeRows.filter(storeWhere(a.where));
+          return a.orderBy?.id === 'desc' ? [...found].reverse() : found;
+        },
+      ),
+      count: jest.fn(
+        async (a: { where: Record<string, unknown> }) =>
+          storeRows.filter(storeWhere(a.where)).length,
       ),
       findUnique: jest.fn(async () => null),
       create: jest.fn(async (a: { data: Omit<StoreRow, 'id'> }) => {
@@ -515,14 +752,6 @@ function makeWorld(
       owner: { kind: 'CAPITAL' },
     });
   };
-  const svc = new CourierSettlementService(
-    { client: tx } as never,
-    { log: jest.fn(async () => 'a1') } as never,
-    codCredit,
-    walletService as never,
-    ledger as never,
-    attribution,
-  );
 
   // ── RS-6: the REAL store wallet services over the same book ─────────
   const audit = { log: jest.fn(async () => 'a1') };
@@ -563,6 +792,27 @@ function makeWorld(
     storeWallet,
     ledger as never,
     attribution,
+  );
+  // RS-6 phase 3c — the REAL reseller order money, over the same book.
+  const resellerMoney = new ResellerOrderMoneyService(
+    { client: tx } as never,
+    walletService as never,
+    storeWallet,
+    attribution,
+    settings as never,
+    {} as never,
+    { persistForOrderSystem: jest.fn(async () => undefined) } as never,
+    audit as never,
+  );
+  const svc = new CourierSettlementService(
+    { client: tx } as never,
+    { log: jest.fn(async () => 'a1') } as never,
+    codCredit,
+    walletService as never,
+    ledger as never,
+    attribution,
+    // Channel worlds keep today's path byte-identical.
+    resellerOrders.length === 0 ? NO_RESELLER_MONEY : (resellerMoney as never),
   );
   const storeUser = (storeId: string): never =>
     ({
@@ -825,6 +1075,25 @@ function makeWorld(
     storeBalance: (storeId: string): string => storeBalanceOf(storeId).toFixed(2),
     groupOwed,
     sellerWithdrawable,
+    // RS-6 phase 3c
+    resellerMoney,
+    tx,
+    /** The order moves, as `transitionStatus` would, before its listener runs. */
+    setStatus: (orderId: string, status: OrderStatus): void => {
+      const st = rState.get(orderId);
+      if (st === undefined) return;
+      st.status = status;
+      if (status === OrderStatus.DELIVERED) st.delivered = true;
+    },
+    creditsOf: (orderId: string): string[] =>
+      credits
+        .filter((c) => c.orderId === orderId)
+        .map((c) => `${c.party} ${c.status}`)
+        .sort(),
+    storeEntriesOf: (orderId: string): string[] =>
+      storeRows
+        .filter((r) => r.linkedOrderId === orderId)
+        .map((r) => `${r.direction} ${r.amount.toFixed(2)}`),
   };
 }
 
@@ -1684,6 +1953,264 @@ describe('RS-6 — a seller and their reseller stores are ONE pot in the bank bo
     }
     expect(ranks[0]).toBe(0);
     expect(ranks).toEqual([...ranks].sort((x, y) => x - y));
+    agrees(w);
+  });
+});
+
+describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ stores) at every step', () => {
+  const STORES = [
+    { id: 'st-a', sellerId: 's', managedBy: 'SELLER' as const },
+    { id: 'st-b', sellerId: 's', managedBy: 'SKYDROP' as const },
+  ];
+  // COD ₹1,180 at 18%: tax 180.00, post-tax 1,000; COD fee 1% = 10.00; Instant Pay 2.5% = 25.00.
+  // The store pays 50% of the tax and the COD fee, all of the Instant Pay fee and half the delivery fee.
+  const PERCENTS = { delivery: '50', codFee: '50', codTax: '50', instant: '100' };
+  const cod = (
+    id: string,
+    storeCredit: [ResellerCreditTrigger, number],
+    sellerCredit: [ResellerCreditTrigger, number],
+    over: Partial<ResellerOrderSpec> = {},
+  ): ResellerOrderSpec => ({
+    id,
+    sellerId: 's',
+    storeId: 'st-a',
+    paymentMode: PaymentMode.COD,
+    cod: '1180',
+    transfer: '700',
+    percents: PERCENTS,
+    storeCredit,
+    sellerCredit,
+    ...over,
+  });
+  const ON_PAYOUT: [ResellerCreditTrigger, number] = [ResellerCreditTrigger.ON_PAYOUT, 0];
+  const INSTANT: [ResellerCreditTrigger, number] = [ResellerCreditTrigger.INSTANT, 0];
+  const AFTER_CONFIRMATION: [ResellerCreditTrigger, number] = [
+    ResellerCreditTrigger.AFTER_CONFIRMATION,
+    0,
+  ];
+  const world = (
+    resellerOrders: ResellerOrderSpec[],
+    channel: Array<{ id: string; sellerId: string; cod: string }> = [],
+  ): World => makeWorld(channel, { collection: '1.00', instant: '2.50' }, STORES, resellerOrders);
+  const agrees = (w: World): void => {
+    expect(w.held('s')).toBe(w.groupOwed('s'));
+  };
+  const confirm = async (w: World, id: string): Promise<void> => {
+    w.setStatus(id, OrderStatus.CONFIRMED);
+    await w.resellerMoney.onConfirmed(id, new Date());
+  };
+  const deliver = async (w: World, id: string): Promise<void> => {
+    w.setStatus(id, OrderStatus.DELIVERED);
+    await w.resellerMoney.onDelivered(id, new Date(), true);
+  };
+
+  it('COD settled, both ON_PAYOUT: nothing moves at delivery; the payout credits each party its net', async () => {
+    const w = world([cod('r1', ON_PAYOUT, ON_PAYOUT)]);
+    await confirm(w, 'r1');
+    await deliver(w, 'r1');
+    // ON_PAYOUT counts from the payout: delivery arms neither.
+    expect(w.creditsOf('r1')).toEqual(['SELLER WAITING', 'STORE WAITING']);
+    agrees(w);
+    await w.pay('1180', [['r1', '1180']]);
+    // store 1180 − 700 − 90 − 5 = 385; seller 700 − 90 − 5 = 605; 990 = 1180 − 180 − 10.
+    // The store's gross credit is COD − transfer; each share its own entry.
+    expect(w.storeEntriesOf('r1')).toEqual([
+      'ORDER_CREDIT 480.00',
+      'COD_TAX_SHARE 90.00',
+      'FEE_SHARE 5.00',
+    ]);
+    expect(w.entriesOf('r1')).toEqual([
+      'RESELLER_TRANSFER_CREDIT 700.00',
+      'GST_WITHHOLDING 90.00',
+      'COD_COLLECTION_FEE 5.00',
+    ]);
+    expect(w.storeBalance('st-a')).toBe('385.00');
+    expect(w.balance('s')).toBe('605.00');
+    expect(w.held('s')).toBe('990.00');
+    expect(w.accountTotal()).toBe('1180.00');
+    expect(w.capital()).toBe('190.00');
+    agrees(w);
+    expect(w.creditsOf('r1')).toEqual(['SELLER CREDITED', 'STORE CREDITED']);
+  });
+
+  it('a second payout line on the same order credits nobody twice', async () => {
+    const w = world([cod('r1', ON_PAYOUT, ON_PAYOUT)]);
+    await deliver(w, 'r1');
+    await w.pay('1000', [['r1', '1000']]);
+    await w.pay('180', [['r1', '180']]);
+    expect(w.storeBalance('st-a')).toBe('385.00');
+    expect(w.balance('s')).toBe('605.00');
+    agrees(w);
+  });
+
+  it('store INSTANT: fronted at delivery with the Instant Pay fee; the seller is paid at the payout', async () => {
+    const w = world([cod('r1', INSTANT, ON_PAYOUT)]);
+    await confirm(w, 'r1');
+    await deliver(w, 'r1');
+    // 1180 − 700 − 90 − 5 − 25 = 360, fronted from capital.
+    expect(w.storeBalance('st-a')).toBe('360.00');
+    expect(w.held('s')).toBe('360.00');
+    expect(w.accountTotal()).toBe('0.00');
+    agrees(w);
+    await w.pay('1180', [['r1', '1180']]);
+    expect(w.balance('s')).toBe('605.00');
+    expect(w.held('s')).toBe('965.00');
+    // Skydrop keeps the tax and both fees — exactly a channel Instant Pay order's 215.
+    expect(w.capital()).toBe('215.00');
+    agrees(w);
+  });
+
+  it('AFTER_CONFIRMATION, back undelivered: the fronted credit comes back and nobody holds a rupee', async () => {
+    const w = world([cod('r1', AFTER_CONFIRMATION, ON_PAYOUT)]);
+    await confirm(w, 'r1');
+    expect(w.storeBalance('st-a')).toBe('385.00');
+    agrees(w);
+    w.setStatus('r1', OrderStatus.RTO_RECEIVED);
+    await w.resellerMoney.onReturned('r1', 'Returned undelivered');
+    expect(w.storeBalance('st-a')).toBe('0.00');
+    expect(w.creditsOf('r1')).toEqual(['SELLER SKIPPED', 'STORE REVERSED']);
+    expect(w.held('s')).toBe('0.00');
+    expect(w.capital()).toBe('0.00');
+    agrees(w);
+  });
+
+  it('cancelled before dispatch: the credit comes back and the pending one is skipped', async () => {
+    const w = world([cod('r1', AFTER_CONFIRMATION, ON_PAYOUT)]);
+    await confirm(w, 'r1');
+    w.setStatus('r1', OrderStatus.CANCELLED);
+    await w.resellerMoney.onEnded('r1', {
+      kind: 'CALLED_OFF',
+      parcelLeft: false,
+      note: 'Cancelled',
+    });
+    expect(w.storeBalance('st-a')).toBe('0.00');
+    expect(w.creditsOf('r1')).toEqual(['SELLER SKIPPED', 'STORE REVERSED']);
+    agrees(w);
+  });
+
+  it('lost in transit: the credit comes back', async () => {
+    const w = world([cod('r1', AFTER_CONFIRMATION, ON_PAYOUT)]);
+    await confirm(w, 'r1');
+    w.setStatus('r1', OrderStatus.LOST_IN_TRANSIT);
+    await w.resellerMoney.onEnded('r1', { kind: 'LOST', parcelLeft: true, note: 'Lost' });
+    expect(w.storeBalance('st-a')).toBe('0.00');
+    expect(w.held('s')).toBe('0.00');
+    agrees(w);
+  });
+
+  it('RTO after the courier paid: its reversal takes both credits back, per party', async () => {
+    const w = world([cod('r1', ON_PAYOUT, ON_PAYOUT)], [{ id: 'c', sellerId: 's', cod: '2000' }]);
+    await deliver(w, 'r1');
+    await w.pay('1180', [['r1', '1180']]);
+    agrees(w);
+    // The next payout pays channel order c and takes r1's 1,180 back.
+    await w.pay('820', [['c', '2000']], [['r1', '1180']]);
+    expect(w.storeBalance('st-a')).toBe('0.00');
+    expect(w.creditsOf('r1')).toEqual(['SELLER REVERSED', 'STORE REVERSED']);
+    expect(w.accountTotal()).toBe('2000.00');
+    agrees(w);
+  });
+
+  it('the delivery fee is split — seller ORDER_CHARGES + store FEE_SHARE — and a refund returns both', async () => {
+    const w = world(
+      [cod('r1', ON_PAYOUT, ON_PAYOUT, { deliveryFee: '236' })],
+      [{ id: 'c', sellerId: 's', cod: '1000' }],
+    );
+    await w.pay('1000', [['c', '1000']]);
+    const before = w.held('s');
+    await w.resellerMoney.chargeDeliveryFee(w.tx as never, 'r1');
+    await w.resellerMoney.chargeDeliveryFee(w.tx as never, 'r1'); // exactly once
+    expect(w.entriesOf('r1')).toEqual(['ORDER_CHARGES 118.00']);
+    expect(w.storeEntriesOf('r1')).toEqual(['FEE_SHARE 118.00']);
+    agrees(w);
+    await w.resellerMoney.refundDeliveryFee('r1', 'Cancelled before dispatch');
+    expect(w.entriesOf('r1')).toEqual(['ORDER_CHARGES 118.00', 'ORDER_CHARGES_REFUND 118.00']);
+    expect(w.storeBalance('st-a')).toBe('0.00');
+    expect(w.held('s')).toBe(before);
+    agrees(w);
+  });
+
+  it('prepaid: the store pays at confirmation, the seller is credited at delivery, the book agrees', async () => {
+    const w = world([
+      {
+        id: 'p1',
+        sellerId: 's',
+        storeId: 'st-b',
+        paymentMode: PaymentMode.PREPAID,
+        cod: null,
+        transfer: '700',
+        deliveryFee: '236',
+        percents: PERCENTS,
+        storeCredit: ON_PAYOUT,
+        sellerCredit: INSTANT,
+      },
+    ]);
+    await w.storeClaimAccepted('st-b', '2000');
+    agrees(w);
+    await confirm(w, 'p1');
+    expect(w.storeEntriesOf('p1')).toEqual(['PREPAID_DEBIT 700.00', 'FEE_SHARE 118.00']);
+    expect(w.storeBalance('st-b')).toBe('1182.00');
+    expect(w.creditsOf('p1')).toEqual(['SELLER WAITING']);
+    agrees(w);
+    await confirm(w, 'p1'); // a second confirmation takes nothing
+    expect(w.storeBalance('st-b')).toBe('1182.00');
+    await deliver(w, 'p1');
+    expect(w.entriesOf('p1')).toEqual(['PREPAID_TRANSFER_CREDIT 700.00']);
+    expect(w.held('s')).toBe('1882.00');
+    agrees(w);
+    await w.resellerMoney.chargeDeliveryFee(w.tx as never, 'p1'); // the seller's half only
+    expect(w.entriesOf('p1')).toEqual(['PREPAID_TRANSFER_CREDIT 700.00', 'ORDER_CHARGES 118.00']);
+    expect(w.storeEntriesOf('p1')).toEqual(['PREPAID_DEBIT 700.00', 'FEE_SHARE 118.00']);
+    agrees(w);
+  });
+
+  it('prepaid cancelled before dispatch: the store gets back all it paid and the seller nothing', async () => {
+    const w = world([
+      {
+        id: 'p1',
+        sellerId: 's',
+        storeId: 'st-b',
+        paymentMode: PaymentMode.PREPAID,
+        cod: null,
+        transfer: '700',
+        deliveryFee: '236',
+        percents: PERCENTS,
+        storeCredit: ON_PAYOUT,
+        sellerCredit: INSTANT,
+      },
+    ]);
+    await w.storeClaimAccepted('st-b', '2000');
+    await confirm(w, 'p1');
+    w.setStatus('p1', OrderStatus.CANCELLED);
+    await w.resellerMoney.onEnded('p1', {
+      kind: 'CALLED_OFF',
+      parcelLeft: false,
+      note: 'Cancelled',
+    });
+    await w.resellerMoney.refundDeliveryFee('p1', 'Cancelled before dispatch');
+    expect(w.storeBalance('st-b')).toBe('2000.00');
+    expect(w.balance('s')).toBe('0.00');
+    expect(w.creditsOf('p1')).toEqual(['SELLER SKIPPED']);
+    expect(w.held('s')).toBe('2000.00');
+    agrees(w);
+  });
+
+  it('two stores of one seller: each paid its own net, one pot in the book', async () => {
+    const w = world([
+      cod('r1', ON_PAYOUT, ON_PAYOUT),
+      cod('r2', ON_PAYOUT, ON_PAYOUT, { storeId: 'st-b' }),
+    ]);
+    await deliver(w, 'r1');
+    await deliver(w, 'r2');
+    await w.pay('2360', [
+      ['r1', '1180'],
+      ['r2', '1180'],
+    ]);
+    expect(w.storeBalance('st-a')).toBe('385.00');
+    expect(w.storeBalance('st-b')).toBe('385.00');
+    expect(w.balance('s')).toBe('1210.00');
+    expect(w.held('s')).toBe('1980.00');
+    expect(w.accountTotal()).toBe('2360.00');
     agrees(w);
   });
 });

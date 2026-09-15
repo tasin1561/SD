@@ -22,6 +22,7 @@ import { ShipmentProvisionModule } from '../shipment-provision/shipment-provisio
 import { SettingsModule } from '../settings/settings.module';
 import { ResellerOrderGateModule } from '../reseller-order-gate/reseller-order-gate.module';
 import { ResellerStoreTermsModule } from '../reseller-store-terms/reseller-store-terms.module';
+import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order-money.module';
 import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.service';
 import { ResellerOrderService } from './services/reseller-order.service';
 
@@ -75,6 +76,9 @@ import { ResellerOrderService } from './services/reseller-order.service';
     SellerWalletAccrualModule,
     LifecycleEventsModule,
     ShipmentProvisionModule,
+    //  - ResellerOrderMoneyModule: a prepaid store order's balance check at
+    //    create (RS-6 phase 3c). It imports nothing order-shaped.
+    ResellerOrderMoneyModule,
     //  - SettingsModule: the per-seller default courier resolved for the
     //    provision (SET-1). Dependency-free R3 primitive.
     SettingsModule,

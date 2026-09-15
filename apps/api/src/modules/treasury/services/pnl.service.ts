@@ -9,6 +9,7 @@ import {
   InboundFreightStatus,
   OrderStatus,
   Prisma,
+  StoreWalletEntryDirection,
   WalletEntryDirection,
 } from '@skydrop/db';
 import { inrRateAt } from '../../../common/fx/inr-rate-at';
@@ -149,6 +150,103 @@ const COD_SERVICE_FEE_DIRECTIONS: WalletEntryDirection[] = [
   WalletEntryDirection.INSTANT_PAY_FEE,
   WalletEntryDirection.COD_COLLECTION_FEE,
 ];
+
+/** The Skydrop fees a reseller store can pay a share of (FEE_SHARE's `share_of`). */
+const STORE_FEE_SHARE_OF: readonly WalletEntryDirection[] = [
+  ...BILLED_DIRECTIONS,
+  ...COD_SERVICE_FEE_DIRECTIONS,
+];
+
+/** The COD deductions whose store share is given back on a reversed COD. */
+const STORE_COD_DEDUCTIONS: readonly WalletEntryDirection[] = [
+  WalletEntryDirection.GST_WITHHOLDING,
+  ...COD_SERVICE_FEE_DIRECTIONS,
+];
+
+interface StoreEntryShape {
+  readonly direction: StoreWalletEntryDirection;
+  readonly shareOf: WalletEntryDirection | null;
+  readonly linkedEntry?: {
+    readonly direction: StoreWalletEntryDirection;
+    readonly shareOf: WalletEntryDirection | null;
+  } | null;
+}
+
+/**
+ * RS-6 phase 3c: on a reseller store's order every Skydrop fee is SPLIT —
+ * the seller's share is debited to the seller's wallet under the usual
+ * direction, the store's share to the store's wallet. Skydrop's fee is the
+ * two added, so the P&L must read the store's share exactly as it reads the
+ * seller's own debit, or a reseller order earns less than the identical
+ * channel order.
+ *
+ * What a store wallet entry stands for, in the SELLER wallet's vocabulary —
+ * `meaning` is the seller direction it counts as, `of` the fee it is (or
+ * returns) a share of. Null: not Skydrop's money (the store's margin, the
+ * transfer price, prepaid holds, top-ups, payouts, disputes) and on no line.
+ *
+ * F2-exhaustive, so a new store direction fails to compile until somebody
+ * decides whether it is our revenue. A SHARE_REFUND names its share by
+ * `share_of`; one that does not is read through the entry it returns.
+ */
+export function storeEntryMeaning(
+  e: StoreEntryShape,
+): { meaning: WalletEntryDirection; of: WalletEntryDirection } | null {
+  switch (e.direction) {
+    case StoreWalletEntryDirection.FEE_SHARE:
+      return e.shareOf !== null && STORE_FEE_SHARE_OF.includes(e.shareOf)
+        ? { meaning: e.shareOf, of: e.shareOf }
+        : null;
+    case StoreWalletEntryDirection.COD_TAX_SHARE:
+      return {
+        meaning: WalletEntryDirection.GST_WITHHOLDING,
+        of: WalletEntryDirection.GST_WITHHOLDING,
+      };
+    case StoreWalletEntryDirection.SHARE_REFUND: {
+      const of =
+        e.shareOf ??
+        (e.linkedEntry === undefined || e.linkedEntry === null
+          ? null
+          : (storeEntryMeaning(e.linkedEntry)?.of ?? null));
+      if (of === null) return null;
+      if (BILLED_DIRECTIONS.includes(of)) {
+        return { meaning: WalletEntryDirection.ORDER_CHARGES_REFUND, of };
+      }
+      if (STORE_COD_DEDUCTIONS.includes(of)) {
+        return { meaning: WalletEntryDirection.COD_DEDUCTION_REFUND, of };
+      }
+      return null;
+    }
+    case StoreWalletEntryDirection.SELLER_TOPUP:
+    case StoreWalletEntryDirection.SELLER_PAYOUT:
+    case StoreWalletEntryDirection.TOPUP:
+    case StoreWalletEntryDirection.WITHDRAWAL:
+    case StoreWalletEntryDirection.ORDER_CREDIT:
+    case StoreWalletEntryDirection.ORDER_CREDIT_REVERSAL:
+    case StoreWalletEntryDirection.PREPAID_DEBIT:
+    case StoreWalletEntryDirection.PREPAID_REFUND:
+    case StoreWalletEntryDirection.TRANSFER_PRICE:
+    case StoreWalletEntryDirection.TRANSFER_PRICE_REFUND:
+    case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_IN:
+    case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_OUT:
+      return null;
+    default: {
+      const unplaced: never = e.direction;
+      return unplaced;
+    }
+  }
+}
+
+/** A reseller store's share of a COD deduction, or that share given back. */
+interface StoreShareRow {
+  readonly id: string;
+  readonly amount: Prisma.Decimal;
+  readonly createdAt: Date;
+  readonly linkedOrderId: string | null;
+  readonly storeName: string | null;
+  /** The seller direction it is a share of. */
+  readonly of: WalletEntryDirection;
+}
 
 /**
  * Where an order's money sits on this report, by the status it is in —
@@ -550,10 +648,17 @@ interface FateOrder {
    * delivery line because it still carries money (see `orderFate`).
    */
   readonly calledOff: OrderStatus | null;
-  /** The BILLED_DIRECTIONS debits on the order. */
-  readonly debits: ReadonlyArray<{ direction: WalletEntryDirection; amount: Prisma.Decimal }>;
-  /** ORDER_CHARGES_REFUNDs on the order. */
-  readonly refunds: readonly Prisma.Decimal[];
+  /**
+   * The BILLED_DIRECTIONS debits on the order — the seller's, and (`store`)
+   * a reseller store's share of the same fees, read as the fee it is.
+   */
+  readonly debits: ReadonlyArray<{
+    direction: WalletEntryDirection;
+    amount: Prisma.Decimal;
+    store: boolean;
+  }>;
+  /** ORDER_CHARGES_REFUNDs on the order, and a store's fee shares given back. */
+  readonly refunds: ReadonlyArray<{ amount: Prisma.Decimal; store: boolean }>;
   /** Debits less refunds: what the order earned us. */
   readonly billed: Prisma.Decimal;
   /** Charge lines beyond what was debited — quoted, never billed, not counted. */
@@ -599,6 +704,11 @@ interface BilledLabels {
   readonly returnFee: string;
   readonly customerReturnFee: string;
   readonly refunded: string;
+  /** A reseller store's share of the same fees (RS-6 phase 3c). */
+  readonly storeCharges: string;
+  readonly storeReturnFee: string;
+  readonly storeCustomerReturnFee: string;
+  readonly storeRefunded: string;
 }
 
 const BILLED_LABELS = {
@@ -607,24 +717,42 @@ const BILLED_LABELS = {
     returnFee: 'Return fees debited',
     customerReturnFee: 'Customer-return fees debited',
     refunded: 'Refunded to the seller on these orders',
+    storeCharges: 'Reseller stores’ share of delivery fees',
+    storeReturnFee: 'Reseller stores’ share of return fees',
+    storeCustomerReturnFee: 'Reseller stores’ share of customer-return fees',
+    storeRefunded: 'Refunded to reseller stores on these orders',
   },
   lost: {
     charges: 'Fees debited on parcels lost in transit',
     returnFee: 'Return fees debited on parcels lost in transit',
     customerReturnFee: 'Customer-return fees debited on parcels lost in transit',
     refunded: 'Refunded on parcels lost in transit',
+    storeCharges: 'Reseller stores’ share of fees on parcels lost in transit',
+    storeReturnFee: 'Reseller stores’ share of return fees on parcels lost in transit',
+    storeCustomerReturnFee:
+      'Reseller stores’ share of customer-return fees on parcels lost in transit',
+    storeRefunded: 'Refunded to reseller stores on parcels lost in transit',
   },
   calledOff: {
     charges: 'Delivery fee taken on orders since called off',
     returnFee: 'Return fee taken on orders since called off',
     customerReturnFee: 'Customer-return fee taken on orders since called off',
     refunded: 'Refunded to the seller on those orders',
+    storeCharges: 'Reseller stores’ share of the delivery fee taken on orders since called off',
+    storeReturnFee: 'Reseller stores’ share of the return fee taken on orders since called off',
+    storeCustomerReturnFee:
+      'Reseller stores’ share of the customer-return fee taken on orders since called off',
+    storeRefunded: 'Refunded to reseller stores on those orders',
   },
   returned: {
     charges: 'Delivery fees debited on returned parcels',
     returnFee: 'Return fees debited',
     customerReturnFee: 'Customer-return fees debited',
     refunded: 'Refunded to the seller on these orders',
+    storeCharges: 'Reseller stores’ share of delivery fees on returned parcels',
+    storeReturnFee: 'Reseller stores’ share of return fees',
+    storeCustomerReturnFee: 'Reseller stores’ share of customer-return fees',
+    storeRefunded: 'Refunded to reseller stores on these orders',
   },
 } as const satisfies Record<string, BilledLabels>;
 
@@ -963,7 +1091,7 @@ export class PnlService {
     if (included.size === 0) return { ...empty, leftForReturns, movedOn };
 
     const ids = [...included.keys()];
-    const [links, entries, charges] = await Promise.all([
+    const [links, entries, storeEntries, charges] = await Promise.all([
       this.prisma.client.orderShipment.findMany({
         where: { orderId: { in: ids } },
         select: { orderId: true, shipmentId: true },
@@ -975,6 +1103,23 @@ export class PnlService {
           linkedOrderId: { in: ids },
         },
         select: { linkedOrderId: true, direction: true, amount: true },
+      }),
+      // A reseller store's share of the same fees, and those shares given
+      // back (RS-6 phase 3c) — read through `storeEntryMeaning`.
+      this.prisma.client.storeWalletEntry.findMany({
+        where: {
+          direction: {
+            in: [StoreWalletEntryDirection.FEE_SHARE, StoreWalletEntryDirection.SHARE_REFUND],
+          },
+          linkedOrderId: { in: ids },
+        },
+        select: {
+          linkedOrderId: true,
+          direction: true,
+          shareOf: true,
+          amount: true,
+          linkedEntry: { select: { direction: true, shareOf: true } },
+        },
       }),
       this.prisma.client.orderCharge.findMany({
         where: { deletedAt: null, orderId: { in: ids } },
@@ -998,6 +1143,7 @@ export class PnlService {
     const shipmentById = new Map(shipments.map((s) => [s.id, s]));
     const linksOf = group(links, (l) => l.orderId);
     const entriesOf = group(entries, (e) => e.linkedOrderId ?? '');
+    const storeEntriesOf = group(storeEntries, (e) => e.linkedOrderId ?? '');
     const chargesOf = group(charges, (c) => c.orderId);
     const hasCost = (s: {
       actualCourierCostInr: Prisma.Decimal | null;
@@ -1012,14 +1158,30 @@ export class PnlService {
       const recorded = mine.filter(hasCost);
       const waybilled = mine.filter((s) => s.awbNumber !== null);
       const own = entriesOf.get(id) ?? [];
-      const debits = own
-        .filter((e) => e.direction !== WalletEntryDirection.ORDER_CHARGES_REFUND)
-        .map((e) => ({ direction: e.direction, amount: e.amount }));
-      const refunds = own
-        .filter((e) => e.direction === WalletEntryDirection.ORDER_CHARGES_REFUND)
-        .map((e) => e.amount);
+      // A reseller order's fees are split between the seller's wallet and
+      // the store's; Skydrop's fee is the two added, so both are debits.
+      const shares = (storeEntriesOf.get(id) ?? []).flatMap((e) => {
+        const m = storeEntryMeaning(e);
+        return m === null ? [] : [{ meaning: m.meaning, amount: e.amount }];
+      });
+      const debits = [
+        ...own
+          .filter((e) => e.direction !== WalletEntryDirection.ORDER_CHARGES_REFUND)
+          .map((e) => ({ direction: e.direction, amount: e.amount, store: false })),
+        ...shares
+          .filter((s) => BILLED_DIRECTIONS.includes(s.meaning))
+          .map((s) => ({ direction: s.meaning, amount: s.amount, store: true })),
+      ];
+      const refunds = [
+        ...own
+          .filter((e) => e.direction === WalletEntryDirection.ORDER_CHARGES_REFUND)
+          .map((e) => ({ amount: e.amount, store: false })),
+        ...shares
+          .filter((s) => s.meaning === WalletEntryDirection.ORDER_CHARGES_REFUND)
+          .map((s) => ({ amount: s.amount, store: true })),
+      ];
       const debited = sum(debits.map((d) => d.amount));
-      const billed = debited.sub(sum(refunds));
+      const billed = debited.sub(sum(refunds.map((r) => r.amount)));
       // A cancelled order with nothing on it — a quote never billed, no
       // parcel that left us — is no row at all.
       if (
@@ -1203,7 +1365,7 @@ export class PnlService {
     const total = all.length;
     const lostHeld = sum(lost.map((o) => o.billed));
     const lostDebited = sum(lost.flatMap((o) => o.debits.map((d) => d.amount)));
-    const lostRefunded = sum(lost.flatMap((o) => o.refunds));
+    const lostRefunded = sum(lost.flatMap((o) => o.refunds.map((r) => r.amount)));
     const lostOnTheWayBack = delivered.filter((o) => o.lostAfterDelivery);
     const found = delivered.filter((o) => o.found);
     const lostParts = this.billedParts(
@@ -1379,29 +1541,44 @@ export class PnlService {
     filter: string,
   ): PnlBasisPart[] {
     const parts: PnlBasisPart[] = [];
-    const push = (label: string, direction: string, amounts: Prisma.Decimal[], sign = 1): void => {
+    const push = (label: string, source: string, amounts: Prisma.Decimal[], sign = 1): void => {
       if (amounts.length === 0) return;
       const total = sum(amounts);
       parts.push({
         label,
-        source: `seller_wallet_entries.amount WHERE direction=${direction} (${filter})`,
+        source: `${source} (${filter})`,
         count: amounts.length,
         amountInr: (sign < 0 ? total.negated() : total).toFixed(2),
       });
     };
-    const debited = (d: WalletEntryDirection): Prisma.Decimal[] =>
-      orders.flatMap((o) => o.debits.filter((x) => x.direction === d).map((x) => x.amount));
-    push(labels.charges, 'ORDER_CHARGES', debited(WalletEntryDirection.ORDER_CHARGES));
-    push(labels.returnFee, 'RTO_FEE', debited(WalletEntryDirection.RTO_FEE));
+    const debited = (d: WalletEntryDirection, store: boolean): Prisma.Decimal[] =>
+      orders.flatMap((o) =>
+        o.debits.filter((x) => x.direction === d && x.store === store).map((x) => x.amount),
+      );
+    const refunded = (store: boolean): Prisma.Decimal[] =>
+      orders.flatMap((o) => o.refunds.filter((r) => r.store === store).map((r) => r.amount));
+    const seller = (d: string): string => `seller_wallet_entries.amount WHERE direction=${d}`;
+    // A reseller store's share of the same fee, named apart so a reader can
+    // see which part of the figure came from the store's wallet.
+    const store = (d: string): string =>
+      `store_wallet_entries.amount WHERE direction=FEE_SHARE AND share_of=${d}`;
+    for (const [d, sellerLabel, storeLabel] of [
+      [WalletEntryDirection.ORDER_CHARGES, labels.charges, labels.storeCharges],
+      [WalletEntryDirection.RTO_FEE, labels.returnFee, labels.storeReturnFee],
+      [
+        WalletEntryDirection.CUSTOMER_RETURN_FEE,
+        labels.customerReturnFee,
+        labels.storeCustomerReturnFee,
+      ],
+    ] as const) {
+      push(sellerLabel, seller(d), debited(d, false));
+      push(storeLabel, store(d), debited(d, true));
+    }
+    push(labels.refunded, seller('ORDER_CHARGES_REFUND'), refunded(false), -1);
     push(
-      labels.customerReturnFee,
-      'CUSTOMER_RETURN_FEE',
-      debited(WalletEntryDirection.CUSTOMER_RETURN_FEE),
-    );
-    push(
-      labels.refunded,
-      'ORDER_CHARGES_REFUND',
-      orders.flatMap((o) => o.refunds),
+      labels.storeRefunded,
+      'store_wallet_entries.amount WHERE direction=SHARE_REFUND of a delivery or return fee share',
+      refunded(true),
       -1,
     );
     return parts;
@@ -1870,23 +2047,28 @@ export class PnlService {
    * cost basis says that more honestly than a zero would.
    */
   private async codTaxDeduction(from: Date, to: Date): Promise<PnlLine> {
-    const agg = await this.prisma.client.sellerWalletEntry.aggregate({
-      where: {
-        direction: WalletEntryDirection.GST_WITHHOLDING,
-        currency: Currency.INR,
-        createdAt: win(from, to),
-      },
-      _sum: { amount: true },
-      _count: { _all: true },
-    });
-    // Tax withheld on a COD the courier later reversed is given back to
-    // the seller — it was never earned, so it comes off this line.
-    const returned = await this.deductionsReturned(from, to, [
-      WalletEntryDirection.GST_WITHHOLDING,
+    const [agg, returned, store] = await Promise.all([
+      this.prisma.client.sellerWalletEntry.aggregate({
+        where: {
+          direction: WalletEntryDirection.GST_WITHHOLDING,
+          currency: Currency.INR,
+          createdAt: win(from, to),
+        },
+        _sum: { amount: true },
+        _count: { _all: true },
+      }),
+      // Tax withheld on a COD the courier later reversed is given back to
+      // the seller — it was never earned, so it comes off this line.
+      this.deductionsReturned(from, to, [WalletEntryDirection.GST_WITHHOLDING]),
+      // On a reseller order a store pays its share of the tax from its own
+      // wallet (RS-6 phase 3c); the two shares are the tax.
+      this.storeCodDeductions(from, to, [WalletEntryDirection.GST_WITHHOLDING]),
     ]);
     const returnedSum = sum(returned.map((r) => r.amount));
+    const storeTaken = sum(store.taken.map((r) => r.amount));
+    const storeReturned = sum(store.returned.map((r) => r.amount));
     const withheld = agg._sum.amount ?? ZERO;
-    const amount = withheld.sub(returnedSum);
+    const amount = withheld.add(storeTaken).sub(returnedSum).sub(storeReturned);
     return this.line({
       key: 'cod_tax',
       label: 'COD tax deduction',
@@ -1905,6 +2087,16 @@ export class PnlService {
             count: agg._count._all,
             amountInr: withheld.toFixed(2),
           },
+          ...(store.taken.length > 0
+            ? [
+                {
+                  label: 'Reseller stores’ share, taken from their wallets',
+                  source: 'store_wallet_entries.amount WHERE direction=COD_TAX_SHARE',
+                  count: store.taken.length,
+                  amountInr: storeTaken.toFixed(2),
+                },
+              ]
+            : []),
           ...(returned.length > 0
             ? [
                 {
@@ -1913,6 +2105,17 @@ export class PnlService {
                     'seller_wallet_entries.amount WHERE direction=COD_DEDUCTION_REFUND AND linked to GST_WITHHOLDING',
                   count: returned.length,
                   amountInr: returnedSum.negated().toFixed(2),
+                },
+              ]
+            : []),
+          ...(store.returned.length > 0
+            ? [
+                {
+                  label: 'Returned to reseller stores on CODs the courier reversed',
+                  source:
+                    'store_wallet_entries.amount WHERE direction=SHARE_REFUND of a COD_TAX_SHARE',
+                  count: store.returned.length,
+                  amountInr: storeReturned.negated().toFixed(2),
                 },
               ]
             : []),
@@ -2092,9 +2295,34 @@ export class PnlService {
       _sum: { amount: true },
       _count: { _all: true },
     });
-    const returned = await this.deductionsReturned(from, to, COD_SERVICE_FEE_DIRECTIONS);
+    const [returned, store] = await Promise.all([
+      this.deductionsReturned(from, to, COD_SERVICE_FEE_DIRECTIONS),
+      // A reseller store's share of the same fees (RS-6 phase 3c).
+      this.storeCodDeductions(from, to, COD_SERVICE_FEE_DIRECTIONS),
+    ]);
     const returnedSum = sum(returned.map((r) => r.amount));
-    const revenue = rows.reduce((t, r) => t.add(r._sum.amount ?? ZERO), ZERO).sub(returnedSum);
+    const storeReturned = sum(store.returned.map((r) => r.amount));
+    const storeParts = COD_SERVICE_FEE_DIRECTIONS.flatMap((d) => {
+      const taken = store.taken.filter((r) => r.of === d);
+      return taken.length === 0
+        ? []
+        : [
+            {
+              label:
+                d === WalletEntryDirection.INSTANT_PAY_FEE
+                  ? 'Reseller stores’ share of Instant Pay fees'
+                  : 'Reseller stores’ share of COD collection fees',
+              source: `store_wallet_entries.amount WHERE direction=FEE_SHARE AND share_of=${d}`,
+              count: taken.length,
+              amountInr: sum(taken.map((r) => r.amount)).toFixed(2),
+            },
+          ];
+    });
+    const revenue = rows
+      .reduce((t, r) => t.add(r._sum.amount ?? ZERO), ZERO)
+      .add(sum(store.taken.map((r) => r.amount)))
+      .sub(returnedSum)
+      .sub(storeReturned);
     return this.line({
       key: 'cod_service_fees',
       label: 'COD handling fees',
@@ -2114,6 +2342,7 @@ export class PnlService {
             count: r._count._all,
             amountInr: (r._sum.amount ?? ZERO).toFixed(2),
           })),
+          ...storeParts,
           ...(returned.length > 0
             ? [
                 {
@@ -2125,10 +2354,82 @@ export class PnlService {
                 },
               ]
             : []),
+          ...(store.returned.length > 0
+            ? [
+                {
+                  label: 'Returned to reseller stores on CODs the courier reversed',
+                  source:
+                    'store_wallet_entries.amount WHERE direction=SHARE_REFUND of a COD fee share',
+                  count: store.returned.length,
+                  amountInr: storeReturned.negated().toFixed(2),
+                },
+              ]
+            : []),
         ],
         cost: [],
       },
     });
+  }
+
+  /**
+   * A reseller store's SHARE of the COD deductions in `directions` taken in
+   * the window (RS-6 phase 3c), and the shares given back on a COD the
+   * courier reversed — each dated by its own `created_at`, half-open, like
+   * the seller's deduction beside it. Rows, not sums: a line's total and
+   * its drill-down both read this.
+   *
+   * A share refund names its share by `share_of`; one that does not is
+   * read through the entry it returns (`storeEntryMeaning`), exactly as a
+   * seller's COD_DEDUCTION_REFUND is read through its `linkedEntryId`.
+   */
+  private async storeCodDeductions(
+    from: Date,
+    to: Date,
+    directions: readonly WalletEntryDirection[],
+  ): Promise<{ taken: StoreShareRow[]; returned: StoreShareRow[] }> {
+    const rows = await this.prisma.client.storeWalletEntry.findMany({
+      where: {
+        createdAt: win(from, to),
+        OR: [
+          { direction: StoreWalletEntryDirection.COD_TAX_SHARE },
+          {
+            direction: {
+              in: [StoreWalletEntryDirection.FEE_SHARE, StoreWalletEntryDirection.SHARE_REFUND],
+            },
+            shareOf: { in: [...directions] },
+          },
+          { direction: StoreWalletEntryDirection.SHARE_REFUND, shareOf: null },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        direction: true,
+        shareOf: true,
+        amount: true,
+        createdAt: true,
+        linkedOrderId: true,
+        store: { select: { name: true } },
+        linkedEntry: { select: { direction: true, shareOf: true } },
+      },
+    });
+    const taken: StoreShareRow[] = [];
+    const returned: StoreShareRow[] = [];
+    for (const r of rows) {
+      const m = storeEntryMeaning(r);
+      if (m === null || !directions.includes(m.of)) continue;
+      const row: StoreShareRow = {
+        id: r.id,
+        amount: r.amount,
+        createdAt: r.createdAt,
+        linkedOrderId: r.linkedOrderId,
+        storeName: r.store?.name ?? null,
+        of: m.of,
+      };
+      if (m.meaning === WalletEntryDirection.COD_DEDUCTION_REFUND) returned.push(row);
+      else if (m.meaning === m.of) taken.push(row);
+    }
+    return { taken, returned };
   }
 
   /**
@@ -3033,7 +3334,7 @@ export class PnlService {
         const directions = isTax
           ? [WalletEntryDirection.GST_WITHHOLDING]
           : COD_SERVICE_FEE_DIRECTIONS;
-        const [rows, returned] = await Promise.all([
+        const [rows, returned, store] = await Promise.all([
           this.prisma.client.sellerWalletEntry.findMany({
             where: {
               direction: { in: directions },
@@ -3051,7 +3352,28 @@ export class PnlService {
             },
           }),
           this.deductionsReturned(from, to, directions),
+          this.storeCodDeductions(from, to, directions),
         ]);
+        // A store entry's order is a plain id (no relation): numbered here.
+        const storeOrderIds = [
+          ...new Set(
+            [...store.taken, ...store.returned]
+              .map((s) => s.linkedOrderId)
+              .filter((x): x is string => x !== null),
+          ),
+        ];
+        const numbers = new Map(
+          storeOrderIds.length === 0
+            ? []
+            : (
+                await this.prisma.client.order.findMany({
+                  where: { id: { in: storeOrderIds } },
+                  select: { id: true, orderNumber: true },
+                })
+              ).map((o) => [o.id, o.orderNumber] as const),
+        );
+        const numberOf = (id: string | null): string =>
+          id === null ? '—' : (numbers.get(id) ?? '—');
         return capped(
           [
             ...rows.map((e) => ({
@@ -3070,6 +3392,25 @@ export class PnlService {
               subRef: `${r.companyName ?? '—'} · returned on a reversed COD`,
               at: r.createdAt.toISOString(),
               revenueInr: r.amount.negated().toFixed(2),
+              costInr: null,
+            })),
+            // A reseller store's share of the same deduction, and that share
+            // given back — the store entry's own id, prefixed, is the row's
+            // stable id (PNL-CF-1).
+            ...store.taken.map((s) => ({
+              id: `store:${s.id}`,
+              ref: numberOf(s.linkedOrderId),
+              subRef: `${s.storeName ?? '—'} · reseller store’s share`,
+              at: s.createdAt.toISOString(),
+              revenueInr: s.amount.toFixed(2),
+              costInr: null,
+            })),
+            ...store.returned.map((s) => ({
+              id: `store:${s.id}`,
+              ref: numberOf(s.linkedOrderId),
+              subRef: `${s.storeName ?? '—'} · reseller store’s share returned on a reversed COD`,
+              at: s.createdAt.toISOString(),
+              revenueInr: s.amount.negated().toFixed(2),
               costInr: null,
             })),
           ],

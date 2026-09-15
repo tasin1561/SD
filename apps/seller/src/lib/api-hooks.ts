@@ -32,6 +32,7 @@ import type {
   PresignVariantImageRequest,
   PresignVariantImageResponse,
   RegisterVariantImageRequest,
+  ResellerOrderMoneyView,
   SellerProductListResponse,
   SellerProductView,
   SellerStockListResponse,
@@ -116,6 +117,20 @@ export function useOrderDetail(id: string): UseQueryResult<OrderView> {
     queryKey: ['seller-orders', 'detail', id],
     queryFn: () => client.request<OrderView>(`/api/seller/orders/${id}`),
     enabled: Boolean(id),
+  });
+}
+
+/** RS-6 phase 3c — what one of your reseller stores' orders earns you, and when. */
+export function useResellerOrderMoney(
+  id: string,
+  enabled: boolean,
+): UseQueryResult<ResellerOrderMoneyView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-orders', 'reseller-money', id],
+    queryFn: () =>
+      client.request<ResellerOrderMoneyView>(`/api/seller/orders/${id}/reseller-money`),
+    enabled: enabled && Boolean(id),
   });
 }
 

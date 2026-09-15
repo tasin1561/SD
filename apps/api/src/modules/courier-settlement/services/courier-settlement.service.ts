@@ -13,8 +13,10 @@ import {
   BankEntryType,
   BankOwnerKind,
   CourierRechargeMatch,
+  SellerStoreKind,
 } from '@skydrop/db';
 import { CodCreditService } from '../../seller-wallet-accrual/services/cod-credit.service';
+import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -174,6 +176,10 @@ export class CourierSettlementService {
     private readonly wallet: WalletService,
     private readonly bank: BankLedgerService,
     private readonly attribution: SellerCashAttributionService,
+    // RS-6 phase 3c — a reseller order's COD is not the seller's alone:
+    // its payout line arms each party's credit instead of crediting the
+    // seller the whole COD.
+    private readonly resellerMoney: ResellerOrderMoneyService,
   ) {}
 
   /**
@@ -300,7 +306,7 @@ export class CourierSettlementService {
     const reversedIds = rtoReversals.map((r) => r.orderId);
     const orders = await this.prisma.client.order.findMany({
       where: { id: { in: [...lineIds, ...reversedIds] } },
-      select: { id: true, orderNumber: true, codAmountInr: true, sellerId: true },
+      select: { id: true, orderNumber: true, codAmountInr: true, sellerId: true, storeKind: true },
     });
     const byId = new Map(orders.map((o) => [o.id, o]));
     const missing = [...lineIds, ...reversedIds].filter((id) => !byId.has(id));
@@ -521,6 +527,19 @@ export class CourierSettlementService {
         // settlement credit. One Instant Pay already credited at delivery
         // is caught by `isCredited` below, and its cash repays our front.
         if (line.expectedInr.lessThanOrEqualTo(0)) continue; // no COD to credit
+        if (order.storeKind === SellerStoreKind.RESELLER) {
+          // RS-6 phase 3c: the COD is the store's AND the seller's, each at
+          // its own trigger. Nothing is attributed to the seller here — the
+          // whole line lands as capital's (the remainder below) and every
+          // party credit due now is fronted out of it, in this transaction.
+          await this.resellerMoney.onPayoutLine(tx, {
+            orderId: order.id,
+            accountId: receivingAccount.id,
+            at: new Date(),
+          });
+          touchedSellers.add(order.sellerId);
+          continue;
+        }
         // Held for the seller ONLY when this payout is what credits them.
         // An order already credited on an earlier payout (the rest of a
         // part-payment) was held for them then; that cash repays what we
@@ -588,6 +607,30 @@ export class CourierSettlementService {
       for (const r of rtoReversals) {
         const order = byId.get(r.orderId);
         if (!order) continue; // refused before the transaction
+        if (order.storeKind === SellerStoreKind.RESELLER) {
+          // RS-6 phase 3c: each party's written credit is taken back (the
+          // store's COD margin and fee shares, the seller's transfer price
+          // and deductions); pending ones are skipped. The cash to move to
+          // capital is computed per party and taken below, once.
+          const rr = await this.resellerMoney.reverseOnCourierReversal(tx, {
+            orderId: order.id,
+            note: `COD reversed by the courier on payout ${reference}`,
+          });
+          if (rr.outcome === 'ALREADY_REVERSED') {
+            throw new ConflictException({
+              code: 'SETTLEMENT_RTO_ALREADY_REVERSED',
+              message: `This order's COD was already reversed on an earlier payout (${r.orderId}).`,
+            });
+          }
+          if (rr.outcome === 'REVERSED') touchedSellers.add(order.sellerId);
+          clawbacks.push({
+            sellerId: rr.outcome === 'REVERSED' ? order.sellerId : null,
+            amount: r.amount,
+            gross: rr.grossInr,
+            take: rr.take,
+          });
+          continue;
+        }
         // What they were owed before this reversal, under their wallet lock —
         // the seller and their reseller stores together, as the bank book
         // holds them (RS-6, decision 7).
@@ -966,7 +1009,7 @@ export class CourierSettlementService {
 
     const orders = await this.prisma.client.order.findMany({
       where: { id: { in: input.lines.map((l) => l.orderId) } },
-      select: { id: true, sellerId: true, codAmountInr: true },
+      select: { id: true, sellerId: true, codAmountInr: true, storeKind: true },
     });
     const byId = new Map(orders.map((o) => [o.id, o]));
     const missing = input.lines.filter((l) => !byId.has(l.orderId));
@@ -1127,6 +1170,18 @@ export class CourierSettlementService {
         // settlement credit. One Instant Pay already credited at delivery
         // is caught by `isCredited` below, and its cash repays our front.
         if (line.expectedInr.lessThanOrEqualTo(0)) continue;
+        if (order.storeKind === SellerStoreKind.RESELLER) {
+          // RS-6 phase 3c — as `record`: the line stays capital's and the
+          // parties' due credits are fronted out of it.
+          await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
+          await this.resellerMoney.onPayoutLine(tx, {
+            orderId: order.id,
+            accountId: receivingAccount.id,
+            at: new Date(),
+          });
+          credited.add(order.sellerId);
+          continue;
+        }
         await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
         if (await this.codCredit.isCredited(tx, order.id)) continue;
         const split = await this.attribution.debtSplit(tx, order.sellerId, line.expectedInr);

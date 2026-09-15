@@ -63,6 +63,11 @@ export const STORE_CREDIT_DIRECTIONS: ReadonlySet<StoreWalletEntryDirection> = n
   StoreWalletEntryDirection.SHARE_REFUND,
   // Phase 3b — a prepaid order's debit given back on a cancel.
   StoreWalletEntryDirection.PREPAID_REFUND,
+  // Phase 3c — a COD order's transfer price given back when the store's
+  // credit is reversed.
+  StoreWalletEntryDirection.TRANSFER_PRICE_REFUND,
+  // RS-7 — a dispute with the seller settled in the store's favour.
+  StoreWalletEntryDirection.DISPUTE_SETTLEMENT_IN,
 ]);
 
 export interface ApplyStoreEntryInput {

@@ -28,6 +28,8 @@ interface Opts {
   sellerStatus?: SellerStatus;
   enabled?: boolean | 'throws';
   ready?: boolean;
+  /** RS-6 phase 3c — the store's wallet cannot pay for a prepaid order. */
+  prepaidShort?: boolean;
   offered?: boolean;
   min?: string | null;
   max?: string | null;
@@ -116,6 +118,15 @@ function makeService(opts: Opts = {}) {
       async () => new Map([['v1', { sellerId: 's1', skuCode: 'KURTA-M' }]]),
     ),
   };
+  // RS-6 phase 3c — the store-wallet check a prepaid order runs inside the
+  // create transaction; refused as the real one refuses when asked to.
+  const prepaidCheck = jest.fn(async () => {
+    if (opts.prepaidShort === true) {
+      throw Object.assign(new Error('short'), {
+        response: { code: 'STORE_BALANCE_INSUFFICIENT' },
+      });
+    }
+  });
   const svc = new ResellerOrderService(
     { client } as unknown as PrismaService,
     { create } as never,
@@ -123,8 +134,9 @@ function makeService(opts: Opts = {}) {
     terms as never,
     gate as never,
     catalog as never,
+    { assertPrepaidCovered: prepaidCheck } as never,
   );
-  return { svc, create, settings, terms, gate, snapshot };
+  return { svc, create, settings, terms, gate, snapshot, prepaidCheck };
 }
 
 function input(over: Partial<CreateStoreOrderDto> = {}): CreateStoreOrderDto {
@@ -234,11 +246,35 @@ describe('ResellerOrderService.create — the refusals, IN ORDER (RS-5)', () => 
     ).toBe('OK');
   });
 
-  it('6. PREPAID waits for the store wallet — refused before the visible check', async () => {
-    const { svc } = makeService({ visible: 0 });
-    expect(await code(svc.create(ACTOR, input({ paymentMode: PaymentMode.PREPAID }), CTX))).toBe(
-      'RESELLER_PREPAID_NOT_YET_AVAILABLE',
+  it('6. PREPAID is paid from the store wallet — checked INSIDE the create transaction', async () => {
+    // RS-6 phase 3c: prepaid is ON. It passes every refusal before the write,
+    // and the store's wallet is asked, under the lock, whether it can pay the
+    // transfer price (2 × ₹300) and its delivery share.
+    const tx = (): unknown => ({ $queryRaw: jest.fn(async () => [{ status: 'active' }]) });
+    const ok = makeService();
+    expect(await code(ok.svc.create(ACTOR, input({ paymentMode: PaymentMode.PREPAID }), CTX))).toBe(
+      'OK',
     );
+    const reseller = ok.create.mock.calls[0]![4]['reseller'] as ResellerCreateContext;
+    await reseller.lockAndReadTerms(tx() as never);
+    expect(ok.prepaidCheck).toHaveBeenCalledTimes(1);
+    const asked = (ok.prepaidCheck.mock.calls[0] as unknown as [unknown, AnyArgs])[1];
+    expect(asked).toMatchObject({ storeId: 'store-1', sellerId: 's1' });
+    expect((asked['transferTotal'] as Prisma.Decimal).toFixed(2)).toBe('600.00');
+    expect((asked['deliveryFeeStorePercent'] as Prisma.Decimal).toFixed(2)).toBe('80.00');
+
+    // A wallet that cannot pay refuses the order inside its transaction.
+    const short = makeService({ prepaidShort: true });
+    await short.svc.create(ACTOR, input({ paymentMode: PaymentMode.PREPAID }), CTX);
+    const shortCtx = short.create.mock.calls[0]![4]['reseller'] as ResellerCreateContext;
+    expect(await code(shortCtx.lockAndReadTerms(tx() as never))).toBe('STORE_BALANCE_INSUFFICIENT');
+
+    // A COD order never asks the store's wallet.
+    const cod = makeService();
+    await cod.svc.create(ACTOR, input(), CTX);
+    const codCtx = cod.create.mock.calls[0]![4]['reseller'] as ResellerCreateContext;
+    await codCtx.lockAndReadTerms(tx() as never);
+    expect(cod.prepaidCheck).not.toHaveBeenCalled();
   });
 
   it('7. no more than the store is SHOWN — summed across lines of the same product', async () => {

@@ -281,6 +281,7 @@ model Seller {
   stagedOrderRows          StagedOrderRow[]
   gstWithholdings          GstWithholding[]
   pendingAccruals          PendingAccrual[]
+  resellerOrderCredits     ResellerOrderCredit[]
   tickets                  Ticket[]
   earlyReservationReviews  EarlyReservationReview[]
   reattemptRequests        OrderReattemptRequest[]
@@ -2731,6 +2732,10 @@ model SellerStore {
   /// RS-5 — the store's own customers (ORD-7 generalised), API keys,
   /// outbound webhook endpoints and CSV uploads.
   resellerCustomers       Customer[]
+  /// RS-6 phase 3c — each order's credits, per party.
+  resellerOrderCredits    ResellerOrderCredit[]
+  /// RS-7 — disputes this store raised.
+  tickets                 Ticket[]                 @relation("TicketStore")
   storeApiKeys            StoreApiKey[]
   webhookEndpoints        SellerWebhookEndpoint[]
   bulkOrderUploads        BulkOrderUpload[]
@@ -2805,6 +2810,8 @@ model StoreUser {
   invitationsAccepted     StoreUserInvitation[]          @relation("StoreInvitationAcceptedBy")
   /// RS-4 — the terms versions this person accepted on the store's behalf.
   termsAcceptances        ResellerStoreTermsAcceptance[]
+  /// RS-7 — disputes this person raised for the store.
+  ticketsOpened           Ticket[]                       @relation("TicketOpenedByStoreUser")
 
   @@index([storeId])
   @@index([roleId])
@@ -3150,6 +3157,8 @@ model Order {
   gstWithholding         GstWithholding?
   invoice                Invoice?
   pendingAccrual         PendingAccrual?
+  /// RS-6 phase 3c — a reseller order's credits, one per party.
+  resellerOrderCredits   ResellerOrderCredit[]
   tickets                Ticket[]
   earlyReservationReview EarlyReservationReview?
   courierSettlementLines CourierSettlementLine[]
@@ -6504,18 +6513,18 @@ enum WalletEntryDirection {
   // what sellers paid us in charges silently included tax we merely
   // hold for the government, and the seller's own ledger called a tax
   // line "Order charges".
-  GST_WITHHOLDING      @map("gst_withholding")
+  GST_WITHHOLDING            @map("gst_withholding")
   /// A COD credit taken back because the courier reversed the COD — a
   /// parcel it had paid out on turned into a return, and it clawed the
   /// money back out of a later payout. A DEBIT of the gross COD, the
   /// mirror of COD_COLLECTION. ABSENT from CREDIT_DIRECTIONS (WAL-1).
-  COD_REVERSAL         @map("cod_reversal")
+  COD_REVERSAL               @map("cod_reversal")
   /// What we deducted from a COD that has since been reversed — the tax
   /// and the COD / Instant Pay fee — given back, one entry per deduction,
   /// `linkedEntryId` naming the deduction it returns. A CREDIT:
   /// REGISTERED in CREDIT_DIRECTIONS and in `isWalletCredit` (WAL-1). The
   /// P&L takes it back off the line that counted the deduction.
-  COD_DEDUCTION_REFUND @map("cod_deduction_refund")
+  COD_DEDUCTION_REFUND       @map("cod_deduction_refund")
   /// A member of staff taking money OUT of a seller's wallet on purpose,
   /// with a reason the seller reads on their ledger. Unlike
   /// ADJUSTMENT_DEBIT (a correction that moves no cash) this MOVES cash:
@@ -6524,25 +6533,53 @@ enum WalletEntryDirection {
   /// receivable. A DEBIT: ABSENT from CREDIT_DIRECTIONS (WAL-1). P&L:
   /// income on "Staff wallet adjustments". Written only by
   /// StaffWalletTransferService.
-  STAFF_DEBIT          @map("staff_debit")
+  STAFF_DEBIT                @map("staff_debit")
   /// A member of staff putting OUR money into a seller's wallet on
   /// purpose, with a reason the seller reads. Moves cash: capital becomes
   /// the seller's in the account the operator chose — except the part
   /// that clears a debt, which repays a receivable and moves nothing.
   /// A CREDIT: REGISTERED in CREDIT_DIRECTIONS and `isWalletCredit`
   /// (WAL-1). P&L: cost on "Staff wallet adjustments".
-  STAFF_CREDIT         @map("staff_credit")
+  STAFF_CREDIT               @map("staff_credit")
   /// RS-6 — the seller moved money from their own wallet into a reseller
   /// store they manage (the store's SELLER_TOPUP is its twin, written in
   /// the same transaction). A DEBIT: ABSENT from CREDIT_DIRECTIONS. Moves
   /// NO cash — the seller's and the store's money are one pot in the bank
   /// book (decision 7), and the sum of the two wallets is unchanged.
-  STORE_TOPUP_OUT      @map("store_topup_out")
+  STORE_TOPUP_OUT            @map("store_topup_out")
   /// RS-6 — the seller recorded paying a store they manage OFF-platform:
   /// the store's SELLER_PAYOUT (−X) and this (+X), one transaction. A
   /// CREDIT: REGISTERED in CREDIT_DIRECTIONS and `isWalletCredit`. Moves
   /// no cash, for the same reason.
-  STORE_PAYOUT_IN      @map("store_payout_in")
+  STORE_PAYOUT_IN            @map("store_payout_in")
+  /// RS-6 phase 3c (2026-09-14) — a reseller order's money
+  /// (docs/reseller-stores.md "Order money as built").
+  ///
+  /// The SELLER's transfer price on a reseller store's COD order, credited
+  /// at the seller's credit trigger. CREDIT. Cash rule NONE: the money is
+  /// not the seller's until it is, so `ResellerOrderMoneyService` posts the
+  /// cash itself — a front from capital (reference = the order id, WAL-9),
+  /// exactly as an Instant Pay COD credit is fronted.
+  RESELLER_TRANSFER_CREDIT   @map("reseller_transfer_credit")
+  /// A RESELLER_TRANSFER_CREDIT taken back (the parcel came back, was
+  /// lost, or the order was called off before a courier paid). DEBIT.
+  /// Cash rule NONE: the flow taking it back posts the cash, as a COD
+  /// reversal's does.
+  RESELLER_TRANSFER_REVERSAL @map("reseller_transfer_reversal")
+  /// The seller's transfer price on a PREPAID reseller order — money the
+  /// store already paid (its PREPAID_DEBIT made it ours). CREDIT, cash
+  /// TO_SELLER: it becomes the seller's again, above any group debt.
+  PREPAID_TRANSFER_CREDIT    @map("prepaid_transfer_credit")
+  /// A PREPAID_TRANSFER_CREDIT taken back (the order was called off, came
+  /// back or was lost). DEBIT, cash TO_CAPITAL, clamped.
+  PREPAID_TRANSFER_REVERSAL  @map("prepaid_transfer_reversal")
+  /// RS-7 — a store↔seller dispute settled by staff in the SELLER's
+  /// favour: the store's DISPUTE_SETTLEMENT_OUT is its twin, one
+  /// transaction. CREDIT. No cash moves (decision 7: one pot).
+  STORE_DISPUTE_IN           @map("store_dispute_in")
+  /// RS-7 — a dispute settled in the STORE's favour: the seller pays the
+  /// store (twin: the store's DISPUTE_SETTLEMENT_IN). DEBIT. No cash moves.
+  STORE_DISPUTE_OUT          @map("store_dispute_out")
 
   @@map("wallet_entry_direction")
 }
@@ -6980,6 +7017,11 @@ enum TicketType {
   /// (`goodsReceiptId`). It records the loss and asks the question; it
   /// never blocks the count (CNS-3) and moves no money by itself.
   RECEIPT_SHORTFALL      @map("receipt_shortfall")
+  /// RS-7 (2026-09-14) — raised by a RESELLER STORE about one of its
+  /// orders; the seller sees it, Skydrop referees. Settled by moving money
+  /// between the store's and the seller's wallets (a pair, no bank entry),
+  /// never by a SCRAP_REFUND from our money.
+  STORE_DISPUTE          @map("store_dispute")
 
   @@map("ticket_type")
 }
@@ -7100,10 +7142,23 @@ model Ticket {
   resolvedByStaffId    String?   @map("resolved_by_staff_id") @db.Uuid
   resolvedAt           DateTime? @map("resolved_at") @db.Timestamptz
 
+  /// RS-7 — the reseller store a STORE_DISPUTE ticket was raised by (and
+  /// is visible to). NULL on every other ticket.
+  storeId                String?             @map("store_id") @db.Uuid
+  /// RS-7 — the store user who raised it.
+  openedByStoreUserId    String?             @map("opened_by_store_user_id") @db.Uuid
+  /// RS-7 — a dispute settled with money: who paid the other.
+  disputePayer           ResellerMoneyParty? @map("dispute_payer")
+  /// RS-7 — the store-wallet half of the settlement pair
+  /// (`resolution_wallet_entry_id` holds the seller half).
+  resolutionStoreEntryId String?             @unique @map("resolution_store_entry_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   seller             Seller             @relation(fields: [sellerId], references: [id])
+  store              SellerStore?       @relation("TicketStore", fields: [storeId], references: [id], onDelete: Restrict)
+  openedByStoreUser  StoreUser?         @relation("TicketOpenedByStoreUser", fields: [openedByStoreUserId], references: [id], onDelete: SetNull)
   shipment           Shipment?          @relation(fields: [shipmentId], references: [id])
   shipmentItem       ShipmentItem?      @relation(fields: [shipmentItemId], references: [id])
   openedByStaff      StaffUser?         @relation("TicketOpenedByStaff", fields: [openedByStaffId], references: [id])
@@ -7130,6 +7185,7 @@ model Ticket {
   @@index([shipmentId])
   /// The queue filter: "what must a person pick up".
   @@index([handling])
+  @@index([storeId])
   @@map("tickets")
 }
 
@@ -8778,38 +8834,52 @@ model ResellerStoreTermsAcceptance {
 enum StoreWalletEntryDirection {
   /// SELLER-managed: the seller moved money from their wallet into the
   /// store's (twin: the seller's STORE_TOPUP_OUT). CREDIT. No cash moves.
-  SELLER_TOPUP          @map("seller_topup")
+  SELLER_TOPUP           @map("seller_topup")
   /// SELLER-managed: the seller recorded paying the store off-platform
   /// (twin: the seller's STORE_PAYOUT_IN). DEBIT. No cash moves.
-  SELLER_PAYOUT         @map("seller_payout")
+  SELLER_PAYOUT          @map("seller_payout")
   /// SKYDROP-managed: the store wired money to our bank and a person saw it
   /// arrive (WAL-2). CREDIT. The acceptance posts the cash as the SELLER's.
-  TOPUP                 @map("topup")
+  TOPUP                  @map("topup")
   /// SKYDROP-managed: we paid the store out. DEBIT. The payout posts the
   /// cash leaving, as the SELLER's up to what they hold.
-  WITHDRAWAL            @map("withdrawal")
+  WITHDRAWAL             @map("withdrawal")
   /// Phase 3b — a COD order's store margin credited at the store's trigger.
   /// CREDIT. Cash posted by the flow that brings it (a payout, or a front).
-  ORDER_CREDIT          @map("order_credit")
+  ORDER_CREDIT           @map("order_credit")
   /// Phase 3b — an ORDER_CREDIT taken back on a return / loss (WAL-6 /
   /// WAL-8 per party). DEBIT. Cash posted by the payout taking it back.
-  ORDER_CREDIT_REVERSAL @map("order_credit_reversal")
+  ORDER_CREDIT_REVERSAL  @map("order_credit_reversal")
   /// Phase 3b — the store's share of one Skydrop fee (`share_of` names
   /// which). DEBIT. The seller's held cash becomes ours, clamped (TRE-8).
-  FEE_SHARE             @map("fee_share")
+  FEE_SHARE              @map("fee_share")
   /// Phase 3b — the store's share of the COD tax (GST_WITHHOLDING). DEBIT,
   /// the cash becomes ours exactly as a fee share does.
-  COD_TAX_SHARE         @map("cod_tax_share")
+  COD_TAX_SHARE          @map("cod_tax_share")
   /// Phase 3b — a FEE_SHARE or COD_TAX_SHARE given back (`linked_entry_id`
   /// names it). CREDIT. The cash is theirs again above any debt.
-  SHARE_REFUND          @map("share_refund")
+  SHARE_REFUND           @map("share_refund")
   /// Phase 3b — a PREPAID order's transfer price + store fee shares, taken
   /// at confirmation. DEBIT. The seller's held cash becomes ours until the
   /// seller is credited at their own trigger (TO_SELLER there).
-  PREPAID_DEBIT         @map("prepaid_debit")
+  PREPAID_DEBIT          @map("prepaid_debit")
   /// Phase 3b — a PREPAID_DEBIT given back on a cancel before dispatch.
   /// CREDIT. The cash is theirs again above any debt.
-  PREPAID_REFUND        @map("prepaid_refund")
+  PREPAID_REFUND         @map("prepaid_refund")
+  /// Phase 3c — the seller's transfer price for a COD order's goods, netted
+  /// at the STORE's credit trigger beside the ORDER_CREDIT that carries the
+  /// COD. DEBIT, cash TO_CAPITAL (clamped) — it reaches the seller at the
+  /// seller's own trigger, in between it is in neither wallet.
+  TRANSFER_PRICE         @map("transfer_price")
+  /// Phase 3c — a TRANSFER_PRICE given back when the store's credit is
+  /// reversed (`linked_entry_id` names it). CREDIT, cash TO_SELLER.
+  TRANSFER_PRICE_REFUND  @map("transfer_price_refund")
+  /// RS-7 — a store↔seller dispute settled by staff in the STORE's favour
+  /// (twin: the seller's STORE_DISPUTE_OUT). CREDIT. No cash moves.
+  DISPUTE_SETTLEMENT_IN  @map("dispute_settlement_in")
+  /// RS-7 — a dispute settled in the SELLER's favour: the store pays the
+  /// seller (twin: the seller's STORE_DISPUTE_IN). DEBIT. No cash moves.
+  DISPUTE_SETTLEMENT_OUT @map("dispute_settlement_out")
 
   @@map("store_wallet_entry_direction")
 }
@@ -8859,6 +8929,86 @@ model StoreWalletEntry {
   @@index([linkedOrderId])
   @@index([linkedEntryId])
   @@map("store_wallet_entries")
+}
+
+/// RS-6 phase 3c — WHICH side of a reseller order a credit is for.
+enum ResellerMoneyParty {
+  STORE  @map("store")
+  SELLER @map("seller")
+
+  @@map("reseller_money_party")
+}
+
+/// RS-6 phase 3c — where one party's credit on a reseller order stands.
+enum ResellerCreditStatus {
+  /// Planned; the event its trigger counts from (confirmation, delivery,
+  /// the courier's payout) has not happened yet.
+  WAITING  @map("waiting")
+  /// The event happened; `due_at` says when the credit runs.
+  DUE      @map("due")
+  /// Written to the party's wallet.
+  CREDITED @map("credited")
+  /// Written and then taken back (return, loss, called off, the courier
+  /// reversing the COD). Re-armed if a courier pays for it after all.
+  REVERSED @map("reversed")
+  /// Never written: the order ended before it came due.
+  SKIPPED  @map("skipped")
+
+  @@map("reseller_credit_status")
+}
+
+/// RS-6 phase 3c (2026-09-14) — one party's credit on one reseller order:
+/// the plan, fixed the first time the order needs it (its confirmation,
+/// usually), and where it stands. Written ONLY by
+/// `ResellerOrderMoneyService`; every status move is a guarded
+/// `updateMany` on the status read, inside the transaction that writes the
+/// wallet entries under the seller's WALLET lock, so a credit is written
+/// exactly once per arming.
+///
+/// The figures are the pure planner's (`reseller-money-plan.ts`):
+///   store  (COD): gross = the COD collected, transfer = the seller's
+///                 transfer price, then its shares of the COD tax / COD fee
+///                 / Instant Pay fee;
+///   seller:       gross = the transfer price, transfer = 0, then its
+///                 shares. net = gross − transfer − the three shares.
+/// The store's net plus the seller's is exactly what a channel order with
+/// the same COD and fees would credit its seller. Delivery and return
+/// fees are split when Skydrop bills them, not here.
+model ResellerOrderCredit {
+  id                 String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId            String                @map("order_id") @db.Uuid
+  sellerId           String                @map("seller_id") @db.Uuid
+  storeId            String                @map("store_id") @db.Uuid
+  party              ResellerMoneyParty
+  trigger            ResellerCreditTrigger
+  days               Int
+  status             ResellerCreditStatus  @default(WAITING)
+  /// When it runs — set when the trigger's event happens.
+  dueAt              DateTime?             @map("due_at") @db.Timestamptz
+  creditedAt         DateTime?             @map("credited_at") @db.Timestamptz
+  reversedAt         DateTime?             @map("reversed_at") @db.Timestamptz
+  skippedReason      String?               @map("skipped_reason")
+  grossInr           Decimal               @map("gross_inr") @db.Decimal(14, 2)
+  transferInr        Decimal               @map("transfer_inr") @db.Decimal(14, 2)
+  taxShareInr        Decimal               @map("tax_share_inr") @db.Decimal(14, 2)
+  codFeeShareInr     Decimal               @map("cod_fee_share_inr") @db.Decimal(14, 2)
+  instantFeeShareInr Decimal               @map("instant_fee_share_inr") @db.Decimal(14, 2)
+  netInr             Decimal               @map("net_inr") @db.Decimal(14, 2)
+  /// How many times it has been written (a reversed credit re-armed by a
+  /// later payout is written again).
+  timesCredited      Int                   @default(0) @map("times_credited")
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+
+  order  Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  seller Seller      @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  store  SellerStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, party])
+  @@index([status, dueAt])
+  @@index([storeId])
+  @@index([sellerId])
+  @@map("reseller_order_credits")
 }
 
 /// A SKYDROP-managed store says "we sent you money"; a person checks the

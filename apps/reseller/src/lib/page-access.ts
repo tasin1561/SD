@@ -28,6 +28,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/orders/import', 'orders.create'], // /store/order-imports/*
   ['/customers', 'customers.view'], // GET /store/customers
   ['/integrations', 'integrations.manage'], // /store/api-keys, /store/webhook-endpoints
+  // RS-7 — the store's disputes with its seller.
+  ['/tickets', 'tickets.view'], // GET /store/tickets
+  ['/tickets/new', 'tickets.manage'], // POST /store/tickets
 ];
 
 export function permissionForPath(pathname: string | null): string | null {

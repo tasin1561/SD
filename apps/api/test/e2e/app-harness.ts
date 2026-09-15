@@ -28,6 +28,7 @@ import { OrderDeliveredInvoiceListener } from '../../src/modules/invoice/service
 import { OrderDeliveredAccrualListener } from '../../src/modules/seller-wallet-accrual/services/order-delivered-accrual-listener.service';
 import { DeliveryFailedListener } from '../../src/modules/delivery-action/services/delivery-failed-listener.service';
 import { TicketNotifier } from '../../src/modules/ticket/services/ticket-notifier.service';
+import { ResellerOrderMoneyListener } from '../../src/modules/reseller-order-money/services/reseller-order-money.listener';
 
 export interface AppHarness {
   app: NestExpressApplication;
@@ -177,6 +178,8 @@ export async function drainAll(app: NestExpressApplication): Promise<void> {
     DeliveryFailedListener,
     // TKT-3: every ticket event tells the other side after it commits.
     TicketNotifier,
+    // RS-6 phase 3c: a reseller order's money follows each lifecycle event.
+    ResellerOrderMoneyListener,
   ];
   for (const token of drainables) {
     try {
@@ -521,6 +524,9 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'store_role_permissions',
         'store_roles',
         'reseller_store_events',
+        // RS-6 phase 3c: each reseller order's credits FK-RESTRICT orders,
+        // sellers and seller_stores (MUST #12).
+        'reseller_order_credits',
         // RS-6 store wallets: entries and requests FK-RESTRICT seller_stores
         // (and the requests platform_bank_accounts), so they go here too.
         'store_wallet_entries',

@@ -158,3 +158,5 @@ export {
 export { ResellerCreditTrigger } from '@prisma/client';
 // RS-6 — reseller store wallets.
 export { StoreWalletEntryDirection } from '@prisma/client';
+// RS-6 phase 3c — a reseller order's per-party credits.
+export { ResellerMoneyParty, ResellerCreditStatus } from '@prisma/client';

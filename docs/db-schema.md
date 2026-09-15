@@ -238,6 +238,15 @@ A reseller store's machine key (`Authorization: Bearer sks_…`). `storeId` (FK 
 
 **Migration grants:** existing stores' system roles — admin += `orders.view`, `orders.create`, `orders.cancel`, `customers.view`, `integrations.manage`; ops += `orders.view`, `orders.create`, `orders.cancel`, `customers.view`; finance += `orders.view`, `customers.view`; viewer += `orders.view`. **Setting:** `reseller.orders_enabled` (BOOLEAN, FALSE, seller-overridable) — store orders are refused until phase 3c wires the money.
 
+## Reseller order money — RS-6 phase 3c + RS-7 *(2026-09-15, `20260914250000_reseller_order_money`; design `docs/reseller-stores.md` "Order money as built" / "RS-7 as built")*
+
+## reseller_order_credits
+Each party's credit on one reseller order, planned once from the order's snapshot. `orderId` (FK orders RESTRICT), `sellerId` (FK sellers RESTRICT), `storeId` (FK seller_stores RESTRICT), `party: ResellerMoneyParty` (STORE / SELLER), `trigger: ResellerCreditTrigger`, `days`, `status: ResellerCreditStatus` (WAITING default / DUE / CREDITED / REVERSED / SKIPPED), `dueAt`, `creditedAt`, `reversedAt`, `skippedReason`, `grossInr` (store: the COD; seller: the transfer price), `transferInr` (store: the transfer price it pays; seller: 0), `taxShareInr`, `codFeeShareInr`, `instantFeeShareInr`, `netInr` (all `Decimal(14,2)`), `timesCredited` (Int, default 0), `createdAt`, `updatedAt`. **Unique** `(orderId, party)`. **Indexes** `(status, dueAt)`, `(storeId)`, `(sellerId)`. **CHECKs:** `reseller_order_credits_figures_ck` (non-negative figures, `net = gross − transfer − tax − cod fee − instant fee`, days 0–365), `_seller_transfer_ck` (a SELLER row's transfer is 0), `_status_ck` (DUE needs `due_at`, CREDITED needs `credited_at`). Written ONLY by `ResellerOrderMoneyService`, status moves by guarded `updateMany`.
+
+**`tickets`** += `storeId` (FK seller_stores RESTRICT, indexed), `openedByStoreUserId` (FK store_users SET NULL), `disputePayer: ResellerMoneyParty?`, `resolutionStoreEntryId` (UNIQUE — the store-wallet half of a dispute settlement).
+
+**Enum values added:** `WalletEntryDirection` += `RESELLER_TRANSFER_CREDIT` (credit, cash NONE — fronted), `RESELLER_TRANSFER_REVERSAL` (debit, NONE), `PREPAID_TRANSFER_CREDIT` (credit, TO_SELLER), `PREPAID_TRANSFER_REVERSAL` (debit, TO_CAPITAL), `STORE_DISPUTE_IN` (credit, NONE), `STORE_DISPUTE_OUT` (debit, NONE). `StoreWalletEntryDirection` += `TRANSFER_PRICE` (debit, TO_CAPITAL), `TRANSFER_PRICE_REFUND` (credit, TO_SELLER), `DISPUTE_SETTLEMENT_IN` (credit, NONE), `DISPUTE_SETTLEMENT_OUT` (debit, NONE). `TicketType` += `STORE_DISPUTE`. **New enums:** `ResellerMoneyParty` (`reseller_money_party`), `ResellerCreditStatus` (`reseller_credit_status`). **Migration grants:** existing stores' admin/ops += `tickets.view` + `tickets.manage`, finance/viewer += `tickets.view`.
+
 ## seller_notes
 Admin notes about sellers (replaces simple `rejectionReason` field).
 

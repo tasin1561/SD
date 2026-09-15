@@ -5,6 +5,12 @@ import { OrderChargesAccrualService } from '../../src/modules/seller-wallet-accr
 const lockTaken = jest.fn(async () => 1);
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 
+/** RS-6 phase 3c — every order in this suite is a channel order. */
+const NO_RESELLER_MONEY = {
+  isResellerOrder: async () => false,
+  head: async () => null,
+} as never;
+
 type AnyArgs = Record<string, unknown>;
 
 function makeService(
@@ -41,7 +47,7 @@ function makeService(
     sellerWalletEntry: { count },
     orderCharge: { findMany: orderChargeFindMany },
   };
-  const svc = new OrderChargesAccrualService(wallet as unknown as WalletService);
+  const svc = new OrderChargesAccrualService(wallet as unknown as WalletService, NO_RESELLER_MONEY);
   return { svc, tx, findFirst, orderChargeFindMany, applyEntry };
 }
 

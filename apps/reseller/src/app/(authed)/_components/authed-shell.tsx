@@ -10,6 +10,7 @@ import {
   Contact,
   FileSignature,
   LayoutDashboard,
+  MessagesSquare,
   Package,
   PlugZap,
   Settings,
@@ -56,6 +57,7 @@ export function AuthedShell({
         { href: '/catalogue', label: 'Catalogue', icon: <Package size={15} /> },
         { href: '/terms', label: 'Terms', icon: <FileSignature size={15} /> },
         { href: '/wallet', label: 'Wallet', icon: <Wallet size={15} /> },
+        { href: '/tickets', label: 'Disputes', icon: <MessagesSquare size={15} /> },
       ],
     },
     {

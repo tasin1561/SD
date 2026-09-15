@@ -19,11 +19,12 @@ import {
   TicketStatusBadge,
   useToast,
 } from '@skydrop/ui/components';
-import { TicketStatus } from '@skydrop/db';
+import { TicketStatus, TicketType } from '@skydrop/db';
 import { useAdminTicket, useTicketEvents, useTransitionTicket } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AdminTicketConversation } from './admin-ticket-conversation';
+import { StoreDisputeSettle } from './store-dispute-settle';
 
 /**
  * THREE stages, in the order a ticket actually travels: Open →
@@ -82,6 +83,13 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
   }
   const t = ticket.data;
   if (t === undefined) return <div />;
+  // RS-7 — a store dispute is settled BETWEEN the store and the seller,
+  // never refunded by us. Cosmetic: the API refuses the refund outcome
+  // on this type with STORE_DISPUTE_USE_SETTLEMENT regardless.
+  const isStoreDispute = t.ticketType === TicketType.STORE_DISPUTE;
+  const outcomes = isStoreDispute
+    ? OUTCOMES.filter((o) => o.value !== TicketStatus.RESOLVED_REFUND)
+    : OUTCOMES;
 
   const apply = (): void => {
     if (to === '') return;
@@ -119,7 +127,11 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         // The number leads — it is what the seller quotes to us.
         title={`${t.ticketNumber} · ${t.subject}`}
         subtitle={`Raised ${new Date(t.createdAt).toLocaleString()} by ${
-          t.openedBy === 'SELLER' ? 'the seller' : 'Skydrop'
+          t.openedBy === 'SELLER'
+            ? 'the seller'
+            : t.openedBy === 'STORE'
+              ? (t.storeName ?? 'a reseller store')
+              : 'Skydrop'
         }`}
       />
 
@@ -185,6 +197,18 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   ),
               },
               { label: 'Courier', value: t.courierCode ?? '—' },
+              ...(t.storeName == null ? [] : [{ label: 'Reseller store', value: t.storeName }]),
+              ...(t.disputePayer == null
+                ? []
+                : [
+                    {
+                      label: 'Settled',
+                      value:
+                        t.disputePayer === 'STORE'
+                          ? 'The store paid the seller'
+                          : 'The seller paid the store',
+                    },
+                  ]),
             ]}
           />
           {/*
@@ -251,6 +275,15 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         </CardBody>
       </Card>
 
+      {canResolve && t.resolvedAt === null && isStoreDispute ? (
+        <>
+          <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">
+            Settle between store and seller
+          </h2>
+          <StoreDisputeSettle ticketId={ticketId} storeName={t.storeName ?? null} />
+        </>
+      ) : null}
+
       {canResolve && t.resolvedAt === null ? (
         <>
           <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">Move this on</h2>
@@ -301,7 +334,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                       onChange={(e) => setTo(e.target.value as TicketStatus | '')}
                     >
                       <option value="">Outcome…</option>
-                      {OUTCOMES.map((o) => (
+                      {outcomes.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
                         </option>

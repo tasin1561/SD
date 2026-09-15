@@ -35,6 +35,7 @@ import {
   useStoreOrderEvents,
   type StoreOrderView,
 } from '@/lib/order-hooks';
+import { OrderMoney } from './_components/order-money';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -248,6 +249,17 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
             </CardBody>
           </Card>
         </Section>
+      ) : null}
+
+      <OrderMoney orderId={o.id} />
+
+      {can(me, 'tickets.manage') ? (
+        <p className="text-sm">
+          Something wrong with this order that the seller should put right?{' '}
+          <Link href={`/tickets/new?orderId=${o.id}`} className="text-accent hover:underline">
+            Raise a dispute
+          </Link>
+        </p>
       ) : null}
 
       <Timeline orderId={o.id} />

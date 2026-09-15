@@ -55,13 +55,16 @@ import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock
  */
 
 const MODE_KEY = 'wallet.cod_credit_mode';
-const GST_KEY = 'wallet.cod_gst_percent';
-const INSTANT_FEE_KEY = 'wallet.instant_pay_fee_percent';
-const COLLECTION_FEE_KEY = 'wallet.cod_collection_fee_percent';
+// Exported for the reseller order money (RS-6 phase 3c), which charges the
+// SAME three fees on a reseller store's COD and must resolve them exactly
+// as this service does.
+export const GST_KEY = 'wallet.cod_gst_percent';
+export const INSTANT_FEE_KEY = 'wallet.instant_pay_fee_percent';
+export const COLLECTION_FEE_KEY = 'wallet.cod_collection_fee_percent';
 
-const DEFAULT_GST_PERCENT = '18.00';
-const DEFAULT_INSTANT_FEE_PERCENT = '2.50';
-const DEFAULT_COLLECTION_FEE_PERCENT = '0.00';
+export const DEFAULT_GST_PERCENT = '18.00';
+export const DEFAULT_INSTANT_FEE_PERCENT = '2.50';
+export const DEFAULT_COLLECTION_FEE_PERCENT = '0.00';
 
 export type CodCreditModeValue = 'SETTLEMENT' | 'INSTANT_PAY';
 

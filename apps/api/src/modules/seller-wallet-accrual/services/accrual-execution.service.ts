@@ -5,6 +5,7 @@ import {
   OrderStatus,
   PaymentMode,
   Prisma,
+  SellerStoreKind,
   SystemIssueKind,
   SystemIssueSeverity,
 } from '@skydrop/db';
@@ -72,7 +73,14 @@ export class AccrualExecutionService {
   async executeAccrual(orderId: string): Promise<AccrualExecutionOutcome> {
     const order = await this.prisma.client.order.findUnique({
       where: { id: orderId },
-      select: { id: true, sellerId: true, paymentMode: true, codAmountInr: true, status: true },
+      select: {
+        id: true,
+        sellerId: true,
+        paymentMode: true,
+        codAmountInr: true,
+        status: true,
+        storeKind: true,
+      },
     });
     if (!order) {
       this.logger.warn({ orderId }, 'Order vanished before accrual execution; skipping');
@@ -188,7 +196,15 @@ export class AccrualExecutionService {
         // credit waits for the courier's withdrawal. Crediting at delivery for
         // everyone is what made Skydrop front 5-10 days of every seller's
         // COD and absorb any short payment.
-        if (order.paymentMode === PaymentMode.COD && carried) {
+        // A RESELLER store's order is never credited here: its COD is split
+        // between the store and the seller, each at its own trigger
+        // (ResellerOrderMoneyService — RS-6 phase 3c). The delivery fee below
+        // IS billed here, and split by the order's snapshot inside debitIfNeeded.
+        if (
+          order.paymentMode === PaymentMode.COD &&
+          carried &&
+          order.storeKind !== SellerStoreKind.RESELLER
+        ) {
           const mode = await this.codCredit.resolveMode(order.sellerId);
           if (mode === 'INSTANT_PAY') {
             const gross = order.codAmountInr ?? new Prisma.Decimal(0);

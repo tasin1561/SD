@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import {
@@ -149,6 +150,14 @@ export default function WalletPage(): ReactElement {
                   <Td className="text-text-muted text-xs">{when(e.createdAt)}</Td>
                   <Td>
                     <div>{storeWalletDirectionLabel(e.direction, s.sellerCompanyName)}</div>
+                    {e.linkedOrderId !== null ? (
+                      <Link
+                        href={`/orders/${e.linkedOrderId}`}
+                        className="text-accent text-xs hover:underline"
+                      >
+                        See the order
+                      </Link>
+                    ) : null}
                     {e.note !== null ? (
                       <div className="text-text-faint text-xs">{e.note}</div>
                     ) : null}

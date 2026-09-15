@@ -41,6 +41,8 @@ function ticketTypeLabel(type: TicketType): string {
       return 'Delivery escalation';
     case TicketType.RECEIPT_SHORTFALL:
       return 'Receipt short';
+    case TicketType.STORE_DISPUTE:
+      return 'Reseller store dispute';
   }
 }
 

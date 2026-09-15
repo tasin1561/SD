@@ -4,6 +4,7 @@ import {
   BankOwnerKind,
   OrderStatus,
   Prisma,
+  ResellerCreditStatus,
   WalletEntryDirection,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -208,10 +209,42 @@ export class InstantPayAdvanceService {
       const delta = c.direction === WalletEntryDirection.COD_COLLECTION ? 1 : -1;
       net.set(c.linkedOrderId, (net.get(c.linkedOrderId) ?? 0) + delta * c._count._all);
     }
-    return [...net].filter(([, n]) => n > 0).map(([id]) => id);
+    const channel = [...net].filter(([, n]) => n > 0).map(([id]) => id);
+    // RS-6 phase 3c — a reseller order credits no COD_COLLECTION: each party
+    // is credited at its own trigger (`reseller_order_credits`). A party
+    // written with no courier payout behind it (INSTANT, AFTER_DELIVERY, or
+    // AFTER_CONFIRMATION — which fronts BEFORE delivery, so "ever delivered"
+    // does not apply) is money we advanced, exactly like Instant Pay.
+    const reseller = await this.resellerAdvanced(sellerId);
+    return [...new Set([...channel, ...reseller.keys()])];
+  }
+
+  /** Reseller orders with a written credit and no payout line → their credits. */
+  private async resellerAdvanced(
+    sellerId: string | undefined,
+  ): Promise<Map<string, { net: Prisma.Decimal; creditedAt: Date }>> {
+    const rows = await this.prisma.client.resellerOrderCredit.findMany({
+      where: {
+        status: ResellerCreditStatus.CREDITED,
+        ...(sellerId === undefined ? {} : { sellerId }),
+        order: { codAmountInr: { gt: 0 }, courierSettlementLines: { none: {} } },
+      },
+      select: { orderId: true, netInr: true, creditedAt: true },
+    });
+    const out = new Map<string, { net: Prisma.Decimal; creditedAt: Date }>();
+    for (const r of rows) {
+      const prev = out.get(r.orderId);
+      const at = r.creditedAt ?? new Date(0);
+      out.set(r.orderId, {
+        net: (prev?.net ?? ZERO).add(r.netInr),
+        creditedAt: prev === undefined || at > prev.creditedAt ? at : prev.creditedAt,
+      });
+    }
+    return out;
   }
 
   private async rows(ids: string[], now: Date): Promise<InstantPayAdvanceRow[]> {
+    const resellerCredits = await this.resellerAdvanced(undefined);
     const [orders, entries, fronts, delivered] = await Promise.all([
       this.prisma.client.order.findMany({
         where: { id: { in: ids } },
@@ -306,6 +339,14 @@ export class InstantPayAdvanceService {
             // COD_REVERSAL and the three deductions.
             net = net.sub(e.amount);
         }
+      }
+
+      // A reseller order's advance is what its written credits netted
+      // (store margin and seller transfer price, less their shares).
+      const rc = resellerCredits.get(o.id);
+      if (rc !== undefined) {
+        net = rc.net;
+        creditedAt = rc.creditedAt;
       }
 
       const myFronts = fronts.filter((f) => f.reference === o.id && f.sellerId === o.sellerId);

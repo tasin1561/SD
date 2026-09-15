@@ -12,6 +12,7 @@ import {
 } from './services/remittance-parser.service';
 import { AdminCourierSettlementController } from './controllers/admin-courier-settlement.controller';
 import { TreasuryModule } from '../treasury/treasury.module';
+import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order-money.module';
 
 /**
  * R2c — the courier settlement ledger: what the courier paid US, matched
@@ -32,6 +33,8 @@ import { TreasuryModule } from '../treasury/treasury.module';
     SellerWalletModule,
     // The cash side of a settlement is written in the same tx as the credit.
     TreasuryModule,
+    // RS-6 phase 3c — a reseller order's payout line arms per-party credits.
+    ResellerOrderMoneyModule,
   ],
   controllers: [AdminCourierSettlementController],
   providers: [

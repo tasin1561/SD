@@ -54,6 +54,8 @@ function makeSut(data: { orders: FakeOrder[]; entries: FakeEntry[]; bank: FakeBa
   };
 
   const client = {
+    // RS-6 phase 3c — no reseller order credits in these channel scenarios.
+    resellerOrderCredit: { findMany: jest.fn(async () => []) },
     sellerWalletEntry: {
       groupBy: async (args: {
         where: {

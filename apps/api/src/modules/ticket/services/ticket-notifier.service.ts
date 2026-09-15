@@ -46,6 +46,9 @@ const EVENT_SELECT = {
       sellerId: true,
       orderId: true,
       seller: { select: { companyName: true, email: true } },
+      // RS-7 — a store dispute names the store and, once settled, who paid.
+      store: { select: { name: true, displayName: true } },
+      disputePayer: true,
     },
   },
 } as const;
@@ -138,6 +141,8 @@ export class TicketNotifier implements OnModuleDestroy {
         description: t.description,
         resolutionAmountInr: t.resolutionAmountInr?.toFixed(2) ?? null,
         companyName: t.seller.companyName,
+        storeName: t.store?.displayName ?? t.store?.name ?? null,
+        disputePayer: t.disputePayer ?? null,
       },
     );
     if (plan.seller !== null) await this.tellSeller(ticketEventId, t, plan.seller);

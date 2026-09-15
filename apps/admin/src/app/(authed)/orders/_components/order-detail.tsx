@@ -28,6 +28,7 @@ import { useOrderJourney } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { ConsigneePanel } from './consignee-panel';
 import { ResellerOrderPanel } from './reseller-order-panel';
+import { ResellerMoneyPanel } from './reseller-money-panel';
 
 /**
  * Order detail. Single-fetch (admin /orders/:id). Renders:
@@ -135,6 +136,8 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           {/* RS-5 — a reseller store's order: the store and the terms
               snapshot it was placed under. Nothing for a channel order. */}
           <ResellerOrderPanel order={detail.data} />
+          {/* RS-6 phase 3c — the full split: both parties, both wallets. */}
+          <ResellerMoneyPanel orderId={orderId} enabled={detail.data.storeKind === 'RESELLER'} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <Card>

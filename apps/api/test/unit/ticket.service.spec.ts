@@ -126,6 +126,8 @@ function makeService(
     wallet as unknown as WalletService,
     new TicketStateMachineService(),
     { afterEvent } as unknown as TicketNotifier,
+    // RS-7 — a channel order: no transfer-price cap.
+    { transferCompensationCap: async () => null } as never,
   );
   return {
     svc,
@@ -483,6 +485,7 @@ describe('TicketService.markRelayed', () => {
       {} as unknown as WalletService,
       new TicketStateMachineService(),
       { afterEvent: jest.fn() } as unknown as TicketNotifier,
+      { transferCompensationCap: async () => null } as never,
     );
     return { svc, relayCreate, relayFindUnique, auditLog };
   }

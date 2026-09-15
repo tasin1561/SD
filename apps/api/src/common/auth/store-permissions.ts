@@ -33,6 +33,7 @@ export const STORE_PERMISSION_GROUPS = [
   'Orders',
   'Customers',
   'Integrations',
+  'Support',
 ] as const;
 
 export type StorePermissionGroup = (typeof STORE_PERMISSION_GROUPS)[number];
@@ -158,6 +159,23 @@ export const STORE_PERMISSIONS = [
     group: 'Integrations',
     sensitive: true,
   },
+  // RS-7 — disputes with the seller about one of this store's orders.
+  // Granted to existing stores' system roles by
+  // 20260914250000_reseller_order_money.
+  {
+    key: 'tickets.view',
+    label: 'See disputes',
+    description:
+      'The disputes this store has raised with its seller about an order, and how Skydrop settled them.',
+    group: 'Support',
+  },
+  {
+    key: 'tickets.manage',
+    label: 'Raise disputes',
+    description:
+      'Raise a dispute with the seller about one of this store’s orders, and reply on it. Skydrop referees; a settlement moves money between the store and the seller.',
+    group: 'Support',
+  },
 ] as const satisfies readonly StorePermissionDef[];
 
 export type StorePermissionKey = (typeof STORE_PERMISSIONS)[number]['key'];
@@ -214,6 +232,9 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
       'orders.create',
       'orders.cancel',
       'customers.view',
+      // RS-7. Also granted to existing ops roles by the 250000 migration.
+      'tickets.view',
+      'tickets.manage',
     ],
   },
   {
@@ -233,6 +254,7 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
       'wallet.withdrawals.manage',
       'orders.view',
       'customers.view',
+      'tickets.view',
     ],
   },
   {
@@ -243,7 +265,13 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
     // order costs, and the portal banner that says "new terms to accept"
     // must be able to read them for whoever is signed in. Orders too (RS-5)
     // — but not the customer list, which is a list of people, not work.
-    permissions: ['store.profile.view', 'catalogue.view', 'terms.view', 'orders.view'],
+    permissions: [
+      'store.profile.view',
+      'catalogue.view',
+      'terms.view',
+      'orders.view',
+      'tickets.view',
+    ],
   },
 ];
 

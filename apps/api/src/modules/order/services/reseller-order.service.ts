@@ -17,6 +17,7 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { ResellerStockGateService } from '../../reseller-order-gate/services/reseller-stock-gate.service';
+import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
 import {
   ResellerStoreTermsService,
   type StoreTermsSnapshot,
@@ -81,9 +82,9 @@ export function termsFromSnapshot(s: StoreTermsSnapshot): ResellerOrderTerms {
  *   4. every line's product is ENABLED for the store, still resellable,
  *      with an effective transfer price (RS-3);
  *   5. every line's retail sits inside the seller's [min, max] where set;
- *   6. PREPAID is refused until the store wallet exists (phase 3c swaps
- *      this refusal for the wallet-balance check — the payment mode is
- *      carried through untouched so that is the only change);
+ *   6. PREPAID needs the store's wallet to cover the transfer price and
+ *      its delivery share (phase 3c): `STORE_BALANCE_INSUFFICIENT`, checked
+ *      inside the create transaction under the seller's WALLET lock;
  *   7. no line asks for more than the store is SHOWN (RS-3's visible
  *      quantity, hidden share and set-asides included). ORD-10 is
  *      AMENDED for this one check — a store must never order stock it was
@@ -106,6 +107,8 @@ export class ResellerOrderService {
     private readonly terms: ResellerStoreTermsService,
     private readonly gate: ResellerStockGateService,
     private readonly catalog: CatalogReadService,
+    // RS-6 phase 3c — the prepaid store-balance check.
+    private readonly money: ResellerOrderMoneyService,
   ) {}
 
   async create(
@@ -208,14 +211,14 @@ export class ResellerOrderService {
       };
     });
 
-    // ── 6. Prepaid waits for the store wallet (phase 3c) ─────────────
-    if (input.paymentMode === PaymentMode.PREPAID) {
-      throw new ConflictException({
-        code: 'RESELLER_PREPAID_NOT_YET_AVAILABLE',
-        message:
-          'Prepaid store orders need the store wallet, which is not live yet. Place it as cash on delivery.',
-      });
-    }
+    // ── 6. Prepaid: the store's wallet must pay for it (decision 11) ──
+    // Checked INSIDE the create transaction (`lockAndReadTerms` below),
+    // under the seller's WALLET lock, so no top-up, withdrawal or sibling
+    // order can move the store between the check and the order's commit.
+    const transferTotal = lines.reduce(
+      (t, l, i) => t.add(l.transferPriceInr.mul(input.items[i]?.quantity ?? 0)),
+      new D(0),
+    );
 
     // ── 7. No more than the store is shown ───────────────────────────
     const wanted = new Map<string, number>();
@@ -250,7 +253,21 @@ export class ResellerOrderService {
         storeId,
         storeName: store.displayName ?? store.name,
         lines,
-        lockAndReadTerms: (tx) => this.lockAndReadTerms(tx, storeId),
+        lockAndReadTerms: async (tx) => {
+          const terms = await this.lockAndReadTerms(tx, storeId);
+          if (input.paymentMode === PaymentMode.PREPAID) {
+            // STORE_BALANCE_INSUFFICIENT — the transfer price and the store's
+            // delivery share, plus its other accepted-but-unconfirmed prepaid
+            // orders, within the store's negative limit.
+            await this.money.assertPrepaidCovered(tx, {
+              storeId,
+              sellerId: store.sellerId,
+              transferTotal,
+              deliveryFeeStorePercent: new D(terms.deliveryFeeStorePercent),
+            });
+          }
+          return terms;
+        },
       },
     });
   }

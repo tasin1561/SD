@@ -3,6 +3,7 @@ import { Currency, ActorType, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
+import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
@@ -40,6 +41,7 @@ export class OrderChargesRefundService {
     private readonly prisma: PrismaService,
     private readonly wallet: WalletService,
     private readonly audit: AuditLogService,
+    private readonly resellerMoney: ResellerOrderMoneyService,
   ) {}
 
   /**
@@ -59,6 +61,11 @@ export class OrderChargesRefundService {
     sellerId: string,
     reason: string,
   ): Promise<Prisma.Decimal | null> {
+    // RS-6 phase 3c: a reseller order's fee was split between the store and
+    // the seller; each side gives back its own share, on the same pairing.
+    if ((await this.resellerMoney.head(this.prisma.client, orderId)) !== null) {
+      return this.resellerMoney.refundDeliveryFee(orderId, reason);
+    }
     return this.prisma.client.$transaction(async (tx) => {
       // WAL-7: two concurrent refunds would both read "charged, not yet
       // refunded" and both credit the seller back.

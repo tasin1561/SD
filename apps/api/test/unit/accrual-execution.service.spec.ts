@@ -6,6 +6,12 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 import type { InboundFreightAmortisationService } from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
 
+/** RS-6 phase 3c — every order in this suite is a channel order. */
+const NO_RESELLER_MONEY = {
+  isResellerOrder: async () => false,
+  head: async () => null,
+} as never;
+
 type AnyArgs = Record<string, unknown>;
 
 function makeService(
@@ -80,7 +86,10 @@ function makeService(
   const recomputeCacheAfterCommit = jest.fn(async () => undefined);
   const wallet = { applyEntry, recomputeCacheAfterCommit };
 
-  const chargesAccrual = new OrderChargesAccrualService(wallet as unknown as WalletService);
+  const chargesAccrual = new OrderChargesAccrualService(
+    wallet as unknown as WalletService,
+    NO_RESELLER_MONEY,
+  );
 
   // R3 amortisation: these fixtures cover orders whose goods came from no
   // billed consignment, so the freight hook is a no-op (0 debited).
@@ -262,7 +271,10 @@ describe('AccrualExecutionService.executeAccrual', () => {
     });
     const recomputeCacheAfterCommit = jest.fn(async () => undefined);
     const wallet = { applyEntry, recomputeCacheAfterCommit };
-    const chargesAccrual = new OrderChargesAccrualService(wallet as unknown as WalletService);
+    const chargesAccrual = new OrderChargesAccrualService(
+      wallet as unknown as WalletService,
+      NO_RESELLER_MONEY,
+    );
     const freightAmortisation = {
       debitForDeliveredOrder: jest.fn(async () => ({
         amountInr: '0',
@@ -368,7 +380,7 @@ describe('AccrualExecutionService — Instant Pay fronts the COD', () => {
     const svc = new AccrualExecutionService(
       { client } as unknown as PrismaService,
       wallet as unknown as WalletService,
-      new OrderChargesAccrualService(wallet as unknown as WalletService),
+      new OrderChargesAccrualService(wallet as unknown as WalletService, NO_RESELLER_MONEY),
       { debitForDeliveredOrder } as unknown as InboundFreightAmortisationService,
       codCredit as unknown as CodCreditService,
       { persistForOrderSystem } as never,
