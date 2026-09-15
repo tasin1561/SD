@@ -594,10 +594,22 @@ export class StaffInvitationService {
       });
     }
     if (target.deletedAt !== null) return;
-    await this.prisma.client.staffUser.update({
-      where: { id: targetStaffId },
-      data: { deletedAt: new Date() },
+    const removed = await this.prisma.client.$transaction(async (tx) => {
+      const now = new Date();
+      const changed = await tx.staffUser.updateMany({
+        where: { id: targetStaffId, deletedAt: null },
+        data: { deletedAt: now },
+      });
+      if (changed.count === 0) return false;
+      // Their sessions end now. Every guard re-reads the user, but a
+      // removed person's session rows must not stay live until they expire.
+      await tx.staffRefreshToken.updateMany({
+        where: { staffUserId: targetStaffId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      return true;
     });
+    if (!removed) return;
     await this.audit.log({
       actorType: ActorType.STAFF,
       staffUserId: actor.staffId,

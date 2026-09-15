@@ -554,10 +554,22 @@ export class SellerTeamService {
         });
       }
     }
-    await this.prisma.client.sellerUser.update({
-      where: { id: targetUserId },
-      data: { deletedAt: new Date() },
+    const removed = await this.prisma.client.$transaction(async (tx) => {
+      const now = new Date();
+      const changed = await tx.sellerUser.updateMany({
+        where: { id: targetUserId, sellerId, deletedAt: null },
+        data: { deletedAt: now },
+      });
+      if (changed.count === 0) return false;
+      // Their sessions end now. Every guard re-reads the user, but a
+      // removed person's session rows must not stay live until they expire.
+      await tx.sellerRefreshToken.updateMany({
+        where: { sellerUserId: targetUserId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      return true;
     });
+    if (!removed) return;
     await this.audit.log({
       actorType: ActorType.SELLER,
       sellerId,
