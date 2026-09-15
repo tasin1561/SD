@@ -408,9 +408,18 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                       <div className="space-y-2 text-sm">
                         <p className="text-text-body">
                           Placed by your reseller store{' '}
-                          <span className="font-medium">
-                            {detail.data.storeNameSnapshot ?? 'a reseller store'}
-                          </span>
+                          {detail.data.storeId !== null ? (
+                            <Link
+                              href={`/reseller-stores/${detail.data.storeId}`}
+                              className="text-accent font-medium hover:underline"
+                            >
+                              {detail.data.storeNameSnapshot ?? 'a reseller store'}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">
+                              {detail.data.storeNameSnapshot ?? 'a reseller store'}
+                            </span>
+                          )}
                           . The customer is the store’s, so their name and contact details are not
                           shown to you.
                         </p>

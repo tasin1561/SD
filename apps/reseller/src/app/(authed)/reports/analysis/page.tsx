@@ -21,6 +21,7 @@ import {
 } from '@skydrop/ui/components';
 import { istDayRange, lastDays } from '@/lib/ist-day';
 import { useStoreAnalysis, useStoreCashFlow } from '@/lib/report-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 
 const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
 
@@ -39,7 +40,7 @@ export default function StoreAnalysisPage(): ReactElement {
   const cash = useStoreCashFlow();
 
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
         title="Analysis"
         subtitle="How your orders are doing, what each product earns, where parcels come back from, and what you can expect to be credited."
@@ -49,7 +50,7 @@ export default function StoreAnalysisPage(): ReactElement {
           </Link>
         }
       />
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
         <FormField label="From" htmlFor="from">
           <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </FormField>
@@ -58,9 +59,9 @@ export default function StoreAnalysisPage(): ReactElement {
         </FormField>
       </div>
 
-      {analysis.isPending && <LoadingState rows={6} />}
+      {analysis.isPending && <LoadingState label="Loading the analysis" rows={6} />}
       {analysis.isError && (
-        <ErrorState message={analysis.error.message} retry={() => void analysis.refetch()} />
+        <ErrorState message={serverVerdict(analysis.error)} retry={() => void analysis.refetch()} />
       )}
       {analysis.data !== undefined && (
         <>
@@ -197,9 +198,9 @@ export default function StoreAnalysisPage(): ReactElement {
         title="Cash-flow forecast"
         subtitle="COD orders not yet credited to you: retail − transfer, before your fee shares and COD tax share, by when your terms credit them."
       >
-        {cash.isPending && <LoadingState rows={3} />}
+        {cash.isPending && <LoadingState label="Loading the forecast" rows={3} />}
         {cash.isError && (
-          <ErrorState message={cash.error.message} retry={() => void cash.refetch()} />
+          <ErrorState message={serverVerdict(cash.error)} retry={() => void cash.refetch()} />
         )}
         {cash.data !== undefined &&
           (cash.data.rows.length === 0 ? (
@@ -238,9 +239,46 @@ export default function StoreAnalysisPage(): ReactElement {
                   ))}
                 </TBody>
               </Table>
+              <h3 className="text-text-body mt-4 mb-2 text-sm font-medium">Order by order</h3>
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>Order</Th>
+                    <Th>Credited</Th>
+                    <Th align="right">Expected</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {cash.data.rows.map((r) => (
+                    <Tr key={r.orderId}>
+                      <Td>
+                        <Link
+                          href={`/orders/${r.orderId}`}
+                          className="text-accent font-mono text-xs hover:underline"
+                        >
+                          {r.orderNumber}
+                        </Link>
+                      </Td>
+                      <Td className="text-xs">
+                        {r.expectedOn === null ? (
+                          'Waiting for the order to move on'
+                        ) : (
+                          <span className={r.overdue ? 'text-warning' : undefined}>
+                            {r.overdue ? 'Due since ' : 'Around '}
+                            {r.expectedOn}
+                          </span>
+                        )}
+                      </Td>
+                      <Td align="right">
+                        <Money amount={r.expectedInr} />
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
             </>
           ))}
       </Section>
-    </>
+    </div>
   );
 }

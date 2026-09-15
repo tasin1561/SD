@@ -159,13 +159,30 @@ export interface StoreWebhook {
   readonly id: string;
   readonly url: string;
   readonly name: string | null;
+  readonly description: string | null;
   readonly subscribedEvents: readonly string[];
   readonly isActive: boolean;
   readonly lastSuccessAt: string | null;
   readonly lastFailureAt: string | null;
   readonly consecutiveFailureCount: number;
   readonly autoDisabledAt: string | null;
+  readonly autoDisabledReason: string | null;
   readonly createdAt: string;
+}
+
+/** One event code the outbound dispatcher can send, with what it means. */
+export interface StoreWebhookEvent {
+  readonly code: string;
+  readonly description: string;
+}
+
+export interface UpdateStoreWebhookInput {
+  readonly id: string;
+  readonly url?: string;
+  readonly name?: string;
+  readonly description?: string;
+  readonly subscribedEvents?: readonly string[];
+  readonly isActive?: boolean;
 }
 
 const ORDERS = ['store-orders'] as const;
@@ -272,6 +289,15 @@ export function useStoreCustomers(query: {
   });
 }
 
+export function useStoreCustomer(id: string): UseQueryResult<StoreCustomer> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...CUSTOMERS, 'detail', id],
+    queryFn: () => client.request<StoreCustomer>(`/api/store/customers/${id}`),
+    enabled: id !== '',
+  });
+}
+
 export function useStoreApiKeys(): UseQueryResult<readonly StoreApiKey[]> {
   const client = useApiClient();
   return useQuery({
@@ -283,7 +309,7 @@ export function useStoreApiKeys(): UseQueryResult<readonly StoreApiKey[]> {
 export function useCreateStoreApiKey(): UseMutationResult<
   StoreApiKey & { readonly plaintext: string },
   Error,
-  { readonly name: string }
+  { readonly name: string; readonly expiresInDays?: number }
 > {
   const client = useApiClient();
   const qc = useQueryClient();
@@ -317,7 +343,12 @@ export function useStoreWebhooks(): UseQueryResult<readonly StoreWebhook[]> {
 export function useCreateStoreWebhook(): UseMutationResult<
   StoreWebhook & { readonly secretKey: string },
   Error,
-  { readonly url: string; readonly name?: string; readonly subscribedEvents: readonly string[] }
+  {
+    readonly url: string;
+    readonly name?: string;
+    readonly description?: string;
+    readonly subscribedEvents: readonly string[];
+  }
 > {
   const client = useApiClient();
   const qc = useQueryClient();
@@ -327,6 +358,35 @@ export function useCreateStoreWebhook(): UseMutationResult<
         '/api/store/webhook-endpoints',
         { method: 'POST', body },
       ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: WEBHOOKS }),
+  });
+}
+
+/** The event codes a webhook may subscribe to — the API refuses any other. */
+export function useStoreWebhookEvents(): UseQueryResult<readonly StoreWebhookEvent[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...WEBHOOKS, 'events'],
+    queryFn: () =>
+      client.request<readonly StoreWebhookEvent[]>('/api/store/webhook-endpoints/events'),
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+/** Change an endpoint's URL, name, events — or switch it back on after failures. */
+export function useUpdateStoreWebhook(): UseMutationResult<
+  StoreWebhook,
+  Error,
+  UpdateStoreWebhookInput
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) =>
+      client.request<StoreWebhook>(`/api/store/webhook-endpoints/${id}`, {
+        method: 'PATCH',
+        body,
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: WEBHOOKS }),
   });
 }

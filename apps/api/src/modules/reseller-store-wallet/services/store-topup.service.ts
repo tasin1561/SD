@@ -21,7 +21,11 @@ import type { AuthenticatedStoreUser } from '../../../common/types/request';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
+import {
+  BankLedgerService,
+  idempotencyKeyReused,
+  isUniqueViolation,
+} from '../../treasury/services/bank-ledger.service';
 import { SellerCashAttributionService } from '../../treasury/services/seller-cash-attribution.service';
 import { parseAmount, StoreWalletService, STORE_WALLET_TX_OPTIONS } from './store-wallet.service';
 
@@ -72,6 +76,15 @@ const VIEW_INCLUDE = {
 } as const;
 
 type TopupRow = Prisma.StoreTopupRequestGetPayload<{ include: typeof VIEW_INCLUDE }>;
+
+/** What makes two claims "the same claim" for an IDEM-1 replay. */
+interface TopupMaterial {
+  readonly storeId: string;
+  readonly bankAccountId: string;
+  readonly amount: Prisma.Decimal;
+  readonly transactionRef: string | null;
+  readonly proofSpacesKey: string | null;
+}
 
 /**
  * RS-6 — a SKYDROP-managed store putting money into its wallet.
@@ -144,11 +157,21 @@ export class StoreTopupService {
       transactionRef?: string | null;
       proofSpacesKey?: string | null;
       proofMimeType?: string | null;
+      /** IDEM-1: minted when the form opens, reused on a retry. */
+      idempotencyKey?: string | null;
     },
   ): Promise<StoreTopupView> {
     const amount = parseAmount(input.amountInr);
     const ref = input.transactionRef?.trim() ?? '';
     const proofKey = input.proofSpacesKey?.trim() ?? '';
+    const key = input.idempotencyKey ?? null;
+    const material: TopupMaterial = {
+      storeId: user.storeId,
+      bankAccountId: input.bankAccountId,
+      amount,
+      transactionRef: ref === '' ? null : ref,
+      proofSpacesKey: proofKey === '' ? null : proofKey,
+    };
     if (ref === '' && proofKey === '') {
       throw new BadRequestException({
         code: 'PROOF_REQUIRED',
@@ -166,7 +189,73 @@ export class StoreTopupService {
       });
     }
 
-    const row = await this.prisma.client.$transaction(async (tx) => {
+    // IDEM-1: the same form sent twice (a double click, a retry after a
+    // dropped response) answers with the claim it already made.
+    const replayed = await this.replayClaim(key, material);
+    if (replayed !== null) return replayed;
+
+    let row: TopupRow;
+    try {
+      row = await this.createClaim(user, input, key, material);
+    } catch (err) {
+      // Two copies of the same form racing: the loser answers with the winner.
+      if (key !== null && isUniqueViolation(err)) {
+        const winner = await this.replayClaim(key, material);
+        if (winner !== null) return winner;
+      }
+      throw err;
+    }
+
+    await this.audit.log({
+      actorType: ActorType.STORE,
+      actorId: user.id,
+      sellerId: user.sellerId,
+      action: 'reseller_store.topup_submitted',
+      entityType: 'store_topup_request',
+      entityId: row.id,
+      severity: 'MEDIUM',
+      metadata: {
+        storeId: user.storeId,
+        amountInr: amount.toFixed(2),
+        bankAccountId: input.bankAccountId,
+        hasRef: ref !== '',
+        hasProof: proofKey !== '',
+      },
+    });
+    return toView(row);
+  }
+
+  /**
+   * IDEM-1 replay: the row this key already wrote, IF it is the same claim
+   * (store, account, amount, reference, proof); the same key on a different
+   * claim is refused, never answered with somebody else's row.
+   */
+  private async replayClaim(key: string | null, m: TopupMaterial): Promise<StoreTopupView | null> {
+    if (key === null) return null;
+    const prior = await this.prisma.client.storeTopupRequest.findUnique({
+      where: { idempotencyKey: key },
+      include: VIEW_INCLUDE,
+    });
+    if (prior === null) return null;
+    if (
+      prior.storeId !== m.storeId ||
+      prior.bankAccountId !== m.bankAccountId ||
+      !prior.amountInr.equals(m.amount) ||
+      prior.transactionRef !== m.transactionRef ||
+      prior.proofSpacesKey !== m.proofSpacesKey
+    ) {
+      throw idempotencyKeyReused('store top-up claim');
+    }
+    return toView(prior);
+  }
+
+  private async createClaim(
+    user: AuthenticatedStoreUser,
+    input: { bankAccountId: string; proofMimeType?: string | null },
+    key: string | null,
+    m: TopupMaterial,
+  ): Promise<TopupRow> {
+    return this.prisma.client.$transaction(async (tx) => {
       // The seller's WALLET lock: a change of who manages the wallet takes
       // it too, so a claim cannot be filed against a wallet that is at this
       // moment being handed to the seller.
@@ -199,33 +288,16 @@ export class StoreTopupService {
           storeId: store.id,
           sellerId: store.sellerId,
           bankAccountId: account.id,
-          amountInr: amount,
-          transactionRef: ref === '' ? null : ref,
-          proofSpacesKey: proofKey === '' ? null : proofKey,
-          proofMimeType: proofKey === '' ? null : (input.proofMimeType ?? null),
+          amountInr: m.amount,
+          transactionRef: m.transactionRef,
+          proofSpacesKey: m.proofSpacesKey,
+          proofMimeType: m.proofSpacesKey === null ? null : (input.proofMimeType ?? null),
           submittedByStoreUserId: user.id,
+          idempotencyKey: key,
         },
         include: VIEW_INCLUDE,
       });
     }, STORE_WALLET_TX_OPTIONS);
-
-    await this.audit.log({
-      actorType: ActorType.STORE,
-      actorId: user.id,
-      sellerId: user.sellerId,
-      action: 'reseller_store.topup_submitted',
-      entityType: 'store_topup_request',
-      entityId: row.id,
-      severity: 'MEDIUM',
-      metadata: {
-        storeId: user.storeId,
-        amountInr: amount.toFixed(2),
-        bankAccountId: input.bankAccountId,
-        hasRef: ref !== '',
-        hasProof: proofKey !== '',
-      },
-    });
-    return toView(row);
   }
 
   async listForStore(storeId: string): Promise<readonly StoreTopupView[]> {

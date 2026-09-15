@@ -9043,6 +9043,9 @@ model StoreTopupRequest {
   reviewedByStaffId      String?            @map("reviewed_by_staff_id") @db.Uuid
   reviewedAt             DateTime?          @map("reviewed_at") @db.Timestamptz
   reviewNote             String?            @map("review_note") @db.Text
+  /// IDEM-1: the claim form's key, minted when it opens. A replay with the
+  /// same key and the same claim answers with this row.
+  idempotencyKey         String?            @unique @map("idempotency_key") @db.Uuid
   createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -9081,6 +9084,8 @@ model StoreWithdrawalRequest {
   storeEntryId           String?                 @unique @map("store_entry_id") @db.Uuid
   /// IDEM-1: the pay form's key.
   payoutIdempotencyKey   String?                 @unique @map("payout_idempotency_key") @db.Uuid
+  /// IDEM-1: the store's request form's key (distinct from the payout's).
+  idempotencyKey         String?                 @unique @map("idempotency_key") @db.Uuid
   createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz
 

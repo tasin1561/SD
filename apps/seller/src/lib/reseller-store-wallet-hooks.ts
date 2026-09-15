@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
+  type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -35,6 +38,8 @@ export interface StoreWalletEntryView {
   readonly direction: StoreWalletEntryDirection;
   readonly amountInr: string;
   readonly runningBalanceAfterInr: string;
+  /** The order this movement is about (a credit, a fee share), when there is one. */
+  readonly linkedOrderId: string | null;
   readonly note: string | null;
   readonly createdAt: string;
 }
@@ -65,17 +70,29 @@ export function useResellerStoreWallet(
   });
 }
 
+/** How many ledger rows one page asks for; "Show older" asks for the next page. */
+export const STORE_LEDGER_PAGE_SIZE = 50;
+
+/**
+ * The store's ledger, newest first, one page at a time. The API pages with
+ * `before=<entry id>` and answers `nextCursor` (null when there is nothing
+ * older) — a hard-coded `limit=100` used to hide everything past the
+ * hundredth movement with no way to reach it.
+ */
 export function useResellerStoreWalletEntries(
   storeId: string,
   enabled: boolean,
-): UseQueryResult<StoreWalletLedger> {
+): UseInfiniteQueryResult<InfiniteData<StoreWalletLedger, string | null>> {
   const client = useApiClient();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: [...key(storeId), 'entries'],
-    queryFn: () =>
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
       client.request<StoreWalletLedger>(
-        `/api/seller/reseller-stores/${storeId}/wallet/entries?limit=100`,
+        `/api/seller/reseller-stores/${storeId}/wallet/entries?limit=${STORE_LEDGER_PAGE_SIZE}` +
+          (pageParam === null ? '' : `&before=${encodeURIComponent(pageParam)}`),
       ),
+    getNextPageParam: (last) => last.nextCursor,
     enabled,
   });
 }

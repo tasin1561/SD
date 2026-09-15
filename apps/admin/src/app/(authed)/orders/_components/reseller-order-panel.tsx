@@ -62,8 +62,11 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
               )}
             </dd>
             <dt className="text-text-muted">Terms version</dt>
-            <dd className="text-text-body font-mono text-xs">
-              {order.resellerTermsVersionId ?? '—'}
+            <dd className="text-text-body">
+              {order.resellerTermsVersionNumber === null ||
+              order.resellerTermsVersionNumber === undefined
+                ? '—'
+                : `Version ${order.resellerTermsVersionNumber}`}
             </dd>
             {SHARES.map(([key, label]) => {
               const value = order[key];
@@ -122,9 +125,24 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
                   )}
                 </Td>
                 <Td className="text-text-muted text-xs">
-                  {i.resellerMinRetailInr === null && i.resellerMaxRetailInr === null
-                    ? 'Any price'
-                    : `${i.resellerMinRetailInr ?? '…'} – ${i.resellerMaxRetailInr ?? '…'}`}
+                  {(i.resellerMinRetailInr ?? null) === null &&
+                  (i.resellerMaxRetailInr ?? null) === null ? (
+                    'Any price'
+                  ) : (
+                    <>
+                      {i.resellerMinRetailInr ? (
+                        <Money amount={i.resellerMinRetailInr} convert={false} />
+                      ) : (
+                        'no minimum'
+                      )}{' '}
+                      –{' '}
+                      {i.resellerMaxRetailInr ? (
+                        <Money amount={i.resellerMaxRetailInr} convert={false} />
+                      ) : (
+                        'no maximum'
+                      )}
+                    </>
+                  )}
                 </Td>
                 <Td className="text-text-muted text-xs">
                   {i.resellerStockMode === 'SET_ASIDE'

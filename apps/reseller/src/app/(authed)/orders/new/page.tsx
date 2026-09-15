@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, type FormEvent, type ReactElement } from 'react';
+import { useMemo, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import {
@@ -33,11 +33,20 @@ interface Line {
   readonly retail: string;
 }
 
-function rangeWords(i: StoreCatalogueItem): string {
+function rangeWords(i: StoreCatalogueItem): ReactNode {
+  const m = (v: string): ReactNode => <Money amount={v} convert={false} />;
   if (i.minRetailInr === null && i.maxRetailInr === null) return 'any price';
   if (i.minRetailInr !== null && i.maxRetailInr !== null)
-    return `between ₹${i.minRetailInr} and ₹${i.maxRetailInr}`;
-  return i.minRetailInr !== null ? `₹${i.minRetailInr} or more` : `up to ₹${i.maxRetailInr ?? ''}`;
+    return (
+      <>
+        between {m(i.minRetailInr)} and {m(i.maxRetailInr)}
+      </>
+    );
+  return i.minRetailInr !== null ? (
+    <>{m(i.minRetailInr)} or more</>
+  ) : (
+    <>up to {m(i.maxRetailInr ?? '0')}</>
+  );
 }
 
 /**
@@ -50,7 +59,8 @@ function rangeWords(i: StoreCatalogueItem): string {
 export default function NewStoreOrderPage(): ReactElement {
   const me = useStoreIdentity();
   const router = useRouter();
-  const catalogue = useStoreCatalogue(can(me, 'catalogue.view'));
+  const mayReadCatalogue = can(me, 'catalogue.view');
+  const catalogue = useStoreCatalogue(mayReadCatalogue);
   const create = useCreateStoreOrder();
 
   const [lines, setLines] = useState<Line[]>([
@@ -122,6 +132,19 @@ export default function NewStoreOrderPage(): ReactElement {
     />
   );
 
+  // The picker IS the catalogue: without `catalogue.view` the query never
+  // runs, and `isPending` would stay true for ever.
+  if (!mayReadCatalogue) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <EmptyState
+          title="You cannot see the catalogue"
+          description="Placing an order starts from your store’s catalogue, and your role cannot open it. Ask an owner or admin of your store to change your role, or to place the order."
+        />
+      </div>
+    );
+  }
   if (catalogue.isPending) {
     return (
       <div className="space-y-6">
@@ -215,7 +238,7 @@ export default function NewStoreOrderPage(): ReactElement {
                       </FormField>
                       <FormField
                         label="Sell at (₹ each)"
-                        hint={item === undefined ? undefined : `Sell ${rangeWords(item)}`}
+                        hint={item === undefined ? undefined : <>Sell {rangeWords(item)}</>}
                       >
                         <Input
                           aria-label="Retail price per unit"
@@ -326,7 +349,11 @@ export default function NewStoreOrderPage(): ReactElement {
                 </FormField>
                 <FormField
                   label="Cash to collect (₹)"
-                  hint={`Leave blank to collect ₹${collectDefault.toFixed(2)}`}
+                  hint={
+                    <>
+                      Leave blank to collect <Money amount={collectDefault} convert={false} />
+                    </>
+                  }
                 >
                   <Input
                     type="number"

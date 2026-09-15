@@ -66,6 +66,9 @@ const ORDER_VIEW_INCLUDE = {
 
 export type OrderView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>;
 
+/** The staff read of an order: the reseller terms version by NUMBER too. */
+export type AdminOrderView = OrderView & { readonly resellerTermsVersionNumber: number | null };
+
 const ORDER_LIST_SELECT = {
   id: true,
   orderNumber: true,
@@ -1313,7 +1316,7 @@ export class OrderService {
   }
 
   /** Admin order detail (no seller scope). 404 on missing/soft-deleted. */
-  async adminGetById(id: string): Promise<OrderView> {
+  async adminGetById(id: string): Promise<AdminOrderView> {
     const order = await this.prisma.client.order.findFirst({
       where: { id, deletedAt: null },
       include: ORDER_VIEW_INCLUDE,
@@ -1321,7 +1324,19 @@ export class OrderService {
     if (!order) {
       throw new NotFoundException(`Order ${id} not found`);
     }
-    return order;
+    // A reseller order names its terms by id; staff read the version NUMBER
+    // ("Version 3"), which is what the store and seller saw when accepting.
+    const termsVersionId = order.resellerTermsVersionId ?? null;
+    const resellerTermsVersionNumber =
+      termsVersionId === null
+        ? null
+        : ((
+            await this.prisma.client.resellerStoreTermsVersion.findUnique({
+              where: { id: termsVersionId },
+              select: { version: true },
+            })
+          )?.version ?? null);
+    return { ...order, resellerTermsVersionNumber };
   }
 
   /** Seller-visible timeline. Internal-only events are filtered out. */

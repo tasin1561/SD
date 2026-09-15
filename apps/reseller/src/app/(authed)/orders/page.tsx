@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState, type ReactElement } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState, type ReactElement } from 'react';
 import { OrderStatus } from '@skydrop/db';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import {
@@ -38,12 +38,45 @@ const STATUSES = Object.values(OrderStatus);
  * customer, then out of the seller's stock in our warehouse.
  */
 export default function OrdersPage(): ReactElement {
+  return (
+    <Suspense fallback={<LoadingState label="Loading orders" rows={6} />}>
+      <OrdersList />
+    </Suspense>
+  );
+}
+
+/** Read a status from the URL, ignoring anything that is not one. */
+function statusParam(v: string | null): OrderStatus | '' {
+  return v !== null && (STATUSES as readonly string[]).includes(v) ? (v as OrderStatus) : '';
+}
+
+/**
+ * The search, status and page live in the URL, so a link from elsewhere
+ * (a customer, a P&L row) opens the list already filtered, and the back
+ * button returns to the same view.
+ */
+function OrdersList(): ReactElement {
   const me = useStoreIdentity();
   const router = useRouter();
-  const [status, setStatus] = useState<OrderStatus | ''>('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const status = statusParam(params.get('status'));
+  const search = params.get('search')?.trim() ?? '';
+  const page = Math.max(1, Number(params.get('page')) || 1);
+  const [searchInput, setSearchInput] = useState(search);
+
+  function go(next: { status?: OrderStatus | ''; search?: string; page?: number }): void {
+    const sp = new URLSearchParams();
+    const s = next.status ?? status;
+    const q = next.search ?? search;
+    const p = next.page ?? page;
+    if (s !== '') sp.set('status', s);
+    if (q !== '') sp.set('search', q);
+    if (p > 1) sp.set('page', String(p));
+    const qs = sp.toString();
+    const base = pathname ?? '/orders';
+    router.replace(qs === '' ? base : `${base}?${qs}`);
+  }
   const list = useStoreOrders({
     ...(status === '' ? {} : { status }),
     ...(search === '' ? {} : { search }),
@@ -81,8 +114,7 @@ export default function OrdersPage(): ReactElement {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                setSearch(searchInput.trim());
-                setPage(1);
+                go({ search: searchInput.trim(), page: 1 });
               }}
             >
               <Input
@@ -96,10 +128,7 @@ export default function OrdersPage(): ReactElement {
             <Select
               aria-label="Filter by status"
               value={status}
-              onChange={(e) => {
-                setStatus((e.target.value as OrderStatus | '') || '');
-                setPage(1);
-              }}
+              onChange={(e) => go({ status: statusParam(e.target.value), page: 1 })}
               className="w-[200px]"
             >
               <option value="">All statuses</option>
@@ -188,7 +217,7 @@ export default function OrdersPage(): ReactElement {
                 page={page}
                 pageSize={PAGE_SIZE}
                 total={list.data.total}
-                onPageChange={setPage}
+                onPageChange={(p) => go({ page: p })}
               />
             </div>
           </>

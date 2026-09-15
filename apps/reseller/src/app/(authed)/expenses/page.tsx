@@ -52,13 +52,13 @@ export default function StoreExpensesPage(): ReactElement {
   const [removing, setRemoving] = useState<StoreExpenseView | null>(null);
 
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
         title="Expenses"
         subtitle="What your store spent. It counts in your profit and loss and return on ad spend; it moves no money and your seller never sees it."
       />
       {mayRecord && <RecordExpense />}
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
         <FormField label="From" htmlFor="from">
           <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </FormField>
@@ -66,18 +66,24 @@ export default function StoreExpensesPage(): ReactElement {
           <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </FormField>
       </div>
-      {list.isPending && <LoadingState rows={5} />}
+      {list.isPending && <LoadingState label="Loading expenses" rows={5} />}
       {list.isError && (
-        <ErrorState message={list.error.message} retry={() => void list.refetch()} />
+        <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       )}
       {list.data !== undefined && (
         <Section
           title="Recorded"
           subtitle={
             <>
-              Total <Money amount={list.data.totalInr} /> ·{' '}
-              {list.data.byCategory.map((c) => `${c.label} ₹${c.amountInr}`).join(' · ') ||
-                'nothing yet'}
+              Total <Money amount={list.data.totalInr} />
+              {list.data.byCategory.length === 0
+                ? ' · nothing yet'
+                : list.data.byCategory.map((c) => (
+                    <span key={c.category}>
+                      {' · '}
+                      {c.label} <Money amount={c.amountInr} />
+                    </span>
+                  ))}
             </>
           }
         >
@@ -137,7 +143,7 @@ export default function StoreExpensesPage(): ReactElement {
         </Section>
       )}
       {removing !== null && <RemoveExpense expense={removing} onClose={() => setRemoving(null)} />}
-    </>
+    </div>
   );
 }
 
@@ -223,7 +229,7 @@ function RecordExpense(): ReactElement {
         </FormField>
         <div className="flex items-end">
           <Button type="submit" variant="primary" size="md" disabled={record.isPending}>
-            Record
+            {record.isPending ? 'Recording…' : 'Record'}
           </Button>
         </div>
       </form>
@@ -248,19 +254,25 @@ function RemoveExpense({
         if (!o) onClose();
       }}
       title="Remove this expense?"
-      description={`${expense.categoryLabel} · ₹${expense.amountInr} · ${expense.expenseDate}. It stays on the record with your reason; if its month has closed, the change is carried into this month.`}
+      description={
+        <>
+          {expense.categoryLabel} · <Money amount={expense.amountInr} /> · {expense.expenseDate}. It
+          stays on the record with your reason; if its month has closed, the change is carried into
+          this month.
+        </>
+      }
     >
       <FormField label="Why" htmlFor="reason" required>
-        <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} required />
       </FormField>
       <ModalFooter>
         <Button onClick={onClose}>Keep it</Button>
         <Button
           variant="destructive"
-          disabled={remove.isPending}
+          disabled={remove.isPending || reason.trim() === ''}
           onClick={() =>
             remove.mutate(
-              { id: expense.id, reason },
+              { id: expense.id, reason: reason.trim() },
               {
                 onSuccess: () => {
                   toast.success('Removed.');

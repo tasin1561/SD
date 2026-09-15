@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import {
@@ -28,20 +27,18 @@ import {
   openExternalWhenReady,
   useToast,
 } from '@skydrop/ui/components';
-import { isStoreWalletCredit, storeWalletDirectionLabel } from '@skydrop/ui/status';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
-  useRequestStoreWithdrawal,
   useStoreBankAccounts,
   useStoreTopupProof,
   useStoreTopups,
   useStoreWallet,
-  useStoreWalletEntries,
   useStoreWithdrawals,
   useSubmitStoreTopup,
-  type StoreWalletSummary,
 } from '@/lib/store-wallet-hooks';
+import { LedgerSection } from './_components/ledger-section';
+import { WithdrawCard } from './_components/withdraw-card';
 
 function when(iso: string | null): string {
   return iso === null
@@ -65,12 +62,17 @@ const TOPUP_WORDS: Record<string, string> = {
 export default function WalletPage(): ReactElement {
   const me = useStoreIdentity();
   const summary = useStoreWallet();
-  const entries = useStoreWalletEntries();
 
-  if (summary.isPending) return <LoadingState label="Loading the wallet" rows={4} />;
-  if (summary.isError) {
+  if (summary.isPending || summary.isError) {
     return (
-      <ErrorState message={serverVerdict(summary.error)} retry={() => void summary.refetch()} />
+      <div className="space-y-6">
+        <PageHeader title="Wallet" subtitle="Your store’s balance and every movement of it." />
+        {summary.isPending ? (
+          <LoadingState label="Loading the wallet" rows={4} />
+        ) : (
+          <ErrorState message={serverVerdict(summary.error)} retry={() => void summary.refetch()} />
+        )}
+      </div>
     );
   }
   const s = summary.data;
@@ -120,63 +122,14 @@ export default function WalletPage(): ReactElement {
       {mayWithdraw ? <WithdrawCard summary={s} /> : null}
       {skydrop ? <RequestsSection /> : null}
 
-      <Section title="Every movement" subtitle="Newest first.">
-        {entries.isPending ? (
-          <LoadingState label="Loading the ledger" rows={4} />
-        ) : entries.isError ? (
-          <ErrorState message={serverVerdict(entries.error)} retry={() => void entries.refetch()} />
-        ) : entries.data.items.length === 0 ? (
-          <EmptyState
-            title="Nothing has moved yet"
-            description={
-              skydrop
-                ? 'Top up the wallet to get started.'
-                : `${s.sellerCompanyName} tops it up for you.`
-            }
-          />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>When</Th>
-                <Th>What</Th>
-                <Th align="right">Amount</Th>
-                <Th align="right">Balance after</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {entries.data.items.map((e) => (
-                <Tr key={e.id}>
-                  <Td className="text-text-muted text-xs">{when(e.createdAt)}</Td>
-                  <Td>
-                    <div>{storeWalletDirectionLabel(e.direction, s.sellerCompanyName)}</div>
-                    {e.linkedOrderId !== null ? (
-                      <Link
-                        href={`/orders/${e.linkedOrderId}`}
-                        className="text-accent text-xs hover:underline"
-                      >
-                        See the order
-                      </Link>
-                    ) : null}
-                    {e.note !== null ? (
-                      <div className="text-text-faint text-xs">{e.note}</div>
-                    ) : null}
-                  </Td>
-                  <Td align="right">
-                    <Money
-                      amount={e.amountInr}
-                      direction={isStoreWalletCredit(e.direction) ? 'credit' : 'debit'}
-                    />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={e.runningBalanceAfterInr} />
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </Section>
+      <LedgerSection
+        sellerCompanyName={s.sellerCompanyName}
+        emptyDescription={
+          skydrop
+            ? 'Top up the wallet to get started.'
+            : `${s.sellerCompanyName} tops it up for you.`
+        }
+      />
     </div>
   );
 }
@@ -190,6 +143,8 @@ function TopupCard(): ReactElement {
   const [reference, setReference] = useState('');
   const [proof, setProof] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // IDEM-1: minted when the form opens, reused on a retry, new after a success.
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const chosen = (accounts.data ?? []).find((a) => a.id === accountId) ?? null;
 
@@ -202,11 +157,13 @@ function TopupCard(): ReactElement {
         amountInr: amount.trim(),
         transactionRef: reference.trim(),
         ...(proof === null ? {} : { proof }),
+        idempotencyKey,
       });
       toast.success('Sent to Skydrop. Your wallet is credited once they see the money arrive.');
       setAmount('');
       setReference('');
       setProof(null);
+      setIdempotencyKey(crypto.randomUUID());
     } catch (err) {
       setError(serverVerdict(err));
     }
@@ -286,100 +243,6 @@ function TopupCard(): ReactElement {
             </div>
           </form>
         )}
-      </CardBody>
-    </Card>
-  );
-}
-
-function WithdrawCard({ summary }: { readonly summary: StoreWalletSummary }): ReactElement {
-  const toast = useToast();
-  const request = useRequestStoreWithdrawal();
-  const [amount, setAmount] = useState('');
-  const [payeeName, setPayeeName] = useState('');
-  const [account, setAccount] = useState('');
-  const [ifsc, setIfsc] = useState('');
-  const [bank, setBank] = useState('');
-  const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function onSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
-    e.preventDefault();
-    setError(null);
-    try {
-      await request.mutateAsync({
-        amountInr: amount.trim(),
-        payeeName: payeeName.trim(),
-        payeeAccountNumber: account.trim(),
-        payeeIfsc: ifsc.trim(),
-        payeeBankName: bank.trim(),
-        ...(note.trim() === '' ? {} : { note: note.trim() }),
-      });
-      toast.success('Asked. Skydrop pays it and the wallet shows it when they do.');
-      setAmount('');
-      setNote('');
-    } catch (err) {
-      setError(serverVerdict(err));
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader
-        title="Withdraw"
-        subtitle={
-          summary.withdrawableInr === null
-            ? 'Ask Skydrop to pay out your balance.'
-            : `Ask Skydrop to pay out up to ₹${summary.withdrawableInr}. Nothing leaves the wallet until they pay it.`
-        }
-      />
-      <CardBody>
-        <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <FormField label="Amount (₹)" htmlFor="wd-amount" required>
-            <Input
-              id="wd-amount"
-              inputMode="decimal"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Name on the account" htmlFor="wd-name" required>
-            <Input
-              id="wd-name"
-              required
-              value={payeeName}
-              onChange={(e) => setPayeeName(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Account number" htmlFor="wd-account" required>
-            <Input
-              id="wd-account"
-              required
-              inputMode="numeric"
-              value={account}
-              onChange={(e) => setAccount(e.target.value)}
-            />
-          </FormField>
-          <FormField label="IFSC" htmlFor="wd-ifsc" required>
-            <Input id="wd-ifsc" required value={ifsc} onChange={(e) => setIfsc(e.target.value)} />
-          </FormField>
-          <FormField label="Bank" htmlFor="wd-bank" required>
-            <Input id="wd-bank" required value={bank} onChange={(e) => setBank(e.target.value)} />
-          </FormField>
-          <FormField label="Note (optional)" htmlFor="wd-note">
-            <Input id="wd-note" value={note} onChange={(e) => setNote(e.target.value)} />
-          </FormField>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm md:col-span-2">
-              {error}
-            </p>
-          ) : null}
-          <div className="md:col-span-2">
-            <Button type="submit" variant="primary" size="md" disabled={request.isPending}>
-              {request.isPending ? 'Asking…' : 'Ask to withdraw'}
-            </Button>
-          </div>
-        </form>
       </CardBody>
     </Card>
   );

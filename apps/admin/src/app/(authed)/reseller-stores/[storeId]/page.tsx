@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import {
+  Button,
   Card,
   CardBody,
   CardHeader,
@@ -27,6 +28,8 @@ import { useAdminResellerStore } from '@/lib/reseller-store-hooks';
 import { CatalogueTerms } from './_components/catalogue-terms';
 import { useAdminResellerStoreTerms } from '@/lib/reseller-terms-hooks';
 import { StoreWalletPanel } from './_components/store-wallet-panel';
+import { usePermission } from '@/lib/use-permission';
+import { PauseStoreModal } from '../_components/pause-store-modal';
 
 function when(iso: string | null): string {
   return iso === null
@@ -169,21 +172,50 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
 export default function AdminResellerStorePage(): ReactElement {
   const { storeId } = useParams<{ storeId: string }>();
   const store = useAdminResellerStore(storeId);
+  const mayPause = usePermission('reseller.stores.pause');
+  const [pausing, setPausing] = useState(false);
 
-  if (store.isPending) return <LoadingState label="Loading the store" rows={5} />;
-  if (store.isError) {
-    return <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />;
+  const back = (
+    <div>
+      <Link href="/reseller-stores" className="text-accent hover:text-accent-hover text-sm">
+        ← All reseller stores
+      </Link>
+    </div>
+  );
+  // The header and the way back stay on screen while the store loads or
+  // fails, so a slow or refused read never leaves a blank page.
+  if (store.isPending || store.isError) {
+    return (
+      <div className="space-y-6">
+        {back}
+        <PageHeader title="Reseller store" />
+        {store.isPending ? (
+          <LoadingState label="Loading the store" rows={5} />
+        ) : (
+          <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />
+        )}
+      </div>
+    );
   }
   const s = store.data;
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/reseller-stores" className="text-accent hover:text-accent-hover text-sm">
-          ← All reseller stores
-        </Link>
-      </div>
-      <PageHeader title={s.name} subtitle={<ResellerStoreStatusBadge status={s.status} />} />
+      {back}
+      <PageHeader
+        title={s.name}
+        subtitle={<ResellerStoreStatusBadge status={s.status} />}
+        action={
+          mayPause && s.status === 'ACTIVE' ? (
+            <Button variant="destructive" size="md" onClick={() => setPausing(true)}>
+              Pause store
+            </Button>
+          ) : undefined
+        }
+      />
+      {pausing ? (
+        <PauseStoreModal storeId={s.id} storeName={s.name} onClose={() => setPausing(false)} />
+      ) : null}
 
       <Card>
         <CardHeader title="Details" />
@@ -193,7 +225,19 @@ export default function AdminResellerStorePage(): ReactElement {
             items={[
               {
                 label: 'Seller',
-                value: <Link href={`/sellers/${s.sellerId}`}>{s.sellerCompanyName}</Link>,
+                value: (
+                  <>
+                    <Link href={`/sellers/${s.sellerId}`} className="text-accent">
+                      {s.sellerCompanyName}
+                    </Link>{' '}
+                    <Link
+                      href={`/reseller-stores?sellerId=${s.sellerId}`}
+                      className="text-text-muted text-xs hover:underline"
+                    >
+                      (their other stores)
+                    </Link>
+                  </>
+                ),
               },
               { label: 'Customers see', value: s.displayName ?? s.name },
               { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'The seller' },

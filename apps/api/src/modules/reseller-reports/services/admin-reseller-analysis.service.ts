@@ -75,7 +75,9 @@ export interface DisputesOverview {
     readonly ticketType: TicketType;
     readonly status: TicketStatus;
     readonly subject: string;
+    readonly orderId: string | null;
     readonly orderNumber: string;
+    readonly storeId: string | null;
     readonly storeName: string;
     readonly sellerName: string;
     readonly createdAt: string;
@@ -391,7 +393,9 @@ export class AdminResellerAnalysisService {
             ticketType: t.ticketType,
             status: t.status,
             subject: t.subject,
+            orderId: t.orderId,
             orderNumber: o?.orderNumber ?? '',
+            storeId: o?.storeId ?? null,
             storeName: s === undefined ? '' : (s.displayName ?? s.name),
             sellerName: s?.seller.companyName ?? '',
             createdAt: t.createdAt.toISOString(),

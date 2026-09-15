@@ -34,9 +34,9 @@ import {
 import { ForceMutationDto } from '../dto/force-mutation.dto';
 import {
   OrderService,
+  type AdminOrderView,
   type OrderEventView,
   type OrderListItem,
-  type OrderView,
 } from '../services/order.service';
 import { OrderWriteService, type TransitionStatusResult } from '../services/order-write.service';
 import {
@@ -84,7 +84,7 @@ export class AdminOrderController {
   @Get(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get one order (with items)' })
-  get(@Param('id', uuid()) id: string): Promise<OrderView> {
+  get(@Param('id', uuid()) id: string): Promise<AdminOrderView> {
     return this.orders.adminGetById(id);
   }
 

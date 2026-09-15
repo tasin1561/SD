@@ -101,6 +101,8 @@ export interface OrderView {
   readonly recipientMasked?: boolean;
   /** RS-5 — the terms snapshot on a reseller order (all null on a channel one). */
   readonly resellerTermsVersionId?: string | null;
+  /** The version NUMBER of that terms snapshot (what people read). */
+  readonly resellerTermsVersionNumber?: number | null;
   readonly resellerDeliveryFeeStorePercent?: string | null;
   readonly resellerReturnFeeStorePercent?: string | null;
   readonly resellerCustomerReturnFeeStorePercent?: string | null;

@@ -16,12 +16,7 @@ import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { useFxRatesList, useSellersList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
-
-function localNow(): string {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
+import { localNow } from '@/lib/datetime-local';
 
 /**
  * Money moving between two of our own accounts.

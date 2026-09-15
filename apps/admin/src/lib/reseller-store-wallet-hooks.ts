@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
+  type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -45,10 +48,19 @@ export interface AdminStoreWalletEntry {
   readonly direction: StoreWalletEntryDirection;
   readonly amountInr: string;
   readonly runningBalanceAfterInr: string;
+  readonly linkedOrderId: string | null;
   readonly note: string | null;
   readonly actorType: string;
   readonly createdAt: string;
 }
+
+export interface AdminStoreWalletLedgerPage {
+  readonly items: readonly AdminStoreWalletEntry[];
+  readonly nextCursor: string | null;
+}
+
+/** One page of the ledger; "Show older" asks for the next one by cursor. */
+export const STORE_LEDGER_PAGE_SIZE = 50;
 
 export interface AdminStoreTopup {
   readonly id: string;
@@ -108,38 +120,52 @@ export function useAdminStoreWallet(
 export function useAdminStoreWalletEntries(
   storeId: string,
   enabled: boolean,
-): UseQueryResult<{ readonly items: readonly AdminStoreWalletEntry[] }> {
+): UseInfiniteQueryResult<InfiniteData<AdminStoreWalletLedgerPage>> {
   const client = useApiClient();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: [...KEY, 'store', storeId, 'entries'],
-    queryFn: () =>
-      client.request<{ readonly items: readonly AdminStoreWalletEntry[] }>(
-        `/api/admin/reseller-store-wallets/stores/${storeId}/entries?limit=100`,
+    queryFn: ({ pageParam }) =>
+      client.request<AdminStoreWalletLedgerPage>(
+        `/api/admin/reseller-store-wallets/stores/${storeId}/entries?limit=${STORE_LEDGER_PAGE_SIZE}${
+          pageParam === null ? '' : `&before=${encodeURIComponent(pageParam)}`
+        }`,
       ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     enabled,
   });
 }
 
-export function useAdminStoreTopups(status: string): UseQueryResult<readonly AdminStoreTopup[]> {
+function queueQuery(status: string, storeId: string | null): string {
+  const sp = new URLSearchParams({ status });
+  if (storeId !== null && storeId !== '') sp.set('storeId', storeId);
+  return sp.toString();
+}
+
+export function useAdminStoreTopups(
+  status: string,
+  storeId: string | null = null,
+): UseQueryResult<readonly AdminStoreTopup[]> {
   const client = useApiClient();
   return useQuery({
-    queryKey: [...KEY, 'topups', status],
+    queryKey: [...KEY, 'topups', status, storeId],
     queryFn: () =>
       client.request<readonly AdminStoreTopup[]>(
-        `/api/admin/reseller-store-wallets/topups?status=${encodeURIComponent(status)}`,
+        `/api/admin/reseller-store-wallets/topups?${queueQuery(status, storeId)}`,
       ),
   });
 }
 
 export function useAdminStoreWithdrawals(
   status: string,
+  storeId: string | null = null,
 ): UseQueryResult<readonly AdminStoreWithdrawal[]> {
   const client = useApiClient();
   return useQuery({
-    queryKey: [...KEY, 'withdrawals', status],
+    queryKey: [...KEY, 'withdrawals', status, storeId],
     queryFn: () =>
       client.request<readonly AdminStoreWithdrawal[]>(
-        `/api/admin/reseller-store-wallets/withdrawals?status=${encodeURIComponent(status)}`,
+        `/api/admin/reseller-store-wallets/withdrawals?${queueQuery(status, storeId)}`,
       ),
   });
 }

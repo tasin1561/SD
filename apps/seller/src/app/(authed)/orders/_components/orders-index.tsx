@@ -566,7 +566,17 @@ export function OrdersIndex(): ReactElement {
                   {/* RS-5: which reseller store placed it. */}
                   {o.storeKind === 'RESELLER' && (
                     <div className="text-text-muted mt-0.5 text-xs">
-                      via {o.storeNameSnapshot ?? 'a reseller store'}
+                      via{' '}
+                      {o.storeId !== undefined ? (
+                        <Link
+                          href={`/reseller-stores/${o.storeId}`}
+                          className="text-accent hover:underline"
+                        >
+                          {o.storeNameSnapshot ?? 'a reseller store'}
+                        </Link>
+                      ) : (
+                        (o.storeNameSnapshot ?? 'a reseller store')
+                      )}
                     </div>
                   )}
                 </Td>

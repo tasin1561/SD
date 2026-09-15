@@ -65,7 +65,9 @@ export interface DisputesOverview {
     readonly ticketType: string;
     readonly status: string;
     readonly subject: string;
+    readonly orderId: string | null;
     readonly orderNumber: string;
+    readonly storeId: string | null;
     readonly storeName: string;
     readonly sellerName: string;
     readonly createdAt: string;

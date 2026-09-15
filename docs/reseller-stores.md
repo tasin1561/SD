@@ -1527,3 +1527,62 @@ Keep the global default FALSE until that run is clean.
 - **Tests:** `store-dispute.service.spec.ts` (claim before money, amount
   rules, refused refund, transfer-price cap, store-scoped open); the RS-7
   case in `tenant-isolation.e2e-spec.ts`.
+
+## UI audit fixes, 2026-09-15
+
+A UI/UX audit of every reseller-store screen (store portal, the seller's
+store screens, the admin ones). What it found, and what the fixes settle:
+
+- **A payout was recorded up to 5h30m early.** The admin "Record payout"
+  form defaulted "Paid on" to UTC wall clock and then read it back as
+  local, so near midnight it recorded the previous day — on the 1st, the
+  previous month. `toDateTimeLocalValue` / `localNow`
+  (`apps/admin/src/lib/datetime-local.ts`) is now the ONE place a
+  `datetime-local` default is built, and the four modals that each had
+  their own copy read it. **A new datetime-local default goes through it**
+  — the mistake is invisible in any timezone at UTC+0, which is why four
+  copies drifted the same way.
+- **Every store wallet ledger stopped at 100 rows** with no way to see
+  older ones, on all three apps. Each now pages with the API's own
+  `before` cursor (`useInfiniteQuery` + "Show older"), and says how many
+  it is showing so a truncated history is never mistaken for the whole.
+- **A store webhook switched off after repeated failures could not be
+  switched back on** — `PATCH /store/webhook-endpoints/:id` had no caller.
+  The portal gained an Edit form and a per-row On/Off switch, and the
+  events are CHOSEN from a list rather than typed: `WEBHOOK_EVENT_CATALOGUE`
+  (`seller-webhook-delivery/webhook-event-catalogue.ts`) is served by
+  `GET /store/webhook-endpoints/events`, and a subscription to anything
+  else is refused (`UNKNOWN_WEBHOOK_EVENT`). The catalogue is DECLARED and
+  pinned against the F2 mapping in both directions by
+  `webhook-event-catalogue.spec.ts` — a code nothing sends would be a
+  checkbox that never fires; one the pipeline sends but the list lacks is
+  an event no store can hear. Switching an endpoint back on clears the
+  failure streak: a person saying "try again" means starting over.
+- **IDEM-1 reached the store's own money forms.** `SubmitStoreTopupDto`
+  and `RequestStoreWithdrawalDto` take an `idempotencyKey` minted when the
+  form opens and reused on retry, stored behind a unique index
+  (`20260915000000_store_money_idempotency`). Replay semantics are
+  IDEM-1's exactly: the same key with the same claim answers with the row
+  already written (nothing new, nothing audited twice); the same key with
+  a different amount, reference or payee is 409 `IDEMPOTENCY_KEY_REUSED`;
+  two copies racing let the unique index decide and the loser answers with
+  the winner. `store-money-idempotency.spec.ts` covers all four.
+- **Money actions ask first.** The store's "Ask to withdraw" names the
+  amount, payee and account before sending; the admin's withdrawal
+  Approve, the seller's wallet-manager change and the negative-limit save
+  each confirm. Small destructive acts (withdraw an invitation, remove a
+  logo or an overlay picture, remove a webhook, mint a new secret) do too.
+- **The admin order panel showed the terms version's UUID.** `adminGetById`
+  resolves `resellerTermsVersionNumber`, so it reads "Version 3" — the
+  number the store and seller accepted.
+- Smaller: a store customer's detail page (`/customers/[id]`) and
+  URL-driven order filters so a link pre-fills; custom-range store P&L
+  through `useStorePnl`; position tiles with loading, error and retry;
+  a dashboard of real links rather than a "next release" note; "Pause
+  store" on the admin store header (`reseller.stores.pause`, cosmetic —
+  the gate lives beside the call in `PauseStoreModal`); disputes rows
+  linked to their order and store; the `Money` primitive wherever a figure
+  is shown; status BADGES rather than raw enum text (`topupStatusKind`
+  joins the F2 mappers in `@skydrop/ui/status`); `serverVerdict` + retry
+  on every report screen; and the stock forecast showing the product's
+  name and picture (rule 5b) rather than a bare SKU.

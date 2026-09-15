@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
   Button,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   FormField,
@@ -57,6 +59,10 @@ export function StoreWalletSection({
   const entries = useResellerStoreWalletEntries(store.id, allowed);
   const [topUp, setTopUp] = useState(false);
   const [payout, setPayout] = useState(false);
+  const ledger = entries.data?.pages.flatMap((p) => p.items) ?? [];
+  // Read before the success branch narrows the union: inside it the type
+  // says a next-page error cannot exist, so the check would be dead code.
+  const olderFailed = entries.isFetchNextPageError ? entries.failureReason : null;
 
   if (!allowed) return null;
   const open = store.status === 'ACTIVE' || store.status === 'PAUSED';
@@ -102,7 +108,12 @@ export function StoreWalletSection({
             <Stat
               label="May go below zero by"
               value={<Money amount={summary.data.negativeLimit.effectiveInr} size="lg" />}
-              hint={`Skydrop allows up to ₹${summary.data.negativeLimit.capInr} for your account.`}
+              hint={
+                <>
+                  Skydrop allows up to <Money amount={summary.data.negativeLimit.capInr} /> for your
+                  account.
+                </>
+              }
             />
             <Stat
               label="Waiting on Skydrop"
@@ -125,7 +136,7 @@ export function StoreWalletSection({
           <LoadingState label="Loading the ledger" rows={3} />
         ) : entries.isError ? (
           <ErrorState message={serverVerdict(entries.error)} retry={() => void entries.refetch()} />
-        ) : entries.data.items.length === 0 ? (
+        ) : ledger.length === 0 ? (
           <EmptyState
             title="Nothing has moved yet"
             description={
@@ -135,38 +146,70 @@ export function StoreWalletSection({
             }
           />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>When</Th>
-                <Th>What</Th>
-                <Th align="right">Amount</Th>
-                <Th align="right">Balance after</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {entries.data.items.map((e) => (
-                <Tr key={e.id}>
-                  <Td className="text-text-muted text-xs">{when(e.createdAt)}</Td>
-                  <Td>
-                    <div>{storeWalletDirectionLabel(e.direction, 'you')}</div>
-                    {e.note !== null ? (
-                      <div className="text-text-faint text-xs">{e.note}</div>
-                    ) : null}
-                  </Td>
-                  <Td align="right">
-                    <Money
-                      amount={e.amountInr}
-                      direction={isStoreWalletCredit(e.direction) ? 'credit' : 'debit'}
-                    />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={e.runningBalanceAfterInr} />
-                  </Td>
+          <>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>When</Th>
+                  <Th>What</Th>
+                  <Th align="right">Amount</Th>
+                  <Th align="right">Balance after</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
+              </THead>
+              <TBody>
+                {ledger.map((e) => (
+                  <Tr key={e.id}>
+                    <Td className="text-text-muted text-xs">{when(e.createdAt)}</Td>
+                    <Td>
+                      <div>{storeWalletDirectionLabel(e.direction, 'you')}</div>
+                      {e.linkedOrderId !== null ? (
+                        <Link
+                          href={`/orders/${e.linkedOrderId}`}
+                          className="text-accent text-xs hover:underline"
+                        >
+                          See the order
+                        </Link>
+                      ) : null}
+                      {e.note !== null ? (
+                        <div className="text-text-faint text-xs">{e.note}</div>
+                      ) : null}
+                    </Td>
+                    <Td align="right">
+                      <Money
+                        amount={e.amountInr}
+                        direction={isStoreWalletCredit(e.direction) ? 'credit' : 'debit'}
+                      />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={e.runningBalanceAfterInr} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-text-muted text-xs">
+                {entries.hasNextPage
+                  ? `Showing the latest ${ledger.length} movements.`
+                  : `Showing all ${ledger.length} movements.`}
+              </p>
+              {entries.hasNextPage ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={entries.isFetchingNextPage}
+                  onClick={() => void entries.fetchNextPage()}
+                >
+                  {entries.isFetchingNextPage ? 'Loading…' : 'Show older'}
+                </Button>
+              ) : null}
+            </div>
+            {olderFailed !== null ? (
+              <p role="alert" className="text-critical mt-2 text-sm">
+                {serverVerdict(olderFailed)}
+              </p>
+            ) : null}
+          </>
         )}
       </div>
 
@@ -200,12 +243,19 @@ function NegativeLimitForm({
   const toast = useToast();
   const set = useSetResellerStoreNegativeLimit();
   const [value, setValue] = useState(current);
+  const [confirming, setConfirming] = useState(false);
+  const next = value.trim();
   return (
     <div className="flex flex-wrap items-end gap-2">
       <FormField
         label="How far below zero it may go (₹)"
         htmlFor="nl-amount"
-        hint={`Your risk: the store owes you whatever it spends below zero. At most ₹${cap}.`}
+        hint={
+          <>
+            Your risk: the store owes you whatever it spends below zero. At most{' '}
+            <Money amount={cap} />.
+          </>
+        }
       >
         <Input
           id="nl-amount"
@@ -217,19 +267,33 @@ function NegativeLimitForm({
       <Button
         variant="secondary"
         size="md"
-        disabled={set.isPending || value.trim() === current}
-        onClick={() =>
-          set.mutate(
-            { storeId, negativeLimitInr: value.trim() },
-            {
-              onSuccess: () => toast.success('Saved.'),
-              onError: (err) => toast.error(serverVerdict(err)),
-            },
-          )
-        }
+        disabled={set.isPending || next === current}
+        onClick={() => setConfirming(true)}
       >
         Save
       </Button>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Change how far below zero the store may go?"
+        description={
+          <>
+            From <Money amount={current} /> to <Money amount={next === '' ? '0' : next} />. Whatever
+            the store spends below zero is money it owes you — your risk, not Skydrop’s.
+          </>
+        }
+        confirmLabel="Change the limit"
+        disabled={set.isPending}
+        onConfirm={async () => {
+          try {
+            await set.mutateAsync({ storeId, negativeLimitInr: next });
+            toast.success('Saved.');
+          } catch (err) {
+            toast.error(serverVerdict(err));
+          }
+          setConfirming(false);
+        }}
+      />
     </div>
   );
 }
@@ -278,7 +342,7 @@ function MoveModal({
           ...(note.trim() === '' ? {} : { note: note.trim() }),
           idempotencyKey,
         });
-        toast.success(`Moved ₹${amount.trim()} to ${storeName}.`);
+        toast.success(`Moved the money to ${storeName}. It shows on the store’s ledger below.`);
       } else {
         await payout.mutateAsync({
           storeId,
@@ -286,7 +350,7 @@ function MoveModal({
           note: note.trim(),
           idempotencyKey,
         });
-        toast.success(`Recorded paying ${storeName} ₹${amount.trim()}.`);
+        toast.success(`Recorded paying ${storeName}. It shows on the store’s ledger below.`);
       }
       onOpenChange(false);
     } catch (err) {
