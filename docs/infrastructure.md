@@ -235,10 +235,11 @@ Layered approach — no single "dual database" replaces this:
 |---|---|---|
 | Managed Postgres daily automated backups | Most data loss | ✅ Yes |
 | Storage autoscaling (80% threshold) | Disk-full → read-only | ✅ Yes |
-| Droplet weekly backups | Server-level disaster | ✅ Yes (~$6.40/mo) |
+| Droplet weekly backups | Server-level disaster | ❌ NOT enabled (checked in the panel 2026-09-15) — the owner decides; see `docs/disaster-recovery.md` |
 | Off-site nightly `pg_dump` to Spaces | DO account compromise, defense in depth | ⏳ To configure |
-| Tested restore procedure | "We had backups but they don't work" | ⏳ Test before launch |
+| Tested restore procedure | "We had backups but they don't work" | ✅ Practice restore 2026-09-15, every table matched — `docs/disaster-recovery.md` |
 | Point-in-time recovery (PITR) | Accidental deletes, bad migrations | ⏳ Upgrade DB tier at launch |
+| Off-site encrypted copy (Google Drive, every 6 h) | Losing DigitalOcean itself, or its 7-day backups | ✅ Since 2026-09-15 — `scripts/backup/`, alarm `backup-watch` |
 | Automated standby node | Hardware failure / HA | ⏳ Upgrade DB tier at launch |
 
 ---
