@@ -194,6 +194,59 @@ describe('ManualPlacementService.placeAwb', () => {
     );
   });
 
+  // A waybill is set once (CUR-9). Every "already placed" branch answers with
+  // the STORED number, so it is only honest for a repeat of that number. On
+  // production (2026-09-15) a different number came back 200 with the old one
+  // in the body — the operator was told their new waybill was recorded when
+  // it was not. Each branch is pinned below, with the stored number unchanged
+  // and nothing written.
+  describe('a different number on a shipment that already has a manual waybill is refused', () => {
+    const cases: Array<[string, OrderStatus, ShipmentStatus]> = [
+      ['while it is being picked', OrderStatus.PENDING_PICK, ShipmentStatus.CREATED],
+      ['once packed', OrderStatus.PACKED, ShipmentStatus.CREATED],
+      ['after dispatch', OrderStatus.DISPATCHED, ShipmentStatus.HANDED_TO_COURIER],
+      [
+        'on convergent recovery',
+        OrderStatus.PENDING_MANUAL_PLACEMENT,
+        ShipmentStatus.AWB_GENERATED,
+      ],
+    ];
+    it.each(cases)('%s', async (_label, orderStatus, shipmentStatus) => {
+      const { svc, transitionStatus, shipmentUpdate } = makeService({
+        awbNumber: 'QA-OLD-1',
+        isManualCourier: true,
+        shipmentStatus,
+        orderStatus,
+      });
+      await expect(
+        svc.placeAwb(SHIP, { awbNumber: 'QA-NEW-2', courierName: 'Bluedart' }, STAFF),
+      ).rejects.toMatchObject({
+        response: {
+          code: 'SHIPMENT_ALREADY_HAS_AWB',
+          message: expect.stringContaining('QA-OLD-1'),
+        },
+      });
+      expect(transitionStatus).not.toHaveBeenCalled();
+      expect(shipmentUpdate).not.toHaveBeenCalled();
+    });
+
+    it('the SAME number while it is being picked is still a harmless repeat', async () => {
+      const { svc, transitionStatus, shipmentUpdate } = makeService({
+        awbNumber: 'QA-OLD-1',
+        isManualCourier: true,
+        orderStatus: OrderStatus.PENDING_PICK,
+      });
+      const r = await svc.placeAwb(
+        SHIP,
+        { awbNumber: '  QA-OLD-1 ', courierName: 'Bluedart' },
+        STAFF,
+      );
+      expect(r).toMatchObject({ alreadyPlaced: true, awbNumber: 'QA-OLD-1' });
+      expect(transitionStatus).not.toHaveBeenCalled();
+      expect(shipmentUpdate).not.toHaveBeenCalled();
+    });
+  });
+
   it('a parcel that is not on a shelf yet routes to PENDING_PICK, not DISPATCHED', async () => {
     const { svc, transitionStatus } = makeService({
       reservations: [phase2('r1'), phase1('r2')],

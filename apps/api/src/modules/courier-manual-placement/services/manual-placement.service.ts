@@ -121,6 +121,20 @@ export class ManualPlacementService {
           message: `Shipment ${shipmentId} already carries a courier AWB`,
         });
       }
+      // Every branch below answers "already placed" or converges on the
+      // STORED number, so each is only honest for a repeat of THAT number.
+      // A different one used to come back 200 with the old number in the
+      // body: the operator was told the new waybill was recorded, the
+      // shipment kept the old one, and the parcel went out under a number
+      // the person holding the docket had never seen (found on production,
+      // 2026-09-15). A waybill is set once (CUR-9); a different number is a
+      // refusal that names the one on file.
+      if (awbNumber !== shipment.awbNumber) {
+        throw new ConflictException({
+          code: 'SHIPMENT_ALREADY_HAS_AWB',
+          message: `Shipment ${shipmentId} already carries manual AWB ${shipment.awbNumber}; ${awbNumber} was not recorded. A waybill is set once — if the courier issued a new one, cancel this placement and place the parcel again.`,
+        });
+      }
       if (orderStatus === OrderStatus.DISPATCHED) {
         return {
           shipmentId,
