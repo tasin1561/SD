@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { ApiError, type ReleaseReservationsResult } from '@skydrop/api-client';
+import { type ReleaseReservationsResult } from '@skydrop/api-client';
 import { useReleaseReservations } from '@/lib/api-hooks';
 import { Button, FormField, Textarea, Modal, ModalFooter } from '@skydrop/ui/components';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * God-mode cleanup companion. When forceMutate() moves an order
@@ -44,16 +45,7 @@ export function ReleaseReservationsDialog({
       onSuccess(result);
       close();
     } catch (err) {
-      if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
-        const b = err.body as { code?: unknown; message?: unknown };
-        const code = typeof b.code === 'string' ? b.code : null;
-        const msg = typeof b.message === 'string' ? b.message : err.message;
-        setServerError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setServerError(err.message);
-      } else {
-        setServerError('Failed to release reservations.');
-      }
+      setServerError(serverVerdict(err, 'Failed to release reservations.'));
     }
   }
 

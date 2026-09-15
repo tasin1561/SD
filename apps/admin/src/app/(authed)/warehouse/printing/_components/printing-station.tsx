@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { Check, Download, Printer, Search, X } from 'lucide-react';
 import {
@@ -527,6 +528,12 @@ function BatchesTab(): ReactElement {
   const cancel = useCancelPickBatch();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+  // Parcels a "Picked" left behind, per batch. The batch view does not
+  // carry them, so they are remembered from the mark-picked answer for as
+  // long as this screen is open — long enough to walk to the station.
+  const [skippedByBatch, setSkippedByBatch] = useState<
+    Readonly<Record<string, ReadonlyArray<{ shipmentNumber: string; reason: string }>>>
+  >({});
 
   /*
     FINISHING A DRAFT FROM HERE.
@@ -566,6 +573,7 @@ function BatchesTab(): ReactElement {
     setError(null);
     try {
       const r = await markPicked.mutateAsync(batchId);
+      setSkippedByBatch((prev) => ({ ...prev, [batchId]: r.skipped }));
       if (r.skipped.length > 0) {
         // Named, not swallowed: a serialised parcel still needs its
         // units scanning, and a silent partial would leave it sitting.
@@ -594,6 +602,7 @@ function BatchesTab(): ReactElement {
     <Card>
       <CardBody>
         {error !== null && <ErrorNote message={error} />}
+        <SkippedNotice skippedByBatch={skippedByBatch} batches={batches.data ?? []} />
         <div className="mb-3 max-w-sm">
           <Input
             value={search}
@@ -723,6 +732,14 @@ function BatchesTab(): ReactElement {
                             <Check size={14} /> Picked
                           </Button>
                         )}
+                        {(skippedByBatch[b.id]?.length ?? 0) > 0 && (
+                          <Link
+                            href="/warehouse/pick"
+                            className="text-accent hover:text-accent-hover text-xs whitespace-nowrap"
+                          >
+                            Scan {skippedByBatch[b.id]?.length} at the pick station →
+                          </Link>
+                        )}
                       </div>
                     </Td>
                   </Tr>
@@ -733,6 +750,47 @@ function BatchesTab(): ReactElement {
         )}
       </CardBody>
     </Card>
+  );
+}
+
+/**
+ * STRICT-mode parcels a batch could not close from paper (UNIT-2: their
+ * serials must be scanned at pick), named with the one place that can
+ * finish them. The per-parcel station is out of the nav on purpose — it
+ * is the escape hatch, reached from exactly the moment it is needed.
+ */
+function SkippedNotice({
+  skippedByBatch,
+  batches,
+}: {
+  readonly skippedByBatch: Readonly<
+    Record<string, ReadonlyArray<{ shipmentNumber: string; reason: string }>>
+  >;
+  readonly batches: ReadonlyArray<{ id: string; batchNumber: string }>;
+}): ReactElement | null {
+  const entries = Object.entries(skippedByBatch).filter(([, list]) => list.length > 0);
+  if (entries.length === 0) return null;
+  return (
+    <div className="border-[var(--status-pending-ring)] bg-[var(--status-pending-bg)] mb-3 rounded-[5px] border px-3 py-2 text-sm">
+      <p className="text-text-body">
+        These parcels carry serialised units, so their units must be scanned one by one before they
+        can be packed.{' '}
+        <Link href="/warehouse/pick" className="text-accent hover:text-accent-hover font-medium">
+          Open the pick station →
+        </Link>
+      </p>
+      <ul className="text-text-muted mt-1 space-y-0.5 text-xs">
+        {entries.map(([batchId, list]) =>
+          list.map((s) => (
+            <li key={`${batchId}:${s.shipmentNumber}`}>
+              <span className="font-mono">{s.shipmentNumber}</span>
+              {' · '}
+              {batches.find((b) => b.id === batchId)?.batchNumber ?? 'batch'} · {s.reason}
+            </li>
+          )),
+        )}
+      </ul>
+    </div>
   );
 }
 

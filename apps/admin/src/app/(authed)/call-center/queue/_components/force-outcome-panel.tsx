@@ -22,11 +22,11 @@ import { usePermission } from '@/lib/use-permission';
  * A supervisor overruling one stuck call (decision 11, force-outcome).
  *
  * ── WHY THIS EXISTS ──────────────────────────────────────────────────
- * The queue screen could already move an entry to another agent and
- * close every entry for a seller. Neither resolves ONE order: reassign
- * hands the same stuck call to somebody else, and bulk-dequeue closes
- * the queue entry without recording what happened, so the order never
- * advances. An entry a supervisor already knows the answer to — the
+ * The queue screen could already move an entry to another agent, and
+ * seller detail can close every open entry for a seller. Neither
+ * resolves ONE order: reassign hands the same stuck call to somebody
+ * else, and bulk-dequeue closes the queue entry without recording what
+ * happened, so the order never advances. An entry a supervisor already knows the answer to — the
  * customer confirmed on WhatsApp, the number is dead, the seller
  * cancelled by email — had no way out except waiting for an agent to
  * dial a number nobody needs to dial.

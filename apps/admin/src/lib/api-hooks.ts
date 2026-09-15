@@ -334,6 +334,8 @@ async function fetchOrders(client: ApiClient, query: ListOrdersQuery): Promise<O
   if (query.source) sp.set('source', query.source);
   if (query.search) sp.set('search', query.search);
   if (query.sellerId) sp.set('sellerId', query.sellerId);
+  if (query.placedFrom) sp.set('placedFrom', query.placedFrom);
+  if (query.placedTo) sp.set('placedTo', query.placedTo);
   if (query.page) sp.set('page', String(query.page));
   if (query.pageSize) sp.set('pageSize', String(query.pageSize));
   const qs = sp.toString();
@@ -361,22 +363,6 @@ export function useResellerOrderMoney(
     queryKey: ['admin-orders', 'reseller-money', id],
     queryFn: () => client.request<ResellerOrderMoneyView>(`/api/admin/orders/${id}/reseller-money`),
     enabled: enabled && Boolean(id),
-  });
-}
-
-// Admin order events — full timeline (all events, including
-// isVisibleToSeller=false ones the seller wouldn't see).
-import type { SellerOrderEventView as AdminOrderEventView } from '@skydrop/api-client';
-
-export function useAdminOrderEvents(
-  id: string,
-): UseQueryResult<ReadonlyArray<AdminOrderEventView>> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['admin-orders', 'events', id],
-    queryFn: () =>
-      client.request<ReadonlyArray<AdminOrderEventView>>(`/api/admin/orders/${id}/events`),
-    enabled: Boolean(id),
   });
 }
 
@@ -577,7 +563,6 @@ import type {
   RecordPickItemRequest,
   RecordPickItemResult,
   CompletePickResult,
-  PulledPack,
   CompletePackResult,
   ListManifestsQuery,
   ListManifestsResponse,
@@ -805,16 +790,6 @@ export function useCancelPackBox(): UseMutationResult<
   });
 }
 
-export function usePullNextPack(): UseMutationResult<{ pack: PulledPack | null }, Error, void> {
-  const client = useApiClient();
-  return useMutation({
-    mutationFn: () =>
-      client.request<{ pack: PulledPack | null }>(`/api/warehouse/packs/next`, {
-        method: 'POST',
-        body: {},
-      }),
-  });
-}
 /**
  * `scannedSerials` matches `CompletePackDto.scannedSerials?: string[]`
  * verbatim.

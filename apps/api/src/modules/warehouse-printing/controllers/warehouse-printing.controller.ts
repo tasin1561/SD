@@ -215,12 +215,6 @@ export class WarehousePrintingController {
     return this.batches.list({ search: q.search, status: q.status, limit: q.limit });
   }
 
-  @Get('pick-batches/:id')
-  @ApiOperation({ summary: 'One batch, with its parcels — for reprinting' })
-  getBatch(@Param('id', new ParseUUIDPipe({ version: '7' })) id: string): Promise<PickBatchView> {
-    return this.batches.getById(id);
-  }
-
   // ---------- product stickers (both inventory modes) ----------
 
   @Get('sku-labels/goods-receipt/:goodsReceiptId')

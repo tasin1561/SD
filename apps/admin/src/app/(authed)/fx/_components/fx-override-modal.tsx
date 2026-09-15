@@ -2,9 +2,9 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Button, FormField, Input, Modal, ModalFooter, Textarea } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { FxRateView } from '@skydrop/api-client';
 import { useSetFxRate } from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 
 export function FxOverrideModal({
   rate,
@@ -38,14 +38,7 @@ export function FxOverrideModal({
       });
       onSuccess();
     } catch (e) {
-      if (e instanceof ApiError) {
-        const b = e.body as { code?: unknown; message?: unknown } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const msg = typeof b?.message === 'string' ? b.message : e.message;
-        setError(code ? `[${code}] ${msg}` : msg);
-      } else {
-        setError(e instanceof Error ? e.message : 'Action failed');
-      }
+      setError(serverVerdict(e, 'Action failed'));
     } finally {
       setBusy(false);
     }

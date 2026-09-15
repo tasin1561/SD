@@ -9,6 +9,7 @@ import {
   Card,
   EmptyState,
   ErrorNote,
+  ErrorState,
   FreightStatusBadge,
   Ident,
   Money,
@@ -31,6 +32,7 @@ import { RecordFreightModal } from './record-freight-modal';
 import { FreightActions } from './freight-actions';
 import { OurCostCell } from './our-cost-cell';
 import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Inbound (BD → India) freight bills — R3.
@@ -295,9 +297,14 @@ function CostBreakdown({
 }): ReactElement {
   const q = useFreightCostBreakdown(freightChargeId);
 
-  if (q.isLoading) return <p className="text-text-muted py-2 text-xs">Loading…</p>;
+  if (q.isLoading) return <SkeletonRows rows={3} cols={4} />;
   if (q.isError || q.data === undefined) {
-    return <p className="text-danger py-2 text-xs">Could not load the breakdown.</p>;
+    return (
+      <ErrorState
+        message={serverVerdict(q.error, 'Could not load the breakdown.')}
+        retry={() => void q.refetch()}
+      />
+    );
   }
 
   const d = q.data;
@@ -315,57 +322,64 @@ function CostBreakdown({
             can say which product carried what.
           </p>
         ) : (
-          <table className="w-full text-xs">
-            <thead className="text-text-faint text-left">
-              <tr>
-                <th className="py-1 pr-2 font-medium">Product</th>
-                <th className="py-1 pr-2 text-right font-medium">Units</th>
-                <th className="py-1 pr-2 text-right font-medium">Weight</th>
-                <th className="py-1 pr-2 text-right font-medium">Per unit</th>
-                <th className="py-1 text-right font-medium">Line</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Product</Th>
+                <Th align="right">Units</Th>
+                <Th align="right">Weight</Th>
+                <Th align="right">Per unit</Th>
+                <Th align="right">Line</Th>
+              </Tr>
+            </THead>
+            <TBody>
               {d.lines.map((l, i) => (
-                <tr key={`${l.skuCode ?? i}`} className="border-border/60 border-t">
-                  <td className="py-1 pr-2">
+                <Tr key={`${l.skuCode ?? i}`}>
+                  <Td>
                     <div>{l.productName ?? '—'}</div>
-                    <div className="text-text-faint font-mono">{l.skuCode ?? ''}</div>
-                  </td>
-                  <td className="py-1 pr-2 text-right tabular-nums">
-                    {l.unitsSettled}/{l.units}
-                  </td>
-                  <td className="text-text-muted py-1 pr-2 text-right tabular-nums">
+                    <div className="text-text-faint font-mono text-xs">{l.skuCode ?? ''}</div>
+                  </Td>
+                  <Td align="right">
+                    <span className="tabular-nums">
+                      {l.unitsSettled}/{l.units}
+                    </span>
+                  </Td>
+                  <Td align="right">
                     {/* The number the split was made ON. Freight is
                         priced by weight, so a line with no weight fell
                         back to a count share — worth seeing. */}
-                    {l.chargeableWeightKg === null ? '—' : `${l.chargeableWeightKg} kg`}
-                  </td>
-                  <td className="py-1 pr-2 text-right">
+                    <span className="text-text-muted tabular-nums">
+                      {l.chargeableWeightKg === null ? '—' : `${l.chargeableWeightKg} kg`}
+                    </span>
+                  </Td>
+                  <Td align="right">
                     <Money amount={l.perUnitInr} />
-                  </td>
-                  <td className="py-1 text-right">
+                  </Td>
+                  <Td align="right">
                     <Money amount={l.lineTotalInr} />
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
-              <tr className="border-border border-t font-medium">
-                <td className="py-1 pr-2" colSpan={4}>
-                  Lines add up to
-                </td>
-                <td className="py-1 text-right">
-                  <Money amount={splitTotal.toFixed(2)} />
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              <Tr>
+                <Td colSpan={4}>
+                  <span className="font-medium">Lines add up to</span>
+                </Td>
+                <Td align="right">
+                  <span className="font-medium">
+                    <Money amount={splitTotal.toFixed(2)} />
+                  </span>
+                </Td>
+              </Tr>
+            </TBody>
+          </Table>
         )}
         {/* Said out loud rather than left to be noticed: if the split
             does not reach the bill, some of it is charged to nothing. */}
         {d.lines.length > 0 && Math.abs(splitTotal - Number(billedInr)) > 0.01 && (
           <p className="text-warning mt-2 text-xs">
-            The lines come to {splitTotal.toFixed(2)} but the bill is {billedInr}. Part of this bill
-            is attached to no line, so it will never be recovered as those units sell.
+            The lines come to <Money amount={splitTotal.toFixed(2)} convert={false} /> but the bill
+            is <Money amount={billedInr} convert={false} />. Part of this bill is attached to no
+            line, so it will never be recovered as those units sell.
           </p>
         )}
       </div>
@@ -378,7 +392,11 @@ function CostBreakdown({
           <p className="text-text-faint text-xs">
             Nothing recorded as paid.
             {d.ourCostInr !== null && (
-              <> Our cost is noted as {d.ourCostInr}, but no payment sits behind it.</>
+              <>
+                {' '}
+                Our cost is noted as <Money amount={d.ourCostInr} convert={false} />, but no payment
+                sits behind it.
+              </>
             )}
           </p>
         ) : (

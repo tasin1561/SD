@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, ErrorNote } from '@skydrop/ui/components';
+import { Button, ErrorNote, Skeleton } from '@skydrop/ui/components';
 import { Money } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useRevealSellerBankAccount, useSellerDetail } from '@/lib/api-hooks';
@@ -88,7 +88,7 @@ export function PayoutInstructionPanel({
             someone who does for the payout details before sending.
           </div>
         ) : seller.isLoading ? (
-          <div className="text-text-muted">Loading the seller&rsquo;s bank details…</div>
+          <Skeleton className="h-10 w-full" />
         ) : bankMissing ? (
           <div className="text-[var(--color-critical)]">
             This seller has no bank details on file. There is nowhere to send the money — ask them
@@ -151,7 +151,7 @@ export function PayoutInstructionPanel({
             Of that, this seller&rsquo;s
           </div>
           {holdings.isLoading ? (
-            <div className="text-text-muted">Loading…</div>
+            <Skeleton className="h-4 w-2/3" />
           ) : (holdings.data ?? []).length === 0 ? (
             <div className="text-text-muted">
               None of our accounts holds cash attributed to this seller. That is normal for a wallet
@@ -183,7 +183,7 @@ export function PayoutInstructionPanel({
             before sending, or the transfer may bounce.
           </div>
         ) : treasury.isLoading ? (
-          <div className="text-text-muted">Loading balances…</div>
+          <Skeleton className="h-8 w-full" />
         ) : accounts.length === 0 ? (
           <div className="text-[var(--color-critical)]">
             No {currency} account is set up, so this payout cannot leave from anywhere.

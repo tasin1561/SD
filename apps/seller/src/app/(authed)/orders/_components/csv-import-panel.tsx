@@ -8,6 +8,7 @@ import {
   CardBody,
   EmptyState,
   ErrorState,
+  SkeletonRows,
   Table,
   TBody,
   Td,
@@ -16,9 +17,9 @@ import {
   Tr,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import { useApiClient } from '@skydrop/auth/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Shared CSV import widget — drives:
@@ -133,13 +134,7 @@ export function CsvImportPanel({
   });
 
   function fmtError(err: unknown): string {
-    if (err instanceof ApiError) {
-      const b = err.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : err.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return err instanceof Error ? err.message : 'Upload failed';
+    return serverVerdict(err, 'Upload failed');
   }
 
   async function downloadTemplate(): Promise<void> {
@@ -391,11 +386,11 @@ export function CsvImportPanel({
       <h2 className="text-text-bright text-sm font-medium mt-5">Recent imports</h2>
       {list.isLoading ? (
         <Card>
-          <CardBody>Loading…</CardBody>
+          <SkeletonRows rows={3} cols={4} />
         </Card>
       ) : list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load uploads.'}
+          message={serverVerdict(list.error, 'Failed to load uploads.')}
           retry={() => void list.refetch()}
         />
       ) : !list.data || list.data.items.length === 0 ? (

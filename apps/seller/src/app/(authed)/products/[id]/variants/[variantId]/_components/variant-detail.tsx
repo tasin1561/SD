@@ -5,7 +5,15 @@ import { ArrowLeft } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { ApiError, type SellerVariantView } from '@skydrop/api-client';
 import type { SellerProductView } from '@skydrop/api-client';
-import { useProductDetail, useUpdateVariant, useVariantDetail } from '@/lib/api-hooks';
+import { useSellerIdentity } from '@skydrop/auth/client';
+import {
+  useArchiveVariant,
+  useProductDetail,
+  useUpdateVariant,
+  useVariantDetail,
+} from '@/lib/api-hooks';
+import { can } from '@/lib/page-access';
+import { serverVerdict } from '@/lib/server-verdict';
 import {
   Button,
   Card,
@@ -16,9 +24,12 @@ import {
   FormField,
   Input,
   LoadingState,
+  Modal,
+  ModalFooter,
   PageHeader,
   Section,
   StatusBadge,
+  useToast,
 } from '@skydrop/ui/components';
 import { VariantImageUpload } from './image-upload';
 import { StockConfigPanel } from './stock-config-panel';
@@ -74,16 +85,24 @@ export function VariantDetailView({
             title={<span className="font-mono">{detail.data.skuCode}</span>}
             subtitle={detail.data.variantLabel ?? undefined}
             action={
-              <StatusBadge
-                kind={
-                  detail.data.status === 'ACTIVE'
-                    ? 'confirmed'
-                    : detail.data.status === 'ARCHIVED'
-                      ? 'cancelled'
-                      : 'pending'
-                }
-                label={detail.data.status.toLowerCase()}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge
+                  kind={
+                    detail.data.status === 'ACTIVE'
+                      ? 'confirmed'
+                      : detail.data.status === 'ARCHIVED'
+                        ? 'cancelled'
+                        : 'pending'
+                  }
+                  label={detail.data.status.toLowerCase()}
+                />
+                <ArchiveVariantButton
+                  productId={productId}
+                  variantId={variantId}
+                  skuCode={detail.data.skuCode}
+                  archived={detail.data.status === 'ARCHIVED'}
+                />
+              </div>
             }
           />
 
@@ -111,6 +130,93 @@ export function VariantDetailView({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Archive or restore THIS variant.
+ *
+ * Archiving a product archives its variants, but restoring the product
+ * deliberately leaves them archived (which ones go live again is the
+ * seller's call) — so without this a restored product's variants could
+ * never be brought back. Archiving is confirmed: it stops new orders and
+ * stock receiving for the SKU; restoring is not, it only makes it
+ * orderable again. Cosmetically gated on catalog.manage, which is what
+ * the endpoint enforces (FE-2 — the server refuses regardless).
+ */
+export function ArchiveVariantButton({
+  productId,
+  variantId,
+  skuCode,
+  archived,
+}: {
+  readonly productId: string;
+  readonly variantId: string;
+  readonly skuCode: string;
+  readonly archived: boolean;
+}): ReactElement | null {
+  const mayManage = can(useSellerIdentity(), 'catalog.manage');
+  const archive = useArchiveVariant(productId, variantId);
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!mayManage) return null;
+
+  async function run(nextArchived: boolean): Promise<void> {
+    setError(null);
+    try {
+      await archive.mutateAsync({ archived: nextArchived });
+      setConfirming(false);
+      toast.success(
+        nextArchived
+          ? `${skuCode} archived — it can no longer be ordered or received.`
+          : `${skuCode} restored — it can be ordered again.`,
+      );
+    } catch (err) {
+      const verdict = serverVerdict(err);
+      if (nextArchived) setError(verdict);
+      else toast.error(verdict);
+    }
+  }
+
+  return (
+    <>
+      <Button
+        variant="secondary"
+        disabled={archive.isPending}
+        onClick={() => (archived ? void run(false) : setConfirming(true))}
+      >
+        {archive.isPending && archived
+          ? 'Restoring…'
+          : archived
+            ? 'Restore variant'
+            : 'Archive variant'}
+      </Button>
+      <Modal
+        open={confirming}
+        onOpenChange={(next) => {
+          setConfirming(next);
+          if (!next) setError(null);
+        }}
+        title={`Archive ${skuCode}?`}
+        description="It stops being orderable and no new stock can be received against it. Its order history and any stock already here stay as they are, and you can restore it at any time."
+      >
+        {error !== null && (
+          <p role="alert" className="text-critical text-sm">
+            {error}
+          </p>
+        )}
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" disabled={archive.isPending} onClick={() => void run(true)}>
+            {archive.isPending ? 'Archiving…' : 'Archive variant'}
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </>
   );
 }
 

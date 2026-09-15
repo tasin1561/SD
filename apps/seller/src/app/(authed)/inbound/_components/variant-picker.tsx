@@ -96,7 +96,7 @@ export function VariantPicker({
           // Sung…", so four variants of one product were four identical
           // rows and the SKU was the only thing telling them apart —
           // which is exactly the choice this control exists to make easy.
-          className="border-border bg-surface absolute z-20 mt-1 max-h-72 w-full min-w-[22rem] overflow-auto rounded-[6px] border shadow-[var(--shadow-2)] sm:w-max sm:max-w-[32rem]"
+          className="border-border bg-surface absolute z-20 mt-1 max-h-72 w-full min-w-0 overflow-auto rounded-[6px] border shadow-[var(--shadow-2)] sm:w-max sm:min-w-[22rem] sm:max-w-[32rem]"
         >
           {!maySearch ? (
             <p className="text-text-muted px-3 py-2 text-xs">

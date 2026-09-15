@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Button, Card, CardBody, FormField, Input, useToast } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 import { useCreateVariant } from '@/lib/api-hooks';
 
 /**
@@ -56,12 +56,7 @@ export function AddVariantPanel({
     } catch (err) {
       // FE-2: the server's verdict verbatim — a duplicate SKU is its
       // call to make, not something guessed at from a stale list here.
-      if (err instanceof ApiError) {
-        const body = err.body as { code?: string; message?: string } | undefined;
-        setError(body?.code ? `[${body.code}] ${body.message ?? err.message}` : err.message);
-      } else {
-        setError(err instanceof Error ? err.message : 'Something went wrong.');
-      }
+      setError(serverVerdict(err, 'Something went wrong.'));
     } finally {
       setBusy(false);
     }

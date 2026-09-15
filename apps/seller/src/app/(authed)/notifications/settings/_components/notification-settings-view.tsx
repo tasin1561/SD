@@ -33,7 +33,6 @@ import {
   Tr,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { NotificationPreferenceView } from '@skydrop/api-client';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
@@ -455,14 +454,7 @@ function PreferenceRow({
       await update.mutateAsync({ category: row.category, body });
       onToast(msg);
     } catch (e) {
-      if (e instanceof ApiError) {
-        const b = e.body as { code?: unknown; message?: unknown } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const m = typeof b?.message === 'string' ? b.message : e.message;
-        onError(code ? `[${code}] ${m}` : m);
-      } else {
-        onError(e instanceof Error ? e.message : 'Update failed');
-      }
+      onError(serverVerdict(e, 'Update failed'));
     } finally {
       setBusy(false);
     }

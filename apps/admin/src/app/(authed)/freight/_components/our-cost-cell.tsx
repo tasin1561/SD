@@ -84,8 +84,13 @@ export function OurCostCell({ row }: { readonly row: FreightChargeView }): React
                 className={`text-xs ${margin < 0 ? 'text-danger' : 'text-text-muted'}`}
                 title="What we billed the seller, less what the forwarder charged us"
               >
-                {margin < 0 ? '' : '+'}
-                {margin.toFixed(2)} margin
+                <Money
+                  amount={margin}
+                  currency="INR"
+                  convert={false}
+                  direction={margin < 0 ? 'debit' : 'credit'}
+                />{' '}
+                margin
               </div>
             )}
           </button>

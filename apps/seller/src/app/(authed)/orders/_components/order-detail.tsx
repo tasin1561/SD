@@ -20,7 +20,6 @@ import {
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { useDeliveryActions } from '@/lib/ops-hooks';
 import type { OrderStatus } from '@skydrop/db';
-import { ApiError } from '@skydrop/api-client';
 import {
   useGenerateInvoice,
   useOrderDetail,
@@ -762,14 +761,7 @@ function OrderInvoiceSection({
       const res = await generate.mutateAsync();
       toast.success(res.alreadyExisted ? 'Invoice loaded.' : 'Invoice generated.');
     } catch (e) {
-      if (e instanceof ApiError) {
-        const b = e.body as { code?: unknown; message?: unknown } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const msg = typeof b?.message === 'string' ? b.message : e.message;
-        setError(code ? `[${code}] ${msg}` : msg);
-      } else {
-        setError(e instanceof Error ? e.message : 'Generation failed');
-      }
+      setError(serverVerdict(e, 'Generation failed'));
     }
   }
 

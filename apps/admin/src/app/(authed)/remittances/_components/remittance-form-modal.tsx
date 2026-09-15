@@ -9,13 +9,14 @@ import {
   ModalFooter,
   Money,
   Select,
+  Skeleton,
   Textarea,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { CreateRemittanceRequest } from '@skydrop/api-client';
 import { useCreateRemittance, useSellersList, useSellerWalletBalance } from '@/lib/api-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { PayoutInstructionPanel } from './payout-instruction-panel';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Record a remittance. Two-currency model:
@@ -191,13 +192,7 @@ export function RemittanceFormModal({
   }, [destAmount, bankFee]);
 
   function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
+    return serverVerdict(e, 'Action failed');
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {
@@ -290,17 +285,22 @@ export function RemittanceFormModal({
               Current wallet balance
             </div>
             {balance.isLoading ? (
-              <div className="text-text-muted">Loading…</div>
+              <Skeleton className="h-4 w-1/2" />
             ) : balance.isError ? (
-              <div className="text-critical">Failed to load balance</div>
+              <div className="text-critical">
+                {serverVerdict(balance.error, 'Failed to load balance')}
+              </div>
             ) : (
               <div className="flex items-center gap-4 font-mono">
                 {(balance.data?.balances ?? []).map((b) => {
                   const amt = Number(b.balance);
-                  const money = `${b.currency === 'INR' ? '₹' : '৳'} ${amt.toLocaleString(
-                    undefined,
-                    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                  )}`;
+                  const money = (
+                    <Money
+                      amount={b.balance}
+                      currency={b.currency === 'BDT' ? 'BDT' : 'INR'}
+                      convert={false}
+                    />
+                  );
                   // A converted figure is the same money in another
                   // currency, so it cannot be clicked to fill a wallet
                   // debit — there is no taka pot to debit from.

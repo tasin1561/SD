@@ -3,7 +3,7 @@
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { Card, CardBody, PageHeader, Section } from '@skydrop/ui/components';
+import { Card, CardBody, PageHeader, Section, SkeletonRows } from '@skydrop/ui/components';
 import {
   useClearNotificationSubscription,
   useNotificationSubscriptions,
@@ -61,7 +61,7 @@ export function NotificationSettingsView(): ReactElement {
       <Card>
         <CardBody>
           {topics.isLoading ? (
-            <p className="text-text-muted text-sm">Loading…</p>
+            <SkeletonRows rows={4} cols={2} />
           ) : (
             Object.entries(grouped).map(([group, defs]) => (
               <div key={group} className="mt-4 first:mt-0">

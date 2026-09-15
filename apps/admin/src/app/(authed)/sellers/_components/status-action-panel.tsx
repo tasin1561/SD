@@ -2,8 +2,9 @@
 
 import { useState, type ReactElement } from 'react';
 import { useUpdateSellerStatus } from '@/lib/api-hooks';
-import { ApiError, type SellerStatusValue } from '@skydrop/api-client';
+import { type SellerStatusValue } from '@skydrop/api-client';
 import { Button, FormField, Textarea, Modal, ModalFooter } from '@skydrop/ui/components';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * The well-built "action" of the seller list→detail→action→audit
@@ -74,16 +75,7 @@ export function StatusActionPanel({
       // client-side. If the server rejected (e.g., a future RBAC
       // gate, or an invariant we don't know about), display its
       // message verbatim. UI is reading material; server is law.
-      if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
-        const body = err.body as { message?: unknown; code?: unknown };
-        const msg = typeof body.message === 'string' ? body.message : err.message;
-        const code = typeof body.code === 'string' ? body.code : null;
-        setServerError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setServerError(err.message);
-      } else {
-        setServerError('Failed to change status.');
-      }
+      setServerError(serverVerdict(err, 'Failed to change status.'));
     }
   }
 

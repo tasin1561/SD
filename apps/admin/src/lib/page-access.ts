@@ -60,7 +60,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/inventory/adjustments', 'inventory.view'],
   ['/inventory/cycle-counts', 'inventory.view'],
   ['/inventory/movements', 'inventory.view'],
-  ['/inventory/transfers', 'inventory.view'],
+  // The whole page is the transfer FORM — its only write is the POST the
+  // controller guards on this key, so the read gate let a stock-reading
+  // role fill the form in and meet a 403 at submit.
+  ['/inventory/transfers', 'inventory.transfers.manage'],
   ['/inventory-units', 'inventory.view'],
   ['/settlements', 'money.view'],
   ['/withdrawals', 'money.view'],
@@ -103,6 +106,15 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // work this queue are not necessarily the ones who cancel orders.
   ['/courier-decisions', 'orders.courier_choice'],
   ['/warehouse/printing', 'warehouse.pick'],
+  // The per-parcel picking station (WMS-1's retired-but-kept escape hatch,
+  // reached from the printing station when a serialised parcel cannot be
+  // closed from paper) and the pack bench. Both inherited `/warehouse`'s
+  // READ gate, so somebody holding only warehouse.view opened a station
+  // whose every call refuses — the supervisor force-expire on the pick
+  // page and the force-complete on the pack bench are gated separately in
+  // code on warehouse.pick.supervise.
+  ['/warehouse/pick', 'warehouse.pick'],
+  ['/warehouse/pack', 'warehouse.pack'],
   ['/warehouse/handover', 'courier.dispatch.handoff'],
   ['/remittances', 'money.view'],
   // A withdrawal destination is money, not seller admin — and the API

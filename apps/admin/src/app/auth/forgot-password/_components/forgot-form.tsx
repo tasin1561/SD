@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
+import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Step 1 of the staff password reset — asks for the email, posts to
@@ -42,16 +43,7 @@ export function ForgotPasswordForm(): ReactElement {
       // FE-2: the server's verdict verbatim. The one it actually returns
       // here is the rate limit — three an hour per address — and telling
       // someone "too many requests" is far more use than a shrug.
-      if (err instanceof ApiError) {
-        const b = err.body as { code?: unknown; message?: unknown } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const msg = typeof b?.message === 'string' ? b.message : err.message;
-        setError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Could not send the reset email.');
-      }
+      setError(serverVerdict(err, 'Could not send the reset email.'));
       setSubmitting(false);
     }
   }

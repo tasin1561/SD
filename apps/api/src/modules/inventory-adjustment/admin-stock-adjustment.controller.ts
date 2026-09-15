@@ -65,12 +65,6 @@ export class AdminStockAdjustmentController {
     return this.svc.list(query);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get one stock adjustment' })
-  get(@Param('id', uuid()) id: string): Promise<StockAdjustmentView> {
-    return this.svc.get(id);
-  }
-
   @Post(':id/approve')
   @RequirePermissions('inventory.adjustments.approve')
   @HttpCode(HttpStatus.OK)

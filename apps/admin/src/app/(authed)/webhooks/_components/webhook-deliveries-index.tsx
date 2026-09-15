@@ -2,7 +2,6 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { ApiError } from '@skydrop/api-client';
 import {
   Button,
   Card,
@@ -16,6 +15,7 @@ import {
 } from '@skydrop/ui/components';
 import { useRetryWebhookDelivery, useWebhookDeliveriesList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 
 const STATUSES = [
   '',
@@ -45,14 +45,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
       const res = await retry.mutateAsync({ id });
       toast.success(`Re-enqueued (job ${res.jobId.slice(0, 8)}…)`);
     } catch (e) {
-      if (e instanceof ApiError) {
-        const b = e.body as { code?: unknown; message?: unknown } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const msg = typeof b?.message === 'string' ? b.message : e.message;
-        toast.error(code ? `[${code}] ${msg}` : msg);
-      } else {
-        toast.error(e instanceof Error ? e.message : 'Retry failed');
-      }
+      toast.error(serverVerdict(e, 'Retry failed'));
     } finally {
       setRetryingId(null);
     }

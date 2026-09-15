@@ -19,8 +19,8 @@ import {
   Tr,
   useToast,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import { useCloseManifest, useConfirmHandoff, useManifestDetail } from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 import { MoveShipmentPanel } from './move-shipment-panel';
 import { useRouter } from 'next/navigation';
 
@@ -45,17 +45,17 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(err: unknown): string {
-    if (err instanceof ApiError) {
-      const b = err.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : err.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return err instanceof Error ? err.message : 'Action failed';
+    return serverVerdict(err, 'Action failed');
   }
 
   if (detail.isLoading) return <LoadingState label="Loading manifest…" />;
-  if (detail.isError) return <ErrorState message={detail.error?.message ?? 'Failed to load.'} />;
+  if (detail.isError)
+    return (
+      <ErrorState
+        message={serverVerdict(detail.error, 'Failed to load.')}
+        retry={() => void detail.refetch()}
+      />
+    );
   if (!detail.data)
     return (
       <EmptyState

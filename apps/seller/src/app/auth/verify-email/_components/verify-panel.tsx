@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
+import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Confirms a seller email-verification token.
@@ -36,16 +37,7 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
         });
         setState('done');
       } catch (err) {
-        if (err instanceof ApiError) {
-          const b = err.body as { code?: unknown; message?: unknown } | null;
-          const code = typeof b?.code === 'string' ? b.code : null;
-          const msg = typeof b?.message === 'string' ? b.message : err.message;
-          setError(code !== null ? `[${code}] ${msg}` : msg);
-        } else if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError('Could not verify the email address.');
-        }
+        setError(serverVerdict(err, 'Could not verify the email address.'));
         setState('failed');
       }
     })();

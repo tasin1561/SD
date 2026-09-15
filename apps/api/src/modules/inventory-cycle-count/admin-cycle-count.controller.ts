@@ -59,12 +59,6 @@ export class AdminCycleCountController {
     return this.svc.schedule(staff.id, body, ctx);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get one cycle count' })
-  get(@Param('id', uuid()) id: string): Promise<CycleCountView> {
-    return this.svc.get(id);
-  }
-
   @Post(':id/start')
   @RequirePermissions('inventory.cycle_counts.manage')
   @HttpCode(HttpStatus.OK)

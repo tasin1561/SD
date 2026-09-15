@@ -2,7 +2,6 @@
 
 import { Fragment, useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Pencil } from 'lucide-react';
-import { ApiError } from '@skydrop/api-client';
 import type {
   SellerProfileView,
   UpdateSellerBankDetailsRequest,
@@ -95,13 +94,7 @@ export default function ProfilePage(): ReactElement {
 }
 
 function fmtError(e: unknown): string {
-  if (e instanceof ApiError) {
-    const b = e.body as { code?: unknown; message?: unknown } | null;
-    const code = typeof b?.code === 'string' ? b.code : null;
-    const msg = typeof b?.message === 'string' ? b.message : e.message;
-    return code ? `[${code}] ${msg}` : msg;
-  }
-  return e instanceof Error ? e.message : 'Action failed';
+  return serverVerdict(e, 'Action failed');
 }
 
 function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
@@ -697,13 +690,7 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   function fmtErr(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
+    return serverVerdict(e, 'Action failed');
   }
 
   async function onPick(file: File): Promise<void> {

@@ -137,7 +137,11 @@ export function useDecideReattempt(): UseMutationResult<
   return useMutation({
     mutationFn: ({ requestId, approve, note, extraAttempts }) =>
       client.request<AdminReattemptRequest>(
-        `/api/admin/reattempt-requests/${requestId}/${approve ? 'approve' : 'reject'}`,
+        // Two literal paths rather than one composed segment, so both
+        // route checkers can match each call to its endpoint.
+        approve
+          ? `/api/admin/reattempt-requests/${requestId}/approve`
+          : `/api/admin/reattempt-requests/${requestId}/reject`,
         // extraAttempts only means anything on an approval; the reject
         // endpoint ignores it and the DTO leaves it optional.
         { method: 'POST', body: approve ? { note, extraAttempts } : { note } },
@@ -189,10 +193,17 @@ export function useReassignQueueEntry(): UseMutationResult<
   });
 }
 
+/**
+ * Close every OPEN call-queue entry for one seller.
+ *
+ * `reason` is required by BulkDequeueDto (2–500 chars) and lands on the
+ * audit row. The hook used to send the seller alone, so every call was
+ * a 400 — which nobody noticed because no screen called it.
+ */
 export function useBulkDequeue(): UseMutationResult<
   { sellerId: string; dequeuedOrders: number },
   Error,
-  { sellerId: string }
+  { sellerId: string; reason: string }
 > {
   const client = useApiClient();
   const qc = useQueryClient();

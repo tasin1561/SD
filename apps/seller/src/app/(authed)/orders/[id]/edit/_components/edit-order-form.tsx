@@ -16,7 +16,6 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { OrderedProducts, ProductCatalogue, type PickedLine } from '@/components/product-picker';
-import { ApiError } from '@skydrop/api-client';
 import {
   useDiscardDraftOrder,
   useOrderDetail,
@@ -26,6 +25,7 @@ import {
   type UpdateOrderInput,
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import { serverVerdict } from '@/lib/server-verdict';
 import { useStores } from '@/lib/store-hooks';
 import {
   ADDRESS_LINE_1_HINT,
@@ -109,6 +109,9 @@ interface FormState {
   storeId: string;
   sellerNotes: string;
 }
+
+/** A figure said inside a sentence — the same en-IN grouping `Money` uses. */
+const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
 
 export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactElement {
   const sellerInitials = useSellerIdentity()?.initials ?? null;
@@ -245,9 +248,16 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     return before.join('|') !== after.join('|');
   }, [lines, detail.data]);
 
-  if (detail.isLoading || form === null) return <LoadingState label="Loading order…" />;
+  // The error check comes FIRST: `form` is only built from a loaded
+  // order, so a failed load would otherwise sit on the spinner forever.
   if (detail.isError)
-    return <ErrorState message={detail.error?.message ?? 'Failed to load order.'} />;
+    return (
+      <ErrorState
+        message={serverVerdict(detail.error, 'Failed to load order.')}
+        retry={() => void detail.refetch()}
+      />
+    );
+  if (detail.isLoading || form === null) return <LoadingState label="Loading order…" />;
   if (!detail.data) return <ErrorState message="Order not found." />;
 
   const status = detail.data.status;
@@ -323,13 +333,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   }
 
   function fmtError(err: unknown): string {
-    if (err instanceof ApiError) {
-      const b = err.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : err.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return err instanceof Error ? err.message : 'Action failed';
+    return serverVerdict(err, 'Action failed');
   }
 
   /** The same gate the create form uses, from the same module — the two
@@ -687,7 +691,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 */
                 notice={
                   Math.abs(computedCollectable - (Number(form.codAmountInr) || 0)) > 0.005
-                    ? `Items + delivery − advance − discount = ₹${computedCollectable.toFixed(2)}`
+                    ? `Items + delivery − advance − discount = ${inr.format(computedCollectable)}`
                     : undefined
                 }
               >
@@ -707,7 +711,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                       size="sm"
                       onClick={() => set('codAmountInr', computedCollectable.toFixed(2))}
                     >
-                      Use ₹{computedCollectable.toFixed(2)}
+                      Use {inr.format(computedCollectable)}
                     </Button>
                   )}
                 </div>

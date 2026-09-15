@@ -83,7 +83,9 @@ describe('the two-call create is retry-safe', () => {
   });
 
   it('surfaces the server verdict verbatim (FE-2)', () => {
-    expect(src).toMatch(/\[\$\{body\.code\}\]/);
+    // Through the ONE formatter, so the code can never be dropped here
+    // while every other screen keeps it.
+    expect(src).toContain('serverVerdict(');
   });
 });
 

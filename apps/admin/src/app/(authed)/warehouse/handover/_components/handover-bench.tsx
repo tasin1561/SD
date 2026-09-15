@@ -16,6 +16,7 @@ import {
 } from '@skydrop/ui/components';
 import { useHandoverScan, useScanBlock } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { usePermission } from '@/lib/use-permission';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { HandoverQueue } from './handover-queue';
 
@@ -34,6 +35,7 @@ import { HandoverQueue } from './handover-queue';
 export function HandoverBench(): ReactElement {
   const scan = useHandoverScan();
   const block = useScanBlock();
+  const canManagePickups = usePermission('courier.pickups.manage');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const [code, setCode] = useState('');
@@ -141,6 +143,19 @@ export function HandoverBench(): ReactElement {
             </Link>{' '}
             — closed out automatically as each van finishes loading.
           </p>
+          {/* The van is asked for automatically when the day's first box
+              is packed (CUR-10 amendment #3). A day that failed is not
+              retried by itself; that, and a parcel that never passed the
+              pack bench, is arranged on the pickups screen. */}
+          {canManagePickups && (
+            <p className="text-text-faint mt-1 text-xs">
+              No van coming?{' '}
+              <Link href="/warehouse/pickups" className="hover:text-text underline">
+                Pickups
+              </Link>{' '}
+              — retry a failed day or ask for one by hand.
+            </p>
+          )}
         </CardBody>
       </Card>
 

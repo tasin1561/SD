@@ -1,7 +1,16 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, Card, CardBody, CardHeader, ErrorNote, useToast } from '@skydrop/ui/components';
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  ConfirmDialog,
+  ErrorNote,
+  Money,
+  useToast,
+} from '@skydrop/ui/components';
 import {
   useBackfillCharges,
   useBillUnbilled,
@@ -10,6 +19,9 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+
+/** A figure inside a toast, which is a string — the same en-IN grouping `Money` uses. */
+const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
 
 /**
  * Give charges to orders that never got any.
@@ -140,23 +152,22 @@ export function BillUnbilledCard(): ReactElement | null {
   const toast = useToast();
   const [report, setReport] = useState<BillingBackfillReport | null>(null);
   const [previewed, setPreviewed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   if (!canBill) return null;
 
   function run(dryRun: boolean): void {
-    if (!dryRun) {
-      const n = report?.examined ?? 0;
-      // The last thing between an operator and other people's money.
-      if (!window.confirm(`Charge ${String(n)} order(s)? This debits real seller balances.`))
-        return;
-    }
+    setConfirming(false);
     bill.mutate(
       { dryRun },
       {
         onSuccess: (r) => {
           setReport(r);
           setPreviewed(dryRun);
-          if (!dryRun) toast.success(`Billed ${String(r.billed)} order(s) — ₹${r.totalInr}.`);
+          if (!dryRun)
+            toast.success(
+              `Billed ${String(r.billed)} order(s) — ${inr.format(Number(r.totalInr))}.`,
+            );
         },
         onError: (err) => toast.error(serverVerdict(err)),
       },
@@ -179,12 +190,32 @@ export function BillUnbilledCard(): ReactElement | null {
           </Button>
           <Button
             variant="destructive"
-            onClick={() => run(false)}
+            // The last thing between an operator and other people's money:
+            // a confirm that names the count and the total the preview found.
+            onClick={() => setConfirming(true)}
             disabled={bill.isPending || report === null || !previewed || report.examined === 0}
           >
             Charge them
           </Button>
         </div>
+
+        <ConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          title={`Charge ${String(report?.examined ?? 0)} order${report?.examined === 1 ? '' : 's'}?`}
+          description={
+            <>
+              The preview found <span className="font-medium">{report?.examined ?? 0}</span> order
+              {report?.examined === 1 ? '' : 's'} to bill, totalling{' '}
+              <Money amount={report?.totalInr ?? '0'} convert={false} />. This debits real seller
+              balances and cannot be undone from here.
+            </>
+          }
+          confirmLabel="Charge them"
+          confirmVariant="destructive"
+          disabled={bill.isPending}
+          onConfirm={() => run(false)}
+        />
 
         {bill.isError && (
           <div className="mt-3">
@@ -201,8 +232,8 @@ export function BillUnbilledCard(): ReactElement | null {
               {!previewed && (
                 <>
                   {' '}
-                  — {report.billed} billed (₹{report.totalInr}), {report.skipped} had nothing to
-                  bill, {report.failed} failed
+                  — {report.billed} billed (<Money amount={report.totalInr} convert={false} />
+                  ), {report.skipped} had nothing to bill, {report.failed} failed
                 </>
               )}
               .

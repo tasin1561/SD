@@ -51,16 +51,6 @@ export class SellerWebhookController {
     return this.svc.list(seller.id);
   }
 
-  @Get(':id')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get one endpoint' })
-  get(
-    @CurrentSeller() seller: AuthenticatedSeller,
-    @Param('id', uuid()) id: string,
-  ): Promise<WebhookEndpointView> {
-    return this.svc.getOwned(seller.id, id);
-  }
-
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

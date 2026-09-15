@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { ApiError, type OrderChargeView } from '@skydrop/api-client';
+import type { OrderChargeView } from '@skydrop/api-client';
 import { useComputeOrderCharges, useOrderCharges } from '@/lib/api-hooks';
 import {
   Button,
@@ -14,6 +14,7 @@ import {
   Table,
 } from '@skydrop/ui/components';
 import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Admin order-charges section (Module 17). Renders all charge rows
@@ -37,14 +38,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
     try {
       await compute.mutateAsync();
     } catch (err) {
-      if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
-        const b = err.body as { code?: unknown; message?: unknown };
-        const code = typeof b.code === 'string' ? b.code : (err.code ?? 'COMPUTE_FAILED');
-        const msg = typeof b.message === 'string' ? b.message : err.message;
-        setServerError(`[${code}] ${msg}`);
-      } else {
-        setServerError('Compute failed.');
-      }
+      setServerError(serverVerdict(err, 'Compute failed.'));
     }
   }
 
@@ -56,7 +50,12 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
     );
   }
   if (charges.isError) {
-    return <ErrorState message={charges.error?.message ?? 'Failed to load charges.'} />;
+    return (
+      <ErrorState
+        message={serverVerdict(charges.error, 'Failed to load charges.')}
+        retry={() => void charges.refetch()}
+      />
+    );
   }
 
   const total = charges.data?.reduce((sum, c) => sum + Number(c.totalAmountInr), 0) ?? 0;

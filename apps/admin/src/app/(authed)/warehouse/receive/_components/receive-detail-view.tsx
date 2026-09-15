@@ -79,7 +79,13 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const bins = useWarehouseBins(detail.data?.warehouseId ?? '');
 
   if (detail.isLoading) return <LoadingState label="Loading…" />;
-  if (detail.isError) return <ErrorState message={detail.error?.message ?? 'Failed to load.'} />;
+  if (detail.isError)
+    return (
+      <ErrorState
+        message={serverVerdict(detail.error, 'Failed to load.')}
+        retry={() => void detail.refetch()}
+      />
+    );
   if (!detail.data) return <ErrorState message="Goods receipt not found." />;
 
   const r = detail.data;

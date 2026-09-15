@@ -702,17 +702,6 @@ export class PickBatchService {
     return rows.map((r) => toView(r));
   }
 
-  async getById(batchId: string): Promise<PickBatchView> {
-    const row = await this.prisma.client.pickBatch.findUnique({
-      where: { id: batchId },
-      select: PICK_BATCH_SELECT,
-    });
-    if (row === null) {
-      throw new BadRequestException({ code: 'BATCH_NOT_FOUND', message: 'No such batch' });
-    }
-    return toView(row);
-  }
-
   // ---------- internal ----------
 
   private async viewFromTx(tx: Prisma.TransactionClient, id: string): Promise<PickBatchView> {

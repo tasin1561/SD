@@ -138,15 +138,6 @@ export function useCreateAdjustment(): UseMutationResult<
   });
 }
 
-export function useAdjustment(id: string | null): UseQueryResult<StockAdjustmentView> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['admin-adjustments', 'detail', id],
-    enabled: id !== null,
-    queryFn: () => client.request<StockAdjustmentView>(`/api/admin/stock-adjustments/${id ?? ''}`),
-  });
-}
-
 export function useApproveAdjustment(): UseMutationResult<
   StockAdjustmentView,
   Error,
@@ -225,15 +216,6 @@ export function useCycleCountsList(query: {
   return useQuery({
     queryKey: ['admin-cycle-counts', 'list', query],
     queryFn: () => client.request<Paginated<CycleCountView>>(`/api/admin/cycle-counts${qs(query)}`),
-  });
-}
-
-export function useCycleCount(id: string | null): UseQueryResult<CycleCountView> {
-  const client = useApiClient();
-  return useQuery({
-    queryKey: ['admin-cycle-counts', 'detail', id],
-    enabled: id !== null,
-    queryFn: () => client.request<CycleCountView>(`/api/admin/cycle-counts/${id ?? ''}`),
   });
 }
 

@@ -3,7 +3,15 @@
 import { useState, type ReactElement } from 'react';
 import { ChevronDown, ChevronRight, RotateCw, Trash2 } from 'lucide-react';
 import { useInvitationsList, useResendInvitation, useDeleteInvitation } from '@/lib/api-hooks';
-import { Button, Card, CardBody, ConfirmDialog, useToast } from '@skydrop/ui/components';
+import {
+  Button,
+  Card,
+  CardBody,
+  ConfirmDialog,
+  SkeletonRows,
+  useToast,
+} from '@skydrop/ui/components';
+import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 
 /**
@@ -48,7 +56,7 @@ export function InvitationsPanel(): ReactElement {
       {expanded && (
         <CardBody className="border-t border-border">
           {list.isLoading ? (
-            <div className="text-text-muted text-sm py-2">Loading…</div>
+            <SkeletonRows rows={3} cols={2} />
           ) : !list.data || list.data.items.length === 0 ? (
             <div className="text-text-muted text-sm py-2">No invitations yet.</div>
           ) : (
@@ -80,9 +88,7 @@ export function InvitationsPanel(): ReactElement {
                                 onSuccess: () =>
                                   toast.success(`Invitation re-sent to ${inv.email}`),
                                 onError: (e) =>
-                                  toast.error(
-                                    e instanceof Error ? e.message : 'Failed to resend invitation.',
-                                  ),
+                                  toast.error(serverVerdict(e, 'Failed to resend invitation.')),
                               },
                             )
                           }

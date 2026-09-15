@@ -3,7 +3,7 @@
 import { useState, type ReactElement } from 'react';
 import { useCreateInvitation } from '@/lib/api-hooks';
 import { Button, FormActions, FormField, Input, Modal, useToast } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Invite-a-seller dialog. Email-only — the API generates the
@@ -40,14 +40,7 @@ export function CreateInvitationDialog({
       toast.success(`Invitation sent to ${trimmed}`);
       close();
     } catch (err) {
-      if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
-        const body = err.body as { message?: unknown };
-        setError(typeof body.message === 'string' ? body.message : err.message);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to send invitation.');
-      }
+      setError(serverVerdict(err, 'Failed to send invitation.'));
     }
   }
 

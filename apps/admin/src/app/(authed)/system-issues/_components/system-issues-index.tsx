@@ -30,6 +30,10 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /** The order an issue is about, when its metadata names one. */
+/** The `source` every `auto-pickup:<courier>:<warehouse>` issue carries
+ *  (courier-pickup.service). The list does not return the dedupe key. */
+const AUTO_PICKUP_SOURCE = 'courier-pickup.auto';
+
 function orderIdOf(metadata: unknown): string | null {
   if (metadata === null || typeof metadata !== 'object') return null;
   const v = (metadata as { orderId?: unknown }).orderId;
@@ -78,6 +82,7 @@ function since(iso: string): string {
  */
 export function SystemIssuesIndex(): ReactElement {
   const mayResolve = usePermission('system.settings.manage');
+  const canManagePickups = usePermission('courier.pickups.manage');
   const [includeResolved, setIncludeResolved] = useState(false);
   const list = useSystemIssues(includeResolved, usePermission('system.settings.view'));
   const ack = useAcknowledgeIssue();
@@ -201,6 +206,17 @@ export function SystemIssuesIndex(): ReactElement {
                         className="text-accent hover:text-accent-hover mt-2 inline-block text-xs"
                       >
                         Open the order
+                      </Link>
+                    )}
+                    {/* A box that asked for no van (CUR-10 amendment #3).
+                        A failed day is not retried by itself — the pickups
+                        screen is where it is released and raised again. */}
+                    {r.source === AUTO_PICKUP_SOURCE && canManagePickups && (
+                      <Link
+                        href="/warehouse/pickups"
+                        className="text-accent hover:text-accent-hover mt-2 block w-fit text-xs"
+                      >
+                        Open pickups
                       </Link>
                     )}
                     <div className="text-text-faint mt-2 text-xs">

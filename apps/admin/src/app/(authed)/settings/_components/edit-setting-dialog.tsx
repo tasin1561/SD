@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { SettingValueType } from '@skydrop/db';
-import { ApiError } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 import { useSystemSetting, useUpdateSystemSetting } from '@/lib/api-hooks';
 import {
   Button,
@@ -83,14 +83,7 @@ export function EditSettingDialog({
       await update.mutateAsync({ valueType: detail.data.valueType, value: parsed });
       onClose();
     } catch (err) {
-      if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
-        const b = err.body as { code?: unknown; message?: unknown };
-        const code = typeof b.code === 'string' ? b.code : (err.code ?? 'UPDATE_FAILED');
-        const msg = typeof b.message === 'string' ? b.message : err.message;
-        setServerError(`[${code}] ${msg}`);
-      } else {
-        setServerError('Update failed. Please try again.');
-      }
+      setServerError(serverVerdict(err, 'Update failed. Please try again.'));
     }
   }
 

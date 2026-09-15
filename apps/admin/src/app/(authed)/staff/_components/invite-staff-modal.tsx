@@ -2,9 +2,9 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Button, FormField, Input, Modal, ModalFooter, Select } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { CreatedStaffInvitation } from '@skydrop/api-client';
 import { useCreateStaffInvitation } from '@/lib/api-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 
 const ROLES = [
   { value: 'SUPER_ADMIN', label: 'Super admin (full access)' },
@@ -30,13 +30,7 @@ export function InviteStaffModal({
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
+    return serverVerdict(e, 'Action failed');
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {

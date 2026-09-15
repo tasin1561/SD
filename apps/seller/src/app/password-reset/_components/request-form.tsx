@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
+import { serverVerdict } from '@/lib/server-verdict';
 
 /**
  * Email-only form that calls /auth/seller/password-reset/request.
@@ -37,16 +38,7 @@ export function PasswordResetRequestForm(): ReactElement {
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         setError('Too many requests. Try again in an hour.');
-      } else if (err instanceof ApiError) {
-        const b = err.body as { code?: unknown; message?: unknown } | null;
-        const code = typeof b?.code === 'string' ? b.code : null;
-        const msg = typeof b?.message === 'string' ? b.message : err.message;
-        setError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Could not request a reset.');
-      }
+      } else setError(serverVerdict(err, 'Could not request a reset.'));
     } finally {
       setSubmitting(false);
     }

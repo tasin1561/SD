@@ -4,7 +4,6 @@ import { useState, type ReactElement } from 'react';
 import { AdminRequestReturnDialog } from './admin-request-return-dialog';
 import { ShieldAlert } from 'lucide-react';
 import {
-  ApiError,
   type ForceMutationResult,
   type OrderView,
   type ReleaseReservationsResult,
@@ -26,6 +25,7 @@ import {
 import { ForceMutationDialog } from './force-mutation-dialog';
 import { ReleaseReservationsDialog } from './release-reservations-dialog';
 import { RestoreReservationsDialog } from './restore-reservations-dialog';
+import { serverVerdict } from '@/lib/server-verdict';
 
 const TERMINAL_STATUSES: readonly OrderStatus[] = [
   OrderStatus.DELIVERED,
@@ -103,16 +103,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
       });
       closeCancel();
     } catch (err) {
-      if (err instanceof ApiError && typeof err.body === 'object' && err.body !== null) {
-        const body = err.body as { message?: unknown; code?: unknown };
-        const msg = typeof body.message === 'string' ? body.message : err.message;
-        const code = typeof body.code === 'string' ? body.code : null;
-        setServerError(code ? `[${code}] ${msg}` : msg);
-      } else if (err instanceof Error) {
-        setServerError(err.message);
-      } else {
-        setServerError('Failed to cancel order.');
-      }
+      setServerError(serverVerdict(err, 'Failed to cancel order.'));
     }
   }
 
