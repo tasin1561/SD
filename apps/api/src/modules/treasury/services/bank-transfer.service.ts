@@ -1,12 +1,33 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActorType, BankEntryType, BankOwnerKind, Prisma } from '@skydrop/db';
+import { ActorType, BankEntryType, BankOwnerKind, Currency, Prisma } from '@skydrop/db';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { BankLedgerService } from './bank-ledger.service';
+import { SellerCashAttributionService } from './seller-cash-attribution.service';
 
-/** The expense category a same-currency transfer's bank charge is filed under. */
+/** The expense category a bank's charge for moving our money is filed under. */
 export const BANK_CHARGES_CATEGORY = 'bank_charges';
+
+/**
+ * The `bank_charges` category, found or created on first use. Shared by
+ * every flow that books what a bank kept — a transfer that arrived short,
+ * a fee on a payout — so they file under ONE category the P&L reads.
+ */
+export async function upsertBankChargesCategory(
+  tx: Prisma.TransactionClient,
+): Promise<{ id: string }> {
+  return tx.expenseCategory.upsert({
+    where: { code: BANK_CHARGES_CATEGORY },
+    update: {},
+    create: {
+      code: BANK_CHARGES_CATEGORY,
+      name: 'Bank charges',
+      hint: 'What a bank took to move our money — a transfer that arrived short, or the fee on a payout to a seller. Booked automatically when those are recorded — do not file these by hand, or the P&L counts them twice.',
+    },
+    select: { id: true },
+  });
+}
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -68,6 +89,7 @@ export class BankTransferService {
     private readonly prisma: PrismaService,
     private readonly ledger: BankLedgerService,
     private readonly audit: AuditLogService,
+    private readonly attribution: SellerCashAttributionService,
   ) {}
 
   async transfer(input: TransferInput): Promise<TransferResult> {
@@ -123,18 +145,63 @@ export class BankTransferService {
       ? { kind: BankOwnerKind.SELLER, sellerId: input.sellerId }
       : { kind: BankOwnerKind.CAPITAL };
 
-    // What the owner is credited on the far side: at the quoted rate when a
-    // seller was quoted one; across a currency otherwise, everything that
-    // arrived; in the same currency, everything that left.
-    const quoted = input.quotedRate ? new Prisma.Decimal(input.quotedRate) : null;
-    const creditedToSeller = !crossCurrency
-      ? out
-      : input.sellerId && quoted
-        ? out.mul(quoted).toDecimalPlaces(2)
-        : inn;
-    const spread = input.sellerId && crossCurrency ? inn.sub(creditedToSeller) : null;
+    const given = input.quotedRate ? new Prisma.Decimal(input.quotedRate) : null;
 
     return this.prisma.client.$transaction(async (tx) => {
+      // The seller's WALLET lock before anything reads their holding: a
+      // charge reclassifies their cash under that lock, and a transfer
+      // that read the holding while one ran would move cash that had just
+      // stopped being theirs. WALLET before BANK_RECONCILE, as everywhere.
+      if (input.sellerId) {
+        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${input.sellerId}|${Currency.INR}`);
+      }
+
+      // A seller's money crossing a currency with NO quote still needs
+      // one, or there is no principled figure to credit them on the far
+      // side — crediting "whatever arrived" silently handed them (or took
+      // from them) the bank's rate, and the gap vanished into their
+      // holding. The quote is the rate their money is valued at on each
+      // side: the rate it was credited at (their latest accepted top-up
+      // into that account), today's rate only where there is none. The
+      // wallet does not move, so neither may the rupee value of their
+      // cash; what the bank actually achieved against that is FX_SPREAD,
+      // ours, either way (TRE-5).
+      let quoted = given;
+      let quoteSource: 'GIVEN' | 'CREDITED_RATE' | 'NONE' = given === null ? 'NONE' : 'GIVEN';
+      if (crossCurrency && input.sellerId && quoted === null) {
+        const fromRate = await this.attribution.rateToInr(
+          tx,
+          input.sellerId,
+          from.id,
+          from.currency,
+        );
+        const toRate = await this.attribution.rateToInr(tx, input.sellerId, to.id, to.currency);
+        if (fromRate === null || toRate === null) {
+          throw new BadRequestException({
+            code: 'TRANSFER_QUOTE_REQUIRED',
+            message:
+              `No rate is known for this seller's ${fromRate === null ? from.currency : to.currency} — ` +
+              'no accepted top-up to take one from and no system rate. Give the rate they were quoted.',
+          });
+        }
+        // to-units per from-unit = (INR per from-unit) / (INR per to-unit).
+        quoted = fromRate.inr
+          .mul(toRate.local)
+          .div(fromRate.local.mul(toRate.inr))
+          .toDecimalPlaces(6);
+        quoteSource = 'CREDITED_RATE';
+      }
+
+      // What the owner is credited on the far side: at the quote when the
+      // money is a seller's; across a currency otherwise, everything that
+      // arrived; in the same currency, everything that left.
+      const creditedToSeller = !crossCurrency
+        ? out
+        : input.sellerId && quoted
+          ? out.mul(quoted).toDecimalPlaces(2)
+          : inn;
+      const spread = input.sellerId && crossCurrency ? inn.sub(creditedToSeller) : null;
+
       /*
         YOU CANNOT MOVE MORE OF SOMEBODY'S MONEY THAN THEY HAVE HERE.
 
@@ -246,7 +313,11 @@ export class BankTransferService {
             occurredAt: input.movedAt,
             transferId: transfer.id,
             note:
-              `Quoted ${quoted?.toString() ?? '-'}, achieved ${achieved?.toString() ?? '-'}` +
+              `Quoted ${quoted?.toString() ?? '-'}` +
+              (quoteSource === 'CREDITED_RATE'
+                ? " (no quote given — the rate the seller's money was credited at)"
+                : '') +
+              `, achieved ${achieved?.toString() ?? '-'}` +
               (spread.isNegative() ? ' — covered from capital' : ''),
             staffId: input.staffId,
           },
@@ -255,16 +326,7 @@ export class BankTransferService {
       }
 
       if (bankCharge.gt(0)) {
-        const category = await tx.expenseCategory.upsert({
-          where: { code: BANK_CHARGES_CATEGORY },
-          update: {},
-          create: {
-            code: BANK_CHARGES_CATEGORY,
-            name: 'Bank charges',
-            hint: 'What a bank took to move money between our accounts. Booked automatically when a transfer arrives short — do not file these by hand, or the P&L counts them twice.',
-          },
-          select: { id: true },
-        });
+        const category = await upsertBankChargesCategory(tx);
         await this.ledger.post(
           {
             accountId: to.id,
@@ -296,6 +358,7 @@ export class BankTransferService {
             amountOut: out.toFixed(2),
             amountIn: inn.toFixed(2),
             quotedRate: quoted?.toString() ?? null,
+            quoteSource,
             achievedRate: achieved?.toString() ?? null,
             fxSpread: spread?.toFixed(2) ?? null,
             bankCharge: bankCharge.gt(0) ? bankCharge.toFixed(2) : null,

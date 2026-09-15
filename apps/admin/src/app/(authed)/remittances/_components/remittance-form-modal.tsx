@@ -11,10 +11,10 @@ import {
   Select,
   Textarea,
 } from '@skydrop/ui/components';
-import { ApiError } from '@skydrop/api-client';
 import type { CreateRemittanceRequest } from '@skydrop/api-client';
 import { useCreateRemittance, useSellersList, useSellerWalletBalance } from '@/lib/api-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
+import { serverVerdict } from '@/lib/server-verdict';
 import { PayoutInstructionPanel } from './payout-instruction-panel';
 
 /**
@@ -97,11 +97,10 @@ export function RemittanceFormModal({
    * live INSIDE the write transaction), so this is UX, not the guard —
    * but finding out at submit means retyping a form you had finished.
    *
-   * The cap is the WALLET, not what we physically hold for this seller
-   * in the paying account. Those are different questions: the wallet is
-   * what we OWE them, and paying more than we happen to be holding for
-   * them just draws on our capital, which is normal (TRE-4/TRE-8). What
-   * must never happen is paying out more than the debt.
+   * Two caps, both enforced by the server: the WALLET (what we owe them)
+   * and the seller's cash in the PAYING account (REMITTANCE_EXCEEDS_SELLER_HOLDING)
+   * — a payout is their cash leaving that account, so it has to be there;
+   * move it with a transfer first. The panel below shows where it sits.
    */
   const overBalance = (() => {
     const held = (balance.data?.balances ?? []).find(
@@ -120,6 +119,9 @@ export function RemittanceFormModal({
   const [paidFromAccountId, setPaidFromAccountId] = useState('');
   const [paidAt, setPaidAt] = useState(toLocalDt(new Date()));
   const [note, setNote] = useState('');
+  // What the bank charged to send it, in the paying account's currency.
+  // Ours (bank charges), not the seller's — they receive the amount above.
+  const [bankFee, setBankFee] = useState('');
   const [busy, setBusy] = useState(false);
   // Only accounts held in the currency that hits the seller's bank. The
   // server refuses a mismatch outright (BANK_CURRENCY_MISMATCH); offering
@@ -173,16 +175,6 @@ export function RemittanceFormModal({
     return (s * f).toFixed(2);
   }, [sourceAmount, fxRate]);
 
-  function fmtError(e: unknown): string {
-    if (e instanceof ApiError) {
-      const b = e.body as { code?: unknown; message?: unknown } | null;
-      const code = typeof b?.code === 'string' ? b.code : null;
-      const msg = typeof b?.message === 'string' ? b.message : e.message;
-      return code ? `[${code}] ${msg}` : msg;
-    }
-    return e instanceof Error ? e.message : 'Action failed';
-  }
-
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
     setError(null);
@@ -209,6 +201,11 @@ export function RemittanceFormModal({
       setError('Say which of our accounts the money left');
       return;
     }
+    const fee = bankFee.trim() === '' ? null : Number(bankFee);
+    if (fee !== null && (!Number.isFinite(fee) || fee <= 0)) {
+      setError('Bank fee must be a positive number, or left empty');
+      return;
+    }
     setBusy(true);
     try {
       const body: CreateRemittanceRequest = {
@@ -222,11 +219,12 @@ export function RemittanceFormModal({
         paidFromAccountId,
         paidAt: new Date(paidAt).toISOString(),
         ...(note.trim() ? { note: note.trim() } : {}),
+        ...(fee !== null ? { bankFee: fee } : {}),
       };
       const created = await create.mutateAsync(body);
       onSuccess(created);
     } catch (err) {
-      setError(fmtError(err));
+      setError(serverVerdict(err, 'Action failed'));
     } finally {
       setBusy(false);
     }
@@ -420,6 +418,29 @@ export function RemittanceFormModal({
           </FormField>
         </div>
 
+        <FormField
+          label={`Bank fee (${currency}, optional)`}
+          hint={
+            bankFee.trim() !== '' && Number(bankFee) > 0 ? (
+              <>
+                <Money amount={Number(bankFee).toFixed(2)} currency={currency} convert={false} />{' '}
+                booked as our bank charge — the seller still receives the full amount.
+              </>
+            ) : (
+              'What the bank charged to send it. Ours, booked under bank charges; the seller receives the full amount.'
+            )
+          }
+        >
+          <Input
+            type="number"
+            min={0.01}
+            step="0.01"
+            value={bankFee}
+            onChange={(e) => setBankFee(e.target.value)}
+            placeholder="0.00"
+          />
+        </FormField>
+
         <FormField label="Note">
           <Textarea
             rows={2}
@@ -442,9 +463,8 @@ export function RemittanceFormModal({
             The wallet holds{' '}
             <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />, so{' '}
             <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} /> is more
-            than we owe this seller. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). Note
-            this is capped by the WALLET, not by what we hold for them in the paying account —
-            paying beyond that draws on our own capital, which is normal.
+            than we owe this seller. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). The
+            paying account must also hold that much of their cash — see where it sits above.
           </div>
         )}
 

@@ -17,7 +17,9 @@ import { WithdrawalRequestService } from '../../seller-wallet-withdrawal/service
 import type { CreateRemittanceDto } from '../dto/create-remittance.dto';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { BankLedgerService } from '../../treasury/services/bank-ledger.service';
+import { upsertBankChargesCategory } from '../../treasury/services/bank-transfer.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 
 /**
  * Phase 1B M23 — Admin records a manual bank transfer to a seller.
@@ -185,12 +187,74 @@ export class RemittanceService {
       });
     }
 
+    const bankFee =
+      input.bankFee === undefined || input.bankFee === null
+        ? null
+        : new Prisma.Decimal(input.bankFee);
+    if (bankFee !== null && bankFee.lessThanOrEqualTo(0)) {
+      throw new BadRequestException({
+        code: 'REMITTANCE_BANK_FEE_INVALID',
+        message: 'A bank fee is a positive amount, or left out',
+      });
+    }
+
     const result = await this.prisma.client.$transaction(async (tx) => {
+      // WAL-7: the balance guard reads, then the debit writes — so the
+      // read happens under the wallet's lock, INSIDE this transaction.
+      // Read before it, two payouts (or a payout and a charge) could both
+      // see the same balance and both proceed. `applyEntry` takes the same
+      // lock below, re-entrantly.
+      await takeAdvisoryLock(
+        tx,
+        AdvisoryLock.WALLET,
+        `${input.sellerId}|${input.sourceCurrency}`,
+      );
       const balance = await this.wallet.balanceLive(input.sellerId, input.sourceCurrency, tx);
       if (balance.lt(sourceAmount)) {
         throw new BadRequestException({
           code: 'INSUFFICIENT_WALLET_BALANCE',
           message: `Wallet balance for ${input.sourceCurrency} (${balance}) is less than sourceAmount (${sourceAmount})`,
+        });
+      }
+
+      /*
+        THE PAYING ACCOUNT MUST HOLD THAT SELLER'S CASH, IN ITS CURRENCY.
+
+        The payout is posted as the seller's cash leaving this account.
+        Unchecked, an account holding none of theirs went NEGATIVE for
+        them — not a real thing, and permanent (append-only) — while the
+        cash they do hold elsewhere stayed "held for the seller" after
+        they had been paid it. Their money has to be where it is paid
+        from: move it there first with a transfer (which carries the
+        rate across a currency), then pay. Read under the seller's
+        reconcile lock, after the wallet lock (TRE-1; WALLET first,
+        everywhere).
+      */
+      await takeAdvisoryLock(
+        tx,
+        AdvisoryLock.BANK_RECONCILE,
+        `${input.paidFromAccountId}|${BankOwnerKind.SELLER}|${input.sellerId}`,
+      );
+      const heldHere = await this.bank.ownerBalance(
+        input.paidFromAccountId,
+        { kind: BankOwnerKind.SELLER, sellerId: input.sellerId },
+        tx,
+      );
+      if (heldHere.lt(amount)) {
+        const everywhere = await this.bank.holdingsForSeller(input.sellerId);
+        const where =
+          everywhere.length === 0
+            ? 'None of our accounts holds any cash of theirs.'
+            : `They hold: ${everywhere
+                .map((h) => `${h.label} ${h.amount} ${h.currency}`)
+                .join('; ')}.`;
+        throw new BadRequestException({
+          code: 'REMITTANCE_EXCEEDS_SELLER_HOLDING',
+          message:
+            `The paying account holds ${heldHere.toFixed(2)} ${input.currency} of this seller's ` +
+            `cash and the payout is ${amount.toFixed(2)} ${input.currency}. ${where} Move their ` +
+            'money into the paying account with a transfer first, or pay from the account that ' +
+            'holds it.',
         });
       }
 
@@ -258,6 +322,28 @@ export class RemittanceService {
         tx,
       );
 
+      // What the bank charged to send it: OURS, a named expense in the
+      // paying account's currency. Left off, the account total drops by it
+      // with nothing on any line to say why — and the statement shows it.
+      if (bankFee !== null) {
+        const category = await upsertBankChargesCategory(tx);
+        await this.bank.post(
+          {
+            accountId: input.paidFromAccountId,
+            type: BankEntryType.EXPENSE,
+            signedAmount: bankFee.neg(),
+            amountCurrency: input.currency,
+            owner: { kind: BankOwnerKind.CAPITAL },
+            occurredAt: new Date(input.paidAt),
+            reference: input.bankReference.trim(),
+            expenseCategoryId: category.id,
+            staffId: actor.staffId,
+            note: `Bank fee on the payout to the seller — ${input.bankReference.trim()}`,
+          },
+          tx,
+        );
+      }
+
       // NO paired credit on the destination currency.
       //
       // This used to write a REMITTANCE_FX credit for the converted
@@ -298,6 +384,7 @@ export class RemittanceService {
         sourceAmount: sourceAmount.toString(),
         fxRateSnapshot: fxRate.toString(),
         bankReference: input.bankReference,
+        bankFee: bankFee?.toString() ?? null,
       },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });

@@ -227,6 +227,8 @@ export class WalletService {
       direction: input.direction,
       amount: input.amount,
       walletEntryId: created.id,
+      // A refund moves only the part that lifts the wallet above zero.
+      balanceAfter: next,
     });
 
     return { id: created.id, runningBalanceAfter: created.runningBalanceAfter };

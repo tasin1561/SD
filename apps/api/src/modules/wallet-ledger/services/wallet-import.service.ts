@@ -436,6 +436,9 @@ export class WalletImportService {
           {
             OR: [
               { awbNumber: { in: [...awbs] } },
+              // A customer-return pickup is booked under its own waybill,
+              // and its charge is filed there — found by it too.
+              { reverseAwbNumber: { in: [...awbs] } },
               ...(fileOrderRefs.size > 0 ? [{ courierOrderId: { in: [...fileOrderRefs] } }] : []),
             ],
           },
@@ -446,6 +449,9 @@ export class WalletImportService {
         id: true,
         awbNumber: true,
         courierOrderId: true,
+        reverseAwbNumber: true,
+        supersededAt: true,
+        deletedAt: true,
         actualCourierCostInr: true,
         actualRtoCostInr: true,
         courierAccountId: true,
@@ -463,7 +469,11 @@ export class WalletImportService {
     // we still hold the first — is netted as part of that parcel. Without
     // this its charges matched no shipment and fell to the P&L's "no
     // Skydrop parcel" line, leaving the parcel's own cost too low.
-    const aliasOf = await this.waybillAliases(courierAccountId, shipments, input.txns);
+    const { aliasOf, returnAliases } = await this.waybillAliases(
+      courierAccountId,
+      shipments,
+      input.txns,
+    );
     for (const alias of aliasOf.keys()) awbs.add(alias);
 
     /*
@@ -501,17 +511,21 @@ export class WalletImportService {
       ? this.netFromFile(input.txns)
       : await this.netFromLedger(courierAccountId, [...awbs]);
     // One parcel, one net — whichever of its waybills a charge was filed under.
+    // A charge under the parcel's customer-return waybill is the return
+    // leg by definition, whatever the row's own leg says: the merged net
+    // then sits whole on the return column (COST-1's per-parcel rule).
     for (const [alias, primary] of aliasOf) {
       const a = netByAwb.get(alias);
       if (a === undefined) continue;
+      const aReturned = a.returned || returnAliases.has(alias);
       const p = netByAwb.get(primary);
       netByAwb.set(
         primary,
         p === undefined
-          ? a
+          ? { ...a, returned: aReturned }
           : {
               total: p.total.add(a.total),
-              returned: p.returned || a.returned,
+              returned: p.returned || aReturned,
               latestAt: p.latestAt.getTime() >= a.latestAt.getTime() ? p.latestAt : a.latestAt,
             },
       );
@@ -621,7 +635,8 @@ export class WalletImportService {
         t.kind === 'DEBIT' ? adjustmentsNet.add(t.amountInr) : adjustmentsNet.sub(t.amountInr);
     }
 
-    const unknownAwbs = [...fileAwbs].filter((a) => !byAwb.has(a)).length;
+    // A waybill that is another name for one of our parcels is not unknown.
+    const unknownAwbs = [...fileAwbs].filter((a) => !byAwb.has(a) && !aliasOf.has(a)).length;
 
     const result: WalletImportResult = {
       rowsRead: input.rowsRead,
@@ -891,54 +906,89 @@ export class WalletImportService {
   }
 
   /**
-   * Waybills that are another name for one of `shipments`: filed under the
-   * same courier ORDER id, but not the waybill the shipment holds. Returns
-   * alias → the shipment's own waybill. A waybill that is itself some
-   * shipment's is never an alias — that is two parcels, not one.
+   * Waybills that are another name for one of `shipments`, as alias → the
+   * shipment's own waybill:
+   *
+   *   - filed under the same courier ORDER id but not the waybill the
+   *     shipment holds (Shiprocket reassigned the parcel);
+   *   - the shipment's customer-return pickup waybill (`reverseAwbNumber`)
+   *     — the same parcel coming back, so its charges are that parcel's
+   *     and mark it RETURNED (`returnAliases`).
+   *
+   * When two of our shipments share an order id — a superseded one and
+   * its replacement — the LIVE one (not superseded, not deleted) is the
+   * primary; whichever the query happened to return last used to win,
+   * which could net a live parcel's charges onto a retired row. A waybill
+   * that is itself some shipment's is never an alias — that is two
+   * parcels, not one.
    */
   private async waybillAliases(
     courierAccountId: string,
-    shipments: ReadonlyArray<{ awbNumber: string | null; courierOrderId: string | null }>,
+    shipments: ReadonlyArray<{
+      awbNumber: string | null;
+      courierOrderId: string | null;
+      reverseAwbNumber?: string | null;
+      supersededAt?: Date | null;
+      deletedAt?: Date | null;
+    }>,
     fileTxns: readonly LedgerTxn[],
-  ): Promise<Map<string, string>> {
+  ): Promise<{ aliasOf: Map<string, string>; returnAliases: Set<string> }> {
     const out = new Map<string, string>();
-    const primaryByRef = new Map<string, string>();
+    const returnAliases = new Set<string>();
+    const primaryByRef = new Map<string, { awb: string; live: boolean }>();
     for (const s of shipments) {
-      if (typeof s.courierOrderId === 'string' && typeof s.awbNumber === 'string') {
-        primaryByRef.set(s.courierOrderId, s.awbNumber);
+      if (typeof s.awbNumber !== 'string') continue;
+      const live = (s.supersededAt ?? null) === null && (s.deletedAt ?? null) === null;
+      if (typeof s.courierOrderId === 'string') {
+        const held = primaryByRef.get(s.courierOrderId);
+        if (held === undefined || (!held.live && live)) {
+          primaryByRef.set(s.courierOrderId, { awb: s.awbNumber, live });
+        }
+      }
+      const reverse = s.reverseAwbNumber ?? null;
+      if (reverse !== null && reverse !== s.awbNumber) {
+        out.set(reverse, s.awbNumber);
+        returnAliases.add(reverse);
       }
     }
-    if (primaryByRef.size === 0) return out;
 
-    const filed = await this.prisma.client.courierWalletTransaction.findMany({
-      where: {
-        courierAccountId,
-        category: CourierWalletTxnCategory.PARCEL,
-        courierOrderRef: { in: [...primaryByRef.keys()] },
-      },
-      select: { awbNumber: true, courierOrderRef: true },
-      distinct: ['awbNumber'],
-    });
-    const pairs = [
-      ...fileTxns
-        .filter((t) => t.category === 'PARCEL')
-        .map((t) => ({ awbNumber: t.awbNumber, courierOrderRef: t.courierOrderRef ?? null })),
-      ...filed,
-    ];
-    for (const p of pairs) {
-      if (p.awbNumber === null || p.courierOrderRef === null) continue;
-      const primary = primaryByRef.get(p.courierOrderRef);
-      if (primary === undefined || primary === p.awbNumber) continue;
-      out.set(p.awbNumber, primary);
+    if (primaryByRef.size > 0) {
+      const filed = await this.prisma.client.courierWalletTransaction.findMany({
+        where: {
+          courierAccountId,
+          category: CourierWalletTxnCategory.PARCEL,
+          courierOrderRef: { in: [...primaryByRef.keys()] },
+        },
+        select: { awbNumber: true, courierOrderRef: true },
+        distinct: ['awbNumber'],
+      });
+      const pairs = [
+        ...fileTxns
+          .filter((t) => t.category === 'PARCEL')
+          .map((t) => ({ awbNumber: t.awbNumber, courierOrderRef: t.courierOrderRef ?? null })),
+        ...filed,
+      ];
+      for (const p of pairs) {
+        if (p.awbNumber === null || p.courierOrderRef === null) continue;
+        const primary = primaryByRef.get(p.courierOrderRef)?.awb;
+        if (primary === undefined || primary === p.awbNumber) continue;
+        // A return waybill already says which parcel it is.
+        if (returnAliases.has(p.awbNumber)) continue;
+        out.set(p.awbNumber, primary);
+      }
     }
-    if (out.size === 0) return out;
+    if (out.size === 0) return { aliasOf: out, returnAliases };
     // Never merge a waybill some shipment holds as its own.
     const taken = await this.prisma.client.shipment.findMany({
       where: { awbNumber: { in: [...out.keys()] } },
       select: { awbNumber: true },
     });
-    for (const t of taken) if (t.awbNumber !== null) out.delete(t.awbNumber);
-    return out;
+    for (const t of taken) {
+      if (t.awbNumber === null) continue;
+      out.delete(t.awbNumber);
+      returnAliases.delete(t.awbNumber);
+    }
+    return { aliasOf: out, returnAliases };
   }
 
   /** The same arithmetic over the FILE, for a dry run — which must not

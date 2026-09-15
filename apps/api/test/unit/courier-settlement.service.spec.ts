@@ -44,6 +44,12 @@ function makeSut(
     debt?: Record<string, string>;
     /** Waybill-bearing shipments of the payout's orders. */
     shipments?: AnyArgs[];
+    /** Cash the reversed order's seller holds in OTHER currencies, in rupees. */
+    sellerHeldOther?: string;
+    /** The credit reverseForOrder takes back (the gross G). */
+    reverseGross?: string;
+    /** The seller's COD mode TODAY. */
+    mode?: 'SETTLEMENT' | 'INSTANT_PAY';
   } = {},
 ) {
   // ONE lookup: the courier exists, and this is where its cash lands.
@@ -149,12 +155,12 @@ function makeSut(
     credited: !(opts.alreadyCredited ?? []).includes(input.orderId),
   }));
   const reverseForOrder = jest.fn(async () => ({
-    grossInr: '0.00',
+    grossInr: opts.reverseGross ?? '300.00',
     returnedInr: '0.00',
     ...(opts.reverse ?? { reversed: true }),
   }));
   const codCredit = {
-    resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+    resolveMode: jest.fn(async () => opts.mode ?? 'SETTLEMENT'),
     isCredited: jest.fn(async (_tx: unknown, orderId: string) =>
       (opts.alreadyCredited ?? []).includes(orderId),
     ),
@@ -176,11 +182,21 @@ function makeSut(
   // The real split is pinned in seller-cash-attribution.service.spec and
   // end to end in settlement-bank-invariant.spec.
   const debt = new Map(Object.entries(opts.debt ?? {}).map(([k, v]) => [k, D(v)]));
+  const takeFromSeller = jest.fn(
+    async (_tx: unknown, i: { amountInr: Prisma.Decimal; skipInr?: boolean }) => i.amountInr,
+  );
   const attribution = {
     sellerHeld: jest.fn(async () => ({
       total: D(opts.sellerHeld ?? '0'),
       accountId: 'bank-inr-1',
     })),
+    // Rupees at face value, other currencies already valued in rupees.
+    sellerHeldAll: jest.fn(async () => {
+      const inr = D(opts.sellerHeld ?? '0');
+      const otherInr = D(opts.sellerHeldOther ?? '0');
+      return { inr, otherInr, totalInr: inr.add(otherInr) };
+    }),
+    takeFromSeller,
     debtSplit: jest.fn(async (_tx: unknown, sellerId: string, amount: Prisma.Decimal) => {
       const owed = debt.get(sellerId) ?? D('0');
       const toCapital = owed.lt(amount) ? owed : amount;
@@ -192,6 +208,7 @@ function makeSut(
   return {
     svc: new CourierSettlementService(prisma, audit, codCredit, wallet, bank, attribution),
     creditForOrder,
+    takeFromSeller,
     reverseForOrder,
     bankPost,
     auditLog,
@@ -886,6 +903,110 @@ describe('CourierSettlementService.record — the cash behind the credit', () =>
     const rev = lines.find((l) => l['orderId'] === 'o-9');
     expect(String(rev?.['settledInr'])).toBe('-250');
     expect(String(rev?.['shortfallInr'])).toBe('-50');
+    // The seller gives back the whole ₹300 credit; the courier took ₹250,
+    // so ₹50 of it returns to capital — the gap we had absorbed.
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    const rto = posts.filter((p) => String(p['note']).startsWith('COD reversed'));
+    expect(rto.map((p) => [ownerKind(p), String(p['signedAmount'])])).toEqual([
+      ['SELLER', '-300'],
+      ['CAPITAL', '50'],
+    ]);
+  });
+
+  it('takes back the GROSS credit, not what the courier paid — the audit example', async () => {
+    // G ₹1,000 credited, its ₹152.54 of deductions given back (so they hold
+    // ₹1,000 of it), the courier taking back the ₹950 it paid. Capped at
+    // ₹950 they kept ₹50 with a wallet at zero. Now ₹1,000 leaves them and
+    // capital gets +₹50: the short-payment we absorbed, repaid.
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '950.00' },
+      reverseGross: '1000.00',
+      sellerHeld: '1000',
+    });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '50.00',
+      deductions: { rtoReversals: [{ orderId: 'o-9', amountInr: '950.00' }] },
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    const rto = posts.filter((p) => String(p['note']).startsWith('COD reversed'));
+    expect(rto.map((p) => [ownerKind(p), String(p['signedAmount'])])).toEqual([
+      ['SELLER', '-1000'],
+      ['CAPITAL', '50'],
+    ]);
+    // The account still moves by exactly what landed.
+    const net = posts.reduce((t, p) => t.add(p['signedAmount'] as Prisma.Decimal), D('0'));
+    expect(net.toFixed(2)).toBe('50.00');
+  });
+
+  it('beyond their rupees, a reversal is taken from what they hold in another currency', async () => {
+    // ₹100 in rupees and ₹500 worth of taka. ₹300 credited, ₹300 reversed:
+    // ₹100 leaves in rupees here, ₹200 of the taka is made ours where it
+    // sits, and capital pays the courier the other ₹200.
+    const sut = makeSut({
+      orders: withReversed,
+      priorSettled: { 'o-9': '300.00' },
+      sellerHeld: '100',
+      sellerHeldOther: '500',
+    });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      amountInr: '700.00',
+      deductions: { rtoReversals: [{ orderId: 'o-9', amountInr: '300.00' }] },
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    const rto = posts.filter((p) => String(p['note']).startsWith('COD reversed'));
+    expect(rto.map((p) => [ownerKind(p), String(p['signedAmount'])])).toEqual([
+      ['SELLER', '-100'],
+      ['CAPITAL', '-200'],
+    ]);
+    expect(sut.takeFromSeller).toHaveBeenCalledTimes(1);
+    const call = sut.takeFromSeller.mock.calls[0]?.[1];
+    expect(call?.amountInr.toFixed(2)).toBe('200.00');
+    expect(call?.skipInr).toBe(true);
+  });
+
+  it('credits an order never credited, whatever the seller’s mode is now — as SETTLEMENT', async () => {
+    // Delivered under SETTLEMENT, the seller since moved to Instant Pay:
+    // it used to be skipped as "already paid at delivery" and was credited
+    // nowhere. Credited here, with no instant fee — it was not paid early.
+    const sut = makeSut({ orders, mode: 'INSTANT_PAY' });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    expect(sut.creditForOrder).toHaveBeenCalledTimes(2);
+    expect(
+      sut.creditForOrder.mock.calls.map((c) => (c[1] as unknown as { mode: string }).mode),
+    ).toEqual(['SETTLEMENT', 'SETTLEMENT']);
+  });
+
+  it('an Instant-Pay order credited at delivery is not credited again, and its cash is ours', async () => {
+    const sut = makeSut({ orders, mode: 'INSTANT_PAY', alreadyCredited: ['o-1', 'o-2'] });
+    await sut.svc.record(STAFF, {
+      ...BASE,
+      lines: [
+        { orderId: 'o-1', settledInr: '600.00' },
+        { orderId: 'o-2', settledInr: '400.00' },
+      ],
+    });
+    expect(sut.creditForOrder).not.toHaveBeenCalled();
+    const posts = sut.bankPost.mock.calls.map((c) => c[0] as AnyArgs);
+    expect(posts.map((p) => [ownerKind(p), String(p['signedAmount'])])).toEqual([
+      ['CAPITAL', '1000'],
+    ]);
   });
 
   it('refuses an order that is both paid and reversed in one payout', async () => {
@@ -1042,8 +1163,13 @@ describe('CourierSettlementService.allocateMore', () => {
       fee?: string;
       existingOrders?: string[];
       orders?: Array<{ id: string; sellerId: string; codAmountInr: Prisma.Decimal | null }>;
+      /** The seller's COD mode TODAY. */
+      mode?: 'SETTLEMENT' | 'INSTANT_PAY';
     } = {},
   ) {
+    const allocCredit = jest.fn(async (_tx: unknown, _i: { orderId: string; mode: string }) => ({
+      credited: true,
+    }));
     const bankPost = jest.fn<Promise<{ id: string }>, [AnyArgs, unknown?]>(async () => ({
       id: 'be-1',
     }));
@@ -1090,9 +1216,9 @@ describe('CourierSettlementService.allocateMore', () => {
       prisma,
       { log: jest.fn(async () => 'a1') } as unknown as AuditLogService,
       {
-        resolveMode: jest.fn(async () => 'SETTLEMENT' as const),
+        resolveMode: jest.fn(async () => opts.mode ?? 'SETTLEMENT'),
         isCredited: jest.fn(async () => false),
-        creditForOrder: jest.fn(async () => ({ credited: true })),
+        creditForOrder: allocCredit,
       } as unknown as CodCreditService,
       { recomputeCacheAfterCommit: jest.fn(async () => undefined) } as unknown as WalletService,
       { post: bankPost } as unknown as BankLedgerService,
@@ -1106,8 +1232,19 @@ describe('CourierSettlementService.allocateMore', () => {
     // getById reads back through the same client; stub it out — the
     // return shape is pinned by record()'s own tests.
     jest.spyOn(svc, 'getById').mockResolvedValue({} as never);
-    return { svc, bankPost, createMany, update };
+    return { svc, bankPost, createMany, update, creditForOrder: allocCredit };
   }
+
+  it('credits an order not yet credited even when the seller has since moved to Instant Pay', async () => {
+    const { svc, creditForOrder } = makeAllocSut({ mode: 'INSTANT_PAY' });
+    await svc.allocateMore('staff-1', SETTLEMENT, {
+      lines: [{ orderId: 'o-2', settledInr: '400.00' }],
+    });
+    expect(creditForOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orderId: 'o-2', mode: 'SETTLEMENT' }),
+    );
+  });
 
   it('refuses to allocate more than actually landed', async () => {
     // The one thing this must not be able to do. Past the ceiling it

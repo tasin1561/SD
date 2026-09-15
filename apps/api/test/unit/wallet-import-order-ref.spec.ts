@@ -30,7 +30,15 @@ const TXN: LedgerTxn = {
   detail: null,
 };
 
-function makeSut(opts: { taken?: string[] } = {}) {
+function makeSut(
+  opts: {
+    taken?: string[];
+    /** Our shipments the import finds; default one live parcel on NEW-AWB. */
+    shipments?: Array<Record<string, unknown>>;
+    /** Further stored charges, by waybill. */
+    extraRows?: Array<{ awbNumber: string; amount: string }>;
+  } = {},
+) {
   const update = jest.fn(
     async (_a: { where: { id: string }; data: Record<string, unknown> }) => ({}),
   );
@@ -44,6 +52,7 @@ function makeSut(opts: { taken?: string[] } = {}) {
     return [
       { awbNumber: 'NEW-AWB', amount: '40.00' },
       { awbNumber: 'OLD-AWB', amount: '60.00' },
+      ...(opts.extraRows ?? []),
     ]
       .filter((r) => inList.includes(r.awbNumber))
       .map((r) => ({
@@ -56,6 +65,7 @@ function makeSut(opts: { taken?: string[] } = {}) {
   });
   const shipmentFind = jest.fn(async (a: { where: Record<string, unknown> }) => {
     if (a.where['AND'] !== undefined) {
+      if (opts.shipments !== undefined) return opts.shipments;
       return [
         {
           id: 'sh-1',
@@ -128,6 +138,56 @@ describe('a parcel whose waybill Shiprocket replaced', () => {
     const { svc, update } = makeSut({ taken: ['OLD-AWB'] });
     await run(svc);
     expect(forwardWritten(update)).toBe('40.00');
+  });
+
+  it('nets onto the LIVE shipment when a superseded one shares the order id', async () => {
+    // The retired row came back LAST, and last used to win: OLD-AWB's ₹60
+    // netted onto the superseded parcel and the live one read ₹40.
+    const base = {
+      courierOrderId: 'SR-ORDER-1',
+      actualCourierCostInr: null,
+      actualRtoCostInr: null,
+      courierAccountId: 'acct-sr',
+      reverseAwbNumber: null,
+      deletedAt: null,
+      orderShipments: [],
+    };
+    const { svc, update } = makeSut({
+      shipments: [
+        { ...base, id: 'sh-1', awbNumber: 'NEW-AWB', supersededAt: null },
+        { ...base, id: 'sh-0', awbNumber: 'SUP-AWB', supersededAt: AT },
+      ],
+    });
+    await run(svc);
+    expect(update.mock.calls[0]?.[0].where).toEqual({ id: 'sh-1' });
+    expect(forwardWritten(update)).toBe('100.00');
+  });
+
+  it("a charge under the parcel's customer-return waybill is its RETURN cost", async () => {
+    // ₹25 filed under the return pickup's own waybill. It is the same
+    // parcel coming back: netted into it, and the whole net sits on the
+    // return column (COST-1), ₹0 forward.
+    const { svc, update } = makeSut({
+      shipments: [
+        {
+          id: 'sh-1',
+          awbNumber: 'NEW-AWB',
+          courierOrderId: null,
+          reverseAwbNumber: 'RET-AWB',
+          supersededAt: null,
+          deletedAt: null,
+          actualCourierCostInr: null,
+          actualRtoCostInr: null,
+          courierAccountId: 'acct-sr',
+          orderShipments: [],
+        },
+      ],
+      extraRows: [{ awbNumber: 'RET-AWB', amount: '25.00' }],
+    });
+    await run(svc);
+    const data = update.mock.calls.map((c) => c[0].data);
+    expect((data[0]?.['actualCourierCostInr'] as Prisma.Decimal).toFixed(2)).toBe('0.00');
+    expect((data[1]?.['actualRtoCostInr'] as Prisma.Decimal).toFixed(2)).toBe('65.00');
   });
 
   it('stores their order id with each charge', async () => {

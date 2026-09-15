@@ -1,10 +1,24 @@
+import { Prisma } from '@skydrop/db';
 import { ChargesBillingBackfillService } from '../../src/modules/seller-wallet-accrual/services/charges-billing-backfill.service';
 
 type AnyArgs = Record<string, unknown>;
 
 type Candidate = { id: string; orderNumber: string; status: string; sellerId: string };
 
-function makeService(candidates: Candidate[], returns: Candidate[] = []) {
+function makeService(
+  candidates: Candidate[],
+  returns: Candidate[] = [],
+  /** Each seller's resolved return fees; absent = the seeded ₹30 / ₹200. */
+  fees: Record<string, { rto: string; customer: string }> = {},
+) {
+  const pricing = {
+    resolveRtoFee: jest.fn(async (s: string) => ({
+      amount: new Prisma.Decimal(fees[s]?.rto ?? '30'),
+    })),
+    resolveCustomerReturnFee: jest.fn(async (s: string) => ({
+      amount: new Prisma.Decimal(fees[s]?.customer ?? '200'),
+    })),
+  };
   // Two queries: the unbilled orders, and received returns with no return
   // fee (told apart by the fee directions in their filter).
   const findMany = jest.fn<Promise<Candidate[]>, [AnyArgs]>(async (args) =>
@@ -32,6 +46,7 @@ function makeService(candidates: Candidate[], returns: Candidate[] = []) {
     charges: { persistForOrderSystem },
     accrual: { debitIfNeeded },
     rtoFees: { chargeOnReceive },
+    pricing,
     logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
   });
   return { svc, findMany, debitIfNeeded, persistForOrderSystem, chargeOnReceive };
@@ -55,6 +70,29 @@ describe('ChargesBillingBackfillService.run — return fees never taken', () => 
     expect(where['walletEntries']).toEqual({
       none: { direction: { in: ['RTO_FEE', 'CUSTOMER_RETURN_FEE'] } },
     });
+  });
+
+  it('stops re-listing a return whose fee is free once its delivery fee is taken', async () => {
+    // s1 gives free RTOs (fee 0). `chargeOnReceive` then writes no fee
+    // entry, so the order matched again every run — "NO_RETURN_FEE"
+    // forever, filling `limit` ahead of returns that ARE owed a fee.
+    const { svc, findMany } = makeService([], RETURNS, { s1: { rto: '0', customer: '200' } });
+    await svc.run({ dryRun: true, limit: 100 });
+    // calls: [0] unbilled orders, [1] which sellers have returns, [2] the returns.
+    const where = (findMany.mock.calls[2]?.[0] as AnyArgs).where as AnyArgs;
+    const taken = { walletEntries: { some: { direction: 'ORDER_CHARGES' } } };
+    expect(where['NOT']).toEqual([
+      { sellerId: { in: ['s1'] }, customerReturnRequestedAt: null, ...taken },
+      { sellerId: { in: [] }, customerReturnRequestedAt: { not: null }, ...taken },
+    ]);
+  });
+
+  it('excludes nobody while every fee is above zero', async () => {
+    const { svc, findMany } = makeService([], RETURNS);
+    await svc.run({ dryRun: true, limit: 100 });
+    const where = (findMany.mock.calls[2]?.[0] as AnyArgs).where as AnyArgs;
+    const not = where['NOT'] as Array<{ sellerId: { in: string[] } }>;
+    expect(not.map((n) => n.sellerId.in)).toEqual([[], []]);
   });
 
   it('a dry run lists them and charges nothing', async () => {

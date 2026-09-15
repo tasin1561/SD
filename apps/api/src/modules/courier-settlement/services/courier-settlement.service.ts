@@ -488,9 +488,15 @@ export class CourierSettlementService {
         }
         const order = byId.get(line.orderId);
         if (!order) continue;
-        const mode = await this.codCredit.resolveMode(order.sellerId);
-        if (mode !== 'SETTLEMENT') continue; // already paid at delivery
         if (line.expectedInr.lessThanOrEqualTo(0)) continue; // no COD to credit
+        // WHATEVER the seller's mode is TODAY. The question is whether this
+        // order was ever credited, not how the seller is paid now: an order
+        // delivered under SETTLEMENT whose seller then switched to Instant
+        // Pay was skipped here ("already paid at delivery") and credited
+        // nowhere — Instant Pay credits at delivery, and its delivery was
+        // already past. An Instant-Pay order credited at delivery is caught
+        // by the credited gate below. One credited here is credited as
+        // SETTLEMENT: it was not paid early, so it carries no instant fee.
         // Held for the seller ONLY when this payout is what credits them.
         // An order already credited on an earlier payout (the rest of a
         // part-payment) was held for them then; that cash repays what we
@@ -525,7 +531,7 @@ export class CourierSettlementService {
           orderId: order.id,
           sellerId: order.sellerId,
           grossInr: line.expectedInr,
-          mode,
+          mode: 'SETTLEMENT',
         });
         if (!credit.credited) {
           // Unreachable under the wallet lock: the gate above is the one
@@ -547,7 +553,14 @@ export class CourierSettlementService {
       // returned — exactly, per order. The cash leaving is theirs as far
       // as they still hold any with us; beyond that it is ours, and their
       // wallet shows what they now owe.
-      const clawbacks: Array<{ sellerId: string | null; amount: Prisma.Decimal }> = [];
+      const clawbacks: Array<{
+        sellerId: string | null;
+        /** What the courier takes back: what it had paid on the order. */
+        amount: Prisma.Decimal;
+        /** The credit reversed — what the seller had been credited. */
+        gross: Prisma.Decimal;
+        orderId: string;
+      }> = [];
       for (const r of rtoReversals) {
         const order = byId.get(r.orderId);
         if (!order) continue; // refused before the transaction
@@ -562,7 +575,12 @@ export class CourierSettlementService {
             message: `This order's COD was already reversed on an earlier payout (${r.orderId}).`,
           });
         }
-        clawbacks.push({ sellerId: res.reversed ? order.sellerId : null, amount: r.amount });
+        clawbacks.push({
+          sellerId: res.reversed ? order.sellerId : null,
+          amount: r.amount,
+          gross: res.reversed ? new Prisma.Decimal(res.grossInr) : ZERO,
+          orderId: order.id,
+        });
       }
 
       // ── The cash ─────────────────────────────────────────────────
@@ -619,13 +637,34 @@ export class CourierSettlementService {
       }
       // The reversed COD leaving again, grossed up above like the rest.
       for (const c of clawbacks) {
+        // What leaves the SELLER is the credit being taken back — the
+        // gross G they were credited — not what the courier had paid (R).
+        // Capped at R, a short-paid order left them holding G − R with a
+        // wallet at zero: G ₹1,000 credited, ₹152.54 of deductions given
+        // back, the courier taking back the ₹950 it paid → ₹50 still "theirs"
+        // for nothing. So min(what they hold, G) leaves the seller, and
+        // capital carries R minus that — POSITIVE when it exceeds R, which is
+        // the ₹50 shortfall we absorbed coming back to us.
+        //
+        // What they hold is counted in EVERY currency (a taka top-up
+        // included, at its credited rate): rupees leave here, in the
+        // receiving account, as before; anything beyond their rupees is
+        // made ours where it sits.
         let fromSeller = ZERO;
-        if (c.sellerId !== null) {
-          // What they hold with us in ANY rupee account: the deductions
-          // just returned to them land wherever their money already is, so
-          // capping against the receiving account alone could strand it.
-          const h = (await this.attribution.sellerHeld(tx, c.sellerId, Currency.INR)).total;
-          fromSeller = h.lt(c.amount) ? h : c.amount;
+        if (c.sellerId !== null && c.gross.gt(0)) {
+          const held = await this.attribution.sellerHeldAll(tx, c.sellerId);
+          const take = held.totalInr.lt(c.gross) ? held.totalInr : c.gross;
+          fromSeller = held.inr.lt(take) ? held.inr : take;
+          const beyondRupees = take.sub(fromSeller);
+          if (beyondRupees.gt(0)) {
+            await this.attribution.takeFromSeller(tx, {
+              sellerId: c.sellerId,
+              amountInr: beyondRupees,
+              reference,
+              note: `COD reversed by the courier on ${reference} — order ${c.orderId}`,
+              skipInr: true,
+            });
+          }
         }
         if (fromSeller.gt(0) && c.sellerId !== null) {
           await this.bank.post(
@@ -644,8 +683,11 @@ export class CourierSettlementService {
             tx,
           );
         }
+        // Negative: capital pays what the seller could not. Positive: the
+        // seller gave back more than the courier took, repaying the
+        // short-payment we absorbed on this order.
         const fromCapital = c.amount.sub(fromSeller);
-        if (fromCapital.gt(0)) {
+        if (!fromCapital.isZero()) {
           await this.bank.post(
             {
               accountId: receivingAccount.id,
@@ -660,7 +702,9 @@ export class CourierSettlementService {
               note:
                 c.sellerId === null
                   ? `COD reversed by the courier on ${reference} — an order never credited`
-                  : `COD reversed by the courier on ${reference} — beyond what the seller holds; their wallet owes it`,
+                  : fromCapital.isNegative()
+                    ? `COD reversed by the courier on ${reference} — the credit taken back exceeds what the courier took; repays the short-payment we absorbed`
+                    : `COD reversed by the courier on ${reference} — beyond what the seller holds; their wallet owes it`,
             },
             tx,
           );
@@ -1011,8 +1055,7 @@ export class CourierSettlementService {
       for (const line of lineData) {
         const order = byId.get(line.orderId);
         if (!order) continue;
-        const mode = await this.codCredit.resolveMode(order.sellerId);
-        if (mode !== 'SETTLEMENT') continue; // already paid at delivery
+        // Whatever the seller's mode is now — see `record`.
         if (line.expectedInr.lessThanOrEqualTo(0)) continue;
         await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
         if (await this.codCredit.isCredited(tx, order.id)) continue;
@@ -1039,7 +1082,7 @@ export class CourierSettlementService {
           orderId: order.id,
           sellerId: order.sellerId,
           grossInr: line.expectedInr,
-          mode,
+          mode: 'SETTLEMENT',
         });
         if (!credit.credited) {
           throw new ConflictException({

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OrderStatus, WalletEntryDirection } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { OrderChargesService } from '../../order-charges/services/order-charges.service';
+import { PricingEngineService } from '../../pricing/services/pricing-engine.service';
 import { OrderChargesAccrualService } from './order-charges-accrual.service';
 import { RtoFeeAccrualService } from './rto-fee-accrual.service';
 
@@ -60,6 +61,7 @@ export class ChargesBillingBackfillService {
     private readonly charges: OrderChargesService,
     private readonly accrual: OrderChargesAccrualService,
     private readonly rtoFees: RtoFeeAccrualService,
+    private readonly pricing: PricingEngineService,
   ) {}
 
   async run(opts: { dryRun: boolean; limit: number }): Promise<BillingBackfillReport> {
@@ -149,17 +151,60 @@ export class ChargesBillingBackfillService {
     // older than the fee — owes it and was never asked. The live path
     // and its own gate (a prior RTO_FEE / CUSTOMER_RETURN_FEE entry), so
     // a second run charges nobody twice.
-    const returns = await this.prisma.client.order.findMany({
-      where: {
-        deletedAt: null,
-        status: { in: [...RETURN_TERMINALS] },
-        walletEntries: {
-          none: {
-            direction: {
-              in: [WalletEntryDirection.RTO_FEE, WalletEntryDirection.CUSTOMER_RETURN_FEE],
-            },
+    const returnsWhere = {
+      deletedAt: null,
+      status: { in: [...RETURN_TERMINALS] },
+      walletEntries: {
+        none: {
+          direction: {
+            in: [WalletEntryDirection.RTO_FEE, WalletEntryDirection.CUSTOMER_RETURN_FEE],
           },
         },
+      },
+    };
+    // ── A seller with FREE returns is not owed a sweep every run ──────
+    // A return fee that resolves to 0 is a legitimate configuration, so
+    // `chargeOnReceive` writes no fee entry — and without one the order
+    // matched this query again on the next run, and the next, listed as
+    // NO_RETURN_FEE forever. Worse, those rows sit first (oldest) and
+    // fill `limit`, so returns that ARE owed a fee stop being reached.
+    //
+    // Excluded once there is nothing left for the sweep to do: the
+    // seller's fee of that KIND (RTO vs customer return) resolves to 0
+    // AND the order's delivery fee has already been taken (the other half
+    // of `chargeOnReceive`). One still unbilled stays in, because the
+    // sweep bills its delivery fee; once billed, it drops out. Resolved
+    // afresh every run, so a seller whose fee is later set above 0 comes
+    // straight back.
+    const returnSellers = await this.prisma.client.order.findMany({
+      where: returnsWhere,
+      distinct: ['sellerId'],
+      select: { sellerId: true },
+    });
+    const freeRto: string[] = [];
+    const freeCustomerReturn: string[] = [];
+    for (const { sellerId } of returnSellers) {
+      const [rto, customer] = await Promise.all([
+        this.pricing.resolveRtoFee(sellerId),
+        this.pricing.resolveCustomerReturnFee(sellerId),
+      ]);
+      if (rto.amount.lessThanOrEqualTo(0)) freeRto.push(sellerId);
+      if (customer.amount.lessThanOrEqualTo(0)) freeCustomerReturn.push(sellerId);
+    }
+    const deliveryFeeTaken = {
+      walletEntries: { some: { direction: WalletEntryDirection.ORDER_CHARGES } },
+    };
+    const returns = await this.prisma.client.order.findMany({
+      where: {
+        ...returnsWhere,
+        NOT: [
+          { sellerId: { in: freeRto }, customerReturnRequestedAt: null, ...deliveryFeeTaken },
+          {
+            sellerId: { in: freeCustomerReturn },
+            customerReturnRequestedAt: { not: null },
+            ...deliveryFeeTaken,
+          },
+        ],
       },
       select: { id: true, orderNumber: true, status: true, sellerId: true },
       orderBy: { createdAt: 'asc' },

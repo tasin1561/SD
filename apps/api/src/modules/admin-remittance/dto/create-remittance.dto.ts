@@ -81,6 +81,19 @@ export class CreateRemittanceDto {
   @IsUUID('7')
   paidFromAccountId!: string;
 
+  @ApiProperty({
+    required: false,
+    minimum: 0.01,
+    description:
+      'What the bank charged to send it, in the PAYING account’s currency. Booked as our ' +
+      'expense (bank charges); the seller receives `amount` in full.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  bankFee?: number;
+
   @ApiProperty({ format: 'date-time' })
   @IsDateString()
   paidAt!: string;

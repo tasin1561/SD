@@ -154,9 +154,9 @@ export function PayoutInstructionPanel({
             <div className="text-text-muted">Loading…</div>
           ) : (holdings.data ?? []).length === 0 ? (
             <div className="text-text-muted">
-              None of our accounts holds cash attributed to this seller. That is normal for a wallet
-              built from credits rather than transfers — the money to pay them is our capital, and
-              paying it is what settles the liability.
+              None of our accounts holds cash attributed to this seller, so there is nothing of
+              theirs to pay out — the server refuses a payout from an account that does not hold
+              their cash (REMITTANCE_EXCEEDS_SELLER_HOLDING).
             </div>
           ) : (
             <ul className="space-y-0.5">

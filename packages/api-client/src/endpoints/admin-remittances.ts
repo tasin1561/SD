@@ -44,4 +44,6 @@ export interface CreateRemittanceRequest {
   /** ISO 8601 */
   readonly paidAt: string;
   readonly note?: string;
+  /** What the bank charged to send it, in the paying account's currency. Ours. */
+  readonly bankFee?: number;
 }

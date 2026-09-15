@@ -1,7 +1,16 @@
 import { Currency, Prisma } from '@skydrop/db';
 import { BankTransferService } from '../../src/modules/treasury/services/bank-transfer.service';
+import { AdvisoryLock } from '../../src/common/db/advisory-lock';
 
-function make(fromCur: Currency, toCur: Currency, sellerHeld = '1000000') {
+type Rate = { inr: Prisma.Decimal; local: Prisma.Decimal; source: string };
+
+function make(
+  fromCur: Currency,
+  toCur: Currency,
+  sellerHeld = '1000000',
+  /** The rate each account's seller money was credited at; absent = none known. */
+  rates: Record<string, { inr: string; local: string }> = {},
+) {
   const posted: Array<{ type: string; signedAmount: string; ownerKind: string }> = [];
   const ledger = {
     post: jest.fn(
@@ -18,6 +27,8 @@ function make(fromCur: Currency, toCur: Currency, sellerHeld = '1000000') {
     // default so the rate cases below stay about the rate.
     ownerBalance: jest.fn(async () => new Prisma.Decimal(sellerHeld)),
   };
+  // The advisory locks, in the order they were taken.
+  const executeRaw = jest.fn(async (..._args: unknown[]) => 1);
   const prisma = {
     client: {
       platformBankAccount: {
@@ -37,16 +48,34 @@ function make(fromCur: Currency, toCur: Currency, sellerHeld = '1000000') {
           // The holding guard takes the same advisory lock reconcile
           // does; a mocked tx has to answer it or the whole transfer
           // fails for the wrong reason.
-          $executeRaw: async () => 1,
+          $executeRaw: executeRaw,
         }),
     },
+  };
+  const attribution = {
+    rateToInr: jest.fn(
+      async (_tx: unknown, _s: string, accountId: string, currency: Currency) => {
+        if (currency === Currency.INR) {
+          return { inr: new Prisma.Decimal(1), local: new Prisma.Decimal(1), source: 'INR' };
+        }
+        const r = rates[accountId];
+        return r === undefined
+          ? null
+          : ({
+              inr: new Prisma.Decimal(r.inr),
+              local: new Prisma.Decimal(r.local),
+              source: 'TOPUP',
+            } satisfies Rate);
+      },
+    ),
   };
   const svc = new BankTransferService(
     prisma as never,
     ledger as never,
     { log: jest.fn() } as never,
+    attribution as never,
   );
-  return { svc, posted };
+  return { svc, posted, executeRaw };
 }
 
 const BASE = { fromAccountId: 'from', toAccountId: 'to', movedAt: new Date(), staffId: 's1' };
@@ -154,6 +183,62 @@ describe('BankTransferService — the quoted rate is a promise', () => {
   });
 });
 
+describe("BankTransferService — a seller's money crossing a currency with no quote", () => {
+  it('crosses at the rate it was credited at, and the gap against the bank is FX_SPREAD', async () => {
+    // ৳1,300 of theirs arrived as a top-up credited ₹1,000. Moved to a
+    // rupee account with no quote, they are credited ₹1,000 — the value
+    // their wallet already carries — and the bank's ₹990 leaves ₹10 for
+    // us to cover. It used to credit "whatever arrived" (₹990): the gap
+    // vanished into their holding and the book stopped matching the wallet.
+    const { svc, posted } = make(Currency.BDT, Currency.INR, '1000000', {
+      from: { inr: '1000', local: '1300' },
+    });
+    const r = await svc.transfer({
+      ...BASE,
+      amountOut: '1300',
+      amountIn: '990',
+      sellerId: 'seller-a',
+    });
+    expect(r.creditedToSeller).toBe('1000.00');
+    expect(r.fxSpread).toBe('-10.00');
+    expect(posted).toEqual([
+      { type: 'TRANSFER_OUT', signedAmount: '-1300.00', ownerKind: 'SELLER' },
+      { type: 'TRANSFER_IN', signedAmount: '1000.00', ownerKind: 'SELLER' },
+      { type: 'FX_SPREAD', signedAmount: '-10.00', ownerKind: 'CAPITAL' },
+    ]);
+  });
+
+  it('into taka, at the rate their taka there was credited at', async () => {
+    // ₹1,000 → the taka account, where their top-up credited ₹1,000 for
+    // ৳1,300: they are credited ৳1,300 and the bank's ৳1,350 leaves ৳50 ours.
+    const { svc } = make(Currency.INR, Currency.BDT, '1000000', {
+      to: { inr: '1000', local: '1300' },
+    });
+    const r = await svc.transfer({
+      ...BASE,
+      amountOut: '1000',
+      amountIn: '1350',
+      sellerId: 'seller-a',
+    });
+    expect(r.creditedToSeller).toBe('1300.00');
+    expect(r.fxSpread).toBe('50.00');
+  });
+
+  it('refuses when no rate is known for their money at all', async () => {
+    const { svc } = make(Currency.BDT, Currency.INR);
+    await expect(
+      svc.transfer({ ...BASE, amountOut: '1300', amountIn: '990', sellerId: 'seller-a' }),
+    ).rejects.toMatchObject({ response: { code: 'TRANSFER_QUOTE_REQUIRED' } });
+  });
+
+  it('our own money across a currency is still credited with what arrived', async () => {
+    const { svc, posted } = make(Currency.BDT, Currency.INR);
+    const r = await svc.transfer({ ...BASE, amountOut: '1300', amountIn: '990' });
+    expect(r.fxSpread).toBeNull();
+    expect(posted[1]).toEqual({ type: 'TRANSFER_IN', signedAmount: '990.00', ownerKind: 'CAPITAL' });
+  });
+});
+
 describe("BankTransferService — you cannot move more of a seller's money than they have", () => {
   it("refuses a transfer larger than the seller's holding in that account", async () => {
     // "Whose money" is a CHOICE on the form, not a fact off a statement.
@@ -173,6 +258,18 @@ describe("BankTransferService — you cannot move more of a seller's money than 
     const { svc, posted } = make(Currency.INR, Currency.INR, '1200');
     await svc.transfer({ ...BASE, amountOut: '1200', amountIn: '1200', sellerId: 'seller-a' });
     expect(posted).toHaveLength(2);
+  });
+
+  it("takes the seller's WALLET lock before the reconcile lock", async () => {
+    // A charge reclassifies their cash under the wallet lock. Read their
+    // holding without it and a transfer can move cash that just stopped
+    // being theirs. WALLET first, everywhere, so the two never deadlock.
+    const { svc, executeRaw } = make(Currency.INR, Currency.INR, '1200');
+    await svc.transfer({ ...BASE, amountOut: '100', amountIn: '100', sellerId: 'seller-a' });
+    expect(executeRaw.mock.calls.map((c) => c[1])).toEqual([
+      AdvisoryLock.WALLET,
+      AdvisoryLock.BANK_RECONCILE,
+    ]);
   });
 
   it('does NOT check our own money', async () => {

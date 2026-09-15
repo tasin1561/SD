@@ -294,7 +294,9 @@ export class ShiprocketCostSyncService {
             `${s.awbNumber}. Tracking still follows ${s.awbNumber}, and a label printed before the ` +
             'change carries it. If the parcel has not been picked up, reprint its label from ' +
             'Shiprocket. Its courier charges are matched by Shiprocket’s order id and are counted ' +
-            'correctly either way.',
+            'correctly either way.\n\n' +
+            'This clears itself: the nightly Shiprocket cost sync resolves it the first night ' +
+            'their order shows the same waybill as ours again.',
           source: 'ShiprocketCostSyncService',
           dedupeKey: `shiprocket-awb-swapped:${s.id}`,
           metadata: {
@@ -304,6 +306,17 @@ export class ShiprocketCostSyncService {
             courierOrderId,
           },
         });
+      } else if (
+        reading.awbNumber !== null &&
+        s.awbNumber !== null &&
+        reading.awbNumber === s.awbNumber
+      ) {
+        // The two agree (again): a swap raised on an earlier night is over.
+        // A no-op when nothing was ever raised for this parcel.
+        await this.issues.resolveByKey(
+          `shiprocket-awb-swapped:${s.id}`,
+          `Shiprocket shows waybill ${s.awbNumber} for this parcel again — the same as ours.`,
+        );
       }
 
       const last = await this.prisma.client.courierCostReading.findFirst({
