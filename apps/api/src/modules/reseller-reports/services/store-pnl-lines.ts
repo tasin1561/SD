@@ -35,6 +35,7 @@ export const STORE_PNL_LINE_KEYS = [
   'fee_shares',
   'return_fees',
   'cod_tax_share',
+  'dispute_settlements',
   'expenses',
 ] as const;
 
@@ -49,7 +50,7 @@ export const STORE_PNL_LINES: Record<
   order_margin: {
     label: 'Order credits',
     side: 'revenue',
-    note: 'What your COD orders credited to your wallet — the retail you sold at less the seller’s transfer price — net of any credit taken back when a parcel returned or was lost.',
+    note: 'What your COD orders credited to your wallet — the retail you sold at less the seller’s transfer price — net of any credit taken back when a parcel returned or was lost. An order sold below the transfer price counts the difference you paid the seller here, as a minus.',
   },
   prepaid_sales: {
     label: 'Prepaid sales (collected by you)',
@@ -75,6 +76,11 @@ export const STORE_PNL_LINES: Record<
     label: 'Your share of the COD tax',
     side: 'cost',
     note: 'Your share of the tax deducted from cash-on-delivery money, net of any given back.',
+  },
+  dispute_settlements: {
+    label: 'Dispute settlements',
+    side: 'revenue',
+    note: 'Money Skydrop moved between you and the seller to settle a dispute: what the seller paid you, less what you paid the seller.',
   },
   expenses: {
     label: 'Your expenses',
@@ -237,6 +243,19 @@ export function placeDirection(entry: LedgerEntryIn, linked: LinkedEntryIn | und
       return { kind: 'line', line: 'cod_tax_share', sign: 1 };
     case StoreWalletEntryDirection.SHARE_REFUND:
       return { kind: 'line', line: refundLine(entry, linked), sign: -1 };
+    // RS-6 3c: a store that sold below the transfer price pays the seller
+    // the difference; that is part of what the order earned it, so it sits
+    // on the same line as the credit (which can then read negative).
+    case StoreWalletEntryDirection.TRANSFER_PRICE:
+      return { kind: 'line', line: 'order_margin', sign: -1 };
+    case StoreWalletEntryDirection.TRANSFER_PRICE_REFUND:
+      return { kind: 'line', line: 'order_margin', sign: 1 };
+    // RS-7: a dispute settled between the store and its seller is profit or
+    // loss for the store, never cash it put in or took out.
+    case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_IN:
+      return { kind: 'line', line: 'dispute_settlements', sign: 1 };
+    case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_OUT:
+      return { kind: 'line', line: 'dispute_settlements', sign: -1 };
     case StoreWalletEntryDirection.PREPAID_DEBIT:
       return { kind: 'prepaid', sign: 1 };
     case StoreWalletEntryDirection.PREPAID_REFUND:
@@ -271,6 +290,10 @@ const WORDS: Record<StoreWalletEntryDirection, string> = {
   SELLER_TOPUP: 'Top-up from the seller',
   WITHDRAWAL: 'Withdrawal',
   SELLER_PAYOUT: 'Payout recorded by the seller',
+  TRANSFER_PRICE: 'Sold below the transfer price',
+  TRANSFER_PRICE_REFUND: 'Transfer-price difference given back',
+  DISPUTE_SETTLEMENT_IN: 'Dispute settled in your favour',
+  DISPUTE_SETTLEMENT_OUT: 'Dispute settled in the seller’s favour',
 };
 
 const FEE_WORDS: Partial<Record<WalletEntryDirection, string>> = {
