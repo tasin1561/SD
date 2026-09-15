@@ -395,12 +395,33 @@ export class ResellerStoreService {
           message: 'This store changed while you were looking at it. Reload and try again.',
         });
       }
-      if (action === 'CLOSE' && (await this.orders.hasOrdersInFlightForStore(storeId, tx))) {
-        throw new ConflictException({
-          code: 'STORE_HAS_ORDERS_IN_FLIGHT',
-          message:
-            'This store still has orders on their way. Pause it, and close it once they finish.',
-        });
+      if (action === 'CLOSE') {
+        // RS-1, amended 2026-09-15 (owner): closed once its business is DONE
+        // — every parcel delivered or back in our warehouse, no credit still
+        // to run — then the wallet at ₹0 below. `store-close-rule.ts`.
+        const b = await this.orders.storeCloseBlockers(storeId, tx);
+        if (b.movingCount > 0) {
+          const names = b.moving.map((o) => `${o.orderNumber} (${o.status})`).join(', ');
+          throw new ConflictException({
+            code: 'STORE_HAS_ORDERS_IN_FLIGHT',
+            message:
+              `${b.movingCount} order(s) on this store are not finished yet: ${names}` +
+              (b.movingCount > b.moving.length ? ', …' : '') +
+              '. Close it once every parcel is delivered or back in our warehouse.',
+            details: { movingCount: b.movingCount, moving: b.moving },
+          });
+        }
+        if (b.creditsToRunCount > 0) {
+          const names = b.creditsToRun.map((c) => `${c.orderNumber} (${c.party})`).join(', ');
+          throw new ConflictException({
+            code: 'STORE_HAS_CREDITS_TO_RUN',
+            message:
+              `${b.creditsToRunCount} credit(s) on this store's orders have not run yet: ${names}` +
+              (b.creditsToRunCount > b.creditsToRun.length ? ', …' : '') +
+              ". They run on the courier's payout or a set number of days after delivery. Close it once they have.",
+            details: { creditsToRunCount: b.creditsToRunCount, creditsToRun: b.creditsToRun },
+          });
+        }
       }
       if (action === 'CLOSE') {
         // RS-1: "the wallet is paid out/settled first". A closed store's

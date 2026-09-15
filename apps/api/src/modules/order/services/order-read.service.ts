@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderSource, OrderStatus, PaymentMode, Prisma, WalletEntryDirection } from '@skydrop/db';
 import { OrderStateMachineService } from './order-state-machine.service';
+import {
+  CREDIT_STILL_TO_RUN,
+  orderBlocksStoreClose,
+  type StoreCloseBlockers,
+} from './store-close-rule';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 export interface ResolvedOrderItem {
@@ -180,26 +185,52 @@ export class OrderReadService {
   }
 
   /**
-   * RS-1 — does any order filed under this store still have somewhere to
-   * go? A reseller store is closed only when none does.
+   * RS-1, amended 2026-09-15 — what still keeps this store from closing.
+   * The rule (paused first; every parcel delivered or back in our
+   * warehouse; no credit still to run) lives in `store-close-rule.ts`. Two
+   * small indexed reads, however many orders the store has had, on the
+   * caller's transaction so it runs AFTER the store's status has moved
+   * (see ResellerStoreService.close).
    *
-   * "In flight" is every non-terminal status, decided by the state
-   * machine (never a local list), over the DISTINCT statuses the store's
-   * orders sit in — one small grouped query however many orders there
-   * are. Takes the caller's transaction so the check can run AFTER the
-   * store's status has moved, inside the same tx (see
-   * ResellerStoreService.close).
+   * The credit rows belong to the reseller-order-money module; they are
+   * READ here, not imported as a service, because the store module already
+   * sits below modules that import it and a service import would close a
+   * cycle. The read is a status count on the order's own money — nothing
+   * here writes it.
    */
-  async hasOrdersInFlightForStore(
+  async storeCloseBlockers(
     storeId: string,
     client?: Prisma.TransactionClient,
-  ): Promise<boolean> {
+  ): Promise<StoreCloseBlockers> {
     const db = client ?? this.prisma.client;
-    const statuses = await db.order.groupBy({
-      by: ['status'],
-      where: { storeId, deletedAt: null },
+    const blocking = Object.values(OrderStatus).filter((s) =>
+      orderBlocksStoreClose(s, (x) => this.stateMachine.isTerminal(x)),
+    );
+    const movingWhere = { storeId, deletedAt: null, status: { in: blocking } };
+    const creditWhere = { storeId, status: { in: [...CREDIT_STILL_TO_RUN] } };
+    const moving = await db.order.findMany({
+      where: movingWhere,
+      select: { orderNumber: true, status: true },
+      orderBy: { createdAt: 'asc' },
+      take: 5,
     });
-    return statuses.some((s) => !this.stateMachine.isTerminal(s.status));
+    const movingCount = await db.order.count({ where: movingWhere });
+    const credits = await db.resellerOrderCredit.findMany({
+      where: creditWhere,
+      select: { party: true, status: true, order: { select: { orderNumber: true } } },
+      take: 5,
+    });
+    const creditsToRunCount = await db.resellerOrderCredit.count({ where: creditWhere });
+    return {
+      moving,
+      movingCount,
+      creditsToRun: credits.map((c) => ({
+        orderNumber: c.order.orderNumber,
+        party: c.party,
+        status: c.status,
+      })),
+      creditsToRunCount,
+    };
   }
 
   /**

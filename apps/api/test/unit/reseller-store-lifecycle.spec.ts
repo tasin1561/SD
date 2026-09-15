@@ -24,7 +24,8 @@ const ALLOWED: Record<ResellerStoreAction, readonly ResellerStoreStatus[]> = {
   REJECT: [S.PENDING_SELLER_APPROVAL],
   PAUSE: [S.ACTIVE],
   RESUME: [S.PAUSED],
-  CLOSE: [S.ACTIVE, S.PAUSED],
+  // Paused first (owner, 2026-09-15): an ACTIVE store cannot be closed.
+  CLOSE: [S.PAUSED],
 };
 
 describe('reseller store lifecycle (RS-1)', () => {
@@ -76,7 +77,7 @@ describe('reseller store lifecycle (RS-1)', () => {
 
   it('a refusal names where the store is and where it would have to be', () => {
     expect(refusalFor('CLOSE', S.PENDING_SELLER_APPROVAL)).toBe(
-      'A store that is pending seller approval cannot be closed — only one that is active or paused.',
+      'A store that is pending seller approval cannot be closed — only one that is paused.',
     );
   });
 });

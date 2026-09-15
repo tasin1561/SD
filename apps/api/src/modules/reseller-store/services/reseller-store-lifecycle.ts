@@ -9,7 +9,9 @@ import { ResellerStoreEventKind, ResellerStoreOrigin, ResellerStoreStatus } from
  *   PENDING  —reject→  REJECTED      (terminal)
  *   ACTIVE   —pause→   PAUSED        (blocks NEW orders; in-flight finish)
  *   PAUSED   —resume→  ACTIVE
- *   ACTIVE | PAUSED —close→ CLOSED   (terminal; only with nothing in flight)
+ *   PAUSED   —close→   CLOSED        (terminal; paused first, then only once every
+ *                                     order is finished, no credit is still to run and
+ *                                     the wallet is ₹0 — RS-1, amended 2026-09-15)
  *
  * Every rule names EXACTLY the states it may start from. The service
  * guards its write on the one it READ (`updateMany where status = <that>`),
@@ -65,7 +67,9 @@ export function ruleFor(action: ResellerStoreAction): ResellerStoreRule {
       };
     case 'CLOSE':
       return {
-        from: [ResellerStoreStatus.ACTIVE, ResellerStoreStatus.PAUSED],
+        // PAUSED only (owner, 2026-09-15): pausing is what stops new orders,
+        // so a store is paused first and closed once what it has placed is done.
+        from: [ResellerStoreStatus.PAUSED],
         to: ResellerStoreStatus.CLOSED,
         event: ResellerStoreEventKind.CLOSED,
         severity: 'HIGH',

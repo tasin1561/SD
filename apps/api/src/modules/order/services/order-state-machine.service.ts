@@ -487,9 +487,14 @@ const TRANSITIONS: ReadonlyArray<readonly [OrderStatus, readonly TransitionDef[]
     ],
   ],
 
-  // Terminal states — no outgoing transitions in the normal machine.
-  // (Admin god-mode bypasses this matrix entirely; LOST→found recovery
-  // is a deferred god-mode op per phase-1a-debt.)
+  // DELIVERED is NOT terminal: a customer may send the parcel back (the two
+  // edges below), so `isTerminal(DELIVERED)` is false. Anything asking
+  // "is this order finished?" must not read terminality for it — see
+  // store-close-rule.ts, which a store close refused forever on until
+  // 2026-09-15. The statuses after it ARE terminal: no outgoing
+  // transitions in the normal machine. (Admin god-mode bypasses this
+  // matrix entirely; LOST→found recovery is a deferred god-mode op per
+  // phase-1a-debt.)
   [
     OrderStatus.DELIVERED,
     [

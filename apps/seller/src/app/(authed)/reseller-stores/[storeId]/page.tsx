@@ -373,7 +373,8 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
       toast.success(`“${store.name}” is closed.`);
       setClosing(false);
     } catch (err) {
-      // STORE_HAS_ORDERS_IN_FLIGHT says what to do instead (FE-2).
+      // STORE_HAS_ORDERS_IN_FLIGHT / STORE_HAS_CREDITS_TO_RUN /
+      // STORE_WALLET_NOT_SETTLED each say what to do instead (FE-2).
       setError(serverVerdict(err));
     }
   }
@@ -384,8 +385,8 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
         title={store.status === 'PAUSED' ? 'Paused' : 'Open'}
         subtitle={
           store.status === 'PAUSED'
-            ? 'It takes no new orders; anything already placed carries on.'
-            : 'Pausing stops new orders. Closing is for good, and only once nothing is on its way.'
+            ? 'It takes no new orders; anything already placed carries on. Close it for good once every parcel is delivered or back with us, every credit has run and its wallet is ₹0.'
+            : 'Pausing stops new orders. To close it for good, pause it first.'
         }
       />
       <CardBody>
@@ -412,9 +413,11 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
               Resume
             </Button>
           )}
-          <Button variant="destructive" size="md" onClick={() => setClosing(true)}>
-            Close for good
-          </Button>
+          {store.status === 'PAUSED' ? (
+            <Button variant="destructive" size="md" onClick={() => setClosing(true)}>
+              Close for good
+            </Button>
+          ) : null}
         </div>
       </CardBody>
       <ConfirmDialog

@@ -58,8 +58,13 @@ exactly as it is. A store now has a **kind**:
   contact.
 - ADMIN-created stores start `PENDING_SELLER_APPROVAL`; nothing can be
   ordered until the seller approves. REJECTED is terminal.
-- PAUSED blocks NEW orders; in-flight orders finish. CLOSED only when no
-  order is in flight; the wallet is paid out/settled first.
+- PAUSED blocks NEW orders; in-flight orders finish. **Amended 2026-09-15
+  (owner): only a PAUSED store can be CLOSED, and only once its business is
+  done** — every parcel delivered or back in our warehouse, no credit still
+  to run (WAITING / DUE), and the wallet at ₹0. After that its team has no
+  access. "Done" is not "terminal": DELIVERED has a customer-return edge, so
+  the old terminality rule refused every store that had ever delivered a
+  parcel (`order/services/store-close-rule.ts`).
 - All transitions audited (HIGH for approve/reject/close).
 
 ## RS-2 Store identity, team, permissions
@@ -228,8 +233,10 @@ seller is told in-app (`SELLER_PERMISSION stores.manage`) and by email
 throwing. Approve / reject / pause / resume / close / wallet-manager are
 guarded `updateMany` on the status READ (`RESELLER_STORE_CHANGED` on a race)
 with an event row in the same tx; approve, reject and close audit HIGH.
-Close is refused while any order on the store is not terminal (checked
-INSIDE the tx after the move, via `OrderReadService`); phase 3's order
+Close (from PAUSED only) is refused while an order's parcel is neither
+delivered nor back in our warehouse, or a credit is still to run
+(`STORE_HAS_ORDERS_IN_FLIGHT` / `STORE_HAS_CREDITS_TO_RUN`, checked INSIDE
+the tx after the move, via `OrderReadService.storeCloseBlockers`); phase 3's order
 create must lock the store row FOR SHARE to close the remaining window.
 REJECTED / CLOSED revoke every store refresh token and live invitation.
 CHANNEL stores behave exactly as before: every `SellerStoreService` query
