@@ -239,7 +239,7 @@ Layered approach — no single "dual database" replaces this:
 | Off-site nightly `pg_dump` to Spaces | DO account compromise, defense in depth | ⏳ To configure |
 | Tested restore procedure | "We had backups but they don't work" | ✅ Practice restore 2026-09-15, every table matched — `docs/disaster-recovery.md` |
 | Point-in-time recovery (PITR) | Accidental deletes, bad migrations | ✅ Already on the basic tier — any transaction in the last 7 days (checked 2026-09-15) |
-| Off-site encrypted copy (Google Drive, every 6 h) | Losing DigitalOcean itself, or its 7-day backups | ✅ Since 2026-09-15 — `scripts/backup/`, alarm `backup-watch` |
+| Off-site encrypted copy (Google Drive, every 2 h) | Losing DigitalOcean itself, or its 7-day backups | ✅ Since 2026-09-15 — `scripts/backup/`, alarm `backup-watch` |
 | Automated standby node | Hardware failure / HA | ⏳ Upgrade DB tier at launch |
 
 ---

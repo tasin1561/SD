@@ -93,7 +93,11 @@ describe('BackupWatchService.check', () => {
 
   it('a failed latest run raises HIGH naming the step it stopped at', async () => {
     const { svc, issues } = harness({
-      [BACKUP_COMPLETED_ACTION]: { createdAt: hoursAgo(6), metadata: { step: 'done' } },
+      // Inside the stale window, so only the failure is raised.
+      [BACKUP_COMPLETED_ACTION]: {
+        createdAt: hoursAgo(BACKUP_STALE_AFTER_HOURS - 1),
+        metadata: { step: 'done' },
+      },
       [BACKUP_FAILED_ACTION]: { createdAt: hoursAgo(1), metadata: { step: 'stored files' } },
     });
     await svc.check(NOW);

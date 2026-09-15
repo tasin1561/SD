@@ -8,11 +8,11 @@ export const BACKUP_COMPLETED_ACTION = 'system.backup.completed';
 export const BACKUP_FAILED_ACTION = 'system.backup.failed';
 
 /**
- * The backup runs every six hours. Past thirteen hours without a success,
- * two runs in a row have been missed — one missed run can be a network
- * blip, two is a stopped backup.
+ * The backup runs every two hours. Past five hours without a success, two
+ * runs in a row have been missed — one missed run can be a network blip,
+ * two is a stopped backup.
  */
-export const BACKUP_STALE_AFTER_HOURS = 13;
+export const BACKUP_STALE_AFTER_HOURS = 5;
 
 export const BACKUP_STALE_ISSUE_KEY = 'backup-stale';
 export const BACKUP_FAILED_ISSUE_KEY = 'backup-failed';
@@ -109,7 +109,7 @@ export class BackupWatchService {
           (completed === null
             ? 'Nothing has been copied to Google Drive yet. '
             : `The last successful backup to Google Drive was ${completed.at.toISOString()}; ` +
-              `they run every six hours. `) +
+              `they run every two hours. `) +
           'If the server or the database were lost now, this is how much would be lost with ' +
           `it. ${RECOVERY_HINT}`,
         source: 'backup-watch',

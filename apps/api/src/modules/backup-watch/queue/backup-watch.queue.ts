@@ -7,7 +7,7 @@ import { BackupWatchService } from '../services/backup-watch.service';
 
 export const BACKUP_WATCH_QUEUE = 'backup-watch';
 export const JOB_BACKUP_WATCH = 'check-offsite-backup';
-/** Hourly: the backup itself runs every six hours, so an hour is fine grain. */
+/** Hourly: the backup itself runs every two hours, so an hour is fine grain. */
 export const BACKUP_WATCH_CRON = '20 * * * *';
 
 @Injectable()
