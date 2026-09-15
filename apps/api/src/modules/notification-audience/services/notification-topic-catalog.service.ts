@@ -297,6 +297,16 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     description: 'A seller answered on one of their tickets, and may be waiting on us.',
     group: 'Tickets',
   },
+  // Not a system issue: somebody asked for a serial label to be reprinted
+  // (LBL-5b), sent by LabelReprintRequestService to everyone who can
+  // approve it.
+  {
+    topic: 'label_reprint.requested',
+    label: 'A label reprint is waiting for approval',
+    description:
+      'Somebody asked to reprint a damaged or lost serial label. A second person has to approve it before it can be printed.',
+    group: 'Warehouse',
+  },
 ];
 
 /** The one place an issue kind becomes a topic key. */

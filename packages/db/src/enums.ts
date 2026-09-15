@@ -119,6 +119,7 @@ export {
   EarlyReservationReviewStatus,
   // R4 — strict-mode per-unit inventory
   LabellingSite,
+  LabelReprintRequestStatus,
   InventoryMode,
   PackBoxStatus,
   StockUnitStatus,

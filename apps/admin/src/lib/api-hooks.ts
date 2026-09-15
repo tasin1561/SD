@@ -19,6 +19,7 @@ import type {
   DispatchResult,
   DispatchToIndiaBody,
   LabelPreview,
+  LabelReprintRequestView,
   LabelSheet,
   ForceMutationRequest,
   ForceMutationResult,
@@ -2526,14 +2527,29 @@ export function useForceCompletePack(): UseMutationResult<
 }
 
 /**
- * Reprint the label for NAMED units.
+ * LBL-5b — a damaged serial label is reprinted by TWO people.
  *
  * Per unit, never the sheet: a serial names one physical item, so a
  * second copy of the whole sheet is a duplicate sticker on every unit.
- * Behind its own permission for the same reason.
+ * One person asks, somebody else holding `warehouse.labels.reprint`
+ * approves, and the person who asked prints it once.
  */
-export function useReprintConsignmentLabels(): UseMutationResult<
-  LabelSheet,
+export function useLabelReprintRequests(
+  consignmentId: string,
+): UseQueryResult<LabelReprintRequestView[]> {
+  const client = useApiClient();
+  return useQuery({
+    enabled: consignmentId !== '',
+    queryKey: ['admin-consignments', 'label-reprint-requests', consignmentId],
+    queryFn: () =>
+      client.request<LabelReprintRequestView[]>(
+        `/api/admin/consignments/${consignmentId}/labels/reprint-requests`,
+      ),
+  });
+}
+
+export function useRequestLabelReprint(): UseMutationResult<
+  LabelReprintRequestView,
   Error,
   { id: string; serials: string[]; reason: string }
 > {
@@ -2541,10 +2557,68 @@ export function useReprintConsignmentLabels(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, serials, reason }) =>
-      client.request<LabelSheet>(`/api/admin/consignments/${id}/labels/reprint`, {
-        method: 'POST',
-        body: { serials, reason },
-      }),
+      client.request<LabelReprintRequestView>(
+        `/api/admin/consignments/${id}/labels/reprint-requests`,
+        { method: 'POST', body: { serials, reason } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-consignments'] });
+    },
+  });
+}
+
+export function useApproveLabelReprint(): UseMutationResult<
+  LabelReprintRequestView,
+  Error,
+  { requestId: string; note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, note }) =>
+      client.request<LabelReprintRequestView>(
+        `/api/admin/consignments/labels/reprint-requests/${requestId}/approve`,
+        { method: 'POST', body: note === undefined ? {} : { note } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-consignments'] });
+    },
+  });
+}
+
+export function useRejectLabelReprint(): UseMutationResult<
+  LabelReprintRequestView,
+  Error,
+  { requestId: string; note: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, note }) =>
+      client.request<LabelReprintRequestView>(
+        `/api/admin/consignments/labels/reprint-requests/${requestId}/reject`,
+        { method: 'POST', body: { note } },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-consignments'] });
+    },
+  });
+}
+
+/** The sheet for an approved request — once, by the person who asked. */
+export function usePrintLabelReprint(): UseMutationResult<
+  LabelSheet,
+  Error,
+  { requestId: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId }) =>
+      client.request<LabelSheet>(
+        `/api/admin/consignments/labels/reprint-requests/${requestId}/print`,
+        { method: 'POST' },
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-consignments'] });
     },

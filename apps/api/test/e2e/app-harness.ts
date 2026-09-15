@@ -615,6 +615,9 @@ export async function resetInventoryState(prisma: PrismaClient): Promise<void> {
         // must go before the seller wipe (MUST #12). consignment_events
         // cascades, listed anyway so the intent reads.
         'consignment_events',
+        // LBL-5b reprint requests FK-RESTRICT consignments, sellers and
+        // staff_users (MUST #12).
+        'label_reprint_requests',
         'inbound_freight_allocations',
         'inbound_freight_charges',
         'consignments',

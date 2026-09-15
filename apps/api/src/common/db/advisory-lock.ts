@@ -134,6 +134,15 @@ export const AdvisoryLock = {
    * each carry the same change. Both take this key first.
    */
   STORE_PNL_PERIOD: 0x05370,
+  /**
+   * 'LR' — asking to reprint a serial label (LBL-5b), per consignment.
+   *
+   * A request reads "is any of these serials already on an open request"
+   * and then inserts; two requests for the same damaged box at once would
+   * each see the other missing, and two approvals would put two new
+   * stickers on one unit.
+   */
+  LABEL_REPRINT: 0x04c52,
 } as const;
 
 /**

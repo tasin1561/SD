@@ -46,15 +46,16 @@ function make(
   };
   const auditLog = jest.fn(async () => 'a');
   const recordLabelReprint = jest.fn(async () => (opts.units ?? [unitRow('SDU-AAA')]).length);
+  const append = jest.fn(async () => undefined);
   const svc = new ConsignmentLabelService(
     { client } as unknown as PrismaService,
     { log: auditLog } as unknown as AuditLogService,
     { requireById: async () => consignment } as unknown as ConsignmentService,
-    { append: jest.fn(async () => undefined) } as unknown as ConsignmentEventService,
+    { append } as unknown as ConsignmentEventService,
     {} as unknown as InventoryModeService,
     { recordLabelReprint } as unknown as StockUnitService,
   );
-  return { svc, auditLog, recordLabelReprint, stockUnitFindMany };
+  return { svc, auditLog, recordLabelReprint, stockUnitFindMany, append };
 }
 
 describe('ConsignmentLabelService — a unique serial is printed ONCE', () => {
@@ -85,43 +86,22 @@ describe('ConsignmentLabelService — a unique serial is printed ONCE', () => {
   });
 });
 
-describe('ConsignmentLabelService.reprintUnits — the damaged sticker', () => {
-  const REASON = 'Label torn off in the carton during transit; unit itself is intact.';
+const REASON = 'Label torn off in the carton during transit; unit itself is intact.';
 
-  it('reprints only the named unit, and records it on that unit’s ledger', async () => {
-    const { svc, recordLabelReprint } = make({
-      labelsPrintedAt: new Date(),
-      units: [unitRow('SDU-AAA')],
-    });
-    const sheet = await svc.reprintUnits(STAFF, CONS, ['SDU-AAA'], REASON, CTX);
-    expect(sheet.labels).toHaveLength(1);
-    // On the UNIT, because the question asked later is "has THIS serial
-    // been printed twice?" — a question about the unit, not the sheet.
-    expect(recordLabelReprint).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ serials: ['SDU-AAA'], reason: REASON }),
-    );
-  });
-
-  it('audits HIGH with the serials, so "how often" has an answer', async () => {
-    const { svc, auditLog } = make({ labelsPrintedAt: new Date() });
-    await svc.reprintUnits(STAFF, CONS, ['SDU-AAA'], REASON, CTX);
-    expect(auditLog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'consignment.labels_reprinted',
-        severity: 'HIGH',
-        metadata: expect.objectContaining({ serials: ['SDU-AAA'], reason: REASON }),
-      }),
-    );
+describe('ConsignmentLabelService.unitsForReprint — which units a reprint is about', () => {
+  it('returns only the named units, trimmed and de-duplicated', async () => {
+    const { svc } = make({ labelsPrintedAt: new Date(), units: [unitRow('SDU-AAA')] });
+    const r = await svc.unitsForReprint(CONS, ['SDU-AAA', ' SDU-AAA ']);
+    expect(r.serials).toEqual(['SDU-AAA']);
+    expect(r.units).toHaveLength(1);
+    expect(r.consignment).toMatchObject({ consignmentNumber: 'CN-1', sellerId: 'seller-1' });
   });
 
   it('NAMES a serial this consignment does not own rather than dropping it', async () => {
     // Printing four of the five somebody asked for, with no comment, is
     // how the fifth box stays unlabelled.
     const { svc } = make({ labelsPrintedAt: new Date(), units: [unitRow('SDU-AAA')] });
-    await expect(
-      svc.reprintUnits(STAFF, CONS, ['SDU-AAA', 'SDU-GHOST'], REASON, CTX),
-    ).rejects.toMatchObject({
+    await expect(svc.unitsForReprint(CONS, ['SDU-AAA', 'SDU-GHOST'])).rejects.toMatchObject({
       response: {
         code: 'SERIAL_NOT_ON_CONSIGNMENT',
         message: expect.stringContaining('SDU-GHOST'),
@@ -131,24 +111,50 @@ describe('ConsignmentLabelService.reprintUnits — the damaged sticker', () => {
 
   it('refuses when the sheet was never printed — there is nothing to reprint', async () => {
     const { svc } = make({ labelsPrintedAt: null });
-    await expect(svc.reprintUnits(STAFF, CONS, ['SDU-AAA'], REASON, CTX)).rejects.toMatchObject({
+    await expect(svc.unitsForReprint(CONS, ['SDU-AAA'])).rejects.toMatchObject({
       response: { code: 'LABELS_NOT_PRINTED_YET' },
     });
   });
 
-  it('de-duplicates a serial asked for twice', async () => {
-    const { svc, recordLabelReprint } = make({ labelsPrintedAt: new Date() });
-    await svc.reprintUnits(STAFF, CONS, ['SDU-AAA', 'SDU-AAA'], REASON, CTX);
-    expect(recordLabelReprint).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ serials: ['SDU-AAA'] }),
-    );
-  });
-
   it('rejects an empty list rather than printing nothing quietly', async () => {
     const { svc } = make({ labelsPrintedAt: new Date() });
-    await expect(svc.reprintUnits(STAFF, CONS, ['  '], REASON, CTX)).rejects.toBeInstanceOf(
-      ConflictException,
+    await expect(svc.unitsForReprint(CONS, ['  '])).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('prints and records NOTHING by itself — a reprint needs an approved request (LBL-5b)', async () => {
+    const { svc, recordLabelReprint, auditLog } = make({ labelsPrintedAt: new Date() });
+    await svc.unitsForReprint(CONS, ['SDU-AAA']);
+    expect(recordLabelReprint).not.toHaveBeenCalled();
+    expect(auditLog).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConsignmentLabelService.recordReprint — on the unit’s own ledger', () => {
+  it('records on each unit and on the consignment timeline', async () => {
+    const { svc, recordLabelReprint, append } = make({ labelsPrintedAt: new Date() });
+    await svc.recordReprint({} as never, {
+      consignmentId: CONS,
+      sellerId: 'seller-1',
+      serials: ['SDU-AAA'],
+      reason: REASON,
+      staffId: STAFF,
+    });
+    // On the UNIT, because the question asked later is "has THIS serial
+    // been printed twice?" — a question about the unit, not the sheet.
+    expect(recordLabelReprint).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ serials: ['SDU-AAA'], reason: REASON, actorId: STAFF }),
     );
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({ description: expect.stringContaining('REPRINTED') }),
+      expect.anything(),
+    );
+  });
+});
+
+describe('ConsignmentLabelService — no one-person reprint remains', () => {
+  it('has no reprintUnits: every reprint goes through a second person', () => {
+    const proto = ConsignmentLabelService.prototype as unknown as Record<string, unknown>;
+    expect(proto['reprintUnits']).toBeUndefined();
   });
 });

@@ -6,6 +6,7 @@ import {
   InventoryMode,
   LabellingSite,
   StockUnitStatus,
+  type Prisma,
 } from '@skydrop/db';
 import { printableBarcode } from '../../../common/barcode/printable-barcode';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -36,6 +37,42 @@ export interface LabelSheet {
      */
     readonly barcodeWidths: readonly number[] | null;
   }>;
+}
+
+/** What a label needs to know about one unit. */
+const LABEL_UNIT_SELECT = {
+  serialBarcode: true,
+  batch: { select: { expiresAt: true } },
+  variant: {
+    select: {
+      skuCode: true,
+      variantLabel: true,
+      product: { select: { name: true } },
+    },
+  },
+} as const;
+
+interface LabelUnit {
+  readonly serialBarcode: string;
+  readonly batch: { readonly expiresAt: Date | null } | null;
+  readonly variant: {
+    readonly skuCode: string;
+    readonly variantLabel: string | null;
+    readonly product: { readonly name: string };
+  };
+}
+
+/** The units behind a reprint, and the consignment they belong to. */
+export interface ReprintUnits {
+  readonly consignment: {
+    readonly id: string;
+    readonly consignmentNumber: string;
+    readonly sellerId: string;
+    readonly labellingSite: LabellingSite;
+  };
+  /** The serials asked for, trimmed and de-duplicated. */
+  readonly serials: readonly string[];
+  readonly units: readonly LabelUnit[];
 }
 
 /**
@@ -129,8 +166,9 @@ export class ConsignmentLabelService {
     // The guarded updateMany below already stopped the STAMP moving,
     // which is what locks the station (CNS-5) — but it never stopped
     // the sheet coming back, so reprinting was unlimited and only the
-    // first one was ever recorded. A damaged label goes through
-    // `reprintUnits`, which is per-unit and leaves a trail.
+    // first one was ever recorded. A damaged label goes through a
+    // reprint REQUEST (LabelReprintRequestService), which is per unit,
+    // needs a second person, and leaves a trail.
     if (consignment.labelsPrintedAt !== null) {
       throw new ConflictException({
         code: 'LABELS_ALREADY_PRINTED',
@@ -138,7 +176,7 @@ export class ConsignmentLabelService {
           `${consignment.consignmentNumber} was labelled on ` +
           `${consignment.labelsPrintedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC. ` +
           'Printing the sheet again would put a second sticker on every unit. For a label ' +
-          'that was damaged or lost, reprint that unit on its own.',
+          'that was damaged or lost, ask for that unit to be reprinted on its own.',
       });
     }
 
@@ -160,17 +198,7 @@ export class ConsignmentLabelService {
         goodsReceiptLine: { receiptId: { in: legIds } },
       },
       orderBy: { createdAt: 'asc' },
-      select: {
-        serialBarcode: true,
-        batch: { select: { expiresAt: true } },
-        variant: {
-          select: {
-            skuCode: true,
-            variantLabel: true,
-            product: { select: { name: true } },
-          },
-        },
-      },
+      select: LABEL_UNIT_SELECT,
     });
     if (units.length === 0) {
       throw new ConflictException({
@@ -227,23 +255,14 @@ export class ConsignmentLabelService {
       { consignmentId, site: consignment.labellingSite, count: units.length },
       'Consignment labels printed',
     );
-    return {
-      consignmentNumber: consignment.consignmentNumber,
-      site: consignment.labellingSite,
-      printedAt,
-      labels: units.map((u) => ({
-        serialBarcode: u.serialBarcode,
-        skuCode: u.variant.skuCode,
-        productName: u.variant.product.name,
-        variantLabel: u.variant.variantLabel,
-        expiresAt: u.batch?.expiresAt ?? null,
-        barcodeWidths: printableBarcode(u.serialBarcode).widths,
-      })),
-    };
+    return this.sheetFor(consignment, units, printedAt);
   }
 
   /**
-   * Reprint the label for SPECIFIC units — the damaged or lost sticker.
+   * The units behind a reprint of SPECIFIC labels — the damaged or lost
+   * sticker. Read twice by `LabelReprintRequestService`: when somebody
+   * asks (so a wrong serial is named at the bench, not at approval) and
+   * again when the approved request is printed.
    *
    * ── WHY PER UNIT, NEVER THE SHEET ────────────────────────────────────
    * The realistic failure is one label smudged in a carton, not four
@@ -252,26 +271,15 @@ export class ConsignmentLabelService {
    * (`@@unique(sellerId, serialBarcode)`), so the duplicate does not
    * announce itself — it surfaces later as a unit that was already
    * picked for a different parcel, at the bench, with a customer
-   * waiting. Capping the count keeps the blast radius of the escape
-   * hatch to what a person can actually be holding.
+   * waiting. The request DTO caps the count so the escape hatch stays
+   * the size of what a person can actually be holding.
    *
    * The serial is REPRINTED AS-IS rather than reissued. A lost label is
    * a label that may yet turn up on the same box; minting a new serial
    * would make the original — still stuck to the unit — scan as
    * something that does not exist.
-   *
-   * Every reprint lands on the UNIT's own ledger (`LABEL_REPRINT`), not
-   * only on the consignment, because the question worth asking later is
-   * "has this serial been printed twice?" and that is a question about
-   * the unit.
    */
-  async reprintUnits(
-    staffId: string,
-    consignmentId: string,
-    serials: readonly string[],
-    reason: string,
-    ctx: ClientContext,
-  ): Promise<LabelSheet> {
+  async unitsForReprint(consignmentId: string, serials: readonly string[]): Promise<ReprintUnits> {
     const consignment = await this.consignments.requireById(consignmentId);
     if (consignment.labelsPrintedAt === null) {
       throw new ConflictException({
@@ -297,17 +305,7 @@ export class ConsignmentLabelService {
         serialBarcode: { in: wanted },
         goodsReceiptLine: { receiptId: { in: legIds } },
       },
-      select: {
-        serialBarcode: true,
-        batch: { select: { expiresAt: true } },
-        variant: {
-          select: {
-            skuCode: true,
-            variantLabel: true,
-            product: { select: { name: true } },
-          },
-        },
-      },
+      select: LABEL_UNIT_SELECT,
     });
 
     // A serial this consignment does not own is named rather than
@@ -322,45 +320,60 @@ export class ConsignmentLabelService {
       });
     }
 
-    const printedAt = new Date();
-    await this.prisma.client.$transaction(async (tx) => {
-      await this.units.recordLabelReprint(tx, {
-        serials: wanted,
-        sellerId: consignment.sellerId,
-        actorType: ActorType.STAFF,
-        actorId: staffId,
-        reason,
-      });
-      await this.events.append(
-        {
-          consignmentId,
-          type: ConsignmentEventType.LABELS_PRINTED,
-          description: `${wanted.length} label(s) REPRINTED — ${reason}`,
-          actorType: ActorType.STAFF,
-          actorId: staffId,
-        },
-        tx,
-      );
-    });
-
-    await this.audit.log({
-      actorType: ActorType.STAFF,
-      actorId: staffId,
-      action: 'consignment.labels_reprinted',
-      entityType: 'consignment',
-      entityId: consignmentId,
-      severity: 'HIGH',
-      metadata: {
+    return {
+      consignment: {
+        id: consignment.id,
         consignmentNumber: consignment.consignmentNumber,
-        serials: wanted,
-        count: wanted.length,
-        reason,
-        ipAddress: ctx.ipAddress ?? null,
-        userAgent: ctx.userAgent ?? null,
-        requestId: ctx.requestId ?? null,
+        sellerId: consignment.sellerId,
+        labellingSite: consignment.labellingSite,
       },
-    });
+      serials: wanted,
+      units,
+    };
+  }
 
+  /**
+   * Records a reprint, inside the caller's transaction, on each unit's
+   * own ledger (`LABEL_REPRINT`) and on the consignment's timeline. The
+   * unit ledger is the one that matters: "has THIS serial been printed
+   * twice?" is a question about the unit, not about the sheet. UNIT-1 —
+   * only `StockUnitService` writes `stock_unit_events`.
+   */
+  async recordReprint(
+    tx: Prisma.TransactionClient,
+    input: {
+      readonly consignmentId: string;
+      readonly sellerId: string;
+      readonly serials: readonly string[];
+      readonly reason: string;
+      readonly staffId: string;
+    },
+  ): Promise<void> {
+    await this.units.recordLabelReprint(tx, {
+      serials: [...input.serials],
+      sellerId: input.sellerId,
+      actorType: ActorType.STAFF,
+      actorId: input.staffId,
+      reason: input.reason,
+    });
+    await this.events.append(
+      {
+        consignmentId: input.consignmentId,
+        type: ConsignmentEventType.LABELS_PRINTED,
+        description: `${input.serials.length} label(s) REPRINTED — ${input.reason}`,
+        actorType: ActorType.STAFF,
+        actorId: input.staffId,
+      },
+      tx,
+    );
+  }
+
+  /** The printable sheet for units already read. */
+  sheetFor(
+    consignment: { readonly consignmentNumber: string; readonly labellingSite: LabellingSite },
+    units: readonly LabelUnit[],
+    printedAt: Date,
+  ): LabelSheet {
     return {
       consignmentNumber: consignment.consignmentNumber,
       site: consignment.labellingSite,

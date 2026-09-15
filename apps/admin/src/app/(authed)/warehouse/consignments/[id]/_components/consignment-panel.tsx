@@ -30,7 +30,7 @@ import {
   useConsignmentLabelPreview,
   useDispatchConsignment,
   usePrintConsignmentLabels,
-  useReprintConsignmentLabels,
+  useRequestLabelReprint,
   useSetLabellingSite,
 } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -49,6 +49,7 @@ function parseSerials(raw: string): string[] {
     ),
   ];
 }
+import { LabelReprintRequests } from './label-reprint-requests';
 import { LabelSheetView } from './label-sheet';
 import { Step, Variance } from './steps';
 
@@ -68,8 +69,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
 
   const setSite = useSetLabellingSite();
   const printLabels = usePrintConsignmentLabels();
-  const reprintLabels = useReprintConsignmentLabels();
-  const mayReprint = usePermission('warehouse.labels.reprint');
+  const requestReprint = useRequestLabelReprint();
   const [reprinting, setReprinting] = useState(false);
   const [reprintSerials, setReprintSerials] = useState('');
   const [reprintReason, setReprintReason] = useState('');
@@ -146,17 +146,21 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
     }
   }
 
-  /** The damaged sticker — named units only, and it says why. */
+  /**
+   * The damaged sticker — named units only, it says why, and it prints
+   * nothing: somebody else approves it first (LBL-5b).
+   */
   async function onReprint(): Promise<void> {
     setError(null);
     try {
-      const result = await reprintLabels.mutateAsync({
+      const result = await requestReprint.mutateAsync({
         id,
         serials: parseSerials(reprintSerials),
         reason: reprintReason.trim(),
       });
-      setSheet(result);
-      toast.success(`${result.labels.length} label(s) ready to reprint`);
+      toast.success(
+        `Asked to reprint ${result.serials.length} label(s) — somebody else has to approve it`,
+      );
       setReprinting(false);
       setReprintSerials('');
       setReprintReason('');
@@ -394,10 +398,11 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                   names ONE physical unit, so a second copy of the sheet
                   is a duplicate sticker on every one of them. The
                   damaged label goes through here instead — named units
-                  only, behind its own permission. */}
-              {c.labelsPrintedAt !== null && mayReprint && (
-                <div className="border-border-subtle mt-1 border-t pt-3">
-                  {!reprinting ? (
+                  only, and two people (LBL-5b): one asks, somebody else
+                  approves, the one who asked prints it once. */}
+              {c.labelsPrintedAt !== null && (
+                <div className="border-border-subtle mt-1 flex flex-col gap-3 border-t pt-3">
+                  {!mayManage ? null : !reprinting ? (
                     <button
                       type="button"
                       className="text-text-faint hover:text-text text-xs underline"
@@ -410,7 +415,8 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       <p className="text-text-muted text-xs">
                         Name the units only. Reprinting the sheet would put a second sticker on
                         every unit, and two boxes claiming to be the same one is not something the
-                        ledger can hold — one of them just stops existing.
+                        ledger can hold — one of them just stops existing. Nothing prints yet:
+                        somebody else approves the request, then you print it.
                       </p>
                       <Input
                         aria-label="Serials to reprint"
@@ -427,13 +433,13 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       <div className="flex flex-wrap gap-2">
                         <Button
                           disabled={
-                            reprintLabels.isPending ||
-                            reprintReason.trim().length < 20 ||
+                            requestReprint.isPending ||
+                            reprintReason.trim().length === 0 ||
                             parseSerials(reprintSerials).length === 0
                           }
                           onClick={() => void onReprint()}
                         >
-                          {reprintLabels.isPending ? 'Preparing…' : 'Reprint these labels'}
+                          {requestReprint.isPending ? 'Sending…' : 'Ask for approval'}
                         </Button>
                         <Button variant="ghost" onClick={() => setReprinting(false)}>
                           Cancel
@@ -441,6 +447,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       </div>
                     </div>
                   )}
+                  <LabelReprintRequests consignmentId={id} onSheet={setSheet} />
                 </div>
               )}
             </div>

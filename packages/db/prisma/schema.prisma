@@ -113,6 +113,9 @@ model StaffUser {
   notificationBroadcasts    NotificationBroadcast[] @relation("BroadcastCreatedBy")
   pnlPeriodsClosed          PnlPeriod[]             @relation("PnlPeriodClosedBy")
   pnlVersionsCreated        PnlSnapshotVersion[]    @relation("PnlVersionCreatedBy")
+  labelReprintsRequested    LabelReprintRequest[]   @relation("LabelReprintRequestedBy")
+  labelReprintsDecided      LabelReprintRequest[]   @relation("LabelReprintDecidedBy")
+  labelReprintsPrinted      LabelReprintRequest[]   @relation("LabelReprintPrintedBy")
 
   @@index([role])
   @@index([deletedAt])
@@ -298,6 +301,7 @@ model Seller {
   restrictions             SellerRestriction[]
   sellerBankChangeRequests SellerBankChangeRequest[]
   consignments             Consignment[]
+  labelReprintRequests     LabelReprintRequest[]
   sellerFavouriteVariants  SellerFavouriteVariant[]
   shipmentAddressChanges   ShipmentAddressChange[]
 
@@ -1435,10 +1439,11 @@ model Consignment {
   updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt         DateTime?         @map("deleted_at") @db.Timestamptz
 
-  seller         Seller                 @relation(fields: [sellerId], references: [id])
-  receipts       GoodsReceipt[]
-  events         ConsignmentEvent[]
-  freightCharges InboundFreightCharge[]
+  seller               Seller                 @relation(fields: [sellerId], references: [id])
+  receipts             GoodsReceipt[]
+  events               ConsignmentEvent[]
+  freightCharges       InboundFreightCharge[]
+  labelReprintRequests LabelReprintRequest[]
 
   @@index([sellerId, status])
   @@index([status])
@@ -5535,6 +5540,51 @@ enum LabellingSite {
   IN   @map("in")
 
   @@map("labelling_site")
+}
+
+/// LBL-5b: where a request to reprint a unit's serial label stands.
+/// "Expired" is not stored — an approval lapses 24h after `decided_at`,
+/// and every reader derives it from that one column.
+enum LabelReprintRequestStatus {
+  PENDING  @map("pending")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+  PRINTED  @map("printed")
+
+  @@map("label_reprint_request_status")
+}
+
+/// LBL-5b (2026-09-15): a STRICT serial label is reprinted only after a
+/// SECOND person approves it. One person names the damaged units and
+/// says why; somebody holding `warehouse.labels.reprint` who is not them
+/// approves or rejects; the requester prints it, once. Written only by
+/// `LabelReprintRequestService`.
+model LabelReprintRequest {
+  id                 String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  consignmentId      String                    @map("consignment_id") @db.Uuid
+  sellerId           String                    @map("seller_id") @db.Uuid
+  /// The units named, trimmed and de-duplicated. Never more than 25.
+  serials            String[]
+  reason             String                    @db.Text
+  status             LabelReprintRequestStatus @default(PENDING)
+  requestedByStaffId String                    @map("requested_by_staff_id") @db.Uuid
+  decidedByStaffId   String?                   @map("decided_by_staff_id") @db.Uuid
+  decidedAt          DateTime?                 @map("decided_at") @db.Timestamptz
+  decisionNote       String?                   @map("decision_note") @db.Text
+  printedByStaffId   String?                   @map("printed_by_staff_id") @db.Uuid
+  printedAt          DateTime?                 @map("printed_at") @db.Timestamptz
+  createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime                  @updatedAt @map("updated_at") @db.Timestamptz
+
+  consignment Consignment @relation(fields: [consignmentId], references: [id])
+  seller      Seller      @relation(fields: [sellerId], references: [id])
+  requestedBy StaffUser   @relation("LabelReprintRequestedBy", fields: [requestedByStaffId], references: [id])
+  decidedBy   StaffUser?  @relation("LabelReprintDecidedBy", fields: [decidedByStaffId], references: [id])
+  printedBy   StaffUser?  @relation("LabelReprintPrintedBy", fields: [printedByStaffId], references: [id])
+
+  @@index([consignmentId, status])
+  @@index([status, createdAt])
+  @@map("label_reprint_requests")
 }
 
 /// The seller-facing timeline vocabulary. Mirrors OrderEventType's role.
