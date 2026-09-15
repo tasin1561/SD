@@ -23,12 +23,18 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
 import {
+  ApproveLabelReprintDto,
   CancelConsignmentDto,
   DispatchToIndiaDto,
   ListConsignmentsQueryDto,
+  RejectLabelReprintDto,
   ReprintLabelsDto,
   SetLabellingSiteDto,
 } from '../dto/consignment.dto';
+import {
+  LabelReprintRequestService,
+  type LabelReprintRequestView,
+} from '../services/label-reprint-request.service';
 import {
   ConsignmentCancelService,
   type CancelResult,
@@ -62,6 +68,7 @@ export class AdminConsignmentController {
     private readonly svc: ConsignmentService,
     private readonly dispatch: ConsignmentDispatchService,
     private readonly labels: ConsignmentLabelService,
+    private readonly reprints: LabelReprintRequestService,
     private readonly cancels: ConsignmentCancelService,
     private readonly events: ConsignmentEventService,
   ) {}
@@ -135,27 +142,78 @@ export class AdminConsignmentController {
   }
 
   /**
-   * The damaged or lost sticker.
+   * The damaged or lost sticker — LBL-5b, two people.
    *
-   * Its own permission, not the one that prints the sheet: a serial
-   * names ONE physical unit, so a second copy is how two boxes come to
-   * claim the same one, and that should take somebody who was given
-   * that specifically rather than anybody who can receive goods.
+   * A serial names ONE physical unit, so a second copy is how two boxes
+   * come to claim the same one. Asking is the labeller's act (the
+   * permission that prints the sheet); deciding takes
+   * `warehouse.labels.reprint` AND not being the person who asked;
+   * printing is the asker's, once. The service enforces the last two —
+   * a permission cannot say "not you".
    */
-  @Post(':id/labels/reprint')
-  @RequirePermissions('warehouse.labels.reprint')
-  @HttpCode(HttpStatus.OK)
+  @Post(':id/labels/reprint-requests')
+  @RequirePermissions('inventory.goods_receipts.manage')
   @ApiOperation({
     summary:
-      'Reprint the label for NAMED units, with a reason. Per unit on purpose — reprinting the sheet would put a second sticker on every one. Audited HIGH and recorded on each unit’s own ledger',
+      'Ask for NAMED units’ labels to be reprinted, with a reason. Prints nothing — somebody else holding warehouse.labels.reprint must approve it first',
   })
-  reprintLabels(
+  requestReprint(
     @CurrentStaff() staff: AuthenticatedStaff,
     @Param('id', uuid()) id: string,
     @Body() body: ReprintLabelsDto,
     @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<LabelReprintRequestView> {
+    return this.reprints.request(staff.id, id, body.serials, body.reason, ctx);
+  }
+
+  @Get(':id/labels/reprint-requests')
+  @ApiOperation({ summary: 'This consignment’s label reprint requests, newest first' })
+  listReprintRequests(@Param('id', uuid()) id: string): Promise<LabelReprintRequestView[]> {
+    return this.reprints.list(id);
+  }
+
+  @Post('labels/reprint-requests/:requestId/approve')
+  @RequirePermissions('warehouse.labels.reprint')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Approve a reprint somebody ELSE asked for. Good for 24 hours, and only the person who asked can print it. Audited HIGH',
+  })
+  approveReprint(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('requestId', uuid()) requestId: string,
+    @Body() body: ApproveLabelReprintDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<LabelReprintRequestView> {
+    return this.reprints.approve(staff.id, requestId, body.note, ctx);
+  }
+
+  @Post('labels/reprint-requests/:requestId/reject')
+  @RequirePermissions('warehouse.labels.reprint')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reject a reprint somebody else asked for, saying why' })
+  rejectReprint(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('requestId', uuid()) requestId: string,
+    @Body() body: RejectLabelReprintDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<LabelReprintRequestView> {
+    return this.reprints.reject(staff.id, requestId, body.note, ctx);
+  }
+
+  @Post('labels/reprint-requests/:requestId/print')
+  @RequirePermissions('inventory.goods_receipts.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'The sheet for an APPROVED reprint request — once, by the person who asked. Recorded on each unit’s own ledger and audited HIGH',
+  })
+  printReprint(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('requestId', uuid()) requestId: string,
+    @ClientInfo() ctx: ClientInfoPayload,
   ): Promise<LabelSheet> {
-    return this.labels.reprintUnits(staff.id, id, body.serials, body.reason, ctx);
+    return this.reprints.print(staff.id, requestId, ctx);
   }
 
   @Post(':id/dispatch')

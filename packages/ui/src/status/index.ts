@@ -30,6 +30,7 @@ import {
   TicketStatus,
   TopupRequestStatus,
   WithdrawalRequestStatus,
+  LabelReprintRequestStatus,
   InviteLeadStatus,
   WalletEntryDirection,
   ResellerStoreStatus,
@@ -307,6 +308,29 @@ export function inboundFreightStatusKind(status: InboundFreightStatus): StatusKi
 }
 
 /** R2 seller withdrawal request → kind. */
+/**
+ * LBL-5b — a label reprint request. `EXPIRED` is an approval more than 24
+ * hours old; the API derives it, so it is not a database value.
+ */
+export function labelReprintStateKind(state: LabelReprintRequestStatus | 'EXPIRED'): StatusKind {
+  switch (state) {
+    case LabelReprintRequestStatus.PENDING:
+      return 'pending';
+    case LabelReprintRequestStatus.APPROVED:
+      return 'confirmed';
+    case LabelReprintRequestStatus.PRINTED:
+      return 'delivered';
+    case LabelReprintRequestStatus.REJECTED:
+      return 'failed';
+    case 'EXPIRED':
+      return 'cancelled';
+    default: {
+      const exhaustive: never = state;
+      throw new Error(`Unhandled label reprint state: ${String(exhaustive)}`);
+    }
+  }
+}
+
 export function withdrawalStatusKind(status: WithdrawalRequestStatus): StatusKind {
   switch (status) {
     case WithdrawalRequestStatus.PENDING:

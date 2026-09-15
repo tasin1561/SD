@@ -23,6 +23,7 @@ import {
 import { RECEIPT_SURPLUS_TOPIC } from '../../src/modules/inventory-receipt/services/receipt-shortfall-ticket.service';
 import { RESELLER_STORE_PENDING_TOPIC } from '../../src/modules/reseller-store/services/reseller-store-notifier.service';
 import { RESELLER_SET_ASIDE_SHRUNK_TOPIC } from '../../src/modules/reseller-catalogue/services/reseller-set-aside-notifier.service';
+import { LABEL_REPRINT_REQUESTED_TOPIC } from '../../src/modules/consignment/services/label-reprint-request.service';
 import {
   RESELLER_TERMS_ACCEPTED_TOPIC,
   RESELLER_TERMS_NEED_REVISION_TOPIC,
@@ -53,7 +54,11 @@ const OTHER_SELLER_SENDERS = [
 ];
 
 /** Staff topics that are not system issues (TKT-3), by their sender's constant. */
-const OTHER_STAFF_SENDERS = [TICKET_SELLER_OPENED_TOPIC, TICKET_SELLER_REPLIED_TOPIC];
+const OTHER_STAFF_SENDERS = [
+  TICKET_SELLER_OPENED_TOPIC,
+  TICKET_SELLER_REPLIED_TOPIC,
+  LABEL_REPRINT_REQUESTED_TOPIC,
+];
 
 /**
  * The catalogue is a list of words, and words drift.

@@ -211,3 +211,21 @@ export class ReprintLabelsDto {
   @MaxLength(500)
   readonly reason!: string;
 }
+
+/** Approving a reprint request (LBL-5b). A note is optional. */
+export class ApproveLabelReprintDto {
+  @ApiPropertyOptional({ maxLength: 500 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  readonly note?: string;
+}
+
+/** Rejecting one says why — the person who asked reads it. */
+export class RejectLabelReprintDto {
+  @ApiProperty({ minLength: 10, maxLength: 500, description: 'Why not. The requester reads this.' })
+  @IsString()
+  @MinLength(10)
+  @MaxLength(500)
+  readonly note!: string;
+}

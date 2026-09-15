@@ -6,6 +6,7 @@ import { ConsignmentCoreModule } from '../consignment-core/consignment-core.modu
 import { EmailModule } from '../email/email.module';
 import { InventoryReceiptModule } from '../inventory-receipt/inventory-receipt.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { AdminConsignmentController } from './controllers/admin-consignment.controller';
 import { SellerConsignmentController } from './controllers/seller-consignment.controller';
@@ -13,6 +14,7 @@ import { ConsignmentCancelService } from './services/consignment-cancel.service'
 import { ConsignmentDispatchService } from './services/consignment-dispatch.service';
 import { ConsignmentLabelService } from './services/consignment-label.service';
 import { ConsignmentService } from './services/consignment.service';
+import { LabelReprintRequestService } from './services/label-reprint-request.service';
 
 /**
  * Two-leg consignments — the journey a seller's stock takes to reach
@@ -31,12 +33,14 @@ import { ConsignmentService } from './services/consignment.service';
     ShipmentProvisionModule,
     EmailModule,
     SellerRestrictionModule,
+    NotificationAudienceModule,
   ],
   controllers: [SellerConsignmentController, AdminConsignmentController],
   providers: [
     ConsignmentService,
     ConsignmentDispatchService,
     ConsignmentLabelService,
+    LabelReprintRequestService,
     ConsignmentCancelService,
     SellerJwtGuard,
     StaffJwtGuard,

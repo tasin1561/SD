@@ -111,6 +111,8 @@ export type {
   DispatchResult,
   DispatchToIndiaBody,
   LabelPreview,
+  LabelReprintRequestView,
+  LabelReprintState,
   LabelSheet,
 } from './endpoints/consignments';
 export type {

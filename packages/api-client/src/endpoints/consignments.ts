@@ -10,6 +10,7 @@ import type {
   ConsignmentLeg,
   ConsignmentRoute,
   ConsignmentStatus,
+  LabelReprintRequestStatus,
   GoodsReceiptStatus,
   LabellingSite,
 } from '@skydrop/db';
@@ -150,6 +151,30 @@ export interface LabelSheet {
      *  which case the sheet prints the string alone. */
     readonly barcodeWidths: readonly number[] | null;
   }>;
+}
+
+/**
+ * LBL-5b — where a label reprint request stands. `EXPIRED` is an approval
+ * more than 24 hours old: derived on read, never stored.
+ */
+export type LabelReprintState = LabelReprintRequestStatus | 'EXPIRED';
+
+/** One request to reprint named units' serial labels (two people). */
+export interface LabelReprintRequestView {
+  readonly id: string;
+  readonly consignmentId: string;
+  readonly consignmentNumber: string;
+  readonly serials: readonly string[];
+  readonly reason: string;
+  readonly state: LabelReprintState;
+  readonly requestedBy: { readonly id: string; readonly email: string | null };
+  readonly requestedAt: string;
+  readonly decidedBy: { readonly id: string; readonly email: string | null } | null;
+  readonly decidedAt: string | null;
+  readonly decisionNote: string | null;
+  /** When an approval stops being printable; null unless approved. */
+  readonly approvalExpiresAt: string | null;
+  readonly printedAt: string | null;
 }
 
 export interface ConsignmentListResult {
