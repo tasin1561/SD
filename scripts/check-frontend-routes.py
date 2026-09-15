@@ -365,6 +365,55 @@ if orphans:
 else:
     print("every API route has an obvious caller")
 
+# ── A hook no screen uses is a caller that calls nothing ─────────────
+#
+# Both directions above count a `client.request(...)` inside a data hook
+# as a caller. But a hook that no page, component or other hook ever
+# imports never runs: the endpoint behind it is exactly as unreachable as
+# one with no caller at all, and it reads as "covered". On 2026-09-15 this
+# hid fifteen hooks across admin and seller — linking a seller to a courier
+# account, the admin order timeline, archiving a variant — while the line
+# above said "every API route has an obvious caller".
+#
+# Informational like the orphan list, for the same reason: a hook reached
+# through a re-export or a dynamic name cannot be seen by a string scan.
+# A hook kept unused ON PURPOSE goes in EXPECTED_UNUSED_HOOKS with why.
+EXPECTED_UNUSED_HOOKS: dict[str, str] = {}
+
+HOOK_DEF = re.compile(r'export\s+(?:async\s+)?(?:function|const)\s+(use[A-Z]\w*)')
+unused_hooks = []
+for app, root in SOURCES:
+    if not root.exists() or app in ('api-client', 'auth'):
+        continue  # the shared packages export for the apps; judged there
+    files = [f for f in list(root.rglob('*.ts')) + list(root.rglob('*.tsx')) if is_source(f)]
+    texts = {f: f.read_text() for f in files}
+    for f, text in texts.items():
+        for m in HOOK_DEF.finditer(text):
+            name = m.group(1)
+            if name in EXPECTED_UNUSED_HOOKS:
+                continue
+            word = re.compile(r'\b' + re.escape(name) + r'\b')
+            used_elsewhere = any(word.search(t) for g, t in texts.items() if g != f)
+            used_here = len(word.findall(text)) > 1  # called by a sibling in its own file
+            if not used_elsewhere and not used_here:
+                paths = sorted({
+                    strip_interpolations(p).split('?')[0][4:] or '/'
+                    for p in PATHISH.findall(text[m.start(): m.start() + 1500])[:2]
+                })
+                unused_hooks.append((app, name, str(f).split('/src/')[-1], ', '.join(paths)))
+
+print()
+if unused_hooks:
+    print(f"HOOKS NO SCREEN USES ({len(unused_hooks)}) — informational, not a failure:")
+    for app, name, file, paths in sorted(unused_hooks):
+        print(f"  {app:<9} {name:<34} {file}  {paths}")
+    print()
+    print("  Each is an endpoint the product cannot reach even though a")
+    print("  hook calls it. Build the screen, delete the hook, or list it")
+    print("  in EXPECTED_UNUSED_HOOKS with the reason.")
+else:
+    print("every data hook is used by a screen")
+
 # Only the call -> route direction gates. It is exact: every call it finds
 # is a real call, so a miss is a real bug.
 sys.exit(1 if missing else 0)
