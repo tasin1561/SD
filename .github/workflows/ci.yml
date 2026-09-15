@@ -95,6 +95,13 @@ jobs:
           API=false; FE=false
           match '^(apps/api/|packages/db/|\.github/)' && API=true
           match '^(apps/(admin|seller|track|marketing|reseller)/|packages/(ui|api-client|auth|db)/|e2e-shared/|playwright\.config|\.github/)' && FE=true
+          # The dependency graph feeds BOTH, and is the riskiest change of
+          # all: a lockfile or override edit swaps the code every app runs
+          # without touching one app's source. 029584ec (sharp/multer/qs/
+          # js-yaml overrides) matched neither pattern, so e2e and browser
+          # were skipped on exactly the change they exist to catch.
+          DEPS='^(pnpm-lock\.yaml|pnpm-workspace\.yaml|package\.json|turbo\.json|\.npmrc|\.nvmrc)$'
+          match "$DEPS" && { API=true; FE=true; }
           echo "api=$API"      >> "$GITHUB_OUTPUT"
           echo "frontend=$FE"  >> "$GITHUB_OUTPUT"
           echo "→ api=$API frontend=$FE"
