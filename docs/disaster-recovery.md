@@ -8,7 +8,7 @@ after each practice restore** — see "Practice restores" at the end.
 
 | What | Lives in | Copies |
 |---|---|---|
-| Database (`skydrop-db-prod`, PostgreSQL 18 + TimescaleDB 2.28, basic tier, primary only) | DigitalOcean, SGP1 | DigitalOcean daily backups, 7 days (automatic on managed databases). **Off-site: Google Drive every 6 hours.** No point-in-time recovery on the basic tier. |
+| Database (`skydrop-db-prod`, PostgreSQL 18 + TimescaleDB 2.28, basic tier, primary only) | DigitalOcean, SGP1 | DigitalOcean backups, automatic: **point-in-time recovery to any transaction in the last 7 days** — available on this basic tier (checked in the panel 2026-09-15: Actions → Restore from backup → "Choose a point in time"). **Off-site: Google Drive every 6 hours.** |
 | Stored files (`skydrop-prod-storage` Space: labels, invoices, top-up proofs, portal probes) | DigitalOcean Spaces, SGP1 | **Google Drive every 6 hours** (`files/current`, with anything overwritten or deleted kept in `files/changed/<run>` for 180 days). **Spaces object versioning ON since 2026-09-15**, with a lifecycle rule (`expire-old-versions-90d`) that removes a replaced or deleted object's old copy after 90 days — so a file overwritten or deleted by mistake can be brought back from the bucket itself within 90 days. |
 | Main server `skydrop-app-prod` (API, admin, seller, track, reseller, portal worker, Caddy, Redis) | DigitalOcean droplet, SGP1 | Code: GitHub. Settings and secrets: **Google Drive every 6 hours**. **DigitalOcean droplet backups: ON since 2026-09-15** — usage-based, daily between 00:00 and 04:00 UTC, each kept 7 days. |
 | India egress server `Skydrop-India-Socket` (Shiprocket panel tunnel) | DigitalOcean droplet, BLR1 | Its few settings ride in the same secrets bundle every 6 hours. |
@@ -90,13 +90,18 @@ listed it.
 
 ### A. The database is corrupted, or rows were deleted by mistake
 
-Estimate: 30–60 min. Data lost: back to the chosen backup.
+Estimate: 30–60 min. Data lost: **next to nothing** with a point-in-time
+restore (pick the minute before the damage); up to 6 hours from the Drive
+copy, which is the route only if DigitalOcean itself is unavailable.
 
 1. Put the apps in maintenance (stop the API: `pm2 stop skydrop-api`) so
    nothing writes to a database about to be replaced.
-2. Either restore DigitalOcean's daily backup to a NEW cluster (panel →
-   the database → Backups → Restore), or create a new PostgreSQL 18 cluster
-   and restore the Drive dump into it:
+2. **First choice — point in time:** panel → `skydrop-db-prod` → **Actions →
+   Restore from backup → Choose a point in time** (GMT+6), name the new
+   cluster, Restore to New Cluster. It creates a NEW cluster (billed
+   separately); the damaged one stays untouched until you delete it.
+   **Otherwise** create a new PostgreSQL 18 cluster and restore the Drive
+   dump into it:
    ```bash
    psql "$NEW_URL" -c 'CREATE EXTENSION IF NOT EXISTS timescaledb;'
    psql "$NEW_URL" -c 'SELECT timescaledb_pre_restore();'

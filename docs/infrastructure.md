@@ -223,7 +223,7 @@ Upgrade components only when these thresholds are hit:
 | Reports / analytics slow main DB | Add read replica or ClickHouse |
 | `tracking_events` > 50M rows | Enable TimescaleDB compression policies |
 | Postgres full-text search slow on tracking lookup | Add Meilisearch |
-| Phase 1B launch with paying sellers | Upgrade to Production-tier managed Postgres (adds PITR + standby) |
+| Phase 1B launch with paying sellers | Add a standby node for failover (PITR is already included on the basic tier) |
 
 ---
 
@@ -238,7 +238,7 @@ Layered approach — no single "dual database" replaces this:
 | Droplet backups | Server-level disaster | ✅ Daily, usage-based, 7-day retention (enabled 2026-09-15) — `docs/disaster-recovery.md` |
 | Off-site nightly `pg_dump` to Spaces | DO account compromise, defense in depth | ⏳ To configure |
 | Tested restore procedure | "We had backups but they don't work" | ✅ Practice restore 2026-09-15, every table matched — `docs/disaster-recovery.md` |
-| Point-in-time recovery (PITR) | Accidental deletes, bad migrations | ⏳ Upgrade DB tier at launch |
+| Point-in-time recovery (PITR) | Accidental deletes, bad migrations | ✅ Already on the basic tier — any transaction in the last 7 days (checked 2026-09-15) |
 | Off-site encrypted copy (Google Drive, every 6 h) | Losing DigitalOcean itself, or its 7-day backups | ✅ Since 2026-09-15 — `scripts/backup/`, alarm `backup-watch` |
 | Automated standby node | Hardware failure / HA | ⏳ Upgrade DB tier at launch |
 
@@ -256,7 +256,7 @@ To complete before any real production traffic:
 - [ ] Switch Postgres connection from public endpoint to VPC private endpoint
 - [ ] Set up Sentry projects (frontend × 4, backend, workers)
 - [ ] Configure DigitalOcean alerts (CPU, memory, disk, DB connections)
-- [ ] Upgrade to Production-tier Managed Postgres (adds PITR + standby)
+- [ ] Add a database standby node for failover (PITR already included — checked 2026-09-15)
 
 ### Application
 - [ ] Separate staging environment (smaller droplet + DB)
