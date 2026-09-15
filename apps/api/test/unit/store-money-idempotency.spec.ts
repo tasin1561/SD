@@ -41,7 +41,13 @@ function world(opts: { raceWith?: Row } = {}) {
       throw p2002();
     }
     n += 1;
-    const row = { ...shared, ...extra, ...data, id: `r-${n}` } as Row;
+    const row = {
+      ...shared,
+      ...extra,
+      ...data,
+      id: `r-${n}`,
+      idempotencyKey: (data.idempotencyKey as string | null | undefined) ?? null,
+    } as Row;
     list.push(row);
     return row;
   };
