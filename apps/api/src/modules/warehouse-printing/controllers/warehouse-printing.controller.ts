@@ -40,7 +40,11 @@ import {
   ShipmentSelectionDto,
   SkuLabelRequestDto,
 } from '../dto/warehouse-printing.dto';
-import { SkuLabelService, type SkuLabelSheet } from '../services/sku-label.service';
+import {
+  SkuLabelService,
+  type SkuLabelPrint,
+  type SkuLabelSheet,
+} from '../services/sku-label.service';
 
 /**
  * Print-first picking (2026-09-03).
@@ -224,8 +228,9 @@ export class WarehousePrintingController {
   })
   skuLabelsForReceipt(
     @Param('goodsReceiptId', new ParseUUIDPipe({ version: '7' })) goodsReceiptId: string,
+    @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<SkuLabelSheet> {
-    return this.skuLabels.forGoodsReceipt(goodsReceiptId);
+    return this.skuLabels.forGoodsReceipt(goodsReceiptId, staff.id);
   }
 
   @Post('sku-labels/variants')
@@ -233,8 +238,20 @@ export class WarehousePrintingController {
   @ApiOperation({
     summary: 'Product stickers for chosen SKUs and quantities — the reprint for one that fell off',
   })
-  skuLabelsForVariants(@Body() body: SkuLabelRequestDto): Promise<SkuLabelSheet> {
-    return this.skuLabels.forVariants(body.items);
+  skuLabelsForVariants(
+    @Body() body: SkuLabelRequestDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<SkuLabelSheet> {
+    return this.skuLabels.forVariants(body.items, staff.id);
+  }
+
+  @Get('sku-labels/history')
+  @ApiOperation({
+    summary:
+      'The most recent product-sticker sheets, newest first: who built each, when, from a goods receipt or Find a product, and every SKU with its quantity. Read from the warehouse.sku_labels.built audit rows',
+  })
+  skuLabelHistory(): Promise<SkuLabelPrint[]> {
+    return this.skuLabels.history();
   }
 
   // ---------- the lookup a picker needs mid-walk ----------

@@ -43,7 +43,12 @@ import {
   type LabelSheetResult,
   type PickListResult,
 } from '@/lib/ops-hooks';
-import { useSkuLabelsForVariants, type SkuLabelSheet } from '@/lib/api-hooks';
+import {
+  useSkuLabelHistory,
+  useSkuLabelsForVariants,
+  type SkuLabelPrint,
+  type SkuLabelSheet,
+} from '@/lib/api-hooks';
 import { SkuLabelSheetView } from '@/components/sku-label-sheet';
 import { serverVerdict } from '@/lib/server-verdict';
 import { downloadPdf, printPdf } from '@/lib/print-pdf';
@@ -807,99 +812,186 @@ function LocateTab(): ReactElement {
   }
 
   return (
-    <Card>
-      <CardBody>
-        <div className="mb-3 max-w-sm">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Product name, SKU or barcode"
-            aria-label="Find a product"
-          />
-        </div>
-
-        {q.trim().length < 2 ? (
-          <div className="flex flex-col items-center gap-1.5 py-8 text-center">
-            <Search size={20} className="text-text-muted" />
-            <div className="text-sm font-medium">Where is it?</div>
-            <div className="max-w-sm text-xs text-text-muted">
-              Type at least two characters. Every bin holding the product is shown, including
-              returns and quarantine — stock on the returns bench is still where it is.
-            </div>
+    <div className="space-y-4">
+      <Card>
+        <CardBody>
+          <div className="mb-3 max-w-sm">
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Product name, SKU or barcode"
+              aria-label="Find a product"
+            />
           </div>
-        ) : results.isLoading ? (
-          <LoadingState label="Looking…" />
-        ) : results.isError ? (
-          <ErrorState
-            message={results.error?.message ?? 'Could not search.'}
-            retry={() => void results.refetch()}
-          />
-        ) : (results.data ?? []).length === 0 ? (
-          <div className="py-8 text-center text-sm text-text-muted">Nothing matches that.</div>
-        ) : (
-          <div className="space-y-3">
-            {(results.data ?? []).map((r) => (
-              <div key={r.variantId} className="rounded border border-border-subtle p-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div>
-                    <span className="font-medium">{r.productName}</span>
-                    {r.variantLabel !== null && (
-                      <span className="text-text-muted"> — {r.variantLabel}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="font-mono text-xs text-text-muted">
-                      {r.skuCode}
-                      {r.barcode !== null && ` · ${r.barcode}`}
+
+          {q.trim().length < 2 ? (
+            <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+              <Search size={20} className="text-text-muted" />
+              <div className="text-sm font-medium">Where is it?</div>
+              <div className="max-w-sm text-xs text-text-muted">
+                Type at least two characters. Every bin holding the product is shown, including
+                returns and quarantine — stock on the returns bench is still where it is.
+              </div>
+            </div>
+          ) : results.isLoading ? (
+            <LoadingState label="Looking…" />
+          ) : results.isError ? (
+            <ErrorState
+              message={results.error?.message ?? 'Could not search.'}
+              retry={() => void results.refetch()}
+            />
+          ) : (results.data ?? []).length === 0 ? (
+            <div className="py-8 text-center text-sm text-text-muted">Nothing matches that.</div>
+          ) : (
+            <div className="space-y-3">
+              {(results.data ?? []).map((r) => (
+                <div key={r.variantId} className="rounded border border-border-subtle p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <span className="font-medium">{r.productName}</span>
+                      {r.variantLabel !== null && (
+                        <span className="text-text-muted"> — {r.variantLabel}</span>
+                      )}
                     </div>
-                    {/* The sticker that fell off. Quantity is asked for
+                    <div className="flex items-center gap-3">
+                      <div className="font-mono text-xs text-text-muted">
+                        {r.skuCode}
+                        {r.barcode !== null && ` · ${r.barcode}`}
+                      </div>
+                      {/* The sticker that fell off. Quantity is asked for
                         rather than assumed: you are replacing what came
                         off, not relabelling the shelf. */}
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={reprint.isPending}
-                      onClick={() => {
-                        const raw = window.prompt(`How many labels for ${r.skuCode}?`, '1');
-                        if (raw === null) return;
-                        const quantity = Number.parseInt(raw, 10);
-                        if (!Number.isFinite(quantity) || quantity < 1) return;
-                        reprint.mutate([{ variantId: r.variantId, quantity }], {
-                          onSuccess: (sheet) => setReprintSheet(sheet),
-                        });
-                      }}
-                    >
-                      Labels
-                    </Button>
-                  </div>
-                </div>
-                {r.locations.length === 0 ? (
-                  <div className="mt-2 text-xs text-text-muted">No stock on hand anywhere.</div>
-                ) : (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {r.locations.map((loc, i) => (
-                      <div
-                        key={`${loc.warehouseName}-${loc.binCode}-${i}`}
-                        className="rounded border border-border-subtle px-2 py-1"
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={reprint.isPending}
+                        onClick={() => {
+                          const raw = window.prompt(`How many labels for ${r.skuCode}?`, '1');
+                          if (raw === null) return;
+                          const quantity = Number.parseInt(raw, 10);
+                          if (!Number.isFinite(quantity) || quantity < 1) return;
+                          reprint.mutate([{ variantId: r.variantId, quantity }], {
+                            onSuccess: (sheet) => setReprintSheet(sheet),
+                          });
+                        }}
                       >
-                        <div className="font-mono text-sm font-medium">{loc.binCode}</div>
-                        <div className="text-xs text-text-muted">
-                          {loc.warehouseName}
-                          {loc.zoneName !== null && ` · ${loc.zoneName}`}
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1.5">
-                          <span className="text-sm tabular-nums">{loc.qtyOnHand}</span>
-                          {!loc.pickable && <StatusBadge kind="pending" label="not sellable" />}
-                        </div>
-                      </div>
-                    ))}
+                        Labels
+                      </Button>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
+                  {r.locations.length === 0 ? (
+                    <div className="mt-2 text-xs text-text-muted">No stock on hand anywhere.</div>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {r.locations.map((loc, i) => (
+                        <div
+                          key={`${loc.warehouseName}-${loc.binCode}-${i}`}
+                          className="rounded border border-border-subtle px-2 py-1"
+                        >
+                          <div className="font-mono text-sm font-medium">{loc.binCode}</div>
+                          <div className="text-xs text-text-muted">
+                            {loc.warehouseName}
+                            {loc.zoneName !== null && ` · ${loc.zoneName}`}
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            <span className="text-sm tabular-nums">{loc.qtyOnHand}</span>
+                            {!loc.pickable && <StatusBadge kind="pending" label="not sellable" />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+      <StickerHistory />
+    </div>
+  );
+}
+
+/**
+ * Every product-sticker sheet recently built — from a goods receipt or
+ * from this tab — so "were these ever labelled, and by whom?" has an
+ * answer. It records the sheet being BUILT; whether the paper came out
+ * of the printer is not something the server can see.
+ */
+function StickerHistory(): ReactElement {
+  const history = useSkuLabelHistory();
+  return (
+    <Card>
+      <CardBody>
+        <div className="mb-3">
+          <div className="text-sm font-medium">Recently printed stickers</div>
+          <div className="text-xs text-text-muted">
+            Every product-label sheet built here or from a goods receipt, newest first.
           </div>
+        </div>
+        {history.isLoading ? (
+          <LoadingState label="Loading…" />
+        ) : history.isError ? (
+          <ErrorState
+            message={history.error?.message ?? 'Could not load the sticker history.'}
+            retry={() => void history.refetch()}
+          />
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>When</Th>
+                <Th>Who</Th>
+                <Th>Stickers</Th>
+                <Th>From</Th>
+                <Th className="text-right">Total</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {(history.data ?? []).length === 0 ? (
+                <TableEmpty colSpan={5}>
+                  No stickers printed yet. Print them from a goods receipt, or find a product above
+                  and choose Labels.
+                </TableEmpty>
+              ) : (
+                (history.data ?? []).map((p, i) => <StickerHistoryRow key={`${p.at}-${i}`} p={p} />)
+              )}
+            </TBody>
+          </Table>
         )}
       </CardBody>
     </Card>
+  );
+}
+
+function StickerHistoryRow({ p }: { p: SkuLabelPrint }): ReactElement {
+  const when = new Date(p.at).toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const from =
+    p.source === 'GOODS_RECEIPT'
+      ? `Receipt ${p.receiptNumber ?? ''}`.trim()
+      : p.source === 'FIND_A_PRODUCT'
+        ? 'Find a product'
+        : '—';
+  return (
+    <Tr>
+      <Td className="whitespace-nowrap tabular-nums">{when}</Td>
+      <Td>{p.by ?? '—'}</Td>
+      <Td>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs">
+          {p.lines.map((l) => (
+            <span key={l.skuCode}>
+              {l.skuCode} × {l.quantity}
+            </span>
+          ))}
+        </div>
+      </Td>
+      <Td>{from}</Td>
+      <Td className="text-right tabular-nums">{p.totalStickers}</Td>
+    </Tr>
   );
 }

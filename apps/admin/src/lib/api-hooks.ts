@@ -2434,11 +2434,13 @@ export interface SkuLabelSheet {
  */
 export function useSkuLabelsForReceipt(): UseMutationResult<SkuLabelSheet, Error, string> {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (goodsReceiptId) =>
       client.request<SkuLabelSheet>(
         `/api/admin/warehouse/printing/sku-labels/goods-receipt/${goodsReceiptId}`,
       ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: SKU_LABEL_HISTORY_KEY }),
   });
 }
 
@@ -2455,12 +2457,40 @@ export function useSkuLabelsForVariants(): UseMutationResult<
   ReadonlyArray<{ variantId: string; quantity: number }>
 > {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (items) =>
       client.request<SkuLabelSheet>('/api/admin/warehouse/printing/sku-labels/variants', {
         method: 'POST',
         body: { items },
       }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: SKU_LABEL_HISTORY_KEY }),
+  });
+}
+
+const SKU_LABEL_HISTORY_KEY = ['admin', 'sku-label-history'] as const;
+
+/** One past product-sticker sheet (warehouse.sku_labels.built). */
+export interface SkuLabelPrint {
+  at: string;
+  by: string | null;
+  source: 'GOODS_RECEIPT' | 'FIND_A_PRODUCT' | null;
+  receiptNumber: string | null;
+  totalStickers: number;
+  lines: Array<{ skuCode: string; quantity: number }>;
+}
+
+/**
+ * The most recent sticker sheets — who printed which SKUs, how many, and
+ * from where. Both print hooks refresh it, so a sheet just built shows up
+ * here straight away.
+ */
+export function useSkuLabelHistory(): UseQueryResult<SkuLabelPrint[], Error> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: SKU_LABEL_HISTORY_KEY,
+    queryFn: () =>
+      client.request<SkuLabelPrint[]>('/api/admin/warehouse/printing/sku-labels/history'),
   });
 }
 

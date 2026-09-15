@@ -1,6 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ActorType } from '@skydrop/db';
 import { printableBarcode } from '../../../common/barcode/printable-barcode';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { AuditLogService } from '../../auth-common/services/audit-log.service';
+
+/** One audit row per sticker sheet built — the record of what was printed. */
+export const SKU_LABELS_BUILT_ACTION = 'warehouse.sku_labels.built';
+
+/** Where a sheet came from: a goods receipt, or the Find-a-product reprint. */
+export type SkuLabelSource = 'GOODS_RECEIPT' | 'FIND_A_PRODUCT';
+
+/** One past sticker sheet, as the Printing station lists it. */
+export interface SkuLabelPrint {
+  readonly at: string;
+  /** The staff member's email; null when the row names nobody. */
+  readonly by: string | null;
+  readonly source: SkuLabelSource | null;
+  readonly receiptNumber: string | null;
+  readonly totalStickers: number;
+  readonly lines: ReadonlyArray<{ readonly skuCode: string; readonly quantity: number }>;
+}
 
 export interface SkuLabel {
   readonly variantId: string;
@@ -71,7 +90,10 @@ export function scannableCodeFor(v: { barcode: string | null; skuCode: string })
  */
 @Injectable()
 export class SkuLabelService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   /**
    * Labels for everything on a goods receipt, one sticker per unit
@@ -84,7 +106,7 @@ export class SkuLabelService {
    * spare stickers in a drawer, and a spare sticker is a duplicate
    * waiting to be stuck on the wrong thing.
    */
-  async forGoodsReceipt(goodsReceiptId: string): Promise<SkuLabelSheet> {
+  async forGoodsReceipt(goodsReceiptId: string, staffId: string): Promise<SkuLabelSheet> {
     const receipt = await this.prisma.client.goodsReceipt.findUnique({
       where: { id: goodsReceiptId },
       select: {
@@ -116,16 +138,24 @@ export class SkuLabelService {
       .filter((l) => l.receivedQty > 0)
       .map((l) => this.toLabel(l.variant, l.receivedQty));
 
-    return {
+    const sheet: SkuLabelSheet = {
       title: `Product labels — ${receipt.receiptNumber}`,
       labels,
       totalStickers: labels.reduce((n, l) => n + l.quantity, 0),
     };
+    await this.record(staffId, sheet, {
+      source: 'GOODS_RECEIPT',
+      entityType: 'goods_receipt',
+      entityId: goodsReceiptId,
+      receiptNumber: receipt.receiptNumber,
+    });
+    return sheet;
   }
 
   /** Ad-hoc: reprint for a chosen SKU, for the sticker that fell off. */
   async forVariants(
     input: ReadonlyArray<{ variantId: string; quantity: number }>,
+    staffId: string,
   ): Promise<SkuLabelSheet> {
     const ids = input.map((i) => i.variantId);
     const variants = await this.prisma.client.productVariant.findMany({
@@ -151,11 +181,74 @@ export class SkuLabelService {
       }
       labels.push(this.toLabel(v, want.quantity));
     }
-    return {
+    const sheet: SkuLabelSheet = {
       title: 'Product labels',
       labels,
       totalStickers: labels.reduce((n, l) => n + l.quantity, 0),
     };
+    await this.record(staffId, sheet, {
+      source: 'FIND_A_PRODUCT',
+      entityType: 'product_variant',
+      entityId: labels.length === 1 ? (labels[0]?.variantId ?? null) : null,
+      receiptNumber: null,
+    });
+    return sheet;
+  }
+
+  /**
+   * The most recent sticker sheets, newest first — who, when, which SKUs
+   * and how many. The audit trail IS the record (the cost sync's call):
+   * a second table would be a copy that eventually disagrees.
+   *
+   * What it records is a sheet BUILT for printing. Whether the paper came
+   * out of the printer is not something the server can see; the shipping
+   * label flow asks a person to confirm it because printing there moves
+   * the parcel on, and a sticker sheet moves nothing.
+   */
+  async history(limit = 25): Promise<SkuLabelPrint[]> {
+    const rows = await this.prisma.client.auditLog.findMany({
+      where: { action: SKU_LABELS_BUILT_ACTION },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: { createdAt: true, metadata: true, staffUser: { select: { emailDisplay: true } } },
+    });
+    return rows.map((r) => toPrint(r.createdAt, r.staffUser?.emailDisplay ?? null, r.metadata));
+  }
+
+  /**
+   * One LOW audit row per sheet. AuditLogService never throws, so a
+   * failed write costs the record, never the stickers somebody is
+   * waiting to print.
+   */
+  private async record(
+    staffId: string,
+    sheet: SkuLabelSheet,
+    where: {
+      source: SkuLabelSource;
+      entityType: string;
+      entityId: string | null;
+      receiptNumber: string | null;
+    },
+  ): Promise<void> {
+    await this.audit.log({
+      actorType: ActorType.STAFF,
+      staffUserId: staffId,
+      action: SKU_LABELS_BUILT_ACTION,
+      entityType: where.entityType,
+      entityId: where.entityId,
+      severity: 'LOW',
+      metadata: {
+        source: where.source,
+        receiptNumber: where.receiptNumber,
+        totalStickers: sheet.totalStickers,
+        lines: sheet.labels.map((l) => ({
+          variantId: l.variantId,
+          skuCode: l.skuCode,
+          code: l.value,
+          quantity: l.quantity,
+        })),
+      },
+    });
   }
 
   private toLabel(
@@ -180,4 +273,32 @@ export class SkuLabelService {
       quantity,
     };
   }
+}
+
+/** Reads one audit row's metadata defensively: it is JSON, written by us. */
+function toPrint(at: Date, by: string | null, metadata: unknown): SkuLabelPrint {
+  const m =
+    metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : {};
+  const source = m.source === 'GOODS_RECEIPT' || m.source === 'FIND_A_PRODUCT' ? m.source : null;
+  const rawLines = Array.isArray(m.lines) ? (m.lines as unknown[]) : [];
+  const lines = rawLines.flatMap((l) => {
+    if (l === null || typeof l !== 'object') return [];
+    const o = l as Record<string, unknown>;
+    return typeof o.skuCode === 'string' && typeof o.quantity === 'number'
+      ? [{ skuCode: o.skuCode, quantity: o.quantity }]
+      : [];
+  });
+  return {
+    at: at.toISOString(),
+    by,
+    source,
+    receiptNumber: typeof m.receiptNumber === 'string' ? m.receiptNumber : null,
+    totalStickers:
+      typeof m.totalStickers === 'number'
+        ? m.totalStickers
+        : lines.reduce((n, l) => n + l.quantity, 0),
+    lines,
+  };
 }
