@@ -10,7 +10,7 @@ after each practice restore** — see "Practice restores" at the end.
 |---|---|---|
 | Database (`skydrop-db-prod`, PostgreSQL 18 + TimescaleDB 2.28, basic tier, primary only) | DigitalOcean, SGP1 | DigitalOcean daily backups, 7 days (automatic on managed databases). **Off-site: Google Drive every 6 hours.** No point-in-time recovery on the basic tier. |
 | Stored files (`skydrop-prod-storage` Space: labels, invoices, top-up proofs, portal probes) | DigitalOcean Spaces, SGP1 | **Google Drive every 6 hours** (`files/current`, with anything overwritten or deleted kept in `files/changed/<run>` for 180 days). **Spaces object versioning ON since 2026-09-15**, with a lifecycle rule (`expire-old-versions-90d`) that removes a replaced or deleted object's old copy after 90 days — so a file overwritten or deleted by mistake can be brought back from the bucket itself within 90 days. |
-| Main server `skydrop-app-prod` (API, admin, seller, track, reseller, portal worker, Caddy, Redis) | DigitalOcean droplet, SGP1 | Code: GitHub. Settings and secrets: **Google Drive every 6 hours**. DigitalOcean droplet backups: **off**. |
+| Main server `skydrop-app-prod` (API, admin, seller, track, reseller, portal worker, Caddy, Redis) | DigitalOcean droplet, SGP1 | Code: GitHub. Settings and secrets: **Google Drive every 6 hours**. **DigitalOcean droplet backups: ON since 2026-09-15** — usage-based, daily between 00:00 and 04:00 UTC, each kept 7 days. |
 | India egress server `Skydrop-India-Socket` (Shiprocket panel tunnel) | DigitalOcean droplet, BLR1 | Its few settings ride in the same secrets bundle every 6 hours. |
 | Redis (job queues) | the main server | Saved to disk (AOF). Not copied off-site: every job is re-created by the app or its cron. |
 
@@ -109,8 +109,20 @@ Estimate: 30–60 min. Data lost: back to the chosen backup.
 
 ### B. The main server is gone
 
-Estimate: 2–4 h by hand today (about 15 min with DigitalOcean droplet
-backups on). Data lost: none — the database and Space are separate.
+Estimate: 15–30 min from a droplet backup; 2–4 h if rebuilding by hand
+(no usable droplet backup, or a new provider). Data lost: none — the
+database and Space are separate; the server itself goes back to its last
+daily backup, so re-check that the running code matches `main` (a redeploy
+fixes it).
+
+**Fast path — restore a droplet backup:** panel → Droplets →
+`skydrop-app-prod` → Backups & Snapshots → the newest backup → **Restore
+Droplet** (same droplet, same IP) or **Create Droplet** from it (a new one:
+then move the reserved IP / Cloudflare A records and the database's trusted
+source to it). Check `/health`, admin login, `pm2 ls`, and that the backup
+cron and the Shiprocket tunnel are running.
+
+**Slow path — rebuild by hand:**
 
 1. New Ubuntu 24.04 droplet in SGP1, same VPC; attach the old reserved IP
    or update the Cloudflare A records.

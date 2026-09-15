@@ -170,7 +170,7 @@ belt-and-braces rather than a blocker. The reseller app itself needs only
 | Droplet `skydrop-app-prod` | 4 GB RAM / 2 vCPU / 120 GB NVMe (Premium Intel) | Bangalore (BLR1) | ~$32 |
 | Managed PostgreSQL 18 `skydrop-db-prod` | 1 GB RAM / 1 vCPU / 10 GB + storage autoscale | Bangalore (BLR1) | ~$15 |
 | Spaces bucket `skydrop-storage` | 250 GB + CDN, restricted listing | Singapore (SGP1) — BLR unavailable | $5 |
-| Droplet weekly backups | 20% of droplet cost | — | ~$6.40 |
+| Droplet backups (daily, usage-based) | per GiB of data the droplet holds (~16 GB) | — | a few $ |
 | Cloudflare | Free tier | Global | $0 |
 | Sentry | Free tier | — | $0 |
 | **Total fixed monthly cost** | | | **~$58** |
@@ -235,7 +235,7 @@ Layered approach — no single "dual database" replaces this:
 |---|---|---|
 | Managed Postgres daily automated backups | Most data loss | ✅ Yes |
 | Storage autoscaling (80% threshold) | Disk-full → read-only | ✅ Yes |
-| Droplet weekly backups | Server-level disaster | ❌ NOT enabled (checked in the panel 2026-09-15) — the owner decides; see `docs/disaster-recovery.md` |
+| Droplet backups | Server-level disaster | ✅ Daily, usage-based, 7-day retention (enabled 2026-09-15) — `docs/disaster-recovery.md` |
 | Off-site nightly `pg_dump` to Spaces | DO account compromise, defense in depth | ⏳ To configure |
 | Tested restore procedure | "We had backups but they don't work" | ✅ Practice restore 2026-09-15, every table matched — `docs/disaster-recovery.md` |
 | Point-in-time recovery (PITR) | Accidental deletes, bad migrations | ⏳ Upgrade DB tier at launch |
