@@ -46,6 +46,67 @@ describe('planTicketNotification', () => {
     }
   });
 
+  it('a STORE_ISSUE tells STAFF only — the seller is not party to it', () => {
+    // 2026-09-16. The store is telling US a parcel was damaged or lost in
+    // our hands. Routed through the STORE_DISPUTE branch it would have
+    // emailed the seller "a dispute was raised with you", which is false
+    // twice: it is not a dispute, and not with them.
+    const plan = planTicketNotification(
+      {
+        fromStatus: null,
+        toStatus: TicketStatus.OPEN,
+        note: 'Ticket opened',
+        actorType: ActorType.STORE,
+      },
+      {
+        ...TICKET,
+        ticketType: TicketType.STORE_ISSUE,
+        storeName: 'Kolkata Kurtas',
+        description: 'The parcel came back crushed.',
+      },
+    );
+    expect(plan.seller).toBeNull();
+    expect(plan.staff).toMatchObject({
+      topic: TICKET_SELLER_OPENED_TOPIC,
+      body: 'The parcel came back crushed.',
+    });
+    expect(plan.staff?.title).toContain('raised TK-2026-000004 with us');
+  });
+
+  it('a STORE_ISSUE reply also stops at staff', () => {
+    const plan = planTicketNotification(
+      {
+        fromStatus: TicketStatus.OPEN,
+        toStatus: TicketStatus.OPEN,
+        note: 'Any news?',
+        actorType: ActorType.STORE,
+      },
+      { ...TICKET, ticketType: TicketType.STORE_ISSUE, storeName: 'Kolkata Kurtas' },
+    );
+    expect(plan.seller).toBeNull();
+    expect(plan.staff).toMatchObject({ topic: TICKET_SELLER_REPLIED_TOPIC, body: 'Any news?' });
+  });
+
+  it('a STORE_DISPUTE still reaches the seller — the new type did not swallow the old one', () => {
+    const plan = planTicketNotification(
+      {
+        fromStatus: null,
+        toStatus: TicketStatus.OPEN,
+        note: 'Ticket opened',
+        actorType: ActorType.STORE,
+      },
+      {
+        ...TICKET,
+        ticketType: TicketType.STORE_DISPUTE,
+        storeName: 'Kolkata Kurtas',
+        description: 'Wrong colour sent.',
+      },
+    );
+    expect(plan.seller).toMatchObject({ kind: 'OPENED_FOR_YOU' });
+    expect(plan.seller?.title).toContain('raised dispute');
+    expect(plan.staff).not.toBeNull();
+  });
+
   it('a ticket the SELLER opened tells staff, not the seller', () => {
     for (const actorType of [ActorType.SELLER, ActorType.API]) {
       const plan = planTicketNotification(

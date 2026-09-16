@@ -15,6 +15,9 @@ import { SellerNotificationPreferenceModule } from '../seller-notification-prefe
 import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order-money.module';
 import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { StoreTicketController } from './controllers/store-ticket.controller';
+import { StoreIssueController } from './controllers/store-issue.controller';
+import { StoreIssueService } from './services/store-issue.service';
+import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
 
 /**
  * R7 — unified ticket system (scrap/damage + seller-raised issues).
@@ -39,12 +42,22 @@ import { StoreTicketController } from './controllers/store-ticket.controller';
     // the store ↔ seller dispute settlement pair. It sits UNDER ticket and
     // imports nothing ticket-shaped, so there is no cycle.
     ResellerOrderMoneyModule,
+    // 2026-09-16 — whether a store may raise something with US is the
+    // SELLER's policy for that store. One-way: `reseller-store` imports
+    // nothing ticket-shaped.
+    ResellerStoreModule,
   ],
-  controllers: [SellerTicketController, AdminTicketController, StoreTicketController],
+  controllers: [
+    SellerTicketController,
+    AdminTicketController,
+    StoreTicketController,
+    StoreIssueController,
+  ],
   providers: [
     TicketService,
     TicketStateMachineService,
     TicketNotifier,
+    StoreIssueService,
     SellerJwtGuard,
     StaffJwtGuard,
     StoreJwtGuard,

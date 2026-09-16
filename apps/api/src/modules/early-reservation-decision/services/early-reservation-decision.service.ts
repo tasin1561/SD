@@ -110,4 +110,68 @@ export class EarlyReservationDecisionService {
   async listOpen(sellerId: string): Promise<readonly ReviewView[]> {
     return this.reviews.listForSeller(sellerId, EarlyReservationReviewStatus.OPEN);
   }
+
+  /** Reviews on this STORE's own orders that nobody has answered yet. */
+  async listOpenForStore(storeId: string): Promise<readonly ReviewView[]> {
+    return this.reviews.listForStore(storeId, EarlyReservationReviewStatus.OPEN);
+  }
+
+  /**
+   * The same decision, made by a reseller STORE on its own order
+   * (2026-09-16, owner).
+   *
+   * The store spoke to the customer — on a reseller order they are the
+   * only party who can — so they are the ones who know whether another
+   * call is worth making. The saga is `decide`'s, unchanged: the review
+   * and the stock release commit FIRST, the order transition LAST, and a
+   * crash between leaves a resolved review and an order the sweep or a
+   * re-submit converges (visible-vs-silent).
+   *
+   * The actor is the STORE throughout — on the hold release, on the audit
+   * row, and on the order event — so the timeline says who actually gave
+   * up on the order rather than crediting the seller with it.
+   */
+  async decideAsStore(
+    storeId: string,
+    sellerId: string,
+    reviewId: string,
+    decision: ReviewDecision,
+    storeUserId: string,
+    note?: string | null,
+    ctx?: ClientContext,
+  ): Promise<DecisionResult> {
+    const review = await this.reviews.decideAsStore(
+      sellerId,
+      reviewId,
+      decision,
+      storeUserId,
+      note ?? null,
+    );
+
+    const target =
+      decision === 'REQUEST_MORE_ATTEMPTS'
+        ? OrderStatus.PENDING_CONFIRMATION
+        : OrderStatus.REJECTED_NDR;
+
+    try {
+      const result = await this.orderWrite.transitionStatus({
+        orderId: review.orderId,
+        to: target,
+        actor: { type: ActorType.STORE, id: storeUserId },
+        expectedFrom: OrderStatus.AWAITING_SELLER_DECISION,
+        reason:
+          decision === 'REQUEST_MORE_ATTEMPTS'
+            ? 'The store asked for more call attempts'
+            : 'The store released the order after the call cap',
+        ...(ctx !== undefined ? { ctx } : {}),
+      });
+      return { review, orderStatus: result.status, orderMoved: true };
+    } catch (err) {
+      this.logger.warn(
+        { orderId: review.orderId, reviewId, decision, storeId, err: (err as Error).message },
+        'Store review decision recorded but the order transition did not land',
+      );
+      return { review, orderStatus: null, orderMoved: false };
+    }
+  }
 }

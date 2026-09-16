@@ -43,7 +43,23 @@ function ticketTypeLabel(type: TicketType): string {
       return 'Receipt short';
     case TicketType.STORE_DISPUTE:
       return 'Reseller store dispute';
+    // 2026-09-16 — a reseller store raising something with SKYDROP, not
+    // with its seller staff. Named apart from the dispute for the same
+    // reason the types are apart: one is Skydrop's to answer, the other
+    // Skydrop referees between seller staff and the store.
+    case TicketType.STORE_ISSUE:
+      return 'Reseller store issue';
+    default:
+      // F2: every value above returns, so this is unreachable — but the
+      // compiler cannot see that, and `never` is what makes a FUTURE
+      // ticket type fail to compile here rather than render a blank
+      // label in the Skydrop admin queue.
+      return assertNever(type);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled ticket type: ${String(value)}`);
 }
 
 /**

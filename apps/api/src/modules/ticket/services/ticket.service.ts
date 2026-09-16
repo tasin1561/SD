@@ -59,6 +59,20 @@ const OPENING_EVENT = {
  * shown as `01a043c6-7fbf-…` cannot be repeated down a phone, matched
  * against the order list, or recognised at all.
  */
+/**
+ * The ticket kinds a reseller store may READ on its own portal.
+ *
+ * A dispute WITH its seller (RS-7) and, since 2026-09-16, an issue it
+ * raised with US. One set, because every store-facing read and reply
+ * must admit both — filtered to STORE_DISPUTE alone, a store would raise
+ * a STORE_ISSUE and then be unable to see or reply to it.
+ *
+ * Deliberately NOT used by the two settlement guards: money between a
+ * store and its seller settles a DISPUTE only, and a STORE_ISSUE is ours
+ * to answer.
+ */
+const STORE_READABLE_TICKET_TYPES = [TicketType.STORE_DISPUTE, TicketType.STORE_ISSUE] as const;
+
 const TICKET_NAMES = {
   order: { select: { orderNumber: true } },
   shipment: { select: { shipmentNumber: true } },
@@ -412,7 +426,7 @@ export class TicketService {
         // RS-7 — a store's reply: only on a dispute it raised.
         ...(scope?.storeId === undefined
           ? {}
-          : { storeId: scope.storeId, ticketType: TicketType.STORE_DISPUTE }),
+          : { storeId: scope.storeId, ticketType: { in: [...STORE_READABLE_TICKET_TYPES] } }),
       },
       select: { id: true, status: true, resolvedAt: true },
     });
@@ -1125,6 +1139,57 @@ export class TicketService {
     return this.getForStore(input.storeId, opened.id);
   }
 
+  /**
+   * 2026-09-16 — a store raising something with SKYDROP about one of its
+   * orders: damaged in our hands, lost, or sitting in our warehouse.
+   *
+   * The same store-scoped order check as a dispute, and the same queue
+   * ops already works — but a different TYPE, because who is being asked
+   * differs. The seller is not party to it (`planTicketNotification`
+   * sends them nothing) and it can never be settled through the
+   * store-dispute money path, which refuses anything not a dispute.
+   *
+   * `sellerId` is still the order's seller: the column is the ticket's
+   * home in the ops queue and every ticket has one. It is not a claim
+   * that the seller is involved.
+   */
+  async openStoreIssue(input: {
+    storeId: string;
+    storeUserId: string;
+    orderId: string;
+    subject: string;
+    description?: string | null;
+  }): Promise<StoreTicketView> {
+    const order = await this.prisma.client.order.findFirst({
+      where: {
+        id: input.orderId,
+        storeId: input.storeId,
+        storeKind: SellerStoreKind.RESELLER,
+        deletedAt: null,
+      },
+      select: { id: true, sellerId: true },
+    });
+    if (order === null) {
+      throw new NotFoundException({
+        code: 'ORDER_NOT_FOUND',
+        message: 'No such order in your store.',
+      });
+    }
+    const opened = await this.open(
+      {
+        ticketType: TicketType.STORE_ISSUE,
+        sellerId: order.sellerId,
+        storeId: input.storeId,
+        openedByStoreUserId: input.storeUserId,
+        subject: input.subject.trim(),
+        description: input.description?.trim() || null,
+        orderId: order.id,
+      },
+      { type: ActorType.STORE, storeUserId: input.storeUserId },
+    );
+    return this.getForStore(input.storeId, opened.id);
+  }
+
   /** The store's own disputes, newest first. Scoped by the TOKEN's store. */
   async listForStore(
     storeId: string,
@@ -1134,7 +1199,7 @@ export class TicketService {
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
     const where: Prisma.TicketWhereInput = {
       storeId,
-      ticketType: TicketType.STORE_DISPUTE,
+      ticketType: { in: [...STORE_READABLE_TICKET_TYPES] },
       ...(filters.status !== undefined
         ? { status: filters.status }
         : filters.stage === undefined
@@ -1157,7 +1222,7 @@ export class TicketService {
   /** One of the store's own disputes — another store's is a 404. */
   async getForStore(storeId: string, ticketId: string): Promise<StoreTicketView> {
     const row = await this.prisma.client.ticket.findFirst({
-      where: { id: ticketId, storeId, ticketType: TicketType.STORE_DISPUTE },
+      where: { id: ticketId, storeId, ticketType: { in: [...STORE_READABLE_TICKET_TYPES] } },
       include: TICKET_NAMES,
     });
     if (row === null) {
@@ -1180,7 +1245,7 @@ export class TicketService {
     }>
   > {
     const ticket = await this.prisma.client.ticket.findFirst({
-      where: { id: ticketId, storeId, ticketType: TicketType.STORE_DISPUTE },
+      where: { id: ticketId, storeId, ticketType: { in: [...STORE_READABLE_TICKET_TYPES] } },
       select: { id: true },
     });
     if (ticket === null) {

@@ -5,6 +5,7 @@ import {
   ReservationBookingStage,
   ReservationReleaseReason,
   ReservationStatus,
+  SellerStoreKind,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -56,6 +57,39 @@ export class EarlyReservationReviewService {
     private readonly audit: AuditLogService,
   ) {}
 
+  /**
+   * The reviews on ONE reseller store's own orders (2026-09-16).
+   *
+   * The review row carries no store id — it is keyed on the order — so
+   * the scope goes through the order, which is also what makes another
+   * store's review (and the seller's own channel orders) invisible here
+   * rather than merely unlisted.
+   */
+  async listForStore(
+    storeId: string,
+    status?: EarlyReservationReviewStatus,
+  ): Promise<readonly ReviewView[]> {
+    const rows = await this.prisma.client.earlyReservationReview.findMany({
+      where: {
+        ...(status === undefined ? {} : { status }),
+        order: { storeId, storeKind: SellerStoreKind.RESELLER, deletedAt: null },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((r) => this.toView(r));
+  }
+
+  /** This store's own review, or null — used to scope a decision. */
+  async findForStore(storeId: string, reviewId: string): Promise<{ sellerId: string } | null> {
+    return this.prisma.client.earlyReservationReview.findFirst({
+      where: {
+        id: reviewId,
+        order: { storeId, storeKind: SellerStoreKind.RESELLER, deletedAt: null },
+      },
+      select: { sellerId: true },
+    });
+  }
+
   async listForSeller(
     sellerId: string,
     status?: EarlyReservationReviewStatus,
@@ -105,12 +139,55 @@ export class EarlyReservationReviewService {
    * already-resolved review is a 409 rather than a silent second
    * release, so a double-click can't be mistaken for two decisions.
    */
+  /**
+   * The same decision, made by a reseller STORE on its own order
+   * (2026-09-16).
+   *
+   * Shares `decide`'s body rather than copying it: the release of the
+   * at-placement holds is the money-relevant half, and two
+   * implementations of that is how one of them comes to leak stock.
+   *
+   * Two things differ, and both matter. `resolvedByUserId` is an FK to
+   * `seller_users`, so a store user's id CANNOT go there — it stays null
+   * and the actor is recorded on the audit row instead. And the holds are
+   * released as the STORE, because "the store gave up on this order" and
+   * "the seller did" are different facts about somebody else's customer.
+   */
+  async decideAsStore(
+    sellerId: string,
+    reviewId: string,
+    decision: ReviewDecision,
+    storeUserId: string,
+    note?: string | null,
+  ): Promise<ReviewView> {
+    return this.applyDecision(sellerId, reviewId, decision, note ?? null, {
+      type: ActorType.STORE,
+      id: storeUserId,
+      // Never written: the column only accepts a seller user.
+      resolvedByUserId: null,
+    });
+  }
+
   async decide(
     sellerId: string,
     reviewId: string,
     decision: ReviewDecision,
     sellerUserId: string,
     note?: string | null,
+  ): Promise<ReviewView> {
+    return this.applyDecision(sellerId, reviewId, decision, note ?? null, {
+      type: ActorType.SELLER,
+      id: sellerUserId,
+      resolvedByUserId: sellerUserId,
+    });
+  }
+
+  private async applyDecision(
+    sellerId: string,
+    reviewId: string,
+    decision: ReviewDecision,
+    note: string | null,
+    actor: { type: ActorType; id: string; resolvedByUserId: string | null },
   ): Promise<ReviewView> {
     const existing = await this.prisma.client.earlyReservationReview.findFirst({
       where: { id: reviewId, sellerId },
@@ -142,7 +219,10 @@ export class EarlyReservationReviewService {
         const res = await this.reservations.release(
           hold.id,
           ReservationReleaseReason.SELLER_RELEASED,
-          { type: ActorType.SELLER, id: sellerUserId },
+          // Whoever actually gave the stock back. The REASON stays
+          // SELLER_RELEASED — it names the decision, not the desk it was
+          // made at, and a store deciding is the seller's arrangement.
+          { type: actor.type, id: actor.id },
         );
         if (!res.alreadyInactive) releasedCount += 1;
       }
@@ -156,14 +236,17 @@ export class EarlyReservationReviewService {
             ? EarlyReservationReviewStatus.SELLER_RELEASED
             : EarlyReservationReviewStatus.SELLER_REQUESTED_MORE_ATTEMPTS,
         resolvedAt: new Date(),
-        resolvedByUserId: sellerUserId,
+        // NULL when a store decided: the column is an FK to `seller_users`
+        // and a store user's id would not resolve. Who acted is on the
+        // audit row below, which has no such constraint.
+        resolvedByUserId: actor.resolvedByUserId,
         note: note ?? existing.note,
       },
     });
 
     await this.audit.log({
-      actorType: ActorType.SELLER,
-      actorId: sellerUserId,
+      actorType: actor.type,
+      actorId: actor.id,
       sellerId,
       action: 'inventory.early_reservation.review_decided',
       entityType: 'order',

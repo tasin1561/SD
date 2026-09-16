@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -36,6 +37,28 @@ import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
 import { SellerCreditService } from '../../seller-credit/services/seller-credit.service';
 import { SellerStoreService } from '../../seller-store/services/seller-store.service';
+
+/**
+ * What a RESELLER STORE may change on its own order (2026-09-16).
+ *
+ * The recipient block only — where the parcel is going. Never the items
+ * and never the six economic fields: those are the deal the store struck
+ * with its customer under a snapshotted terms version, and correcting an
+ * address is not renegotiating it. Notes are out too; they are the
+ * seller's own working notes on their order.
+ */
+export const STORE_EDITABLE_KEYS = [
+  'recipientName',
+  'recipientPhoneE164',
+  'recipientAltPhoneE164',
+  'recipientEmail',
+  'recipientAddressLine1',
+  'recipientAddressLine2',
+  'recipientLandmark',
+  'recipientCity',
+  'recipientStateProvince',
+  'recipientPostalCode',
+] as const;
 
 const ORDER_VIEW_INCLUDE = {
   items: {
@@ -805,6 +828,17 @@ export class OrderService {
     input: UpdateOrderDto,
     actor: EventActor,
     ctx: ClientContext,
+    /**
+     * 2026-09-16 — set when a RESELLER STORE is correcting its OWN
+     * order's consignee, never by a seller path.
+     *
+     * The store gets in here rather than a parallel edit method so it
+     * inherits the whole of this one: the DRAFT/PENDING gate, address
+     * revalidation, the canonical state casing, and the EDIT_DURING_CALL
+     * rule. A second implementation would drift from those, and the one
+     * that drifted would be the one nobody was testing.
+     */
+    storeScope?: { readonly storeId: string },
   ): Promise<OrderView> {
     const order = await this.loadOwned(sellerId, id);
 
@@ -812,12 +846,38 @@ export class OrderService {
     // customer, its terms snapshot. An edit from the seller's side would
     // re-price it outside the store's terms (and the seller cannot even
     // read the recipient it would be correcting).
+    //
+    // UNCHANGED for the seller. The only way past it is the store itself,
+    // correcting its own order, and then only the recipient block.
     if (order.storeKind === SellerStoreKind.RESELLER) {
-      throw new ConflictException({
-        code: 'RESELLER_ORDER_NOT_EDITABLE',
-        message:
-          'This order was placed by a reseller store. Only the store can change it — ask them to cancel it and place it again.',
-      });
+      if (storeScope === undefined || order.storeId !== storeScope.storeId) {
+        throw new ConflictException({
+          code: 'RESELLER_ORDER_NOT_EDITABLE',
+          message:
+            'This order was placed by a reseller store. Only the store can change it — ask them to cancel it and place it again.',
+        });
+      }
+    } else if (storeScope !== undefined) {
+      // A store reaching for a channel order. Same 404-shaped refusal as
+      // everywhere else on the store surface.
+      throw new NotFoundException(`Order ${id} not found`);
+    }
+
+    if (storeScope !== undefined) {
+      // The store fixes WHERE IT IS GOING and nothing else. Items and the
+      // economics are the deal it struck with its customer under a terms
+      // snapshot; letting either move here would re-price an order after
+      // the fact, which is the very thing the seller's refusal protects.
+      const allowed = new Set<string>(STORE_EDITABLE_KEYS);
+      const reached = (Object.keys(input) as Array<keyof UpdateOrderDto>).filter(
+        (k) => input[k] !== undefined && !allowed.has(k as string),
+      );
+      if (reached.length > 0) {
+        throw new ForbiddenException({
+          code: 'STORE_EDIT_RECIPIENT_ONLY',
+          message: `A store may correct where the parcel is going, nothing else. Remove: ${reached.join(', ')}.`,
+        });
+      }
     }
 
     const isDraft = order.status === OrderStatus.DRAFT;
@@ -915,7 +975,15 @@ export class OrderService {
           where: { id: sellerId },
           select: { initials: true },
         });
-        data.recipientName = composeSellerPrefixedName(seller?.initials, input.recipientName);
+        // RS-10: a reseller order's consignee carries NO seller-initials
+        // prefix — it is printed on the courier label, and a code naming
+        // the seller would reach the store's customer. So a store
+        // correcting the name writes it through unchanged; prefixing here
+        // would corrupt the very field it came to fix.
+        data.recipientName =
+          storeScope === undefined
+            ? composeSellerPrefixedName(seller?.initials, input.recipientName)
+            : input.recipientName;
       }
       if (input.recipientPhoneE164 !== undefined) {
         data.recipientPhoneE164 = input.recipientPhoneE164.trim();

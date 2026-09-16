@@ -71,12 +71,20 @@ export function sideOf(actor: ActorType): TicketSide {
  */
 export function sellerCategoryFor(type: TicketType): SellerNotificationCategory {
   switch (type) {
-    // A parcel's ticket — and RS-7's reseller store dispute, which is about
-    // one of the store's orders.
+    // A parcel's ticket — and RS-7's reseller store dispute, which is
+    // about one of the store's orders.
+    //
+    // STORE_ISSUE is grouped here deliberately. It never produces a
+    // notice for seller staff (they are not party to a store's issue
+    // with Skydrop — see `planTicketNotification`), so this value is
+    // reached only if some future caller asks for its category. Filed
+    // with the other parcel tickets so that, if one ever does, it lands
+    // somewhere sane rather than in a category nobody chose.
     case TicketType.SCRAP_DAMAGE:
     case TicketType.SELLER_RAISED_ISSUE:
     case TicketType.COURIER_NDR_ESCALATION:
     case TicketType.STORE_DISPUTE:
+    case TicketType.STORE_ISSUE:
       return SellerNotificationCategory.SHIPMENT_UPDATES;
     case TicketType.RECEIPT_SHORTFALL:
       return SellerNotificationCategory.STOCK_ALERTS;
@@ -210,6 +218,20 @@ export function planTicketNotification(
     if (side === 'STORE') {
       const store = ticket.storeName ?? 'A reseller store';
       const body = said === '' ? ticket.subject : said;
+      // A STORE_ISSUE is the store telling US something. The seller is
+      // not party to it, so telling them "a dispute was raised with you"
+      // would be false twice over — it is not a dispute, and not with
+      // them.
+      if (ticket.ticketType === TicketType.STORE_ISSUE) {
+        return {
+          seller: null,
+          staff: {
+            topic: TICKET_SELLER_OPENED_TOPIC,
+            title: `${store} (a reseller store of ${ticket.companyName}) raised ${num} with us: ${ticket.subject}`,
+            body: clip(body),
+          },
+        };
+      }
       return {
         // The dispute is WITH the seller: they hear it from the store's
         // side. The email is the reply template — "we opened a ticket for
@@ -281,6 +303,18 @@ export function planTicketNotification(
   if (note === '') return NOTHING;
   if (side === 'STORE') {
     const store = ticket.storeName ?? 'The reseller store';
+    // Same rule as the opening: a STORE_ISSUE is ours to answer, so the
+    // store's words go to staff and nowhere near the seller.
+    if (ticket.ticketType === TicketType.STORE_ISSUE) {
+      return {
+        seller: null,
+        staff: {
+          topic: TICKET_SELLER_REPLIED_TOPIC,
+          title: `${store} (a reseller store of ${ticket.companyName}) replied on ${num}`,
+          body: clip(note),
+        },
+      };
+    }
     return {
       seller: {
         kind: 'REPLY',

@@ -1,0 +1,13 @@
+-- A reseller store raising something with SKYDROP (2026-09-16).
+--
+-- `store_dispute` is an argument with the SELLER that we referee and
+-- settle between the two wallets. This is different in kind: the store
+-- telling US that a parcel was damaged, lost, or is sitting in our
+-- warehouse. The seller is not party to it, so it must not reach their
+-- ticket list's notifications, and it can never be settled by the
+-- store-dispute money path.
+--
+-- Safe inside Prisma's migration transaction on PostgreSQL 12+: nothing
+-- here USES the new value; the first row carrying it is written later by
+-- a store raising one.
+ALTER TYPE "ticket_type" ADD VALUE IF NOT EXISTS 'store_issue';
