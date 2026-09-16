@@ -49,12 +49,6 @@ export interface OrderListItem {
   readonly storeId?: string;
   readonly storeKind?: StoreKindValue;
   readonly storeNameSnapshot?: string;
-  /**
-   * RS-5 — true on a SELLER's read of a reseller store's order: the
-   * customer's name, phone, email and street address were taken off
-   * (they are the store's). City, state and PIN stay.
-   */
-  readonly recipientMasked?: boolean;
 }
 
 /** RS-1 / RS-5 — a store's kind: the seller's own channel, or a reseller store. */
@@ -101,8 +95,6 @@ export interface OrderView {
   /** RS-5 — a reseller store's order, and the store's name as placed. */
   readonly storeKind?: StoreKindValue;
   readonly storeNameSnapshot?: string;
-  /** RS-5 — true when a seller reads a reseller store's order (see OrderListItem). */
-  readonly recipientMasked?: boolean;
   /** RS-5 — the terms snapshot on a reseller order (all null on a channel one). */
   readonly resellerTermsVersionId?: string | null;
   /** The version NUMBER of that terms snapshot (what people read). */

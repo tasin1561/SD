@@ -581,15 +581,7 @@ export function OrdersIndex(): ReactElement {
                   )}
                 </Td>
                 <Td>
-                  {/* A reseller store's customer is the store's (RS-5): the
-                      server sends a placeholder name and no phone. */}
-                  <div
-                    className={
-                      o.recipientMasked === true ? 'text-text-muted italic' : 'text-text-body'
-                    }
-                  >
-                    {o.recipientName}
-                  </div>
+                  <div className="text-text-body">{o.recipientName}</div>
                   {/* City is blank on everything placed since the form
                       stopped asking (ORD-5), so the PIN carries the
                       destination and the city joins it when present. */}

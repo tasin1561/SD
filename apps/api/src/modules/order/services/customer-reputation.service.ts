@@ -3,11 +3,15 @@ import { CustomerRiskLevel, OrderStatus, type Prisma, SellerStoreKind } from '@s
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 /**
- * RS-5 — whose orders are "your own" in a lookup: the seller's OWN
- * (channel) orders, or one reseller store's. A reseller store's customer
- * belongs to the store (ORD-7 generalised), so the seller's lookup never
- * lists the orders a store placed, and a store's lookup never lists the
- * seller's. The platform-wide COUNTS are unaffected — they were always
+ * Whose orders are "your own" in a lookup: ALL of the seller's — their
+ * own channel and every reseller store selling their goods — or one
+ * store's.
+ *
+ * AMENDED 2026-09-16 (owner): the SELLER scope no longer stops at
+ * channel orders. Every one of these parcels is the seller's to ship and
+ * to be refused, so a customer who has burned them through a store is
+ * exactly the history the lookup exists to show. A STORE still sees only
+ * its own. The platform-wide COUNTS are unaffected — they were always
  * across every seller.
  */
 export type CustomerScope =
@@ -17,7 +21,7 @@ export type CustomerScope =
 function scopeWhere(sellerId: string, scope: CustomerScope): Prisma.OrderWhereInput {
   return scope.kind === 'STORE'
     ? { sellerId, storeId: scope.storeId, storeKind: SellerStoreKind.RESELLER }
-    : { sellerId, storeKind: SellerStoreKind.CHANNEL };
+    : { sellerId };
 }
 
 /**
@@ -213,10 +217,18 @@ export class CustomerReputationService {
       this.prisma.client.customer.findFirst({
         where: {
           sellerId,
-          resellerStoreId: scope.kind === 'STORE' ? scope.storeId : null,
+          // A STORE sees only its own row. A SELLER sees any row of theirs
+          // for this number (2026-09-16) — their own, or one a reseller
+          // store of theirs created — because the orders above now span
+          // both, and a blank name and risk level beside a list of that
+          // customer's orders is exactly the half-state this change
+          // removes. Two rows can carry one phone (identity is per OWNER,
+          // ORD-7), so the seller's OWN row wins: nulls first.
+          ...(scope.kind === 'STORE' ? { resellerStoreId: scope.storeId } : {}),
           phoneE164,
           deletedAt: null,
         },
+        orderBy: { resellerStoreId: { sort: 'asc', nulls: 'first' } },
         select: { name: true, riskLevel: true, riskNotes: true },
       }),
     ]);

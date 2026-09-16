@@ -66,8 +66,11 @@ export interface AdminCreateResellerStoreInput {
   readonly sellerId: string;
   readonly name: string;
   readonly displayName?: string | undefined;
-  readonly contactEmail?: string | undefined;
-  readonly contactPhone?: string | undefined;
+  // Required since 2026-09-16 (owner) — see the seller-side twin. The
+  // invitation is not here: an admin-created store has no team until the
+  // seller approves it, and it is required on THAT call.
+  readonly contactEmail: string;
+  readonly contactPhone: string;
   readonly walletManagedBy?: 'SELLER' | 'SKYDROP' | undefined;
   readonly note?: string | undefined;
 }

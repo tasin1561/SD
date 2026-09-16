@@ -15,7 +15,6 @@ import {
   VariantStatus,
   SellerCapability,
 } from '@skydrop/db';
-import { maskResellerRecipient, type Masked } from '../reseller-privacy';
 import { resellerOrderColumns, type ResellerCreateContext } from '../reseller-order-snapshot';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
@@ -1168,7 +1167,7 @@ export class OrderService {
    * have no use for a picture, and presigning on a write path would be
    * work nobody reads.
    */
-  async loadOwnedForDisplay(sellerId: string, id: string): Promise<Masked<OrderView>> {
+  async loadOwnedForDisplay(sellerId: string, id: string): Promise<OrderView> {
     const order = await this.loadOwnedForSeller(sellerId, id);
     const thumbs = await this.catalog.thumbnailUrlsByVariant(order.items.map((i) => i.variantId));
     return {
@@ -1178,13 +1177,23 @@ export class OrderService {
   }
 
   /**
-   * The order as its SELLER may read it — a reseller store customer's
-   * identity taken off (RS-5, `reseller-privacy.ts`). Every seller-facing
-   * read of one order returns this, never `loadOwned`, which is the
-   * mutators' internal load.
+   * The order as its SELLER may read it — IN FULL, the customer included.
+   *
+   * AMENDED 2026-09-16 (owner). RS-5 masked a reseller store's customer
+   * here: their name, phones, email and street address were taken off
+   * before the seller read them, because the customer was the store's.
+   * The owner's call is that the ORDER is the seller's — their stock,
+   * their warehouse slot, their courier, their money at risk — and a
+   * seller who cannot see who a parcel is going to cannot act on it:
+   * they cannot ring about a failed delivery, judge a bad address, or
+   * answer the call centre. `order/reseller-privacy.ts` is deleted.
+   *
+   * The method survives the mask it existed for: it is still the ONE
+   * seller-scoped read, so a future rule about what a seller may see has
+   * a single place to live.
    */
-  async loadOwnedForSeller(sellerId: string, id: string): Promise<Masked<OrderView>> {
-    return maskResellerRecipient(await this.loadOwned(sellerId, id));
+  async loadOwnedForSeller(sellerId: string, id: string): Promise<OrderView> {
+    return this.loadOwned(sellerId, id);
   }
 
   async loadOwned(sellerId: string, id: string): Promise<OrderView> {
@@ -1201,7 +1210,7 @@ export class OrderService {
   async list(
     sellerId: string,
     query: ListOrdersQuery,
-  ): Promise<{ items: Masked<OrderListItem>[]; total: number; page: number; pageSize: number }> {
+  ): Promise<{ items: OrderListItem[]; total: number; page: number; pageSize: number }> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const where: Prisma.OrderWhereInput = { sellerId, deletedAt: null };
@@ -1215,18 +1224,13 @@ export class OrderService {
       where.OR = [
         { orderNumber: { contains: query.search, mode: 'insensitive' } },
         { sellerOrderRef: { contains: query.search, mode: 'insensitive' } },
-        // RS-5: a name or phone matches the seller's OWN (channel) orders
-        // only. Matching a reseller order by its customer's phone would
-        // tell the seller who that store sold to — the very thing the
-        // mask on the rows withholds.
-        {
-          storeKind: SellerStoreKind.CHANNEL,
-          recipientName: { contains: query.search, mode: 'insensitive' },
-        },
-        {
-          storeKind: SellerStoreKind.CHANNEL,
-          recipientPhoneE164: { contains: query.search, mode: 'insensitive' },
-        },
+        // A name or phone matches EVERY order of this seller's, a
+        // reseller store's included (2026-09-16): the rows no longer
+        // hide the customer, so a search that skipped them would mean a
+        // seller reading a phone number on one screen and finding
+        // nothing when they typed it into the next.
+        { recipientName: { contains: query.search, mode: 'insensitive' } },
+        { recipientPhoneE164: { contains: query.search, mode: 'insensitive' } },
         // The WAYBILL. It is the number a courier quotes, a customer
         // reads off a text message and a seller pastes from an email —
         // and it was the one identifier on the parcel that this search
@@ -1256,8 +1260,7 @@ export class OrderService {
       }),
       this.prisma.client.order.count({ where }),
     ]);
-    // RS-5: the seller's list, with every reseller store customer masked.
-    return { items: items.map((o) => maskResellerRecipient(o)), total, page, pageSize };
+    return { items, total, page, pageSize };
   }
 
   /**

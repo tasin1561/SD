@@ -75,6 +75,8 @@ describe('reseller order money (e2e)', () => {
       .send({
         name: `Money ${Math.random().toString(36).slice(2, 8)}`,
         displayName: 'Money Store',
+        contactEmail: email,
+        contactPhone: '+919800000001',
         invite: { email, fullName: 'Money Owner', roleKey: 'owner' },
       })
       .expect(201);

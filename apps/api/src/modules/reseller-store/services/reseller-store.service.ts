@@ -164,9 +164,10 @@ export class ResellerStoreService {
   // ── Create ─────────────────────────────────────────────────────────
 
   /**
-   * The seller creates a store for themselves (ACTIVE at once, optionally
-   * with its first user invited) — or Skydrop creates one FOR a seller
-   * (PENDING_SELLER_APPROVAL, the seller told in-app and by email).
+   * The seller creates a store for themselves (ACTIVE at once, with its
+   * first user invited — required since 2026-09-16) — or Skydrop creates
+   * one FOR a seller (PENDING_SELLER_APPROVAL, the seller told in-app and
+   * by email, and the invitation arrives when they approve it).
    */
   async create(
     sellerId: string,

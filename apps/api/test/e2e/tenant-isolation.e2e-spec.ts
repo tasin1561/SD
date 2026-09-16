@@ -443,6 +443,8 @@ describe('cross-tenant isolation (e2e)', () => {
       .set(owner.auth)
       .send({
         name: storeName,
+        contactEmail: email,
+        contactPhone: '+919800000003',
         invite: { email, fullName: `${label} Owner`, roleKey: 'owner' },
       })
       .expect(201);
@@ -1004,26 +1006,35 @@ describe('cross-tenant isolation (e2e)', () => {
     const viaKey = await request(h.baseUrl).get(`/store-api/v1/orders/${order.id}`).set(apiAuth);
     expectDenied(viaKey.status, viaKey.body, "a sister store's order via an API key");
 
-    // The seller sees the order is theirs — and never who it goes to.
+    // The order is the SELLER's, and since 2026-09-16 they read it in
+    // full — the customer included. What this suite pins is that the
+    // isolation which remains is between SELLERS and between STORES,
+    // not between a seller and their own store's order.
     const seen = await request(h.baseUrl)
       .get(`/seller/orders/${order.id}`)
       .set(alpha.auth)
       .expect(200);
-    expect((seen.body as { recipientMasked: boolean }).recipientMasked).toBe(true);
     const text = JSON.stringify(seen.body);
-    expect(text).not.toContain('Priya');
-    expect(text).not.toContain('9876500031');
-    expect(text).not.toContain('priya@example.com');
-    expect(text).not.toContain('Hidden Lane');
+    expect(text).toContain('Priya');
+    expect(text).toContain('9876500031');
+    // Found by the phone they can now see — a search that skipped these
+    // rows would mean reading a number on one screen and getting nothing
+    // on the next.
     const byPhone = await request(h.baseUrl)
       .get('/seller/orders?search=9876500031')
       .set(alpha.auth)
       .expect(200);
-    expect((byPhone.body as { total: number }).total).toBe(0);
+    expect((byPhone.body as { total: number }).total).toBe(1);
     const customers = await request(h.baseUrl).get('/seller/customers').set(alpha.auth).expect(200);
-    expect(JSON.stringify(customers.body)).not.toContain(customer.id);
-    const direct = await request(h.baseUrl).get(`/seller/customers/${customer.id}`).set(alpha.auth);
-    expectDenied(direct.status, direct.body, "a store's customer from the seller side");
+    expect(JSON.stringify(customers.body)).toContain(customer.id);
+    await request(h.baseUrl).get(`/seller/customers/${customer.id}`).set(alpha.auth).expect(200);
+    // Reading is what widened: the store's customer row is still the
+    // STORE's to change.
+    const edit = await request(h.baseUrl)
+      .patch(`/seller/customers/${customer.id}`)
+      .set(alpha.auth)
+      .send({ name: 'Renamed by the seller' });
+    expectDenied(edit.status, edit.body, "editing a store's customer from the seller side");
   });
 
   // ─── Reseller reports and analysis (RS-8 / RS-9) ───────────────────────

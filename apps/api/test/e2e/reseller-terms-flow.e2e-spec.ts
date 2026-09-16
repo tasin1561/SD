@@ -77,6 +77,8 @@ describe('reseller store terms (e2e)', () => {
       .set(seller.auth)
       .send({
         name: `${label} ${Math.random().toString(36).slice(2, 8)}`,
+        contactEmail: email,
+        contactPhone: '+919800000002',
         invite: { email, fullName: `${label} Owner`, roleKey: 'owner' },
       })
       .expect(201);

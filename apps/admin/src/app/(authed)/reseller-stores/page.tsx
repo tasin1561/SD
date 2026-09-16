@@ -215,8 +215,8 @@ function CreateModal({
         sellerId,
         name: name.trim(),
         ...(opt(displayName) === undefined ? {} : { displayName: opt(displayName) }),
-        ...(opt(contactEmail) === undefined ? {} : { contactEmail: opt(contactEmail) }),
-        ...(opt(contactPhone) === undefined ? {} : { contactPhone: opt(contactPhone) }),
+        contactEmail: contactEmail.trim(),
+        contactPhone: contactPhone.trim(),
         ...(opt(note) === undefined ? {} : { note: opt(note) }),
       });
       toast.success(`“${created.name}” is waiting for ${created.sellerCompanyName} to approve it.`);
@@ -276,18 +276,25 @@ function CreateModal({
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </FormField>
-        <FormField label="Contact email" htmlFor="cr-email">
+        <FormField label="Contact email" htmlFor="cr-email" required>
           <Input
             id="cr-email"
             type="email"
+            required
             value={contactEmail}
             onChange={(e) => setContactEmail(e.target.value)}
           />
         </FormField>
-        <FormField label="Contact phone" htmlFor="cr-phone" hint="E.164, e.g. +919812345678.">
+        <FormField
+          label="Contact phone"
+          htmlFor="cr-phone"
+          hint="E.164, e.g. +919812345678."
+          required
+        >
           <Input
             id="cr-phone"
             type="tel"
+            required
             value={contactPhone}
             onChange={(e) => setContactPhone(e.target.value)}
           />

@@ -27,7 +27,12 @@ exactly as it is. A store now has a **kind**:
 1. A reseller store resells exactly ONE seller. Never a marketplace.
 2. A store is brought in by the SELLER (invite) or by a Skydrop ADMIN
    (created for a seller, then the seller must APPROVE or REJECT).
-   A seller may also run a reseller store with nobody invited.
+   **AMENDED 2026-09-16: a contact email, a contact phone and an
+   invitation for the first user are all REQUIRED to open one.** A store
+   nobody can sign in to and nobody can ring is not onboarded — it is a
+   row that looks open and can do nothing. The seller's own store is
+   invited as it is created; an admin-created one is invited by the
+   seller at APPROVAL, which is what opens it.
 3. Portal: `reseller.skydrop.online` — a third frontend (`apps/reseller`).
 4. The customer sees the STORE's name.
 5. Stock per store per product: SHARED pool or SET-ASIDE quantity, plus a
@@ -976,27 +981,29 @@ unreadable switch is an off switch, because it guards money.
   so `CustomerService.findOrCreate` is find-then-create under
   `AdvisoryLock.CUSTOMER_IDENTITY` (owner, phone) — every caller passes its
   own transaction.
-- **The seller never sees a store customer's name, phone, email or street
-  address.** ONE mask on the seller read path: `order/reseller-privacy.ts`
-  (`maskResellerRecipient`), applied by `OrderService.list` and
-  `OrderService.loadOwnedForSeller` (detail, display and the cancel response);
-  city, state, PIN and country stay; `recipientMasked: true` says why the
-  gap is there. Seller search by name or phone matches CHANNEL orders only (a
-  phone match on a reseller order would tell the seller who the store sold
-  to). `CustomerService.list/getById/update/softDelete` are the seller's OWN
-  customers only (`reseller_store_id IS NULL`); the reputation lookup and the
-  duplicate check see channel orders for a seller and the store's orders for
-  a store; seller CSV references never match a store's order; the address
-  autocomplete cache is not fed by a store order; a store's CSV upload is
-  never parked in the seller's staged-row queue; a store's uploads and
-  webhook endpoints are invisible to the seller's screens. Staff see
-  everything (admin reads are never masked); the store sees its own in full.
-  Pinned by `reseller-privacy.spec.ts` and `tenant-isolation.e2e-spec.ts`.
-- **Known, recorded**: other seller surfaces that show a recipient (tickets
-  on a parcel, NSA / return worklists, invoices, notification emails to the
-  seller) are not yet masked for reseller orders. None is reachable before
-  `reseller.orders_enabled` is on; RS-10 is reworking the customer-facing
-  half. Mask them through `maskResellerRecipient` before 3c turns orders on.
+- **The seller reads a store's order IN FULL — customer included (AMENDED
+  2026-09-16, owner).** RS-5 masked it: `order/reseller-privacy.ts` took the
+  name, both phones, the email and the street address off every seller read,
+  leaving city, state and PIN. **That module is deleted.** The order is the
+  seller's — their stock, their warehouse slot, their courier, their money at
+  risk — and a seller who cannot see who a parcel is going to cannot ring
+  about a failed delivery, judge a bad address, or answer the call centre.
+  So: the recipient block is whole on `OrderService.list` and
+  `loadOwnedForSeller`; seller search by name or phone matches reseller
+  orders too (a number visible on one screen must resolve on the next); the
+  reputation lookup's SELLER scope is every order of theirs, a store's
+  included — a customer who has refused through a store is exactly the
+  history it exists to show. `CustomerService.list/getById` reach a store's
+  customers.
+- **Reading widened; writing did not.** `CustomerService.update/softDelete`
+  go through the private `getOwnById` (`reseller_store_id IS NULL`) and still
+  refuse a store's customer row — the store maintains its own record of the
+  people it sold to. Identity stays per OWNER (the two partial uniques above
+  are unchanged). A store's CSV uploads, staged rows and webhook endpoints
+  stay invisible to the seller's screens, and seller CSV references still
+  never match a store's order (that scoping is ORD-9's PATCH collision, not
+  privacy). A STORE still reads only its own; staff read everything. Pinned
+  by `tenant-isolation.e2e-spec.ts` and `reseller-store-orders.e2e-spec.ts`.
 
 ### Integrations
 
@@ -1061,10 +1068,11 @@ store's catalogue with the retail range and the available quantity shown;
 `/orders/import` — the CSV flow with the store template and error report),
 **Customers** (`/customers`), **Integrations** (`/integrations` — API keys
 and webhooks, secrets shown once). apps/seller: orders list shows "via
-<store>" and a masked customer, the store filter includes the seller's
+<store>" and the customer in full, the store filter includes the seller's
 reseller stores (with `stores.manage`), and the store filter now actually
-filters (the list hook was dropping `storeId`); order detail replaces a
-masked recipient with a note and offers no Edit on a reseller order.
+filters (the list hook was dropping `storeId`); order detail shows the whole
+recipient under a "Sold by your reseller store X" note, and offers no Edit on
+a reseller order.
 apps/admin: order detail gains a "Reseller store" section (store, terms
 version, shares, timings, each line's transfer price and retail as placed).
 
@@ -1073,8 +1081,7 @@ version, shares, timings, each line's transfer price and retail as placed).
 Unit: `reseller-order.service.spec.ts` (the refusal order, fail-closed switch,
 the snapshot, `lockAndReadTerms` FOR SHARE and re-check), `reseller-set-aside-rules.spec.ts`,
 `reseller-stock-gate.service.spec.ts` (lock first, channel orders respect
-set-asides, consumption), `reseller-privacy.spec.ts` (the mask, and that every
-seller read goes through it), `customer.service.spec.ts` (owner identity under
+set-asides, consumption), `customer.service.spec.ts` (owner identity under
 the lock), `order-write.service.spec.ts` (the guard on every reserve),
 `store-permission-surface.spec.ts` (the RS-5 surface and defaults). E2E (CI):
 `reseller-store-orders.e2e-spec.ts` (the refusals, the snapshot and masking

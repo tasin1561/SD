@@ -48,16 +48,18 @@ class ResellerStoreFieldsDto {
   @MaxLength(80)
   displayName?: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  // REQUIRED since 2026-09-16 (owner). A store we cannot reach is a
+  // store nobody can chase when its parcels go wrong — and both halves
+  // matter: the email carries its invitation and every notice, the phone
+  // is how anybody rings them about a live parcel.
+  @ApiProperty({ example: 'hello@mystore.in' })
   @IsEmail({}, { message: 'contactEmail must be a valid address' })
   @MaxLength(254)
-  contactEmail?: string;
+  contactEmail!: string;
 
-  @ApiPropertyOptional({ example: '+919812345678', description: 'E.164' })
-  @IsOptional()
+  @ApiProperty({ example: '+919812345678', description: 'E.164' })
   @Matches(E164, { message: 'contactPhone must be E.164, e.g. +919812345678' })
-  contactPhone?: string;
+  contactPhone!: string;
 
   @ApiPropertyOptional({ enum: ResellerWalletManager, default: ResellerWalletManager.SELLER })
   @IsOptional()
@@ -73,11 +75,13 @@ class ResellerStoreFieldsDto {
 
 /** The seller creates a store for themselves — it is ACTIVE at once. */
 export class CreateResellerStoreDto extends ResellerStoreFieldsDto {
-  @ApiPropertyOptional({ type: InviteStoreUserDto, description: 'Invite the store’s first user' })
-  @IsOptional()
+  // REQUIRED since 2026-09-16 (owner): without an invitation nobody can
+  // sign in, so the store is not onboarded — it is a row that looks open
+  // and can do nothing. The first user is its owner.
+  @ApiProperty({ type: InviteStoreUserDto, description: 'Invite the store’s first user' })
   @ValidateNested()
   @Type(() => InviteStoreUserDto)
-  invite?: InviteStoreUserDto;
+  invite!: InviteStoreUserDto;
 }
 
 /** Skydrop creates a store FOR a seller — it waits for the seller's approval. */
@@ -88,11 +92,13 @@ export class AdminCreateResellerStoreDto extends ResellerStoreFieldsDto {
 }
 
 export class ApproveResellerStoreDto {
-  @ApiPropertyOptional({ type: InviteStoreUserDto, description: 'Invite the store’s first user' })
-  @IsOptional()
+  // The other half of the same rule: an admin-created store has no team
+  // until the seller agrees to it, so the invitation arrives HERE, and
+  // it is required for the same reason (2026-09-16, owner).
+  @ApiProperty({ type: InviteStoreUserDto, description: 'Invite the store’s first user' })
   @ValidateNested()
   @Type(() => InviteStoreUserDto)
-  invite?: InviteStoreUserDto;
+  invite!: InviteStoreUserDto;
 }
 
 export class ResellerStoreReasonDto {

@@ -149,12 +149,30 @@ export class CustomerService {
   }
 
   /**
-   * The SELLER's own customer. RS-5: a reseller store's customer is never
-   * reachable here — `resellerStoreId: null` in the WHERE — so a seller
-   * cannot read, edit or delete a person a store sold to (a miss is a 404
-   * that says nothing about whether the row exists).
+   * A customer of this SELLER's — their own, or one a reseller store of
+   * theirs sold to.
+   *
+   * AMENDED 2026-09-16 (owner): RS-5 kept a store's customers out of
+   * here entirely. The seller now reads them, because they read the
+   * ORDER in full and a phone number they can see on one screen must
+   * resolve on the next. READING is all that widened: `update` and
+   * `softDelete` go through `getOwnById` and still refuse a store's row —
+   * the store maintains its own customers, and a seller editing a person
+   * they never spoke to would overwrite the store's record of them.
    */
   async getById(sellerId: string, id: string): Promise<CustomerView> {
+    const customer = await this.prisma.client.customer.findFirst({
+      where: { id, sellerId, deletedAt: null },
+      select: VIEW_SELECT,
+    });
+    if (!customer) {
+      throw new NotFoundException(`Customer ${id} not found`);
+    }
+    return customer;
+  }
+
+  /** The seller's OWN customer row — the one they may also CHANGE. */
+  private async getOwnById(sellerId: string, id: string): Promise<CustomerView> {
     const customer = await this.prisma.client.customer.findFirst({
       where: { id, sellerId, resellerStoreId: null, deletedAt: null },
       select: VIEW_SELECT,
@@ -189,8 +207,9 @@ export class CustomerService {
     sellerId: string,
     query: ListCustomersQuery,
   ): Promise<{ items: CustomerView[]; total: number; page: number; pageSize: number }> {
-    // RS-5: the seller's OWN customers; never a reseller store's.
-    return this.listWhere({ sellerId, resellerStoreId: null, deletedAt: null }, query);
+    // Every customer of this seller's — their own and their reseller
+    // stores' (2026-09-16, owner). A store's list stays its own.
+    return this.listWhere({ sellerId, deletedAt: null }, query);
   }
 
   private async listWhere(
@@ -226,8 +245,9 @@ export class CustomerService {
    * auth context, never the body, so the seller scope can't be moved.
    */
   async update(sellerId: string, id: string, input: UpdateCustomerInput): Promise<CustomerView> {
-    // Existence + ownership check (also guards soft-deleted).
-    await this.getById(sellerId, id);
+    // Existence + ownership check (also guards soft-deleted). The seller's
+    // OWN row only — a store's customer is the store's to maintain.
+    await this.getOwnById(sellerId, id);
     const data: Prisma.CustomerUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.email !== undefined) data.email = input.email;
@@ -245,7 +265,7 @@ export class CustomerService {
 
   /** Soft-delete (user-facing data — CLAUDE.md soft-delete rule). */
   async softDelete(sellerId: string, id: string): Promise<void> {
-    await this.getById(sellerId, id);
+    await this.getOwnById(sellerId, id);
     await this.prisma.client.customer.update({
       where: { id },
       data: { deletedAt: new Date() },

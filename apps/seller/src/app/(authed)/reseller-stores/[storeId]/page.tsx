@@ -239,15 +239,15 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
   async function doApprove(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setError(null);
-    const invite: InviteInput | undefined =
-      inviteEmail.trim() === ''
-        ? undefined
-        : { email: inviteEmail.trim(), fullName: inviteName.trim(), roleKey: 'owner' };
+    // Required since 2026-09-16: approving is what opens the store, and a
+    // store nobody can sign in to is not open.
+    const invite: InviteInput = {
+      email: inviteEmail.trim(),
+      fullName: inviteName.trim(),
+      roleKey: 'owner',
+    };
     try {
-      await approve.mutateAsync({
-        storeId: store.id,
-        body: invite === undefined ? {} : { invite },
-      });
+      await approve.mutateAsync({ storeId: store.id, body: { invite } });
       toast.success(`“${store.name}” is approved and open.`);
       setApproving(false);
     } catch (err) {
@@ -287,20 +287,27 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
         open={approving}
         onOpenChange={setApproving}
         title={`Approve “${store.name}”?`}
-        description="It opens at once. You can invite its first user now, or later."
+        description="It opens at once, with its first user invited — they get the email that gives the store a login."
       >
         <form onSubmit={doApprove} className="space-y-4">
-          <FormField label="First user’s email (optional)" htmlFor="ap-email">
+          <FormField label="First user’s email" htmlFor="ap-email" required>
             <Input
               id="ap-email"
               type="email"
+              required
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
             />
           </FormField>
-          <FormField label="Their name" htmlFor="ap-name" hint="They become the store’s owner.">
+          <FormField
+            label="Their name"
+            htmlFor="ap-name"
+            hint="They become the store’s owner."
+            required
+          >
             <Input
               id="ap-name"
+              required
               value={inviteName}
               onChange={(e) => setInviteName(e.target.value)}
             />

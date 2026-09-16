@@ -83,11 +83,14 @@ export interface InviteInput {
 export interface CreateResellerStoreInput {
   readonly name: string;
   readonly displayName?: string | undefined;
-  readonly contactEmail?: string | undefined;
-  readonly contactPhone?: string | undefined;
+  // Required since 2026-09-16 (owner): a store we cannot reach, or that
+  // nobody can sign in to, is not onboarded. The server refuses without
+  // them; typing them as required means a caller finds out here instead.
+  readonly contactEmail: string;
+  readonly contactPhone: string;
   readonly walletManagedBy?: WalletManager | undefined;
   readonly note?: string | undefined;
-  readonly invite?: InviteInput | undefined;
+  readonly invite: InviteInput;
 }
 
 const KEY = ['seller-reseller-stores'] as const;
@@ -142,7 +145,12 @@ function useStoreAction<TBody>(
 export function useApproveResellerStore(): UseMutationResult<
   ResellerStoreDetail,
   Error,
-  { storeId: string; body?: { invite?: InviteInput } }
+  // Approving is what OPENS an admin-created store, so its first user is
+  // invited here and the invitation is required (2026-09-16). The outer
+  // `body` stays optional because the shared `useStoreAction` types every
+  // action that way; what this pins is that a body which IS sent carries
+  // the invitation. The server refuses an approval without one.
+  { storeId: string; body?: { invite: InviteInput } }
 > {
   return useStoreAction((id) => `/api/seller/reseller-stores/${id}/approve`);
 }

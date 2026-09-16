@@ -36,10 +36,14 @@ describe('customer lookup — last known recipient', () => {
     expect(platformQuery).not.toMatch(/recipientAddressLine1/);
   });
 
-  it('RS-5: a seller’s lookup never reaches a reseller store’s customer', () => {
-    // The seller scope is their OWN (channel) orders; a store scope is that
-    // store's reseller orders. A reseller store's customer is the store's.
-    expect(src).toMatch(/\{ sellerId, storeKind: SellerStoreKind\.CHANNEL \}/);
+  it('a seller’s lookup spans every order of theirs; a store sees only its own', () => {
+    // AMENDED 2026-09-16 (owner): the SELLER scope is no longer
+    // channel-only. Every one of these parcels is the seller's to ship and
+    // to be refused for, so a customer who has burned them through one of
+    // their reseller stores is exactly the history this lookup exists to
+    // show. A STORE scope is still that store's reseller orders alone.
+    expect(src).toMatch(/:\s*\{ sellerId \};/);
+    expect(src).not.toMatch(/\{ sellerId, storeKind: SellerStoreKind\.CHANNEL \}/);
     expect(src).toMatch(/storeId: scope\.storeId, storeKind: SellerStoreKind\.RESELLER/);
   });
 

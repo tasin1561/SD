@@ -399,82 +399,69 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               >
                 <Card>
                   <CardBody>
-                    {detail.data.recipientMasked === true ? (
-                      // RS-5: a reseller store's customer belongs to the
-                      // store. The server takes their name, phone, email
-                      // and street address off this order before it
-                      // reaches you; where it is going stays.
-                      <div className="space-y-2 text-sm">
-                        <p className="text-text-body">
-                          Placed by your reseller store{' '}
-                          {detail.data.storeId !== null ? (
-                            <Link
-                              href={`/reseller-stores/${detail.data.storeId}`}
-                              className="text-accent font-medium hover:underline"
-                            >
-                              {detail.data.storeNameSnapshot ?? 'a reseller store'}
-                            </Link>
-                          ) : (
-                            <span className="font-medium">
-                              {detail.data.storeNameSnapshot ?? 'a reseller store'}
-                            </span>
-                          )}
-                          . The customer is the store’s, so their name and contact details are not
-                          shown to you.
-                        </p>
-                        <p className="text-text-muted">
-                          Going to{' '}
+                    {detail.data.storeKind === 'RESELLER' && (
+                      // The order is yours and so are its details; the
+                      // note says who sold to this person, because they
+                      // are who the customer will ring first.
+                      <p className="text-text-muted mb-3 text-sm">
+                        Sold by your reseller store{' '}
+                        {detail.data.storeId !== null ? (
+                          <Link
+                            href={`/reseller-stores/${detail.data.storeId}`}
+                            className="text-accent font-medium hover:underline"
+                          >
+                            {detail.data.storeNameSnapshot ?? 'a reseller store'}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">
+                            {detail.data.storeNameSnapshot ?? 'a reseller store'}
+                          </span>
+                        )}
+                        .
+                      </p>
+                    )}
+                    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
+                      <dt className="text-text-muted">Name</dt>
+                      <dd className="text-text-body">{detail.data.recipientName}</dd>
+                      <dt className="text-text-muted">Phone</dt>
+                      <dd className="text-text-body font-mono text-xs">
+                        {detail.data.recipientPhoneE164}
+                        {detail.data.recipientAltPhoneE164 && (
+                          <span className="text-text-faint ml-2">
+                            / {detail.data.recipientAltPhoneE164}
+                          </span>
+                        )}
+                      </dd>
+                      {detail.data.recipientEmail && (
+                        <>
+                          <dt className="text-text-muted">Email</dt>
+                          <dd className="text-text-body font-mono text-xs">
+                            {detail.data.recipientEmail}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-text-muted">Address</dt>
+                      <dd className="text-text-body">
+                        <div>{detail.data.recipientAddressLine1}</div>
+                        {detail.data.recipientAddressLine2 && (
+                          <div>{detail.data.recipientAddressLine2}</div>
+                        )}
+                        {detail.data.recipientLandmark && (
+                          <div className="text-text-muted text-xs">
+                            Landmark: {detail.data.recipientLandmark}
+                          </div>
+                        )}
+                        <div className="mt-0.5">
                           {[detail.data.recipientCity, detail.data.recipientStateProvince]
                             .filter(Boolean)
                             .join(', ')}{' '}
                           <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
-                          {detail.data.recipientCountryCode}
-                        </p>
-                      </div>
-                    ) : (
-                      <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
-                        <dt className="text-text-muted">Name</dt>
-                        <dd className="text-text-body">{detail.data.recipientName}</dd>
-                        <dt className="text-text-muted">Phone</dt>
-                        <dd className="text-text-body font-mono text-xs">
-                          {detail.data.recipientPhoneE164}
-                          {detail.data.recipientAltPhoneE164 && (
-                            <span className="text-text-faint ml-2">
-                              / {detail.data.recipientAltPhoneE164}
-                            </span>
-                          )}
-                        </dd>
-                        {detail.data.recipientEmail && (
-                          <>
-                            <dt className="text-text-muted">Email</dt>
-                            <dd className="text-text-body font-mono text-xs">
-                              {detail.data.recipientEmail}
-                            </dd>
-                          </>
-                        )}
-                        <dt className="text-text-muted">Address</dt>
-                        <dd className="text-text-body">
-                          <div>{detail.data.recipientAddressLine1}</div>
-                          {detail.data.recipientAddressLine2 && (
-                            <div>{detail.data.recipientAddressLine2}</div>
-                          )}
-                          {detail.data.recipientLandmark && (
-                            <div className="text-text-muted text-xs">
-                              Landmark: {detail.data.recipientLandmark}
-                            </div>
-                          )}
-                          <div className="mt-0.5">
-                            {[detail.data.recipientCity, detail.data.recipientStateProvince]
-                              .filter(Boolean)
-                              .join(', ')}{' '}
-                            <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
-                            <span className="text-text-muted">
-                              {detail.data.recipientCountryCode}
-                            </span>
-                          </div>
-                        </dd>
-                      </dl>
-                    )}
+                          <span className="text-text-muted">
+                            {detail.data.recipientCountryCode}
+                          </span>
+                        </div>
+                      </dd>
+                    </dl>
                   </CardBody>
                 </Card>
               </Section>

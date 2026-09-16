@@ -171,19 +171,19 @@ function CreateModal({
     setError(null);
     const opt = (v: string): string | undefined => (v.trim() === '' ? undefined : v.trim());
     try {
-      const inviteMail = opt(inviteEmail);
       await create.mutateAsync({
         name: name.trim(),
         ...(opt(displayName) === undefined ? {} : { displayName: opt(displayName) }),
-        ...(opt(contactEmail) === undefined ? {} : { contactEmail: opt(contactEmail) }),
-        ...(opt(contactPhone) === undefined ? {} : { contactPhone: opt(contactPhone) }),
+        contactEmail: contactEmail.trim(),
+        contactPhone: contactPhone.trim(),
         walletManagedBy,
-        // The store's first user is its owner.
-        ...(inviteMail === undefined
-          ? {}
-          : {
-              invite: { email: inviteMail, fullName: inviteName.trim(), roleKey: 'owner' as const },
-            }),
+        // A store with nobody able to sign in is not open, so the first
+        // user — its owner — is invited as it is created.
+        invite: {
+          email: inviteEmail.trim(),
+          fullName: inviteName.trim(),
+          roleKey: 'owner' as const,
+        },
       });
       toast.success(`“${name.trim()}” is open.`);
       onOpenChange(false);
@@ -229,10 +229,11 @@ function CreateModal({
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </FormField>
-        <FormField label="Contact email" htmlFor="rs-email">
+        <FormField label="Contact email" htmlFor="rs-email" required>
           <Input
             id="rs-email"
             type="email"
+            required
             value={contactEmail}
             onChange={(e) => setContactEmail(e.target.value)}
           />
@@ -241,10 +242,12 @@ function CreateModal({
           label="Contact phone"
           htmlFor="rs-phone"
           hint="With the country code, e.g. +919812345678."
+          required
         >
           <Input
             id="rs-phone"
             type="tel"
+            required
             value={contactPhone}
             onChange={(e) => setContactPhone(e.target.value)}
           />
@@ -260,11 +263,16 @@ function CreateModal({
           </Select>
         </FormField>
         <fieldset className="border-border space-y-3 rounded-lg border p-3">
-          <legend className="px-1 text-sm font-medium">Invite its first user (optional)</legend>
-          <FormField label="Their email" htmlFor="rs-invite-email">
+          <legend className="px-1 text-sm font-medium">Invite its first user</legend>
+          <p className="text-text-muted px-1 text-xs">
+            A store opens with somebody able to sign in to it. They get the invitation by email and
+            become the store’s owner.
+          </p>
+          <FormField label="Their email" htmlFor="rs-invite-email" required>
             <Input
               id="rs-invite-email"
               type="email"
+              required
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
             />
@@ -273,9 +281,11 @@ function CreateModal({
             label="Their name"
             htmlFor="rs-invite-name"
             hint="They become the store’s owner."
+            required
           >
             <Input
               id="rs-invite-name"
+              required
               value={inviteName}
               onChange={(e) => setInviteName(e.target.value)}
             />

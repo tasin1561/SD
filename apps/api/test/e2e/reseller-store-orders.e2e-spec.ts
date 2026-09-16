@@ -65,6 +65,8 @@ describe('reseller store orders (e2e)', () => {
       .send({
         name: `${label} ${Math.random().toString(36).slice(2, 8)}`,
         displayName: `${label} Display`,
+        contactEmail: email,
+        contactPhone: '+919800000004',
         invite: { email, fullName: `${label} Owner`, roleKey: 'owner' },
       })
       .expect(201);
@@ -329,19 +331,18 @@ describe('reseller store orders (e2e)', () => {
     // The customer is the STORE's.
     expect(row.customer?.resellerStoreId).toBe(store.storeId);
 
-    // The seller sees the order — and not who it is going to.
+    // The order is the seller's, and they see it in full (2026-09-16).
     const seen = await request(h.baseUrl)
       .get(`/seller/orders/${orderId}`)
       .set(sellerAuth)
       .expect(200);
-    expect(seen.body.recipientMasked).toBe(true);
-    expect(JSON.stringify(seen.body)).not.toContain('Asha');
-    expect(JSON.stringify(seen.body)).not.toContain('9876500001');
+    expect(seen.body.recipientName).toBe('Asha Verma');
+    expect(JSON.stringify(seen.body)).toContain('9876500001');
     const bySearch = await request(h.baseUrl)
       .get('/seller/orders?search=9876500001')
       .set(sellerAuth)
       .expect(200);
-    expect(bySearch.body.total).toBe(0);
+    expect(bySearch.body.total).toBe(1);
     // …and cannot edit it.
     const edit = await request(h.baseUrl)
       .patch(`/seller/orders/${orderId}`)

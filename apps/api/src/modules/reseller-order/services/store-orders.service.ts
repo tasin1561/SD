@@ -117,8 +117,10 @@ function ownedBy(storeId: string): Prisma.OrderWhereInput {
  * the row exists.
  *
  * ── THE STORE SEES ITS CUSTOMERS IN FULL ─────────────────────────────
- * The seller behind the store does not (`reseller-privacy.ts`); the store
- * sold to them, so their name, phone and address are its to read.
+ * The store sold to them, so their name, phone and address are its to
+ * read. Since 2026-09-16 the SELLER reads them too (the order is theirs
+ * to ship — ORD-7's amendment); what stays scoped here is one store's
+ * view, which never reaches another store or the seller's own channel.
  */
 @Injectable()
 export class StoreOrdersService {

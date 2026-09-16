@@ -130,12 +130,12 @@ describe('CustomerService', () => {
       const { svc, customer } = makeService();
       customer.findFirst.mockResolvedValueOnce(null);
       await expect(svc.getById('s1', 'cX')).rejects.toThrow(/not found/);
-      // scope is enforced in the query filter — and a reseller store's
-      // customer is never the seller's to read (RS-5)
+      // Scope is enforced in the query filter. Since 2026-09-16 it is the
+      // SELLER's scope only: a customer one of their reseller stores sold
+      // to is theirs to READ (the order is theirs to ship).
       expect(customer.findFirst.mock.calls[0]![0].where).toEqual({
         id: 'cX',
         sellerId: 's1',
-        resellerStoreId: null,
         deletedAt: null,
       });
     });
@@ -174,7 +174,8 @@ describe('CustomerService', () => {
       const res = await svc.list('s1', { page: 2, pageSize: 10, search: 'asha' });
       const where = customer.findMany.mock.calls[0]![0].where as AnyArgs;
       expect(where.sellerId).toBe('s1');
-      expect(where.resellerStoreId).toBeNull();
+      // Not scoped away from the stores' customers any more (2026-09-16).
+      expect('resellerStoreId' in where).toBe(false);
       expect(where.deletedAt).toBeNull();
       expect(where.OR).toHaveLength(3);
       expect(customer.findMany.mock.calls[0]![0].skip).toBe(10);
@@ -204,10 +205,25 @@ describe('CustomerService', () => {
     });
   });
 
+  it('a WRITE is still the seller’s OWN customer only', async () => {
+    // Reading widened on 2026-09-16; changing did not. A store's customer
+    // row is the store's to maintain, so update and softDelete go through
+    // `getOwnById`, which keeps `resellerStoreId: null` in the WHERE.
+    const { svc, customer } = makeService();
+    await svc.update('s1', 'c1', { name: 'X' });
+    expect(customer.findFirst.mock.calls[0]![0].where).toEqual({
+      id: 'c1',
+      sellerId: 's1',
+      resellerStoreId: null,
+      deletedAt: null,
+    });
+  });
+
   it('softDelete sets deletedAt after the scope check', async () => {
     const { svc, customer } = makeService();
     await svc.softDelete('s1', 'c1');
     expect(customer.findFirst).toHaveBeenCalledTimes(1);
+    expect((customer.findFirst.mock.calls[0]![0].where as AnyArgs).resellerStoreId).toBeNull();
     expect((customer.update.mock.calls[0]![0].data as AnyArgs).deletedAt).toBeInstanceOf(Date);
   });
 });
