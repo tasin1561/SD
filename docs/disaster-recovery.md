@@ -8,17 +8,17 @@ after each practice restore** — see "Practice restores" at the end.
 
 | What | Lives in | Copies |
 |---|---|---|
-| Database (`skydrop-db-prod`, PostgreSQL 18 + TimescaleDB 2.28, basic tier, primary only) | DigitalOcean, SGP1 | DigitalOcean backups, automatic: **point-in-time recovery to any transaction in the last 7 days** — available on this basic tier (checked in the panel 2026-09-15: Actions → Restore from backup → "Choose a point in time"). **Off-site: Google Drive every 2 hours.** |
-| Stored files (`skydrop-prod-storage` Space: labels, invoices, top-up proofs, portal probes) | DigitalOcean Spaces, SGP1 | **Google Drive every 2 hours** (`files/current`, with anything overwritten or deleted kept in `files/changed/<run>` for 180 days). **Spaces object versioning ON since 2026-09-15**, with a lifecycle rule (`expire-old-versions-90d`) that removes a replaced or deleted object's old copy after 90 days — so a file overwritten or deleted by mistake can be brought back from the bucket itself within 90 days. |
-| Main server `skydrop-app-prod` (API, admin, seller, track, reseller, portal worker, Caddy, Redis) | DigitalOcean droplet, SGP1 | Code: GitHub. Settings and secrets: **Google Drive every 2 hours**. **DigitalOcean droplet backups: ON since 2026-09-15** — usage-based, daily between 00:00 and 04:00 UTC, each kept 7 days. |
-| India egress server `Skydrop-India-Socket` (Shiprocket panel tunnel) | DigitalOcean droplet, BLR1 | Its few settings ride in the same secrets bundle every 2 hours. |
+| Database (`skydrop-db-prod`, PostgreSQL 18 + TimescaleDB 2.28, basic tier, primary only) | DigitalOcean, SGP1 | DigitalOcean backups, automatic: **point-in-time recovery to any transaction in the last 7 days** — available on this basic tier (checked in the panel 2026-09-15: Actions → Restore from backup → "Choose a point in time"). **Off-site: Google Drive every hour.** |
+| Stored files (`skydrop-prod-storage` Space: labels, invoices, top-up proofs, portal probes) | DigitalOcean Spaces, SGP1 | **Google Drive every hour** (`files/current`, with anything overwritten or deleted kept in `files/changed/<run>` for 180 days). **Spaces object versioning ON since 2026-09-15**, with a lifecycle rule (`expire-old-versions-90d`) that removes a replaced or deleted object's old copy after 90 days — so a file overwritten or deleted by mistake can be brought back from the bucket itself within 90 days. |
+| Main server `skydrop-app-prod` (API, admin, seller, track, reseller, portal worker, Caddy, Redis) | DigitalOcean droplet, SGP1 | Code: GitHub. Settings and secrets: **Google Drive every hour**. **DigitalOcean droplet backups: ON since 2026-09-15** — usage-based, daily between 00:00 and 04:00 UTC, each kept 7 days. |
+| India egress server `Skydrop-India-Socket` (Shiprocket panel tunnel) | DigitalOcean droplet, BLR1 | Its few settings ride in the same secrets bundle every hour. |
 | Redis (job queues) | the main server | Saved to disk (AOF). Not copied off-site: every job is re-created by the app or its cron. |
 
 ## The Google Drive copy
 
 `scripts/backup/skydrop-backup.sh`, run from cron on the main server as
-`skydrop` every two hours, at 10 minutes past each even hour UTC
-(00:10, 02:10, … 22:10; every six hours until 2026-09-15). Each run:
+`skydrop` every hour, at 10 minutes past the hour UTC (every two hours
+until 2026-09-16, every six hours before that). Each run:
 
 1. dumps the database (`pg_dump` 18, custom format) and checks `pg_restore`
    can list it;
@@ -36,7 +36,7 @@ after each practice restore** — see "Practice restores" at the end.
 
 **The alarm.** The API's `backup-watch` job reads those rows hourly and
 raises a HIGH issue (`backup-failed`, `backup-stale`) when the latest run
-failed or nothing has succeeded for 5 hours (two missed runs). Both clear themselves.
+failed or nothing has succeeded for 3 hours (two missed runs). Both clear themselves.
 
 **The password.** `~/.config/skydrop-backup/passphrase` on the main server,
 and with the owner OFF Google (password manager or paper). **Without it the
@@ -92,7 +92,7 @@ listed it.
 ### A. The database is corrupted, or rows were deleted by mistake
 
 Estimate: 30–60 min. Data lost: **next to nothing** with a point-in-time
-restore (pick the minute before the damage); up to 2 hours from the Drive
+restore (pick the minute before the damage); up to an hour from the Drive
 copy, which is the route only if DigitalOcean itself is unavailable.
 
 1. Put the apps in maintenance (stop the API: `pm2 stop skydrop-api`) so
@@ -155,7 +155,7 @@ address in the tunnel unit and in `~/.config/skydrop-backup/india-host`.
 
 ### D. The whole DigitalOcean account is lost
 
-Estimate: 4–6 h. Data lost: up to 2 hours. Scenario B at any provider, a
+Estimate: 4–6 h. Data lost: up to an hour. Scenario B at any provider, a
 new PostgreSQL 18 with TimescaleDB 2.28 restored as in A, a new
 S3-compatible bucket filled from `files/current`, and the storage keys in
 `.env` changed to it.

@@ -8,11 +8,13 @@ export const BACKUP_COMPLETED_ACTION = 'system.backup.completed';
 export const BACKUP_FAILED_ACTION = 'system.backup.failed';
 
 /**
- * The backup runs every two hours. Past five hours without a success, two
- * runs in a row have been missed — one missed run can be a network blip,
- * two is a stopped backup.
+ * The backup runs every hour (2026-09-16; every two hours before that).
+ * Past three hours without a success, two runs in a row have been missed —
+ * one missed run can be a network blip or a long stored-files sync, two is a
+ * stopped backup. Keep this at least one run-interval above the gap two
+ * missed runs make, or a slow run raises an issue that resolves itself.
  */
-export const BACKUP_STALE_AFTER_HOURS = 5;
+export const BACKUP_STALE_AFTER_HOURS = 3;
 
 export const BACKUP_STALE_ISSUE_KEY = 'backup-stale';
 export const BACKUP_FAILED_ISSUE_KEY = 'backup-failed';
@@ -109,7 +111,7 @@ export class BackupWatchService {
           (completed === null
             ? 'Nothing has been copied to Google Drive yet. '
             : `The last successful backup to Google Drive was ${completed.at.toISOString()}; ` +
-              `they run every two hours. `) +
+              `they run every hour. `) +
           'If the server or the database were lost now, this is how much would be lost with ' +
           `it. ${RECOVERY_HINT}`,
         source: 'backup-watch',

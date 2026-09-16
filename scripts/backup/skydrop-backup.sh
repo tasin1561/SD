@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Skydrop off-site backup — the database, every stored file and the server's
 # secrets, copied to Google Drive ENCRYPTED. Runs from cron on the droplet
-# every two hours (:10 past each even hour, UTC) as the `skydrop` user. Recovery: docs/disaster-recovery.md.
+# every hour (:10 past the hour, UTC) as the `skydrop` user. Recovery: docs/disaster-recovery.md.
 #
 #   db/YYYY/MM/defaultdb-<ts>.dump   pg_dump custom format (pg_restore reads it)
 #   secrets/YYYY/MM/secrets-<ts>.tar.gz   .env, Caddyfile, pm2 config, crontab

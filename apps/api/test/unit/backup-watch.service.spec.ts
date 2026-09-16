@@ -18,11 +18,11 @@ describe('judgeBackups', () => {
   it('a recent success with no later failure is fine', () => {
     expect(
       judgeBackups({
-        lastCompleted: { at: hoursAgo(2), step: 'done' },
+        lastCompleted: { at: hoursAgo(1), step: 'done' },
         lastFailed: null,
         now: NOW,
       }),
-    ).toEqual({ stale: false, failed: false, hoursSinceSuccess: 2 });
+    ).toEqual({ stale: false, failed: false, hoursSinceSuccess: 1 });
   });
 
   it('one missed run is not yet stale; two are', () => {
@@ -83,7 +83,10 @@ function harness(rows: Record<string, { createdAt: Date; metadata: unknown } | n
 describe('BackupWatchService.check', () => {
   it('a healthy backup raises nothing and clears both issues', async () => {
     const { svc, issues } = harness({
-      [BACKUP_COMPLETED_ACTION]: { createdAt: hoursAgo(3), metadata: { step: 'done' } },
+      [BACKUP_COMPLETED_ACTION]: {
+        createdAt: hoursAgo(BACKUP_STALE_AFTER_HOURS - 1),
+        metadata: { step: 'done' },
+      },
     });
     await svc.check(NOW);
     expect(issues.raise).not.toHaveBeenCalled();
