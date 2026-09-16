@@ -13,6 +13,7 @@ import {
   ConfirmDialog,
   ErrorState,
   FormField,
+  Input,
   LoadingState,
   Modal,
   ModalFooter,
@@ -23,6 +24,7 @@ import {
   Section,
   DeliveryActionStatusBadge,
   ShipmentStatusBadge,
+  StoreAddressChangeStatusBadge,
   TBody,
   THead,
   Table,
@@ -37,10 +39,14 @@ import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCancelStoreOrder,
+  useEditStoreRecipient,
   useRequestStoreAction,
+  useStoreAddressChanges,
   useStoreOrder,
   useStoreOrderActions,
   useStoreOrderEvents,
+  type AddressChangeFields,
+  type AddressField,
   type StoreActionKind,
   type StoreOrderView,
 } from '@/lib/order-hooks';
@@ -267,8 +273,15 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
 
       {/* Only while the parcel is still live, and only for somebody who
           may ask. The server decides whether each one is actually
-          possible and says so in its own words (FE-2). */}
-      {!o.terminal && can(me, 'orders.actions') ? <OrderActions orderId={o.id} /> : null}
+          possible and says so in its own words (FE-2). Both sections are
+          governed by the seller's policy for this store, which each one
+          reads from the server rather than assuming. */}
+      {!o.terminal && can(me, 'orders.actions') ? (
+        <>
+          <OrderActions orderId={o.id} />
+          <AddressCorrection orderId={o.id} recipient={o.recipient} />
+        </>
+      ) : null}
 
       <OrderMoney orderId={o.id} />
 
@@ -558,6 +571,341 @@ function Timeline({ orderId }: { orderId: string }): ReactElement {
           ))}
         </ol>
       )}
+    </Section>
+  );
+}
+
+/**
+ * What a person calls each delivery detail.
+ *
+ * All ten, not just the ones the form below offers: a correction made
+ * through the API or a CSV may carry one the form does not, and the
+ * history has to be able to name it.
+ */
+const FIELD_LABEL: Readonly<Record<AddressField, string>> = {
+  recipientName: 'Name',
+  recipientPhoneE164: 'Phone',
+  recipientAltPhoneE164: 'Second phone',
+  recipientEmail: 'Email',
+  recipientAddressLine1: 'Address',
+  recipientAddressLine2: 'Landmark line',
+  recipientLandmark: 'Landmark (old field)',
+  recipientCity: 'City',
+  recipientStateProvince: 'State',
+  recipientPostalCode: 'PIN code',
+};
+
+/** The same ten in reading order, for listing what a correction proposed. */
+const ALL_FIELDS: readonly AddressField[] = [
+  'recipientName',
+  'recipientPhoneE164',
+  'recipientAltPhoneE164',
+  'recipientEmail',
+  'recipientAddressLine1',
+  'recipientAddressLine2',
+  'recipientLandmark',
+  'recipientCity',
+  'recipientStateProvince',
+  'recipientPostalCode',
+];
+
+/**
+ * The nine the form offers, in the order somebody reads an address.
+ *
+ * `recipientLandmark` is deliberately NOT one of them: nothing sends it
+ * to the courier — a landmark reaches a driver on the second address
+ * line — so asking for it here would collect something that changes
+ * nothing on the parcel.
+ */
+const FORM_FIELDS: ReadonlyArray<{
+  readonly key: AddressField;
+  readonly hint?: string;
+  readonly current: (r: StoreOrderView['recipient']) => string;
+}> = [
+  { key: 'recipientName', current: (r) => r.name },
+  {
+    key: 'recipientPhoneE164',
+    hint: 'With the country code, e.g. +919876543210',
+    current: (r) => r.phoneE164,
+  },
+  { key: 'recipientAltPhoneE164', current: (r) => r.altPhoneE164 ?? '' },
+  { key: 'recipientEmail', current: (r) => r.email ?? '' },
+  { key: 'recipientAddressLine1', current: (r) => r.addressLine1 },
+  {
+    key: 'recipientAddressLine2',
+    hint: 'The landmark goes here — it is what a driver finds a rural address by.',
+    current: (r) => r.addressLine2 ?? '',
+  },
+  { key: 'recipientCity', current: (r) => r.city },
+  { key: 'recipientStateProvince', current: (r) => r.stateProvince },
+  { key: 'recipientPostalCode', current: (r) => r.postalCode },
+];
+
+/**
+ * Only what actually changed.
+ *
+ * A box left BLANK is left alone rather than cleared — somebody emptying
+ * a field they did not mean to touch should not wipe a phone number off
+ * a live parcel, and there is nothing the courier needs that is better
+ * absent than wrong.
+ */
+function proposedChanges(
+  draft: Partial<Record<AddressField, string>>,
+  recipient: StoreOrderView['recipient'],
+): AddressChangeFields {
+  const out: AddressChangeFields = {};
+  for (const f of FORM_FIELDS) {
+    const next = (draft[f.key] ?? '').trim();
+    if (next !== '' && next !== f.current(recipient).trim()) out[f.key] = next;
+  }
+  return out;
+}
+
+/**
+ * Correcting where this parcel is going.
+ *
+ * WHICH of the three things happens is the seller's `addressFix` policy
+ * for this store, read from the server with the history (`mode`): OFF is
+ * not offered at all — an offered button that always refuses teaches
+ * people to ignore refusals, the same reasoning as `OrderActions` above;
+ * DIRECT is written onto the order as you send it; ASK_SELLER is held
+ * until seller staff answer, and the parcel keeps the OLD address in the
+ * meantime.
+ *
+ * The one case where OFF still renders is a store that HAS corrected
+ * this order before. Switching the capability off afterwards should not
+ * erase what was already asked and answered — nothing is being offered
+ * there, only remembered.
+ */
+function AddressCorrection({
+  orderId,
+  recipient,
+}: {
+  orderId: string;
+  recipient: StoreOrderView['recipient'];
+}): ReactElement {
+  const changes = useStoreAddressChanges(orderId);
+  const submit = useEditStoreRecipient();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<Partial<Record<AddressField, string>>>({});
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const mode = changes.data?.mode ?? 'OFF';
+  const waits = mode === 'ASK_SELLER';
+  const proposed = proposedChanges(draft, recipient);
+  const changedCount = Object.keys(proposed).length;
+
+  function start(): void {
+    // Pre-filled with what the parcel says NOW, so the person edits the
+    // address in front of them instead of retyping one from memory.
+    const seeded: Partial<Record<AddressField, string>> = {};
+    for (const f of FORM_FIELDS) seeded[f.key] = f.current(recipient);
+    setDraft(seeded);
+    setReason('');
+    setError(null);
+    setOpen(true);
+  }
+
+  async function send(): Promise<void> {
+    setError(null);
+    try {
+      const out = await submit.mutateAsync({
+        orderId,
+        fields: proposed,
+        ...(waits ? { reason: reason.trim() } : {}),
+      });
+      // The REPLY says which of the two happened — never the mode read
+      // when the page loaded, because seller staff may have changed the
+      // policy since.
+      toast.success(
+        out.applied
+          ? 'Corrected. The parcel now goes to the new address.'
+          : 'Sent to seller staff. The parcel keeps the old address until they answer.',
+      );
+      setOpen(false);
+    } catch (err) {
+      // Verbatim (FE-2): ADDRESS_CHANGE_REASON_REQUIRED,
+      // ADDRESS_CHANGE_ALREADY_OPEN, STORE_ACTION_NOT_ALLOWED,
+      // NOT_EDITABLE, EDIT_DURING_CALL…
+      setError(serverVerdict(err));
+    }
+  }
+
+  if (changes.isPending) return <LoadingState label="Loading the delivery details" rows={2} />;
+  if (changes.isError) {
+    return (
+      <ErrorState message={serverVerdict(changes.error)} retry={() => void changes.refetch()} />
+    );
+  }
+
+  const history = changes.data.items;
+  const pending = history.find((r) => r.status === 'PENDING') ?? null;
+  if (mode === 'OFF' && history.length === 0) return <></>;
+
+  return (
+    <Section
+      title="Wrong address?"
+      subtitle={
+        mode === 'OFF'
+          ? 'Your seller does not allow this store to change delivery details.'
+          : waits
+            ? 'Seller staff read the correction and decide. Nothing on the parcel changes until they answer.'
+            : 'A correction here is written onto the order straight away.'
+      }
+    >
+      <Card>
+        <CardBody>
+          {mode === 'OFF' ? (
+            <p className="text-text-muted text-sm">
+              Ask the seller if the delivery details need to change.
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Button variant="secondary" size="md" disabled={pending !== null} onClick={start}>
+                Correct the address
+              </Button>
+              <span className="text-text-muted text-xs">
+                {pending !== null
+                  ? 'A correction on this order is already waiting on seller staff — they answer that one before you can send another.'
+                  : waits
+                    ? 'Seller staff approve this one before anything changes'
+                    : 'Happens as soon as you send it'}
+              </span>
+            </div>
+          )}
+
+          {history.length > 0 ? (
+            <div className="mt-4">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>What you asked to change</Th>
+                    <Th>Why</Th>
+                    <Th>When</Th>
+                    <Th>Where it got to</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {history.map((r) => (
+                    <Tr key={r.id}>
+                      <Td>
+                        <ul className="space-y-0.5">
+                          {ALL_FIELDS.filter((k) => r.fields[k] !== undefined).map((k) => (
+                            <li key={k} className="text-xs">
+                              <span className="text-text-muted">{FIELD_LABEL[k]}: </span>
+                              <span className="text-text-body">{r.fields[k] ?? ''}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </Td>
+                      <Td className="max-w-xs">
+                        <span className="text-text-faint text-xs">{r.reason}</span>
+                      </Td>
+                      <Td className="text-text-muted text-xs">{when(r.createdAt)}</Td>
+                      <Td>
+                        <StoreAddressChangeStatusBadge status={r.status} />
+                        {r.decisionNote !== null ? (
+                          <div className="text-text-muted mt-1 text-xs">
+                            They said: “{r.decisionNote}”
+                          </div>
+                        ) : null}
+                        {/* Seller staff said yes and the order had already
+                            moved on. Loud, because somebody here has to
+                            tell a customer the address did NOT change. */}
+                        {r.failureReason !== null ? (
+                          <div className="text-critical mt-1 text-xs">
+                            Not applied — {r.failureReason}
+                          </div>
+                        ) : null}
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
+          ) : null}
+        </CardBody>
+      </Card>
+
+      <Modal
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) setOpen(false);
+        }}
+        title="Correct the delivery address"
+        description={
+          waits
+            ? 'Seller staff decide this one. The parcel keeps the OLD address until they answer.'
+            : 'This is written onto the order as soon as you send it.'
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {FORM_FIELDS.map((f) => (
+              <FormField
+                key={f.key}
+                label={FIELD_LABEL[f.key]}
+                htmlFor={`fix-${f.key}`}
+                {...(f.hint === undefined ? {} : { hint: f.hint })}
+              >
+                <Input
+                  id={`fix-${f.key}`}
+                  value={draft[f.key] ?? ''}
+                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                />
+              </FormField>
+            ))}
+          </div>
+          {waits ? (
+            <FormField
+              label="Why the details are wrong"
+              htmlFor="fix-reason"
+              hint="At least a sentence — seller staff read this before deciding."
+              required
+            >
+              <Textarea
+                id="fix-reason"
+                rows={3}
+                maxLength={2000}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </FormField>
+          ) : null}
+          <p className="text-text-faint text-xs">
+            {changedCount === 0
+              ? 'Nothing has changed yet — edit a detail above.'
+              : `Sending ${changedCount} change${changedCount === 1 ? '' : 's'}. A box left as it is stays as it is.`}
+          </p>
+          {error !== null ? (
+            <p role="alert" className="text-critical text-sm">
+              {error}
+            </p>
+          ) : null}
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setOpen(false)}
+              disabled={submit.isPending}
+            >
+              Never mind
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => void send()}
+              disabled={submit.isPending || changedCount === 0}
+            >
+              {submit.isPending ? 'Sending…' : waits ? 'Send it to seller staff' : 'Correct it'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
     </Section>
   );
 }

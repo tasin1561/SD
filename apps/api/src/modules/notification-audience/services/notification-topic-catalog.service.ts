@@ -189,6 +189,16 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
       'At the rate it sold recently, stock of a product your reseller stores sell will run out sooner than your reorder threshold.',
     group: 'Reseller stores',
   },
+  {
+    // Sent by AddressChangeNotifier (2026-09-16) to `stores.manage` when
+    // a store corrects a delivery address and the seller's policy for
+    // that store says they approve it first.
+    topic: 'seller.store_address_change_waiting',
+    label: 'A reseller store wants to correct an address',
+    description:
+      'A store says the delivery details on one of its orders are wrong. The parcel keeps the old address until you answer.',
+    group: 'Reseller stores',
+  },
 ];
 
 /**

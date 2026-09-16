@@ -323,6 +323,99 @@ export function useRequestStoreAction(): UseMutationResult<
   });
 }
 
+/**
+ * 2026-09-16 — correcting where this store's own parcel is going.
+ *
+ * WHAT a correction does is the seller's `addressFix` policy, and the
+ * SERVER decides it, not this file: DIRECT writes the new details onto
+ * the order there and then, ASK_SELLER holds them until seller staff
+ * answer, OFF refuses by name. Which of the two happened is the
+ * `applied` flag on the reply — never inferred here from the mode we
+ * happened to read when the page loaded, because seller staff may have
+ * changed it since.
+ */
+export type AddressField =
+  | 'recipientName'
+  | 'recipientPhoneE164'
+  | 'recipientAltPhoneE164'
+  | 'recipientEmail'
+  | 'recipientAddressLine1'
+  | 'recipientAddressLine2'
+  | 'recipientLandmark'
+  | 'recipientCity'
+  | 'recipientStateProvince'
+  | 'recipientPostalCode';
+
+/** Only the fields a correction proposes — never the whole block. */
+export type AddressChangeFields = Partial<Record<AddressField, string>>;
+
+export interface AddressChangeRequestView {
+  readonly id: string;
+  readonly orderId: string;
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED' | 'FAILED';
+  readonly reason: string;
+  readonly fields: AddressChangeFields;
+  /** What seller staff said when they answered. */
+  readonly decisionNote: string | null;
+  readonly sellerDecidedAt: string | null;
+  readonly appliedAt: string | null;
+  /** Why an approved correction could not be written onto the order. */
+  readonly failureReason: string | null;
+  readonly createdAt: string;
+}
+
+export interface StoreAddressChanges {
+  readonly items: readonly AddressChangeRequestView[];
+  /** The seller's `addressFix` policy for this store, as it stands now. */
+  readonly mode: StoreActionMode;
+}
+
+/** What this store has asked to correct on one of its own orders. */
+export function useStoreAddressChanges(orderId: string): UseQueryResult<StoreAddressChanges> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...ORDERS, 'address-changes', orderId],
+    queryFn: () =>
+      client.request<StoreAddressChanges>(`/api/store/orders/${orderId}/address-changes`),
+    enabled: orderId !== '',
+  });
+}
+
+/**
+ * The reply to a correction, and both halves matter to whoever is
+ * watching: `applied: true` carries the order as it now reads;
+ * `applied: false` carries the held request, and means the parcel is
+ * STILL going to the old address.
+ */
+export type EditStoreRecipientResult =
+  | { readonly applied: true; readonly order: StoreOrderView; readonly request: null }
+  | { readonly applied: false; readonly order: null; readonly request: AddressChangeRequestView };
+
+export function useEditStoreRecipient(): UseMutationResult<
+  EditStoreRecipientResult,
+  Error,
+  {
+    readonly orderId: string;
+    /** Only what actually changed — the rest of the block is left alone. */
+    readonly fields: AddressChangeFields;
+    /** Required when the seller set corrections to “ask me first”. */
+    readonly reason?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, fields, reason }) =>
+      client.request<EditStoreRecipientResult>(`/api/store/orders/${orderId}/recipient`, {
+        method: 'PATCH',
+        body: { ...fields, ...(reason === undefined || reason === '' ? {} : { reason }) },
+      }),
+    // The order itself may have changed (DIRECT) or not (held), and the
+    // history behind it has either way — one key covers both.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ORDERS }),
+  });
+}
+
 export function useStoreCustomers(query: {
   readonly search?: string;
   readonly page?: number;

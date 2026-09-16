@@ -37,6 +37,7 @@ import {
   ResellerCreditStatus,
   StoreWalletEntryDirection,
   DeliveryActionStatus,
+  StoreAddressChangeStatus,
 } from '@skydrop/db';
 
 export const STATUS_KINDS = [
@@ -510,6 +511,61 @@ export function deliveryActionStatusLabel(status: DeliveryActionStatus): string 
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled DeliveryActionStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * What became of a reseller store's correction to where its parcel is
+ * going (2026-09-16).
+ *
+ * Its own vocabulary rather than the delivery-action one above, because
+ * a correction has a state that an ask does not: APPLIED — seller staff
+ * said yes AND the order took it. The two are worth telling apart, since
+ * the gap between them is exactly where FAILED lives.
+ */
+export function storeAddressChangeStatusKind(status: StoreAddressChangeStatus): StatusKind {
+  switch (status) {
+    // Nobody has answered. The parcel still carries the OLD address.
+    case StoreAddressChangeStatus.PENDING:
+      return 'pending';
+    // Seller staff said yes; writing it onto the order follows.
+    case StoreAddressChangeStatus.APPROVED:
+      return 'confirmed';
+    // The order now carries the corrected details.
+    case StoreAddressChangeStatus.APPLIED:
+      return 'delivered';
+    // A person said no. Neutral rather than red — a considered refusal
+    // is not a malfunction, and their reason is shown beside it.
+    case StoreAddressChangeStatus.REJECTED:
+      return 'cancelled';
+    // They agreed and the order had already moved on. The one state here
+    // that needs somebody, so the one that is red.
+    case StoreAddressChangeStatus.FAILED:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled StoreAddressChangeStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** The same five states in the words the store and seller staff read. */
+export function storeAddressChangeStatusLabel(status: StoreAddressChangeStatus): string {
+  switch (status) {
+    case StoreAddressChangeStatus.PENDING:
+      return 'Waiting on seller staff';
+    case StoreAddressChangeStatus.APPROVED:
+      return 'Approved';
+    case StoreAddressChangeStatus.APPLIED:
+      return 'Corrected';
+    case StoreAddressChangeStatus.REJECTED:
+      return 'Declined';
+    case StoreAddressChangeStatus.FAILED:
+      return 'Could not be applied';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled StoreAddressChangeStatus: ${String(exhaustive)}`);
     }
   }
 }

@@ -10,6 +10,7 @@ import {
   LoadingState,
   Modal,
   ModalFooter,
+  OrderStatusBadge,
   PageHeader,
   Section,
   TBody,
@@ -24,8 +25,12 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useDecideStoreAction,
+  useDecideStoreAddressChange,
   useStoreActionRequests,
+  useStoreAddressChanges,
+  type AddressField,
   type StoreActionRequestRow,
+  type StoreAddressChangeRow,
 } from '@/lib/reseller-store-hooks';
 
 function when(iso: string): string {
@@ -40,21 +45,27 @@ const ASKED_FOR: Record<StoreActionRequestRow['action'], string> = {
 };
 
 /**
- * 2026-09-16 — the asks your reseller stores are waiting on.
+ * 2026-09-16 — the one queue for everything your reseller stores are
+ * waiting on: what they have asked to DO to a parcel, and what they have
+ * asked to CHANGE on one.
  *
  * Only the ones your own policy marked “ask me first” stop here; the ones
- * you let through have already run. Nothing happens on these until you
- * answer, and the store has a customer waiting for that answer — which is
- * why a rejection needs a reason and the store is emailed either way.
+ * you let through have already run. Nothing happens on any of them until
+ * you answer, and the store has a customer waiting for that answer —
+ * which is why a rejection needs a reason and the store is told either
+ * way.
  */
-export default function StoreActionRequestsPage(): ReactElement {
+export default function StoreRequestsPage(): ReactElement {
+  // Asked here only to decide whether BOTH queues are empty; the two
+  // sections ask again and read the same cache entry, so this costs no
+  // extra request.
   const requests = useStoreActionRequests();
-  const [rejecting, setRejecting] = useState<StoreActionRequestRow | null>(null);
+  const addresses = useStoreAddressChanges();
 
   const header = (
     <PageHeader
       title="Waiting on you"
-      subtitle="Things your reseller stores have asked for. Until you answer, nothing happens on the parcel."
+      subtitle="Things your reseller stores have asked for, and corrections they want made to where a parcel is going. Until you answer, nothing happens."
       action={
         <Link href="/reseller-stores" className="text-accent text-sm hover:underline">
           All reseller stores →
@@ -63,7 +74,8 @@ export default function StoreActionRequestsPage(): ReactElement {
     />
   );
 
-  if (requests.isPending) {
+  // Both still loading: one skeleton rather than two stacked.
+  if (requests.isPending && addresses.isPending) {
     return (
       <div className="space-y-6">
         {header}
@@ -71,51 +83,71 @@ export default function StoreActionRequestsPage(): ReactElement {
       </div>
     );
   }
-  if (requests.isError) {
-    return (
-      <div className="space-y-6">
-        {header}
-        <ErrorState message={serverVerdict(requests.error)} retry={() => void requests.refetch()} />
-      </div>
-    );
-  }
+
+  // An empty queue is the ordinary state, and it reads far better as one
+  // sentence than as two empty tables.
+  const bothEmpty =
+    requests.data !== undefined &&
+    requests.data.length === 0 &&
+    addresses.data !== undefined &&
+    addresses.data.length === 0;
 
   return (
     <div className="space-y-6">
       {header}
-      <Section title="Asks from your stores">
-        {requests.data.length === 0 ? (
-          <EmptyState
-            title="Nothing is waiting"
-            description="When a store asks for something you chose to approve yourself, it appears here. Anything you let them do on their own never stops here at all."
-            action={
-              <Link href="/reseller-stores" className="text-accent text-sm hover:underline">
-                Change what your stores can do
-              </Link>
-            }
-          />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Store</Th>
-                <Th>Order</Th>
-                <Th>They asked for</Th>
-                <Th>Why</Th>
-                <Th>Asked</Th>
-                <Th>Your answer</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {requests.data.map((r) => (
-                <RequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </Section>
-      <RejectModal request={rejecting} onClose={() => setRejecting(null)} />
+      {bothEmpty ? (
+        <EmptyState
+          title="Nothing is waiting"
+          description="When a reseller store asks for something you chose to approve yourself, it appears here. Anything you let them do on their own never stops here at all."
+          action={
+            <Link href="/reseller-stores" className="text-accent text-sm hover:underline">
+              Change what your stores can do
+            </Link>
+          }
+        />
+      ) : (
+        <>
+          <ActionRequestsSection />
+          <AddressChangesSection />
+        </>
+      )}
     </div>
+  );
+}
+
+function ActionRequestsSection(): ReactElement {
+  const requests = useStoreActionRequests();
+  const [rejecting, setRejecting] = useState<StoreActionRequestRow | null>(null);
+
+  return (
+    <Section title="Asks from your stores">
+      {requests.isPending ? (
+        <LoadingState label="Loading asks" rows={2} />
+      ) : requests.isError ? (
+        <ErrorState message={serverVerdict(requests.error)} retry={() => void requests.refetch()} />
+      ) : requests.data.length === 0 ? (
+        <p className="text-text-muted text-sm">Nothing to answer here.</p>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Store</Th>
+              <Th>Order</Th>
+              <Th>They asked for</Th>
+              <Th>Why</Th>
+              <Th>Asked</Th>
+              <Th>Your answer</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {requests.data.map((r) => (
+              <RequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+            ))}
+          </TBody>
+        </Table>
+      )}
+      <RejectModal request={rejecting} onClose={() => setRejecting(null)} />
+    </Section>
   );
 }
 
@@ -231,6 +263,274 @@ function RejectModal({
         <FormField label="Your reason" htmlFor="reject-note" required>
           <Textarea
             id="reject-note"
+            rows={3}
+            maxLength={2000}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </FormField>
+        {error !== null ? (
+          <p role="alert" className="text-critical text-sm">
+            {error}
+          </p>
+        ) : null}
+        <ModalFooter>
+          <Button type="button" variant="secondary" size="md" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="md"
+            disabled={note.trim() === '' || decide.isPending}
+            onClick={() => void submit()}
+          >
+            {decide.isPending ? 'Sending…' : 'Turn it down'}
+          </Button>
+        </ModalFooter>
+      </div>
+    </Modal>
+  );
+}
+
+/** What a person calls each delivery detail. */
+const FIELD_LABEL: Readonly<Record<AddressField, string>> = {
+  recipientName: 'Name',
+  recipientPhoneE164: 'Phone',
+  recipientAltPhoneE164: 'Second phone',
+  recipientEmail: 'Email',
+  recipientAddressLine1: 'Address',
+  recipientAddressLine2: 'Landmark line',
+  recipientLandmark: 'Landmark (old field)',
+  recipientCity: 'City',
+  recipientStateProvince: 'State',
+  recipientPostalCode: 'PIN code',
+};
+
+/** The same ten in the order somebody reads an address. */
+const ALL_FIELDS: readonly AddressField[] = [
+  'recipientName',
+  'recipientPhoneE164',
+  'recipientAltPhoneE164',
+  'recipientEmail',
+  'recipientAddressLine1',
+  'recipientAddressLine2',
+  'recipientLandmark',
+  'recipientCity',
+  'recipientStateProvince',
+  'recipientPostalCode',
+];
+
+/**
+ * What the order says NOW, per field.
+ *
+ * Seven of the ten, because those are the seven the queue carries — the
+ * ones printed on a label. A correction to a second phone, an email or
+ * the old landmark field therefore shows its new value on its own; that
+ * is honest, and inventing a blank “before” would read as though the
+ * order held nothing there.
+ */
+const CURRENT_VALUE: Partial<
+  Record<AddressField, (order: NonNullable<StoreAddressChangeRow['order']>) => string>
+> = {
+  recipientName: (o) => o.recipientName,
+  recipientPhoneE164: (o) => o.recipientPhoneE164,
+  recipientAddressLine1: (o) => o.recipientAddressLine1,
+  recipientAddressLine2: (o) => o.recipientAddressLine2,
+  recipientCity: (o) => o.recipientCity,
+  recipientStateProvince: (o) => o.recipientStateProvince,
+  recipientPostalCode: (o) => o.recipientPostalCode,
+};
+
+function AddressChangesSection(): ReactElement {
+  const addresses = useStoreAddressChanges();
+  const [rejecting, setRejecting] = useState<StoreAddressChangeRow | null>(null);
+
+  return (
+    <Section
+      title="Address corrections"
+      subtitle="A store says a parcel is going to the wrong place. Until you answer, it keeps going to the address on the left."
+    >
+      {addresses.isPending ? (
+        <LoadingState label="Loading corrections" rows={2} />
+      ) : addresses.isError ? (
+        <ErrorState
+          message={serverVerdict(addresses.error)}
+          retry={() => void addresses.refetch()}
+        />
+      ) : addresses.data.length === 0 ? (
+        <p className="text-text-muted text-sm">No corrections are waiting.</p>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Store</Th>
+              <Th>Order</Th>
+              <Th>What is changing</Th>
+              <Th>Why they say it is wrong</Th>
+              <Th>Asked</Th>
+              <Th>Your answer</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {addresses.data.map((r) => (
+              <AddressRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+            ))}
+          </TBody>
+        </Table>
+      )}
+      <RejectAddressModal request={rejecting} onClose={() => setRejecting(null)} />
+    </Section>
+  );
+}
+
+function AddressRow({
+  request,
+  onReject,
+}: {
+  request: StoreAddressChangeRow;
+  onReject: () => void;
+}): ReactElement {
+  const decide = useDecideStoreAddressChange();
+  const toast = useToast();
+  const [error, setError] = useState<string | null>(null);
+
+  async function approve(): Promise<void> {
+    setError(null);
+    try {
+      const out = await decide.mutateAsync({ requestId: request.id, approve: true });
+      // Saying yes and it landing are two different things: the order may
+      // have been confirmed or gone into a call while this sat here. The
+      // server's own words for the refusal, verbatim (FE-2).
+      if (out.status === 'FAILED') {
+        setError(
+          out.failureReason ??
+            'You approved it, but the order had already moved on and the details were not changed.',
+        );
+        toast.error('Approved, but the order could not be changed.');
+        return;
+      }
+      toast.success(
+        'Approved — the order now carries the new details, and the store has been told.',
+      );
+    } catch (err) {
+      // Verbatim (FE-2): ADDRESS_CHANGE_ALREADY_DECIDED when somebody
+      // else answered it first, which is the common one on a shared queue.
+      setError(serverVerdict(err));
+    }
+  }
+
+  const order = request.order;
+
+  return (
+    <Tr>
+      <Td>{request.store?.displayName ?? request.store?.name ?? '—'}</Td>
+      <Td>
+        <span className="font-mono text-xs">{order?.orderNumber ?? '—'}</span>
+        {order === null ? null : (
+          <div className="mt-1">
+            <OrderStatusBadge status={order.status} />
+          </div>
+        )}
+      </Td>
+      {/* The comparison IS the decision — nobody can approve a correction
+          they cannot check against what the parcel says now. */}
+      <Td>
+        <ul className="space-y-1">
+          {ALL_FIELDS.filter((k) => request.fields[k] !== undefined).map((k) => {
+            const now = order === null ? undefined : CURRENT_VALUE[k]?.(order);
+            return (
+              <li key={k} className="text-xs">
+                <span className="text-text-muted">{FIELD_LABEL[k]}: </span>
+                {now === undefined || now === '' ? null : (
+                  <span className="text-text-faint">{now} → </span>
+                )}
+                <span className="text-text-body">{request.fields[k] ?? ''}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </Td>
+      <Td className="max-w-xs">
+        <span className="text-text-body text-xs">{request.reason}</span>
+      </Td>
+      <Td className="text-text-muted text-xs">{when(request.createdAt)}</Td>
+      <Td>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={decide.isPending}
+            onClick={() => void approve()}
+          >
+            Approve
+          </Button>
+          <Button variant="secondary" size="sm" disabled={decide.isPending} onClick={onReject}>
+            Reject
+          </Button>
+        </div>
+        {error !== null ? (
+          <p role="alert" className="text-critical mt-1 text-xs">
+            {error}
+          </p>
+        ) : null}
+      </Td>
+    </Tr>
+  );
+}
+
+/**
+ * Turning a correction down takes a reason, and the server refuses
+ * without one (`ADDRESS_CHANGE_REASON_REQUIRED`). The store reads it —
+ * they still have a parcel going somewhere they believe is wrong, and
+ * they have to decide what to tell their customer.
+ */
+function RejectAddressModal({
+  request,
+  onClose,
+}: {
+  request: StoreAddressChangeRow | null;
+  onClose: () => void;
+}): ReactElement {
+  const decide = useDecideStoreAddressChange();
+  const toast = useToast();
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(): Promise<void> {
+    if (request === null) return;
+    setError(null);
+    try {
+      await decide.mutateAsync({ requestId: request.id, approve: false, note: note.trim() });
+      toast.success('Turned down. The store has been sent your reason.');
+      setNote('');
+      onClose();
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  }
+
+  return (
+    <Modal
+      open={request !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          setNote('');
+          setError(null);
+          onClose();
+        }
+      }}
+      title={
+        request === null
+          ? 'Turn down the correction'
+          : `Leave ${request.order?.orderNumber ?? 'this order'} going to the address it has?`
+      }
+      description="The store reads this. The parcel keeps its current address, so say why you are leaving it."
+    >
+      <div className="space-y-4">
+        <FormField label="Your reason" htmlFor="reject-address-note" required>
+          <Textarea
+            id="reject-address-note"
             rows={3}
             maxLength={2000}
             value={note}

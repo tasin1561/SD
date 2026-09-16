@@ -1572,15 +1572,20 @@ reads the migration file to check. `cancel` defaults DIRECT deliberately:
 stores already hold `orders.cancel`, and a table that read an absent row as
 OFF would have taken it away from every store silently.
 
-**ASK_SELLER is a refusal for four of the seven.** A held request needs
+**ASK_SELLER is still a refusal for three of the seven.** `callCapDecision`,
+`chaseSkydrop` and `cancel` refuse it by name and say who does it instead,
+and two of those would not want an approval at all: the call-cap answer is
+already the seller's and the TTL sweep closes it, so "ask the seller" is a
+round trip with no decision in it, and an approval step on a complaint about
+US would let a seller suppress it.
+
+**`addressFix` is the one that was worth building, and it is built
+(2026-09-16).** It refused for one reason only — a held request needs
 somewhere to live, and `order_delivery_action_requests` rows require a
-shipment — which an unpacked order has not got. Rather than invent a second
-request table late in the build, `addressFix`, `callCapDecision`,
-`chaseSkydrop` and `cancel` refuse ASK_SELLER by name and say who does it
-instead. Two of them would not want an approval anyway: the call-cap answer
-is already the seller's, and an approval step on a complaint about US would
-let a seller suppress it. The address fix is the one with a genuine approval
-shape, and it is recorded as a follow-up.
+shipment, which an order corrected this early has not got. That was recorded
+in the code as a follow-up; `store_address_change_requests` is the follow-up,
+and all three modes of `addressFix` now mean what the seller chose. See "The
+held address correction" below.
 
 ### Endpoints
 
@@ -1588,8 +1593,10 @@ shape, and it is recorded as a follow-up.
 |---|---|---|
 | Seller | `GET|PUT /seller/reseller-stores/:storeId/action-policy` | `stores.manage` |
 | Seller | `GET /seller/store-action-requests` · `POST :id/approve` · `POST :id/reject` | `stores.manage` |
+| Seller | `GET /seller/store-address-changes` · `POST :id/approve` · `POST :id/reject` | `stores.manage` |
 | Store | `GET|POST /store/orders/:orderId/actions` | `orders.actions` |
 | Store | `PATCH /store/orders/:orderId/recipient` | `orders.actions` |
+| Store | `GET /store/orders/:orderId/address-changes` | `orders.actions` |
 | Store | `GET|PATCH /store/call-reviews[/:reviewId]` | `orders.actions` |
 | Store | `POST /store/issues` | `tickets.manage` |
 
@@ -1618,12 +1625,115 @@ Approving calls `DeliveryActionService.runApproved`, which runs the SAME three
 execution paths a direct ask uses. Rejecting requires a reason — the store has a
 customer waiting on the answer.
 
+### The held address correction (2026-09-16)
+
+`store_address_change_requests` is where a correction WAITS. One nullable
+column per field of `STORE_EDITABLE_KEYS` — the ten recipient fields — plus
+`reason`, `status`, `decided_by_seller_user_id`, `seller_decided_at`,
+`decision_note`, `applied_at` and `failure_reason`; indexed `(seller_id,
+status)` for the seller's queue and `(order_id)` for "is anything pending on
+this parcel"; all three FKs RESTRICT, because a decided correction is the
+evidence for why an address changed and must outlive everything short of the
+order. A NULL column means "not part of this correction", never "clear it" —
+a store correcting a misheard house number sends that field alone.
+
+**The proposal lives in its own table, and never on the order.** The order
+must keep the address the courier was given until seller staff say otherwise.
+Parking a pending correction on the order itself would mean every reader of
+the recipient block has to know which of the two is live, and the first reader
+that forgets prints an address nobody approved onto a label.
+
+`StoreOrderEditService.editRecipient` is now a three-way branch rather than a
+refusal and a write. OFF refuses and says who does it instead; DIRECT goes
+through `OrderService.edit` with the store scope exactly as it always has;
+ASK_SELLER holds it and answers with the request. It returns a UNION —
+`{ applied: true, order, request: null }` or `{ applied: false, order: null,
+request }` — rather than a nullable order, because "applied" and "waiting" are
+different things for the portal to say and a caller inferring which from a
+null field will eventually infer it wrong.
+
+**`reason` is required on ASK_SELLER** (`ADDRESS_CHANGE_REASON_REQUIRED`):
+seller staff read it before deciding, and they cannot tell a corrected typo
+from a customer who has moved house without it. **It is also STRIPPED off the
+patch before it reaches `OrderService.edit`** — that method refuses every key
+outside `STORE_EDITABLE_KEYS` BY NAME (`STORE_EDIT_RECIPIENT_ONLY`) rather
+than ignoring it, which is the right behaviour and exactly why this field
+cannot be passed through. A future field on `StoreEditRecipientDto` has to be
+destructured off in the same way.
+
+**One open correction per order** (`ADDRESS_CHANGE_ALREADY_OPEN`). Two
+proposals for one address cannot both be right, and approving them in whatever
+order they happened to be decided would apply the older one last. A patch
+carrying no recipient field at all is `ADDRESS_CHANGE_EMPTY`.
+
+Seller staff decide at `/seller/store-address-changes` (`stores.manage`) — a
+SIBLING of `/seller/store-action-requests` rather than part of it, since the
+two hold different rows and folding them together would mean a response half
+one thing and half another; the single queue PAGE calls both, which is where
+they belong together. The list carries the order's CURRENT recipient block, so
+the change can be read against what the parcel carries today. The claim is a
+guarded `updateMany` on (PENDING, this seller's) — the loser gets
+`ADDRESS_CHANGE_ALREADY_DECIDED` rather than quietly editing the order twice.
+The answer lands in `decided_by_seller_user_id` / `seller_decided_at`, never a
+staff column, or "who allowed this" reads as Skydrop when it was the seller.
+Rejecting requires a reason.
+
+**Approving RUNS the correction, through the same `OrderService.edit` path a
+DIRECT correction takes** — so an approved correction and a direct one cannot
+drift, and the approval inherits the DRAFT/PENDING gate, the address
+revalidation and the `EDIT_DURING_CALL` rule rather than a second
+implementation of any of them. The edit is attributed to the STORE
+(`ActorType.STORE`, the requester) even though the seller allowed it: the
+timeline should say who asked, not only who permitted.
+
+**A yes that could not be carried out is its own outcome, and that is the
+point of the FAILED state.** Time passes between the ask and the answer, and
+the order may have been confirmed, cancelled or pulled into a call by then;
+`edit` refuses those by name. That refusal is NOT thrown at seller staff —
+they answered correctly and the world changed underneath them. The row is
+recorded FAILED with the refusal kept verbatim (`[NOT_EDITABLE] …`,
+`[EDIT_DURING_CALL] …`) and the store is told, because "they agreed but it did
+not happen" is what somebody has to tell the customer. Throwing instead would
+leave the request APPROVED forever with nothing having happened and nobody
+told. The claim moves the row to APPROVED first and on to APPLIED or FAILED
+once it knows which, so a crash between leaves a row that visibly has not been
+applied rather than a PENDING one that silently has — the visible-vs-silent
+ordering.
+
+The five states are an F2 mapping in `@skydrop/ui/status`
+(`storeAddressChangeStatusKind` / `…Label`): PENDING "Waiting on seller
+staff", APPROVED, APPLIED "Corrected", REJECTED "Declined" (neutral, not red —
+a considered refusal is not a malfunction) and FAILED "Could not be applied",
+the one state that needs somebody and so the one that is red.
+
+**A NEW `AddressChangeNotifier`, deliberately, rather than reusing
+`StoreActionNotifier`.** That one lives in `delivery-action`, whose module
+header states it is a LEAF that nothing imports; reaching for it from
+`reseller-order` would close no cycle, but it would spend that property — and
+the property is what keeps the courier-facing module from slowly becoming
+everybody's dependency. So this is a second notifier of the same SHAPE. The
+seller hears IN-APP, addressed by PERMISSION `stores.manage` (NOTIF-10), under
+topic `seller.store_address_change_waiting` — declared in the catalogue and
+pinned against the sender's own constant in both directions by
+`notification-topic-catalog.service.spec.ts` (NOTIF-17), so it cannot become a
+switch on a settings page that silences nothing. The store hears by EMAIL and
+only email — it has no in-app inbox, so an in-app leg would be written to a
+feed nobody there can open (NOTIF-15's "a setting that changes nothing", in
+notification form) — through `store.address_change_approved.email` /
+`store.address_change_rejected.email`, whose `failure_reason` variable renders
+empty on an ordinary approval and carries the refusal on the FAILED one. The
+event id is per DECISION, not per request, so a rejection and a later approval
+of the same correction are two things to say. Neither notifier throws
+(NOTIF-1).
+
 ### Telling each side
 
 The store has **no inbox**, so it hears by email only:
 `store.action_approved.email` / `store.action_rejected.email`, sent to the store
 users who may act on orders. The seller hears in-app, addressed by permission
-(NOTIF-10), when something is waiting on them. Neither notifier throws.
+(NOTIF-10), when something is waiting on them. Neither notifier throws. A held
+address correction says the same two things through its own notifier, for the
+module-boundary reason given above.
 
 ### Screens
 
@@ -1634,13 +1744,40 @@ apps/seller: a "What they can do" tab per store, and `/reseller-stores/requests`
 with a count on the nav item — an approval queue nobody looks at holds a store's
 customer waiting.
 
+The address-correction screens are being built alongside this; the read hooks
+are in place (`apps/reseller/src/lib/order-hooks.ts`,
+`apps/seller/src/lib/reseller-store-hooks.ts`). What they have to show, whatever
+shape they take: on the store's side, the mode BEFORE the form — a capability
+set to OFF renders no correction form at all, and ASK_SELLER has to say so
+before somebody types a correction expecting it to take effect, which is why
+`GET /store/orders/:orderId/address-changes` returns the mode alongside the
+list; and after sending, that the parcel still carries the OLD address until
+the seller answers. On the seller's side, the proposed fields against the
+order's current ones side by side, the store's reason, and a note box that a
+rejection cannot be submitted without. FAILED needs its own treatment on both:
+it is a yes that changed nothing, and reading it as an ordinary approval is how
+a customer is told an address was fixed when it was not.
+
 ### Migrations
 
 `20260916000000_reseller_store_action_policy` (the policy table, the
 `reseller_store_action_mode` enum, the store and seller-decider columns on
-`order_delivery_action_requests`, and `call_queue_reason` += `store_asked`) and
-`20260916010000_store_issue_ticket_type` (`ticket_type` += `store_issue`). Both
-additive; neither writes a row.
+`order_delivery_action_requests`, and `call_queue_reason` += `store_asked`),
+`20260916010000_store_issue_ticket_type` (`ticket_type` += `store_issue`) and
+`20260916020000_store_address_change_requests` (the
+`store_address_change_status` enum and the held-correction table). All
+additive; none writes a row.
+
+The first of those also left real drift behind it, worth recording because
+nothing but one CI step could see it: `ResellerStoreActionMode` shipped in the
+schema with no `@@map`, while its own migration had created the Postgres type
+as `reseller_store_action_mode`. Runtime was unaffected — the VALUE maps were
+right and value literals are what the client sends — so it could only ever
+surface as a red "Schema matches migrations (no drift)" gate, which is what it
+did, reporting the enum added and removed AND every column of
+`reseller_store_action_policy` as "would be dropped and recreated (type
+changed)". Fixed by naming the type the database already has; no corrective
+SQL. See the enum note in `CLAUDE.md`.
 
 ### Tests
 
@@ -1648,15 +1785,39 @@ additive; neither writes a row.
 agreement, scoping, the audit), `store-delivery-action.spec.ts` (OFF refuses,
 DIRECT runs, ASK_SELLER stops and notifies, each action reads its own column),
 `store-orders-cancel-policy.spec.ts` (ownership before policy),
-`store-order-edit.service.spec.ts`, `store-review-decision.service.spec.ts`,
+`store-review-decision.service.spec.ts`,
 `store-issue.service.spec.ts`, plus `store-permission-surface.spec.ts` and
 `ticket-notification-plan.spec.ts` extended.
+`notification-topic-catalog.service.spec.ts` now pins
+`seller.store_address_change_waiting` against the notifier's own constant, both
+ways.
+
+`store-address-change.spec.ts` covers the held correction: which fields a patch
+proposes and how they are named to a person, all three routes out of the policy
+(OFF refuses, DIRECT writes and holds nothing, DIRECT never lets `reason` reach
+the order, ASK_SELLER without a reason is refused, ASK_SELLER holds and does not
+touch the order), the two hold guards (a second correction while one waits, a
+correction proposing nothing), and the decision — that approving applies the
+WHOLE correction rather than an empty patch, that a yes the order has moved past
+is recorded FAILED with the refusal kept verbatim and the store still told, and
+that a request somebody else already decided is a conflict rather than a second
+edit.
+
+The older `store-order-edit.service.spec.ts` has NOT caught up and is now
+superseded by that file's own routing block: its ASK_SELLER case still asserts
+the refusal that used to be the behaviour, and its `make()` builds the service
+with the three dependencies it had before the hold service was added. It has to
+be rewritten or deleted.
 
 ### Not done / recorded
 
-The address fix has no "store asks, seller approves" path — it needs its own
-request row, since the delivery-action queue requires a parcel. No e2e yet
-against a real database. The store still has no inbox.
+No e2e yet against a real database — neither queue, and in particular nothing
+that proves two seller staff racing one correction leaves exactly one decision,
+which is a claim only a real database can settle. The store still has no inbox,
+which is why every message to it is an email. A rejected correction cannot be
+revised and re-sent as an amendment — the store raises a fresh one — and
+nothing withdraws a pending correction, so a store that asked in error waits
+for seller staff to decline it.
 
 ## UI audit fixes, 2026-09-15
 

@@ -3,14 +3,20 @@ import { StoreApiKeyGuard } from '../../common/guards/store-api-key.guard';
 import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
+import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
 import { OrderCoreModule } from '../order/order-core.module';
 import { OrderModule } from '../order/order.module';
 import { StoreApiKeyController } from './controllers/store-api-key.controller';
 import { StoreApiOrderController } from './controllers/store-api-order.controller';
+import { SellerAddressChangeController } from './controllers/seller-address-change.controller';
 import { StoreCustomerController } from './controllers/store-customer.controller';
 import { StoreOrderController } from './controllers/store-order.controller';
 import { StoreOrderEditController } from './controllers/store-order-edit.controller';
 import { StoreWebhookController } from './controllers/store-webhook.controller';
+import { AddressChangeNotifier } from './services/address-change-notifier.service';
+import { SellerAddressChangeDecisionService } from './services/seller-address-change-decision.service';
+import { StoreAddressChangeService } from './services/store-address-change.service';
 import { StoreOrderEditService } from './services/store-order-edit.service';
 import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
 import { ResellerOrderReadService } from './services/reseller-order-read.service';
@@ -43,6 +49,14 @@ import { StoreWebhookService } from './services/store-webhook.service';
     // `OrderCoreModule`, so reaching for it from there would close a
     // cycle. Here it is one-way and safe.
     ResellerStoreModule,
+    // A HELD address correction has to tell both sides: the seller
+    // in-app that somebody is waiting on them, the store by email when
+    // they answer (a reseller store has no inbox). Deliberately NOT by
+    // importing `delivery-action`, whose own header states it is a leaf
+    // nothing imports — that property is worth more than reusing its
+    // notifier, so this module has its own of the same shape.
+    NotificationAudienceModule,
+    NotificationLedgerModule,
   ],
   controllers: [
     StoreOrderController,
@@ -51,10 +65,17 @@ import { StoreWebhookService } from './services/store-webhook.service';
     StoreApiKeyController,
     StoreWebhookController,
     StoreApiOrderController,
+    // The seller's half of the address-correction queue. A sibling of
+    // `/seller/store-action-requests` in `delivery-action`; one page in
+    // apps/seller calls both.
+    SellerAddressChangeController,
   ],
   providers: [
     StoreOrdersService,
     StoreOrderEditService,
+    StoreAddressChangeService,
+    SellerAddressChangeDecisionService,
+    AddressChangeNotifier,
     ResellerOrderReadService,
     StoreApiKeyService,
     StoreWebhookService,

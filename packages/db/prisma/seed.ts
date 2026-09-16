@@ -3680,6 +3680,50 @@ const notificationTemplates: TemplateSeed[] = [
       'to tell them. You can see the order at {{ order_url }}',
     ].join('\n'),
   },
+  // 2026-09-16 — a HELD address correction, answered by seller staff.
+  // EMAIL and nothing else, for the same reason as the two above: a
+  // reseller store has NO INBOX. Neither code matches the credential
+  // pattern, so both are OPERATIONAL and can be silenced.
+  {
+    code: 'store.address_change_approved.email',
+    name: 'Reseller store — the seller approved your address correction',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} approved your address correction on {{ order_number }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} approved your correction to {{ change_summary }} on order {{ order_number }}.',
+      '',
+      'You asked because: “{{ reason }}”',
+      '{{ decision_note }}',
+      '',
+      // Rendered empty on the ordinary approval. It is NOT empty when
+      // they said yes and the order had already moved past editing —
+      // the one case where an approval changes nothing, and the case
+      // somebody has to explain to a customer.
+      '{{ failure_reason }}',
+      '',
+      'See the order at {{ order_url }}',
+    ].join('\n'),
+  },
+  {
+    code: 'store.address_change_rejected.email',
+    name: 'Reseller store — the seller declined your address correction',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} declined your address correction on {{ order_number }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} declined your correction to {{ change_summary }} on order {{ order_number }}.',
+      '',
+      'They said: “{{ decision_note }}”',
+      '',
+      'The parcel still carries the original address. If your customer is waiting on an answer,',
+      'this is what to tell them. You can see the order at {{ order_url }}',
+    ].join('\n'),
+  },
   // RS-2 (2026-09-14) — the reseller store portal's CREDENTIAL messages.
   // Every code matches `categoryForTemplate`'s credential pattern
   // (invitation / password_reset / password_changed / email_verification),

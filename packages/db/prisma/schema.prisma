@@ -289,6 +289,7 @@ model Seller {
   earlyReservationReviews  EarlyReservationReview[]
   reattemptRequests        OrderReattemptRequest[]
   deliveryActionRequests   OrderDeliveryActionRequest[]
+  addressChangeRequests    StoreAddressChangeRequest[]
   stockUnits               StockUnit[]
   inboundFreightCharges    InboundFreightCharge[]
   invoices                 Invoice[]
@@ -2754,6 +2755,8 @@ model SellerStore {
   actionPolicy            ResellerStoreActionPolicy?
   /// Delivery actions this store has asked for on its own orders.
   deliveryActionRequests  OrderDeliveryActionRequest[]
+  /// Address corrections this store has asked seller staff to approve.
+  addressChangeRequests   StoreAddressChangeRequest[]
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -3165,6 +3168,7 @@ model Order {
   callAttempts           CallAttempt[]
   reattemptRequests      OrderReattemptRequest[]
   deliveryActionRequests OrderDeliveryActionRequest[]
+  addressChangeRequests  StoreAddressChangeRequest[]
   orderShipments         OrderShipment[]
   charges                OrderCharge[]
   notificationLogs       NotificationLog[]
@@ -9399,6 +9403,8 @@ enum ResellerStoreActionMode {
   /// courier this still means "asks Skydrop directly" — CUR-10 keeps the
   /// operator gate on a van being sent or a parcel turned round.
   DIRECT     @map("direct")
+
+  @@map("reseller_store_action_mode")
 }
 
 /// What a reseller store may do about an order on its own, per capability
@@ -9445,4 +9451,90 @@ model ResellerStoreActionPolicy {
   store SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@map("reseller_store_action_policy")
+}
+
+/// Where a held address correction sits while seller staff decide.
+enum StoreAddressChangeStatus {
+  PENDING  @map("pending")
+  /// Seller staff said yes; the change has not been written yet.
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+  /// Written onto the order.
+  APPLIED  @map("applied")
+  /// Approved, and then the order had moved on — confirmed, cancelled,
+  /// or otherwise past editing. Distinct from REJECTED, which is seller
+  /// staff saying no: this is a yes that could not be carried out, and
+  /// the reseller store needs telling for a different reason.
+  FAILED   @map("failed")
+
+  @@map("store_address_change_status")
+}
+
+/// A reseller store asking seller staff to approve an address correction
+/// (2026-09-16, owner).
+///
+/// The delivery-action queue cannot hold this one: its rows require a
+/// shipment, and an address is fixed BEFORE a parcel exists. So the held
+/// request lives here instead of the capability refusing ASK_SELLER.
+///
+/// ── THE PROPOSED FIELDS ARE COLUMNS, NOT JSON ────────────────────────
+/// One column per `STORE_EDITABLE_KEYS` field, all nullable, only the
+/// ones the store actually sent being set. JSON would have made "what
+/// exactly did they ask to change" a thing you read by eye rather than
+/// query, and the apply path would have had to trust its shape.
+///
+/// ── EDITABILITY IS RE-CHECKED AT APPLY TIME, NEVER ASSUMED ───────────
+/// Time passes between asking and answering: the order may have been
+/// confirmed, cancelled, or reached a status the edit refuses. Approving
+/// runs the SAME `OrderService.edit` path a direct correction takes, and
+/// a refusal there lands here as FAILED with the reason kept — never a
+/// silent write onto an order that has moved on, and never a discarded
+/// record.
+model StoreAddressChangeRequest {
+  id                     String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId                String  @map("order_id") @db.Uuid
+  /// The order's seller — who decides, and the scope every read carries.
+  sellerId               String  @map("seller_id") @db.Uuid
+  storeId                String  @map("store_id") @db.Uuid
+  /// Who at the reseller store asked. A plain id, like `audit_logs`: the
+  /// record must outlive the person.
+  requestedByStoreUserId String? @map("requested_by_store_user_id") @db.Uuid
+
+  /// Why the customer's details are wrong, in the store's words. Seller
+  /// staff read this before deciding.
+  reason String @db.Text
+
+  /// The correction itself — only the fields the store sent.
+  recipientName          String? @map("recipient_name")
+  recipientPhoneE164     String? @map("recipient_phone_e164")
+  recipientAltPhoneE164  String? @map("recipient_alt_phone_e164")
+  recipientEmail         String? @map("recipient_email")
+  recipientAddressLine1  String? @map("recipient_address_line1")
+  recipientAddressLine2  String? @map("recipient_address_line2")
+  recipientLandmark      String? @map("recipient_landmark")
+  recipientCity          String? @map("recipient_city")
+  recipientStateProvince String? @map("recipient_state_province")
+  recipientPostalCode    String? @map("recipient_postal_code")
+
+  status StoreAddressChangeStatus @default(PENDING)
+
+  /// Seller staff's answer. Their own columns, never a staff member's:
+  /// "who allowed this" must not read as Skydrop when it was the seller.
+  decidedBySellerUserId String?   @map("decided_by_seller_user_id") @db.Uuid
+  sellerDecidedAt       DateTime? @map("seller_decided_at") @db.Timestamptz
+  decisionNote          String?   @map("decision_note") @db.Text
+
+  appliedAt     DateTime? @map("applied_at") @db.Timestamptz
+  /// Why an approved change could not be written, kept as evidence.
+  failureReason String?   @map("failure_reason") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  order  Order       @relation(fields: [orderId], references: [id])
+  seller Seller      @relation(fields: [sellerId], references: [id])
+  store  SellerStore @relation(fields: [storeId], references: [id])
+
+  @@index([sellerId, status])
+  @@index([orderId])
+  @@map("store_address_change_requests")
 }

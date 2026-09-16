@@ -8,6 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
+import type { OrderStatus } from '@skydrop/db';
 import type { ResellerStoreStatusValue } from '@skydrop/api-client';
 
 /**
@@ -129,6 +130,7 @@ export interface StoreActionRequestRow {
 
 const KEY = ['seller-reseller-stores'] as const;
 const ACTION_KEY = ['seller-store-action-requests'] as const;
+const ADDRESS_KEY = ['seller-store-address-changes'] as const;
 
 export function useStoreActionPolicy(storeId: string): UseQueryResult<StoreActionPolicy> {
   const client = useApiClient();
@@ -191,6 +193,109 @@ export function useDecideStoreAction(): UseMutationResult<
         { method: 'POST', body: note === undefined || note === '' ? {} : { note } },
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ACTION_KEY }),
+  });
+}
+
+/**
+ * 2026-09-16 — corrections to where a store's parcel is going, waiting
+ * on this seller because their `addressFix` policy said “ask me first”.
+ *
+ * A separate queue from the delivery asks above because it is a
+ * different question: those are about doing something to a parcel, this
+ * is about what is printed on it. Both are answered on the one page.
+ */
+export type AddressField =
+  | 'recipientName'
+  | 'recipientPhoneE164'
+  | 'recipientAltPhoneE164'
+  | 'recipientEmail'
+  | 'recipientAddressLine1'
+  | 'recipientAddressLine2'
+  | 'recipientLandmark'
+  | 'recipientCity'
+  | 'recipientStateProvince'
+  | 'recipientPostalCode';
+
+export interface StoreAddressChangeRow {
+  readonly id: string;
+  readonly reason: string;
+  /** Only the fields this correction proposes. */
+  readonly fields: Partial<Record<AddressField, string>>;
+  readonly createdAt: string;
+  /** The order as it reads NOW — what the proposal is compared against. */
+  readonly order: {
+    readonly orderNumber: string;
+    readonly status: OrderStatus;
+    readonly recipientName: string;
+    readonly recipientPhoneE164: string;
+    readonly recipientAddressLine1: string;
+    readonly recipientAddressLine2: string;
+    readonly recipientCity: string;
+    readonly recipientStateProvince: string;
+    readonly recipientPostalCode: string;
+  } | null;
+  readonly store: {
+    readonly id: string;
+    readonly name: string;
+    readonly displayName: string | null;
+  } | null;
+}
+
+/**
+ * The address corrections waiting on this seller. Empty when none are.
+ *
+ * `enabled` for the same reason as `useStoreActionRequests`: this needs
+ * `stores.manage`, and anything asked from the shell runs on EVERY page,
+ * so an unconditional call would fire a 403 on every page view for every
+ * seller who does not run reseller stores.
+ */
+export function useStoreAddressChanges(
+  options: { readonly enabled?: boolean } = {},
+): UseQueryResult<readonly StoreAddressChangeRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ADDRESS_KEY,
+    queryFn: () =>
+      client.request<readonly StoreAddressChangeRow[]>('/api/seller/store-address-changes'),
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * What a decision came back as.
+ *
+ * Typed, unlike `useDecideStoreAction`'s reply, because APPROVED is not
+ * the end of it: writing the new details onto the order can still be
+ * refused — it was confirmed, cancelled, or went into a call while
+ * somebody was deciding — and “you agreed but it did not happen” is
+ * exactly what the person who just clicked has to be told.
+ */
+export interface DecidedAddressChange {
+  readonly id: string;
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED' | 'FAILED';
+  /** The server's own words for why an approval could not be applied. */
+  readonly failureReason: string | null;
+}
+
+export function useDecideStoreAddressChange(): UseMutationResult<
+  DecidedAddressChange,
+  Error,
+  { readonly requestId: string; readonly approve: boolean; readonly note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, approve, note }) =>
+      client.request<DecidedAddressChange>(
+        `/api/seller/store-address-changes/${requestId}/${approve ? 'approve' : 'reject'}`,
+        { method: 'POST', body: note === undefined || note === '' ? {} : { note } },
+      ),
+    // Approving WRITES the new details onto the order, so the seller's
+    // own view of that order is stale the moment this returns.
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ADDRESS_KEY });
+      void qc.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
   });
 }
 
