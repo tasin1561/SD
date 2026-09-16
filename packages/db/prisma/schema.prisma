@@ -8496,7 +8496,10 @@ model OrderDeliveryActionRequest {
   order         Order        @relation(fields: [orderId], references: [id])
   shipment      Shipment     @relation(fields: [shipmentId], references: [id])
   seller        Seller       @relation(fields: [sellerId], references: [id])
-  resellerStore SellerStore? @relation(fields: [resellerStoreId], references: [id])
+  /// RESTRICT, not the SET NULL an optional relation defaults to: a
+  /// request whose store id was nulled would read as the seller's own,
+  /// silently misattributing who asked for a courier write.
+  resellerStore SellerStore? @relation(fields: [resellerStoreId], references: [id], onDelete: Restrict)
 
   @@index([resellerStoreId, status])
   @@index([sellerId, status])
