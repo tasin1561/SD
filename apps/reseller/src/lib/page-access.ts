@@ -23,7 +23,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/terms', 'terms.view'], // GET /store/terms (RS-4); accepting needs terms.accept
   ['/wallet', 'wallet.view'], // GET /store/wallet (RS-6)
   // RS-5 — the store's orders, customers and integrations.
-  ['/orders', 'orders.view'], // GET /store/orders; cancelling needs orders.cancel
+  // GET /store/orders; cancelling needs orders.cancel, and asking for a
+  // call, a re-attempt or a return needs orders.actions (2026-09-16) —
+  // both gated in the page's own code, not by this entry.
+  ['/orders', 'orders.view'],
   ['/orders/new', 'orders.create'], // POST /store/orders (the picker reads the catalogue)
   ['/orders/import', 'orders.create'], // /store/order-imports/*
   ['/customers', 'customers.view'], // GET /store/customers

@@ -3640,6 +3640,46 @@ const notificationTemplates: TemplateSeed[] = [
       'Read and accept it at {{ terms_url }}',
     ].join('\n'),
   },
+  // 2026-09-16 — the seller's answer to something a store asked for on
+  // one of its orders (a call, another delivery attempt, a return).
+  //
+  // EMAIL and nothing else, because a reseller store has NO INBOX: an
+  // in-app leg would be written to a feed nobody at the store can open.
+  // OPERATIONAL, so neither code matches the credential pattern.
+  {
+    code: 'store.action_approved.email',
+    name: 'Reseller store — the seller approved what you asked for',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} approved your request on {{ order_number }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} approved what you asked for on order {{ order_number }}: {{ action_label }}.',
+      '',
+      'It is being carried out now. You asked because: “{{ reason }}”',
+      '{{ decision_note }}',
+      '',
+      'Follow it at {{ order_url }}',
+    ].join('\n'),
+  },
+  {
+    code: 'store.action_rejected.email',
+    name: 'Reseller store — the seller declined what you asked for',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} declined your request on {{ order_number }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} declined what you asked for on order {{ order_number }}: {{ action_label }}.',
+      '',
+      'They said: “{{ decision_note }}”',
+      '',
+      'Nothing has changed on the parcel. If your customer is waiting on an answer, this is what',
+      'to tell them. You can see the order at {{ order_url }}',
+    ].join('\n'),
+  },
   // RS-2 (2026-09-14) — the reseller store portal's CREDENTIAL messages.
   // Every code matches `categoryForTemplate`'s credential pattern
   // (invitation / password_reset / password_changed / email_verification),

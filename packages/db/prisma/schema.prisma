@@ -2740,7 +2740,7 @@ model SellerStore {
   /// RS-6 phase 3c — each order's credits, per party.
   resellerOrderCredits    ResellerOrderCredit[]
   /// RS-7 — disputes this store raised.
-  tickets                 Ticket[]                 @relation("TicketStore")
+  tickets                 Ticket[]                     @relation("TicketStore")
   storeApiKeys            StoreApiKey[]
   webhookEndpoints        SellerWebhookEndpoint[]
   bulkOrderUploads        BulkOrderUpload[]
@@ -2750,6 +2750,10 @@ model SellerStore {
   storePnlPeriods         StorePnlPeriod[]
   storePnlCarryForwards   StorePnlCarryForward[]
   autoPauseRule           ResellerStoreAutoPause?
+  /// What this store may do about an order on its own (2026-09-16).
+  actionPolicy            ResellerStoreActionPolicy?
+  /// Delivery actions this store has asked for on its own orders.
+  deliveryActionRequests  OrderDeliveryActionRequest[]
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -5792,6 +5796,10 @@ enum CallQueueReason {
   ORDER_CONFIRMATION @map("order_confirmation")
   /// The seller asked us to ring this customer.
   SELLER_ASKED       @map("seller_asked")
+  /// The reseller STORE that sold it asked us to ring the customer
+  /// (2026-09-16). Its own value: the agent is told who wants the call,
+  /// and the store is who the customer bought from.
+  STORE_ASKED        @map("store_asked")
   /// The courier could not deliver — find out why.
   DELIVERY_FAILED    @map("delivery_failed")
 
@@ -7083,6 +7091,14 @@ enum TicketType {
   /// between the store's and the seller's wallets (a pair, no bank entry),
   /// never by a SCRAP_REFUND from our money.
   STORE_DISPUTE          @map("store_dispute")
+  /// 2026-09-16 — raised by a RESELLER STORE about something in OUR
+  /// hands: a parcel we damaged, lost or are sitting on. Deliberately
+  /// NOT a STORE_DISPUTE: that is an argument with the SELLER which we
+  /// referee and settle between their two wallets, and this is the store
+  /// telling US we got something wrong. Staff hear it; the seller is not
+  /// party to it and is not notified, and it can never be settled by the
+  /// store-dispute money path.
+  STORE_ISSUE            @map("store_issue")
 
   @@map("ticket_type")
 }
@@ -8435,32 +8451,50 @@ enum DeliveryActionStatus {
 /// directly. It also gives the refusal somewhere to live — "we already
 /// tried twice" is a decision with a reason, not a silent no-op.
 model OrderDeliveryActionRequest {
-  id                String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  orderId           String               @map("order_id") @db.Uuid
-  shipmentId        String               @map("shipment_id") @db.Uuid
-  sellerId          String               @map("seller_id") @db.Uuid
-  requestedById     String?              @map("requested_by_id") @db.Uuid
-  action            DeliveryActionKind
-  reason            String               @db.Text
-  status            DeliveryActionStatus @default(PENDING)
+  id                    String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId               String               @map("order_id") @db.Uuid
+  shipmentId            String               @map("shipment_id") @db.Uuid
+  sellerId              String               @map("seller_id") @db.Uuid
+  /// Set when a RESELLER STORE asked rather than the seller (2026-09-16).
+  /// One queue serves both, so a request cannot exist in two shapes that
+  /// drift apart; who may decide it is the store's policy, not a second
+  /// table.
+  resellerStoreId       String?              @map("reseller_store_id") @db.Uuid
+  requestedById         String?              @map("requested_by_id") @db.Uuid
+  action                DeliveryActionKind
+  reason                String               @db.Text
+  status                DeliveryActionStatus @default(PENDING)
   /// The failed delivery this answers, so a request cannot be read as a
   /// response to an NDR that had not happened yet.
-  deliveryAttemptId String?              @map("delivery_attempt_id") @db.Uuid
-  decidedById       String?              @map("decided_by_id") @db.Uuid
-  decidedAt         DateTime?            @map("decided_at") @db.Timestamptz
-  decisionNote      String?              @map("decision_note") @db.Text
-  executedAt        DateTime?            @map("executed_at") @db.Timestamptz
+  deliveryAttemptId     String?              @map("delivery_attempt_id") @db.Uuid
+  decidedById           String?              @map("decided_by_id") @db.Uuid
+  /// A SELLER user who decided a store's request (2026-09-16). Exclusive
+  /// with `decidedById`, which is a staff member: both set would mean two
+  /// people decided one request.
+  decidedBySellerUserId String?              @map("decided_by_seller_user_id") @db.Uuid
+  /// Whether the seller must say yes, SNAPSHOTTED when the store asked.
+  /// Read live instead, a policy changed while a request was open would
+  /// retroactively decide a question already put — or skip one not put.
+  needsSellerApproval   Boolean              @default(false) @map("needs_seller_approval")
+  /// When the seller answered. Distinct from `decidedAt`, which is the
+  /// staff decision, so a request can carry both answers in order.
+  sellerDecidedAt       DateTime?            @map("seller_decided_at") @db.Timestamptz
+  decidedAt             DateTime?            @map("decided_at") @db.Timestamptz
+  decisionNote          String?              @map("decision_note") @db.Text
+  executedAt            DateTime?            @map("executed_at") @db.Timestamptz
   /// What the courier gave back — Delhivery returns a UPL id, not an
   /// outcome, and the result arrives later on a scan.
-  executionRef      String?              @map("execution_ref")
-  executionError    String?              @map("execution_error") @db.Text
-  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+  executionRef          String?              @map("execution_ref")
+  executionError        String?              @map("execution_error") @db.Text
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
-  order    Order    @relation(fields: [orderId], references: [id])
-  shipment Shipment @relation(fields: [shipmentId], references: [id])
-  seller   Seller   @relation(fields: [sellerId], references: [id])
+  order         Order        @relation(fields: [orderId], references: [id])
+  shipment      Shipment     @relation(fields: [shipmentId], references: [id])
+  seller        Seller       @relation(fields: [sellerId], references: [id])
+  resellerStore SellerStore? @relation(fields: [resellerStoreId], references: [id])
 
+  @@index([resellerStoreId, status])
   @@index([sellerId, status])
   @@index([orderId])
   @@index([status, createdAt])
@@ -9353,4 +9387,62 @@ model ResellerStoreAutoPause {
   store SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@map("reseller_store_auto_pause")
+}
+
+/// How far a reseller store may go on one kind of action (2026-09-16).
+enum ResellerStoreActionMode {
+  /// The store cannot ask at all — the capability is not offered to it.
+  OFF        @map("off")
+  /// The store asks; the SELLER decides. Their goods, their money.
+  ASK_SELLER @map("ask_seller")
+  /// The store acts without the seller. For the two actions that reach a
+  /// courier this still means "asks Skydrop directly" — CUR-10 keeps the
+  /// operator gate on a van being sent or a parcel turned round.
+  DIRECT     @map("direct")
+}
+
+/// What a reseller store may do about an order on its own, per capability
+/// (2026-09-16, owner).
+///
+/// The owner's rule: give the store the access, and let the SELLER choose
+/// which parts go straight through and which come to them first. So this
+/// is one row per store, owned by the seller — the same shape as
+/// `ResellerStoreAutoPause`, and for the same reason: it is a rule about
+/// one store that only the seller may set.
+///
+/// A capability is a COLUMN, never a row keyed by an enum value: adding
+/// one is then a migration that has to choose a default out loud, rather
+/// than a new value silently defaulting every existing store to something
+/// nobody picked.
+///
+/// Defaults preserve what a store can already do (`cancel`) and follow the
+/// owner's "directly" for everything that spends nobody's money. The two
+/// that reach Delhivery start at ASK_SELLER because a re-attempt sends a
+/// van and a send-back turns a moving parcel round.
+model ResellerStoreActionPolicy {
+  storeId String @id @map("store_id") @db.Uuid
+
+  /// Ask OUR call centre to phone the customer again. No courier write.
+  recall          ResellerStoreActionMode @default(DIRECT)
+  /// Correct the consignee before the order is confirmed.
+  addressFix      ResellerStoreActionMode @default(DIRECT) @map("address_fix")
+  /// Call off the order. Stores already hold `orders.cancel`, so DIRECT
+  /// here is what they have today — this row must not quietly remove it.
+  cancel          ResellerStoreActionMode @default(DIRECT)
+  /// Answer the call-cap review: keep trying, or give up.
+  callCapDecision ResellerStoreActionMode @default(DIRECT) @map("call_cap_decision")
+  /// Raise it with Skydrop — damaged, lost, late in OUR hands.
+  chaseSkydrop    ResellerStoreActionMode @default(DIRECT) @map("chase_skydrop")
+  /// Ask the courier to try again. Sends a van; costs money.
+  reattempt       ResellerStoreActionMode @default(ASK_SELLER)
+  /// Send it back rather than keep trying. A return fee, split by terms.
+  sendBack        ResellerStoreActionMode @default(ASK_SELLER) @map("send_back")
+
+  updatedBySellerUserId String?  @map("updated_by_seller_user_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  store SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("reseller_store_action_policy")
 }

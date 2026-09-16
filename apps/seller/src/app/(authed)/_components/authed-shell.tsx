@@ -9,6 +9,7 @@ import { AppShell, MenuButton, Toaster, type NavGroup } from '@skydrop/ui/compon
 import { RestrictionBanner } from './restriction-banner';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { canSeePath } from '@/lib/page-access';
+import { useStoreActionRequests } from '@/lib/reseller-store-hooks';
 import { quickActionsFor } from '@/lib/quick-actions';
 import {
   AlertTriangle,
@@ -17,6 +18,7 @@ import {
   Building2,
   LayoutDashboard,
   LifeBuoy,
+  Inbox,
   Lock,
   KeyRound,
   Package,
@@ -67,6 +69,14 @@ export function AuthedShell({
     }
   }
 
+  // 2026-09-16 — how many of this seller's stores are waiting on an
+  // answer. Asked ONLY when they hold the permission the endpoint needs:
+  // the shell renders on every page, so an unconditional call would fire
+  // a 403 on every page view for every seller who does not run stores.
+  const canSeeRequests = canSeePath(identity, '/reseller-stores/requests');
+  const waiting = useStoreActionRequests({ enabled: canSeeRequests });
+  const waitingCount = waiting.data?.length ?? 0;
+
   const navGroups: NavGroup[] = [
     {
       heading: 'Selling',
@@ -104,6 +114,24 @@ export function AuthedShell({
       heading: 'Reselling',
       items: [
         { href: '/reseller-stores', label: 'Reseller stores', icon: <Store size={15} /> },
+        // 2026-09-16 — what the stores are waiting on the seller to decide.
+        // The COUNT is the point: an approval queue nobody looks at holds
+        // a store's customer waiting, and the in-app notice only covers
+        // the moment a request arrives, not the next morning.
+        {
+          href: '/reseller-stores/requests',
+          label: 'Waiting on you',
+          icon: <Inbox size={15} />,
+          ...(waitingCount > 0
+            ? {
+                badge: (
+                  <span className="bg-accent text-text-inverse rounded-full px-1.5 py-0.5 text-[11px] leading-none font-semibold tabular-nums">
+                    {waitingCount}
+                  </span>
+                ),
+              }
+            : {}),
+        },
         // RS-3 — the default price every reseller store pays.
         {
           href: '/reseller-stores/price-list',

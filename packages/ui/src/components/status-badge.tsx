@@ -1,5 +1,6 @@
 import type {
   BulkUploadStatus,
+  DeliveryActionStatus,
   EarlyReservationReviewStatus,
   InboundFreightStatus,
   OrderStatus,
@@ -11,6 +12,8 @@ import type {
   WithdrawalRequestStatus,
 } from '@skydrop/db';
 import {
+  deliveryActionStatusKind,
+  deliveryActionStatusLabel,
   earlyReviewStatusKind,
   inboundFreightStatusKind,
   kindTokens,
@@ -113,6 +116,20 @@ export function ResellerStoreStatusBadge({
 /** R7 scrap/damage + seller-issue ticket. */
 export function TicketStatusBadge({ status }: { readonly status: TicketStatus }): ReactElement {
   return <StatusBadge kind={ticketStatusKind(status)} label={ticketStatusLabel(status)} />;
+}
+
+/** 2026-09-16 — what became of something a reseller store asked for. */
+export function DeliveryActionStatusBadge({
+  status,
+}: {
+  readonly status: DeliveryActionStatus;
+}): ReactElement {
+  return (
+    <StatusBadge
+      kind={deliveryActionStatusKind(status)}
+      label={deliveryActionStatusLabel(status)}
+    />
+  );
 }
 
 /** R3 inbound (BD→India) freight bill. */

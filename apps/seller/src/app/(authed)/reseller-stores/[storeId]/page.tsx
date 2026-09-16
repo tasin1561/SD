@@ -31,6 +31,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
+import { StoreActionsSection } from './_components/store-actions-section';
 import { StoreCatalogue } from './_components/store-catalogue';
 import { StoreWalletSection } from './_components/store-wallet-section';
 import {
@@ -50,7 +51,7 @@ import {
 } from '@/lib/reseller-store-hooks';
 import { TermsSection } from './_components/terms-section';
 
-type StoreTab = 'overview' | 'catalogue' | 'terms';
+type StoreTab = 'overview' | 'catalogue' | 'terms' | 'actions';
 
 function when(iso: string | null): string {
   return iso === null
@@ -128,6 +129,7 @@ export default function ResellerStorePage(): ReactElement {
             ['overview', 'Overview'],
             ['catalogue', 'Catalogue & stock'],
             ['terms', 'Terms'],
+            ['actions', 'What they can do'],
           ] as const
         ).map(([key, label]) => (
           <Button
@@ -145,6 +147,7 @@ export default function ResellerStorePage(): ReactElement {
 
       {tab === 'catalogue' ? <StoreCatalogue storeId={s.id} final={final} /> : null}
       {tab === 'terms' ? <TermsSection storeId={s.id} final={final} /> : null}
+      {tab === 'actions' ? <StoreActionsSection storeId={s.id} final={final} /> : null}
       {tab === 'overview' ? <OverviewTab store={s} open={open} final={final} /> : null}
     </div>
   );

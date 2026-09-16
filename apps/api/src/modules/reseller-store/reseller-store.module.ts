@@ -9,8 +9,10 @@ import { NotificationLedgerModule } from '../notification-ledger/notification-le
 import { OrderModule } from '../order/order.module';
 import { AdminResellerStoreController } from './controllers/admin-reseller-store.controller';
 import { SellerResellerStoreController } from './controllers/seller-reseller-store.controller';
+import { SellerStoreActionPolicyController } from './controllers/seller-store-action-policy.controller';
 import { StoreProfileController } from './controllers/store-profile.controller';
 import { StoreTeamController } from './controllers/store-team.controller';
+import { ResellerStoreActionPolicyService } from './services/reseller-store-action-policy.service';
 import { ResellerStoreNotifier } from './services/reseller-store-notifier.service';
 import { ResellerStoreService } from './services/reseller-store.service';
 import { StoreProfileService } from './services/store-profile.service';
@@ -36,12 +38,14 @@ import { StoreTeamService } from './services/store-team.service';
   ],
   controllers: [
     SellerResellerStoreController,
+    SellerStoreActionPolicyController,
     AdminResellerStoreController,
     StoreProfileController,
     StoreTeamController,
   ],
   providers: [
     ResellerStoreService,
+    ResellerStoreActionPolicyService,
     StoreTeamService,
     StoreProfileService,
     ResellerStoreNotifier,
@@ -52,6 +56,9 @@ import { StoreTeamService } from './services/store-team.service';
   // RS-9 — the reports module pauses a store through the ONE writer of a
   // store's status (the seller's auto-pause rule, and staff acting on a
   // fraud flag). It imports nothing store-shaped back, so no cycle.
-  exports: [ResellerStoreService],
+  // The action sites (the store's own endpoints, and the seller's
+  // approval queue) read the policy; they import this module rather than
+  // keeping a second copy of what a mode means.
+  exports: [ResellerStoreService, ResellerStoreActionPolicyService],
 })
 export class ResellerStoreModule {}

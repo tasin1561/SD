@@ -12,12 +12,16 @@ import {
   CardBody,
   ConfirmDialog,
   ErrorState,
+  FormField,
   LoadingState,
+  Modal,
+  ModalFooter,
   Money,
   OrderStatusBadge,
   PageHeader,
   ProductThumb,
   Section,
+  DeliveryActionStatusBadge,
   ShipmentStatusBadge,
   TBody,
   THead,
@@ -33,8 +37,11 @@ import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCancelStoreOrder,
+  useRequestStoreAction,
   useStoreOrder,
+  useStoreOrderActions,
   useStoreOrderEvents,
+  type StoreActionKind,
   type StoreOrderView,
 } from '@/lib/order-hooks';
 import { OrderMoney } from './_components/order-money';
@@ -258,6 +265,11 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         </Section>
       ) : null}
 
+      {/* Only while the parcel is still live, and only for somebody who
+          may ask. The server decides whether each one is actually
+          possible and says so in its own words (FE-2). */}
+      {!o.terminal && can(me, 'orders.actions') ? <OrderActions orderId={o.id} /> : null}
+
       <OrderMoney orderId={o.id} />
 
       {can(me, 'tickets.manage') ? (
@@ -296,6 +308,228 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         onConfirm={() => void doCancel()}
       />
     </>
+  );
+}
+
+/**
+ * The three things a store can ask for about a live parcel, and what it
+ * has asked for before.
+ *
+ * WHICH ones are offered is the SELLER's policy for this store, read
+ * from the server with the requests (`allowed`). A capability they
+ * switched off is not rendered at all — an offered button that always
+ * refuses teaches people to ignore refusals. One set to "ask the seller"
+ * is offered and says so, because the difference matters to whoever has
+ * a customer waiting on the answer.
+ */
+const ACTIONS: ReadonlyArray<{
+  readonly kind: StoreActionKind;
+  /** The policy column that governs it. */
+  readonly capability: string;
+  readonly label: string;
+  readonly ask: string;
+}> = [
+  {
+    kind: 'RECALL',
+    capability: 'recall',
+    label: 'Call the customer again',
+    ask: 'Our call centre will ring them. Say what they should be asked.',
+  },
+  {
+    kind: 'REATTEMPT',
+    capability: 'reattempt',
+    label: 'Try delivering again',
+    ask: 'The courier is asked to attempt the delivery again. Say what changed — a corrected landmark, a time they will be in.',
+  },
+  {
+    kind: 'RTO',
+    capability: 'sendBack',
+    label: 'Send it back',
+    ask: 'The parcel stops going to the customer and comes back to the warehouse. Say why.',
+  },
+];
+
+function actionLabel(kind: StoreActionKind): string {
+  return ACTIONS.find((a) => a.kind === kind)?.label ?? kind;
+}
+
+function OrderActions({ orderId }: { orderId: string }): ReactElement {
+  const actions = useStoreOrderActions(orderId);
+  const submit = useRequestStoreAction();
+  const toast = useToast();
+  const [asking, setAsking] = useState<(typeof ACTIONS)[number] | null>(null);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function send(): Promise<void> {
+    if (asking === null) return;
+    setError(null);
+    try {
+      const out = await submit.mutateAsync({
+        orderId,
+        action: asking.kind,
+        reason: reason.trim(),
+      });
+      toast.success(
+        out.awaitingSeller
+          ? 'Sent to the seller.'
+          : `We are ${asking.label.toLowerCase()} — it is being carried out now.`,
+      );
+      setAsking(null);
+      setReason('');
+    } catch (err) {
+      // Verbatim (FE-2): DELIVERY_ACTION_REASON_TOO_SHORT,
+      // DELIVERY_ACTION_ALREADY_OPEN, STORE_ACTION_NOT_ALLOWED…
+      setError(serverVerdict(err));
+    }
+  }
+
+  if (actions.isPending) return <LoadingState label="Loading what you can ask for" rows={2} />;
+  if (actions.isError) {
+    return (
+      <ErrorState message={serverVerdict(actions.error)} retry={() => void actions.refetch()} />
+    );
+  }
+
+  const offered = ACTIONS.filter((a) => actions.data.allowed[a.capability] !== 'OFF');
+  const history = actions.data.items;
+  if (offered.length === 0 && history.length === 0) return <></>;
+
+  return (
+    <Section
+      title="Something wrong with the delivery?"
+      subtitle="What you can ask for is set by the seller. Some of it happens straight away; some goes to them first."
+    >
+      <Card>
+        <CardBody>
+          {offered.length === 0 ? (
+            <p className="text-text-muted text-sm">
+              The seller has not enabled any of these for your store.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {offered.map((a) => {
+                const waits = actions.data.allowed[a.capability] === 'ASK_SELLER';
+                return (
+                  <div key={a.kind} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      onClick={() => {
+                        setError(null);
+                        setReason('');
+                        setAsking(a);
+                      }}
+                    >
+                      {a.label}
+                    </Button>
+                    <span className="text-text-muted text-xs">
+                      {waits
+                        ? 'The seller approves this one before anything happens'
+                        : 'Happens as soon as you ask'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {history.length > 0 ? (
+            <div className="mt-4">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>What you asked</Th>
+                    <Th>When</Th>
+                    <Th>Where it got to</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {history.map((r) => (
+                    <Tr key={r.id}>
+                      <Td>
+                        <div>{actionLabel(r.action)}</div>
+                        <div className="text-text-faint text-xs">{r.reason}</div>
+                      </Td>
+                      <Td className="text-text-muted text-xs">{when(r.createdAt)}</Td>
+                      <Td>
+                        <DeliveryActionStatusBadge status={r.status} />
+                        {r.decisionNote !== null ? (
+                          <div className="text-text-muted mt-1 text-xs">
+                            They said: “{r.decisionNote}”
+                          </div>
+                        ) : null}
+                        {r.executionError !== null ? (
+                          <div className="text-critical mt-1 text-xs">{r.executionError}</div>
+                        ) : null}
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
+          ) : null}
+        </CardBody>
+      </Card>
+
+      <Modal
+        open={asking !== null}
+        onOpenChange={(open) => {
+          if (!open) setAsking(null);
+        }}
+        title={asking?.label ?? ''}
+        description={
+          asking === null
+            ? undefined
+            : actions.data.allowed[asking.capability] === 'ASK_SELLER'
+              ? 'The seller sees this and decides. Nothing happens to the parcel until they answer.'
+              : 'This is carried out as soon as you send it.'
+        }
+      >
+        <div className="space-y-4">
+          <FormField
+            label="What happened"
+            htmlFor="action-reason"
+            hint="At least a sentence — a person reads this before acting on it."
+            required
+          >
+            <Textarea
+              id="action-reason"
+              rows={4}
+              maxLength={2000}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={asking?.ask ?? ''}
+            />
+          </FormField>
+          {error !== null ? (
+            <p role="alert" className="text-critical text-sm">
+              {error}
+            </p>
+          ) : null}
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setAsking(null)}
+              disabled={submit.isPending}
+            >
+              Never mind
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => void send()}
+              disabled={submit.isPending}
+            >
+              {submit.isPending ? 'Sending…' : 'Send it'}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+    </Section>
   );
 }
 

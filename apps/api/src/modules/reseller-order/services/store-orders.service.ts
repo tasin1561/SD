@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   ActorType,
   OrderCancellationReason,
@@ -7,12 +7,14 @@ import {
   PaymentMode,
   Prisma,
   ResellerStockMode,
+  ResellerStoreActionMode,
   SellerStoreKind,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
+import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 /** One of a reseller store's orders in its list. The store sees its own customers in full. */
@@ -129,6 +131,7 @@ export class StoreOrdersService {
     private readonly catalog: CatalogReadService,
     private readonly orderRead: OrderReadService,
     private readonly orderWrite: OrderWriteService,
+    private readonly policies: ResellerStoreActionPolicyService,
   ) {}
 
   async list(
@@ -362,6 +365,30 @@ export class StoreOrdersService {
     if (order === null) {
       throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
     }
+
+    // The seller's policy for this store decides whether it may call its
+    // own orders off (2026-09-16). This path PREDATES the policy and
+    // gated on the permission alone, so a seller could set cancel to OFF
+    // and watch the store keep cancelling — a switch that silently does
+    // nothing, which is the failure the whole switchboard exists to
+    // avoid. Checked AFTER ownership, so an order that is not this
+    // store's stays a 404 that says nothing about whether it exists.
+    //
+    // ASK_SELLER refuses for the same reason the other pre-parcel
+    // capabilities do: a held request needs somewhere to live, and the
+    // delivery-action queue's rows require a shipment that an unpacked
+    // order has not got.
+    const policy = await this.policies.forStore(user.storeId);
+    if (policy.cancel !== ResellerStoreActionMode.DIRECT) {
+      throw new ForbiddenException({
+        code: 'STORE_ACTION_NOT_ALLOWED',
+        message:
+          policy.cancel === ResellerStoreActionMode.OFF
+            ? 'The seller has not enabled cancelling for this store. Ask them to call the order off.'
+            : 'The seller calls orders off for this store. Ask them to do it.',
+      });
+    }
+
     await this.orderWrite.cancelBySeller({
       sellerId: order.sellerId,
       orderId: order.id,

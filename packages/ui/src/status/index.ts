@@ -36,6 +36,7 @@ import {
   ResellerStoreStatus,
   ResellerCreditStatus,
   StoreWalletEntryDirection,
+  DeliveryActionStatus,
 } from '@skydrop/db';
 
 export const STATUS_KINDS = [
@@ -458,6 +459,61 @@ export function resellerStoreStatusKind(status: ResellerStoreStatus): StatusKind
 }
 
 /** The words a person reads for each reseller store status. */
+/**
+ * What became of something a reseller store asked for on a live order
+ * (2026-09-16) — a call to its customer, another delivery attempt, or
+ * the parcel back.
+ *
+ * Here rather than as a colour map inside the portal's order screen: the
+ * same five states are read by the store on its own page and by the
+ * seller on their approval queue, and two tables would eventually
+ * disagree about which of them is good news.
+ */
+export function deliveryActionStatusKind(status: DeliveryActionStatus): StatusKind {
+  switch (status) {
+    // Nothing has happened yet — the seller has not answered.
+    case DeliveryActionStatus.PENDING:
+      return 'pending';
+    // Said yes; the doing of it follows.
+    case DeliveryActionStatus.APPROVED:
+      return 'confirmed';
+    case DeliveryActionStatus.EXECUTED:
+      return 'delivered';
+    // A person said no. Neutral rather than red: a considered refusal is
+    // not a malfunction, and the reason is shown beside it.
+    case DeliveryActionStatus.REJECTED:
+      return 'cancelled';
+    // Somebody said yes and it could not be carried out — the one state
+    // here that needs a human, so the one that is red.
+    case DeliveryActionStatus.FAILED:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled DeliveryActionStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** The same five states in the words the store and the seller read. */
+export function deliveryActionStatusLabel(status: DeliveryActionStatus): string {
+  switch (status) {
+    case DeliveryActionStatus.PENDING:
+      return 'Waiting on the seller';
+    case DeliveryActionStatus.APPROVED:
+      return 'Approved';
+    case DeliveryActionStatus.REJECTED:
+      return 'Declined';
+    case DeliveryActionStatus.EXECUTED:
+      return 'Done';
+    case DeliveryActionStatus.FAILED:
+      return 'Could not be done';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled DeliveryActionStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
 export function resellerStoreStatusLabel(status: ResellerStoreStatus): string {
   switch (status) {
     case ResellerStoreStatus.PENDING_SELLER_APPROVAL:

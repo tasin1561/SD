@@ -119,7 +119,20 @@ describe('store permission surface (RS-2)', () => {
     // release the SELLER's stock and our warehouse for a customer, which
     // is a different act from managing a setting, so neither is folded
     // into a `.manage` key or a view one.
-    const WRITE_KEYS_NOT_MANAGE = new Set(['terms.accept', 'orders.create', 'orders.cancel']);
+    // 2026-09-16 adds a fourth, argued for the same way: `orders.actions`
+    // asks for something to be DONE about a live parcel — the customer
+    // rung again, another delivery attempt, the parcel sent back. It is
+    // not a setting being managed, and folding it into `orders.cancel`
+    // would be wrong in both directions: calling off an unpacked order
+    // costs nothing, while these reach our call centre or the courier.
+    // Whether a given store may actually do it is the SELLER's policy per
+    // store; this key only says who at the store may ask.
+    const WRITE_KEYS_NOT_MANAGE = new Set([
+      'terms.accept',
+      'orders.create',
+      'orders.cancel',
+      'orders.actions',
+    ]);
     const loose = HANDLERS.filter(
       (h) =>
         h.method !== 'Get' &&

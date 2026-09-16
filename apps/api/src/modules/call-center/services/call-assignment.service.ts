@@ -155,10 +155,17 @@ export interface PulledAssignment {
    * to disagree.
    */
   callPurpose: {
-    kind: 'CONFIRMATION' | 'SELLER_REQUESTED' | 'DELIVERY_FOLLOW_UP';
+    kind: 'CONFIRMATION' | 'SELLER_REQUESTED' | 'STORE_REQUESTED' | 'DELIVERY_FOLLOW_UP';
     /** What to say first, in the agent's own language. */
     headline: string;
-    /** The seller's own words when they asked for this call. */
+    /**
+     * The words of whoever asked for this call — the seller, or the
+     * reseller store that sold the order (2026-09-16).
+     *
+     * One field rather than two: the agent reads it under "They told
+     * us", and who "they" are is already the headline's job. The KIND is
+     * what tells a screen (or a later report) which it was.
+     */
     sellerAsked: string | null;
     /**
      * The ticket this call ANSWERS, when there is one.
@@ -387,12 +394,21 @@ export class CallAssignmentService {
     orderStatus: OrderStatus | null,
     queueReason: CallQueueReason,
   ): Promise<PulledAssignment['callPurpose']> {
-    if (queueReason === CallQueueReason.SELLER_ASKED) {
+    // Who asked decides what the agent opens with. A store's customer
+    // bought from the STORE and has never heard of the seller, so being
+    // told "the seller asked us to ring you" is a different — and
+    // wrong — conversation.
+    if (
+      queueReason === CallQueueReason.SELLER_ASKED ||
+      queueReason === CallQueueReason.STORE_ASKED
+    ) {
+      const byStore = queueReason === CallQueueReason.STORE_ASKED;
       const asked = await this.prisma.client.orderDeliveryActionRequest.findFirst({
         where: {
           orderId,
           action: DeliveryActionKind.RECALL,
           status: { in: [DeliveryActionStatus.EXECUTED, DeliveryActionStatus.APPROVED] },
+          ...(byStore ? { resellerStoreId: { not: null } } : {}),
         },
         orderBy: { createdAt: 'desc' },
         // `executionRef` is the ticket the recall raised — precisely the
@@ -401,8 +417,10 @@ export class CallAssignmentService {
       });
       if (asked !== null) {
         return {
-          kind: 'SELLER_REQUESTED',
-          headline: 'The seller asked us to call this customer',
+          kind: byStore ? 'STORE_REQUESTED' : 'SELLER_REQUESTED',
+          headline: byStore
+            ? 'The store that sold this asked us to call the customer'
+            : 'The seller asked us to call this customer',
           sellerAsked: asked.reason,
           ticketId: asked.executionRef,
         };

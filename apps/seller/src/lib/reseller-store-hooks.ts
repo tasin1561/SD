@@ -93,7 +93,106 @@ export interface CreateResellerStoreInput {
   readonly invite: InviteInput;
 }
 
+/**
+ * 2026-09-16 — what a store may do on its own, per capability, and the
+ * asks that are waiting on this seller because their policy said so.
+ */
+export type StoreActionMode = 'OFF' | 'ASK_SELLER' | 'DIRECT';
+
+export const ACTION_CAPABILITIES = [
+  'recall',
+  'addressFix',
+  'cancel',
+  'callCapDecision',
+  'chaseSkydrop',
+  'reattempt',
+  'sendBack',
+] as const;
+
+export type ActionCapability = (typeof ACTION_CAPABILITIES)[number];
+
+export type StoreActionPolicy = Readonly<Record<ActionCapability, StoreActionMode>> & {
+  readonly storeId: string;
+  /** False when the store is still running on the defaults. */
+  readonly set: boolean;
+  readonly updatedAt: string | null;
+};
+
+export interface StoreActionRequestRow {
+  readonly id: string;
+  readonly action: 'RECALL' | 'REATTEMPT' | 'RTO';
+  readonly reason: string;
+  readonly createdAt: string;
+  readonly order: { readonly orderNumber: string; readonly recipientName: string } | null;
+  readonly resellerStore: { readonly id: string; readonly name: string } | null;
+}
+
 const KEY = ['seller-reseller-stores'] as const;
+const ACTION_KEY = ['seller-store-action-requests'] as const;
+
+export function useStoreActionPolicy(storeId: string): UseQueryResult<StoreActionPolicy> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...KEY, storeId, 'action-policy'],
+    queryFn: () =>
+      client.request<StoreActionPolicy>(`/api/seller/reseller-stores/${storeId}/action-policy`),
+    enabled: storeId !== '',
+  });
+}
+
+export function useSetStoreActionPolicy(): UseMutationResult<
+  StoreActionPolicy,
+  Error,
+  { readonly storeId: string; readonly policy: Record<ActionCapability, StoreActionMode> }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ storeId, policy }) =>
+      client.request<StoreActionPolicy>(`/api/seller/reseller-stores/${storeId}/action-policy`, {
+        method: 'PUT',
+        body: policy,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+/**
+ * What the seller's stores are waiting on. Empty when nothing is.
+ *
+ * `enabled` exists for the nav count: the shell renders on EVERY page,
+ * and this endpoint needs `stores.manage`. Asked unconditionally, every
+ * seller without that permission would fire a 403 on every page they
+ * open — a red herring in the logs and a request nobody wanted.
+ */
+export function useStoreActionRequests(
+  options: { readonly enabled?: boolean } = {},
+): UseQueryResult<readonly StoreActionRequestRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ACTION_KEY,
+    queryFn: () =>
+      client.request<readonly StoreActionRequestRow[]>('/api/seller/store-action-requests'),
+    enabled: options.enabled ?? true,
+  });
+}
+
+export function useDecideStoreAction(): UseMutationResult<
+  unknown,
+  Error,
+  { readonly requestId: string; readonly approve: boolean; readonly note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, approve, note }) =>
+      client.request(
+        `/api/seller/store-action-requests/${requestId}/${approve ? 'approve' : 'reject'}`,
+        { method: 'POST', body: note === undefined || note === '' ? {} : { note } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ACTION_KEY }),
+  });
+}
 
 export function useResellerStores(enabled = true): UseQueryResult<readonly ResellerStoreView[]> {
   const client = useApiClient();

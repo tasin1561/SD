@@ -52,6 +52,20 @@ export type CourierCallTrigger =
       readonly kind: 'SELLER';
       readonly sellerId: string;
       readonly sellerUserId?: string | null | undefined;
+    }
+  /**
+   * A RESELLER STORE asked for it, about an order it sold (2026-09-16).
+   *
+   * Its own kind for exactly the reason SELLER is not folded into
+   * OPERATOR: "the store decided to send this back" and "the seller
+   * decided to" are different facts, and the store is the one the
+   * customer will ring about it. `storeUserId` is the person at the
+   * store; null for a store API key.
+   */
+  | {
+      readonly kind: 'STORE';
+      readonly storeId: string;
+      readonly storeUserId?: string | null | undefined;
     };
 
 export interface CourierCredentialActor {
@@ -90,6 +104,18 @@ export const courierActor = {
       trigger: { kind: 'SELLER', sellerId, sellerUserId },
     };
   },
+  /**
+   * A reseller store acting on an order it sold. `id` is the STORE, so
+   * the audit row keys on the business that asked — not on the seller
+   * whose goods they are, and not on the person who happened to click.
+   */
+  store(storeId: string, storeUserId: string | null): CourierCredentialActor {
+    return {
+      type: ActorType.STORE,
+      id: storeId,
+      trigger: { kind: 'STORE', storeId, storeUserId },
+    };
+  },
 } as const;
 
 /** Flattened for the audit row's metadata — one shape, whatever the branch. */
@@ -119,6 +145,14 @@ export function describeTrigger(trigger: CourierCallTrigger | undefined): {
           trigger.sellerUserId == null
             ? trigger.sellerId
             : `${trigger.sellerId}:${trigger.sellerUserId}`,
+      };
+    case 'STORE':
+      return {
+        triggerKind: 'STORE',
+        triggerDetail:
+          trigger.storeUserId == null
+            ? trigger.storeId
+            : `${trigger.storeId}:${trigger.storeUserId}`,
       };
   }
 }

@@ -146,6 +146,20 @@ export const STORE_PERMISSIONS = [
     group: 'Orders',
   },
   {
+    // 2026-09-16 — asking for something to be DONE about a live order:
+    // ring the customer again, try delivering again, send it back.
+    // Separate from `orders.cancel` because calling an order off before
+    // it is packed costs nothing, while these reach our call centre or
+    // the courier. What the store may actually do with it is the
+    // SELLER's policy per store (`reseller_store_action_policy`) — this
+    // key only says who at the store may ask.
+    key: 'orders.actions',
+    label: 'Act on live orders',
+    description:
+      'Ask for the customer to be called again, for another delivery attempt, or for a parcel to be sent back. What goes straight through and what waits for the seller is the seller’s setting.',
+    group: 'Orders',
+  },
+  {
     key: 'customers.view',
     label: 'See customers',
     description: 'The people this store has sold to — names, phone numbers, emails.',
@@ -256,6 +270,9 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
       'orders.view',
       'orders.create',
       'orders.cancel',
+      // 2026-09-16 — ops is who rings a customer back and who asks for a
+      // parcel to be tried again; this is their daily work.
+      'orders.actions',
       'customers.view',
       // RS-7. Also granted to existing ops roles by the 250000 migration.
       'tickets.view',

@@ -68,6 +68,10 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   // Setting a store's auto-pause rule needs stores.manage, gated in the page.
   ['/reseller-stores/reports', 'stores.reports'],
   ['/reseller-stores/stock-forecast', 'stores.reports'],
+  // 2026-09-16 — the asks a store's policy sent to the seller to decide
+  // (@Controller seller/store-action-requests). Deciding is the same
+  // authority as the rest of running a store, so the same permission.
+  ['/reseller-stores/requests', 'stores.manage'],
   ['/reseller-stores', 'stores.manage'], // @Controller seller/reseller-stores
   ['/team/roles', 'roles.manage'],
   ['/team', 'team.view'],

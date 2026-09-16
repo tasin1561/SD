@@ -53,9 +53,13 @@ export interface PulledAssignment {
    * because it is what the agent's opening line depends on.
    */
   readonly callPurpose: {
-    readonly kind: 'CONFIRMATION' | 'SELLER_REQUESTED' | 'DELIVERY_FOLLOW_UP';
+    readonly kind: 'CONFIRMATION' | 'SELLER_REQUESTED' | 'STORE_REQUESTED' | 'DELIVERY_FOLLOW_UP';
     readonly headline: string;
-    /** The seller's own words when they asked for this call. */
+    /**
+     * The words of whoever asked — the seller, or the reseller store that
+     * sold the order (2026-09-16). The kind says which; the banner reads
+     * this under "They told us".
+     */
     readonly sellerAsked: string | null;
     /** The ticket this call answers, when there is one. */
     readonly ticketId: string | null;

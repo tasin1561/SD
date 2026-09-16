@@ -1542,6 +1542,122 @@ Keep the global default FALSE until that run is clean.
   rules, refused refund, transfer-price cap, store-scoped open); the RS-7
   case in `tenant-isolation.e2e-spec.ts`.
 
+## Store actions as built (2026-09-16)
+
+The owner: "give all of this access to the store directly but the seller can
+select which should go directly and which by approving the seller." So a
+reseller store can act on its own live orders, and the seller holds a
+switchboard — per store, per capability.
+
+### The policy
+
+`reseller_store_action_policy`, one row per store, owned by the SELLER — the
+same shape as `reseller_store_auto_pause`, and for the same reason: a rule
+about one store that only its seller may set. Seven columns, each
+`OFF | ASK_SELLER | DIRECT`:
+
+| Capability | Default | What DIRECT means |
+|---|---|---|
+| `recall` | DIRECT | our call centre rings the customer again |
+| `addressFix` | DIRECT | the store corrects its own consignee before confirmation |
+| `cancel` | DIRECT | the store calls the order off (what it could already do) |
+| `callCapDecision` | DIRECT | the store answers "keep trying or give up" |
+| `chaseSkydrop` | DIRECT | the store raises an issue WITH US |
+| `reattempt` | ASK_SELLER | the store asks; **Skydrop still carries it out** |
+| `sendBack` | ASK_SELLER | the store asks; **Skydrop still carries it out** |
+
+**A missing row is the defaults**, not a refusal — `DEFAULT_POLICY` in the
+service and the column defaults in the migration must agree, and the spec
+reads the migration file to check. `cancel` defaults DIRECT deliberately:
+stores already hold `orders.cancel`, and a table that read an absent row as
+OFF would have taken it away from every store silently.
+
+**ASK_SELLER is a refusal for four of the seven.** A held request needs
+somewhere to live, and `order_delivery_action_requests` rows require a
+shipment — which an unpacked order has not got. Rather than invent a second
+request table late in the build, `addressFix`, `callCapDecision`,
+`chaseSkydrop` and `cancel` refuse ASK_SELLER by name and say who does it
+instead. Two of them would not want an approval anyway: the call-cap answer
+is already the seller's, and an approval step on a complaint about US would
+let a seller suppress it. The address fix is the one with a genuine approval
+shape, and it is recorded as a follow-up.
+
+### Endpoints
+
+| Who | Route | Gate |
+|---|---|---|
+| Seller | `GET|PUT /seller/reseller-stores/:storeId/action-policy` | `stores.manage` |
+| Seller | `GET /seller/store-action-requests` · `POST :id/approve` · `POST :id/reject` | `stores.manage` |
+| Store | `GET|POST /store/orders/:orderId/actions` | `orders.actions` |
+| Store | `PATCH /store/orders/:orderId/recipient` | `orders.actions` |
+| Store | `GET|PATCH /store/call-reviews[/:reviewId]` | `orders.actions` |
+| Store | `POST /store/issues` | `tickets.manage` |
+
+New store permission: **`orders.actions`** — asking for something to be DONE
+about a live parcel. Deliberately not folded into `orders.cancel` (calling off
+an unpacked order costs nothing; these reach our call centre or a courier) and
+named in `store-permission-surface.spec.ts`'s `WRITE_KEYS_NOT_MANAGE` with that
+argument. Held by the `ops` role by default.
+
+### Attribution — a store's action is the STORE's
+
+Everywhere it could have read as the seller's, it does not: `courierActor.store`
+on the credential decrypt (so "who told Delhivery to turn this round" answers
+the store), the ticket's `storeId`/`openedByStoreUserId` with an
+`ActorType.STORE` opening event, `CallQueueReason.STORE_ASKED` so the call agent
+is told the store asked — their customer has never heard of the seller — and
+`store.delivery_action.requested` on the audit row.
+
+### The seller's queue
+
+Only asks the seller's own policy marked ASK_SELLER stop there. The claim is a
+guarded `updateMany` on (PENDING, needs the seller, this seller's), so two tabs
+open on the queue cannot both decide one request. The seller's answer lands in
+`decided_by_seller_user_id` / `seller_decided_at`, never the staff columns.
+Approving calls `DeliveryActionService.runApproved`, which runs the SAME three
+execution paths a direct ask uses. Rejecting requires a reason — the store has a
+customer waiting on the answer.
+
+### Telling each side
+
+The store has **no inbox**, so it hears by email only:
+`store.action_approved.email` / `store.action_rejected.email`, sent to the store
+users who may act on orders. The seller hears in-app, addressed by permission
+(NOTIF-10), when something is waiting on them. Neither notifier throws.
+
+### Screens
+
+apps/reseller: an actions panel on the order page — a capability set to OFF
+renders no button at all, one set to ASK_SELLER says the seller will be asked,
+and the history reads through the shared `DeliveryActionStatusBadge`.
+apps/seller: a "What they can do" tab per store, and `/reseller-stores/requests`
+with a count on the nav item — an approval queue nobody looks at holds a store's
+customer waiting.
+
+### Migrations
+
+`20260916000000_reseller_store_action_policy` (the policy table, the
+`reseller_store_action_mode` enum, the store and seller-decider columns on
+`order_delivery_action_requests`, and `call_queue_reason` += `store_asked`) and
+`20260916010000_store_issue_ticket_type` (`ticket_type` += `store_issue`). Both
+additive; neither writes a row.
+
+### Tests
+
+`reseller-store-action-policy.spec.ts` (defaults, the code-vs-migration
+agreement, scoping, the audit), `store-delivery-action.spec.ts` (OFF refuses,
+DIRECT runs, ASK_SELLER stops and notifies, each action reads its own column),
+`store-orders-cancel-policy.spec.ts` (ownership before policy),
+`store-order-edit.service.spec.ts`, `store-review-decision.service.spec.ts`,
+`store-issue.service.spec.ts`, plus `store-permission-surface.spec.ts` and
+`ticket-notification-plan.spec.ts` extended.
+
+### Not done / recorded
+
+The address fix has no "store asks, seller approves" path — it needs its own
+request row, since the delivery-action queue requires a parcel. No e2e yet
+against a real database. The store still has no inbox.
+
 ## UI audit fixes, 2026-09-15
 
 A UI/UX audit of every reseller-store screen (store portal, the seller's

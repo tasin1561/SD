@@ -275,6 +275,54 @@ export function useCancelStoreOrder(): UseMutationResult<
   });
 }
 
+/** 2026-09-16 — what this store may ask for about a live order. */
+export type StoreActionMode = 'OFF' | 'ASK_SELLER' | 'DIRECT';
+export type StoreActionKind = 'RECALL' | 'REATTEMPT' | 'RTO';
+
+export interface StoreActionRequest {
+  readonly id: string;
+  readonly action: StoreActionKind;
+  readonly reason: string;
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED';
+  readonly decisionNote: string | null;
+  readonly decidedAt: string | null;
+  readonly executedAt: string | null;
+  readonly executionError: string | null;
+  readonly createdAt: string;
+}
+
+export interface StoreOrderActions {
+  readonly items: readonly StoreActionRequest[];
+  /** The seller's policy for this store, per capability. */
+  readonly allowed: Readonly<Record<string, StoreActionMode>>;
+}
+
+export function useStoreOrderActions(orderId: string): UseQueryResult<StoreOrderActions> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...ORDERS, 'actions', orderId],
+    queryFn: () => client.request<StoreOrderActions>(`/api/store/orders/${orderId}/actions`),
+    enabled: orderId !== '',
+  });
+}
+
+export function useRequestStoreAction(): UseMutationResult<
+  { readonly request: StoreActionRequest; readonly awaitingSeller: boolean },
+  Error,
+  { readonly orderId: string; readonly action: StoreActionKind; readonly reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, action, reason }) =>
+      client.request<{ request: StoreActionRequest; awaitingSeller: boolean }>(
+        `/api/store/orders/${orderId}/actions`,
+        { method: 'POST', body: { action, reason } },
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ORDERS }),
+  });
+}
+
 export function useStoreCustomers(query: {
   readonly search?: string;
   readonly page?: number;

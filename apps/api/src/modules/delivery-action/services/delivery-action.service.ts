@@ -85,6 +85,20 @@ export class DeliveryActionService {
     action: DeliveryActionKind;
     reason: string;
     ctx: ClientInfoPayload;
+    /**
+     * Set when a RESELLER STORE is asking, not the seller (2026-09-16).
+     *
+     * The store's own id and user, so the record — and the courier audit
+     * behind a send-back — says the store asked. `needsSellerApproval`
+     * comes from the store's policy and is SNAPSHOTTED on the row: read
+     * live, a policy changed while a request was open would retroactively
+     * decide a question already put.
+     */
+    store?: {
+      readonly storeId: string;
+      readonly storeUserId: string | null;
+      readonly needsSellerApproval: boolean;
+    };
   }): Promise<DeliveryActionRequestView> {
     const reason = input.reason.trim();
     if (reason.length < 10) {
@@ -164,7 +178,10 @@ export class DeliveryActionService {
     // reaches Delhivery directly (CUR-10's seller amendment). So the row
     // is recorded as decided the moment it is asked, and never sits
     // PENDING where nobody is going to look at it.
-    const sellerDecides = true;
+    // A STORE whose seller wants to see it first stops HERE, PENDING.
+    // Everyone else acts at once, as before.
+    const waitsForSeller = input.store?.needsSellerApproval === true;
+    const sellerDecides = !waitsForSeller;
 
     const row = await this.prisma.client.orderDeliveryActionRequest.create({
       data: {
@@ -175,20 +192,39 @@ export class DeliveryActionService {
         action: input.action,
         reason,
         deliveryAttemptId: attempt?.id ?? null,
+        ...(input.store === undefined
+          ? {}
+          : {
+              resellerStoreId: input.store.storeId,
+              needsSellerApproval: input.store.needsSellerApproval,
+            }),
         ...(sellerDecides
           ? {
               status: DeliveryActionStatus.APPROVED,
               decidedAt: new Date(),
-              decisionNote: 'Auto-approved — returning their own parcel is the seller to decide',
+              decisionNote:
+                input.store === undefined
+                  ? 'Auto-approved — returning their own parcel is the seller to decide'
+                  : 'The seller lets this store act on its own orders without asking',
             }
           : {}),
       },
     });
 
     await this.audit.log({
-      actorType: ActorType.SELLER,
+      // The STORE asked, when it did. "The store decided to send this
+      // back" and "the seller did" are different facts, and only one of
+      // them is the seller's to answer for.
+      actorType: input.store === undefined ? ActorType.SELLER : ActorType.STORE,
+      // null, never undefined: a store API key acted with no person
+      // behind it, and the audit row records that as "no actor id"
+      // rather than as an absent field.
+      actorId: input.store?.storeUserId ?? null,
       sellerId: input.sellerId,
-      action: 'seller.delivery_action.requested',
+      action:
+        input.store === undefined
+          ? 'seller.delivery_action.requested'
+          : 'store.delivery_action.requested',
       entityType: 'order_delivery_action_request',
       entityId: row.id,
       // HIGH for RTO: this one reaches Delhivery on the strength of the
@@ -203,11 +239,18 @@ export class DeliveryActionService {
     // an APPROVED request that visibly has not executed and is
     // re-runnable, rather than a parcel turned around or a ticket raised
     // with no record of who asked for it.
+    // Waiting on the seller: the row is the whole of it for now. The
+    // seller's yes runs the same paths below, from their own service.
+    if (waitsForSeller) return this.toView(row);
+
     const who = {
       sellerId: input.sellerId,
       sellerUserId: input.sellerUserId,
       orderId: order.id,
       ctx: input.ctx,
+      ...(input.store === undefined
+        ? {}
+        : { store: { storeId: input.store.storeId, storeUserId: input.store.storeUserId } }),
     };
     if (input.action === DeliveryActionKind.RTO) {
       return this.executeRto(row.id, shipment.id, who);
@@ -236,7 +279,12 @@ export class DeliveryActionService {
     action: DeliveryActionKind,
     reason: string,
     shipment: { id: string; awbNumber: string | null },
-    who: { sellerId: string; sellerUserId: string | null; orderId: string },
+    who: {
+      sellerId: string;
+      sellerUserId: string | null;
+      orderId: string;
+      store?: { storeId: string; storeUserId: string | null };
+    },
   ): Promise<DeliveryActionRequestView> {
     const isRecall = action === DeliveryActionKind.RECALL;
     const ticket = await this.tickets.open(
@@ -264,8 +312,15 @@ export class DeliveryActionService {
         description: reason,
         orderId: who.orderId,
         shipmentId: shipment.id,
+        // RS-7's columns: a store's ticket is the STORE's, so it appears
+        // on their list and reads as their words, not the seller's.
+        ...(who.store === undefined
+          ? {}
+          : { storeId: who.store.storeId, openedByStoreUserId: who.store.storeUserId }),
       },
-      { type: ActorType.SELLER, sellerUserId: who.sellerUserId },
+      who.store === undefined
+        ? { type: ActorType.SELLER, sellerUserId: who.sellerUserId }
+        : { type: ActorType.STORE, storeUserId: who.store.storeUserId },
     );
 
     if (isRecall) {
@@ -276,7 +331,9 @@ export class DeliveryActionService {
         who.orderId,
         new Date(),
         undefined,
-        CallQueueReason.SELLER_ASKED,
+        // The agent is told who wants the customer rung. A store's
+        // customer has never heard of the seller.
+        who.store === undefined ? CallQueueReason.SELLER_ASKED : CallQueueReason.STORE_ASKED,
       );
     } else {
       await this.openCourierConversation(ticket.id, shipment, reason, who.sellerId);
@@ -357,13 +414,21 @@ export class DeliveryActionService {
       sellerUserId: string | null;
       orderId: string;
       ctx: ClientInfoPayload;
+      store?: { storeId: string; storeUserId: string | null };
     },
   ): Promise<DeliveryActionRequestView> {
     try {
       const outcome = await this.courier.cancelWithCourier(
-        courierActor.seller(who.sellerId, who.sellerUserId),
+        // Whoever actually asked. The credential-decrypt audit behind
+        // this call is how "who told Delhivery to turn this parcel
+        // round" is answered months later.
+        who.store === undefined
+          ? courierActor.seller(who.sellerId, who.sellerUserId)
+          : courierActor.store(who.store.storeId, who.store.storeUserId),
         shipmentId,
-        'Seller asked for the parcel to be returned',
+        who.store === undefined
+          ? 'Seller asked for the parcel to be returned'
+          : 'The store that sold it asked for the parcel to be returned',
         who.ctx,
       );
       if (!outcome.success) throw new Error(outcome.message ?? 'Courier refused the cancellation');
@@ -429,7 +494,73 @@ export class DeliveryActionService {
     };
   }
 
-  private toView(r: {
+  /**
+   * Carry out a request somebody has already approved (2026-09-16).
+   *
+   * The seller's approval of a store's ask runs THIS, so an approved
+   * recall and a direct one are the same three paths — there is no
+   * second implementation to drift. The store context comes off the ROW,
+   * not from the caller: by now the person approving is the seller, and
+   * the parcel still belongs to the store's customer.
+   */
+  async runApproved(requestId: string, ctx: ClientInfoPayload): Promise<DeliveryActionRequestView> {
+    const row = await this.prisma.client.orderDeliveryActionRequest.findUnique({
+      where: { id: requestId },
+      select: {
+        id: true,
+        action: true,
+        reason: true,
+        orderId: true,
+        sellerId: true,
+        shipmentId: true,
+        resellerStoreId: true,
+        requestedById: true,
+      },
+    });
+    if (!row) {
+      throw new NotFoundException({
+        code: 'DELIVERY_ACTION_NOT_FOUND',
+        message: 'No such request',
+      });
+    }
+    const shipment = await this.prisma.client.shipment.findUniqueOrThrow({
+      where: { id: row.shipmentId },
+      select: { id: true, awbNumber: true },
+    });
+    const store =
+      row.resellerStoreId === null
+        ? undefined
+        : { storeId: row.resellerStoreId, storeUserId: row.requestedById };
+    const who = {
+      sellerId: row.sellerId,
+      sellerUserId: null,
+      orderId: row.orderId,
+      ctx,
+      ...(store === undefined ? {} : { store }),
+    };
+
+    if (row.action === DeliveryActionKind.RECALL) {
+      await this.prisma.client.$transaction(async (tx) => {
+        await this.executeRecall(tx, row.id, row.orderId, store !== undefined);
+      });
+      const done = await this.prisma.client.orderDeliveryActionRequest.findUniqueOrThrow({
+        where: { id: row.id },
+      });
+      return this.toView(done);
+    }
+    if (row.action === DeliveryActionKind.RTO) {
+      return this.executeRto(row.id, shipment.id, who);
+    }
+    return this.executeAsTicket(row.id, row.action, row.reason, shipment, who);
+  }
+
+  /**
+   * Public since 2026-09-16: the store-facing service lists a store's own
+   * requests and must render them the SAME way, rather than keeping a
+   * second projection that slowly disagrees about what a request looks
+   * like.
+   */
+  toView(r: {
     id: string;
     orderId: string;
     shipmentId: string;
@@ -472,11 +603,22 @@ export class DeliveryActionService {
     tx: Prisma.TransactionClient,
     requestId: string,
     orderId: string,
+    /**
+     * True when a reseller STORE asked (2026-09-16). The agent is told
+     * who wants the customer rung, and a store's customer has never
+     * heard of the seller — so this must not default to SELLER_ASKED.
+     */
+    askedByStore = false,
   ): Promise<void> {
-    // Available immediately: the seller has asked for this call, so it
-    // joins the queue at its FIFO position rather than being deferred
-    // the way a busy-signal retry is.
-    await this.callQueue.enqueueAgain(orderId, new Date(), undefined, CallQueueReason.SELLER_ASKED);
+    // Available immediately: the asker wants this call, so it joins the
+    // queue at its FIFO position rather than being deferred the way a
+    // busy-signal retry is.
+    await this.callQueue.enqueueAgain(
+      orderId,
+      new Date(),
+      undefined,
+      askedByStore ? CallQueueReason.STORE_ASKED : CallQueueReason.SELLER_ASKED,
+    );
     await tx.orderDeliveryActionRequest.update({
       where: { id: requestId },
       data: { status: DeliveryActionStatus.EXECUTED, executedAt: new Date() },

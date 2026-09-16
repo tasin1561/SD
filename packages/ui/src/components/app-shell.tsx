@@ -52,6 +52,15 @@ export type NavItem = {
   readonly label: string;
   /** Rendered at 15px in both the sidebar and the drawer. */
   readonly icon?: ReactNode;
+  /**
+   * A count or pill at the end of the row — "three things are waiting on
+   * you here". Optional and additive, so an app that sets none renders
+   * exactly as before.
+   *
+   * The app owns what it says; the shell only gives it a place to sit,
+   * pushed right so a row without one is unchanged.
+   */
+  readonly badge?: ReactNode;
 };
 
 export type NavGroup = {
@@ -165,6 +174,9 @@ function NavLinks({
                   </span>
                 )}
                 <span className="truncate">{item.label}</span>
+                {item.badge !== undefined && (
+                  <span className="ml-auto shrink-0 pl-2">{item.badge}</span>
+                )}
               </Link>
             );
           })}

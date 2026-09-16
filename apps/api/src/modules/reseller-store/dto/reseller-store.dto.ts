@@ -12,7 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ResellerWalletManager } from '@skydrop/db';
+import { ResellerStoreActionMode, ResellerWalletManager } from '@skydrop/db';
 import { STORE_ROLE_KEYS, type StoreRoleKey } from '../../../common/auth/store-permissions';
 
 /** E.164, the only phone shape stored anywhere (General rule 2). */
@@ -121,6 +121,47 @@ export class SetWalletManagerDto {
   @ApiProperty({ enum: ResellerWalletManager })
   @IsEnum(ResellerWalletManager)
   walletManagedBy!: ResellerWalletManager;
+}
+
+/**
+ * What the store may do about an order on its own (2026-09-16).
+ *
+ * Every capability is REQUIRED: a save states the whole policy, so there
+ * is no question of what an absent field meant — the screen sends what it
+ * showed. For `reattempt` and `sendBack`, DIRECT means the store may ask
+ * without the seller; the Skydrop operator gate (CUR-10) stays either way.
+ */
+export class SetStoreActionPolicyDto {
+  @ApiProperty({ enum: ResellerStoreActionMode, description: 'Phone the customer again' })
+  @IsEnum(ResellerStoreActionMode)
+  recall!: ResellerStoreActionMode;
+
+  @ApiProperty({
+    enum: ResellerStoreActionMode,
+    description: 'Correct the address before confirmation',
+  })
+  @IsEnum(ResellerStoreActionMode)
+  addressFix!: ResellerStoreActionMode;
+
+  @ApiProperty({ enum: ResellerStoreActionMode, description: 'Call the order off' })
+  @IsEnum(ResellerStoreActionMode)
+  cancel!: ResellerStoreActionMode;
+
+  @ApiProperty({ enum: ResellerStoreActionMode, description: 'Answer the call-cap review' })
+  @IsEnum(ResellerStoreActionMode)
+  callCapDecision!: ResellerStoreActionMode;
+
+  @ApiProperty({ enum: ResellerStoreActionMode, description: 'Raise it with Skydrop' })
+  @IsEnum(ResellerStoreActionMode)
+  chaseSkydrop!: ResellerStoreActionMode;
+
+  @ApiProperty({ enum: ResellerStoreActionMode, description: 'Ask the courier to try again' })
+  @IsEnum(ResellerStoreActionMode)
+  reattempt!: ResellerStoreActionMode;
+
+  @ApiProperty({ enum: ResellerStoreActionMode, description: 'Send it back' })
+  @IsEnum(ResellerStoreActionMode)
+  sendBack!: ResellerStoreActionMode;
 }
 
 export class UpdateStoreProfileDto {
