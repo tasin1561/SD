@@ -9,7 +9,7 @@ import { AppShell, MenuButton, Toaster, type NavGroup } from '@skydrop/ui/compon
 import { RestrictionBanner } from './restriction-banner';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { canSeePath } from '@/lib/page-access';
-import { useStoreActionRequests } from '@/lib/reseller-store-hooks';
+import { useStoreRequestCount } from '@/lib/reseller-store-hooks';
 import { quickActionsFor } from '@/lib/quick-actions';
 import {
   AlertTriangle,
@@ -73,9 +73,14 @@ export function AuthedShell({
   // answer. Asked ONLY when they hold the permission the endpoint needs:
   // the shell renders on every page, so an unconditional call would fire
   // a 403 on every page view for every seller who does not run stores.
+  //
+  // BOTH queues, counted by the server. This read the delivery-ask list's
+  // length until the address-correction queue landed beside it, so a
+  // store asking for a wrong address to be fixed badged nothing and the
+  // parcel kept going where the store had already said it should not.
   const canSeeRequests = canSeePath(identity, '/reseller-stores/requests');
-  const waiting = useStoreActionRequests({ enabled: canSeeRequests });
-  const waitingCount = waiting.data?.length ?? 0;
+  const waiting = useStoreRequestCount({ enabled: canSeeRequests });
+  const waitingCount = waiting.data?.total ?? 0;
 
   const navGroups: NavGroup[] = [
     {

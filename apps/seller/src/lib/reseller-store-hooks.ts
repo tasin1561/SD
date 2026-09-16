@@ -131,6 +131,39 @@ export interface StoreActionRequestRow {
 const KEY = ['seller-reseller-stores'] as const;
 const ACTION_KEY = ['seller-store-action-requests'] as const;
 const ADDRESS_KEY = ['seller-store-address-changes'] as const;
+const COUNT_KEY = ['seller-store-requests', 'count'] as const;
+
+/** Both queues that stop at the seller, added up by the server. */
+export interface StoreRequestCount {
+  readonly total: number;
+  readonly actions: number;
+  readonly addressChanges: number;
+}
+
+/**
+ * How many things the stores are waiting on — for the nav badge.
+ *
+ * ONE number from the server, not the two lists summed here. The shell
+ * renders on EVERY page, so summing lists would pull up to 400 rows with
+ * their includes on every page view to read two lengths; and two round
+ * trips that disagree is how a badge comes to show a number the screen
+ * does not. It also counted only the delivery asks until 2026-09-16, so
+ * an address correction waiting on the seller showed nothing at all.
+ *
+ * `enabled` for the same reason as the two list hooks: this needs
+ * `stores.manage`, and asked unconditionally it would 403 on every page
+ * view for every seller who does not run reseller stores.
+ */
+export function useStoreRequestCount(
+  options: { readonly enabled?: boolean } = {},
+): UseQueryResult<StoreRequestCount> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: COUNT_KEY,
+    queryFn: () => client.request<StoreRequestCount>('/api/seller/store-requests/count'),
+    enabled: options.enabled ?? true,
+  });
+}
 
 export function useStoreActionPolicy(storeId: string): UseQueryResult<StoreActionPolicy> {
   const client = useApiClient();
@@ -192,7 +225,12 @@ export function useDecideStoreAction(): UseMutationResult<
         `/api/seller/store-action-requests/${requestId}/${approve ? 'approve' : 'reject'}`,
         { method: 'POST', body: note === undefined || note === '' ? {} : { note } },
       ),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ACTION_KEY }),
+    // The badge is one of the two things that just changed. Left stale,
+    // it keeps pointing at a queue the person has already emptied.
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ACTION_KEY });
+      void qc.invalidateQueries({ queryKey: COUNT_KEY });
+    },
   });
 }
 
@@ -294,6 +332,7 @@ export function useDecideStoreAddressChange(): UseMutationResult<
     // own view of that order is stale the moment this returns.
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ADDRESS_KEY });
+      void qc.invalidateQueries({ queryKey: COUNT_KEY });
       void qc.invalidateQueries({ queryKey: ['seller-orders'] });
     },
   });

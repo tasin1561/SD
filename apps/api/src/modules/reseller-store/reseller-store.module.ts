@@ -10,9 +10,11 @@ import { OrderModule } from '../order/order.module';
 import { AdminResellerStoreController } from './controllers/admin-reseller-store.controller';
 import { SellerResellerStoreController } from './controllers/seller-reseller-store.controller';
 import { SellerStoreActionPolicyController } from './controllers/seller-store-action-policy.controller';
+import { SellerStoreRequestCountController } from './controllers/seller-store-request-count.controller';
 import { StoreProfileController } from './controllers/store-profile.controller';
 import { StoreTeamController } from './controllers/store-team.controller';
 import { ResellerStoreActionPolicyService } from './services/reseller-store-action-policy.service';
+import { SellerStoreRequestCountService } from './services/seller-store-request-count.service';
 import { ResellerStoreNotifier } from './services/reseller-store-notifier.service';
 import { ResellerStoreService } from './services/reseller-store.service';
 import { StoreProfileService } from './services/store-profile.service';
@@ -39,6 +41,10 @@ import { StoreTeamService } from './services/store-team.service';
   controllers: [
     SellerResellerStoreController,
     SellerStoreActionPolicyController,
+    // 2026-09-16 — the nav badge's ONE number: both queues that stop at
+    // the seller, counted here because this module is the one BOTH of
+    // them already import and it imports neither back (see the service).
+    SellerStoreRequestCountController,
     AdminResellerStoreController,
     StoreProfileController,
     StoreTeamController,
@@ -46,6 +52,7 @@ import { StoreTeamService } from './services/store-team.service';
   providers: [
     ResellerStoreService,
     ResellerStoreActionPolicyService,
+    SellerStoreRequestCountService,
     StoreTeamService,
     StoreProfileService,
     ResellerStoreNotifier,
