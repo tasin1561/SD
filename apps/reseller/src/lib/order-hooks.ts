@@ -185,7 +185,16 @@ export interface UpdateStoreWebhookInput {
   readonly isActive?: boolean;
 }
 
-const ORDERS = ['store-orders'] as const;
+/**
+ * Exported because more than one file now writes something that changes
+ * an order: the call-cap answer (`review-hooks`) rejects the order or
+ * puts it back in the call queue, so it has to be able to say "the
+ * orders you are holding are stale" without restating the key here and
+ * there. A restated key drifts, and a drifted key reads as a screen that
+ * never updates.
+ */
+export const STORE_ORDERS_KEY = ['store-orders'] as const;
+const ORDERS = STORE_ORDERS_KEY;
 const CUSTOMERS = ['store-customers'] as const;
 const KEYS = ['store-api-keys'] as const;
 const WEBHOOKS = ['store-webhooks'] as const;

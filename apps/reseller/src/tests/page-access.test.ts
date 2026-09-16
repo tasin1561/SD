@@ -50,6 +50,18 @@ describe('reseller page access', () => {
     expect(canSeePath({ permissions: ['orders.view'] }, '/integrations')).toBe(false);
   });
 
+  it('gates the call-cap queue on the permission that ANSWERS it, not on reading orders', () => {
+    // 2026-09-16. The page exists to be acted on and its own endpoints
+    // (GET/PATCH /store/call-reviews) need orders.actions, so somebody
+    // who can only READ orders must not be shown a queue every row of
+    // which refuses them. The longer entry wins over '/orders'.
+    expect(permissionForPath('/orders/call-reviews')).toBe('orders.actions');
+    expect(canSeePath({ permissions: ['orders.view'] }, '/orders/call-reviews')).toBe(false);
+    expect(canSeePath({ permissions: ['orders.actions'] }, '/orders/call-reviews')).toBe(true);
+    // And it does not drag the ordinary orders list up with it.
+    expect(canSeePath({ permissions: ['orders.view'] }, '/orders')).toBe(true);
+  });
+
   it('RS-4: the terms page opens on terms.view (every role has it)', () => {
     expect(permissionForPath('/terms')).toBe('terms.view');
     expect(canSeePath({ permissions: ['terms.view'] }, '/terms')).toBe(true);

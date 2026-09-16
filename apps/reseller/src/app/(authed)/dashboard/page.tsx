@@ -52,8 +52,10 @@ const SHORTCUTS: readonly Shortcut[] = [
   },
   {
     href: '/tickets',
-    label: 'Disputes',
-    hint: 'Problems raised with your seller',
+    label: 'Tickets',
+    // Two different conversations live behind this one link, and which
+    // one a person wants decides what they say — so both are named.
+    hint: 'Problems raised with your seller, or with Skydrop',
     permission: 'tickets.view',
   },
 ];

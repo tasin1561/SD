@@ -27,6 +27,12 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   // call, a re-attempt or a return needs orders.actions (2026-09-16) —
   // both gated in the page's own code, not by this entry.
   ['/orders', 'orders.view'],
+  // 2026-09-16 — "we could not reach your customer; keep trying or give
+  // the stock back". Gated on the permission that ANSWERS it rather than
+  // the one that reads orders: the page exists to be acted on, and its
+  // own endpoints (GET/PATCH /store/call-reviews) need orders.actions.
+  // The longer entry wins over '/orders' above.
+  ['/orders/call-reviews', 'orders.actions'],
   ['/orders/new', 'orders.create'], // POST /store/orders (the picker reads the catalogue)
   ['/orders/import', 'orders.create'], // /store/order-imports/*
   ['/customers', 'customers.view'], // GET /store/customers

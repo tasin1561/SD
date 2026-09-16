@@ -97,6 +97,29 @@ export function useRaiseStoreDispute(): UseMutationResult<
   });
 }
 
+/**
+ * 2026-09-16 — raising something with SKYDROP about one of this store's
+ * orders: damaged in our hands, lost, or sitting in our warehouse.
+ *
+ * Its own endpoint and its own mutation rather than a flag on the
+ * dispute above, because the two are different acts and only one of them
+ * involves the seller. It lands in the same list, which is why the list
+ * says which kind each thread is (`storeTicketKind`).
+ */
+export function useRaiseStoreSkydropIssue(): UseMutationResult<
+  StoreTicketView,
+  Error,
+  { readonly orderId: string; readonly subject: string; readonly description?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<StoreTicketView>('/api/store/issues', { method: 'POST', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: TICKETS }),
+  });
+}
+
 export function useReplyStoreTicket(
   id: string,
 ): UseMutationResult<{ ticketId: string; at: string }, Error, { readonly note: string }> {

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import type { ShipmentStatus } from '@skydrop/db';
+import { OrderStatus, type ShipmentStatus } from '@skydrop/db';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import {
   Button,
@@ -50,6 +50,8 @@ import {
   type StoreActionKind,
   type StoreOrderView,
 } from '@/lib/order-hooks';
+import { useStoreCallReviews } from '@/lib/review-hooks';
+import { CallReviewDecision } from '@/components/call-review-decision';
 import { OrderMoney } from './_components/order-money';
 
 function when(iso: string): string {
@@ -278,6 +280,13 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
           reads from the server rather than assuming. */}
       {!o.terminal && can(me, 'orders.actions') ? (
         <>
+          {/* The one thing that STOPS this order until somebody answers.
+              Offered here as well as on its queue because a store
+              arrives both ways — from the list of what is waiting, and
+              from the order itself after a customer chases them. */}
+          {o.status === OrderStatus.AWAITING_SELLER_DECISION ? (
+            <CallCapPanel orderId={o.id} orderNumber={o.orderNumber} />
+          ) : null}
           <OrderActions orderId={o.id} />
           <AddressCorrection orderId={o.id} recipient={o.recipient} />
         </>
@@ -286,12 +295,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
       <OrderMoney orderId={o.id} />
 
       {can(me, 'tickets.manage') ? (
-        <p className="text-sm">
-          Something wrong with this order that the seller should put right?{' '}
-          <Link href={`/tickets/new?orderId=${o.id}`} className="text-accent hover:underline">
-            Raise a dispute
-          </Link>
-        </p>
+        <RaiseTicketLinks orderId={o.id} mayAsk={can(me, 'orders.actions')} />
       ) : null}
 
       <Timeline orderId={o.id} />
@@ -543,6 +547,126 @@ function OrderActions({ orderId }: { orderId: string }): ReactElement {
         </div>
       </Modal>
     </Section>
+  );
+}
+
+/**
+ * "We could not reach your customer" — on the order it is about.
+ *
+ * The question itself, its stock cost and the two answers all live in
+ * `CallReviewDecision`; this is the context around it. It renders only
+ * for an order actually parked in `AWAITING_SELLER_DECISION`, so it can
+ * say plainly that nothing at all happens until somebody answers.
+ *
+ * A refusal is shown rather than hidden: `STORE_ACTION_NOT_ALLOWED`
+ * means the SELLER answers this one, and a store staring at a stuck
+ * order needs to know who to chase. Verbatim (FE-2).
+ */
+function CallCapPanel({
+  orderId,
+  orderNumber,
+}: {
+  orderId: string;
+  orderNumber: string;
+}): ReactElement {
+  // The same query the nav count and the queue page use, so this is
+  // served from cache on a store that has either of them open.
+  const reviews = useStoreCallReviews();
+  const review = (reviews.data ?? []).find((r) => r.orderId === orderId);
+
+  return (
+    <Section
+      title="We could not reach your customer"
+      subtitle="Nothing happens on this order until you answer. The stock stays held in the meantime."
+    >
+      {reviews.isPending ? (
+        <LoadingState label="Loading the question" rows={1} />
+      ) : reviews.isError ? (
+        <ErrorState message={serverVerdict(reviews.error)} retry={() => void reviews.refetch()} />
+      ) : review === undefined ? (
+        <Card>
+          <CardBody>
+            <p className="text-text-muted text-sm">
+              This order is waiting on an answer about further call attempts.{' '}
+              <Link href="/orders/call-reviews" className="text-accent hover:underline">
+                See everything waiting on you
+              </Link>
+            </p>
+          </CardBody>
+        </Card>
+      ) : (
+        <Card>
+          <CardBody>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm">
+                We have rung them {review.attemptCount} time
+                {review.attemptCount === 1 ? '' : 's'} without an answer, and {review.heldQty} unit
+                {review.heldQty === 1 ? '' : 's'} of your seller’s stock{' '}
+                {review.heldQty === 1 ? 'is' : 'are'} held for this order.
+              </p>
+              <CallReviewDecision
+                review={review}
+                orderNumber={orderNumber}
+                triggerLabel="Answer this"
+                triggerVariant="primary"
+              />
+            </div>
+          </CardBody>
+        </Card>
+      )}
+    </Section>
+  );
+}
+
+/**
+ * The two different problems a store can raise about this order, named
+ * apart rather than behind one word.
+ *
+ * A DISPUTE is with the seller — the goods, the price, what was sent —
+ * and Skydrop referees it between their two wallets. An ISSUE is with
+ * US: we damaged it, lost it, or are sitting on it, and the seller is
+ * never told. One link for both would make the store pick a side by
+ * accident.
+ *
+ * Whether the second is theirs to raise is the seller's `chaseSkydrop`
+ * policy, read from the actions endpoint the page is already asking (one
+ * cached query, not a second round trip). Passing an empty id when the
+ * caller cannot ask for actions leaves that query disabled rather than
+ * firing a 403 — and with nothing known, the link is OFFERED and the
+ * server refuses it in its own words if it must.
+ */
+function RaiseTicketLinks({ orderId, mayAsk }: { orderId: string; mayAsk: boolean }): ReactElement {
+  const actions = useStoreOrderActions(mayAsk ? orderId : '');
+  const chase = actions.data?.allowed.chaseSkydrop;
+  // ASK_SELLER is a refusal here too, not a queue: you do not ask a
+  // seller's permission to tell Skydrop we damaged a parcel, so the
+  // server treats it as "not yours to do" and only DIRECT is offered.
+  const offerSkydrop = chase === undefined || chase === 'DIRECT';
+
+  return (
+    <div className="space-y-1 text-sm">
+      <p>
+        Something wrong with this order that the seller should put right?{' '}
+        <Link
+          href={`/tickets/new?orderId=${orderId}&with=seller`}
+          className="text-accent hover:underline"
+        >
+          Raise it with your seller
+        </Link>
+      </p>
+      {offerSkydrop ? (
+        <p>
+          Damaged, lost or stuck with Skydrop?{' '}
+          <Link
+            href={`/tickets/new?orderId=${orderId}&with=skydrop`}
+            className="text-accent hover:underline"
+          >
+            Raise it with Skydrop
+          </Link>
+          <span className="text-text-faint"> — your seller is not told.</span>
+        </p>
+      ) : null}
+    </div>
   );
 }
 

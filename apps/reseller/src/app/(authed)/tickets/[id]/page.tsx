@@ -22,6 +22,7 @@ import {
 import { ticketStatusKind, ticketStatusLabel } from '@skydrop/ui/status';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
+import { storeTicketKind } from '@/lib/ticket-kind';
 import {
   useReplyStoreTicket,
   useStoreTicket,
@@ -56,10 +57,10 @@ export default function TicketPage(): ReactElement {
         href="/tickets"
         className="text-text-muted hover:text-text-body inline-flex items-center gap-1.5 text-xs"
       >
-        <ArrowLeft size={12} /> Disputes
+        <ArrowLeft size={12} /> Tickets
       </Link>
       {ticket.isPending ? (
-        <LoadingState label="Loading the dispute" rows={4} />
+        <LoadingState label="Loading the ticket" rows={4} />
       ) : ticket.isError ? (
         <ErrorState message={serverVerdict(ticket.error)} retry={() => void ticket.refetch()} />
       ) : (
@@ -136,6 +137,11 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
             ) : null}
             {' · opened '}
             {when(t.createdAt)}
+            {/* WHO is on the other end. Said on the thread itself and not
+                only in the list: somebody arriving from a link has not
+                seen the list, and what they write next depends on it. */}
+            {' · with '}
+            {storeTicketKind(t.ticketType).counterparty}
           </span>
         }
         action={
