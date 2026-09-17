@@ -1563,6 +1563,28 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMinInt: 7,
     overrideMaxInt: 180,
   },
+  // 2026-09-17 — a request a reseller store sent to seller staff cannot
+  // wait forever. GLOBAL (not seller-overridable). Also inserted by
+  // 20260917000000_store_requests_held_and_expiring (the seed is
+  // create-only on a deployed database).
+  {
+    key: 'reseller.store_request_remind_hours',
+    category: 'reseller',
+    valueType: SettingValueType.INT,
+    valueInt: 24,
+    displayName: 'Reseller store requests: remind seller staff after (hours)',
+    description:
+      'A request a reseller store sent to seller staff for approval (cancel, address correction, delivery action, call-cap answer, issue with Skydrop) that is still unanswered after this many hours reminds seller staff once, in-app.',
+  },
+  {
+    key: 'reseller.store_request_expire_hours',
+    category: 'reseller',
+    valueType: SettingValueType.INT,
+    valueInt: 72,
+    displayName: 'Reseller store requests: close unanswered after (hours)',
+    description:
+      'A request still unanswered after this many hours is closed as expired, nothing is carried out, and the reseller store is emailed so it knows to follow up with the seller.',
+  },
   {
     key: 'wallet.withdrawal_sla_hours',
     category: 'wallet',
@@ -3657,7 +3679,11 @@ const notificationTemplates: TemplateSeed[] = [
       '',
       '{{ seller_name }} approved what you asked for on order {{ order_number }}: {{ action_label }}.',
       '',
-      'It is being carried out now. You asked because: “{{ reason }}”',
+      // What actually happened when it ran — done, or why it could not be
+      // (2026-09-17: the email used to go out BEFORE it ran).
+      '{{ outcome }}',
+      '',
+      'You asked because: “{{ reason }}”',
       '{{ decision_note }}',
       '',
       'Follow it at {{ order_url }}',
@@ -3722,6 +3748,81 @@ const notificationTemplates: TemplateSeed[] = [
       '',
       'The parcel still carries the original address. If your customer is waiting on an answer,',
       'this is what to tell them. You can see the order at {{ order_url }}',
+    ].join('\n'),
+  },
+  // 2026-09-17 — a held cancel / call-cap answer / issue with Skydrop,
+  // answered by seller staff; and ANY held request nobody answered in
+  // time. EMAIL only (a reseller store has no inbox). OPERATIONAL — none
+  // of the codes matches the credential pattern.
+  {
+    code: 'store.request_approved.email',
+    name: 'Reseller store — the seller approved your request',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} approved your request on {{ order_number }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} approved what you asked for on order {{ order_number }}: {{ request_label }}.',
+      '',
+      '{{ outcome }}',
+      '{{ decision_note }}',
+      '',
+      'See the order at {{ order_url }}',
+    ].join('\n'),
+  },
+  {
+    code: 'store.request_rejected.email',
+    name: 'Reseller store — the seller declined your request',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} declined your request on {{ order_number }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} declined what you asked for on order {{ order_number }}: {{ request_label }}.',
+      '',
+      'They said: “{{ decision_note }}”',
+      '',
+      'Nothing was done. If your customer is waiting on an answer, this is what to tell them.',
+      'See the order at {{ order_url }}',
+    ].join('\n'),
+  },
+  {
+    code: 'store.request_expired.email',
+    name: 'Reseller store — your request was not answered in time',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: 'Your request on {{ order_number }} was not answered',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      'You asked {{ seller_name }} to approve this on order {{ order_number }}: {{ request_label }}.',
+      '',
+      'Nobody answered within {{ expire_hours }} hours, so the request has been closed and nothing',
+      'was done. Please follow up with {{ seller_name }} directly, or ask again from the order.',
+      '',
+      'See the order at {{ order_url }}',
+    ].join('\n'),
+  },
+  // 2026-09-17 — seller staff corrected the customer's details on a
+  // reseller store's order themselves. The store sold to that customer.
+  {
+    code: 'store.recipient_changed_by_seller.email',
+    name: 'Reseller store — the seller corrected the customer details on your order',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} corrected the delivery details on {{ order_number }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} changed the delivery details on order {{ order_number }}:',
+      '',
+      '{{ changes }}',
+      '',
+      '{{ superseded_note }}',
+      '',
+      'See the order at {{ order_url }}',
     ].join('\n'),
   },
   // RS-2 (2026-09-14) — the reseller store portal's CREDENTIAL messages.

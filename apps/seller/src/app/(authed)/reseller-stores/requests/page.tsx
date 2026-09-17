@@ -26,11 +26,14 @@ import { serverVerdict } from '@/lib/server-verdict';
 import {
   useDecideStoreAction,
   useDecideStoreAddressChange,
+  useDecideStoreOrderRequest,
   useStoreActionRequests,
   useStoreAddressChanges,
+  useStoreOrderRequests,
   type AddressField,
   type StoreActionRequestRow,
   type StoreAddressChangeRow,
+  type StoreOrderRequestRow,
 } from '@/lib/reseller-store-hooks';
 
 function when(iso: string): string {
@@ -61,11 +64,12 @@ export default function StoreRequestsPage(): ReactElement {
   // extra request.
   const requests = useStoreActionRequests();
   const addresses = useStoreAddressChanges();
+  const orderRequests = useStoreOrderRequests();
 
   const header = (
     <PageHeader
       title="Waiting on you"
-      subtitle="Things your reseller stores have asked for, and corrections they want made to where a parcel is going. Until you answer, nothing happens."
+      subtitle="What your Reseller stores have asked Seller staff to approve. Until you answer, nothing happens — and a request nobody answers closes after a few days and the store is told."
       action={
         <Link href="/reseller-stores" className="text-accent text-sm hover:underline">
           All reseller stores →
@@ -75,7 +79,7 @@ export default function StoreRequestsPage(): ReactElement {
   );
 
   // Both still loading: one skeleton rather than two stacked.
-  if (requests.isPending && addresses.isPending) {
+  if (requests.isPending && addresses.isPending && orderRequests.isPending) {
     return (
       <div className="space-y-6">
         {header}
@@ -86,16 +90,18 @@ export default function StoreRequestsPage(): ReactElement {
 
   // An empty queue is the ordinary state, and it reads far better as one
   // sentence than as two empty tables.
-  const bothEmpty =
+  const allEmpty =
     requests.data !== undefined &&
     requests.data.length === 0 &&
     addresses.data !== undefined &&
-    addresses.data.length === 0;
+    addresses.data.length === 0 &&
+    orderRequests.data !== undefined &&
+    orderRequests.data.length === 0;
 
   return (
     <div className="space-y-6">
       {header}
-      {bothEmpty ? (
+      {allEmpty ? (
         <EmptyState
           title="Nothing is waiting"
           description="When a reseller store asks for something you chose to approve yourself, it appears here. Anything you let them do on their own never stops here at all."
@@ -107,11 +113,209 @@ export default function StoreRequestsPage(): ReactElement {
         />
       ) : (
         <>
+          <OrderRequestsSection />
           <ActionRequestsSection />
           <AddressChangesSection />
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * A Reseller store's cancel, answer to "keep trying?", or issue for
+ * Skydrop — held because the store's policy says Seller staff approve it
+ * first. Approving runs it exactly as if the store had been allowed to do
+ * it directly; the reply says whether it actually happened.
+ */
+function OrderRequestsSection(): ReactElement {
+  const rows = useStoreOrderRequests();
+  const [rejecting, setRejecting] = useState<StoreOrderRequestRow | null>(null);
+
+  return (
+    <Section
+      title="Cancels, call questions and issues"
+      subtitle="A store wants to call an order off, answer whether to keep calling a customer, or raise an issue with Skydrop."
+    >
+      {rows.isPending ? (
+        <LoadingState label="Loading requests" rows={2} />
+      ) : rows.isError ? (
+        <ErrorState message={serverVerdict(rows.error)} retry={() => void rows.refetch()} />
+      ) : rows.data.length === 0 ? (
+        <p className="text-text-muted text-sm">Nothing to answer here.</p>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Store</Th>
+              <Th>Order</Th>
+              <Th>They asked to</Th>
+              <Th>What they said</Th>
+              <Th>Asked</Th>
+              <Th>Your answer</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {rows.data.map((r) => (
+              <OrderRequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+            ))}
+          </TBody>
+        </Table>
+      )}
+      <RejectOrderRequestModal request={rejecting} onClose={() => setRejecting(null)} />
+    </Section>
+  );
+}
+
+function OrderRequestRow({
+  request,
+  onReject,
+}: {
+  request: StoreOrderRequestRow;
+  onReject: () => void;
+}): ReactElement {
+  const decide = useDecideStoreOrderRequest();
+  const toast = useToast();
+  const [error, setError] = useState<string | null>(null);
+
+  async function approve(): Promise<void> {
+    setError(null);
+    try {
+      const out = await decide.mutateAsync({ requestId: request.id, approve: true });
+      if (out.status !== 'EXECUTED') {
+        // Verbatim (FE-2): e.g. [NOT_CANCELLABLE] when the order was
+        // packed while this waited.
+        setError(
+          out.failureReason ??
+            'You approved it, but it could not be carried out. The store has been told.',
+        );
+        toast.error('Approved, but it could not be carried out.');
+        return;
+      }
+      toast.success('Approved and carried out. The store has been told.');
+    } catch (err) {
+      // Verbatim (FE-2): STORE_REQUEST_ALREADY_DECIDED when somebody else
+      // answered it first.
+      setError(serverVerdict(err));
+    }
+  }
+
+  const order = request.order;
+  return (
+    <Tr>
+      <Td>{request.store?.displayName ?? request.store?.name ?? '—'}</Td>
+      <Td>
+        <span className="font-mono text-xs">{order?.orderNumber ?? '—'}</span>
+        {order === null ? null : (
+          <div className="mt-1">
+            <OrderStatusBadge status={order.status} />
+          </div>
+        )}
+      </Td>
+      <Td className="max-w-xs">
+        <span className="text-text-body text-sm">{request.label}</span>
+      </Td>
+      <Td className="max-w-xs">
+        <span className="text-text-body text-xs">{request.note ?? '—'}</span>
+      </Td>
+      <Td className="text-text-muted text-xs">{when(request.createdAt)}</Td>
+      <Td>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={decide.isPending}
+            onClick={() => void approve()}
+          >
+            Approve
+          </Button>
+          <Button variant="secondary" size="sm" disabled={decide.isPending} onClick={onReject}>
+            Reject
+          </Button>
+        </div>
+        {error !== null ? (
+          <p role="alert" className="text-critical mt-1 text-xs">
+            {error}
+          </p>
+        ) : null}
+      </Td>
+    </Tr>
+  );
+}
+
+function RejectOrderRequestModal({
+  request,
+  onClose,
+}: {
+  request: StoreOrderRequestRow | null;
+  onClose: () => void;
+}): ReactElement {
+  const decide = useDecideStoreOrderRequest();
+  const toast = useToast();
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(): Promise<void> {
+    if (request === null) return;
+    setError(null);
+    try {
+      await decide.mutateAsync({ requestId: request.id, approve: false, note: note.trim() });
+      toast.success('Turned down. The store has been sent your reason.');
+      setNote('');
+      onClose();
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  }
+
+  return (
+    <Modal
+      open={request !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          setNote('');
+          setError(null);
+          onClose();
+        }
+      }}
+      title={
+        request === null
+          ? 'Turn it down'
+          : `Turn down “${request.label}” on ${request.order?.orderNumber ?? 'this order'}?`
+      }
+      description="The store reads this, and nothing is done. Say why."
+    >
+      <div className="space-y-4">
+        <FormField label="Your reason" htmlFor="reject-order-request-note" required>
+          <Textarea
+            id="reject-order-request-note"
+            rows={3}
+            maxLength={2000}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </FormField>
+        {error !== null ? (
+          <p role="alert" className="text-critical text-sm">
+            {error}
+          </p>
+        ) : null}
+        <ModalFooter>
+          <Button type="button" variant="secondary" size="md" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="md"
+            disabled={note.trim() === '' || decide.isPending}
+            onClick={() => void submit()}
+          >
+            {decide.isPending ? 'Sending…' : 'Turn it down'}
+          </Button>
+        </ModalFooter>
+      </div>
+    </Modal>
   );
 }
 
@@ -165,8 +369,18 @@ function RequestRow({
   async function approve(): Promise<void> {
     setError(null);
     try {
-      await decide.mutateAsync({ requestId: request.id, approve: true });
-      toast.success('Approved — it is being carried out, and the store has been told.');
+      const out = await decide.mutateAsync({ requestId: request.id, approve: true });
+      // Approving RUNS it. The reply is what actually happened, and the
+      // store is emailed the same thing (2026-09-17).
+      if (out.status !== 'EXECUTED') {
+        setError(
+          out.executionError ??
+            'You approved it, but it could not be carried out. The store has been told.',
+        );
+        toast.error('Approved, but it could not be carried out.');
+        return;
+      }
+      toast.success('Approved and carried out. The store has been told.');
     } catch (err) {
       // Verbatim (FE-2): DELIVERY_ACTION_ALREADY_DECIDED when somebody
       // else got there first, which is the common one on a shared queue.

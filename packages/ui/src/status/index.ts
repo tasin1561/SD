@@ -38,6 +38,7 @@ import {
   StoreWalletEntryDirection,
   DeliveryActionStatus,
   StoreAddressChangeStatus,
+  StoreOrderRequestStatus,
 } from '@skydrop/db';
 
 export const STATUS_KINDS = [
@@ -488,6 +489,11 @@ export function deliveryActionStatusKind(status: DeliveryActionStatus): StatusKi
     // here that needs a human, so the one that is red.
     case DeliveryActionStatus.FAILED:
       return 'failed';
+    // Nobody at the seller answered in time and nothing was done
+    // (2026-09-17). Neutral like a refusal: the store is emailed to
+    // follow up, and nothing is broken.
+    case DeliveryActionStatus.EXPIRED:
+      return 'cancelled';
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled DeliveryActionStatus: ${String(exhaustive)}`);
@@ -508,6 +514,8 @@ export function deliveryActionStatusLabel(status: DeliveryActionStatus): string 
       return 'Done';
     case DeliveryActionStatus.FAILED:
       return 'Could not be done';
+    case DeliveryActionStatus.EXPIRED:
+      return 'Not answered in time';
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled DeliveryActionStatus: ${String(exhaustive)}`);
@@ -543,6 +551,11 @@ export function storeAddressChangeStatusKind(status: StoreAddressChangeStatus): 
     // that needs somebody, so the one that is red.
     case StoreAddressChangeStatus.FAILED:
       return 'failed';
+    // Not answered in time, or seller staff fixed the address themselves
+    // (2026-09-17). Neither is a malfunction.
+    case StoreAddressChangeStatus.EXPIRED:
+    case StoreAddressChangeStatus.SUPERSEDED:
+      return 'cancelled';
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled StoreAddressChangeStatus: ${String(exhaustive)}`);
@@ -563,9 +576,59 @@ export function storeAddressChangeStatusLabel(status: StoreAddressChangeStatus):
       return 'Declined';
     case StoreAddressChangeStatus.FAILED:
       return 'Could not be applied';
+    case StoreAddressChangeStatus.EXPIRED:
+      return 'Not answered in time';
+    case StoreAddressChangeStatus.SUPERSEDED:
+      return 'Seller staff corrected it themselves';
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled StoreAddressChangeStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * What became of a reseller store's held cancel, call-cap answer or issue
+ * with Skydrop (2026-09-17). Read by the store on its order and by seller
+ * staff on their queue.
+ */
+export function storeOrderRequestStatusKind(status: StoreOrderRequestStatus): StatusKind {
+  switch (status) {
+    case StoreOrderRequestStatus.PENDING:
+      return 'pending';
+    case StoreOrderRequestStatus.APPROVED:
+      return 'confirmed';
+    case StoreOrderRequestStatus.EXECUTED:
+      return 'delivered';
+    case StoreOrderRequestStatus.REJECTED:
+    case StoreOrderRequestStatus.EXPIRED:
+      return 'cancelled';
+    case StoreOrderRequestStatus.FAILED:
+      return 'failed';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled StoreOrderRequestStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+export function storeOrderRequestStatusLabel(status: StoreOrderRequestStatus): string {
+  switch (status) {
+    case StoreOrderRequestStatus.PENDING:
+      return 'Waiting on seller staff';
+    case StoreOrderRequestStatus.APPROVED:
+      return 'Approved';
+    case StoreOrderRequestStatus.EXECUTED:
+      return 'Done';
+    case StoreOrderRequestStatus.REJECTED:
+      return 'Declined';
+    case StoreOrderRequestStatus.FAILED:
+      return 'Could not be done';
+    case StoreOrderRequestStatus.EXPIRED:
+      return 'Not answered in time';
+    default: {
+      const exhaustive: never = status;
+      throw new Error(`Unhandled StoreOrderRequestStatus: ${String(exhaustive)}`);
     }
   }
 }

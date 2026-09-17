@@ -23,6 +23,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { ResellerOrderGateModule } from '../reseller-order-gate/reseller-order-gate.module';
 import { ResellerStoreTermsModule } from '../reseller-store-terms/reseller-store-terms.module';
 import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order-money.module';
+import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
 import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.service';
 import { ResellerOrderService } from './services/reseller-order.service';
 
@@ -88,6 +89,10 @@ import { ResellerOrderService } from './services/reseller-order.service';
     // gate). Neither imports this module back, so no cycle.
     ResellerStoreTermsModule,
     ResellerOrderGateModule,
+    // 2026-09-17 — seller staff correcting a reseller store's recipient
+    // close the store's waiting correction and email the store. An R3
+    // primitive that imports nothing order-shaped, so no cycle.
+    StoreOrderRequestModule,
   ],
   providers: [
     OrderNumberingService,

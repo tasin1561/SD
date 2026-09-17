@@ -14,16 +14,18 @@ import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
 import { ReviewExpiryQueue } from './queue/review-expiry.queue';
 import { ReviewExpiryWorker } from './queue/review-expiry.worker';
+import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
 
 /**
  * R5b — applies a seller's call-cap decision to BOTH the review row and
  * the order, and expires reviews nobody answered.
  *
  * A LEAF module by necessity: it imports `order` AND `early-reservation`,
- * and `order` already imports `early-reservation`. Nothing imports this
+ * and `order` already imports `early-reservation`. Only a leaf imports this
  * module, so composing the two here cannot create a cycle — the R3
  * extraction rule's answer to "the transition boundary is not
- * extractable". Exports nothing.
+ * extractable". Exports only `EarlyReservationDecisionService`, to the leaf
+ * that carries out a store's APPROVED call-cap answer.
  */
 @Module({
   imports: [
@@ -36,6 +38,9 @@ import { ReviewExpiryWorker } from './queue/review-expiry.worker';
     // its own order is the SELLER's policy for that store. This module is
     // a leaf (nothing imports it), so the import cannot close a cycle.
     ResellerStoreModule,
+    // 2026-09-17 — a store's call-cap answer held for seller staff. An R3
+    // primitive that imports nothing review- or order-shaped.
+    StoreOrderRequestModule,
   ],
   controllers: [SellerReviewDecisionController, StoreReviewDecisionController],
   providers: [
@@ -47,5 +52,9 @@ import { ReviewExpiryWorker } from './queue/review-expiry.worker';
     SellerJwtGuard,
     StoreJwtGuard,
   ],
+  // 2026-09-17 — the leaf `store-order-request-decision` runs an APPROVED
+  // call-cap answer through the same `decideAsStore` a direct one uses.
+  // Nothing else imports this module, and it imports nothing back.
+  exports: [EarlyReservationDecisionService],
 })
 export class EarlyReservationDecisionModule {}

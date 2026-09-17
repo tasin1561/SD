@@ -227,7 +227,11 @@ describe('store permission surface (RS-2)', () => {
       'Get get → orders.view',
       'Get events → orders.view',
       'Post cancel → orders.cancel',
+      // 2026-09-17: what the store sent Seller staff to approve on it.
+      'Get requests → orders.view',
     ]);
+    // 2026-09-17: the store reads its own effective action policy.
+    expect(got('store-action-policy.controller.ts')).toEqual(['Get get → orders.view']);
     expect(got('store-customer.controller.ts')).toEqual([
       'Get list → customers.view',
       'Get get → customers.view',

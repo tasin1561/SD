@@ -33,6 +33,11 @@ import {
   RESELLER_STORE_AUTO_PAUSED_TOPIC,
 } from '../../src/modules/reseller-reports/services/reseller-reports-notifier.service';
 import { STORE_ADDRESS_CHANGE_WAITING_TOPIC } from '../../src/modules/reseller-order/services/address-change-notifier.service';
+import { STORE_ACTION_WAITING_TOPIC } from '../../src/modules/delivery-action/services/store-action-notifier.service';
+import {
+  STORE_REQUEST_REMINDER_TOPIC,
+  STORE_REQUEST_WAITING_TOPIC,
+} from '../../src/modules/store-order-request/services/store-request-notifier.service';
 
 /** Seller topics sent by something other than the lifecycle listener,
  *  each named by its sender's own constant. */
@@ -54,6 +59,12 @@ const OTHER_SELLER_SENDERS = [
   RESELLER_STOCK_REORDER_TOPIC,
   // 2026-09-16: a store's address correction held for seller staff.
   STORE_ADDRESS_CHANGE_WAITING_TOPIC,
+  // 2026-09-16: a store's delivery ask held for seller staff.
+  STORE_ACTION_WAITING_TOPIC,
+  // 2026-09-17: a store's held cancel / call-cap answer / issue, and the
+  // one reminder about any held request.
+  STORE_REQUEST_WAITING_TOPIC,
+  STORE_REQUEST_REMINDER_TOPIC,
 ];
 
 /** Staff topics that are not system issues (TKT-3), by their sender's constant. */

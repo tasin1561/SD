@@ -6,8 +6,7 @@ import { StoreJwtGuard } from '../../../common/guards/store-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStoreUser } from '../../../common/types/request';
 import { CreateStoreIssueDto } from '../dto/store-issue.dto';
-import { StoreIssueService } from '../services/store-issue.service';
-import type { StoreTicketView } from '../services/ticket.service';
+import { StoreIssueService, type StoreIssueOutcome } from '../services/store-issue.service';
 
 /**
  * 2026-09-16 — a reseller store raising something with SKYDROP.
@@ -34,12 +33,12 @@ export class StoreIssueController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Raise something with Skydrop about one of this store’s orders — damaged, lost, or stuck with us. The seller is not told.',
+      'Raise something with Skydrop about one of this store’s orders — damaged, lost, or stuck with us. Opens now, or goes to seller staff to approve first, per the seller’s policy.',
   })
   create(
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Body() body: CreateStoreIssueDto,
-  ): Promise<StoreTicketView> {
+  ): Promise<StoreIssueOutcome> {
     return this.issues.raise({
       storeId: user.storeId,
       storeUserId: user.id,

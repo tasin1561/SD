@@ -23,7 +23,7 @@ import {
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useStoreCallReviews, type StoreCallReview } from '@/lib/review-hooks';
-import { useStoreOrders, type StoreOrderListItem } from '@/lib/order-hooks';
+import { useStoreActionPolicy, useStoreOrders, type StoreOrderListItem } from '@/lib/order-hooks';
 import { CallReviewDecision } from '@/components/call-review-decision';
 
 const CONTEXT_PAGE_SIZE = 100;
@@ -61,6 +61,7 @@ export default function CallReviewsPage(): ReactElement {
   const mayReadOrders = can(me, 'orders.view');
 
   const reviews = useStoreCallReviews({ enabled: mayAnswer });
+  const policy = useStoreActionPolicy({ enabled: mayReadOrders });
   // The review carries an order ID and nothing else a person can read.
   // One list request supplies the numbers and the customers for every
   // row (these orders are all parked in the same status), rather than a
@@ -135,7 +136,12 @@ export default function CallReviewsPage(): ReactElement {
             </THead>
             <TBody>
               {rows.map((r) => (
-                <ReviewRow key={r.id} review={r} order={orders.get(r.orderId)} />
+                <ReviewRow
+                  key={r.id}
+                  review={r}
+                  order={orders.get(r.orderId)}
+                  mode={policy.data?.callCapDecision}
+                />
               ))}
             </TBody>
           </Table>
@@ -148,9 +154,12 @@ export default function CallReviewsPage(): ReactElement {
 function ReviewRow({
   review,
   order,
+  mode,
 }: {
   readonly review: StoreCallReview;
   readonly order: StoreOrderListItem | undefined;
+  /** The seller's callCapDecision policy; ASK_SELLER sends the answer to Seller staff. */
+  readonly mode: 'OFF' | 'ASK_SELLER' | 'DIRECT' | undefined;
 }): ReactElement {
   return (
     <Tr>
@@ -189,6 +198,8 @@ function ReviewRow({
           review={review}
           orderNumber={order?.orderNumber}
           triggerVariant="primary"
+          triggerLabel={mode === 'ASK_SELLER' ? 'Propose an answer' : 'Answer'}
+          mode={mode}
         />
       </Td>
     </Tr>

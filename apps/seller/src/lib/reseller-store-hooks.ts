@@ -131,6 +131,7 @@ export interface StoreActionRequestRow {
 const KEY = ['seller-reseller-stores'] as const;
 const ACTION_KEY = ['seller-store-action-requests'] as const;
 const ADDRESS_KEY = ['seller-store-address-changes'] as const;
+const ORDER_REQUEST_KEY = ['seller-store-order-requests'] as const;
 const COUNT_KEY = ['seller-store-requests', 'count'] as const;
 
 /** Both queues that stop at the seller, added up by the server. */
@@ -138,6 +139,8 @@ export interface StoreRequestCount {
   readonly total: number;
   readonly actions: number;
   readonly addressChanges: number;
+  /** Held cancels, call-cap answers and issues with Skydrop (2026-09-17). */
+  readonly orderRequests: number;
 }
 
 /**
@@ -212,8 +215,20 @@ export function useStoreActionRequests(
   });
 }
 
+/**
+ * What a delivery-ask decision came back as (2026-09-17). Approving RUNS
+ * it, and running it can fail — the order moved on, or the courier said
+ * no — so the reply carries the real outcome rather than "approved".
+ */
+export interface DecidedStoreAction {
+  readonly id: string;
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED' | 'EXPIRED';
+  /** The server's own words for why it could not be carried out. */
+  readonly executionError: string | null;
+}
+
 export function useDecideStoreAction(): UseMutationResult<
-  unknown,
+  DecidedStoreAction,
   Error,
   { readonly requestId: string; readonly approve: boolean; readonly note?: string }
 > {
@@ -221,7 +236,7 @@ export function useDecideStoreAction(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ requestId, approve, note }) =>
-      client.request(
+      client.request<DecidedStoreAction>(
         `/api/seller/store-action-requests/${requestId}/${approve ? 'approve' : 'reject'}`,
         { method: 'POST', body: note === undefined || note === '' ? {} : { note } },
       ),
@@ -310,7 +325,14 @@ export function useStoreAddressChanges(
  */
 export interface DecidedAddressChange {
   readonly id: string;
-  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED' | 'FAILED';
+  readonly status:
+    | 'PENDING'
+    | 'APPROVED'
+    | 'REJECTED'
+    | 'APPLIED'
+    | 'FAILED'
+    | 'EXPIRED'
+    | 'SUPERSEDED';
   /** The server's own words for why an approval could not be applied. */
   readonly failureReason: string | null;
 }
@@ -332,6 +354,71 @@ export function useDecideStoreAddressChange(): UseMutationResult<
     // own view of that order is stale the moment this returns.
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ADDRESS_KEY });
+      void qc.invalidateQueries({ queryKey: COUNT_KEY });
+      void qc.invalidateQueries({ queryKey: ['seller-orders'] });
+    },
+  });
+}
+
+/**
+ * 2026-09-17 — a Reseller store's held cancel, call-cap answer or issue
+ * with Skydrop, waiting on Seller staff because the store's policy says
+ * "needs my approval".
+ */
+export interface StoreOrderRequestRow {
+  readonly id: string;
+  readonly kind: 'CANCEL' | 'CALL_CAP_DECISION' | 'RAISE_ISSUE';
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED' | 'EXPIRED';
+  /** What was asked, in words, from the server. */
+  readonly label: string;
+  readonly note: string | null;
+  readonly issueSubject: string | null;
+  readonly callCapProposal: 'RELEASE' | 'REQUEST_MORE_ATTEMPTS' | null;
+  readonly failureReason: string | null;
+  readonly createdAt: string;
+  readonly order: {
+    readonly orderNumber: string;
+    readonly status: OrderStatus;
+    readonly recipientName: string;
+  } | null;
+  readonly store: {
+    readonly id: string;
+    readonly name: string;
+    readonly displayName: string | null;
+  } | null;
+}
+
+export function useStoreOrderRequests(
+  options: { readonly enabled?: boolean } = {},
+): UseQueryResult<readonly StoreOrderRequestRow[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ORDER_REQUEST_KEY,
+    queryFn: () =>
+      client.request<readonly StoreOrderRequestRow[]>('/api/seller/store-order-requests'),
+    enabled: options.enabled ?? true,
+  });
+}
+
+export function useDecideStoreOrderRequest(): UseMutationResult<
+  StoreOrderRequestRow,
+  Error,
+  { readonly requestId: string; readonly approve: boolean; readonly note?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ requestId, approve, note }) =>
+      client.request<StoreOrderRequestRow>(
+        approve
+          ? `/api/seller/store-order-requests/${requestId}/approve`
+          : `/api/seller/store-order-requests/${requestId}/reject`,
+        { method: 'POST', body: note === undefined || note === '' ? {} : { note } },
+      ),
+    // Approving can cancel an order or move a review, so the seller's own
+    // order views are stale too.
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ORDER_REQUEST_KEY });
       void qc.invalidateQueries({ queryKey: COUNT_KEY });
       void qc.invalidateQueries({ queryKey: ['seller-orders'] });
     },

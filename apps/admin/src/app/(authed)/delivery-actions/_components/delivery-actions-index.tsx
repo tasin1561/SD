@@ -66,6 +66,7 @@ function statusKind(
     case 'FAILED':
       return 'failed';
     case 'REJECTED':
+    case 'EXPIRED':
       return 'cancelled';
   }
 }
@@ -107,7 +108,7 @@ export function DeliveryActionsIndex(): ReactElement {
     <div className="space-y-4">
       <PageHeader
         title="Failed deliveries"
-        subtitle="What sellers have asked us to do about parcels the courier could not hand over."
+        subtitle="What sellers have asked us to do about parcels the courier could not hand over. A Reseller store's ask that its seller chose to approve is shown for reference only — Seller staff decide it, not Skydrop admin."
       />
 
       <Card>
@@ -168,7 +169,14 @@ export function DeliveryActionsIndex(): ReactElement {
                         {r.shipment?.awbNumber ?? r.shipment?.shipmentNumber ?? ''}
                       </div>
                     </Td>
-                    <Td className="text-text-muted">{r.seller?.companyName ?? '—'}</Td>
+                    <Td className="text-text-muted">
+                      {r.seller?.companyName ?? '—'}
+                      {r.resellerStore !== null && (
+                        <div className="text-text-faint text-xs">
+                          Reseller store: {r.resellerStore.displayName ?? r.resellerStore.name}
+                        </div>
+                      )}
+                    </Td>
                     <Td>
                       <div className="font-medium">{actionLabel(r.action)}</div>
                       {r.action === 'RECALL' && (
@@ -186,7 +194,12 @@ export function DeliveryActionsIndex(): ReactElement {
                       )}
                     </Td>
                     <Td align="right">
-                      {r.status === 'PENDING' && canDecide ? (
+                      {r.waitingOnSeller ? (
+                        // Seller staff decide this one — the Reseller
+                        // store's policy says so. Skydrop admin can see it,
+                        // and the server refuses a decision here anyway.
+                        <span className="text-text-muted text-xs">Waiting on seller staff</span>
+                      ) : r.status === 'PENDING' && canDecide ? (
                         <div className="flex justify-end gap-1.5">
                           <Button
                             size="sm"

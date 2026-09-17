@@ -27,10 +27,12 @@ import { ResellerOrderService } from '../../order/services/reseller-order.servic
 import { StoreOrderListQueryDto } from '../dto/store-order-query.dto';
 import {
   StoreOrdersService,
+  type StoreCancelOutcome,
   type StoreOrderEventView,
   type StoreOrderListItem,
   type StoreOrderView,
 } from '../services/store-orders.service';
+import type { StoreOrderRequestView } from '../../store-order-request/services/store-order-request.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -102,13 +104,28 @@ export class StoreOrderController {
   @Post(':id/cancel')
   @RequireStorePermissions('orders.cancel')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancel one of this store’s orders — until it is packed' })
+  @ApiOperation({
+    summary:
+      'Cancel one of this store’s orders — until it is packed. Cancels now, or waits for seller staff, per the seller’s policy.',
+  })
   cancel(
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('id', uuid()) id: string,
     @Body() body: CancelOrderDto,
     @ClientInfo() ctx: ClientInfoPayload,
-  ): Promise<StoreOrderView> {
+  ): Promise<StoreCancelOutcome> {
     return this.orders.cancel(user, id, body, ctx);
+  }
+
+  @Get(':id/requests')
+  @ApiOperation({
+    summary:
+      'What this store has sent seller staff to approve on the order (cancel, call-cap answer, issue with Skydrop), and what became of it',
+  })
+  requests(
+    @CurrentStoreUser() user: AuthenticatedStoreUser,
+    @Param('id', uuid()) id: string,
+  ): Promise<readonly StoreOrderRequestView[]> {
+    return this.orders.heldRequests(user.storeId, id);
   }
 }

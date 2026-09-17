@@ -343,12 +343,20 @@ describe('reseller store orders (e2e)', () => {
       .set(sellerAuth)
       .expect(200);
     expect(bySearch.body.total).toBe(1);
-    // …and cannot edit it.
+    // …cannot change the store's deal on it…
     const edit = await request(h.baseUrl)
       .patch(`/seller/orders/${orderId}`)
       .set(sellerAuth)
-      .send({ recipientName: 'Changed' });
+      .send({ sellerNotes: 'Changed' });
     expect(edit.body.code).toBe('RESELLER_ORDER_NOT_EDITABLE');
+    // …but may correct the customer's details (owner, 2026-09-17), with NO
+    // seller-initials prefix on the name (RS-10: it prints on the label).
+    const fixed = await request(h.baseUrl)
+      .patch(`/seller/orders/${orderId}`)
+      .set(sellerAuth)
+      .send({ recipientName: 'Asha V. Verma' })
+      .expect(200);
+    expect(fixed.body.recipientName).toBe('Asha V. Verma');
 
     // A snapshot is immutable: a later price change does not re-price it.
     await request(h.baseUrl)
@@ -364,7 +372,7 @@ describe('reseller store orders (e2e)', () => {
       .get(`/store/orders/${orderId}`)
       .set(store.auth)
       .expect(200);
-    expect(own.body.recipient.name).toBe('Asha Verma');
+    expect(own.body.recipient.name).toBe('Asha V. Verma');
     expect(own.body.totals).toEqual({ retailInr: '998.00', transferInr: '600.00' });
   });
 

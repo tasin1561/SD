@@ -9,6 +9,7 @@ import {
   ResellerStockMode,
   ResellerStoreActionMode,
   SellerStoreKind,
+  StoreOrderRequestKind,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
@@ -16,6 +17,10 @@ import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
+import {
+  StoreOrderRequestService,
+  type StoreOrderRequestView,
+} from '../../store-order-request/services/store-order-request.service';
 
 /** One of a reseller store's orders in its list. The store sees its own customers in full. */
 export interface StoreOrderListItem {
@@ -110,6 +115,14 @@ function ownedBy(storeId: string): Prisma.OrderWhereInput {
 }
 
 /**
+ * What came of a store's cancel: done, or waiting on seller staff. A
+ * union rather than a nullable order — the address-correction shape.
+ */
+export type StoreCancelOutcome =
+  | { readonly applied: true; readonly order: StoreOrderView; readonly request: null }
+  | { readonly applied: false; readonly order: null; readonly request: StoreOrderRequestView };
+
+/**
  * RS-5 — a reseller store's OWN orders, read and called off.
  *
  * ── SCOPE IS ALWAYS IN THE WHERE ─────────────────────────────────────
@@ -132,6 +145,7 @@ export class StoreOrdersService {
     private readonly orderRead: OrderReadService,
     private readonly orderWrite: OrderWriteService,
     private readonly policies: ResellerStoreActionPolicyService,
+    private readonly requests: StoreOrderRequestService,
   ) {}
 
   async list(
@@ -351,13 +365,21 @@ export class StoreOrdersService {
    * cancel the seller's own button uses (`OrderWriteService.cancelBySeller`:
    * "until it is packed", the open-box check, CC-6 dequeue, the stock
    * saga). The actor is the store user, so the timeline says who did it.
+   *
+   * The seller's policy for this store decides HOW (2026-09-17, owner):
+   *   OFF         — refused, and told who does it instead.
+   *   DIRECT      — cancelled here and now.
+   *   ASK_SELLER  — held for seller staff; approving it runs this same
+   *                 cancel, as the store, from the leaf decision module.
+   * Checked AFTER ownership, so an order that is not this store's stays a
+   * 404 that says nothing about whether it exists.
    */
   async cancel(
     user: { readonly id: string; readonly storeId: string },
     orderId: string,
     body: { readonly reason?: OrderCancellationReason; readonly note?: string },
     ctx: ClientContext,
-  ): Promise<StoreOrderView> {
+  ): Promise<StoreCancelOutcome> {
     const order = await this.prisma.client.order.findFirst({
       where: { id: orderId, ...ownedBy(user.storeId) },
       select: { id: true, sellerId: true },
@@ -366,27 +388,25 @@ export class StoreOrdersService {
       throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
     }
 
-    // The seller's policy for this store decides whether it may call its
-    // own orders off (2026-09-16). This path PREDATES the policy and
-    // gated on the permission alone, so a seller could set cancel to OFF
-    // and watch the store keep cancelling — a switch that silently does
-    // nothing, which is the failure the whole switchboard exists to
-    // avoid. Checked AFTER ownership, so an order that is not this
-    // store's stays a 404 that says nothing about whether it exists.
-    //
-    // ASK_SELLER refuses for the same reason the other pre-parcel
-    // capabilities do: a held request needs somewhere to live, and the
-    // delivery-action queue's rows require a shipment that an unpacked
-    // order has not got.
     const policy = await this.policies.forStore(user.storeId);
-    if (policy.cancel !== ResellerStoreActionMode.DIRECT) {
+    if (policy.cancel === ResellerStoreActionMode.OFF) {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NOT_ALLOWED',
         message:
-          policy.cancel === ResellerStoreActionMode.OFF
-            ? 'The seller has not enabled cancelling for this store. Ask them to call the order off.'
-            : 'The seller calls orders off for this store. Ask them to do it.',
+          'The seller has not enabled cancelling for this store. Ask them to call the order off.',
       });
+    }
+
+    if (policy.cancel === ResellerStoreActionMode.ASK_SELLER) {
+      const request = await this.requests.hold({
+        storeId: user.storeId,
+        storeUserId: user.id,
+        orderId: order.id,
+        kind: StoreOrderRequestKind.CANCEL,
+        note: body.note ?? null,
+        cancellationReason: body.reason ?? OrderCancellationReason.SELLER_REQUESTED,
+      });
+      return { applied: false, order: null, request };
     }
 
     await this.orderWrite.cancelBySeller({
@@ -397,6 +417,11 @@ export class StoreOrdersService {
       note: body.note ?? 'Cancelled by the reseller store',
       ctx,
     });
-    return this.detail(user.storeId, order.id);
+    return { applied: true, order: await this.detail(user.storeId, order.id), request: null };
+  }
+
+  /** What this store has sent seller staff to approve on one of its orders. */
+  async heldRequests(storeId: string, orderId: string): Promise<readonly StoreOrderRequestView[]> {
+    return this.requests.listForStoreOrder(storeId, orderId);
   }
 }

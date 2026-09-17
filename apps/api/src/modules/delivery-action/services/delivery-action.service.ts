@@ -9,7 +9,6 @@ import {
   DeliveryActionKind,
   DeliveryActionStatus,
   OrderStatus,
-  Prisma,
   SystemIssueKind,
   SystemIssueSeverity,
   TicketType,
@@ -448,7 +447,14 @@ export class DeliveryActionService {
         where: { id: requestId },
         data: {
           status: DeliveryActionStatus.FAILED,
-          decisionNote: `Courier refused: ${message}`.slice(0, 500),
+          executedAt: new Date(),
+          // `executionError`, and the decision note only when nobody
+          // decided: a store's request carries seller staff's own note in
+          // `decisionNote`, and overwriting it lost their words.
+          executionError: `Courier refused: ${message}`.slice(0, 2000),
+          ...(who.store === undefined
+            ? { decisionNote: `Courier refused: ${message}`.slice(0, 500) }
+            : {}),
         },
       });
       await this.issues.raise({
@@ -495,13 +501,26 @@ export class DeliveryActionService {
   }
 
   /**
-   * Carry out a request somebody has already approved (2026-09-16).
+   * Carry out a request somebody has already approved.
    *
-   * The seller's approval of a store's ask runs THIS, so an approved
-   * recall and a direct one are the same three paths — there is no
-   * second implementation to drift. The store context comes off the ROW,
-   * not from the caller: by now the person approving is the seller, and
-   * the parcel still belongs to the store's customer.
+   * Seller staff approving a store's ask, and Skydrop admin approving a
+   * recall, both run THIS — and it runs the SAME paths a direct ask runs
+   * (`executeAsTicket` for a recall or a re-attempt, `executeRto` for a
+   * send-back), so an approved recall opens the ticket a direct recall
+   * opens. The store context comes off the ROW, not the caller: by now the
+   * person approving is not the one who asked.
+   *
+   * ── RE-CHECKED BEFORE IT RUNS (2026-09-17) ──────────────────────────
+   * Time passes between asking and answering. If the order is no longer
+   * out for delivery or failed, or its live parcel is no longer the one
+   * asked about, NOTHING is carried out: the row is recorded FAILED with
+   * a reason a person can repeat to a customer. A send-back approved days
+   * later must not turn round a parcel that has since been delivered.
+   *
+   * ── NEVER LEFT APPROVED ─────────────────────────────────────────────
+   * Any throw on the way (a ticket that would not open, a queue that
+   * would not take the call) is recorded as FAILED with the error, never
+   * left as an APPROVED row that visibly did nothing forever.
    */
   async runApproved(requestId: string, ctx: ClientInfoPayload): Promise<DeliveryActionRequestView> {
     const row = await this.prisma.client.orderDeliveryActionRequest.findUnique({
@@ -513,6 +532,7 @@ export class DeliveryActionService {
         orderId: true,
         sellerId: true,
         shipmentId: true,
+        status: true,
         resellerStoreId: true,
         requestedById: true,
       },
@@ -523,35 +543,90 @@ export class DeliveryActionService {
         message: 'No such request',
       });
     }
-    const shipment = await this.prisma.client.shipment.findUniqueOrThrow({
-      where: { id: row.shipmentId },
-      select: { id: true, awbNumber: true },
-    });
-    const store =
-      row.resellerStoreId === null
-        ? undefined
-        : { storeId: row.resellerStoreId, storeUserId: row.requestedById };
-    const who = {
-      sellerId: row.sellerId,
-      sellerUserId: null,
-      orderId: row.orderId,
-      ctx,
-      ...(store === undefined ? {} : { store }),
-    };
+    if (row.status !== DeliveryActionStatus.APPROVED) {
+      // Only an approved, not-yet-run request may be carried out.
+      return this.toView(
+        await this.prisma.client.orderDeliveryActionRequest.findUniqueOrThrow({
+          where: { id: row.id },
+        }),
+      );
+    }
 
-    if (row.action === DeliveryActionKind.RECALL) {
-      await this.prisma.client.$transaction(async (tx) => {
-        await this.executeRecall(tx, row.id, row.orderId, store !== undefined);
+    const stale = await this.stillApplies(row.orderId, row.shipmentId);
+    if (stale !== null) return this.recordFailure(row.id, stale);
+
+    try {
+      const shipment = await this.prisma.client.shipment.findUniqueOrThrow({
+        where: { id: row.shipmentId },
+        select: { id: true, awbNumber: true },
       });
-      const done = await this.prisma.client.orderDeliveryActionRequest.findUniqueOrThrow({
-        where: { id: row.id },
-      });
-      return this.toView(done);
+      const store =
+        row.resellerStoreId === null
+          ? undefined
+          : { storeId: row.resellerStoreId, storeUserId: row.requestedById };
+      const who = {
+        sellerId: row.sellerId,
+        sellerUserId: store === undefined ? row.requestedById : null,
+        orderId: row.orderId,
+        ctx,
+        ...(store === undefined ? {} : { store }),
+      };
+      if (row.action === DeliveryActionKind.RTO) {
+        return await this.executeRto(row.id, shipment.id, who);
+      }
+      return await this.executeAsTicket(row.id, row.action, row.reason, shipment, who);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return this.recordFailure(row.id, `It could not be carried out: ${message}`);
     }
-    if (row.action === DeliveryActionKind.RTO) {
-      return this.executeRto(row.id, shipment.id, who);
+  }
+
+  /**
+   * Why an approved request no longer applies, or null when it still does.
+   * The order must still be out for delivery or have just failed, and the
+   * parcel asked about must still be its live one.
+   */
+  async stillApplies(orderId: string, shipmentId: string): Promise<string | null> {
+    const order = await this.prisma.client.order.findFirst({
+      where: { id: orderId, deletedAt: null },
+      select: {
+        status: true,
+        orderShipments: {
+          where: { shipment: { deletedAt: null, supersededAt: null } },
+          orderBy: { shipmentSequence: 'desc' },
+          take: 1,
+          select: { shipmentId: true },
+        },
+      },
+    });
+    if (order === null) return '[ORDER_NOT_FOUND] The order no longer exists.';
+    if (!REQUESTABLE_FROM.has(order.status)) {
+      return (
+        `[DELIVERY_ACTION_NOT_APPLICABLE] By the time this was approved the order was ` +
+        `${order.status.toLowerCase().replaceAll('_', ' ')}, so nothing was done.`
+      );
     }
-    return this.executeAsTicket(row.id, row.action, row.reason, shipment, who);
+    if (order.orderShipments[0]?.shipmentId !== shipmentId) {
+      return '[DELIVERY_ACTION_NO_SHIPMENT] The parcel this was about is no longer the live one, so nothing was done.';
+    }
+    return null;
+  }
+
+  /** Close an approved request that could not be carried out. Guarded on APPROVED. */
+  async recordFailure(requestId: string, reason: string): Promise<DeliveryActionRequestView> {
+    await this.prisma.client.orderDeliveryActionRequest.updateMany({
+      where: { id: requestId, status: DeliveryActionStatus.APPROVED },
+      data: {
+        status: DeliveryActionStatus.FAILED,
+        executedAt: new Date(),
+        executionError: reason.slice(0, 2000),
+      },
+    });
+    return this.toView(
+      await this.prisma.client.orderDeliveryActionRequest.findUniqueOrThrow({
+        where: { id: requestId },
+      }),
+    );
   }
 
   /**
@@ -588,40 +663,5 @@ export class DeliveryActionService {
       executionError: r.executionError,
       createdAt: r.createdAt.toISOString(),
     };
-  }
-
-  /**
-   * RECALL, carried out.
-   *
-   * Kept here rather than in the courier layer because it never reaches
-   * a courier: the seller is asking OUR agents to phone the customer, so
-   * it is a call-queue enqueue and nothing more. It is separated from
-   * the courier actions for exactly that reason — CUR-10's operator gate
-   * exists to stop a van being dispatched, and no van is involved.
-   */
-  async executeRecall(
-    tx: Prisma.TransactionClient,
-    requestId: string,
-    orderId: string,
-    /**
-     * True when a reseller STORE asked (2026-09-16). The agent is told
-     * who wants the customer rung, and a store's customer has never
-     * heard of the seller — so this must not default to SELLER_ASKED.
-     */
-    askedByStore = false,
-  ): Promise<void> {
-    // Available immediately: the asker wants this call, so it joins the
-    // queue at its FIFO position rather than being deferred the way a
-    // busy-signal retry is.
-    await this.callQueue.enqueueAgain(
-      orderId,
-      new Date(),
-      undefined,
-      askedByStore ? CallQueueReason.STORE_ASKED : CallQueueReason.SELLER_ASKED,
-    );
-    await tx.orderDeliveryActionRequest.update({
-      where: { id: requestId },
-      data: { status: DeliveryActionStatus.EXECUTED, executedAt: new Date() },
-    });
   }
 }

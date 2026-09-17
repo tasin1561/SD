@@ -35,8 +35,15 @@ export class DeliveryActionDecisionService {
     private readonly actions: DeliveryActionService,
   ) {}
 
+  /**
+   * Every request, oldest first — including a reseller store's ask that
+   * is waiting on SELLER STAFF (2026-09-17). Those are listed so Skydrop
+   * admin can see what is sitting where, and carry `waitingOnSeller: true`
+   * so the screen shows them read-only: deciding one is seller staff's,
+   * and the claim below refuses it whatever the screen shows.
+   */
   async list(status?: DeliveryActionStatus): Promise<unknown[]> {
-    return this.prisma.client.orderDeliveryActionRequest.findMany({
+    const rows = await this.prisma.client.orderDeliveryActionRequest.findMany({
       where: status === undefined ? {} : { status },
       orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
       take: 200,
@@ -44,7 +51,35 @@ export class DeliveryActionDecisionService {
         order: { select: { orderNumber: true, status: true, recipientName: true } },
         seller: { select: { companyName: true } },
         shipment: { select: { shipmentNumber: true, awbNumber: true } },
+        resellerStore: { select: { name: true, displayName: true } },
       },
+    });
+    return rows.map((r) => ({
+      ...r,
+      waitingOnSeller: r.needsSellerApproval && r.status === DeliveryActionStatus.PENDING,
+    }));
+  }
+
+  /**
+   * Why a claim found nothing: already decided, or a request that is
+   * seller staff's to decide. Read AFTER the guarded claim failed, only to
+   * choose the words — the predicate is the guard.
+   */
+  private async refuseClaim(requestId: string): Promise<never> {
+    const row = await this.prisma.client.orderDeliveryActionRequest.findUnique({
+      where: { id: requestId },
+      select: { needsSellerApproval: true, status: true },
+    });
+    if (row?.needsSellerApproval === true && row.status === DeliveryActionStatus.PENDING) {
+      throw new ConflictException({
+        code: 'DELIVERY_ACTION_HELD_FOR_SELLER',
+        message:
+          'A reseller store asked this and the seller chose to approve it themselves. Seller staff decide it, not Skydrop admin.',
+      });
+    }
+    throw new ConflictException({
+      code: 'DELIVERY_ACTION_ALREADY_DECIDED',
+      message: 'Somebody has already decided this request',
     });
   }
 
@@ -56,7 +91,9 @@ export class DeliveryActionDecisionService {
     const claimed = await this.prisma.client.orderDeliveryActionRequest.updateMany({
       // Claimed on PENDING, not read-then-written: two operators opening
       // the same queue both see it open, and only one may decide it.
-      where: { id: requestId, status: DeliveryActionStatus.PENDING },
+      // NEVER a request held for seller staff (2026-09-17): that decision
+      // is the seller's, and deciding it here ran a different path.
+      where: { id: requestId, status: DeliveryActionStatus.PENDING, needsSellerApproval: false },
       data: {
         status: DeliveryActionStatus.REJECTED,
         decidedById: staffId,
@@ -64,12 +101,7 @@ export class DeliveryActionDecisionService {
         decisionNote: note.trim(),
       },
     });
-    if (claimed.count === 0) {
-      throw new ConflictException({
-        code: 'DELIVERY_ACTION_ALREADY_DECIDED',
-        message: 'Somebody has already decided this request',
-      });
-    }
+    if (claimed.count === 0) await this.refuseClaim(requestId);
     await this.audit.log({
       actorType: ActorType.STAFF,
       staffUserId: staffId,
@@ -99,7 +131,9 @@ export class DeliveryActionDecisionService {
     ctx: ClientInfoPayload,
   ): Promise<{ status: DeliveryActionStatus; executionRef: string | null }> {
     const claimed = await this.prisma.client.orderDeliveryActionRequest.updateMany({
-      where: { id: requestId, status: DeliveryActionStatus.PENDING },
+      // NEVER a request held for seller staff (2026-09-17): that decision
+      // is the seller's, and deciding it here ran a different path.
+      where: { id: requestId, status: DeliveryActionStatus.PENDING, needsSellerApproval: false },
       data: {
         status: DeliveryActionStatus.APPROVED,
         decidedById: staffId,
@@ -107,12 +141,7 @@ export class DeliveryActionDecisionService {
         decisionNote: note?.trim() ?? null,
       },
     });
-    if (claimed.count === 0) {
-      throw new ConflictException({
-        code: 'DELIVERY_ACTION_ALREADY_DECIDED',
-        message: 'Somebody has already decided this request',
-      });
-    }
+    if (claimed.count === 0) await this.refuseClaim(requestId);
 
     const req = await this.prisma.client.orderDeliveryActionRequest.findUnique({
       where: { id: requestId },
@@ -138,10 +167,18 @@ export class DeliveryActionDecisionService {
     });
 
     if (req.action === DeliveryActionKind.RECALL) {
-      await this.prisma.client.$transaction(async (tx) => {
-        await this.actions.executeRecall(tx, req.id, req.orderId);
-      });
-      return { status: DeliveryActionStatus.EXECUTED, executionRef: null };
+      // The ONE recall implementation: the ticket, the call queue, the
+      // outcome recorded — exactly what a direct recall does.
+      const done = await this.actions.runApproved(req.id, ctx);
+      return { status: done.status, executionRef: done.executionRef };
+    }
+
+    // Re-checked before a courier is called (2026-09-17): an approval made
+    // after the parcel was delivered must not turn it round.
+    const stale = await this.actions.stillApplies(req.orderId, req.shipmentId);
+    if (stale !== null) {
+      const done = await this.actions.recordFailure(req.id, stale);
+      return { status: done.status, executionRef: null };
     }
 
     try {

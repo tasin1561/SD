@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query';
 import type { ActorType, TicketStatus, TicketType } from '@skydrop/db';
 import { useApiClient } from '@skydrop/auth/client';
+import { STORE_ORDERS_KEY, type StoreOrderRequestView } from './order-hooks';
 
 /**
  * RS-7 — the store's disputes with its seller, refereed by Skydrop. Every
@@ -106,8 +107,16 @@ export function useRaiseStoreDispute(): UseMutationResult<
  * involves the seller. It lands in the same list, which is why the list
  * says which kind each thread is (`storeTicketKind`).
  */
+/**
+ * What came of raising it (2026-09-17): the ticket, or a request waiting
+ * on Seller staff because the seller approves this store's issues first.
+ */
+export type StoreIssueOutcome =
+  | { readonly applied: true; readonly ticket: StoreTicketView; readonly request: null }
+  | { readonly applied: false; readonly ticket: null; readonly request: StoreOrderRequestView };
+
 export function useRaiseStoreSkydropIssue(): UseMutationResult<
-  StoreTicketView,
+  StoreIssueOutcome,
   Error,
   { readonly orderId: string; readonly subject: string; readonly description?: string }
 > {
@@ -115,8 +124,11 @@ export function useRaiseStoreSkydropIssue(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<StoreTicketView>('/api/store/issues', { method: 'POST', body }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: TICKETS }),
+      client.request<StoreIssueOutcome>('/api/store/issues', { method: 'POST', body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: TICKETS });
+      void qc.invalidateQueries({ queryKey: STORE_ORDERS_KEY });
+    },
   });
 }
 

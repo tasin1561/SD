@@ -43,7 +43,7 @@ describe('raise a ticket — the server verdict, verbatim', () => {
   });
 
   it('carries the chosen audience, so a Skydrop issue never goes to the seller', async () => {
-    const submit = vi.fn(async () => ({ id: 'tk-1' }));
+    const submit = vi.fn(async () => ({ kind: 'ticket' as const, id: 'tk-1' }));
     const onDone = vi.fn();
     render(
       <NewTicketForm initialOrderId={ORDER} pending={false} submit={submit} onDone={onDone} />,
@@ -66,7 +66,7 @@ describe('raise a ticket — the server verdict, verbatim', () => {
       orderId: ORDER,
       subject: 'Parcel crushed in your warehouse',
     });
-    expect(onDone).toHaveBeenCalledWith('tk-1');
+    expect(onDone).toHaveBeenCalledWith({ kind: 'ticket', id: 'tk-1' });
   });
 
   it('opens on the audience the order page already chose', () => {
@@ -75,7 +75,7 @@ describe('raise a ticket — the server verdict, verbatim', () => {
         initialOrderId={ORDER}
         initialAudience="skydrop"
         pending={false}
-        submit={vi.fn(async () => ({ id: 'tk-2' }))}
+        submit={vi.fn(async () => ({ kind: 'ticket' as const, id: 'tk-2' }))}
         onDone={vi.fn()}
       />,
     );

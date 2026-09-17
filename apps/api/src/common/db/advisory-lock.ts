@@ -143,6 +143,13 @@ export const AdvisoryLock = {
    * stickers on one unit.
    */
   LABEL_REPRINT: 0x04c52,
+  /**
+   * 'SQ' — a reseller store's HELD request (2026-09-17), per
+   * (order, kind). Asking reads "is one of this kind already open on the
+   * order" and then inserts; two clicks at once would each see the other
+   * missing and seller staff would be asked the same question twice.
+   */
+  STORE_ORDER_REQUEST: 0x05351,
 } as const;
 
 /**

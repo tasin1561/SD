@@ -37,6 +37,8 @@ import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
 import { SellerCreditService } from '../../seller-credit/services/seller-credit.service';
 import { SellerStoreService } from '../../seller-store/services/seller-store.service';
+import { StoreOrderRequestService } from '../../store-order-request/services/store-order-request.service';
+import { StoreRequestNotifier } from '../../store-order-request/services/store-request-notifier.service';
 
 /**
  * What a RESELLER STORE may change on its own order (2026-09-16).
@@ -59,6 +61,20 @@ export const STORE_EDITABLE_KEYS = [
   'recipientStateProvince',
   'recipientPostalCode',
 ] as const;
+
+/** What a person calls each recipient field, for the store's email. */
+const RECIPIENT_FIELD_LABEL: Readonly<Record<(typeof STORE_EDITABLE_KEYS)[number], string>> = {
+  recipientName: 'Name',
+  recipientPhoneE164: 'Phone',
+  recipientAltPhoneE164: 'Second phone',
+  recipientEmail: 'Email',
+  recipientAddressLine1: 'Address',
+  recipientAddressLine2: 'Landmark line',
+  recipientLandmark: 'Landmark',
+  recipientCity: 'City',
+  recipientStateProvince: 'State',
+  recipientPostalCode: 'PIN code',
+};
 
 const ORDER_VIEW_INCLUDE = {
   items: {
@@ -257,6 +273,11 @@ export class OrderService {
     private readonly orderCharges: OrderChargesService,
     private readonly earlyReservations: EarlyReservationService,
     private readonly credit: SellerCreditService,
+    // 2026-09-17 — seller staff correcting a reseller store's recipient
+    // closes the store's waiting correction and emails the store. An R3
+    // primitive that imports nothing order-shaped.
+    private readonly storeRequests: StoreOrderRequestService,
+    private readonly storeRequestNotifier: StoreRequestNotifier,
   ) {}
 
   /**
@@ -843,19 +864,37 @@ export class OrderService {
     const order = await this.loadOwned(sellerId, id);
 
     // RS-5: a reseller store's order is the STORE's deal — its retail, its
-    // customer, its terms snapshot. An edit from the seller's side would
-    // re-price it outside the store's terms (and the seller cannot even
-    // read the recipient it would be correcting).
+    // lines, its terms snapshot. An edit to any of those from the seller's
+    // side would re-price it outside the store's terms, so they stay
+    // refused (ORD-6).
     //
-    // UNCHANGED for the seller. The only way past it is the store itself,
-    // correcting its own order, and then only the recipient block.
+    // AMENDED 2026-09-17 (owner decision b): SELLER STAFF may correct the
+    // RECIPIENT — the same `STORE_EDITABLE_KEYS` the store may — under the
+    // same status and call rules below, recorded as the seller's act, and
+    // the store is emailed what changed. The seller reads the order in full
+    // (ORD-7 amended 2026-09-16) and rings the customer about a failed
+    // delivery, so a wrong flat number is theirs to fix too.
+    const sellerEditingResellerOrder =
+      order.storeKind === SellerStoreKind.RESELLER && storeScope === undefined;
     if (order.storeKind === SellerStoreKind.RESELLER) {
-      if (storeScope === undefined || order.storeId !== storeScope.storeId) {
+      if (storeScope !== undefined && order.storeId !== storeScope.storeId) {
         throw new ConflictException({
           code: 'RESELLER_ORDER_NOT_EDITABLE',
           message:
             'This order was placed by a reseller store. Only the store can change it — ask them to cancel it and place it again.',
         });
+      }
+      if (sellerEditingResellerOrder) {
+        const allowed = new Set<string>(STORE_EDITABLE_KEYS);
+        const reached = (Object.keys(input) as Array<keyof UpdateOrderDto>).filter(
+          (k) => input[k] !== undefined && !allowed.has(k as string),
+        );
+        if (reached.length > 0) {
+          throw new ConflictException({
+            code: 'RESELLER_ORDER_NOT_EDITABLE',
+            message: `This order was placed by a reseller store. You may correct the customer's details only — its products, prices and terms are the store's. Remove: ${reached.join(', ')}.`,
+          });
+        }
       }
     } else if (storeScope !== undefined) {
       // A store reaching for a channel order. Same 404-shaped refusal as
@@ -981,9 +1020,9 @@ export class OrderService {
         // correcting the name writes it through unchanged; prefixing here
         // would corrupt the very field it came to fix.
         data.recipientName =
-          storeScope === undefined
-            ? composeSellerPrefixedName(seller?.initials, input.recipientName)
-            : input.recipientName;
+          order.storeKind === SellerStoreKind.RESELLER
+            ? input.recipientName
+            : composeSellerPrefixedName(seller?.initials, input.recipientName);
       }
       if (input.recipientPhoneE164 !== undefined) {
         data.recipientPhoneE164 = input.recipientPhoneE164.trim();
@@ -1142,11 +1181,17 @@ export class OrderService {
       });
     }
 
+    let supersededAddressChanges = 0;
     try {
-      return await this.prisma.client.$transaction(async (tx) => {
+      const saved = await this.prisma.client.$transaction(async (tx) => {
         if (phoneChanged && newPhone !== undefined) {
           const customer = await this.customers.findOrCreate(tx, {
             sellerId,
+            // ORD-7 amended (RS-5): a reseller order's customer is the
+            // STORE's identity, never the seller's own.
+            ...(order.storeKind === SellerStoreKind.RESELLER && order.storeId !== null
+              ? { resellerStoreId: order.storeId }
+              : {}),
             phoneE164: newPhone,
             name: input.recipientName ?? order.recipientName,
             email: input.recipientEmail ?? order.recipientEmail,
@@ -1177,6 +1222,15 @@ export class OrderService {
           data,
           include: ORDER_VIEW_INCLUDE,
         });
+        if (sellerEditingResellerOrder) {
+          // A correction the store had waiting on seller staff cannot
+          // stand beside this one — closed as SUPERSEDED in the same tx.
+          supersededAddressChanges = await this.storeRequests.supersedeAddressChanges(
+            tx,
+            id,
+            actor.id ?? null,
+          );
+        }
         await this.events.note(
           tx,
           id,
@@ -1197,6 +1251,9 @@ export class OrderService {
               status: order.status,
               changed,
               phoneChanged,
+              ...(sellerEditingResellerOrder
+                ? { resellerStoreId: order.storeId, supersededAddressChanges }
+                : {}),
               ...this.ctxMeta(ctx),
             },
           },
@@ -1204,6 +1261,17 @@ export class OrderService {
         );
         return updated;
       });
+      if (sellerEditingResellerOrder && order.storeId !== null) {
+        // The store sold to this customer: it is told what the parcel now
+        // carries. Post-commit and never throwing (NOTIF-1).
+        await this.tellStoreSellerCorrectedRecipient(
+          order.storeId,
+          saved,
+          input,
+          supersededAddressChanges > 0,
+        );
+      }
+      return saved;
     } catch (e) {
       // `(sellerId, storeId, sellerOrderRef)` is UNIQUE, and an edit can
       // now set both the ref and the store — so the same clash create
@@ -1216,6 +1284,41 @@ export class OrderService {
         });
       }
       throw e;
+    }
+  }
+
+  /**
+   * Email a reseller store that seller staff corrected the customer's
+   * details on one of its orders (2026-09-17). Never throws.
+   */
+  private async tellStoreSellerCorrectedRecipient(
+    storeId: string,
+    saved: { id: string; orderNumber: string; sellerId: string; updatedAt: Date },
+    input: UpdateOrderDto,
+    supersededRequest: boolean,
+  ): Promise<void> {
+    try {
+      const seller = await this.prisma.client.seller.findUnique({
+        where: { id: saved.sellerId },
+        select: { companyName: true },
+      });
+      const lines = STORE_EDITABLE_KEYS.filter((k) => input[k] !== undefined).map(
+        (k) => `${RECIPIENT_FIELD_LABEL[k]}: ${String(input[k])}`,
+      );
+      await this.storeRequestNotifier.recipientChangedBySeller({
+        storeId,
+        eventKey: `${saved.id}:${saved.updatedAt.getTime()}`,
+        orderId: saved.id,
+        orderNumber: saved.orderNumber,
+        sellerName: seller?.companyName ?? 'Your seller',
+        changes: lines.join('\n'),
+        supersededRequest,
+      });
+    } catch (err) {
+      this.logger.warn(
+        { orderId: saved.id, err: err instanceof Error ? err.message : err },
+        'Could not tell the reseller store its order details were corrected',
+      );
     }
   }
 

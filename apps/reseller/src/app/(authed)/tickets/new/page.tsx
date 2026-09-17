@@ -2,7 +2,10 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, type ReactElement } from 'react';
-import { LoadingState, PageHeader } from '@skydrop/ui/components';
+import { LoadingState, PageHeader, useToast } from '@skydrop/ui/components';
+import { useStoreIdentity } from '@skydrop/auth/client';
+import { can } from '@/lib/page-access';
+import { useStoreActionPolicy } from '@/lib/order-hooks';
 import { useRaiseStoreDispute, useRaiseStoreSkydropIssue } from '@/lib/ticket-hooks';
 import { NewTicketForm, type TicketAudience } from './_components/new-ticket-form';
 
@@ -28,6 +31,10 @@ function NewTicket(): ReactElement {
   const router = useRouter();
   const raiseDispute = useRaiseStoreDispute();
   const raiseIssue = useRaiseStoreSkydropIssue();
+  const toast = useToast();
+  const me = useStoreIdentity();
+  // Only to decide what to OFFER; the server refuses by name regardless.
+  const policy = useStoreActionPolicy({ enabled: can(me, 'orders.view') });
   return (
     <div className="max-w-2xl space-y-6">
       <PageHeader
@@ -40,10 +47,28 @@ function NewTicket(): ReactElement {
         // so somebody arriving from it does not have to choose twice.
         initialAudience={audienceParam(params?.get('with') ?? null)}
         pending={raiseDispute.isPending || raiseIssue.isPending}
-        submit={({ audience, ...body }) =>
-          audience === 'skydrop' ? raiseIssue.mutateAsync(body) : raiseDispute.mutateAsync(body)
-        }
-        onDone={(id) => router.push(`/tickets/${id}`)}
+        skydropMode={policy.data?.chaseSkydrop}
+        submit={async ({ audience, ...body }) => {
+          if (audience === 'seller') {
+            const t = await raiseDispute.mutateAsync(body);
+            return { kind: 'ticket', id: t.id };
+          }
+          // The REPLY says which happened, never the policy read earlier.
+          const out = await raiseIssue.mutateAsync(body);
+          return out.applied
+            ? { kind: 'ticket', id: out.ticket.id }
+            : { kind: 'held', orderId: out.request.orderId };
+        }}
+        onDone={(result) => {
+          if (result.kind === 'ticket') {
+            router.push(`/tickets/${result.id}`);
+            return;
+          }
+          toast.success(
+            'Sent to Seller staff to approve. It reaches Skydrop only once they say yes — follow it on the order.',
+          );
+          router.push(`/orders/${result.orderId}`);
+        }}
       />
     </div>
   );

@@ -37,8 +37,15 @@ export function CallReviewDecision({
   orderNumber,
   triggerLabel = 'Answer',
   triggerVariant = 'secondary',
+  mode,
 }: {
   readonly review: StoreCallReview;
+  /**
+   * The seller's `callCapDecision` policy for this store, when known
+   * (2026-09-17). ASK_SELLER sends the answer to Seller staff to approve
+   * instead of applying it. Cosmetic — the reply says what happened.
+   */
+  readonly mode?: 'OFF' | 'ASK_SELLER' | 'DIRECT' | undefined;
   /** Shown in the title when the caller knows it; the id is no use to a person. */
   readonly orderNumber?: string | undefined;
   readonly triggerLabel?: string;
@@ -52,10 +59,12 @@ export function CallReviewDecision({
   const [error, setError] = useState<string | null>(null);
 
   const releasing = decision === 'RELEASE';
+  const heldForSeller = mode === 'ASK_SELLER';
   const units = `${review.heldQty} unit${review.heldQty === 1 ? '' : 's'}`;
   const tries = `${review.attemptCount} time${review.attemptCount === 1 ? '' : 's'}`;
-  // Only the destructive branch insists on one — see the note above.
-  const missingReason = releasing && note.trim() === '';
+  // Only the destructive branch insists on one — see the note above —
+  // unless Seller staff approve it, who need to know why either way.
+  const missingReason = (releasing || heldForSeller) && note.trim() === '';
 
   function start(): void {
     setDecision('REQUEST_MORE_ATTEMPTS');
@@ -72,10 +81,17 @@ export function CallReviewDecision({
         decision,
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
+      if (!out.applied) {
+        toast.success(
+          'Sent to Seller staff to approve. Nothing changes on the order until they answer.',
+        );
+        setOpen(false);
+        return;
+      }
       toast.success(
         releasing
           ? `${units} released back into stock, and the order is rejected.`
-          : out.orderMoved
+          : out.result.orderMoved
             ? 'We will keep trying to reach the customer.'
             : // Honest rather than cheerful: the answer is recorded and the
               // stock is still held, but the order had already moved on and
@@ -109,7 +125,7 @@ export function CallReviewDecision({
             ? 'Keep trying to reach the customer?'
             : `${orderNumber} — keep trying to reach the customer?`
         }
-        description={`We have tried them ${tries} without an answer, and ${units} of your seller’s stock ${review.heldQty === 1 ? 'is' : 'are'} held for this order in the meantime.`}
+        description={`We have tried them ${tries} without an answer, and ${units} of your seller’s stock ${review.heldQty === 1 ? 'is' : 'are'} held for this order in the meantime.${heldForSeller ? ' Your seller approves this answer first — nothing happens until Seller staff say yes.' : ''}`}
       >
         <div className="space-y-4">
           <fieldset>
@@ -166,14 +182,16 @@ export function CallReviewDecision({
           ) : null}
 
           <FormField
-            label={releasing ? 'Why you are giving up on it' : 'Note'}
+            label={releasing ? 'Why you are giving up on it' : heldForSeller ? 'Why' : 'Note'}
             htmlFor="call-review-note"
             hint={
-              releasing
-                ? 'Kept on the order. Your seller reads this when they ask why the sale was rejected.'
-                : 'Optional — anything the call centre should know.'
+              heldForSeller
+                ? 'Seller staff read this before they approve or reject your answer.'
+                : releasing
+                  ? 'Kept on the order. Your seller reads this when they ask why the sale was rejected.'
+                  : 'Optional — anything the call centre should know.'
             }
-            required={releasing}
+            required={releasing || heldForSeller}
           >
             <Textarea
               id="call-review-note"
@@ -209,9 +227,11 @@ export function CallReviewDecision({
             >
               {decide.isPending
                 ? 'Sending…'
-                : releasing
-                  ? 'Release the stock and reject the order'
-                  : 'Keep trying'}
+                : heldForSeller
+                  ? 'Send to your seller to approve'
+                  : releasing
+                    ? 'Release the stock and reject the order'
+                    : 'Keep trying'}
             </Button>
           </ModalFooter>
         </div>

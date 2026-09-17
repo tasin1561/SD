@@ -13,6 +13,8 @@ function makeSut(
     action?: DeliveryActionKind;
     ndrOutcome?: AnyArgs;
     ndrThrows?: Error;
+    heldForSeller?: boolean;
+    stale?: string | null;
   } = {},
 ) {
   const updates: AnyArgs[] = [];
@@ -25,12 +27,27 @@ function makeSut(
     awbNumber: 'AWB1',
     message: null,
   }));
-  const executeRecall = jest.fn(async () => undefined);
+  const runApproved = jest.fn(async () => ({
+    status: DeliveryActionStatus.EXECUTED,
+    executionRef: 'tkt1',
+  }));
+  const stillApplies = jest.fn(async () => opts.stale ?? null);
+  const recordFailure = jest.fn(async (_id: string, reason: string) => ({
+    status: DeliveryActionStatus.FAILED,
+    executionRef: null,
+    executionError: reason,
+  }));
+  const updateManyCalls: AnyArgs[] = [];
 
   const client: AnyArgs = {
     orderDeliveryActionRequest: {
-      updateMany: async () => ({ count: opts.claimed ?? 1 }),
+      updateMany: async (args: AnyArgs) => {
+        updateManyCalls.push(args);
+        return { count: opts.claimed ?? 1 };
+      },
       findUnique: async () => ({
+        needsSellerApproval: opts.heldForSeller ?? false,
+        status: DeliveryActionStatus.PENDING,
         id: 'req1',
         action: opts.action ?? DeliveryActionKind.REATTEMPT,
         shipmentId: 'sh1',
@@ -49,9 +66,18 @@ function makeSut(
     { client } as unknown as PrismaService,
     { log: jest.fn(async () => 'a1') } as unknown as AuditLogService,
     { takeNdrAction, cancelWithCourier } as unknown as CourierShipmentActionService,
-    { executeRecall } as unknown as DeliveryActionService,
+    { runApproved, stillApplies, recordFailure } as unknown as DeliveryActionService,
   );
-  return { svc, updates, takeNdrAction, cancelWithCourier, executeRecall };
+  return {
+    svc,
+    updates,
+    updateManyCalls,
+    takeNdrAction,
+    cancelWithCourier,
+    runApproved,
+    stillApplies,
+    recordFailure,
+  };
 }
 
 const CTX = { ipAddress: null, userAgent: null, requestId: null } as never;
@@ -83,10 +109,10 @@ describe('DeliveryActionDecisionService.approve', () => {
     expect(sut.takeNdrAction).not.toHaveBeenCalled();
   });
 
-  it('a RECALL never touches a courier — it is our own agents', async () => {
+  it('a RECALL never touches a courier — it runs the ONE approved-recall path (the ticket too)', async () => {
     const sut = makeSut({ action: DeliveryActionKind.RECALL });
     const res = await sut.svc.approve('staff1', 'req1', null, CTX);
-    expect(sut.executeRecall).toHaveBeenCalled();
+    expect(sut.runApproved).toHaveBeenCalledWith('req1', CTX);
     expect(sut.takeNdrAction).not.toHaveBeenCalled();
     expect(sut.cancelWithCourier).not.toHaveBeenCalled();
     expect(res.status).toBe(DeliveryActionStatus.EXECUTED);
@@ -109,6 +135,60 @@ describe('DeliveryActionDecisionService.approve', () => {
     const res = await sut.svc.approve('staff1', 'req1', null, CTX);
     expect(res.status).toBe(DeliveryActionStatus.FAILED);
     expect(sut.updates.at(-1)?.['executionError']).toBe('Delhivery 503');
+  });
+});
+
+describe('Skydrop admin cannot decide a request held for Seller staff (2026-09-17)', () => {
+  it('the claim predicate itself excludes seller-held requests', async () => {
+    const sut = makeSut();
+    await sut.svc.approve('staff1', 'req1', null, CTX);
+    expect(sut.updateManyCalls[0]).toMatchObject({
+      where: { id: 'req1', status: DeliveryActionStatus.PENDING, needsSellerApproval: false },
+    });
+  });
+
+  it('approving one is refused by name, and nothing runs', async () => {
+    const sut = makeSut({ claimed: 0, heldForSeller: true });
+    await expect(sut.svc.approve('staff1', 'req1', null, CTX)).rejects.toMatchObject({
+      response: { code: 'DELIVERY_ACTION_HELD_FOR_SELLER' },
+    });
+    expect(sut.takeNdrAction).not.toHaveBeenCalled();
+    expect(sut.cancelWithCourier).not.toHaveBeenCalled();
+    expect(sut.runApproved).not.toHaveBeenCalled();
+  });
+
+  it('rejecting one is refused by name too', async () => {
+    const sut = makeSut({ claimed: 0, heldForSeller: true });
+    await expect(sut.svc.reject('staff1', 'req1', 'Not needed any more')).rejects.toMatchObject({
+      response: { code: 'DELIVERY_ACTION_HELD_FOR_SELLER' },
+    });
+  });
+
+  it('the list marks them waiting on the seller, so the screen shows them read-only', async () => {
+    const sut = makeSut();
+    const client = (sut.svc as unknown as { prisma: { client: AnyArgs } }).prisma.client;
+    (client['orderDeliveryActionRequest'] as AnyArgs)['findMany'] = async () => [
+      { id: 'r1', needsSellerApproval: true, status: DeliveryActionStatus.PENDING },
+      { id: 'r2', needsSellerApproval: false, status: DeliveryActionStatus.PENDING },
+    ];
+    const rows = (await sut.svc.list()) as Array<{ id: string; waitingOnSeller: boolean }>;
+    expect(rows.map((r) => [r.id, r.waitingOnSeller])).toEqual([
+      ['r1', true],
+      ['r2', false],
+    ]);
+  });
+});
+
+describe('an approval that no longer applies calls no courier (2026-09-17)', () => {
+  it('is recorded FAILED with the reason', async () => {
+    const sut = makeSut({ stale: '[DELIVERY_ACTION_NOT_APPLICABLE] delivered' });
+    const res = await sut.svc.approve('staff1', 'req1', null, CTX);
+    expect(res.status).toBe(DeliveryActionStatus.FAILED);
+    expect(sut.recordFailure).toHaveBeenCalledWith(
+      'req1',
+      '[DELIVERY_ACTION_NOT_APPLICABLE] delivered',
+    );
+    expect(sut.takeNdrAction).not.toHaveBeenCalled();
   });
 });
 

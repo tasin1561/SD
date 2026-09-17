@@ -25,6 +25,7 @@ import {
   DeliveryActionStatusBadge,
   ShipmentStatusBadge,
   StoreAddressChangeStatusBadge,
+  StoreOrderRequestStatusBadge,
   TBody,
   THead,
   Table,
@@ -45,6 +46,9 @@ import {
   useStoreOrder,
   useStoreOrderActions,
   useStoreOrderEvents,
+  useStoreActionPolicy,
+  useStoreOrderRequests,
+  type StoreActionMode,
   type AddressChangeFields,
   type AddressField,
   type StoreActionKind,
@@ -93,6 +97,11 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
   const me = useStoreIdentity();
   const toast = useToast();
   const cancel = useCancelStoreOrder();
+  // What the seller lets this store do, and how. Cosmetic (FE-2): each
+  // action is still refused by name on the server.
+  const policy = useStoreActionPolicy();
+  const cancelMode: StoreActionMode | undefined = policy.data?.cancel;
+  const cancelNeedsSeller = cancelMode === 'ASK_SELLER';
   const [confirming, setConfirming] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -100,8 +109,13 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
   async function doCancel(): Promise<void> {
     setError(null);
     try {
-      await cancel.mutateAsync({ id: o.id, note: note.trim() });
-      toast.success('Order cancelled.');
+      const out = await cancel.mutateAsync({ id: o.id, note: note.trim() });
+      // The REPLY says which happened, never the policy read on load.
+      toast.success(
+        out.applied
+          ? 'Order cancelled.'
+          : 'Sent to Seller staff to approve. The order is not cancelled until they say yes.',
+      );
       setConfirming(false);
     } catch (err) {
       setError(serverVerdict(err));
@@ -126,9 +140,9 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         action={
           <div className="flex items-center gap-2">
             <OrderStatusBadge status={o.status} />
-            {!o.terminal && can(me, 'orders.cancel') ? (
+            {!o.terminal && can(me, 'orders.cancel') && cancelMode !== 'OFF' ? (
               <Button variant="ghost" size="md" onClick={() => setConfirming(true)}>
-                Cancel order
+                {cancelNeedsSeller ? 'Ask the seller to cancel' : 'Cancel order'}
               </Button>
             ) : null}
           </div>
@@ -285,17 +299,23 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               arrives both ways — from the list of what is waiting, and
               from the order itself after a customer chases them. */}
           {o.status === OrderStatus.AWAITING_SELLER_DECISION ? (
-            <CallCapPanel orderId={o.id} orderNumber={o.orderNumber} />
+            <CallCapPanel
+              orderId={o.id}
+              orderNumber={o.orderNumber}
+              mode={policy.data?.callCapDecision}
+            />
           ) : null}
           <OrderActions orderId={o.id} />
           <AddressCorrection orderId={o.id} recipient={o.recipient} />
         </>
       ) : null}
 
+      <HeldRequests orderId={o.id} />
+
       <OrderMoney orderId={o.id} />
 
       {can(me, 'tickets.manage') ? (
-        <RaiseTicketLinks orderId={o.id} mayAsk={can(me, 'orders.actions')} />
+        <RaiseTicketLinks orderId={o.id} chase={policy.data?.chaseSkydrop} />
       ) : null}
 
       <Timeline orderId={o.id} />
@@ -303,25 +323,31 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Cancel ${o.orderNumber}?`}
+        title={
+          cancelNeedsSeller
+            ? `Ask the seller to cancel ${o.orderNumber}?`
+            : `Cancel ${o.orderNumber}?`
+        }
         description={
           <div className="space-y-2">
             <p>
-              An order can be cancelled until it is packed. The customer is not told by us — let
-              them know yourself.
+              {cancelNeedsSeller
+                ? 'Your seller approves cancels for this store. Seller staff read your reason and decide; the order is cancelled only if they say yes, and only until it is packed.'
+                : 'An order can be cancelled until it is packed.'}{' '}
+              The customer is not told by us — let them know yourself.
             </p>
             <Textarea
-              aria-label="Why (optional)"
-              placeholder="Why (optional)"
+              aria-label={cancelNeedsSeller ? 'Why (required)' : 'Why (optional)'}
+              placeholder={cancelNeedsSeller ? 'Why (required)' : 'Why (optional)'}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={500}
             />
           </div>
         }
-        confirmLabel="Cancel the order"
+        confirmLabel={cancelNeedsSeller ? 'Send to your seller' : 'Cancel the order'}
         confirmVariant="destructive"
-        disabled={cancel.isPending}
+        disabled={cancel.isPending || (cancelNeedsSeller && note.trim() === '')}
         onConfirm={() => void doCancel()}
       />
     </>
@@ -387,10 +413,17 @@ function OrderActions({ orderId }: { orderId: string }): ReactElement {
         action: asking.kind,
         reason: reason.trim(),
       });
+      // The REPLY says what actually happened (2026-09-17): waiting on
+      // Seller staff, done, or refused — a send-back the courier turns
+      // down comes back FAILED with the reason.
+      if (out.request.status === 'FAILED') {
+        setError(out.request.executionError ?? 'It could not be carried out.');
+        return;
+      }
       toast.success(
         out.awaitingSeller
-          ? 'Sent to the seller.'
-          : `We are ${asking.label.toLowerCase()} — it is being carried out now.`,
+          ? 'Sent to Seller staff to approve. Nothing happens until they answer.'
+          : 'Done.',
       );
       setAsking(null);
       setReason('');
@@ -565,14 +598,34 @@ function OrderActions({ orderId }: { orderId: string }): ReactElement {
 function CallCapPanel({
   orderId,
   orderNumber,
+  mode,
 }: {
   orderId: string;
   orderNumber: string;
+  mode: StoreActionMode | undefined;
 }): ReactElement {
   // The same query the nav count and the queue page use, so this is
   // served from cache on a store that has either of them open.
-  const reviews = useStoreCallReviews();
+  const reviews = useStoreCallReviews({ enabled: mode !== 'OFF' });
   const review = (reviews.data ?? []).find((r) => r.orderId === orderId);
+
+  if (mode === 'OFF') {
+    return (
+      <Section
+        title="We could not reach your customer"
+        subtitle="Nothing happens on this order until it is answered. The stock stays held in the meantime."
+      >
+        <Card>
+          <CardBody>
+            <p className="text-text-muted text-sm">
+              Seller staff answer this question for your store. Ask your seller whether to keep
+              trying.
+            </p>
+          </CardBody>
+        </Card>
+      </Section>
+    );
+  }
 
   return (
     <Section
@@ -607,8 +660,9 @@ function CallCapPanel({
               <CallReviewDecision
                 review={review}
                 orderNumber={orderNumber}
-                triggerLabel="Answer this"
+                triggerLabel={mode === 'ASK_SELLER' ? 'Propose an answer' : 'Answer this'}
                 triggerVariant="primary"
+                mode={mode}
               />
             </div>
           </CardBody>
@@ -624,25 +678,21 @@ function CallCapPanel({
  *
  * A DISPUTE is with the seller — the goods, the price, what was sent —
  * and Skydrop referees it between their two wallets. An ISSUE is with
- * US: we damaged it, lost it, or are sitting on it, and the seller is
- * never told. One link for both would make the store pick a side by
- * accident.
+ * US: we damaged it, lost it, or are sitting on it.
  *
- * Whether the second is theirs to raise is the seller's `chaseSkydrop`
- * policy, read from the actions endpoint the page is already asking (one
- * cached query, not a second round trip). Passing an empty id when the
- * caller cannot ask for actions leaves that query disabled rather than
- * firing a 403 — and with nothing known, the link is OFFERED and the
- * server refuses it in its own words if it must.
+ * Whether, and how, the second is theirs to raise is the seller's
+ * `chaseSkydrop` policy (2026-09-17): hidden when OFF; when the seller
+ * approves it first the link says so, because the issue then reaches
+ * Skydrop only once Seller staff say yes. With the policy unknown the link
+ * is offered and the server answers in its own words (FE-2).
  */
-function RaiseTicketLinks({ orderId, mayAsk }: { orderId: string; mayAsk: boolean }): ReactElement {
-  const actions = useStoreOrderActions(mayAsk ? orderId : '');
-  const chase = actions.data?.allowed.chaseSkydrop;
-  // ASK_SELLER is a refusal here too, not a queue: you do not ask a
-  // seller's permission to tell Skydrop we damaged a parcel, so the
-  // server treats it as "not yours to do" and only DIRECT is offered.
-  const offerSkydrop = chase === undefined || chase === 'DIRECT';
-
+function RaiseTicketLinks({
+  orderId,
+  chase,
+}: {
+  orderId: string;
+  chase: StoreActionMode | undefined;
+}): ReactElement {
   return (
     <div className="space-y-1 text-sm">
       <p>
@@ -654,7 +704,7 @@ function RaiseTicketLinks({ orderId, mayAsk }: { orderId: string; mayAsk: boolea
           Raise it with your seller
         </Link>
       </p>
-      {offerSkydrop ? (
+      {chase === 'OFF' ? null : (
         <p>
           Damaged, lost or stuck with Skydrop?{' '}
           <Link
@@ -663,10 +713,68 @@ function RaiseTicketLinks({ orderId, mayAsk }: { orderId: string; mayAsk: boolea
           >
             Raise it with Skydrop
           </Link>
-          <span className="text-text-faint"> — your seller is not told.</span>
+          <span className="text-text-faint">
+            {chase === 'ASK_SELLER'
+              ? ' — Seller staff approve it first; it reaches Skydrop once they say yes.'
+              : ' — your seller is not told.'}
+          </span>
         </p>
-      ) : null}
+      )}
     </div>
+  );
+}
+
+/**
+ * What this store sent Seller staff to approve on this order — a cancel,
+ * an answer to "keep trying?", an issue for Skydrop — and where each got
+ * to: waiting, done, declined with their reason, could not be done, or
+ * not answered in time (then it is closed and you should follow up).
+ */
+function HeldRequests({ orderId }: { orderId: string }): ReactElement {
+  const requests = useStoreOrderRequests(orderId);
+  if (requests.isPending)
+    return <LoadingState label="Loading what you asked the seller" rows={1} />;
+  if (requests.isError) {
+    return (
+      <ErrorState message={serverVerdict(requests.error)} retry={() => void requests.refetch()} />
+    );
+  }
+  if (requests.data.length === 0) return <></>;
+  return (
+    <Section
+      title="Sent to your seller to approve"
+      subtitle="Nothing on these happens until Seller staff answer. A request nobody answers closes after a few days — follow up with your seller if that happens."
+    >
+      <Table>
+        <THead>
+          <Tr>
+            <Th>What you asked</Th>
+            <Th>When</Th>
+            <Th>Where it got to</Th>
+          </Tr>
+        </THead>
+        <TBody>
+          {requests.data.map((r) => (
+            <Tr key={r.id}>
+              <Td>
+                <div>{r.label.charAt(0).toUpperCase() + r.label.slice(1)}</div>
+                {r.note !== null ? <div className="text-text-faint text-xs">{r.note}</div> : null}
+              </Td>
+              <Td className="text-text-muted text-xs">{when(r.createdAt)}</Td>
+              <Td>
+                <StoreOrderRequestStatusBadge status={r.status} />
+                {r.decisionNote !== null ? (
+                  <div className="text-text-muted mt-1 text-xs">They said: “{r.decisionNote}”</div>
+                ) : null}
+                {r.failureReason !== null ? (
+                  <div className="text-critical mt-1 text-xs">Not done — {r.failureReason}</div>
+                ) : null}
+              </Td>
+            </Tr>
+          ))}
+        </TBody>
+      </Table>
+    </Section>
   );
 }
 

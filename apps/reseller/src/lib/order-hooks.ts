@@ -267,8 +267,17 @@ export function useCreateStoreOrder(): UseMutationResult<
   });
 }
 
+/**
+ * What came of a cancel (2026-09-17): cancelled now, or sent to Seller
+ * staff because the seller approves this store's cancels first. The REPLY
+ * says which — never the policy read when the page loaded.
+ */
+export type StoreCancelOutcome =
+  | { readonly applied: true; readonly order: StoreOrderView; readonly request: null }
+  | { readonly applied: false; readonly order: null; readonly request: StoreOrderRequestView };
+
 export function useCancelStoreOrder(): UseMutationResult<
-  StoreOrderView,
+  StoreCancelOutcome,
   Error,
   { readonly id: string; readonly note?: string }
 > {
@@ -276,7 +285,7 @@ export function useCancelStoreOrder(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, note }) =>
-      client.request<StoreOrderView>(`/api/store/orders/${id}/cancel`, {
+      client.request<StoreCancelOutcome>(`/api/store/orders/${id}/cancel`, {
         method: 'POST',
         body: note === undefined || note === '' ? {} : { note },
       }),
@@ -286,13 +295,74 @@ export function useCancelStoreOrder(): UseMutationResult<
 
 /** 2026-09-16 — what this store may ask for about a live order. */
 export type StoreActionMode = 'OFF' | 'ASK_SELLER' | 'DIRECT';
+
+/** The seven capabilities the seller sets for this store. */
+export type StoreActionCapability =
+  | 'recall'
+  | 'addressFix'
+  | 'cancel'
+  | 'callCapDecision'
+  | 'chaseSkydrop'
+  | 'reattempt'
+  | 'sendBack';
+
+export type StoreActionPolicy = Readonly<Record<StoreActionCapability, StoreActionMode>>;
+
+/**
+ * 2026-09-17 — what the seller lets this store do about its orders, and
+ * how, for all seven capabilities. Read to decide what to OFFER — hidden
+ * when OFF, "ask the seller" when held, direct otherwise. Cosmetic (FE-2):
+ * every action still refuses by name on the server.
+ */
+export function useStoreActionPolicy(
+  options: { readonly enabled?: boolean } = {},
+): UseQueryResult<StoreActionPolicy> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['store-action-policy'],
+    queryFn: () => client.request<StoreActionPolicy>('/api/store/action-policy'),
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * 2026-09-17 — a cancel, a call-cap answer or an issue for Skydrop this
+ * store sent Seller staff to approve, and what became of it.
+ */
+export interface StoreOrderRequestView {
+  readonly id: string;
+  readonly orderId: string;
+  readonly kind: 'CANCEL' | 'CALL_CAP_DECISION' | 'RAISE_ISSUE';
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED' | 'EXPIRED';
+  readonly label: string;
+  readonly note: string | null;
+  readonly issueSubject: string | null;
+  readonly decisionNote: string | null;
+  readonly executedAt: string | null;
+  readonly executionRef: string | null;
+  readonly failureReason: string | null;
+  readonly expiredAt: string | null;
+  readonly createdAt: string;
+}
+
+export function useStoreOrderRequests(
+  orderId: string,
+): UseQueryResult<readonly StoreOrderRequestView[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: [...ORDERS, 'requests', orderId],
+    queryFn: () =>
+      client.request<readonly StoreOrderRequestView[]>(`/api/store/orders/${orderId}/requests`),
+    enabled: orderId !== '',
+  });
+}
 export type StoreActionKind = 'RECALL' | 'REATTEMPT' | 'RTO';
 
 export interface StoreActionRequest {
   readonly id: string;
   readonly action: StoreActionKind;
   readonly reason: string;
-  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED';
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED' | 'EXPIRED';
   readonly decisionNote: string | null;
   readonly decidedAt: string | null;
   readonly executedAt: string | null;
@@ -361,7 +431,14 @@ export type AddressChangeFields = Partial<Record<AddressField, string>>;
 export interface AddressChangeRequestView {
   readonly id: string;
   readonly orderId: string;
-  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED' | 'FAILED';
+  readonly status:
+    | 'PENDING'
+    | 'APPROVED'
+    | 'REJECTED'
+    | 'APPLIED'
+    | 'FAILED'
+    | 'EXPIRED'
+    | 'SUPERSEDED';
   readonly reason: string;
   readonly fields: AddressChangeFields;
   /** What seller staff said when they answered. */

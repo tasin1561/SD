@@ -16,9 +16,10 @@ import {
  * 2026-09-16 — a reseller STORE correcting where its own parcel is going.
  *
  * The commonest fixable failure is a wrong address, and the store is the
- * only party who can ring the customer to correct it. So this exists; it
- * does NOT weaken `RESELLER_ORDER_NOT_EDITABLE`, which still refuses the
- * SELLER exactly as before.
+ * only party who can ring the customer to correct it. So this exists.
+ * Since 2026-09-17 seller staff may correct the same recipient fields on
+ * the store's order too (owner decision b) — as the SELLER's act, with the
+ * store emailed — and anything else on it stays `RESELLER_ORDER_NOT_EDITABLE`.
  *
  * ── IT REUSES THE SELLER'S EDIT, DELIBERATELY ────────────────────────
  * `OrderService.edit` with a store scope, rather than a parallel writer.

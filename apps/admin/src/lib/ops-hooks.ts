@@ -3232,10 +3232,17 @@ export interface AdminDeliveryActionView {
   readonly id: string;
   readonly action: 'REATTEMPT' | 'RECALL' | 'RTO';
   readonly reason: string;
-  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED';
+  readonly status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED' | 'EXPIRED';
   readonly decisionNote: string | null;
   readonly executionError: string | null;
   readonly createdAt: string;
+  /**
+   * A reseller store's ask waiting on SELLER STAFF (2026-09-17). Shown so
+   * Skydrop admin can see where it sits; deciding it is the seller's, and
+   * the server refuses it here (`DELIVERY_ACTION_HELD_FOR_SELLER`).
+   */
+  readonly waitingOnSeller: boolean;
+  readonly resellerStore: { name: string; displayName: string | null } | null;
   readonly order: { orderNumber: string; status: string; recipientName: string } | null;
   readonly seller: { companyName: string } | null;
   readonly shipment: { shipmentNumber: string; awbNumber: string | null } | null;

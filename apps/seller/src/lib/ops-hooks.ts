@@ -558,7 +558,13 @@ export function useCourierThreadForTicket(ticketId: string): UseQueryResult<Cour
 // ───────── Failed deliveries (NDR) ─────────
 
 export type DeliveryActionKind = 'REATTEMPT' | 'RECALL' | 'RTO';
-export type DeliveryActionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'FAILED';
+export type DeliveryActionStatus =
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'EXECUTED'
+  | 'FAILED'
+  | 'EXPIRED';
 
 export interface DeliveryActionRequestView {
   readonly id: string;

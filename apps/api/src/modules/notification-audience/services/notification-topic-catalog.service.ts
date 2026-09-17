@@ -199,6 +199,36 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
       'A store says the delivery details on one of its orders are wrong. The parcel keeps the old address until you answer.',
     group: 'Reseller stores',
   },
+  {
+    // Sent by StoreActionNotifier (2026-09-16) to `stores.manage` when a
+    // store asks for a call, a re-attempt or a send-back and the seller's
+    // policy says they approve it first. Sent since 2026-09-16 and missing
+    // from this list until 2026-09-17, so it could not be silenced.
+    topic: 'seller.store_action_waiting',
+    label: 'A reseller store is waiting on you about a delivery',
+    description:
+      'A store asked for its customer to be called again, another delivery attempt, or the parcel back, and you approve those first.',
+    group: 'Reseller stores',
+  },
+  {
+    // Sent by StoreRequestNotifier (2026-09-17) to `stores.manage` when a
+    // store asks to cancel, answers the call-cap question, or raises an
+    // issue with Skydrop, and the seller's policy says they approve it.
+    topic: 'seller.store_request_waiting',
+    label: 'A reseller store wants to cancel, answer a call question, or raise an issue',
+    description:
+      'A store sent you something to approve before it happens: calling an order off, whether to keep calling a customer, or an issue for Skydrop.',
+    group: 'Reseller stores',
+  },
+  {
+    // Sent by StoreRequestNotifier (2026-09-17) once, when any request a
+    // store sent you is still unanswered after the reminder threshold.
+    topic: 'seller.store_request_reminder',
+    label: 'A reseller store is still waiting on your answer',
+    description:
+      'Something a store asked you to approve has not been answered. If nobody answers in time it closes on its own and the store is told.',
+    group: 'Reseller stores',
+  },
 ];
 
 /**

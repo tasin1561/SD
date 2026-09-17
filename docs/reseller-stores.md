@@ -1542,29 +1542,44 @@ Keep the global default FALSE until that run is clean.
   rules, refused refund, transfer-price cap, store-scoped open); the RS-7
   case in `tenant-isolation.e2e-spec.ts`.
 
-## Store actions as built (2026-09-16)
+## Store actions as built (2026-09-16, reworked 2026-09-17)
 
 The owner: "give all of this access to the store directly but the seller can
-select which should go directly and which by approving the seller." So a
-reseller store can act on its own live orders, and the seller holds a
-switchboard — per store, per capability.
+select that which should go directly or which should by approving the seller",
+and (2026-09-17) "if the store can do then will this will be done directly or
+it requests to the seller and then the seller approve or reject it. it
+approved then it will work directly. the approve and reject is done by seller
+not by skydrop." So a Reseller store can act on its own live orders, and the
+seller holds a switchboard — per store, per task.
 
 ### The policy
 
 `reseller_store_action_policy`, one row per store, owned by the SELLER — the
 same shape as `reseller_store_auto_pause`, and for the same reason: a rule
 about one store that only its seller may set. Seven columns, each
-`OFF | ASK_SELLER | DIRECT`:
+`OFF | ASK_SELLER | DIRECT`.
 
-| Capability | Default | What DIRECT means |
-|---|---|---|
-| `recall` | DIRECT | our call centre rings the customer again |
-| `addressFix` | DIRECT | the store corrects its own consignee before confirmation |
-| `cancel` | DIRECT | the store calls the order off (what it could already do) |
-| `callCapDecision` | DIRECT | the store answers "keep trying or give up" |
-| `chaseSkydrop` | DIRECT | the store raises an issue WITH US |
-| `reattempt` | ASK_SELLER | the store asks; **Skydrop still carries it out** |
-| `sendBack` | ASK_SELLER | the store asks; **Skydrop still carries it out** |
+**Seller staff are asked it as TWO questions per task** (owner, 2026-09-17):
+"Can the Reseller store do this?" Yes / No, and only when Yes, "How?"
+Directly / Needs my approval. No = OFF, Yes + Needs my approval = ASK_SELLER,
+Yes + Directly = DIRECT. Only the screen asks it that way; the column and the
+API are unchanged. **Every one of the seven supports all three answers** — no
+choice on that screen is one the server then refuses.
+
+| Capability | Default | What DIRECT actually does | Where ASK_SELLER waits |
+|---|---|---|---|
+| `recall` | DIRECT | our call centre is queued to ring the customer, and a ticket opens | `order_delivery_action_requests` |
+| `addressFix` | DIRECT | the correction is written onto the order | `store_address_change_requests` |
+| `cancel` | DIRECT | the order is called off (what stores could already do) | `store_order_requests` |
+| `callCapDecision` | DIRECT | the store's "keep trying / give up" is applied | `store_order_requests` |
+| `chaseSkydrop` | DIRECT | the issue ticket opens with Skydrop | `store_order_requests` |
+| `reattempt` | ASK_SELLER | a ticket opens and the store's words go to the courier outbox; Skydrop admin sends them by hand | `order_delivery_action_requests` |
+| `sendBack` | ASK_SELLER | **the courier is asked to cancel on the store's click and the parcel turns round — nobody checks it first** (CUR-10's seller amendment) | `order_delivery_action_requests` |
+
+This table said, until 2026-09-17, that a DIRECT re-attempt and send-back
+"still pass through Skydrop". For a send-back that was never true, and the
+seller's screen repeated it; the words now say what happens, and the behaviour
+is unchanged.
 
 **A missing row is the defaults**, not a refusal — `DEFAULT_POLICY` in the
 service and the column defaults in the migration must agree, and the spec
@@ -1572,20 +1587,59 @@ reads the migration file to check. `cancel` defaults DIRECT deliberately:
 stores already hold `orders.cancel`, and a table that read an absent row as
 OFF would have taken it away from every store silently.
 
-**ASK_SELLER is still a refusal for three of the seven.** `callCapDecision`,
-`chaseSkydrop` and `cancel` refuse it by name and say who does it instead,
-and two of those would not want an approval at all: the call-cap answer is
-already the seller's and the TTL sweep closes it, so "ask the seller" is a
-round trip with no decision in it, and an approval step on a complaint about
-US would let a seller suppress it.
+**ASK_SELLER is a held request for all seven (2026-09-17).** It used to refuse
+for `cancel`, `callCapDecision` and `chaseSkydrop`, on three arguments: a
+cancel had nowhere to wait (the delivery-action queue needs a shipment), the
+call-cap question is already the seller's, and an approval step on a complaint
+about US would let a seller suppress it. The owner decided otherwise on the
+last two ("Raise with Skydrop gets a real Ask me first"), and the first was a
+storage problem, now solved.
 
-**`addressFix` is the one that was worth building, and it is built
-(2026-09-16).** It refused for one reason only — a held request needs
-somewhere to live, and `order_delivery_action_requests` rows require a
-shipment, which an order corrected this early has not got. That was recorded
-in the code as a follow-up; `store_address_change_requests` is the follow-up,
-and all three modes of `addressFix` now mean what the seller chose. See "The
-held address correction" below.
+### Where a held request waits — three tables, and why not one or four
+
+- **Delivery asks** (`recall`, `reattempt`, `sendBack`) stay in
+  `order_delivery_action_requests`: they are about a PARCEL and carry its
+  shipment, NDR attempt and courier outcome, and the direct asks already live
+  there.
+- **Address corrections** stay in `store_address_change_requests`: one column
+  per editable field, already shipped, and its apply path is the order edit.
+- **Cancel, call-cap answer and issue with Skydrop** share ONE new table,
+  `store_order_requests` (`kind` = CANCEL | CALL_CAP_DECISION | RAISE_ISSUE).
+  All three act BEFORE a parcel matters, share the whole lifecycle (ask → seller
+  decides → run exactly as DIRECT would → true outcome → expiry), and each
+  kind's payload is a handful of nullable columns (`note`,
+  `cancellation_reason`, `call_cap_proposal`, `issue_subject`). Three
+  near-identical tables would drift; folding the two existing queues in would
+  have meant migrating shipped data and giving up the per-field address
+  columns.
+
+`store_order_requests`: status PENDING → APPROVED | REJECTED | EXPIRED,
+APPROVED → EXECUTED | FAILED; seller columns `decided_by_seller_user_id` /
+`seller_decided_at` / `decision_note`, never a staff one; `executed_at`,
+`execution_ref` (the ticket id for an issue, the review id for a call-cap
+answer), `failure_reason` verbatim; `seller_reminded_at`, `expired_at`. FKs to
+orders, sellers and seller_stores RESTRICT. **One open request per order per
+kind** (`STORE_REQUEST_ALREADY_OPEN`), checked under
+`AdvisoryLock.STORE_ORDER_REQUEST` inside the insert's transaction. A cancel or
+call-cap proposal needs a reason (`STORE_REQUEST_REASON_REQUIRED`).
+
+**Modules.** `store-order-request` is an R3 PRIMITIVE (the record, the
+notifier, the reminder/expiry sweep) importing nothing order-, ticket- or
+review-shaped, so `reseller-order` (cancel), `early-reservation-decision`
+(call cap), `ticket` (issue) and `order-core` (the seller's edit, below) import
+it to HOLD. Approving is in the LEAF `store-order-request-decision`, which
+imports `order`, `early-reservation-decision` (now exporting
+`EarlyReservationDecisionService`) and `ticket`, so an approved request runs
+the SAME call a DIRECT one runs, attributed to the STORE: `cancelBySeller` with
+`ActorType.STORE`, `decideAsStore`, `openStoreIssue`.
+
+The store's endpoints did not change shape of URL, only of reply: `POST
+/store/orders/:id/cancel`, `PATCH /store/call-reviews/:id` and `POST
+/store/issues` now return a UNION `{ applied: true, … , request: null } |
+{ applied: false, …: null, request }`, the address-correction shape, so the
+portal says what happened from the REPLY rather than the policy it read on
+load. The call-cap list stays readable on ASK_SELLER (the store proposes from
+it); only OFF refuses.
 
 ### Endpoints
 
@@ -1594,17 +1648,21 @@ held address correction" below.
 | Seller | `GET|PUT /seller/reseller-stores/:storeId/action-policy` | `stores.manage` |
 | Seller | `GET /seller/store-action-requests` · `POST :id/approve` · `POST :id/reject` | `stores.manage` |
 | Seller | `GET /seller/store-address-changes` · `POST :id/approve` · `POST :id/reject` | `stores.manage` |
+| Seller | `GET /seller/store-order-requests` · `POST :id/approve` · `POST :id/reject` | `stores.manage` |
+| Seller | `GET /seller/store-requests/count` (the nav badge, all three queues) | `stores.manage` |
+| Store | `GET /store/action-policy` (its own effective policy) | `orders.view` |
 | Store | `GET|POST /store/orders/:orderId/actions` | `orders.actions` |
+| Store | `GET /store/orders/:orderId/requests` | `orders.view` |
+| Store | `POST /store/orders/:orderId/cancel` | `orders.cancel` |
 | Store | `PATCH /store/orders/:orderId/recipient` | `orders.actions` |
 | Store | `GET /store/orders/:orderId/address-changes` | `orders.actions` |
 | Store | `GET|PATCH /store/call-reviews[/:reviewId]` | `orders.actions` |
 | Store | `POST /store/issues` | `tickets.manage` |
 
-New store permission: **`orders.actions`** — asking for something to be DONE
-about a live parcel. Deliberately not folded into `orders.cancel` (calling off
-an unpacked order costs nothing; these reach our call centre or a courier) and
-named in `store-permission-surface.spec.ts`'s `WRITE_KEYS_NOT_MANAGE` with that
-argument. Held by the `ops` role by default.
+New store permission (2026-09-16): **`orders.actions`** — asking for something
+to be DONE about a live parcel. Deliberately not folded into `orders.cancel`
+and named in `store-permission-surface.spec.ts`'s `WRITE_KEYS_NOT_MANAGE` with
+that argument. Held by the `ops` role by default.
 
 ### Attribution — a store's action is the STORE's
 
@@ -1613,17 +1671,101 @@ on the credential decrypt (so "who told Delhivery to turn this round" answers
 the store), the ticket's `storeId`/`openedByStoreUserId` with an
 `ActorType.STORE` opening event, `CallQueueReason.STORE_ASKED` so the call agent
 is told the store asked — their customer has never heard of the seller — and
-`store.delivery_action.requested` on the audit row.
+`store.delivery_action.requested` / `store.order_request.requested` on the
+audit row. An APPROVED request stays the store's: the store user who asked is
+the actor, and seller staff only appear in the decision columns and audit.
 
-### The seller's queue
+### Seller staff decide — never Skydrop admin
 
-Only asks the seller's own policy marked ASK_SELLER stop there. The claim is a
-guarded `updateMany` on (PENDING, needs the seller, this seller's), so two tabs
-open on the queue cannot both decide one request. The seller's answer lands in
-`decided_by_seller_user_id` / `seller_decided_at`, never the staff columns.
-Approving calls `DeliveryActionService.runApproved`, which runs the SAME three
-execution paths a direct ask uses. Rejecting requires a reason — the store has a
-customer waiting on the answer.
+**Skydrop admin cannot decide a request held for Seller staff (2026-09-17).**
+The admin "Failed deliveries" queue claimed on `{ id, status: PENDING }` alone,
+and since every non-store ask is created already approved, the only PENDING
+rows there WERE store asks waiting on a seller — deciding one ran a different
+path (a live courier NDR call instead of the ticket; SELLER_ASKED instead of
+STORE_ASKED; no email to the store). The claim predicate now carries
+`needsSellerApproval: false`, and a miss on a held row is
+`DELIVERY_ACTION_HELD_FOR_SELLER`. Skydrop admin still SEE those rows, marked
+`waitingOnSeller` with the store's name, read-only. An admin-approved RECALL
+now runs `runApproved` — the one recall implementation, ticket included.
+
+On every queue the claim is a guarded `updateMany` on (PENDING, this seller's
+[, held for the seller]); the loser is told `…_ALREADY_DECIDED`. A rejection
+requires a reason, emailed to the store.
+
+**Approving RUNS it, then records the TRUE outcome, then emails the store —
+in that order (2026-09-17).** The delivery-ask approval used to email
+"approved, being carried out" BEFORE running, so a recall that threw stayed
+APPROVED with nothing recorded, and a send-back the courier refused became
+FAILED with no second email. Now:
+
+1. **Re-check it still applies.** A delivery ask: the order still
+   OUT_FOR_DELIVERY or DELIVERY_FAILED, and the asked-about shipment still its
+   live one (`DeliveryActionService.stillApplies`, also run before Skydrop
+   admin's courier calls). A cancel: `cancelBySeller`'s own refusals (packed,
+   already cancelled, being packed). A call-cap answer: the review still OPEN.
+   An address correction: `OrderService.edit`'s refusals. A stale request runs
+   NOTHING and is FAILED with a reason a person can repeat to a customer.
+2. **Run** through the same path DIRECT uses. `runApproved` is the one path
+   for delivery asks — an approved recall opens the same ticket a direct one
+   does (it used to skip it).
+3. **Record** EXECUTED or FAILED (verbatim `[CODE] message`), guarded on
+   APPROVED. A throw anywhere is recorded FAILED; no APPROVED row is left that
+   did nothing. A courier refusal writes `execution_error` and keeps seller
+   staff's `decision_note`.
+4. **Email** the store the result: `store.action_approved.email` now carries an
+   `outcome` line; the new `store.request_approved.email` /
+   `store.request_rejected.email` carry `request_label` and `outcome`. Event ids
+   distinguish yes / yes-failed / no.
+
+The Seller staff page shows what actually happened ("Approved and carried
+out", or the verbatim failure) from the reply.
+
+### Unanswered requests expire (owner decision, 2026-09-17)
+
+`StoreRequestExpiryService`, queue `store-request-expiry`, every 15 minutes,
+behind `WorkerRoleService.shouldStart` (SCALE-1). For EVERY held queue — the
+delivery asks with `needs_seller_approval`, address corrections, and
+`store_order_requests`:
+
+- after `reseller.store_request_remind_hours` (24) Seller staff are reminded
+  ONCE in-app (topic `seller.store_request_reminder`, `stores.manage`): the
+  sweep claims `seller_reminded_at IS NULL` with a guarded `updateMany` before
+  sending, and the event id is the NOTIF-2 backstop;
+- after `reseller.store_request_expire_hours` (72) the request is closed
+  EXPIRED by a guarded `updateMany` on PENDING — an approval landing first wins
+  and nothing is sent — nothing is carried out, it is audited LOW as SYSTEM,
+  and the store is emailed `store.request_expired.email` so it knows to follow
+  up.
+
+Age is `created_at`, never `updated_at` (rule 4b — stamping the reminder writes
+the row). Both settings are GLOBAL, seeded, and inserted by
+`20260917000000_store_requests_held_and_expiring`. EXPIRED joins
+`DeliveryActionStatus` and `StoreAddressChangeStatus` (and
+`deliveryActionStatusKind` / `storeAddressChangeStatusKind` route it, neutral
+"Not answered in time"); `storeOrderRequestStatusKind` / `…Label` and
+`StoreOrderRequestStatusBadge` are new in `@skydrop/ui`.
+
+### Seller staff correct a store order's customer (owner decision, 2026-09-17)
+
+`OrderService.edit` from the SELLER side now accepts a Reseller store's order
+when every key is one of `STORE_EDITABLE_KEYS` (the same recipient fields the
+store may edit); anything else is still `RESELLER_ORDER_NOT_EDITABLE`, so
+lines, prices and the terms snapshot stay the store's (ORD-6). The same
+DRAFT/PENDING gate and call rule apply. It is the SELLER's act on the timeline
+and audit (metadata carries `resellerStoreId`), the name gets NO seller-initials
+prefix (RS-10 — it prints on the label; the check is now on the order's kind,
+not on who edits), and a changed phone re-links the customer under the STORE's
+identity (`resellerStoreId`), which also fixes the store's own edit that had
+been linking to the seller's. The store's CUSTOMER row is still not
+seller-writable. **A store correction waiting on Seller staff for that order is
+closed SUPERSEDED in the same transaction** (a new `StoreAddressChangeStatus`,
+"Seller staff corrected it themselves"): two corrections to one address cannot
+both stand, and approving the store's later would silently undo the seller's.
+The store is emailed `store.recipient_changed_by_seller.email` with each field
+changed and, when one was closed, that its correction was closed. apps/seller
+offers "Correct customer details" on the Recipient card of a Reseller store's
+order while it is DRAFT or PENDING_CONFIRMATION; the full edit link is hidden
+for those orders.
 
 ### The held address correction (2026-09-16)
 
@@ -1704,7 +1846,8 @@ The five states are an F2 mapping in `@skydrop/ui/status`
 (`storeAddressChangeStatusKind` / `…Label`): PENDING "Waiting on seller
 staff", APPROVED, APPLIED "Corrected", REJECTED "Declined" (neutral, not red —
 a considered refusal is not a malfunction) and FAILED "Could not be applied",
-the one state that needs somebody and so the one that is red.
+the one state that needs somebody and so the one that is red. Since 2026-09-17 two more: EXPIRED "Not answered in time" and SUPERSEDED
+"Seller staff corrected it themselves", both neutral.
 
 **A NEW `AddressChangeNotifier`, deliberately, rather than reusing
 `StoreActionNotifier`.** That one lives in `delivery-action`, whose module
@@ -1728,96 +1871,76 @@ of the same correction are two things to say. Neither notifier throws
 
 ### Telling each side
 
-The store has **no inbox**, so it hears by email only:
-`store.action_approved.email` / `store.action_rejected.email`, sent to the store
-users who may act on orders. The seller hears in-app, addressed by permission
-(NOTIF-10), when something is waiting on them. Neither notifier throws. A held
-address correction says the same two things through its own notifier, for the
-module-boundary reason given above.
+The store has **no inbox**, so it hears by email only, sent to the store users
+who may act on orders. Seller staff hear in-app, addressed by permission
+`stores.manage` (NOTIF-10): `seller.store_action_waiting` (delivery ask — it was
+sent since 2026-09-16 but missing from the topic catalogue until 2026-09-17),
+`seller.store_address_change_waiting`, `seller.store_request_waiting` (cancel /
+call-cap / issue) and `seller.store_request_reminder`, all pinned by
+`notification-topic-catalog.service.spec.ts`. No notifier throws (NOTIF-1);
+every one is awaited, so there is nothing new to drain (NOTIF-19).
 
 ### Screens
 
-apps/reseller: an actions panel on the order page — a capability set to OFF
-renders no button at all, one set to ASK_SELLER says the seller will be asked,
-and the history reads through the shared `DeliveryActionStatusBadge`.
-apps/seller: a "What they can do" tab per store, and `/reseller-stores/requests`
-with a count on the nav item — an approval queue nobody looks at holds a store's
-customer waiting.
-
-The address-correction screens are being built alongside this; the read hooks
-are in place (`apps/reseller/src/lib/order-hooks.ts`,
-`apps/seller/src/lib/reseller-store-hooks.ts`). What they have to show, whatever
-shape they take: on the store's side, the mode BEFORE the form — a capability
-set to OFF renders no correction form at all, and ASK_SELLER has to say so
-before somebody types a correction expecting it to take effect, which is why
-`GET /store/orders/:orderId/address-changes` returns the mode alongside the
-list; and after sending, that the parcel still carries the OLD address until
-the seller answers. On the seller's side, the proposed fields against the
-order's current ones side by side, the store's reason, and a note box that a
-rejection cannot be submitted without. FAILED needs its own treatment on both:
-it is a yes that changed nothing, and reading it as an ordinary approval is how
-a customer is told an address was fixed when it was not.
+apps/reseller: the order page reads `GET /store/action-policy` and renders each
+action accordingly — hidden when OFF; "Ask the seller to cancel" / "Propose an
+answer" / "Seller staff approve it first" when ASK_SELLER; direct otherwise —
+and shows "Sent to your seller to approve" with each held request's status,
+their reason, the verbatim failure, or "Not answered in time". Cosmetic
+(FE-2): the server still refuses by name. apps/seller: the per-store "What
+they can do" section asks the two questions; `/reseller-stores/requests` lists
+all three queues and says what an approval actually did; the nav badge counts
+all three. apps/admin: "Failed deliveries" shows a store's held ask read-only as
+"Waiting on seller staff".
 
 ### Migrations
 
-`20260916000000_reseller_store_action_policy` (the policy table, the
-`reseller_store_action_mode` enum, the store and seller-decider columns on
-`order_delivery_action_requests`, and `call_queue_reason` += `store_asked`),
-`20260916010000_store_issue_ticket_type` (`ticket_type` += `store_issue`) and
-`20260916020000_store_address_change_requests` (the
-`store_address_change_status` enum and the held-correction table). All
-additive; none writes a row.
+`20260916000000_reseller_store_action_policy`,
+`20260916010000_store_issue_ticket_type`,
+`20260916020000_store_address_change_requests`, and
+`20260917000000_store_requests_held_and_expiring` (the `store_order_requests`
+table and its three enums; `delivery_action_status` += `expired`;
+`store_address_change_status` += `expired`, `superseded`; `seller_reminded_at`
+and `expired_at` on the two older queues; the two settings). DDL generated by
+`prisma migrate diff`, data appended. None rewrites an existing row.
 
 The first of those also left real drift behind it, worth recording because
 nothing but one CI step could see it: `ResellerStoreActionMode` shipped in the
 schema with no `@@map`, while its own migration had created the Postgres type
-as `reseller_store_action_mode`. Runtime was unaffected — the VALUE maps were
-right and value literals are what the client sends — so it could only ever
-surface as a red "Schema matches migrations (no drift)" gate, which is what it
-did, reporting the enum added and removed AND every column of
-`reseller_store_action_policy` as "would be dropped and recreated (type
-changed)". Fixed by naming the type the database already has; no corrective
-SQL. See the enum note in `CLAUDE.md`.
+as `reseller_store_action_mode`. Fixed by naming the type the database already
+has; no corrective SQL. See the enum note in `CLAUDE.md`.
 
 ### Tests
 
-`reseller-store-action-policy.spec.ts` (defaults, the code-vs-migration
-agreement, scoping, the audit), `store-delivery-action.spec.ts` (OFF refuses,
-DIRECT runs, ASK_SELLER stops and notifies, each action reads its own column),
-`store-orders-cancel-policy.spec.ts` (ownership before policy),
-`store-review-decision.service.spec.ts`,
-`store-issue.service.spec.ts`, plus `store-permission-surface.spec.ts` and
-`ticket-notification-plan.spec.ts` extended.
-`notification-topic-catalog.service.spec.ts` now pins
-`seller.store_address_change_waiting` against the notifier's own constant, both
-ways.
-
-`store-address-change.spec.ts` covers the held correction: which fields a patch
-proposes and how they are named to a person, all three routes out of the policy
-(OFF refuses, DIRECT writes and holds nothing, DIRECT never lets `reason` reach
-the order, ASK_SELLER without a reason is refused, ASK_SELLER holds and does not
-touch the order), the two hold guards (a second correction while one waits, a
-correction proposing nothing), and the decision — that approving applies the
-WHOLE correction rather than an empty patch, that a yes the order has moved past
-is recorded FAILED with the refusal kept verbatim and the store still told, and
-that a request somebody else already decided is a conflict rather than a second
-edit.
-
-The older `store-order-edit.service.spec.ts` has NOT caught up and is now
-superseded by that file's own routing block: its ASK_SELLER case still asserts
-the refusal that used to be the behaviour, and its `make()` builds the service
-with the three dependencies it had before the hold service was added. It has to
-be rewritten or deleted.
+`reseller-store-action-policy.spec.ts`, `store-delivery-action.spec.ts`,
+`store-orders-cancel-policy.spec.ts` (ASK_SELLER now holds),
+`store-review-decision.service.spec.ts` (ASK_SELLER holds; an answered review
+is refused; the list stays readable), `store-issue.service.spec.ts` (ASK_SELLER
+holds and reaches Skydrop with nothing), `store-address-change.spec.ts`,
+`delivery-action-decision.service.spec.ts` (Skydrop admin: the claim predicate
+excludes held requests, `DELIVERY_ACTION_HELD_FOR_SELLER`, the read-only flag,
+a stale approval calls no courier), `delivery-action-run-approved.spec.ts`
+(`runApproved`: an approved recall opens the ticket, stale → FAILED with no
+courier, a throw → FAILED, a refusal keeps the seller's note; Seller staff
+approval runs then emails the true outcome, lost race, reject),
+`store-order-request.spec.ts` (hold, one-open, reason; approve cancel / call
+cap / issue as the store, FAILED verbatim, lost race, reject; the sweep reminds
+once, expires once, an approval wins, delivery asks covered),
+`store-requests-count.spec.ts` (all three list predicates pinned to the count),
+plus `store-permission-surface.spec.ts` and
+`notification-topic-catalog.service.spec.ts` extended.
 
 ### Not done / recorded
 
-No e2e yet against a real database — neither queue, and in particular nothing
-that proves two seller staff racing one correction leaves exactly one decision,
-which is a claim only a real database can settle. The store still has no inbox,
-which is why every message to it is an email. A rejected correction cannot be
-revised and re-sent as an amendment — the store raises a fresh one — and
-nothing withdraws a pending correction, so a store that asked in error waits
-for seller staff to decline it.
+No e2e against a real database for any of the three queues — in particular
+nothing proves two Seller staff racing one request, or an approval racing the
+expiry sweep, leaves exactly one outcome; the guards are there and only mocked
+tests cover them. The store still has no inbox. A held request cannot be
+withdrawn by the store that sent it, nor amended; the store waits for Seller
+staff or the expiry. Skydrop admin's own approval of a (legacy, non-store)
+PENDING re-attempt still calls the courier's NDR API rather than opening the
+ticket the seller's direct path opens — no such rows are created any more, so
+it was left.
 
 ## UI audit fixes, 2026-09-15
 

@@ -164,5 +164,11 @@ export { StoreExpenseCategory } from '@prisma/client';
 // 2026-09-16 — what a store may do about an order on its own, and where a
 // held address correction sits while seller staff decide.
 export { ResellerStoreActionMode, StoreAddressChangeStatus } from '@prisma/client';
+// 2026-09-17 — a reseller store's held cancel / call-cap answer / issue.
+export {
+  StoreCallCapProposal,
+  StoreOrderRequestKind,
+  StoreOrderRequestStatus,
+} from '@prisma/client';
 // RS-6 phase 3c — a reseller order's per-party credits.
 export { ResellerMoneyParty, ResellerCreditStatus } from '@prisma/client';

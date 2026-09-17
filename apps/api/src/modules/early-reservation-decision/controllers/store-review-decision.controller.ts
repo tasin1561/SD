@@ -20,8 +20,10 @@ import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStoreUser } from '../../../common/types/request';
 import { DecideReviewDto } from '../../early-reservation/dto/early-reservation.dto';
 import type { ReviewView } from '../../early-reservation/services/early-reservation-review.service';
-import { StoreReviewDecisionService } from '../services/store-review-decision.service';
-import type { DecisionResult } from '../services/early-reservation-decision.service';
+import {
+  StoreReviewDecisionService,
+  type StoreReviewOutcome,
+} from '../services/store-review-decision.service';
 
 /**
  * 2026-09-16 — a reseller store answering the call-cap question on its
@@ -50,14 +52,14 @@ export class StoreReviewDecisionController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'RELEASE gives the stock back and rejects the order; REQUEST_MORE_ATTEMPTS keeps the hold and puts it back in the call queue.',
+      'RELEASE gives the stock back and rejects the order; REQUEST_MORE_ATTEMPTS keeps the hold and puts it back in the call queue. Applied now, or sent to seller staff to approve, per the seller’s policy.',
   })
   decide(
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('reviewId') reviewId: string,
     @Body() body: DecideReviewDto,
     @ClientInfo() ctx: ClientInfoPayload,
-  ): Promise<DecisionResult> {
+  ): Promise<StoreReviewOutcome> {
     return this.reviews.decide({
       storeId: user.storeId,
       storeUserId: user.id,

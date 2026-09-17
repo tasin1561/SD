@@ -18,6 +18,7 @@ import { StoreTicketController } from './controllers/store-ticket.controller';
 import { StoreIssueController } from './controllers/store-issue.controller';
 import { StoreIssueService } from './services/store-issue.service';
 import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
+import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
 
 /**
  * R7 — unified ticket system (scrap/damage + seller-raised issues).
@@ -46,6 +47,9 @@ import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
     // SELLER's policy for that store. One-way: `reseller-store` imports
     // nothing ticket-shaped.
     ResellerStoreModule,
+    // 2026-09-17 — a store's issue held for seller staff (ASK_SELLER). An
+    // R3 primitive: it imports nothing ticket-shaped.
+    StoreOrderRequestModule,
   ],
   controllers: [
     SellerTicketController,

@@ -20,13 +20,22 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
  * agree: a default that drifts between the table and the code is a store
  * being told it may do something the database refuses, or the reverse.
  *
- * ── DIRECT DOES NOT MEAN "REACHES A COURIER UNSUPERVISED" ────────────
- * For `reattempt` and `sendBack`, DIRECT means the store may ASK without
- * the seller standing in the middle. The request still lands in the
- * Skydrop operator queue, because CUR-10 says a call that sends a van or
- * turns a moving parcel round is authorised by an operator and never
- * fired by a customer-facing handler. The seller's policy decides who
- * stands between the store and us; it does not remove that gate.
+ * ── WHAT DIRECT DOES, PER CAPABILITY (corrected 2026-09-17) ─────────
+ * DIRECT means the store's click is treated exactly as the seller's own
+ * ask would be — and what that DOES differs:
+ *   recall          — our call centre is queued to ring the customer, now.
+ *   reattempt       — a ticket opens and the store's words go to the
+ *                     courier outbox; Skydrop staff send it by hand.
+ *   sendBack        — the courier is asked to cancel on the store's click,
+ *                     and the parcel turns round. No person in between.
+ *   cancel          — the order is called off, now.
+ *   addressFix      — the correction is written onto the order, now.
+ *   callCapDecision — the answer is applied to the review, now.
+ *   chaseSkydrop    — the issue ticket opens with Skydrop, now.
+ * ASK_SELLER holds every one of the seven for seller staff to approve or
+ * reject; approving runs the same path as DIRECT. This comment used to
+ * say a send-back "still lands in the Skydrop operator queue" — it never
+ * did; CUR-10's seller amendment lets that cancel through directly.
  */
 
 /** The capabilities a policy covers. A new one is a COLUMN and a decision. */

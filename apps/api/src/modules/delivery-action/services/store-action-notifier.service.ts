@@ -88,11 +88,19 @@ export class StoreActionNotifier {
     }
   }
 
-  /** The seller answered. The store reads this and goes back to their customer. */
+  /**
+   * The seller answered — sent AFTER an approval has run, never before
+   * (2026-09-17), so `outcome` says what actually happened: done, or why
+   * it could not be. The store reads this and goes back to their customer.
+   */
   async decided(input: {
     storeId: string;
     requestId: string;
     approved: boolean;
+    /** False when it was approved and could not be carried out. */
+    carriedOut: boolean;
+    /** What happened, in a sentence. Empty on a rejection. */
+    outcome: string;
     orderId: string;
     orderNumber: string;
     sellerName: string;
@@ -117,7 +125,9 @@ export class StoreActionNotifier {
           await this.ledger.enqueue({
             // Per decision, not per request: a rejection and a later
             // approval of the same ask are two things to say.
-            eventId: `store_action_decided:${input.requestId}:${input.approved ? 'yes' : 'no'}`,
+            eventId: `store_action_decided:${input.requestId}:${
+              input.approved ? (input.carriedOut ? 'yes' : 'yes-failed') : 'no'
+            }`,
             recipientType: NotificationRecipientType.STORE_USER,
             recipientId: person.id,
             channel: NotificationChannel.EMAIL,
@@ -133,6 +143,7 @@ export class StoreActionNotifier {
               action_label: ACTION_LABEL[input.action],
               reason: input.reason,
               decision_note: input.decisionNote ?? '',
+              outcome: input.outcome,
               order_url: `${this.env.resellerAppUrl}/orders/${input.orderId}`,
               app_url: this.env.resellerAppUrl,
             },

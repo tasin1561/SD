@@ -8,6 +8,14 @@ import { storeTicketKind } from '@/lib/ticket-kind';
 
 export type TicketAudience = 'seller' | 'skydrop';
 
+/**
+ * What came of it: a ticket, or (for Skydrop, when the seller approves
+ * this store's issues first) a request waiting on Seller staff.
+ */
+export type NewTicketResult =
+  | { readonly kind: 'ticket'; readonly id: string }
+  | { readonly kind: 'held'; readonly orderId: string };
+
 export interface NewTicketInput {
   readonly audience: TicketAudience;
   readonly orderId: string;
@@ -37,14 +45,25 @@ export function NewTicketForm({
   pending,
   submit,
   onDone,
+  skydropMode,
 }: {
   readonly initialOrderId: string;
   readonly initialAudience?: TicketAudience;
   readonly pending: boolean;
-  readonly submit: (input: NewTicketInput) => Promise<{ id: string }>;
-  readonly onDone: (id: string) => void;
+  readonly submit: (input: NewTicketInput) => Promise<NewTicketResult>;
+  readonly onDone: (result: NewTicketResult) => void;
+  /**
+   * The seller's `chaseSkydrop` policy for this store, when known
+   * (2026-09-17). OFF hides the Skydrop choice; ASK_SELLER says the issue
+   * goes to Seller staff first. Cosmetic — the server decides (FE-2).
+   */
+  readonly skydropMode?: 'OFF' | 'ASK_SELLER' | 'DIRECT' | undefined;
 }): ReactElement {
-  const [audience, setAudience] = useState<TicketAudience>(initialAudience);
+  const offerSkydrop = skydropMode !== 'OFF';
+  const heldForSeller = skydropMode === 'ASK_SELLER';
+  const [audience, setAudience] = useState<TicketAudience>(
+    initialAudience === 'skydrop' && !offerSkydrop ? 'seller' : initialAudience,
+  );
   const [orderId, setOrderId] = useState(initialOrderId);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
@@ -57,13 +76,13 @@ export function NewTicketForm({
     e.preventDefault();
     setError(null);
     try {
-      const t = await submit({
+      const result = await submit({
         audience,
         orderId: orderId.trim(),
         subject,
         ...(description.trim() === '' ? {} : { description }),
       });
-      onDone(t.id);
+      onDone(result);
     } catch (err) {
       setError(serverVerdict(err));
     }
@@ -89,21 +108,25 @@ export function NewTicketForm({
               </span>
             </span>
           </label>
-          <label className="border-border hover:bg-surface-hover flex cursor-pointer items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2">
-            <input
-              type="radio"
-              name="ticket-audience"
-              className="mt-1"
-              checked={audience === 'skydrop'}
-              onChange={() => setAudience('skydrop')}
-            />
-            <span>
-              <span className="text-text-strong block text-sm">Skydrop</span>
-              <span className="text-text-muted block text-xs leading-relaxed">
-                {withSkydrop.blurb}
+          {offerSkydrop ? (
+            <label className="border-border hover:bg-surface-hover flex cursor-pointer items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2">
+              <input
+                type="radio"
+                name="ticket-audience"
+                className="mt-1"
+                checked={audience === 'skydrop'}
+                onChange={() => setAudience('skydrop')}
+              />
+              <span>
+                <span className="text-text-strong block text-sm">Skydrop</span>
+                <span className="text-text-muted block text-xs leading-relaxed">
+                  {heldForSeller
+                    ? 'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your seller approves these first: it reaches Skydrop only once Seller staff say yes.'
+                    : withSkydrop.blurb}
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          ) : null}
         </div>
       </fieldset>
 
@@ -138,7 +161,11 @@ export function NewTicketForm({
         </p>
       ) : null}
       <Button type="submit" disabled={pending}>
-        {audience === 'skydrop' ? 'Raise it with Skydrop' : 'Raise it with your seller'}
+        {audience === 'skydrop'
+          ? heldForSeller
+            ? 'Send it to your seller to approve'
+            : 'Raise it with Skydrop'
+          : 'Raise it with your seller'}
       </Button>
     </form>
   );

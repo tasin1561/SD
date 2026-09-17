@@ -11,6 +11,7 @@ import { AdminResellerStoreController } from './controllers/admin-reseller-store
 import { SellerResellerStoreController } from './controllers/seller-reseller-store.controller';
 import { SellerStoreActionPolicyController } from './controllers/seller-store-action-policy.controller';
 import { SellerStoreRequestCountController } from './controllers/seller-store-request-count.controller';
+import { StoreActionPolicyController } from './controllers/store-action-policy.controller';
 import { StoreProfileController } from './controllers/store-profile.controller';
 import { StoreTeamController } from './controllers/store-team.controller';
 import { ResellerStoreActionPolicyService } from './services/reseller-store-action-policy.service';
@@ -48,6 +49,8 @@ import { StoreTeamService } from './services/store-team.service';
     AdminResellerStoreController,
     StoreProfileController,
     StoreTeamController,
+    // 2026-09-17 — the store reads its own effective policy.
+    StoreActionPolicyController,
   ],
   providers: [
     ResellerStoreService,

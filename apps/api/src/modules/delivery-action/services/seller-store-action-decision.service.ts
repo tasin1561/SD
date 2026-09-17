@@ -76,11 +76,14 @@ export class SellerStoreActionDecisionService {
       metadata: { action: row.action, orderId: row.orderId, storeId: row.resellerStoreId },
     });
 
-    // Told BEFORE it runs. The decision is the durable fact and the
-    // store's answer to their customer; whether the courier then accepts
-    // it is a separate outcome they follow on the order.
-    await this.tellTheStore(row, true);
-    return this.actions.runApproved(requestId, ctx);
+    // RUN FIRST, then tell the store what actually happened (2026-09-17).
+    // It used to email "approved" before running, so a recall that threw
+    // stayed APPROVED with nothing recorded and a send-back the courier
+    // refused became FAILED with no second email. `runApproved` re-checks
+    // the order, never leaves the row APPROVED, and returns the truth.
+    const done = await this.actions.runApproved(requestId, ctx);
+    await this.tellTheStore(row, true, done);
+    return done;
   }
 
   async reject(
@@ -101,7 +104,7 @@ export class SellerStoreActionDecisionService {
       metadata: { action: row.action, orderId: row.orderId, storeId: row.resellerStoreId },
     });
 
-    await this.tellTheStore(row, false);
+    await this.tellTheStore(row, false, null);
 
     const done = await this.prisma.client.orderDeliveryActionRequest.findUniqueOrThrow({
       where: { id: requestId },
@@ -126,8 +129,10 @@ export class SellerStoreActionDecisionService {
       resellerStoreId: string | null;
     },
     approved: boolean,
+    done: DeliveryActionRequestView | null,
   ): Promise<void> {
     if (row.resellerStoreId === null) return;
+    const carriedOut = done !== null && done.status === DeliveryActionStatus.EXECUTED;
     const order = await this.prisma.client.order.findUnique({
       where: { id: row.orderId },
       select: { orderNumber: true, seller: { select: { companyName: true } } },
@@ -137,6 +142,13 @@ export class SellerStoreActionDecisionService {
       storeId: row.resellerStoreId,
       requestId: row.id,
       approved,
+      carriedOut,
+      outcome:
+        done === null
+          ? ''
+          : carriedOut
+            ? 'It has been carried out.'
+            : `It could not be carried out: ${done.executionError ?? 'the request did not complete.'}`,
       orderId: row.orderId,
       orderNumber: order.orderNumber,
       sellerName: order.seller.companyName,

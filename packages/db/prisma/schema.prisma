@@ -290,6 +290,7 @@ model Seller {
   reattemptRequests        OrderReattemptRequest[]
   deliveryActionRequests   OrderDeliveryActionRequest[]
   addressChangeRequests    StoreAddressChangeRequest[]
+  storeOrderRequests       StoreOrderRequest[]
   stockUnits               StockUnit[]
   inboundFreightCharges    InboundFreightCharge[]
   invoices                 Invoice[]
@@ -2757,6 +2758,8 @@ model SellerStore {
   deliveryActionRequests  OrderDeliveryActionRequest[]
   /// Address corrections this store has asked seller staff to approve.
   addressChangeRequests   StoreAddressChangeRequest[]
+  /// Cancels, call-cap answers and issues this store asked seller staff to approve.
+  storeOrderRequests      StoreOrderRequest[]
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -3169,6 +3172,7 @@ model Order {
   reattemptRequests      OrderReattemptRequest[]
   deliveryActionRequests OrderDeliveryActionRequest[]
   addressChangeRequests  StoreAddressChangeRequest[]
+  storeOrderRequests     StoreOrderRequest[]
   orderShipments         OrderShipment[]
   charges                OrderCharge[]
   notificationLogs       NotificationLog[]
@@ -8442,6 +8446,11 @@ enum DeliveryActionStatus {
   /// REJECTED, which is a human saying no — this is a decision that
   /// could not be carried out, and it needs a different response.
   FAILED   @map("failed")
+  /// Nobody at the seller answered in time (2026-09-17). Closed by the
+  /// sweep after `reseller.store_request_expire_hours`; the store is
+  /// emailed so it knows to follow up. Only a seller-held store request
+  /// can reach it.
+  EXPIRED  @map("expired")
 
   @@map("delivery_action_status")
 }
@@ -8490,6 +8499,11 @@ model OrderDeliveryActionRequest {
   /// outcome, and the result arrives later on a scan.
   executionRef          String?              @map("execution_ref")
   executionError        String?              @map("execution_error") @db.Text
+  /// When seller staff were reminded a store's request is still waiting
+  /// (2026-09-17). Set once, by a guarded claim, so the reminder goes once.
+  sellerRemindedAt      DateTime?            @map("seller_reminded_at") @db.Timestamptz
+  /// When the sweep closed an unanswered request as EXPIRED.
+  expiredAt             DateTime?            @map("expired_at") @db.Timestamptz
   createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz
   updatedAt             DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -9402,9 +9416,11 @@ enum ResellerStoreActionMode {
   OFF        @map("off")
   /// The store asks; the SELLER decides. Their goods, their money.
   ASK_SELLER @map("ask_seller")
-  /// The store acts without the seller. For the two actions that reach a
-  /// courier this still means "asks Skydrop directly" — CUR-10 keeps the
-  /// operator gate on a van being sent or a parcel turned round.
+  /// The store acts without the seller, exactly as the seller's own ask
+  /// would (2026-09-17). What that DOES differs per capability: a
+  /// send-back cancels with the courier on the store's click and turns the
+  /// parcel round; a re-attempt opens a ticket whose courier message
+  /// Skydrop sends by hand; a recall queues our call centre at once.
   DIRECT     @map("direct")
 
   @@map("reseller_store_action_mode")
@@ -9458,17 +9474,24 @@ model ResellerStoreActionPolicy {
 
 /// Where a held address correction sits while seller staff decide.
 enum StoreAddressChangeStatus {
-  PENDING  @map("pending")
+  PENDING    @map("pending")
   /// Seller staff said yes; the change has not been written yet.
-  APPROVED @map("approved")
-  REJECTED @map("rejected")
+  APPROVED   @map("approved")
+  REJECTED   @map("rejected")
   /// Written onto the order.
-  APPLIED  @map("applied")
+  APPLIED    @map("applied")
   /// Approved, and then the order had moved on — confirmed, cancelled,
   /// or otherwise past editing. Distinct from REJECTED, which is seller
   /// staff saying no: this is a yes that could not be carried out, and
   /// the reseller store needs telling for a different reason.
-  FAILED   @map("failed")
+  FAILED     @map("failed")
+  /// Seller staff never answered and the sweep closed it (2026-09-17).
+  /// The order kept its old details; the store is emailed.
+  EXPIRED    @map("expired")
+  /// Seller staff corrected the recipient on the order themselves while
+  /// this was waiting (2026-09-17), so it was closed unapplied: two
+  /// corrections to one address cannot both stand.
+  SUPERSEDED @map("superseded")
 
   @@map("store_address_change_status")
 }
@@ -9527,11 +9550,15 @@ model StoreAddressChangeRequest {
   sellerDecidedAt       DateTime? @map("seller_decided_at") @db.Timestamptz
   decisionNote          String?   @map("decision_note") @db.Text
 
-  appliedAt     DateTime? @map("applied_at") @db.Timestamptz
+  appliedAt        DateTime? @map("applied_at") @db.Timestamptz
   /// Why an approved change could not be written, kept as evidence.
-  failureReason String?   @map("failure_reason") @db.Text
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  failureReason    String?   @map("failure_reason") @db.Text
+  /// When seller staff were reminded this is still waiting (2026-09-17).
+  sellerRemindedAt DateTime? @map("seller_reminded_at") @db.Timestamptz
+  /// When the sweep closed it as EXPIRED.
+  expiredAt        DateTime? @map("expired_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   order  Order       @relation(fields: [orderId], references: [id])
   seller Seller      @relation(fields: [sellerId], references: [id])
@@ -9540,4 +9567,102 @@ model StoreAddressChangeRequest {
   @@index([sellerId, status])
   @@index([orderId])
   @@map("store_address_change_requests")
+}
+
+/// What a reseller store asked seller staff to let it do BEFORE a parcel
+/// exists (2026-09-17, owner: "if the store can do then will this will be
+/// done directly or it requests to the seller").
+enum StoreOrderRequestKind {
+  /// Call the order off.
+  CANCEL            @map("cancel")
+  /// Answer the call-cap review: keep trying, or release.
+  CALL_CAP_DECISION @map("call_cap_decision")
+  /// Raise an issue with Skydrop about the order.
+  RAISE_ISSUE       @map("raise_issue")
+
+  @@map("store_order_request_kind")
+}
+
+/// Where a held store request sits.
+enum StoreOrderRequestStatus {
+  PENDING  @map("pending")
+  /// Seller staff said yes; carrying it out follows.
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+  /// Carried out exactly as a DIRECT request would have been.
+  EXECUTED @map("executed")
+  /// Approved, and it could not be carried out — the order had moved on,
+  /// or the action was refused. The refusal is kept verbatim.
+  FAILED   @map("failed")
+  /// Nobody answered in time; closed by the sweep.
+  EXPIRED  @map("expired")
+
+  @@map("store_order_request_status")
+}
+
+/// The store's proposed answer to the call-cap review.
+enum StoreCallCapProposal {
+  RELEASE               @map("release")
+  REQUEST_MORE_ATTEMPTS @map("request_more_attempts")
+
+  @@map("store_call_cap_proposal")
+}
+
+/// A reseller store's request, held for seller staff, for the capabilities
+/// that act before a parcel exists: cancel, answer the call cap, raise an
+/// issue with Skydrop (2026-09-17).
+///
+/// ONE table for the three rather than three tables: they share the whole
+/// lifecycle (ask → seller decides → run exactly as DIRECT would → outcome
+/// → expiry), and three near-identical tables would drift. Each kind's own
+/// payload is a handful of nullable columns. Delivery actions keep their
+/// own table (they need a shipment) and address corrections keep theirs
+/// (one column per editable field, already shipped).
+model StoreOrderRequest {
+  id                     String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId                String                  @map("order_id") @db.Uuid
+  /// The order's seller — who decides, and the scope every read carries.
+  sellerId               String                  @map("seller_id") @db.Uuid
+  storeId                String                  @map("store_id") @db.Uuid
+  /// Who at the store asked. A plain id: the record outlives the person.
+  requestedByStoreUserId String?                 @map("requested_by_store_user_id") @db.Uuid
+  kind                   StoreOrderRequestKind
+  status                 StoreOrderRequestStatus @default(PENDING)
+
+  /// The store's own words: the cancel note, the call-cap note, or the
+  /// issue's description.
+  note               String?                  @db.Text
+  /// CANCEL only.
+  cancellationReason OrderCancellationReason? @map("cancellation_reason")
+  /// CALL_CAP_DECISION only.
+  callCapProposal    StoreCallCapProposal?    @map("call_cap_proposal")
+  /// RAISE_ISSUE only.
+  issueSubject       String?                  @map("issue_subject")
+
+  /// Seller staff's answer — their own columns, never a staff member's.
+  decidedBySellerUserId String?   @map("decided_by_seller_user_id") @db.Uuid
+  sellerDecidedAt       DateTime? @map("seller_decided_at") @db.Timestamptz
+  decisionNote          String?   @map("decision_note") @db.Text
+
+  executedAt       DateTime? @map("executed_at") @db.Timestamptz
+  /// What carrying it out produced — the ticket id for RAISE_ISSUE.
+  executionRef     String?   @map("execution_ref")
+  /// Why an approved request could not be carried out, verbatim.
+  failureReason    String?   @map("failure_reason") @db.Text
+  sellerRemindedAt DateTime? @map("seller_reminded_at") @db.Timestamptz
+  expiredAt        DateTime? @map("expired_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  /// RESTRICT on all three: a decided request is the evidence for why an
+  /// order was cancelled or an issue raised, and must outlive the rest.
+  order  Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  seller Seller      @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  store  SellerStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@index([sellerId, status])
+  @@index([storeId, status])
+  @@index([orderId, kind])
+  @@index([status, createdAt])
+  @@map("store_order_requests")
 }

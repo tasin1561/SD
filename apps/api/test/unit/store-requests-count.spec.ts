@@ -2,9 +2,11 @@ import {
   SellerStoreRequestCountService,
   pendingActionsWhere,
   pendingAddressChangesWhere,
+  pendingStoreOrderRequestsWhere,
 } from '../../src/modules/reseller-store/services/seller-store-request-count.service';
 import { SellerStoreActionDecisionService } from '../../src/modules/delivery-action/services/seller-store-action-decision.service';
 import { SellerAddressChangeDecisionService } from '../../src/modules/reseller-order/services/seller-address-change-decision.service';
+import { SellerStoreOrderRequestDecisionService } from '../../src/modules/store-order-request-decision/services/seller-store-order-request-decision.service';
 
 /**
  * The nav badge counts BOTH queues, and counts exactly what the screen
@@ -31,23 +33,31 @@ import { SellerAddressChangeDecisionService } from '../../src/modules/reseller-o
 const SELLER = 'seller-1';
 
 describe('the count itself', () => {
-  function makePrisma(actions: number, addressChanges: number) {
+  function makePrisma(actions: number, addressChanges: number, orderRequests = 0) {
     return {
       client: {
         orderDeliveryActionRequest: { count: jest.fn().mockResolvedValue(actions) },
         storeAddressChangeRequest: { count: jest.fn().mockResolvedValue(addressChanges) },
+        storeOrderRequest: { count: jest.fn().mockResolvedValue(orderRequests) },
       },
     };
   }
 
-  it('is BOTH queues added, not just the delivery asks', async () => {
-    const prisma = makePrisma(2, 3);
+  it('is EVERY queue added, not just the delivery asks', async () => {
+    const prisma = makePrisma(2, 3, 4);
     const svc = new SellerStoreRequestCountService(prisma as never);
     await expect(svc.forSeller(SELLER)).resolves.toEqual({
-      total: 5,
+      total: 9,
       actions: 2,
       addressChanges: 3,
+      orderRequests: 4,
     });
+  });
+
+  it('counts a held cancel / call-cap answer / issue (2026-09-17)', async () => {
+    const prisma = makePrisma(0, 0, 1);
+    const svc = new SellerStoreRequestCountService(prisma as never);
+    await expect(svc.forSeller(SELLER)).resolves.toMatchObject({ total: 1 });
   });
 
   it('counts an address correction even when no delivery ask is waiting', async () => {
@@ -68,6 +78,9 @@ describe('the count itself', () => {
       where: expect.objectContaining({ sellerId: SELLER }),
     });
     expect(prisma.client.storeAddressChangeRequest.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({ sellerId: SELLER }),
+    });
+    expect(prisma.client.storeOrderRequest.count).toHaveBeenCalledWith({
       where: expect.objectContaining({ sellerId: SELLER }),
     });
   });
@@ -103,5 +116,23 @@ describe('the badge counts exactly what the screen lists', () => {
 
     const listed = findMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
     expect(listed).toEqual(pendingAddressChangesWhere(SELLER));
+  });
+
+  it('the held-request count uses the same filter as the held-request list', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = { client: { storeOrderRequest: { findMany } } };
+    const list = new SellerStoreOrderRequestDecisionService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await list.listPending(SELLER);
+
+    const listed = findMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    expect(listed).toEqual(pendingStoreOrderRequestsWhere(SELLER));
   });
 });

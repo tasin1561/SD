@@ -41,6 +41,7 @@ function statusKind(s: DeliveryActionStatus): 'pending' | 'confirmed' | 'failed'
     case 'FAILED':
       return 'failed';
     case 'REJECTED':
+    case 'EXPIRED':
       return 'cancelled';
   }
 }

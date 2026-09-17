@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-query';
 import type { EarlyReservationReviewStatus, OrderStatus } from '@skydrop/db';
 import { useApiClient } from '@skydrop/auth/client';
-import { STORE_ORDERS_KEY } from './order-hooks';
+import { STORE_ORDERS_KEY, type StoreOrderRequestView } from './order-hooks';
 
 /**
  * 2026-09-16 — the call-cap question, on this store's own orders.
@@ -57,6 +57,18 @@ export interface CallReviewDecisionResult {
   readonly orderMoved: boolean;
 }
 
+/**
+ * What came of an answer (2026-09-17): applied now, or sent to Seller
+ * staff to approve because the seller's policy says so.
+ */
+export type CallReviewOutcome =
+  | { readonly applied: true; readonly result: CallReviewDecisionResult; readonly request: null }
+  | {
+      readonly applied: false;
+      readonly result: null;
+      readonly request: StoreOrderRequestView;
+    };
+
 export const STORE_CALL_REVIEWS_KEY = ['store-call-reviews'] as const;
 
 /**
@@ -91,7 +103,7 @@ export function useStoreCallReviews(
  * order back in the call queue.
  */
 export function useDecideStoreCallReview(): UseMutationResult<
-  CallReviewDecisionResult,
+  CallReviewOutcome,
   Error,
   { readonly reviewId: string; readonly decision: CallReviewDecision; readonly note?: string }
 > {
@@ -99,7 +111,7 @@ export function useDecideStoreCallReview(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ reviewId, decision, note }) =>
-      client.request<CallReviewDecisionResult>(`/api/store/call-reviews/${reviewId}`, {
+      client.request<CallReviewOutcome>(`/api/store/call-reviews/${reviewId}`, {
         method: 'PATCH',
         body: { decision, ...(note === undefined || note === '' ? {} : { note }) },
       }),

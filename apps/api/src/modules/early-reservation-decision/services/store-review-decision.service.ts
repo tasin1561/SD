@@ -1,5 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ResellerStoreActionMode } from '@skydrop/db';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  EarlyReservationReviewStatus,
+  ResellerStoreActionMode,
+  StoreCallCapProposal,
+  StoreOrderRequestKind,
+} from '@skydrop/db';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import {
   EarlyReservationReviewService,
@@ -8,39 +18,52 @@ import {
 } from '../../early-reservation/services/early-reservation-review.service';
 import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
 import {
+  StoreOrderRequestService,
+  type StoreOrderRequestView,
+} from '../../store-order-request/services/store-order-request.service';
+import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import {
   EarlyReservationDecisionService,
   type DecisionResult,
 } from './early-reservation-decision.service';
+
+/**
+ * What came of a store's answer: applied, or waiting on seller staff.
+ * A union rather than a nullable result — the address-correction shape.
+ */
+export type StoreReviewOutcome =
+  | { readonly applied: true; readonly result: DecisionResult; readonly request: null }
+  | { readonly applied: false; readonly result: null; readonly request: StoreOrderRequestView };
 
 /**
  * 2026-09-16 — the policy gate in front of a reseller STORE answering
  * "we could not reach your customer; keep trying, or release?".
  *
  * On a reseller order the store is the only party who can ring the
- * customer, so they are best placed to answer it. Whether they may is
- * the SELLER's policy for that store — their stock is what is being
- * held.
+ * customer, so they are best placed to answer it. Whether they may, and
+ * HOW, is the SELLER's policy for that store — their stock is what is
+ * being held.
  *
- * ── WHY ASK_SELLER IS A REFUSAL HERE ─────────────────────────────────
- * Answering this question is ALREADY the seller's by default: the review
- * is theirs, and the TTL sweep resolves it if nobody answers. So the
- * meaningful settings are DIRECT (the store may answer too) and OFF
- * (only the seller). ASK_SELLER would mean "the store asks the seller to
- * answer a question the seller can already answer", which is a round
- * trip with no decision in it — so it is refused by name, pointing at
- * who does it instead.
+ * ── ASK_SELLER IS A HELD REQUEST (2026-09-17, owner) ─────────────────
+ * It used to refuse, on the reasoning that the seller can answer the
+ * review themselves. The owner's rule is that every capability may be
+ * set to "needs my approval", so the store PROPOSES an answer and seller
+ * staff approve or reject that proposal; approving runs the same
+ * `decideAsStore` a DIRECT answer runs, as the store.
  */
 @Injectable()
 export class StoreReviewDecisionService {
   constructor(
+    private readonly prisma: PrismaService,
     private readonly decisions: EarlyReservationDecisionService,
     private readonly reviews: EarlyReservationReviewService,
     private readonly policies: ResellerStoreActionPolicyService,
+    private readonly requests: StoreOrderRequestService,
   ) {}
 
   /** The open reviews on this store's own orders. */
   async listOpen(storeId: string): Promise<readonly ReviewView[]> {
-    await this.assertAllowed(storeId);
+    await this.policyMode(storeId);
     return this.decisions.listOpenForStore(storeId);
   }
 
@@ -51,8 +74,8 @@ export class StoreReviewDecisionService {
     decision: ReviewDecision;
     note?: string | null;
     ctx?: ClientContext;
-  }): Promise<DecisionResult> {
-    await this.assertAllowed(input.storeId);
+  }): Promise<StoreReviewOutcome> {
+    const mode = await this.policyMode(input.storeId);
 
     // The review must be on one of THIS store's orders. Scoped through
     // the order, because the review row carries no store id — so another
@@ -65,7 +88,32 @@ export class StoreReviewDecisionService {
       });
     }
 
-    return this.decisions.decideAsStore(
+    if (mode === ResellerStoreActionMode.ASK_SELLER) {
+      const review = await this.prisma.client.earlyReservationReview.findUniqueOrThrow({
+        where: { id: input.reviewId },
+        select: { orderId: true, status: true },
+      });
+      if (review.status !== EarlyReservationReviewStatus.OPEN) {
+        throw new ConflictException({
+          code: 'REVIEW_ALREADY_RESOLVED',
+          message: 'This question has already been answered.',
+        });
+      }
+      const request = await this.requests.hold({
+        storeId: input.storeId,
+        storeUserId: input.storeUserId,
+        orderId: review.orderId,
+        kind: StoreOrderRequestKind.CALL_CAP_DECISION,
+        note: input.note ?? null,
+        callCapProposal:
+          input.decision === 'RELEASE'
+            ? StoreCallCapProposal.RELEASE
+            : StoreCallCapProposal.REQUEST_MORE_ATTEMPTS,
+      });
+      return { applied: false, result: null, request };
+    }
+
+    const result = await this.decisions.decideAsStore(
       input.storeId,
       owned.sellerId,
       input.reviewId,
@@ -74,16 +122,19 @@ export class StoreReviewDecisionService {
       input.note ?? null,
       input.ctx,
     );
+    return { applied: true, result, request: null };
   }
 
-  private async assertAllowed(storeId: string): Promise<void> {
+  /** The store's mode for this capability; OFF is refused by name. */
+  private async policyMode(storeId: string): Promise<ResellerStoreActionMode> {
     const policy = await this.policies.forStore(storeId);
-    if (policy.callCapDecision !== ResellerStoreActionMode.DIRECT) {
+    if (policy.callCapDecision === ResellerStoreActionMode.OFF) {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NOT_ALLOWED',
         message:
           'The seller answers call-attempt questions for this store. Ask them whether to keep trying.',
       });
     }
+    return policy.callCapDecision;
   }
 }

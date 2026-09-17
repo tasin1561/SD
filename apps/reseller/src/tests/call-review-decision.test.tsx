@@ -49,7 +49,11 @@ describe('call-cap answer — the consequence, then the commit', () => {
     const fetchImpl = vi.fn(
       async () =>
         new Response(
-          JSON.stringify({ review: REVIEW, orderStatus: 'REJECTED_NDR', orderMoved: true }),
+          JSON.stringify({
+            applied: true,
+            result: { review: REVIEW, orderStatus: 'REJECTED_NDR', orderMoved: true },
+            request: null,
+          }),
           {
             status: 200,
           },
@@ -103,9 +107,16 @@ describe('call-cap answer — the consequence, then the commit', () => {
   it('says so plainly when the answer is recorded but the order had moved on', async () => {
     const fetchImpl = vi.fn(
       async () =>
-        new Response(JSON.stringify({ review: REVIEW, orderStatus: null, orderMoved: false }), {
-          status: 200,
-        }),
+        new Response(
+          JSON.stringify({
+            applied: true,
+            result: { review: REVIEW, orderStatus: null, orderMoved: false },
+            request: null,
+          }),
+          {
+            status: 200,
+          },
+        ),
     );
     renderStoreScreen(<CallReviewDecision review={REVIEW} />, { fetchImpl });
     openDialog();
@@ -118,6 +129,33 @@ describe('call-cap answer — the consequence, then the commit', () => {
       decision: 'REQUEST_MORE_ATTEMPTS',
     });
     expect(await screen.findByText(/calling did not restart/)).toBeInTheDocument();
+  });
+
+  it('when Seller staff approve answers first, it asks for a reason and says the answer went to them', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            applied: false,
+            result: null,
+            request: { id: 'req-1', orderId: REVIEW.orderId, status: 'PENDING' },
+          }),
+          { status: 201 },
+        ),
+    );
+    renderStoreScreen(<CallReviewDecision review={REVIEW} mode="ASK_SELLER" />, { fetchImpl });
+    openDialog();
+
+    const dialog = await screen.findByRole('dialog');
+    const send = within(dialog).getByRole('button', { name: 'Send to your seller to approve' });
+    expect(send).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole('textbox'), {
+      target: { value: 'Customer asked us to try tomorrow' },
+    });
+    fireEvent.click(send);
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalled());
+    expect(await screen.findByText(/Sent to Seller staff to approve/)).toBeInTheDocument();
   });
 
   it('shows the server’s refusal verbatim (FE-2) when the seller keeps this question', async () => {

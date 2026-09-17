@@ -8,6 +8,7 @@ import type {
   ShipmentStatus,
   StockUnitStatus,
   StoreAddressChangeStatus,
+  StoreOrderRequestStatus,
   TicketStatus,
   TopupRequestStatus,
   WithdrawalRequestStatus,
@@ -26,6 +27,8 @@ import {
   withdrawalStatusLabel,
   stockUnitStatusKind,
   storeAddressChangeStatusKind,
+  storeOrderRequestStatusKind,
+  storeOrderRequestStatusLabel,
   storeAddressChangeStatusLabel,
   ticketStatusKind,
   ticketStatusLabel,
@@ -145,6 +148,20 @@ export function StoreAddressChangeStatusBadge({
     <StatusBadge
       kind={storeAddressChangeStatusKind(status)}
       label={storeAddressChangeStatusLabel(status)}
+    />
+  );
+}
+
+/** 2026-09-17 — a reseller store's held cancel / call-cap answer / issue. */
+export function StoreOrderRequestStatusBadge({
+  status,
+}: {
+  readonly status: StoreOrderRequestStatus;
+}): ReactElement {
+  return (
+    <StatusBadge
+      kind={storeOrderRequestStatusKind(status)}
+      label={storeOrderRequestStatusLabel(status)}
     />
   );
 }

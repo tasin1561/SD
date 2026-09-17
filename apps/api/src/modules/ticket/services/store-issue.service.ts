@@ -1,25 +1,39 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { ResellerStoreActionMode } from '@skydrop/db';
+import { ResellerStoreActionMode, StoreOrderRequestKind } from '@skydrop/db';
 import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
+import {
+  StoreOrderRequestService,
+  type StoreOrderRequestView,
+} from '../../store-order-request/services/store-order-request.service';
 import { TicketService, type StoreTicketView } from './ticket.service';
+
+/**
+ * What came of a store raising an issue: the ticket, or a request waiting
+ * on seller staff. A union rather than a nullable ticket.
+ */
+export type StoreIssueOutcome =
+  | { readonly applied: true; readonly ticket: StoreTicketView; readonly request: null }
+  | { readonly applied: false; readonly ticket: null; readonly request: StoreOrderRequestView };
 
 /**
  * 2026-09-16 — the policy gate in front of a store raising something
  * with Skydrop.
  *
- * ── WHY THERE IS NO "ASK THE SELLER" HERE ────────────────────────────
- * `chaseSkydrop` is DIRECT or OFF in practice. You do not ask a seller's
- * permission to tell Skydrop we damaged a parcel — an approval step
- * there would let a seller suppress a complaint about us, which is the
- * opposite of what the queue is for. ASK_SELLER is therefore treated as
- * "not yours to do", with a message that says who does it instead,
- * rather than being silently read as DIRECT.
+ * ── ASK_SELLER IS A HELD REQUEST (2026-09-17, owner) ─────────────────
+ * This used to refuse "ask the seller", on the reasoning that an approval
+ * step lets a seller suppress a complaint about us. The owner decided
+ * otherwise: a seller may choose to see a store's issue before it reaches
+ * Skydrop. So ASK_SELLER holds the subject and description for seller
+ * staff; approving opens exactly the ticket a DIRECT raise opens,
+ * attributed to the store; rejecting sends nothing to Skydrop and the
+ * store is told why. OFF still refuses by name.
  */
 @Injectable()
 export class StoreIssueService {
   constructor(
     private readonly tickets: TicketService,
     private readonly policies: ResellerStoreActionPolicyService,
+    private readonly requests: StoreOrderRequestService,
   ) {}
 
   async raise(input: {
@@ -28,23 +42,33 @@ export class StoreIssueService {
     orderId: string;
     subject: string;
     description: string | null;
-  }): Promise<StoreTicketView> {
+  }): Promise<StoreIssueOutcome> {
     const policy = await this.policies.forStore(input.storeId);
-    if (policy.chaseSkydrop !== ResellerStoreActionMode.DIRECT) {
+    if (policy.chaseSkydrop === ResellerStoreActionMode.OFF) {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NOT_ALLOWED',
         message:
-          policy.chaseSkydrop === ResellerStoreActionMode.OFF
-            ? 'The seller has not enabled raising issues with Skydrop for this store. Raise it with them instead.'
-            : 'The seller handles issues with Skydrop for this store. Raise it with them instead.',
+          'The seller has not enabled raising issues with Skydrop for this store. Raise it with them instead.',
       });
     }
-    return this.tickets.openStoreIssue({
+    if (policy.chaseSkydrop === ResellerStoreActionMode.ASK_SELLER) {
+      const request = await this.requests.hold({
+        storeId: input.storeId,
+        storeUserId: input.storeUserId,
+        orderId: input.orderId,
+        kind: StoreOrderRequestKind.RAISE_ISSUE,
+        note: input.description,
+        issueSubject: input.subject,
+      });
+      return { applied: false, ticket: null, request };
+    }
+    const ticket = await this.tickets.openStoreIssue({
       storeId: input.storeId,
       storeUserId: input.storeUserId,
       orderId: input.orderId,
       subject: input.subject,
       description: input.description,
     });
+    return { applied: true, ticket, request: null };
   }
 }

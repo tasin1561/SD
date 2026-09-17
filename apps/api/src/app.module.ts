@@ -118,6 +118,8 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { pinoConfig } from './common/pino/logger-config';
 import { envSchema } from './config/env.schema';
 import { DeliveryActionModule } from './modules/delivery-action/delivery-action.module';
+import { StoreOrderRequestModule } from './modules/store-order-request/store-order-request.module';
+import { StoreOrderRequestDecisionModule } from './modules/store-order-request-decision/store-order-request-decision.module';
 import { CourierServiceabilityModule } from './modules/courier-serviceability/courier-serviceability.module';
 import { CourierShiprocketModule } from './modules/courier-shiprocket/courier-shiprocket.module';
 import { ShipmentAddressModule } from './modules/shipment-address/shipment-address.module';
@@ -129,6 +131,8 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     CourierShiprocketModule,
     CourierServiceabilityModule,
     DeliveryActionModule,
+    StoreOrderRequestModule,
+    StoreOrderRequestDecisionModule,
     ConfigModule,
     LoggerModule.forRootAsync({
       inject: [EnvService],

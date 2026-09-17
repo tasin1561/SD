@@ -425,6 +425,12 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'inbound_freight_charges',
         // R5 early-reservation reviews — FK-RESTRICT orders + sellers.
         'early_reservation_reviews',
+        // 2026-09-17 held store requests (cancel / call-cap answer / issue)
+        // — FK-RESTRICT orders, sellers and seller_stores (MUST #12). The
+        // two older held queues are named beside it for the same reason.
+        'store_order_requests',
+        'store_address_change_requests',
+        'order_delivery_action_requests',
         // R7 tickets — FK-RESTRICT sellers; ticket_events cascades.
         // Courier escalations FK tickets (CASCADE), and their messages
         // cascade from those — listed anyway so the reset stays

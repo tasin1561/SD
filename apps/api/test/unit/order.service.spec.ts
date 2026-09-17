@@ -190,6 +190,9 @@ function makeService(
     // In credit. The overdrawn path is covered in
     // seller-credit.service.spec, where the allowance maths lives.
     { assertCanPlaceOrder: assertCanPlaceOrder } as never,
+    // A seller correcting a reseller store's recipient (2026-09-17).
+    { supersedeAddressChanges: jest.fn(async () => 0) } as never,
+    { recipientChangedBySeller: jest.fn(async () => undefined) } as never,
   );
   return {
     svc,

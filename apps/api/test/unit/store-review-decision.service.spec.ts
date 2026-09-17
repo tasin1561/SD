@@ -2,6 +2,7 @@ import { ResellerStoreActionMode } from '@skydrop/db';
 import { StoreReviewDecisionService } from '../../src/modules/early-reservation-decision/services/store-review-decision.service';
 import type { EarlyReservationDecisionService } from '../../src/modules/early-reservation-decision/services/early-reservation-decision.service';
 import type { EarlyReservationReviewService } from '../../src/modules/early-reservation/services/early-reservation-review.service';
+import type { StoreOrderRequestService } from '../../src/modules/store-order-request/services/store-order-request.service';
 import type { ResellerStoreActionPolicyService } from '../../src/modules/reseller-store/services/reseller-store-action-policy.service';
 
 const ASK = {
@@ -15,6 +16,7 @@ const ASK = {
 function make(
   mode: ResellerStoreActionMode,
   owned: { sellerId: string } | null = { sellerId: 'seller-1' },
+  reviewStatus: 'OPEN' | 'SELLER_RELEASED' = 'OPEN',
 ) {
   const decisions = {
     decideAsStore: jest.fn().mockResolvedValue({ review: {}, orderStatus: null, orderMoved: true }),
@@ -24,14 +26,27 @@ function make(
   const policies = {
     forStore: jest.fn().mockResolvedValue({ storeId: 'store-1', callCapDecision: mode }),
   };
+  const requests = { hold: jest.fn().mockResolvedValue({ id: 'req-1', status: 'PENDING' }) };
+  const prisma = {
+    client: {
+      earlyReservationReview: {
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValue({ orderId: 'order-1', status: reviewStatus }),
+      },
+    },
+  };
   return {
     decisions,
     reviews,
     policies,
+    requests,
     svc: new StoreReviewDecisionService(
+      prisma as never,
       decisions as unknown as EarlyReservationDecisionService,
       reviews as unknown as EarlyReservationReviewService,
       policies as unknown as ResellerStoreActionPolicyService,
+      requests as unknown as StoreOrderRequestService,
     ),
   };
 }
@@ -39,7 +54,8 @@ function make(
 describe('a store answering the call-cap question (2026-09-16)', () => {
   it('DIRECT decides as the STORE, on the seller resolved from the review', async () => {
     const { svc, decisions } = make(ResellerStoreActionMode.DIRECT);
-    await svc.decide(ASK);
+    const out = await svc.decide(ASK);
+    expect(out.applied).toBe(true);
     expect(decisions.decideAsStore).toHaveBeenCalledWith(
       'store-1',
       'seller-1',
@@ -59,18 +75,46 @@ describe('a store answering the call-cap question (2026-09-16)', () => {
     expect(decisions.decideAsStore).not.toHaveBeenCalled();
   });
 
-  it('OFF and ASK_SELLER both leave it to the seller', async () => {
-    // Answering is ALREADY the seller's, and the TTL sweep closes it if
-    // nobody does — so "ask the seller" would be a round trip with no
-    // decision in it. Refused by name, pointing at who does it.
-    for (const mode of [ResellerStoreActionMode.OFF, ResellerStoreActionMode.ASK_SELLER]) {
-      const { svc, decisions, reviews } = make(mode);
-      await expect(svc.decide(ASK)).rejects.toMatchObject({
-        response: { code: 'STORE_ACTION_NOT_ALLOWED' },
-      });
-      expect(reviews.findForStore).not.toHaveBeenCalled();
-      expect(decisions.decideAsStore).not.toHaveBeenCalled();
-    }
+  it('OFF refuses by name before looking at the review', async () => {
+    const { svc, decisions, reviews } = make(ResellerStoreActionMode.OFF);
+    await expect(svc.decide(ASK)).rejects.toMatchObject({
+      response: { code: 'STORE_ACTION_NOT_ALLOWED' },
+    });
+    expect(reviews.findForStore).not.toHaveBeenCalled();
+    expect(decisions.decideAsStore).not.toHaveBeenCalled();
+  });
+
+  it('ASK_SELLER holds the proposed answer for seller staff and decides nothing (owner, 2026-09-17)', async () => {
+    const { svc, decisions, requests } = make(ResellerStoreActionMode.ASK_SELLER);
+    const out = await svc.decide(ASK);
+    expect(out).toMatchObject({ applied: false, result: null, request: { id: 'req-1' } });
+    expect(decisions.decideAsStore).not.toHaveBeenCalled();
+    expect(requests.hold).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: 'order-1',
+        kind: 'CALL_CAP_DECISION',
+        callCapProposal: 'RELEASE',
+        note: ASK.note,
+      }),
+    );
+  });
+
+  it('ASK_SELLER on a review already answered is refused, never held', async () => {
+    const { svc, requests } = make(
+      ResellerStoreActionMode.ASK_SELLER,
+      { sellerId: 'seller-1' },
+      'SELLER_RELEASED',
+    );
+    await expect(svc.decide(ASK)).rejects.toMatchObject({
+      response: { code: 'REVIEW_ALREADY_RESOLVED' },
+    });
+    expect(requests.hold).not.toHaveBeenCalled();
+  });
+
+  it('ASK_SELLER still lets the store see what is waiting', async () => {
+    const { svc, decisions } = make(ResellerStoreActionMode.ASK_SELLER);
+    await svc.listOpen('store-1');
+    expect(decisions.listOpenForStore).toHaveBeenCalledWith('store-1');
   });
 
   it('the open list is gated the same way', async () => {
