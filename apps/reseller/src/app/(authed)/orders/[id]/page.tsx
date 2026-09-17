@@ -140,7 +140,9 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         action={
           <div className="flex items-center gap-2">
             <OrderStatusBadge status={o.status} />
-            {!o.terminal && can(me, 'orders.cancel') && cancelMode !== 'OFF' ? (
+            {/* Only while the order's stage still allows a cancel (until it is
+                packed) — past that the button could only ever be refused. */}
+            {!o.terminal && o.stages.cancel && can(me, 'orders.cancel') && cancelMode !== 'OFF' ? (
               <Button variant="ghost" size="md" onClick={() => setConfirming(true)}>
                 {cancelNeedsSeller ? 'Ask the seller to cancel' : 'Cancel order'}
               </Button>
@@ -305,8 +307,18 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               mode={policy.data?.callCapDecision}
             />
           ) : null}
-          <OrderActions orderId={o.id} />
-          <AddressCorrection orderId={o.id} recipient={o.recipient} />
+          {/* Each offered only at the stages where it can work (2026-09-17):
+              delivery tasks while the parcel is out for delivery or has just
+              failed, a correction before the call confirms the order. At
+              other stages the history still shows, with a plain sentence
+              saying when the task opens — cosmetic, the server still refuses
+              by name (FE-2). */}
+          <OrderActions orderId={o.id} stageOpen={o.stages.deliveryActions} />
+          <AddressCorrection
+            orderId={o.id}
+            recipient={o.recipient}
+            stageOpen={o.stages.addressCorrection}
+          />
         </>
       ) : null}
 
@@ -396,7 +408,14 @@ function actionLabel(kind: StoreActionKind): string {
   return ACTIONS.find((a) => a.kind === kind)?.label ?? kind;
 }
 
-function OrderActions({ orderId }: { orderId: string }): ReactElement {
+function OrderActions({
+  orderId,
+  stageOpen,
+}: {
+  orderId: string;
+  /** The order is out for delivery or has just failed — the only time these apply. */
+  stageOpen: boolean;
+}): ReactElement {
   const actions = useStoreOrderActions(orderId);
   const submit = useRequestStoreAction();
   const toast = useToast();
@@ -455,6 +474,11 @@ function OrderActions({ orderId }: { orderId: string }): ReactElement {
           {offered.length === 0 ? (
             <p className="text-text-muted text-sm">
               The seller has not enabled any of these for your store.
+            </p>
+          ) : !stageOpen ? (
+            <p className="text-text-muted text-sm">
+              Calling the customer again, another delivery attempt and sending the parcel back are
+              available only while the parcel is out for delivery or has just failed to deliver.
             </p>
           ) : (
             <div className="space-y-2">
@@ -912,9 +936,12 @@ function proposedChanges(
 function AddressCorrection({
   orderId,
   recipient,
+  stageOpen,
 }: {
   orderId: string;
   recipient: StoreOrderView['recipient'];
+  /** Before the call confirms the order — the only time the details can change. */
+  stageOpen: boolean;
 }): ReactElement {
   const changes = useStoreAddressChanges(orderId);
   const submit = useEditStoreRecipient();
@@ -973,7 +1000,9 @@ function AddressCorrection({
   }
 
   const history = changes.data.items;
-  const pending = history.find((r) => r.status === 'PENDING') ?? null;
+  // Open means PENDING or APPROVED (still being applied) — the server
+  // refuses a second correction while either exists.
+  const pending = history.find((r) => r.status === 'PENDING' || r.status === 'APPROVED') ?? null;
   if (mode === 'OFF' && history.length === 0) return <></>;
 
   return (
@@ -982,9 +1011,11 @@ function AddressCorrection({
       subtitle={
         mode === 'OFF'
           ? 'Your seller does not allow this store to change delivery details.'
-          : waits
-            ? 'Seller staff read the correction and decide. Nothing on the parcel changes until they answer.'
-            : 'A correction here is written onto the order straight away.'
+          : !stageOpen
+            ? 'Delivery details can be corrected only until the customer confirms the order on our call.'
+            : waits
+              ? 'Seller staff read the correction and decide. Nothing on the parcel changes until they answer.'
+              : 'A correction here is written onto the order straight away.'
       }
     >
       <Card>
@@ -993,6 +1024,12 @@ function AddressCorrection({
             <p className="text-text-muted text-sm">
               Ask the seller if the delivery details need to change.
             </p>
+          ) : !stageOpen ? (
+            <p className="text-text-muted text-sm">
+              This order is past that stage, so the details on the parcel stand. If they are wrong,
+              tell your seller — once the parcel is out for delivery you can also ask for another
+              attempt or for it to be sent back.
+            </p>
           ) : (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <Button variant="secondary" size="md" disabled={pending !== null} onClick={start}>
@@ -1000,7 +1037,7 @@ function AddressCorrection({
               </Button>
               <span className="text-text-muted text-xs">
                 {pending !== null
-                  ? 'A correction on this order is already waiting on seller staff — they answer that one before you can send another.'
+                  ? 'A correction on this order is still open with seller staff — it has to be finished before you can send another.'
                   : waits
                     ? 'Seller staff approve this one before anything changes'
                     : 'Happens as soon as you send it'}

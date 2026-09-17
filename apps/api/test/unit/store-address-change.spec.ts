@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { StoreAddressChangeStatus } from '@skydrop/db';
+import { AdvisoryLock, advisoryKey } from '../../src/common/db/advisory-lock';
 import {
   StoreAddressChangeService,
   fieldsFromPatch,
@@ -51,7 +52,14 @@ function pendingRow() {
 }
 
 function makePrisma(requestOverrides: Record<string, unknown> = {}) {
+  const locks: Array<[number, number]> = [];
   const client = {
+    locks,
+    $executeRaw: jest.fn((_strings: TemplateStringsArray, ns: number, key: number) => {
+      locks.push([ns, key]);
+      return Promise.resolve(1);
+    }),
+    $transaction: jest.fn(),
     order: {
       findFirst: jest.fn().mockResolvedValue(ORDER),
       findUnique: jest.fn().mockResolvedValue({
@@ -77,6 +85,7 @@ function makePrisma(requestOverrides: Record<string, unknown> = {}) {
       ...requestOverrides,
     },
   };
+  client.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn(client));
   return { client };
 }
 
@@ -119,21 +128,53 @@ describe('StoreAddressChangeService — holding a correction', () => {
     expect(notifier.waitingOnSeller).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses a second correction while one is still waiting', async () => {
+  it('checks and inserts under the per-order lock, counting an APPROVED correction as open', async () => {
+    // A read before the insert with nothing between is not a guard under
+    // READ COMMITTED: two clicks both passed. The re-check and the insert
+    // now share a transaction holding STORE_ADDRESS_CHANGE on the order.
+    const prisma = makePrisma();
+    const svc = new StoreAddressChangeService(prisma as never, audit as never, notifier as never);
+    await svc.hold({
+      storeId: 'store-1',
+      storeUserId: 'store-user-1',
+      sellerId: 'seller-1',
+      orderId: 'order-1',
+      reason: 'Customer rang to say the house number is wrong',
+      fields: { recipientAddressLine1: '42 New Street' },
+    });
+    expect(prisma.client.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.client.locks).toEqual([
+      [AdvisoryLock.STORE_ADDRESS_CHANGE, advisoryKey('order-1')],
+    ]);
+    const where = prisma.client.storeAddressChangeRequest.findFirst.mock.calls[0]![0].where;
+    expect(where.status.in).toEqual([
+      StoreAddressChangeStatus.PENDING,
+      StoreAddressChangeStatus.APPROVED,
+    ]);
+    // The lock is taken BEFORE the re-check reads.
+    expect(prisma.client.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      prisma.client.storeAddressChangeRequest.findFirst.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('refuses a second correction while one is still open, as a 409', async () => {
     // Two proposals for one address cannot both be right, and approving
     // them in whatever order they were decided applies the older last.
     const prisma = makePrisma({ findFirst: jest.fn().mockResolvedValue({ id: 'open' }) });
     const svc = new StoreAddressChangeService(prisma as never, audit as never, notifier as never);
-    await expect(
-      svc.hold({
+    const err: unknown = await svc
+      .hold({
         storeId: 'store-1',
         storeUserId: 'store-user-1',
         sellerId: 'seller-1',
         orderId: 'order-1',
         reason: 'Customer rang to say the house number is wrong',
         fields: { recipientAddressLine1: '42 New Street' },
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect(err).toMatchObject({ response: { code: 'ADDRESS_CHANGE_ALREADY_OPEN' } });
+    expect(prisma.client.storeAddressChangeRequest.create).not.toHaveBeenCalled();
   });
 
   it('refuses a correction that proposes nothing', async () => {
@@ -200,14 +241,42 @@ describe('SellerAddressChangeDecisionService — the answer', () => {
     });
     const { svc, prisma, decided } = build(edit);
     await expect(svc.approve(seller, 'req-1', null, ctx)).resolves.toBeDefined();
-    expect(prisma.client.storeAddressChangeRequest.update.mock.calls[0]![0].data).toMatchObject({
-      status: StoreAddressChangeStatus.FAILED,
-      failureReason: '[EDIT_DURING_CALL] An agent is on the phone about this order',
+    // The claim is updateMany call 0; the outcome is call 1, guarded on APPROVED.
+    expect(prisma.client.storeAddressChangeRequest.updateMany.mock.calls[1]![0]).toMatchObject({
+      where: { id: 'req-1', status: StoreAddressChangeStatus.APPROVED },
+      data: {
+        status: StoreAddressChangeStatus.FAILED,
+        failureReason: '[EDIT_DURING_CALL] An agent is on the phone about this order',
+      },
     });
+    expect(prisma.client.storeAddressChangeRequest.update).not.toHaveBeenCalled();
     // The store has a customer waiting; silence is the real failure here.
     expect(decided).toHaveBeenCalledWith(
       expect.objectContaining({ approved: true, applied: false }),
     );
+  });
+
+  it('an applied correction is written guarded on APPROVED, never a plain update', async () => {
+    const edit = jest.fn().mockResolvedValue(undefined);
+    const { svc, prisma } = build(edit);
+    await svc.approve(seller, 'req-1', null, ctx);
+    expect(prisma.client.storeAddressChangeRequest.updateMany.mock.calls[1]![0]).toMatchObject({
+      where: { id: 'req-1', status: StoreAddressChangeStatus.APPROVED },
+      data: { status: StoreAddressChangeStatus.APPLIED },
+    });
+    expect(prisma.client.storeAddressChangeRequest.update).not.toHaveBeenCalled();
+  });
+
+  it('a store user who no longer exists is recorded as the STORE with no id — never the seller user', async () => {
+    const edit = jest.fn().mockResolvedValue(undefined);
+    const prisma = makePrisma({
+      findUniqueOrThrow: jest
+        .fn()
+        .mockResolvedValue({ ...pendingRow(), requestedByStoreUserId: null }),
+    });
+    const { svc } = build(edit, prisma);
+    await svc.approve(seller, 'req-1', null, ctx);
+    expect(edit.mock.calls[0]![3]).toEqual({ type: 'STORE', id: null });
   });
 
   it('a request somebody else already decided is a conflict, not a second edit', async () => {

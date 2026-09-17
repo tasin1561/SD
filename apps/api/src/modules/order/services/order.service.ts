@@ -41,6 +41,17 @@ import { StoreOrderRequestService } from '../../store-order-request/services/sto
 import { StoreRequestNotifier } from '../../store-order-request/services/store-request-notifier.service';
 
 /**
+ * The statuses in which `edit` accepts anything at all — the ONE list,
+ * read by `edit` (which refuses outside it, `NOT_EDITABLE`) and by the
+ * reseller store's order view, which offers the address correction only
+ * inside it (cosmetic, FE-2).
+ */
+export const RECIPIENT_EDITABLE_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.DRAFT,
+  OrderStatus.PENDING_CONFIRMATION,
+]);
+
+/**
  * What a RESELLER STORE may change on its own order (2026-09-16).
  *
  * The recipient block only — where the parcel is going. Never the items
@@ -919,9 +930,8 @@ export class OrderService {
       }
     }
 
-    const isDraft = order.status === OrderStatus.DRAFT;
     const isPending = order.status === OrderStatus.PENDING_CONFIRMATION;
-    if (!isDraft && !isPending) {
+    if (!RECIPIENT_EDITABLE_STATUSES.has(order.status)) {
       throw new ConflictException({
         code: 'NOT_EDITABLE',
         message: `An order in ${order.status} cannot be edited`,

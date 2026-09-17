@@ -1,5 +1,6 @@
 import { DeliveryActionKind, DeliveryActionStatus, OrderStatus } from '@skydrop/db';
 import { DeliveryActionService } from '../../src/modules/delivery-action/services/delivery-action.service';
+import { AdvisoryLock, advisoryKey } from '../../src/common/db/advisory-lock';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { CallQueueService } from '../../src/modules/call-queue/services/call-queue.service';
@@ -30,14 +31,18 @@ function makeSut(
       : opts.order;
 
   const updated: AnyArgs[] = [];
+  const locks: Array<[number, number]> = [];
+  // The row as the database would hold it, so a guarded updateMany and
+  // the re-read after it behave like the real thing.
+  let current: AnyArgs | null = null;
   const client: AnyArgs = {
     order: { findFirst: async () => order },
     orderDeliveryActionRequest: {
-      findFirst: async () => opts.openRequest ?? null,
+      findFirst: jest.fn(async () => opts.openRequest ?? null),
       findMany: async () => [],
-      create: async (args: { data: AnyArgs }) => {
+      create: jest.fn(async (args: { data: AnyArgs }) => {
         created.push(args.data);
-        return {
+        current = {
           id: 'req1',
           status: DeliveryActionStatus.PENDING,
           decisionNote: null,
@@ -51,27 +56,25 @@ function makeSut(
           // stamps PENDING over it would hide exactly that.
           ...args.data,
         };
-      },
-      update: async (args: { data: AnyArgs }) => {
-        updated.push(args.data);
-        return {
-          id: 'req1',
-          orderId: 'o1',
-          shipmentId: 'sh1',
-          action: DeliveryActionKind.RTO,
-          reason: 'x',
-          decisionNote: null,
-          decidedAt: null,
-          executedAt: null,
-          executionRef: null,
-          executionError: null,
-          createdAt: new Date('2026-08-28T00:00:00Z'),
-          ...args.data,
-        };
-      },
+        return current;
+      }),
+      updateMany: jest.fn(async (args: { where: AnyArgs; data: AnyArgs }) => {
+        updated.push({ where: args.where, ...args.data });
+        if (current !== null && current['status'] === args.where['status']) {
+          Object.assign(current, args.data);
+          return { count: 1 };
+        }
+        return { count: 0 };
+      }),
+      findUniqueOrThrow: async () => current,
     },
     deliveryAttempt: { findFirst: async () => opts.attempt ?? { id: 'att1' } },
+    $executeRaw: jest.fn(async (_s: TemplateStringsArray, ns: number, key: number) => {
+      locks.push([ns, key]);
+      return 1;
+    }),
   };
+  client['$transaction'] = async (fn: (tx: unknown) => Promise<unknown>) => fn(client);
 
   const prisma = { client } as unknown as PrismaService;
   const audit = { log: jest.fn(async () => 'a1') } as unknown as AuditLogService;
@@ -99,6 +102,8 @@ function makeSut(
 
   return {
     svc: new DeliveryActionService(prisma, audit, queue, courier, issues, tickets, escalations),
+    client,
+    locks,
     created,
     updated,
     enqueueAgain,
@@ -311,5 +316,109 @@ describe('DeliveryActionService.request — the manual ticket system', () => {
       expect(view.status).not.toBe(DeliveryActionStatus.PENDING);
     }
     expect(sut).toBeDefined();
+  });
+});
+
+describe('DeliveryActionService.request — one open request per order, under a lock (2026-09-17)', () => {
+  it('re-checks and inserts inside ONE transaction holding DELIVERY_ACTION_REQUEST on the order', async () => {
+    // A read before the insert with nothing between is not a guard: two
+    // clicks both passed, and a DIRECT send-back asked the courier twice.
+    const sut = makeSut();
+    await sut.svc.request({ ...BASE, action: DeliveryActionKind.RTO });
+    expect(sut.locks).toEqual([[AdvisoryLock.DELIVERY_ACTION_REQUEST, advisoryKey('o1')]]);
+    const findFirst = (sut.client['orderDeliveryActionRequest'] as AnyArgs)[
+      'findFirst'
+    ] as jest.Mock;
+    const create = (sut.client['orderDeliveryActionRequest'] as AnyArgs)['create'] as jest.Mock;
+    const lockAt = (sut.client['$executeRaw'] as jest.Mock).mock.invocationCallOrder[0] ?? 0;
+    expect(lockAt).toBeLessThan(findFirst.mock.invocationCallOrder[0] ?? 0);
+    expect(findFirst.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      create.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('the loser of the race reaches no courier', async () => {
+    const sut = makeSut({ openRequest: { id: 'req0', action: DeliveryActionKind.RTO } });
+    await expect(
+      sut.svc.request({ ...BASE, action: DeliveryActionKind.RTO }),
+    ).rejects.toMatchObject({ response: { code: 'DELIVERY_ACTION_ALREADY_OPEN' } });
+    expect(sut.cancelWithCourier).not.toHaveBeenCalled();
+    expect(sut.created).toHaveLength(0);
+  });
+});
+
+describe('DeliveryActionService.request — a direct ask that throws halfway (2026-09-17)', () => {
+  it('a recall whose queueing throws is recorded FAILED (no longer open) and the failure is surfaced', async () => {
+    const sut = makeSut();
+    sut.enqueueAgain.mockRejectedValueOnce(new Error('call queue unavailable'));
+
+    const err: unknown = await sut.svc
+      .request({ ...BASE, action: DeliveryActionKind.RECALL })
+      .catch((e: unknown) => e);
+
+    expect(err).toMatchObject({ response: { code: 'DELIVERY_ACTION_FAILED' } });
+    expect((err as { response: { message: string } }).response.message).toContain(
+      'call queue unavailable',
+    );
+    // Recorded exactly as runApproved records it: FAILED, guarded on APPROVED,
+    // with the verbatim reason — so the order is not stuck on ALREADY_OPEN.
+    expect(sut.updated.at(-1)).toMatchObject({
+      where: { id: 'req1', status: DeliveryActionStatus.APPROVED },
+      status: DeliveryActionStatus.FAILED,
+      executionError: 'It could not be carried out: call queue unavailable',
+    });
+  });
+
+  it('a re-attempt whose ticket will not open is recorded FAILED too', async () => {
+    const sut = makeSut();
+    sut.openTicket.mockRejectedValueOnce(new Error('ticket store down'));
+    await expect(sut.svc.request(BASE)).rejects.toMatchObject({
+      response: { code: 'DELIVERY_ACTION_FAILED' },
+    });
+    expect(sut.updated.at(-1)).toMatchObject({ status: DeliveryActionStatus.FAILED });
+  });
+
+  it('a store asking and holding for seller staff carries out nothing', async () => {
+    const sut = makeSut();
+    const view = await sut.svc.request({
+      ...BASE,
+      action: DeliveryActionKind.RTO,
+      sellerUserId: null,
+      store: { storeId: 'st1', storeUserId: 'su1', needsSellerApproval: true },
+    });
+    expect(view.status).toBe(DeliveryActionStatus.PENDING);
+    expect(sut.cancelWithCourier).not.toHaveBeenCalled();
+  });
+});
+
+describe('DeliveryActionService — final writes are guarded on APPROVED (2026-09-17)', () => {
+  it('EXECUTED is written with updateMany on APPROVED, never a plain update', async () => {
+    const sut = makeSut();
+    await sut.svc.request({ ...BASE, action: DeliveryActionKind.RTO });
+    expect(sut.updated.at(-1)).toMatchObject({
+      where: { id: 'req1', status: DeliveryActionStatus.APPROVED },
+      status: DeliveryActionStatus.EXECUTED,
+    });
+    expect((sut.client['orderDeliveryActionRequest'] as AnyArgs)['update']).toBeUndefined();
+  });
+
+  it("a courier refusing a STORE's send-back names the reseller store, not the seller", async () => {
+    const sut = makeSut();
+    sut.cancelWithCourier.mockResolvedValueOnce({
+      success: false,
+      awbNumber: 'AWB1',
+      message: 'Already delivered',
+    });
+    await sut.svc.request({
+      ...BASE,
+      action: DeliveryActionKind.RTO,
+      sellerUserId: null,
+      store: { storeId: 'st1', storeUserId: 'su1', needsSellerApproval: false },
+    });
+    expect(sut.issues.raise).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'A reseller store asked to return a parcel and the courier refused',
+      }),
+    );
   });
 });

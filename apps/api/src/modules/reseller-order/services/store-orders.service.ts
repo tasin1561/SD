@@ -14,7 +14,12 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { OrderReadService } from '../../order/services/order-read.service';
-import { OrderWriteService } from '../../order/services/order-write.service';
+import {
+  OrderWriteService,
+  SELLER_CANCELLABLE_STATES,
+} from '../../order/services/order-write.service';
+import { RECIPIENT_EDITABLE_STATUSES } from '../../order/services/order.service';
+import { DELIVERY_ACTION_STATUSES } from '../../delivery-action/delivery-action-stages';
 import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import {
@@ -63,6 +68,20 @@ export interface StoreOrderView {
   readonly status: OrderStatus;
   /** A finished order (delivered, returned, cancelled…) — nothing more happens to it. */
   readonly terminal: boolean;
+  /**
+   * Which of the store's tasks the order's STAGE leaves room for
+   * (2026-09-17), read off the same lists the server refuses by. Cosmetic
+   * (FE-2): the portal hides what cannot work yet, and each action is
+   * still refused by name if tried. The seller's policy is separate.
+   */
+  readonly stages: {
+    /** Cancel — until the parcel is packed. */
+    readonly cancel: boolean;
+    /** Call the customer again / try again / send it back — out for delivery or just failed. */
+    readonly deliveryActions: boolean;
+    /** Correct the delivery details — before the call confirms the order. */
+    readonly addressCorrection: boolean;
+  };
   readonly source: OrderSource;
   readonly placedAt: string;
   readonly confirmedAt: string | null;
@@ -291,6 +310,11 @@ export class StoreOrdersService {
       sellerOrderRef: o.sellerOrderRef,
       status: o.status,
       terminal: this.orderRead.isTerminalStatus(o.status),
+      stages: {
+        cancel: SELLER_CANCELLABLE_STATES.has(o.status),
+        deliveryActions: DELIVERY_ACTION_STATUSES.has(o.status),
+        addressCorrection: RECIPIENT_EDITABLE_STATUSES.has(o.status),
+      },
       source: o.source,
       placedAt: o.placedAt.toISOString(),
       confirmedAt: o.confirmedAt?.toISOString() ?? null,

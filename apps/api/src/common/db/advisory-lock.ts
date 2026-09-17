@@ -150,6 +150,22 @@ export const AdvisoryLock = {
    * missing and seller staff would be asked the same question twice.
    */
   STORE_ORDER_REQUEST: 0x05351,
+  /**
+   * 'DA' — one OPEN delivery-action request per order (2026-09-17). Asking
+   * reads "is a PENDING or APPROVED request already open on this order"
+   * and then inserts; a double click (or a store and its seller asking at
+   * once) would each see the other missing, and a DIRECT send-back would
+   * ask the courier to cancel twice. Keyed on the order id, taken inside
+   * the transaction that re-checks and inserts.
+   */
+  DELIVERY_ACTION_REQUEST: 0x04441,
+  /**
+   * 'AC' — one OPEN reseller-store address correction per order
+   * (2026-09-17). Same read-then-insert shape as `DELIVERY_ACTION_REQUEST`:
+   * two corrections held for seller staff on one address cannot both be
+   * right. Keyed on the order id.
+   */
+  STORE_ADDRESS_CHANGE: 0x04143,
 } as const;
 
 /**

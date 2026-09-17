@@ -54,6 +54,12 @@ export interface StoreOrderView {
   readonly sellerOrderRef: string | null;
   readonly status: OrderStatus;
   readonly terminal: boolean;
+  /** Which tasks the order's stage leaves room for. Cosmetic — the server still decides. */
+  readonly stages: {
+    readonly cancel: boolean;
+    readonly deliveryActions: boolean;
+    readonly addressCorrection: boolean;
+  };
   readonly source: string;
   readonly placedAt: string;
   readonly confirmedAt: string | null;

@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import type { ReactElement } from 'react';
+import { ApiError } from '@skydrop/api-client';
 import { OrderStatus } from '@skydrop/db';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import {
+  Card,
+  CardBody,
   EmptyState,
   ErrorState,
   Ident,
@@ -60,8 +63,11 @@ export default function CallReviewsPage(): ReactElement {
   const mayAnswer = can(me, 'orders.actions');
   const mayReadOrders = can(me, 'orders.view');
 
-  const reviews = useStoreCallReviews({ enabled: mayAnswer });
   const policy = useStoreActionPolicy({ enabled: mayReadOrders });
+  // Switched OFF by the seller: there is nothing to list, so do not ask
+  // for a list the server can only refuse.
+  const answeredBySeller = policy.data?.callCapDecision === 'OFF';
+  const reviews = useStoreCallReviews({ enabled: mayAnswer && !answeredBySeller });
   // The review carries an order ID and nothing else a person can read.
   // One list request supplies the numbers and the customers for every
   // row (these orders are all parked in the same status), rather than a
@@ -105,7 +111,20 @@ export default function CallReviewsPage(): ReactElement {
       </div>
 
       <Section title="Waiting on you">
-        {reviews.isPending ? (
+        {answeredBySeller || isAnsweredBySeller(reviews.error) ? (
+          // NOT an error (2026-09-17): the seller keeps these questions for
+          // themselves. A red box read as something broken. The server's
+          // own sentence is used when it gave one — it names who answers.
+          <Card>
+            <CardBody>
+              <p className="text-text-muted text-sm">
+                {reviews.error instanceof ApiError
+                  ? serverVerdictMessage(reviews.error)
+                  : 'The seller answers call-attempt questions for this store. Ask them whether to keep trying.'}
+              </p>
+            </CardBody>
+          </Card>
+        ) : reviews.isPending ? (
           <LoadingState label="Loading the orders we could not confirm" rows={4} />
         ) : reviews.isError ? (
           // Verbatim (FE-2). The common one here is not a fault:
@@ -149,6 +168,21 @@ export default function CallReviewsPage(): ReactElement {
       </Section>
     </div>
   );
+}
+
+/** The seller keeps call-attempt questions for themselves — a policy, not a fault. */
+function isAnsweredBySeller(err: unknown): boolean {
+  return err instanceof ApiError && err.code === 'STORE_ACTION_NOT_ALLOWED';
+}
+
+/** The server's sentence without the `[CODE]` prefix, for a plain explanation. */
+function serverVerdictMessage(err: ApiError): string {
+  const body = err.body;
+  if (typeof body === 'object' && body !== null && 'message' in body) {
+    const m = (body as { message: unknown }).message;
+    if (typeof m === 'string' && m !== '') return m;
+  }
+  return 'The seller answers call-attempt questions for this store. Ask them whether to keep trying.';
 }
 
 function ReviewRow({

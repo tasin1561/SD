@@ -53,7 +53,7 @@ const CANCEL_FAMILY: ReadonlySet<OrderStatus> = new Set([
  * those cases — the matrix is what enforces the difference, and this
  * set only decides which refusal MESSAGE the seller reads.
  */
-const SELLER_CANCELLABLE_STATES: ReadonlySet<OrderStatus> = new Set([
+export const SELLER_CANCELLABLE_STATES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.DRAFT,
   OrderStatus.PENDING_CONFIRMATION,
   OrderStatus.CALL_NO_RESPONSE,

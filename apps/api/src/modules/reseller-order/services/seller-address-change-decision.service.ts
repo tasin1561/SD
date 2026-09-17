@@ -127,8 +127,11 @@ export class SellerAddressChangeDecisionService {
         row.orderId,
         fields as unknown as UpdateOrderDto,
         // The SELLER approved it, but the correction is the STORE's: the
-        // timeline should say who asked, not only who allowed it.
-        { type: ActorType.STORE, id: row.requestedByStoreUserId ?? seller.userId },
+        // timeline should say who asked, not only who allowed it. A store
+        // user who no longer exists is a STORE actor with no id — never
+        // the seller user's id stamped as a store actor, which would name
+        // somebody who did not ask.
+        { type: ActorType.STORE, id: row.requestedByStoreUserId },
         ctx,
         { storeId: row.storeId },
       );
@@ -141,11 +144,17 @@ export class SellerAddressChangeDecisionService {
       );
     }
 
-    const done = await this.prisma.client.storeAddressChangeRequest.update({
-      where: { id: requestId },
+    // Guarded on APPROVED, the state the claim left it in: only this
+    // approval moves it on, and a row something else closed keeps its
+    // outcome rather than being overwritten.
+    await this.prisma.client.storeAddressChangeRequest.updateMany({
+      where: { id: requestId, status: StoreAddressChangeStatus.APPROVED },
       data: applied
         ? { status: StoreAddressChangeStatus.APPLIED, appliedAt: new Date() }
         : { status: StoreAddressChangeStatus.FAILED, failureReason },
+    });
+    const done = await this.prisma.client.storeAddressChangeRequest.findUniqueOrThrow({
+      where: { id: requestId },
     });
 
     await this.tellTheStore(row, fields, true, applied, failureReason, note);

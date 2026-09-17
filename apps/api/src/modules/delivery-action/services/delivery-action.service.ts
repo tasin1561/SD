@@ -8,12 +8,13 @@ import {
   ActorType,
   DeliveryActionKind,
   DeliveryActionStatus,
-  OrderStatus,
   SystemIssueKind,
   SystemIssueSeverity,
   TicketType,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import { DELIVERY_ACTION_STATUSES } from '../delivery-action-stages';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
@@ -39,23 +40,8 @@ export interface DeliveryActionRequestView {
   readonly createdAt: string;
 }
 
-/**
- * Statuses where asking us to do something about the delivery makes
- * sense.
- *
- * DELIVERY_FAILED is the ordinary case. OUT_FOR_DELIVERY is allowed too:
- * a seller who has just heard from their customer that nobody is home
- * should be able to say so before the driver knocks, rather than being
- * made to wait for the failure they can already see coming.
- *
- * Anything past the parcel moving is refused — a delivered order has
- * nothing to re-attempt, and an RTO already in flight cannot be asked
- * for twice.
- */
-const REQUESTABLE_FROM: ReadonlySet<OrderStatus> = new Set([
-  OrderStatus.OUT_FOR_DELIVERY,
-  OrderStatus.DELIVERY_FAILED,
-]);
+/** Where a delivery action applies — the shared list (see its file). */
+const REQUESTABLE_FROM = DELIVERY_ACTION_STATUSES;
 
 @Injectable()
 export class DeliveryActionService {
@@ -145,23 +131,6 @@ export class DeliveryActionService {
       });
     }
 
-    // One open request at a time. Two pending asks on the same parcel
-    // are two operators about to do contradictory things to it.
-    const open = await this.prisma.client.orderDeliveryActionRequest.findFirst({
-      where: {
-        orderId: order.id,
-        status: { in: [DeliveryActionStatus.PENDING, DeliveryActionStatus.APPROVED] },
-      },
-      select: { id: true, action: true },
-    });
-    if (open) {
-      throw new ConflictException({
-        code: 'DELIVERY_ACTION_ALREADY_OPEN',
-        message: `A ${open.action.toLowerCase()} request on this order is still open`,
-        cause: { requestId: open.id },
-      });
-    }
-
     // The NDR this answers, so a request cannot later read as a response
     // to a failure that had not happened when it was raised.
     const attempt = await this.prisma.client.deliveryAttempt.findFirst({
@@ -182,32 +151,58 @@ export class DeliveryActionService {
     const waitsForSeller = input.store?.needsSellerApproval === true;
     const sellerDecides = !waitsForSeller;
 
-    const row = await this.prisma.client.orderDeliveryActionRequest.create({
-      data: {
-        orderId: order.id,
-        shipmentId: shipment.id,
-        sellerId: input.sellerId,
-        requestedById: input.sellerUserId,
-        action: input.action,
-        reason,
-        deliveryAttemptId: attempt?.id ?? null,
-        ...(input.store === undefined
-          ? {}
-          : {
-              resellerStoreId: input.store.storeId,
-              needsSellerApproval: input.store.needsSellerApproval,
-            }),
-        ...(sellerDecides
-          ? {
-              status: DeliveryActionStatus.APPROVED,
-              decidedAt: new Date(),
-              decisionNote:
-                input.store === undefined
-                  ? 'Auto-approved — returning their own parcel is the seller to decide'
-                  : 'The seller lets this store act on its own orders without asking',
-            }
-          : {}),
-      },
+    // ── ONE OPEN REQUEST PER ORDER, under a lock (2026-09-17) ─────────
+    // Two open asks on one parcel are two people about to do contradictory
+    // things to it. The check used to be a read before the insert with
+    // nothing between them, so a double click passed twice and a DIRECT
+    // send-back asked the courier to cancel twice. Under READ COMMITTED a
+    // read is not a guard: the re-check and the insert now run in ONE
+    // transaction holding `DELIVERY_ACTION_REQUEST` on the order, so the
+    // second caller waits, then sees the first row and is refused. Only
+    // the row that won is ever carried out below.
+    const row = await this.prisma.client.$transaction(async (tx) => {
+      await takeAdvisoryLock(tx, AdvisoryLock.DELIVERY_ACTION_REQUEST, order.id);
+      const open = await tx.orderDeliveryActionRequest.findFirst({
+        where: {
+          orderId: order.id,
+          status: { in: [DeliveryActionStatus.PENDING, DeliveryActionStatus.APPROVED] },
+        },
+        select: { id: true, action: true },
+      });
+      if (open) {
+        throw new ConflictException({
+          code: 'DELIVERY_ACTION_ALREADY_OPEN',
+          message: `A ${open.action.toLowerCase()} request on this order is still open`,
+          cause: { requestId: open.id },
+        });
+      }
+      return tx.orderDeliveryActionRequest.create({
+        data: {
+          orderId: order.id,
+          shipmentId: shipment.id,
+          sellerId: input.sellerId,
+          requestedById: input.sellerUserId,
+          action: input.action,
+          reason,
+          deliveryAttemptId: attempt?.id ?? null,
+          ...(input.store === undefined
+            ? {}
+            : {
+                resellerStoreId: input.store.storeId,
+                needsSellerApproval: input.store.needsSellerApproval,
+              }),
+          ...(sellerDecides
+            ? {
+                status: DeliveryActionStatus.APPROVED,
+                decidedAt: new Date(),
+                decisionNote:
+                  input.store === undefined
+                    ? 'Auto-approved — returning their own parcel is the seller to decide'
+                    : 'The seller lets this store act on its own orders without asking',
+              }
+            : {}),
+        },
+      });
     });
 
     await this.audit.log({
@@ -251,10 +246,59 @@ export class DeliveryActionService {
         ? {}
         : { store: { storeId: input.store.storeId, storeUserId: input.store.storeUserId } }),
     };
-    if (input.action === DeliveryActionKind.RTO) {
-      return this.executeRto(row.id, shipment.id, who);
+    // Through the SAME carrying-out `runApproved` uses: a throw on the way
+    // (a ticket that would not open, a queue that would not take the call)
+    // is recorded FAILED with its reason, so the row stops being open and
+    // the order is not stuck refusing every later ask as ALREADY_OPEN.
+    const done = await this.carryOut(row, async () => shipment, who);
+    if (done.status === DeliveryActionStatus.FAILED && done.threw) {
+      // Surfaced, not swallowed: the caller asked for this a moment ago and
+      // must not read a request that did nothing as done. The row already
+      // says FAILED with the same words, so a refresh agrees.
+      throw new ConflictException({
+        code: 'DELIVERY_ACTION_FAILED',
+        message: done.view.executionError ?? 'The request could not be carried out.',
+        cause: { requestId: row.id },
+      });
     }
-    return this.executeAsTicket(row.id, input.action, reason, shipment, who);
+    return done.view;
+  }
+
+  /**
+   * Carry out an APPROVED request — the ONE implementation, shared by a
+   * direct ask (`request`) and an approved one (`runApproved`).
+   *
+   * A send-back goes to the courier (`executeRto`, which records a courier
+   * refusal itself); a recall or a re-attempt becomes a ticket
+   * (`executeAsTicket`). Anything THROWN on the way is recorded FAILED with
+   * the error through `recordFailure` — never left APPROVED, because an
+   * APPROVED row counts as open and would refuse every later request on
+   * the order. `threw` tells the caller the failure was an exception rather
+   * than a refusal the far side gave.
+   */
+  private async carryOut(
+    row: { id: string; action: DeliveryActionKind; reason: string },
+    loadShipment: () => Promise<{ id: string; awbNumber: string | null }>,
+    who: {
+      sellerId: string;
+      sellerUserId: string | null;
+      orderId: string;
+      ctx: ClientInfoPayload;
+      store?: { storeId: string; storeUserId: string | null };
+    },
+  ): Promise<{ view: DeliveryActionRequestView; status: DeliveryActionStatus; threw: boolean }> {
+    try {
+      const shipment = await loadShipment();
+      const view =
+        row.action === DeliveryActionKind.RTO
+          ? await this.executeRto(row.id, shipment.id, who)
+          : await this.executeAsTicket(row.id, row.action, row.reason, shipment, who);
+      return { view, status: view.status, threw: false };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const view = await this.recordFailure(row.id, `It could not be carried out: ${message}`);
+      return { view, status: view.status, threw: true };
+    }
   }
 
   /**
@@ -338,15 +382,39 @@ export class DeliveryActionService {
       await this.openCourierConversation(ticket.id, shipment, reason, who.sellerId);
     }
 
-    const done = await this.prisma.client.orderDeliveryActionRequest.update({
-      where: { id: requestId },
-      data: {
-        status: DeliveryActionStatus.EXECUTED,
-        executedAt: new Date(),
-        executionRef: ticket.id,
-      },
+    // Guarded on APPROVED: only an approved, still-open request becomes
+    // EXECUTED. A row something else already closed keeps its outcome.
+    return this.finish(requestId, {
+      status: DeliveryActionStatus.EXECUTED,
+      executedAt: new Date(),
+      executionRef: ticket.id,
     });
-    return this.toView(done);
+  }
+
+  /**
+   * Move an APPROVED request to its final state, guarded on APPROVED, and
+   * return the row as it now stands. A plain `update` would overwrite a
+   * row somebody else had already closed.
+   */
+  private async finish(
+    requestId: string,
+    data: {
+      status: DeliveryActionStatus;
+      executedAt: Date;
+      executionRef?: string | null;
+      executionError?: string | null;
+      decisionNote?: string;
+    },
+  ): Promise<DeliveryActionRequestView> {
+    await this.prisma.client.orderDeliveryActionRequest.updateMany({
+      where: { id: requestId, status: DeliveryActionStatus.APPROVED },
+      data,
+    });
+    return this.toView(
+      await this.prisma.client.orderDeliveryActionRequest.findUniqueOrThrow({
+        where: { id: requestId },
+      }),
+    );
   }
 
   /**
@@ -432,45 +500,41 @@ export class DeliveryActionService {
       );
       if (!outcome.success) throw new Error(outcome.message ?? 'Courier refused the cancellation');
 
-      const done = await this.prisma.client.orderDeliveryActionRequest.update({
-        where: { id: requestId },
-        data: {
-          status: DeliveryActionStatus.EXECUTED,
-          executedAt: new Date(),
-          executionRef: outcome.awbNumber,
-        },
+      return await this.finish(requestId, {
+        status: DeliveryActionStatus.EXECUTED,
+        executedAt: new Date(),
+        executionRef: outcome.awbNumber,
       });
-      return this.toView(done);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const failed = await this.prisma.client.orderDeliveryActionRequest.update({
-        where: { id: requestId },
-        data: {
-          status: DeliveryActionStatus.FAILED,
-          executedAt: new Date(),
-          // `executionError`, and the decision note only when nobody
-          // decided: a store's request carries seller staff's own note in
-          // `decisionNote`, and overwriting it lost their words.
-          executionError: `Courier refused: ${message}`.slice(0, 2000),
-          ...(who.store === undefined
-            ? { decisionNote: `Courier refused: ${message}`.slice(0, 500) }
-            : {}),
-        },
+      const failed = await this.finish(requestId, {
+        status: DeliveryActionStatus.FAILED,
+        executedAt: new Date(),
+        // `executionError`, and the decision note only when nobody
+        // decided: a store's request carries seller staff's own note in
+        // `decisionNote`, and overwriting it lost their words.
+        executionError: `Courier refused: ${message}`.slice(0, 2000),
+        ...(who.store === undefined
+          ? { decisionNote: `Courier refused: ${message}`.slice(0, 500) }
+          : {}),
       });
+      // Name who actually asked: a reseller store's send-back is not the
+      // seller's, and whoever picks this up rings a different party.
+      const asker = who.store === undefined ? 'seller' : 'reseller store';
       await this.issues.raise({
         kind: SystemIssueKind.INTEGRATION,
         severity: SystemIssueSeverity.HIGH,
-        title: 'A seller asked to return a parcel and the courier refused',
+        title: `A ${asker} asked to return a parcel and the courier refused`,
         detail:
           `The cancellation for order ${who.orderId} was refused: ${message}\n\n` +
-          'The seller has been told it did not go through, but they are expecting this parcel ' +
+          `The ${asker} has been told it did not go through, but they are expecting this parcel ` +
           'back. Someone needs to either cancel it by hand in the courier portal or tell them ' +
           'why it cannot be returned — the parcel is still out for delivery until then.',
         source: 'DeliveryActionService',
         dedupeKey: `seller-rto-refused:${requestId}`,
         metadata: { requestId, orderId: who.orderId, sellerId: who.sellerId, error: message },
       });
-      return this.toView(failed);
+      return failed;
     }
   }
 
@@ -555,30 +619,27 @@ export class DeliveryActionService {
     const stale = await this.stillApplies(row.orderId, row.shipmentId);
     if (stale !== null) return this.recordFailure(row.id, stale);
 
-    try {
-      const shipment = await this.prisma.client.shipment.findUniqueOrThrow({
-        where: { id: row.shipmentId },
-        select: { id: true, awbNumber: true },
-      });
-      const store =
-        row.resellerStoreId === null
-          ? undefined
-          : { storeId: row.resellerStoreId, storeUserId: row.requestedById };
-      const who = {
-        sellerId: row.sellerId,
-        sellerUserId: store === undefined ? row.requestedById : null,
-        orderId: row.orderId,
-        ctx,
-        ...(store === undefined ? {} : { store }),
-      };
-      if (row.action === DeliveryActionKind.RTO) {
-        return await this.executeRto(row.id, shipment.id, who);
-      }
-      return await this.executeAsTicket(row.id, row.action, row.reason, shipment, who);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return this.recordFailure(row.id, `It could not be carried out: ${message}`);
-    }
+    const store =
+      row.resellerStoreId === null
+        ? undefined
+        : { storeId: row.resellerStoreId, storeUserId: row.requestedById };
+    const who = {
+      sellerId: row.sellerId,
+      sellerUserId: store === undefined ? row.requestedById : null,
+      orderId: row.orderId,
+      ctx,
+      ...(store === undefined ? {} : { store }),
+    };
+    const done = await this.carryOut(
+      row,
+      () =>
+        this.prisma.client.shipment.findUniqueOrThrow({
+          where: { id: row.shipmentId },
+          select: { id: true, awbNumber: true },
+        }),
+      who,
+    );
+    return done.view;
   }
 
   /**
