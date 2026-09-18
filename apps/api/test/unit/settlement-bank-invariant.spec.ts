@@ -2245,7 +2245,21 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     agrees(w);
   });
 
-  it('re-priced AFTER both parties are credited: taken back and written again', async () => {
+  it('money already PAID is refused, not re-worked-out — and nothing moves', async () => {
+    /*
+      The contents freeze at confirmation and a reseller credit runs at or
+      after delivery, so an edit can never reach a paid credit; only god
+      mode can put a paid order back where its lines are changeable. That
+      is a bypass, and the answer to a bypass is to stop.
+
+      It could not be written in any case: nine wallet directions may
+      occur at most ONCE per order
+      (`seller_wallet_entries_once_per_order_uq` — the guard against
+      paying an order twice), and a reversal-then-rewrite needs a second
+      `cod_collection` on the same order. This fake book has no such
+      index, which is exactly why the refusal is asserted here rather
+      than left to Postgres to discover.
+    */
     const order = cod('r1', ON_PAYOUT, ON_PAYOUT);
     const w = world([order]);
     await confirm(w, 'r1');
@@ -2255,20 +2269,20 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     expect(w.storeBalance('st-a')).toBe('385.00');
     expect(w.balance('s')).toBe('605.00');
     agrees(w);
+    const entriesWere = w.storeEntriesOf('r1');
 
     order.cod = '2360';
     order.transfer = '1400';
-    const out = await w.resellerMoney.recalculateAfterEdit('r1', { reason: 'Seller changed it' });
-    expect(out.parties.map((p) => p.what).sort()).toEqual(['RECREDITED', 'RECREDITED']);
-    // Old net beside new net, which is what the store is shown.
-    const store = out.parties.find((p) => p.party === 'STORE');
-    expect(store?.before.netInr).toBe('385.00');
-    expect(store?.after.netInr).toBe('770.00');
+    await expect(
+      w.resellerMoney.recalculateAfterEdit('r1', { reason: 'Seller changed it' }),
+    ).rejects.toThrow(/already been paid/);
 
-    // The wallets end at the NEW figures, and the book still agrees.
-    expect(w.storeBalance('st-a')).toBe('770.00');
-    expect(w.balance('s')).toBe('1210.00');
+    // Refused means refused: both wallets, both plans and the book are
+    // exactly where the payout left them.
+    expect(w.storeBalance('st-a')).toBe('385.00');
+    expect(w.balance('s')).toBe('605.00');
     expect(w.creditsOf('r1')).toEqual(['SELLER CREDITED', 'STORE CREDITED']);
+    expect(w.storeEntriesOf('r1')).toEqual(entriesWere);
     agrees(w);
   });
 

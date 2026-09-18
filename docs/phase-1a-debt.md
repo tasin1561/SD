@@ -1306,6 +1306,17 @@ the service is the boundary, not because a route exists; if god mode or a
 future path ever moves a confirmed prepaid order's contents, the guard is
 already there rather than discovered missing.
 
+The same reasoning is why a CREDITED credit row is REFUSED
+(`RESELLER_CREDIT_ALREADY_PAID`) rather than reversed and re-written: an
+edit cannot reach one, and the ledger's once-per-order unique
+(`seller_wallet_entries_once_per_order_uq`) would refuse the second
+`cod_collection` a rewrite needs. What is genuinely open is the case
+BEHIND that refusal — a paid order whose figures somebody needs to
+correct. Today the answer is the order's ticket (a store dispute settles
+between the two wallets, RS-7) or calling the order off and placing it
+again. A first-class "correct a paid reseller order" flow would need its
+own directions rather than a second credit, and nobody has asked for one.
+
 **3. A recalculation that fails leaves the edit standing.** The edit has
 committed by then, so `recalculateResellerMoney` swallows the failure and
 raises a HIGH `reseller_order.money_recalculation_failed` audit row naming

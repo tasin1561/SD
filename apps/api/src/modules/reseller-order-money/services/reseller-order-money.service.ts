@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, HttpException, Injectable, Logger } from '@nestjs/common';
 import {
   ActorType,
   ChargeType,
@@ -55,6 +55,18 @@ type Db = Prisma.TransactionClient;
 const ZERO = new Prisma.Decimal(0);
 
 /**
+ * The `code` a refusal was built with, or null. Read rather than matched
+ * on the message: the message is prose somebody will reword.
+ */
+function codeOf(err: unknown): string | null {
+  if (!(err instanceof HttpException)) return null;
+  const body: unknown = err.getResponse();
+  if (typeof body !== 'object' || body === null || !('code' in body)) return null;
+  const code = (body as { code: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
+/**
  * Every money transaction here waits on the SELLER's WALLET lock (the
  * seller and all their stores serialise together, RS-6), so under
  * contention a caller legitimately queues — Prisma's 2 s / 5 s defaults
@@ -95,10 +107,12 @@ export interface RecalculatedParty {
   /**
    * UNCHANGED — the edit did not move this party's money.
    * REPLANNED  — nothing was written yet; the plan's figures were rewritten.
-   * RECREDITED — money HAD been written: it was taken back and written
-   *              again at the new figures (see `recalculateAfterEdit`).
+   *
+   * There is deliberately no third value for "money had been written and
+   * was re-written": that cannot happen, and if it is ever reached it is
+   * refused rather than performed — see `recalculateAfterEdit`.
    */
-  readonly what: 'UNCHANGED' | 'REPLANNED' | 'RECREDITED';
+  readonly what: 'UNCHANGED' | 'REPLANNED';
   readonly before: CreditFigures;
   readonly after: CreditFigures;
 }
@@ -871,7 +885,7 @@ export class ResellerOrderMoneyService {
    * would change a deal neither side agreed for it. The seller's COD
    * rates likewise come from the plan's own stamp (`ratesFor`).
    *
-   * ── WHAT HAPPENS TO MONEY ALREADY POSTED ─────────────────────────────
+   * ── ONLY A PLAN IS EVER RE-PRICED (owner decision 2, 2026-09-18) ─────
    * A credit row in any state EXCEPT `CREDITED` has written nothing to a
    * wallet: its figures are a plan, and a guarded `updateMany` on the
    * status it was read in rewrites them. That covers WAITING, DUE,
@@ -879,16 +893,31 @@ export class ResellerOrderMoneyService {
    * payout can re-arm them (`REARM_ON_PAYOUT_REASONS`), and a stale
    * figure there would credit the OLD amount weeks later.
    *
-   * A `CREDITED` row HAS moved money. It is not patched with a signed
-   * difference across five directions — it is TAKEN BACK through the
-   * exact reversal path a return uses (every deduction refunded, the cash
-   * returned to capital, `cashTakenOnReversal`) and then WRITTEN AGAIN at
-   * the new figures. The net movement is the difference; what the ledger
-   * shows is two legible entries — "taken back because the order changed"
-   * and the new credit — which is what somebody arguing about this in a
-   * month needs to see. Both halves are operations whose cash rules
-   * already keep TRE-8c true, so the invariant holds after each step
-   * rather than only at the end.
+   * A `CREDITED` row HAS moved money, and it is REFUSED BY NAME rather
+   * than re-priced. Two reasons, and the first alone settles it:
+   *
+   *   It cannot arise. The order's CONTENTS freeze at confirmation
+   *   (`CONTENTS_EDITABLE_STATUSES`) — after it, stock is held, a waybill
+   *   is booked and the parcel may be packed, so the only edit `edit`
+   *   accepts is the RECIPIENT, which moves no figure and never reaches
+   *   here (`OrderService.MONEY_KEYS`). A reseller order's credit runs at
+   *   or after delivery, which is long past that point. The only way in
+   *   is god mode forcing a credited order back to a contents-editable
+   *   status and somebody then changing its lines — a bypass, by
+   *   definition, and the right answer to a bypass is to stop.
+   *
+   *   And it could not be written even if it were wanted. Nine wallet
+   *   directions may occur at most ONCE per order
+   *   (`seller_wallet_entries_once_per_order_uq`) — that partial unique
+   *   IS the double-credit guard. Reversing and writing the credit again
+   *   means a second `cod_collection` (and its deductions) for the same
+   *   order, which the database refuses. Weakening the index to allow it
+   *   would trade the guard against paying an order twice for a case that
+   *   cannot legitimately occur.
+   *
+   * So: the transaction is rolled back with `RESELLER_CREDIT_ALREADY_PAID`,
+   * nothing is written, and a HIGH audit row names the order — the caller
+   * never sees a half-re-priced plan, and a person is told.
    *
    * A PREPAID order's up-front debit follows the same shape: refunded and
    * retaken when the transfer total moved, and refused before anything is
@@ -896,7 +925,7 @@ export class ResellerOrderMoneyService {
    *
    * ONE transaction, under the seller's WALLET lock (the seller and all
    * their stores serialise together), so nothing else credits, reverses or
-   * pays out between the reversal and the re-credit.
+   * pays out between reading a row's status and rewriting its figures.
    */
   async recalculateAfterEdit(
     orderId: string,
@@ -905,6 +934,60 @@ export class ResellerOrderMoneyService {
     const head = await this.head(this.prisma.client, orderId);
     if (head === null) return { outcome: 'NOT_A_RESELLER_ORDER', parties: [], prepaid: null };
 
+    const result = await this.runRecalculation(head, orderId, input);
+
+    if (result.outcome === 'REPLANNED') {
+      await this.afterCommit(head.sellerId, 'reseller-order-repriced');
+    }
+    return result;
+  }
+
+  /**
+   * The transaction `recalculateAfterEdit` runs, plus the one thing that
+   * must survive it being rolled back: a refusal to re-price money that
+   * has already been paid is AUDITED HIGH, outside the transaction,
+   * because an audit written inside it would be rolled back with it and
+   * the bypass that got here would leave no trace.
+   */
+  private async runRecalculation(
+    head: ResellerOrderHead,
+    orderId: string,
+    input: { readonly reason: string },
+  ): Promise<ResellerMoneyRecalculation> {
+    try {
+      return await this.recalculationTx(head, orderId, input);
+    } catch (err) {
+      if (codeOf(err) === 'RESELLER_CREDIT_ALREADY_PAID') {
+        await this.audit
+          .log({
+            actorType: ActorType.SYSTEM,
+            actorId: null,
+            sellerId: head.sellerId,
+            action: 'reseller_order.money_recalculation_refused',
+            entityType: 'order',
+            entityId: orderId,
+            // Somebody has to look: the order now says one thing and a
+            // credit already paid says another, and only a person can
+            // decide which is right.
+            severity: 'HIGH',
+            metadata: {
+              storeId: head.storeId,
+              orderNumber: head.orderNumber,
+              reason: input.reason,
+              refusal: 'RESELLER_CREDIT_ALREADY_PAID',
+            },
+          })
+          .catch(() => undefined);
+      }
+      throw err;
+    }
+  }
+
+  private async recalculationTx(
+    head: ResellerOrderHead,
+    orderId: string,
+    input: { readonly reason: string },
+  ): Promise<ResellerMoneyRecalculation> {
     const result = await this.prisma.client.$transaction(async (tx) => {
       await this.lock(tx, head.sellerId);
       const rows = await tx.resellerOrderCredit.findMany({
@@ -933,7 +1016,6 @@ export class ResellerOrderMoneyService {
       if (plan.store !== null) planned.set(ResellerMoneyParty.STORE, plan.store);
       planned.set(ResellerMoneyParty.SELLER, plan.seller);
 
-      const now = new Date();
       const parties: RecalculatedParty[] = [];
       for (const row of rows) {
         const next = planned.get(row.party);
@@ -961,29 +1043,18 @@ export class ResellerOrderMoneyService {
         }
         const before = figures(row);
         if (row.status === ResellerCreditStatus.CREDITED) {
-          await this.reverseCreditedWithTake(tx, head, [row], input.reason);
-          const rewritten = await tx.resellerOrderCredit.updateMany({
-            where: { id: row.id, status: ResellerCreditStatus.REVERSED },
-            data: {
-              ...figureColumns(next),
-              status: ResellerCreditStatus.DUE,
-              dueAt: now,
-              skippedReason: null,
-              timesRepriced: { increment: 1 },
-            },
+          // Unreachable except through god mode (see the method's note).
+          // Refused rather than performed: the whole transaction rolls
+          // back, so a party already re-planned earlier in this loop is
+          // rolled back with it and the order is left exactly as it was.
+          throw new ConflictException({
+            code: 'RESELLER_CREDIT_ALREADY_PAID',
+            message:
+              `The ${row.party.toLowerCase()} has already been paid ₹${before.netInr} for order ` +
+              `${head.orderNumber}, so its money cannot be re-worked-out. Nothing was changed. ` +
+              'Settle the difference on the order’s ticket, or call the order off and place it again.',
+            details: { party: row.party, paidNetInr: before.netInr },
           });
-          if (rewritten.count === 0) {
-            // Something else moved the row between the reversal and here,
-            // inside our own lock — impossible today, and a silent skip
-            // would leave a reversed credit nobody re-writes.
-            throw new ConflictException({
-              code: 'RESELLER_CREDIT_MOVED',
-              message: `The ${row.party.toLowerCase()}’s credit on order ${head.orderNumber} changed while it was being re-priced.`,
-            });
-          }
-          await this.executeRow(tx, row.id, now, null);
-          parties.push({ party: row.party, what: 'RECREDITED', before, after: figures(next) });
-          continue;
         }
         // Nothing written for this party yet: the row IS the plan.
         await tx.resellerOrderCredit.updateMany({
@@ -1030,17 +1101,14 @@ export class ResellerOrderMoneyService {
       };
     }, RESELLER_MONEY_TX_OPTIONS);
 
-    if (result.outcome === 'REPLANNED') {
-      await this.afterCommit(head.sellerId, 'reseller-order-repriced');
-    }
     return result;
   }
 
   /**
    * A prepaid order's up-front debit, after its transfer total moved.
    * Refund what was taken and take the new figure — never a signed patch,
-   * for the same reason a credit is reversed and re-written. Returns what
-   * changed, or null when nothing was owed differently.
+   * which would hide what moved. Returns what changed, or null when
+   * nothing was owed differently.
    */
   private async repricePrepaidDebit(
     tx: Tx,

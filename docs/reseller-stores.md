@@ -1899,19 +1899,33 @@ before the stamp existed fall back to today's, and the audit row says so
 | The credit row | What the recalculation does |
 |---|---|
 | WAITING / DUE / SKIPPED / REVERSED | nothing was written to a wallet, so the row IS the plan: its figures are rewritten by a guarded `updateMany` on the status it was read in. SKIPPED and REVERSED matter because a later courier payout can re-arm them, and a stale figure there would credit the old amount weeks later. |
-| CREDITED | money HAS moved. It is TAKEN BACK through the exact reversal path a return uses — every deduction refunded, the cash returned to capital — and WRITTEN AGAIN at the new figures. |
+| CREDITED | money HAS moved, and it is REFUSED BY NAME (`RESELLER_CREDIT_ALREADY_PAID`). The whole transaction rolls back, so a party re-planned earlier in the same pass is rolled back with it and the order is left exactly as it was. |
 
-The reversal-and-rewrite is deliberate. A signed difference across five
-directions is where a correcting movement goes wrong; the reversal path is
-already exact and already tested by returns, and both halves are operations
-whose cash rules keep TRE-8c true, so `held = max(0, seller + Σ stores)` holds
-after each step rather than only at the end. What the ledger shows is two
-legible entries — taken back, credited again — which is what somebody arguing
-about this in a month needs to see.
+**Only a PLAN is ever re-priced, and the refusal is not a missing feature.**
 
-A PREPAID order's up-front debit follows the same shape: refunded and retaken
-when the transfer total moved, and refused before anything is written when the
-store's wallet cannot carry the bigger one (`STORE_BALANCE_INSUFFICIENT`).
+It cannot arise. The order's CONTENTS freeze at confirmation
+(`CONTENTS_EDITABLE_STATUSES` — DRAFT and PENDING_CONFIRMATION): after it,
+stock is held, a waybill is booked and the parcel may be packed, so the only
+edit `edit` accepts is the RECIPIENT, which moves no figure and never reaches
+the recalculation (`OrderService.MONEY_KEYS`). A reseller order's credit runs
+at or AFTER delivery, long past that point. The only way in is god mode putting
+a paid order back into a contents-editable status and somebody then changing
+its lines — a bypass by definition, and the right answer to a bypass is to stop.
+
+And it could not be written even if it were wanted. Nine wallet directions may
+occur at most ONCE per order (`seller_wallet_entries_once_per_order_uq`) —
+that partial unique IS the guard against paying an order twice. Reversing and
+writing the credit again means a second `cod_collection`, and its deductions,
+for the same order; the database refuses it. Weakening the index to allow it
+would trade the double-credit guard for a case that cannot legitimately occur.
+
+The refusal is ANNOUNCED: a HIGH `reseller_order.money_recalculation_refused`
+audit row, written OUTSIDE the transaction — written inside it, it would be
+rolled back with it and a bypass would leave no trace.
+
+A PREPAID order's up-front debit is refunded and retaken when the transfer
+total moved, and refused before anything is written when the store's wallet
+cannot carry the bigger one (`STORE_BALANCE_INSUFFICIENT`).
 
 **What is refused rather than guessed.** Changing how a PRICED order is paid
 for (`RESELLER_PAYMENT_MODE_LOCKED`, checked BEFORE the edit is written). COD
@@ -1927,8 +1941,12 @@ order, because until somebody looks the order says one thing and the credits
 behind it say another.
 
 Pinned by `settlement-bank-invariant.spec.ts` (four re-price scenarios over the
-in-memory book, including a CREDITED one), `reseller-money-recalculation.spec.ts`
-and `reseller-order-money.e2e-spec.ts` against a real database.
+in-memory book, including the refusal on a CREDITED one — that fake has no
+unique index, which is exactly why the refusal is asserted there rather than
+left to Postgres to discover), `reseller-money-recalculation.spec.ts` (which
+pins the ABSENCE of the reversal path: a future "fix" re-adding it would pass
+every behavioural test and fail against the database) and
+`reseller-order-money.e2e-spec.ts` against a real one.
 
 ### The held ORDER CHANGE (2026-09-16, widened 2026-09-18)
 

@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import type { HttpException } from '@nestjs/common';
 import request from 'supertest';
 import {
   ActorType,
@@ -493,21 +494,24 @@ describe('reseller order money (e2e)', () => {
   /*
     ── THE ORDER CHANGED, AND THE MONEY FOLLOWED IT (owner, 2026-09-18) ──
 
-    Seller staff may now change a reseller store's order. Against a real
-    database this pins the three things only Postgres shows: the credit
-    rows' guarded status moves, the re-priced figures, and the bank book
-    after a credit has been taken back and written again.
+    Seller staff may change a reseller store's order, and the window in
+    which they may change its CONTENTS closes at CONFIRMATION
+    (`CONTENTS_EDITABLE_STATUSES`): after it, stock is held, a waybill is
+    booked and the parcel may already be packed, so what is IN it is
+    fixed for both parties. Where it is GOING is a separate question with
+    a separate answer.
+
+    So the re-price is exercised where it can happen — before the call
+    confirms the order — and the freeze afterwards is asserted BY NAME.
   */
-  it('seller staff change the order: the credits are re-priced and the book still agrees', async () => {
+  it('seller staff change the order before it is confirmed: the money is planned at the NEW figures', async () => {
     const store = await makeStore();
     const placed = (await placeOrder(store, 1)).body as { id: string };
-    await confirm(placed.id);
-    const before = await creditsOf(placed.id);
-    expect(before.map((c) => c.status)).toEqual(['WAITING', 'WAITING']);
 
-    // A second unit. The seller may change the order outright now; what
-    // stays fixed is the TERMS version and the line's snapshotted
-    // transfer price, so the store's deal is not re-struck.
+    // A second unit, agreed on the call before the order is confirmed.
+    // The seller may change the order outright now; what stays fixed is
+    // the TERMS version and the line's snapshotted transfer price, so the
+    // store's deal is not re-struck.
     const items = await h.prisma.orderItem.findMany({ where: { orderId: placed.id } });
     const edited = await request(h.baseUrl)
       .patch(`/seller/orders/${placed.id}`)
@@ -523,19 +527,37 @@ describe('reseller order money (e2e)', () => {
     expect(line.quantity).toBe(2);
     // The kept line keeps the price it was PLACED at (RS-4).
     expect(line.resellerTransferPriceInr?.toFixed(2)).toBe('300.00');
+    // Nothing is planned before confirmation, so there was nothing to
+    // re-price — the plan below is simply made from the order as it now
+    // stands.
+    expect(await h.prisma.resellerOrderCredit.count({ where: { orderId: placed.id } })).toBe(0);
 
+    await confirm(placed.id);
     const after = await creditsOf(placed.id);
-    // Still nothing written, so the rows themselves were rewritten.
     expect(after.map((c) => c.status)).toEqual(['WAITING', 'WAITING']);
     const sellerRow = after.find((c) => c.party === 'SELLER');
     expect(sellerRow?.grossInr.toFixed(2)).toBe('600.00');
-    expect(sellerRow?.timesRepriced).toBe(1);
     // The rates were stamped at the plan, so a later settings change
     // cannot move an order placed before it.
     expect(sellerRow?.gstPercentAtPlan).not.toBeNull();
     await expectBookAgrees([store.storeId]);
 
-    // Paid at the NEW figures, and the book agrees at the paisa.
+    // ── And now the window is SHUT, by name, for the same seller staff ──
+    const frozen = await request(h.baseUrl)
+      .patch(`/seller/orders/${placed.id}`)
+      .set(sellerAuth)
+      .send({ items: [{ variantId: items[0]!.variantId, quantity: 3, unitPriceInr: 499 }] });
+    expect(frozen.status).toBe(409);
+    expect((frozen.body as { code: string }).code).toBe('NOT_EDITABLE');
+    // Refused means refused: the line, the COD and the plan are untouched.
+    expect(
+      (await h.prisma.orderItem.findFirstOrThrow({ where: { orderId: placed.id } })).quantity,
+    ).toBe(2);
+    expect(
+      (await creditsOf(placed.id)).find((c) => c.party === 'SELLER')?.grossInr.toFixed(2),
+    ).toBe('600.00');
+
+    // Paid at the figures that were planned, and the book agrees at the paisa.
     const cod = await codOf(placed.id);
     expect(cod).toBe('998.00');
     await deliver(placed.id);
@@ -548,7 +570,24 @@ describe('reseller order money (e2e)', () => {
     await expectBookAgrees([store.storeId]);
   });
 
-  it('a change once the money is POSTED takes the credit back and writes it again', async () => {
+  it('money already PAID is never re-worked-out: refused by name, nothing written, audited HIGH', async () => {
+    /*
+      This cannot be reached through `edit` — the contents freeze at
+      confirmation and a reseller credit runs at or after delivery, so by
+      the time money exists there is nothing left to change that moves it.
+      The only way in is god mode putting a paid order back into a
+      contents-editable status, which is a bypass by definition.
+
+      Two things make refusing the right answer rather than a missing
+      feature, and this pins both. Nine wallet directions may occur at
+      most ONCE per order (`seller_wallet_entries_once_per_order_uq` —
+      the double-credit guard), so reversing and re-writing a credit is
+      something the DATABASE refuses; and a half-re-priced plan is worse
+      than an unchanged one, so the whole transaction rolls back.
+
+      Driven at the service, because that is the only place the bypass
+      can arrive from.
+    */
     const store = await makeStore();
     const placed = (await placeOrder(store, 1)).body as { id: string };
     await confirm(placed.id);
@@ -557,50 +596,68 @@ describe('reseller order money (e2e)', () => {
     await pay(cod, [[placed.id, cod]]);
     const credited = await creditsOf(placed.id);
     expect(credited.map((c) => c.status)).toEqual(['CREDITED', 'CREDITED']);
-    const storeWas = (await storeBalance(store.storeId)).toFixed(2);
+    const was = {
+      store: (await storeBalance(store.storeId)).toFixed(2),
+      seller: (await sellerBalance()).toFixed(2),
+      storeNet: credited.find((c) => c.party === 'STORE')?.netInr.toFixed(2),
+      sellerNet: credited.find((c) => c.party === 'SELLER')?.netInr.toFixed(2),
+    };
 
-    // Change the COD after the payout. The re-price is not a signed
-    // patch: each credit is REVERSED through the same path a return
-    // uses and written again at the new figures.
-    await h.app
+    // An order that did not move is a no-op, not a refusal — a form
+    // round-trips every field it renders, and pressing save must not
+    // raise anything.
+    const unmoved = await h.app
       .get(ResellerOrderMoneyService)
-      .recalculateAfterEdit(placed.id, { reason: 'Seller corrected the amount' })
-      .catch(() => undefined);
-    // Nothing moved — the order did not change — so no reversal was written.
-    expect(
-      await h.prisma.storeWalletEntry.count({
-        where: { linkedOrderId: placed.id, direction: 'ORDER_CREDIT_REVERSAL' },
-      }),
-    ).toBe(0);
-    expect((await storeBalance(store.storeId)).toFixed(2)).toBe(storeWas);
+      .recalculateAfterEdit(placed.id, { reason: 'Nothing actually changed' });
+    expect(unmoved.outcome).toBe('UNCHANGED');
+    expect((await storeBalance(store.storeId)).toFixed(2)).toBe(was.store);
 
+    // Now the bypass: the COD is moved underneath a credit already paid.
     await h.prisma.order.update({
       where: { id: placed.id },
       data: { codAmountInr: new Prisma.Decimal('1996.00') },
     });
-    const out = await h.app
+    const failed = await h.app
       .get(ResellerOrderMoneyService)
-      .recalculateAfterEdit(placed.id, { reason: 'Seller corrected the amount' });
-    expect(out.outcome).toBe('REPLANNED');
-    expect(out.parties.every((p) => p.what === 'RECREDITED')).toBe(true);
-    // One reversal and a second credit — two legible entries, not a
-    // silent adjustment.
+      .recalculateAfterEdit(placed.id, { reason: 'Seller corrected the amount' })
+      .then(
+        () => null,
+        (e: unknown) => e as HttpException,
+      );
+    expect(failed).not.toBeNull();
+    expect(failed?.getResponse()).toMatchObject({ code: 'RESELLER_CREDIT_ALREADY_PAID' });
+
+    // NOTHING was written: no reversal, no second credit, no moved
+    // balance, and both plans still say what they were paid.
     expect(
       await h.prisma.storeWalletEntry.count({
-        where: { linkedOrderId: placed.id, direction: 'ORDER_CREDIT_REVERSAL' },
+        where: {
+          linkedOrderId: placed.id,
+          direction: { in: ['ORDER_CREDIT_REVERSAL', 'SHARE_REFUND'] },
+        },
       }),
-    ).toBe(1);
+    ).toBe(0);
     expect(
       await h.prisma.storeWalletEntry.count({
         where: { linkedOrderId: placed.id, direction: 'ORDER_CREDIT' },
       }),
-    ).toBe(2);
-    const now = await creditsOf(placed.id);
-    expect(now.map((c) => c.status)).toEqual(['CREDITED', 'CREDITED']);
-    expect((await storeBalance(store.storeId)).toFixed(2)).toBe(
-      now.find((c) => c.party === 'STORE')?.netInr.toFixed(2),
-    );
+    ).toBe(1);
+    expect((await storeBalance(store.storeId)).toFixed(2)).toBe(was.store);
+    expect((await sellerBalance()).toFixed(2)).toBe(was.seller);
+    const still = await creditsOf(placed.id);
+    expect(still.map((c) => c.status)).toEqual(['CREDITED', 'CREDITED']);
+    expect(still.find((c) => c.party === 'STORE')?.netInr.toFixed(2)).toBe(was.storeNet);
+    expect(still.find((c) => c.party === 'SELLER')?.netInr.toFixed(2)).toBe(was.sellerNet);
+    expect(still.every((c) => c.timesRepriced === 0)).toBe(true);
     await expectBookAgrees([store.storeId]);
+
+    // And a person is told — the audit survives the rolled-back
+    // transaction because it is written outside it.
+    const audited = await h.prisma.auditLog.findFirst({
+      where: { action: 'reseller_order.money_recalculation_refused', entityId: placed.id },
+      select: { severity: true },
+    });
+    expect(audited?.severity).toBe('HIGH');
   });
 
   it('once the COURIER holds the address, neither party may write it — they must ask', async () => {

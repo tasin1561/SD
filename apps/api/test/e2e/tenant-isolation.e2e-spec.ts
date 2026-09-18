@@ -911,7 +911,7 @@ describe('cross-tenant isolation (e2e)', () => {
 
   // ─── Reseller store orders (RS-5) ──────────────────────────────────────
 
-  it("RS-5: a store never reaches a sister store's order or customer, and the seller never sees a store customer", async () => {
+  it("RS-5: a store never reaches a sister store's order or customer, and a store's customer is their own seller's to read and correct — nobody else's", async () => {
     // Two stores of the SAME seller — the boundary under test is the store,
     // not the seller.
     const storeA = await makeStoreUser(alpha, 'ord-a');
@@ -1028,13 +1028,49 @@ describe('cross-tenant isolation (e2e)', () => {
     const customers = await request(h.baseUrl).get('/seller/customers').set(alpha.auth).expect(200);
     expect(JSON.stringify(customers.body)).toContain(customer.id);
     await request(h.baseUrl).get(`/seller/customers/${customer.id}`).set(alpha.auth).expect(200);
-    // Reading is what widened: the store's customer row is still the
-    // STORE's to change.
-    const edit = await request(h.baseUrl)
+
+    // 2026-09-18 (owner): the WRITE widened too. Alpha rings this person
+    // about a failed delivery and eats the parcel when it comes back, so
+    // a wrong detail on their own store's customer is theirs to correct.
+    // The store is told; what did NOT widen is identity (the phone is not
+    // an editable field anywhere, ORD-7).
+    await request(h.baseUrl)
       .patch(`/seller/customers/${customer.id}`)
       .set(alpha.auth)
-      .send({ name: 'Renamed by the seller' });
-    expectDenied(edit.status, edit.body, "editing a store's customer from the seller side");
+      .send({ name: 'Renamed by the seller' })
+      .expect(200);
+    expect(
+      (
+        await h.prisma.customer.findUniqueOrThrow({
+          where: { id: customer.id },
+          select: { name: true },
+        })
+      ).name,
+    ).toBe('Renamed by the seller');
+
+    // The boundary that matters to THIS suite is untouched: the customer
+    // belongs to ALPHA's store, so BETA may not change them — and a
+    // refused write leaves the row exactly as Alpha left it.
+    const crossSeller = await request(h.baseUrl)
+      .patch(`/seller/customers/${customer.id}`)
+      .set(beta.auth)
+      .send({ name: 'Renamed by another seller' });
+    expectDenied(crossSeller.status, crossSeller.body, "another seller's store customer");
+    expect(
+      (
+        await h.prisma.customer.findUniqueOrThrow({
+          where: { id: customer.id },
+          select: { name: true },
+        })
+      ).name,
+    ).toBe('Renamed by the seller');
+
+    // And a sister STORE still cannot: a store maintains its own.
+    const crossStore = await request(h.baseUrl)
+      .patch(`/store/customers/${customer.id}`)
+      .set(storeB.auth)
+      .send({ name: 'Renamed by another store' });
+    expectDenied(crossStore.status, crossStore.body, "a sister store's customer");
   });
 
   // ─── Reseller reports and analysis (RS-8 / RS-9) ───────────────────────

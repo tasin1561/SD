@@ -162,11 +162,23 @@ describe('the rates a recalculation uses', () => {
     );
   });
 
-  it('a CREDITED row is taken back and written again, never patched with a difference', () => {
-    // Five directions with signs is where a correcting movement goes
-    // wrong. The reversal path is exact and already tested by returns;
-    // reusing it is what keeps TRE-8c true after every step.
-    expect(service).toContain('await this.reverseCreditedWithTake(tx, head, [row], input.reason)');
-    expect(service).toContain('status: ResellerCreditStatus.DUE');
+  it('a CREDITED row is REFUSED, never reversed and written again', () => {
+    /*
+      Money already paid is not re-worked-out here (owner decision 2,
+      2026-09-18): the contents freeze at confirmation and a reseller
+      credit runs at or after delivery, so an edit cannot reach one.
+      Reversing and re-writing it would need a second `cod_collection` on
+      the same order, which `seller_wallet_entries_once_per_order_uq`
+      refuses — the guard against paying an order twice.
+
+      Read from the source because what is being pinned is an ABSENCE: a
+      future "fix" that re-adds the reversal would pass every behavioural
+      test in this file and fail against Postgres.
+    */
+    expect(service).toContain("code: 'RESELLER_CREDIT_ALREADY_PAID'");
+    expect(service).not.toContain('await this.reverseCreditedWithTake(tx, head, [row]');
+    // And the refusal is announced: the audit is written OUTSIDE the
+    // transaction, or it would be rolled back with it.
+    expect(service).toContain("action: 'reseller_order.money_recalculation_refused'");
   });
 });

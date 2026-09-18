@@ -142,12 +142,11 @@ export function describeMoneyMove(result: ResellerMoneyRecalculation | null): st
     // Named rather than "you": both sides read the same sentence, so a
     // second-person phrasing would be wrong for one of them.
     const who = p.party === 'STORE' ? 'The store is' : 'The seller is';
-    lines.push(
-      `${who} now credited ₹${p.after.netInr} on this order (was ₹${p.before.netInr})` +
-        (p.what === 'RECREDITED'
-          ? ' — the earlier credit was taken back and written again at the new figures.'
-          : '.'),
-    );
+    // Always a PLAN that moved, never money already paid: the contents
+    // freeze at confirmation and a reseller credit runs at or after
+    // delivery, so nothing re-priced here has been written to a wallet
+    // (`ResellerOrderMoneyService.recalculateAfterEdit` refuses if it has).
+    lines.push(`${who} now credited ₹${p.after.netInr} on this order (was ₹${p.before.netInr}).`);
   }
   if (result.prepaid !== null) {
     lines.push(
