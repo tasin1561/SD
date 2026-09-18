@@ -30,11 +30,14 @@ const E164 = /^\+[1-9]\d{6,14}$/;
  *    whole order is editable until the confirmation call settles it,
  *    because nothing is committed before CONFIRMED (no reservation,
  *    ORD-10; no waybill, CUR-2b; no shipment).
- *  - EXCEPT under a live call: an items or economics edit is refused
- *    while an agent is holding the order (EDIT_DURING_CALL). Waiting in
- *    the queue is not a call. A recipient correction is always allowed.
- *  - any other status → 409 (god-mode is a separate, non-Checkpoint-2
- *    path).
+ *    A LIVE CALL no longer refuses it (owner, 2026-09-18): the change
+ *    is written to the order timeline saying an agent was on the phone,
+ *    and the call station re-reads what it holds and tells the agent.
+ *  - any other status → the CONTENTS are refused (`NOT_EDITABLE` — stock
+ *    is held, the waybill is booked, the box may be packed), while the
+ *    RECIPIENT is routed by `recipientChangeRoute`: written here when no
+ *    waybill exists, else `COURIER_MUST_ACCEPT_ADDRESS_CHANGE` pointing
+ *    at the endpoint that asks the courier. God mode is a separate path.
  *
  * Every property is optional; only provided keys are touched (PATCH
  * semantics). Recipient changes re-run AddressValidationService and
@@ -217,7 +220,10 @@ export class UpdateOrderDto {
     type: [CreateOrderItemDto],
     minItems: 1,
     maxItems: 200,
-    description: 'When present, replaces the entire line set. Refused mid-call (EDIT_DURING_CALL).',
+    description:
+      'When present, replaces the entire line set. On a RESELLER store’s order each line is ' +
+      're-termed: a kept line keeps its snapshotted transfer price, a new one is priced from that ' +
+      'store’s catalogue, and one with no price there is refused by name.',
   })
   @IsOptional()
   @IsArray()

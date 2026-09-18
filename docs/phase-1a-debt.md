@@ -1274,3 +1274,43 @@ settlement are unchanged.
 
 Found because a live consignment was standing in it: CN-2026-08-000003,
 100 units landed in Kolkata and 201 still in Dhaka.
+
+---
+
+## Both sides may change a reseller order (2026-09-18) — what was left
+
+The owner opened a reseller store's order to BOTH parties (CLAUDE.md
+ORD-6, `docs/reseller-stores.md` "Both sides may change the order"). What
+went in is complete for the decisions taken; these three are recorded
+rather than guessed.
+
+**1. A CSV re-upload still cannot patch a reseller order.**
+`OrderService.applyBulkPatch` keeps `RESELLER_ORDER_NOT_EDITABLE`. It
+re-snapshots the single line from the LIVE catalogue with no reseller
+terms at all — no transfer price, no retail range, no stock mode — so a
+patched line would carry the order's `store_kind = RESELLER` with null
+term columns, which the table's own CHECK refuses, and the money would
+have nothing to re-plan from. Making it work means routing the CSV line
+through `ResellerOrderRetermService` and deciding what a CSV row means by
+"the retail" (it carries a COD amount, not a per-line price). That is a
+product question about the CSV format, not a wiring job. The portal, the
+API key and the seller's edit form all reach the same capability.
+
+**2. A prepaid re-price is guarded but unreachable through `edit`.**
+`repricePrepaidDebit` refuses with `STORE_BALANCE_INSUFFICIENT` when a
+change makes a prepaid order cost the store more than its wallet can
+carry — and by the time that could bite, the debit has been taken at
+CONFIRMED, which is past `CONTENTS_EDITABLE_STATUSES`. So today only a
+direct call to `recalculateAfterEdit` can reach it. It is written because
+the service is the boundary, not because a route exists; if god mode or a
+future path ever moves a confirmed prepaid order's contents, the guard is
+already there rather than discovered missing.
+
+**3. A recalculation that fails leaves the edit standing.** The edit has
+committed by then, so `recalculateResellerMoney` swallows the failure and
+raises a HIGH `reseller_order.money_recalculation_failed` audit row naming
+the order. That is the right ordering (the edit is the durable fact and
+the money is its reflection), but nothing SWEEPS for those rows: somebody
+has to be reading audit logs. The cheap follow-up is a system issue rather
+than an audit row, keyed on the order and self-clearing when a later
+recalculation succeeds — the shape `OrderAttentionService` already uses.

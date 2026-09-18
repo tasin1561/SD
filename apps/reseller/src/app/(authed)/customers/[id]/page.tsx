@@ -2,10 +2,16 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import {
+  Button,
   DescriptionList,
+  FormField,
+  Input,
+  Modal,
+  ModalFooter,
+  useToast,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -21,7 +27,14 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
-import { useStoreCustomer, useStoreOrders, type StoreCustomer } from '@/lib/order-hooks';
+import { can } from '@/lib/page-access';
+import { useStoreIdentity } from '@skydrop/auth/client';
+import {
+  useStoreCustomer,
+  useStoreOrders,
+  useUpdateStoreCustomer,
+  type StoreCustomer,
+} from '@/lib/order-hooks';
 
 function when(iso: string | null): string {
   return iso === null
@@ -67,6 +80,96 @@ export default function StoreCustomerPage(): ReactElement {
   );
 }
 
+/**
+ * Correcting what we hold for one of this store's customers (owner,
+ * 2026-09-18).
+ *
+ * The PHONE is not here and never will be: it is what tells one customer
+ * from another (ORD-7), and a changed one is a different person. Seller
+ * staff may make the same correction, and whichever side does it the
+ * other is told.
+ */
+function EditCustomer({ customer: c }: { customer: StoreCustomer }): ReactElement {
+  const me = useStoreIdentity();
+  const update = useUpdateStoreCustomer();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(c.name ?? '');
+  const [email, setEmail] = useState(c.email ?? '');
+  const [alt, setAlt] = useState(c.altPhoneE164 ?? '');
+  const [error, setError] = useState<string | null>(null);
+
+  // Cosmetic only — the server refuses without the permission either way
+  // (FE-2). Hiding a button whose save comes back 403 is the point.
+  if (me === null || !can(me, 'customers.manage')) return <></>;
+
+  const save = async (): Promise<void> => {
+    setError(null);
+    try {
+      await update.mutateAsync({
+        id: c.id,
+        name: name.trim(),
+        email: email.trim() === '' ? null : email.trim(),
+        altPhoneE164: alt.trim() === '' ? null : alt.trim(),
+      });
+      toast.success('Saved. Your seller has been told what changed.');
+      setOpen(false);
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  };
+
+  return (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        Edit details
+      </Button>
+      <Modal
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) setOpen(false);
+        }}
+        title="Edit this customer"
+        description="Their phone number is how we tell one customer from another, so it never changes. Your seller is told what you changed."
+      >
+        <div className="space-y-3">
+          <FormField label="Name" htmlFor="cust-name">
+            <Input id="cust-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </FormField>
+          <FormField label="Email" htmlFor="cust-email">
+            <Input id="cust-email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </FormField>
+          <FormField
+            label="Other phone"
+            htmlFor="cust-alt"
+            hint="A second number to try. With the country code, e.g. +919876543210."
+          >
+            <Input id="cust-alt" value={alt} onChange={(e) => setAlt(e.target.value)} />
+          </FormField>
+          {error !== null ? (
+            <p className="text-danger text-sm" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" size="md" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            disabled={update.isPending}
+            onClick={() => void save()}
+          >
+            {update.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </ModalFooter>
+      </Modal>
+    </>
+  );
+}
+
 function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElement {
   const router = useRouter();
   const orders = useStoreOrders({ search: c.phoneE164, pageSize: 50 });
@@ -76,7 +179,8 @@ function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElemen
     <>
       <PageHeader
         title={c.name ?? 'No name given'}
-        subtitle="Your customer — the seller does not see them."
+        subtitle="Your customer. Your seller sees them too, and each of you is told when the other changes their details."
+        action={<EditCustomer customer={c} />}
       />
       <DescriptionList
         columns={2}

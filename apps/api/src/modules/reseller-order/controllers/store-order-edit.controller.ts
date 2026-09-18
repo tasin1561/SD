@@ -28,19 +28,22 @@ import {
 import type { AddressChangeRequestView } from '../services/store-address-change.service';
 
 /**
- * 2026-09-16 — a reseller store correcting where its own parcel is going.
+ * 2026-09-16 — a reseller store changing its OWN order. Widened from
+ * "correcting where the parcel is going" to the whole order on
+ * 2026-09-18 (owner); the route keeps its name so no store's saved link
+ * breaks.
  *
  * Its own controller so the gate list pinned on `StoreOrderController` by
  * `store-permission-surface.spec.ts` stays as it is; the concern is also
  * genuinely different from placing and cancelling.
  *
  * The DTO extends the SELLER's `UpdateOrderDto` on purpose — one shape
- * for one order — and the service refuses every field outside the
- * recipient block by name (`STORE_EDIT_RECIPIENT_ONLY`) rather than
- * ignoring it, so a store that sends more finds out instead of believing
- * it worked. The one field that is NOT the order's is `reason`, which
- * belongs to a held correction and is stripped before the patch is
- * applied.
+ * for one order — and the store may reach every field on it except the
+ * two in `STORE_FORBIDDEN_KEYS`, each refused BY NAME
+ * (`STORE_EDIT_FIELD_NOT_YOURS`) rather than ignored, so a store that
+ * sends one finds out instead of believing it worked. The one field that
+ * is NOT the order's is `reason`, which belongs to a held change and is
+ * stripped before the patch is applied.
  */
 @ApiTags('store-orders')
 @ApiBearerAuth('store-jwt')
@@ -55,9 +58,10 @@ export class StoreOrderEditController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Correct where the parcel is going, before it is confirmed. Recipient fields only; anything ' +
-      'else is refused by name. Depending on the seller’s policy this is applied at once or held ' +
-      'for them to approve — the answer says which.',
+      'Change this order — the customer’s details, what is in it, the money the customer pays. ' +
+      'The contents only until the confirmation call settles it; once the courier holds the ' +
+      'address, only they can change it (use /store/orders/:id/consignee). Depending on the ' +
+      'seller’s policy this is applied at once or held for them to approve — the answer says which.',
   })
   editRecipient(
     @CurrentStoreUser() user: AuthenticatedStoreUser,

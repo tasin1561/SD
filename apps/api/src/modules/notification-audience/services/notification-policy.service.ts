@@ -37,8 +37,51 @@ export interface ChannelPolicy {
  * NotificationEventMappingService), so a new category fails to build
  * until someone consciously decides what it may use.
  */
+/**
+ * TOPICS THAT CANNOT BE SILENCED, whatever their category (owner,
+ * 2026-09-18).
+ *
+ * ── WHY A PER-TOPIC EXCEPTION AND NOT A NEW CATEGORY ─────────────────
+ * The category answers "what KIND of message is this", and it decides
+ * CHANNELS as well as mutability. A new category — `URGENT`, say — would
+ * have to be given a channel list, would have to be routed in
+ * `categoryForTemplate`, and would then be available to be attached to
+ * anything, which is how "unmutable" spreads from one message to a dozen
+ * over a year. It would also be a lie about this message: the 24-hour
+ * reminder IS operational, in every respect except that it is the last
+ * thing standing between a request and it closing unanswered.
+ *
+ * So the exception is exactly as narrow as the decision was: one named
+ * topic, listed here with its reason, read by BOTH halves — the write
+ * (`assertMutable` refuses to record the mute) and the read (`mutesFor`
+ * ignores one recorded before this shipped, or by any future path). A
+ * rule enforced only at the write is not a rule; it is a rule with a back
+ * door for every row already in the table.
+ */
+export const IMMUTABLE_TOPICS: ReadonlyMap<string, string> = new Map([
+  [
+    'seller.store_request_reminder',
+    'It is the only warning that a reseller store has been waiting a day for an answer. ' +
+      'Silenced, the request closes itself, the store is told nobody answered, and their ' +
+      'customer is left on a promise nobody kept.',
+  ],
+]);
+
 @Injectable()
 export class NotificationPolicyService {
+  /**
+   * Can this TOPIC be silenced at all? Asked before the category, because
+   * a named exception overrides it.
+   */
+  isTopicMutable(topic: string): boolean {
+    return !IMMUTABLE_TOPICS.has(topic);
+  }
+
+  /** Why a topic cannot be silenced, for the refusal and the screen. */
+  topicImmutableReason(topic: string): string | null {
+    return IMMUTABLE_TOPICS.get(topic) ?? null;
+  }
+
   policyFor(category: NotificationCategory): ChannelPolicy {
     switch (category) {
       case NotificationCategory.CREDENTIAL:
@@ -87,10 +130,13 @@ export class NotificationPolicyService {
     readonly category: NotificationCategory;
     readonly requested: readonly NotificationChannel[];
     readonly mutedChannels?: readonly NotificationChannel[];
+    /** When given, a topic on `IMMUTABLE_TOPICS` ignores every mute. */
+    readonly topic?: string;
   }): readonly NotificationChannel[] {
     const policy = this.policyFor(input.category);
     const permitted = input.requested.filter((c) => policy.allowed.includes(c));
     if (!policy.mutable) return permitted;
+    if (input.topic !== undefined && !this.isTopicMutable(input.topic)) return permitted;
     const muted = input.mutedChannels ?? [];
     return permitted.filter((c) => !muted.includes(c));
   }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NotificationSubjectType, SystemIssueKind } from '@skydrop/db';
+import { IMMUTABLE_TOPICS } from './notification-policy.service';
 
 export interface TopicDef {
   /** The stable key a subscription row is written against. */
@@ -7,6 +8,22 @@ export interface TopicDef {
   readonly label: string;
   readonly description: string;
   readonly group: string;
+}
+
+/**
+ * A topic as a PERSON's settings screen reads it: the definition, plus
+ * whether it can be silenced at all (2026-09-18).
+ *
+ * The flag travels with the list rather than being inferred client-side,
+ * for the reason every other capability on this estate does: a screen
+ * that offers a switch the server always refuses teaches people to
+ * ignore refusals. FE-2 still holds — the switch is only rendered
+ * locked, and the API is what actually refuses.
+ */
+export interface TopicView extends TopicDef {
+  readonly mutable: boolean;
+  /** Why it cannot be silenced, in the same words the refusal uses. */
+  readonly immutableReason: string | null;
 }
 
 /**
@@ -34,8 +51,13 @@ export interface TopicDef {
  */
 @Injectable()
 export class NotificationTopicCatalogService {
-  forSubject(subjectType: NotificationSubjectType): readonly TopicDef[] {
-    return subjectType === NotificationSubjectType.SELLER_USER ? SELLER_TOPICS : STAFF_TOPICS;
+  forSubject(subjectType: NotificationSubjectType): readonly TopicView[] {
+    const defs = subjectType === NotificationSubjectType.SELLER_USER ? SELLER_TOPICS : STAFF_TOPICS;
+    return defs.map((d) => ({
+      ...d,
+      mutable: !IMMUTABLE_TOPICS.has(d.topic),
+      immutableReason: IMMUTABLE_TOPICS.get(d.topic) ?? null,
+    }));
   }
 }
 
@@ -223,10 +245,25 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
   {
     // Sent by StoreRequestNotifier (2026-09-17) once, when any request a
     // store sent you is still unanswered after the reminder threshold.
+    //
+    // UNMUTABLE (owner, 2026-09-18) — see `IMMUTABLE_TOPICS`. It is the
+    // only thing standing between "a store is waiting on you" and a
+    // request closing itself with nobody having read it.
     topic: 'seller.store_request_reminder',
     label: 'A reseller store is still waiting on your answer',
     description:
-      'Something a store asked you to approve has not been answered. If nobody answers in time it closes on its own and the store is told.',
+      'Something a store asked you to approve has not been answered. If nobody answers in time it closes on its own and the store is told. This one cannot be switched off.',
+    group: 'Reseller stores',
+  },
+  {
+    // Sent by StoreRequestNotifier (2026-09-18) when a reseller store
+    // changes one of its own orders, or its own customer's record, under
+    // a policy the seller set to DIRECT. Whoever did not make the change
+    // hears about it.
+    topic: 'seller.store_changed_order',
+    label: 'A reseller store changed one of its orders',
+    description:
+      'A store changed an order of its own — the customer’s details, what is in the parcel, or the money — or changed a customer’s record. You own the goods, so you are told what moved.',
     group: 'Reseller stores',
   },
 ];

@@ -20,6 +20,7 @@ function makeSut(opts: { status?: ShipmentStatus; editOk?: boolean } = {}) {
   };
   const created: Any[] = [];
   const updated: Any[] = [];
+  const orderUpdated: Any[] = [];
   const prisma = {
     client: {
       orderShipment: { findFirst: async () => ({ shipment }) },
@@ -35,6 +36,18 @@ function makeSut(opts: { status?: ShipmentStatus; editOk?: boolean } = {}) {
         findMany: async () => [],
       },
       shipment: { update: async () => ({}) },
+      // 2026-09-18 — an ACCEPTED change now follows onto the ORDER too,
+      // so our copy, the label and the call centre all say one thing.
+      order: {
+        update: async (a: { data: Any }) => {
+          orderUpdated.push(a.data);
+          return {};
+        },
+        // Only a reseller order's parties are told; this fixture is a
+        // channel order, so the notice short-circuits.
+        findFirst: async () => null,
+      },
+      seller: { findUnique: async () => ({ companyName: 'Acme' }) },
       $transaction: async (ops: unknown[]) => ops,
     },
   };
@@ -46,8 +59,12 @@ function makeSut(opts: { status?: ShipmentStatus; editOk?: boolean } = {}) {
     prisma as never,
     { edit } as never,
     { log: jest.fn(async () => 'a1') } as never,
+    {
+      orderChangedBySeller: jest.fn(async () => undefined),
+      orderChangedByStore: jest.fn(async () => undefined),
+    } as never,
   );
-  return { svc, edit, created, updated };
+  return { svc, edit, created, updated, orderUpdated };
 }
 
 const ACTOR = { type: ActorType.SELLER, sellerId: 's1' };

@@ -2195,6 +2195,109 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     agrees(w);
   });
 
+  /*
+    ── THE ORDER CHANGED (owner, 2026-09-18) ─────────────────────────────
+
+    Seller staff — or the store — may change a reseller order, and the
+    money is recalculated to the new one. The invariant to hold is the
+    same one every other step holds: after EVERY step,
+    held for the seller = max(0, seller wallet + Σ their store wallets).
+
+    Two shapes, and the difference between them is the whole design:
+      - nothing posted yet ⇒ the credit rows ARE the plan, so their
+        figures are rewritten and no wallet moves;
+      - money already posted ⇒ the credit is TAKEN BACK through the same
+        reversal path a return uses and WRITTEN AGAIN at the new figures.
+        The net movement is the difference; what the ledger shows is two
+        legible entries rather than a signed patch across five directions.
+  */
+  it('re-priced BEFORE anything is credited: the plan moves, no wallet does', async () => {
+    const order = cod('r1', ON_PAYOUT, ON_PAYOUT);
+    const w = world([order]);
+    await confirm(w, 'r1');
+    expect(w.creditsOf('r1')).toEqual(['SELLER WAITING', 'STORE WAITING']);
+    const before = { store: w.storeBalance('st-a'), seller: w.balance('s') };
+
+    // The customer asked for a second unit on the call: COD and the
+    // transfer total both double.
+    order.cod = '2360';
+    order.transfer = '1400';
+    const out = await w.resellerMoney.recalculateAfterEdit('r1', { reason: 'Seller changed it' });
+
+    expect(out.outcome).toBe('REPLANNED');
+    expect(out.parties.map((p) => `${p.party} ${p.what}`).sort()).toEqual([
+      'SELLER REPLANNED',
+      'STORE REPLANNED',
+    ]);
+    // Nothing was written, so nothing moved.
+    expect(w.storeBalance('st-a')).toBe(before.store);
+    expect(w.balance('s')).toBe(before.seller);
+    expect(w.storeEntriesOf('r1')).toEqual([]);
+    expect(w.entriesOf('r1')).toEqual([]);
+    agrees(w);
+
+    // And the payout now pays the NEW figures: tax 360, COD fee 20,
+    // store 2360 − 1400 − 180 − 10 = 770; seller 1400 − 180 − 10 = 1210.
+    await deliver(w, 'r1');
+    await w.pay('2360', [['r1', '2360']]);
+    expect(w.storeBalance('st-a')).toBe('770.00');
+    expect(w.balance('s')).toBe('1210.00');
+    agrees(w);
+  });
+
+  it('re-priced AFTER both parties are credited: taken back and written again', async () => {
+    const order = cod('r1', ON_PAYOUT, ON_PAYOUT);
+    const w = world([order]);
+    await confirm(w, 'r1');
+    await deliver(w, 'r1');
+    await w.pay('1180', [['r1', '1180']]);
+    expect(w.creditsOf('r1')).toEqual(['SELLER CREDITED', 'STORE CREDITED']);
+    expect(w.storeBalance('st-a')).toBe('385.00');
+    expect(w.balance('s')).toBe('605.00');
+    agrees(w);
+
+    order.cod = '2360';
+    order.transfer = '1400';
+    const out = await w.resellerMoney.recalculateAfterEdit('r1', { reason: 'Seller changed it' });
+    expect(out.parties.map((p) => p.what).sort()).toEqual(['RECREDITED', 'RECREDITED']);
+    // Old net beside new net, which is what the store is shown.
+    const store = out.parties.find((p) => p.party === 'STORE');
+    expect(store?.before.netInr).toBe('385.00');
+    expect(store?.after.netInr).toBe('770.00');
+
+    // The wallets end at the NEW figures, and the book still agrees.
+    expect(w.storeBalance('st-a')).toBe('770.00');
+    expect(w.balance('s')).toBe('1210.00');
+    expect(w.creditsOf('r1')).toEqual(['SELLER CREDITED', 'STORE CREDITED']);
+    agrees(w);
+  });
+
+  it('a change that moves nothing is a no-op, not a reversal', async () => {
+    // A form round-trips every field it renders. Re-writing a credit
+    // because somebody pressed save would show the seller and the store
+    // a reversal and a re-credit for a change that never happened.
+    const w = world([cod('r1', ON_PAYOUT, ON_PAYOUT)]);
+    await deliver(w, 'r1');
+    await w.pay('1180', [['r1', '1180']]);
+    const out = await w.resellerMoney.recalculateAfterEdit('r1', { reason: 'Saved again' });
+    expect(out.outcome).toBe('UNCHANGED');
+    expect(w.storeEntriesOf('r1')).toEqual([
+      'ORDER_CREDIT 480.00',
+      'COD_TAX_SHARE 90.00',
+      'FEE_SHARE 5.00',
+    ]);
+    agrees(w);
+  });
+
+  it('an order whose credits were never planned is left alone', async () => {
+    const w = world([cod('r1', ON_PAYOUT, ON_PAYOUT)]);
+    const out = await w.resellerMoney.recalculateAfterEdit('r1', { reason: 'Edited early' });
+    // The plan is made at confirmation and will read the order as it now
+    // stands, so there is nothing stale to correct.
+    expect(out.outcome).toBe('NOT_PLANNED_YET');
+    agrees(w);
+  });
+
   it('two stores of one seller: each paid its own net, one pot in the book', async () => {
     const w = world([
       cod('r1', ON_PAYOUT, ON_PAYOUT),

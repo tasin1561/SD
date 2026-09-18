@@ -77,6 +77,36 @@ const EMPTY_QUEUE_RETRY_MS = 15_000;
  *  present agent is never stood down between two beats. */
 const HEARTBEAT_MS = 60_000;
 
+/**
+ * What the agent actually reads out, as one string.
+ *
+ * Deliberately NOT the order's `updatedAt`: any write to the row moves
+ * it (rule 4b), so a nightly cost sync or an attribution backfill would
+ * flash "the seller changed this order" at an agent mid-call about a
+ * change nobody made — and a warning that fires on noise is one people
+ * learn to ignore. This moves only when something the agent is saying to
+ * the customer moves.
+ */
+function callSignature(a: PulledAssignment): string {
+  const o = a.order;
+  if (o === null) return '';
+  const r = o.recipient;
+  return JSON.stringify([
+    r.name,
+    r.phoneE164,
+    r.altPhoneE164,
+    r.addressLine1,
+    r.addressLine2,
+    r.landmark,
+    r.city,
+    r.stateProvince,
+    r.postalCode,
+    o.paymentMode,
+    o.codAmountInr,
+    o.items.map((i) => [i.skuCode, i.quantity]),
+  ]);
+}
+
 export function CallCenterStation(): ReactElement {
   const toast = useToast();
   const client = useApiClient();
@@ -164,6 +194,7 @@ export function CallCenterStation(): ReactElement {
 
   function resetCall(): void {
     setAssignment(null);
+    setChangedUnderMe(false);
     setOutcome('');
     setNotes('');
     setCallbackTime('');
@@ -278,6 +309,34 @@ export function CallCenterStation(): ReactElement {
     }
     setBootstrapped(true);
   }, [current.isSuccess, current.data]);
+
+  /*
+    THE ORDER IN HAND IS RE-READ, AND A CHANGE IS SAID OUT LOUD
+    (owner decision 4, 2026-09-18).
+
+    `EDIT_DURING_CALL` is gone: a seller — and now a reseller store — may
+    change an order while an agent holds it, because the moment an agent
+    is told "that flat number is wrong" is exactly the moment it needs
+    fixing. What made that refusal look safe was never true: the station
+    copied the pulled assignment into React state and never looked again,
+    so an admin edit, a god-mode change, a CSV patch or a second agent
+    could already have moved the order under the agent with nothing said.
+
+    So the held call is re-read (`useCurrentCalls` polls) and compared on
+    WHAT THE AGENT READS OUT — the recipient, the lines, the amount. A
+    server `updatedAt` would be wrong here for the reason rule 4b gives:
+    any write to the row moves it, so a nightly job would flash a warning
+    about a change nobody made. A content signature never false-alarms.
+  */
+  const [changedUnderMe, setChangedUnderMe] = useState(false);
+  useEffect(() => {
+    if (!current.isSuccess || assignment === null) return;
+    const fresh = current.data.assignments.find((a) => a.orderId === assignment.orderId);
+    if (fresh === undefined) return;
+    if (callSignature(fresh) === callSignature(assignment)) return;
+    setAssignment(fresh);
+    setChangedUnderMe(true);
+  }, [current.isSuccess, current.data, assignment]);
 
   const idleRef = useRef(false);
   idleRef.current = isAvailable && bootstrapped && assignment === null && !pull.isPending;
@@ -446,6 +505,35 @@ export function CallCenterStation(): ReactElement {
       ) : (
         <Card>
           <CardBody>
+            {changedUnderMe ? (
+              /* The seller or the reseller store changed this order while
+                 it was in your hand (owner decision 4, 2026-09-18). The
+                 panel below is already showing the NEW one — this is here
+                 so the agent knows to read it again rather than carry on
+                 from memory. Dismissible, because after they have looked
+                 it is just noise. */
+              <div
+                role="status"
+                className="mb-3 rounded border border-warning/40 bg-warning/10 p-3 text-sm"
+              >
+                <div className="text-text-bright font-medium">
+                  This order changed while you were on the call
+                </div>
+                <p className="text-text-muted mt-1 text-xs">
+                  The seller or the store that sold it has just changed something. What is on this
+                  screen is the new version — read the address and the items again before you
+                  confirm anything.
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setChangedUnderMe(false)}
+                >
+                  I have read it
+                </Button>
+              </div>
+            ) : null}
             <div className="mb-3">
               <div className="text-text-bright font-medium text-sm">
                 Assignment {assignment.assignmentId.slice(0, 8)}

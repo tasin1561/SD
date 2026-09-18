@@ -57,6 +57,7 @@ import {
 import { useStoreCallReviews } from '@/lib/review-hooks';
 import { CallReviewDecision } from '@/components/call-review-decision';
 import { OrderMoney } from './_components/order-money';
+import { StoreConsigneePanel } from './_components/store-consignee-panel';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -319,6 +320,11 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
             recipient={o.recipient}
             stageOpen={o.stages.addressCorrection}
           />
+          {/* Past that stage the COURIER holds the address, and only
+              they can change it (owner, 2026-09-18). This renders
+              nothing until a parcel exists, and greys itself out once
+              the courier's own window has closed. */}
+          {!o.stages.addressCorrection ? <StoreConsigneePanel orderId={o.id} /> : null}
         </>
       ) : null}
 
@@ -920,7 +926,7 @@ function proposedChanges(
 /**
  * Correcting where this parcel is going.
  *
- * WHICH of the three things happens is the seller's `addressFix` policy
+ * WHICH of the three things happens is the seller's `orderChange` policy
  * for this store, read from the server with the history (`mode`): OFF is
  * not offered at all — an offered button that always refuses teaches
  * people to ignore refusals, the same reasoning as `OrderActions` above;
@@ -987,7 +993,7 @@ function AddressCorrection({
     } catch (err) {
       // Verbatim (FE-2): ADDRESS_CHANGE_REASON_REQUIRED,
       // ADDRESS_CHANGE_ALREADY_OPEN, STORE_ACTION_NOT_ALLOWED,
-      // NOT_EDITABLE, EDIT_DURING_CALL…
+      // NOT_EDITABLE, COURIER_MUST_ACCEPT_ADDRESS_CHANGE, RETAIL_OUT_OF_RANGE…
       setError(serverVerdict(err));
     }
   }
@@ -1007,37 +1013,38 @@ function AddressCorrection({
 
   return (
     <Section
-      title="Wrong address?"
+      title="Something wrong with this order?"
       subtitle={
         mode === 'OFF'
-          ? 'Your seller does not allow this store to change delivery details.'
+          ? 'Your seller does not allow this store to change its orders.'
           : !stageOpen
-            ? 'Delivery details can be corrected only until the customer confirms the order on our call.'
+            ? 'What is in the parcel can only change until the customer confirms it on our call. The customer’s details can still be corrected — while the parcel is with the courier, only if they accept it.'
             : waits
-              ? 'Seller staff read the correction and decide. Nothing on the parcel changes until they answer.'
-              : 'A correction here is written onto the order straight away.'
+              ? 'Seller staff read the change and decide. Nothing on the order changes until they answer.'
+              : 'A change here is written onto the order straight away.'
       }
     >
       <Card>
         <CardBody>
           {mode === 'OFF' ? (
             <p className="text-text-muted text-sm">
-              Ask the seller if the delivery details need to change.
+              Ask the seller if anything on this order needs to change.
             </p>
           ) : !stageOpen ? (
             <p className="text-text-muted text-sm">
-              This order is past that stage, so the details on the parcel stand. If they are wrong,
-              tell your seller — once the parcel is out for delivery you can also ask for another
-              attempt or for it to be sent back.
+              This order is past that stage, so what is in the parcel stands. The customer’s details
+              can still be corrected — ask your seller, and once it is with the courier the change
+              only sticks if the courier accepts it. Once it is out for delivery you can also ask
+              for another attempt or for it to be sent back.
             </p>
           ) : (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <Button variant="secondary" size="md" disabled={pending !== null} onClick={start}>
-                Correct the address
+                Change this order
               </Button>
               <span className="text-text-muted text-xs">
                 {pending !== null
-                  ? 'A correction on this order is still open with seller staff — it has to be finished before you can send another.'
+                  ? 'A change on this order is still open with seller staff — it has to be finished before you can send another.'
                   : waits
                     ? 'Seller staff approve this one before anything changes'
                     : 'Happens as soon as you send it'}

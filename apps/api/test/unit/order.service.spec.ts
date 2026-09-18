@@ -127,7 +127,7 @@ function makeService(
   const events = {
     created: jest.fn<Promise<{ id: string }>, unknown[]>(async () => ({ id: 'e1' })),
     statusChanged: jest.fn(async () => ({ id: 'e2' })),
-    note: jest.fn(async () => ({ id: 'e3' })),
+    note: jest.fn<Promise<{ id: string }>, unknown[]>(async () => ({ id: 'e3' })),
   };
   const addressCache = { recordAddress: jest.fn(async () => undefined) };
   const addressValidation = { assertValid: jest.fn(async () => 'Karnataka') };
@@ -192,7 +192,20 @@ function makeService(
     { assertCanPlaceOrder: assertCanPlaceOrder } as never,
     // A seller correcting a reseller store's recipient (2026-09-17).
     { supersedeAddressChanges: jest.fn(async () => 0) } as never,
-    { recipientChangedBySeller: jest.fn(async () => undefined) } as never,
+    {
+      orderChangedBySeller: jest.fn(async () => undefined),
+      orderChangedByStore: jest.fn(async () => undefined),
+    } as never,
+    // Re-terming a reseller order's replaced lines (2026-09-18).
+    { retermLines: jest.fn(async () => []) } as never,
+    {
+      assertEditKeepsMoneyCorrectable: jest.fn(async () => undefined),
+      recalculateAfterEdit: jest.fn(async () => ({
+        outcome: 'NOT_PLANNED_YET',
+        parties: [],
+        prepaid: null,
+      })),
+    } as never,
   );
   return {
     svc,
@@ -470,17 +483,25 @@ describe('OrderService.edit', () => {
     expect(orderUpdate.mock.calls[0]![0].data).toMatchObject({ isUrgent: true });
   });
 
-  it('refuses an items/economics edit while an agent is on the call', async () => {
-    // The agent is reading the contents and the amount to the customer.
-    // Changing either underneath them means the customer agrees to one
-    // order and we ship another, and neither of them would know.
-    const { svc } = makeService({
+  it('allows an items/economics edit DURING a call, and says so on the timeline', async () => {
+    /*
+      `EDIT_DURING_CALL` is GONE (owner decision 4, 2026-09-18). It
+      refused the change; what it could not do was make the agent look
+      again — the station held a copy of the order taken when the call
+      was pulled, so an address could already be stale for reasons this
+      guard never covered. The answer is the record plus a station that
+      re-reads, not a refusal that cost a seller the ability to fix a
+      wrong number at the one moment they find out it is wrong.
+    */
+    const { svc, orderUpdate, events } = makeService({
       existing: existingOrder({ status: OrderStatus.PENDING_CONFIRMATION }),
       activeCall: { assignedAgentId: 'agent-1', assignedAt: new Date() },
     });
-    await expect(svc.edit('s1', 'o1', { codAmountInr: 999 }, ACTOR, CTX)).rejects.toMatchObject({
-      response: { code: 'EDIT_DURING_CALL' },
-    });
+    await svc.edit('s1', 'o1', { codAmountInr: 999 }, ACTOR, CTX);
+    expect(orderUpdate).toHaveBeenCalled();
+    // The note is the safeguard: whoever picks the order up later can see
+    // it moved while somebody had the customer on the phone.
+    expect(events.note.mock.calls[0]![2]).toContain('WHILE AN AGENT WAS ON THE CALL');
   });
 
   it('still allows a recipient correction mid-call', async () => {

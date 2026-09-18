@@ -3805,24 +3805,48 @@ const notificationTemplates: TemplateSeed[] = [
       'See the order at {{ order_url }}',
     ].join('\n'),
   },
-  // 2026-09-17 — seller staff corrected the customer's details on a
-  // reseller store's order themselves. The store sold to that customer.
+  // 2026-09-18 (owner) — seller staff changed a reseller store's order.
+  // Replaced `store.recipient_changed_by_seller.email`, which said "the
+  // delivery details" and would now be a lie about half the edits it is
+  // sent for: seller staff may change anything on the order.
   {
-    code: 'store.recipient_changed_by_seller.email',
-    name: 'Reseller store — the seller corrected the customer details on your order',
+    code: 'store.order_changed_by_seller.email',
+    name: 'Reseller store — the seller changed your order',
     channel: NotificationChannel.EMAIL,
     recipientType: NotificationRecipientType.STORE_USER,
-    subject: '{{ seller_name }} corrected the delivery details on {{ order_number }}',
+    subject: '{{ seller_name }} changed order {{ order_number }}',
     bodyTemplate: [
       'Hi {{ full_name }},',
       '',
-      '{{ seller_name }} changed the delivery details on order {{ order_number }}:',
+      '{{ seller_name }} changed order {{ order_number }}. This is what moved:',
       '',
       '{{ changes }}',
+      '',
+      '{{ money }}',
       '',
       '{{ superseded_note }}',
       '',
       'See the order at {{ order_url }}',
+    ].join('\n'),
+  },
+  // 2026-09-18 (owner) — seller staff changed a customer record belonging
+  // to one of their reseller stores. The store spoke to that person.
+  {
+    code: 'store.customer_changed_by_seller.email',
+    name: 'Reseller store — the seller changed one of your customers',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ seller_name }} changed what we hold for {{ customer_name }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ seller_name }} changed the details we hold for your customer {{ customer_name }}:',
+      '',
+      '{{ changes }}',
+      '',
+      'Their phone number is how we tell one customer from another, so that never changes.',
+      '',
+      'See your customers at {{ app_url }}/customers',
     ].join('\n'),
   },
   // RS-2 (2026-09-14) — the reseller store portal's CREDENTIAL messages.

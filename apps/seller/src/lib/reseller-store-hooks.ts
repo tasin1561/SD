@@ -102,7 +102,7 @@ export type StoreActionMode = 'OFF' | 'ASK_SELLER' | 'DIRECT';
 
 export const ACTION_CAPABILITIES = [
   'recall',
-  'addressFix',
+  'orderChange',
   'cancel',
   'callCapDecision',
   'chaseSkydrop',
@@ -251,7 +251,7 @@ export function useDecideStoreAction(): UseMutationResult<
 
 /**
  * 2026-09-16 — corrections to where a store's parcel is going, waiting
- * on this seller because their `addressFix` policy said “ask me first”.
+ * on this seller because their `orderChange` policy said “ask me first”.
  *
  * A separate queue from the delivery asks above because it is a
  * different question: those are about doing something to a parcel, this

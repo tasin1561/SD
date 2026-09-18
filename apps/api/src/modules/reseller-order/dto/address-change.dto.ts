@@ -3,25 +3,25 @@ import { IsOptional, IsString, Length } from 'class-validator';
 import { UpdateOrderDto } from '../../order/dto/update-order.dto';
 
 /**
- * A store correcting its own consignee (2026-09-16).
+ * A store changing its own order (2026-09-16; widened beyond the
+ * consignee 2026-09-18).
  *
  * It EXTENDS the seller's `UpdateOrderDto` — one shape for one order —
- * and adds the one thing a held correction needs that an immediate one
- * does not: why.
+ * and adds the one thing a held change needs that an immediate one does
+ * not: why.
  *
  * ── `reason` MUST BE STRIPPED BEFORE THE PATCH REACHES `edit` ─────────
- * `OrderService.edit` refuses every key outside `STORE_EDITABLE_KEYS` BY
- * NAME (`STORE_EDIT_RECIPIENT_ONLY`) rather than ignoring it — which is
- * the right behaviour and exactly why this field cannot be passed
- * through. `StoreOrderEditService` destructures it off. If a future
- * field is added here, it has to be destructured off too.
+ * `OrderService.edit` does not know the key, and the API's
+ * `forbidNonWhitelisted` would reject the whole call. `StoreOrderEditService`
+ * destructures it off. If a future field is added here, it has to be
+ * destructured off too.
  */
 export class StoreEditRecipientDto extends UpdateOrderDto {
   @ApiPropertyOptional({
     description:
-      'Why the details are wrong, in the store’s words. REQUIRED when the seller has set address ' +
-      'corrections to “ask me first” — they read this before deciding, and a correction with no ' +
-      'account of where it came from is unanswerable.',
+      'Why the change is needed, in the store’s words. REQUIRED when the seller has set changes to ' +
+      'this store’s orders to “ask me first” — they read this before deciding, and a change with ' +
+      'no account of where it came from is unanswerable.',
   })
   @IsOptional()
   @IsString()

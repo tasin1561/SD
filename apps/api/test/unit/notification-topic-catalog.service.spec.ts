@@ -35,6 +35,7 @@ import {
 import { STORE_ADDRESS_CHANGE_WAITING_TOPIC } from '../../src/modules/reseller-order/services/address-change-notifier.service';
 import { STORE_ACTION_WAITING_TOPIC } from '../../src/modules/delivery-action/services/store-action-notifier.service';
 import {
+  STORE_CHANGED_ORDER_TOPIC,
   STORE_REQUEST_REMINDER_TOPIC,
   STORE_REQUEST_WAITING_TOPIC,
 } from '../../src/modules/store-order-request/services/store-request-notifier.service';
@@ -65,6 +66,8 @@ const OTHER_SELLER_SENDERS = [
   // one reminder about any held request.
   STORE_REQUEST_WAITING_TOPIC,
   STORE_REQUEST_REMINDER_TOPIC,
+  // 2026-09-18: a store changed one of its own orders, or a customer.
+  STORE_CHANGED_ORDER_TOPIC,
 ];
 
 /** Staff topics that are not system issues (TKT-3), by their sender's constant. */
@@ -162,10 +165,32 @@ describe('NotificationTopicCatalogService', () => {
   });
 
   it('serves the right list per subject, and they do not overlap', () => {
-    expect(svc.forSubject(NotificationSubjectType.SELLER_USER)).toBe(SELLER_TOPICS);
-    expect(svc.forSubject(NotificationSubjectType.STAFF_USER)).toBe(STAFF_TOPICS);
+    // BY TOPIC, not by array identity: since 2026-09-18 `forSubject`
+    // decorates each entry with whether it can be silenced at all
+    // (`IMMUTABLE_TOPICS`), so it returns new objects. The contract is
+    // which topics each subject gets, which is what this asserts.
+    expect(svc.forSubject(NotificationSubjectType.SELLER_USER).map((t) => t.topic)).toEqual(
+      SELLER_TOPICS.map((t) => t.topic),
+    );
+    expect(svc.forSubject(NotificationSubjectType.STAFF_USER).map((t) => t.topic)).toEqual(
+      STAFF_TOPICS.map((t) => t.topic),
+    );
     const seller = new Set(SELLER_TOPICS.map((t) => t.topic));
     expect(STAFF_TOPICS.filter((t) => seller.has(t.topic))).toEqual([]);
+  });
+
+  it('carries whether each topic can be silenced, so a screen need not guess', () => {
+    // A switch the server always refuses teaches people to ignore
+    // refusals; the flag travels with the list so the screen can render
+    // it locked with the reason (FE-2 — the API still refuses).
+    const seller = svc.forSubject(NotificationSubjectType.SELLER_USER);
+    const reminder = seller.find((t) => t.topic === STORE_REQUEST_REMINDER_TOPIC);
+    expect(reminder?.mutable).toBe(false);
+    expect(reminder?.immutableReason).toContain('waiting a day');
+    expect(seller.filter((t) => !t.mutable).map((t) => t.topic)).toEqual([
+      STORE_REQUEST_REMINDER_TOPIC,
+    ]);
+    expect(svc.forSubject(NotificationSubjectType.STAFF_USER).every((t) => t.mutable)).toBe(true);
   });
 
   it('every entry is written for a person, not an enum', () => {

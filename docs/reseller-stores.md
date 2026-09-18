@@ -1542,7 +1542,7 @@ Keep the global default FALSE until that run is clean.
   rules, refused refund, transfer-price cap, store-scoped open); the RS-7
   case in `tenant-isolation.e2e-spec.ts`.
 
-## Store actions as built (2026-09-16, reworked 2026-09-17)
+## Store actions as built (2026-09-16, reworked 2026-09-17, widened to the whole order 2026-09-18)
 
 The owner: "give all of this access to the store directly but the seller can
 select that which should go directly or which should by approving the seller",
@@ -1569,7 +1569,7 @@ choice on that screen is one the server then refuses.
 | Capability | Default | What DIRECT actually does | Where ASK_SELLER waits |
 |---|---|---|---|
 | `recall` | DIRECT | our call centre is queued to ring the customer, and a ticket opens | `order_delivery_action_requests` |
-| `addressFix` | DIRECT | the correction is written onto the order | `store_address_change_requests` |
+| `orderChange` | DIRECT | the change is written onto the order — the customer's details, the products, the quantities, the retail, the money | `store_address_change_requests` |
 | `cancel` | DIRECT | the order is called off (what stores could already do) | `store_order_requests` |
 | `callCapDecision` | DIRECT | the store's "keep trying / give up" is applied | `store_order_requests` |
 | `chaseSkydrop` | DIRECT | the issue ticket opens with Skydrop | `store_order_requests` |
@@ -1745,39 +1745,224 @@ the row). Both settings are GLOBAL, seeded, and inserted by
 "Not answered in time"); `storeOrderRequestStatusKind` / `…Label` and
 `StoreOrderRequestStatusBadge` are new in `@skydrop/ui`.
 
-### Seller staff correct a store order's customer (owner decision, 2026-09-17)
+### Both sides may change the order (owner decision, 2026-09-18)
 
-`OrderService.edit` from the SELLER side now accepts a Reseller store's order
-when every key is one of `STORE_EDITABLE_KEYS` (the same recipient fields the
-store may edit); anything else is still `RESELLER_ORDER_NOT_EDITABLE`, so
-lines, prices and the terms snapshot stay the store's (ORD-6). The same
-DRAFT/PENDING gate and call rule apply. It is the SELLER's act on the timeline
-and audit (metadata carries `resellerStoreId`), the name gets NO seller-initials
-prefix (RS-10 — it prints on the label; the check is now on the order's kind,
-not on who edits), and a changed phone re-links the customer under the STORE's
-identity (`resellerStoreId`), which also fixes the store's own edit that had
-been linking to the seller's. The store's CUSTOMER row is still not
-seller-writable. **A store correction waiting on Seller staff for that order is
-closed SUPERSEDED in the same transaction** (a new `StoreAddressChangeStatus`,
-"Seller staff corrected it themselves"): two corrections to one address cannot
-both stand, and approving the store's later would silently undo the seller's.
-The store is emailed `store.recipient_changed_by_seller.email` with each field
-changed and, when one was closed, that its correction was closed. apps/seller
-offers "Correct customer details" on the Recipient card of a Reseller store's
-order while it is DRAFT or PENDING_CONFIRMATION; the full edit link is hidden
-for those orders.
+The owner, on the seller's side: seller staff may change products, quantities,
+prices and the order's terms; edit anything on a reseller order; correct the
+customer's details after confirmation and while the call centre is on the
+phone; and edit the store's customer record. And, the same day, on the store's:
+"reseller should be able to Edit the order beyond the customer's details if
+possible, Edit the customer's record, Edit after confirmation or during a call.
+but only if our main system allows it whatever the case is."
 
-### The held address correction (2026-09-16)
+So the rule is symmetric, and the limits are only the real ones.
 
-`store_address_change_requests` is where a correction WAITS. One nullable
-column per field of `STORE_EDITABLE_KEYS` — the ten recipient fields — plus
-`reason`, `status`, `decided_by_seller_user_id`, `seller_decided_at`,
-`decision_note`, `applied_at` and `failure_reason`; indexed `(seller_id,
-status)` for the seller's queue and `(order_id)` for "is anything pending on
-this parcel"; all three FKs RESTRICT, because a decided correction is the
-evidence for why an address changed and must outlive everything short of the
-order. A NULL column means "not part of this correction", never "clear it" —
+**What each party may reach.** Seller staff reach every field on
+`UpdateOrderDto`. The store reaches every field but two, and each is closed for
+a reason about the FIELD rather than about who is asking
+(`STORE_FORBIDDEN_KEYS` in `order.service.ts`):
+
+| Field | Why a store may not change it |
+|---|---|
+| `internalNotes` | Skydrop's own working notes on the order — not a fact about the sale |
+| `storeId` | moving an order to another shopfront moves its money, its customer identity (ORD-7) and its terms snapshot to a deal that was never struck for it |
+
+It is a DENY list on purpose. An allow list encodes the opposite rule: every
+field added to the DTO afterwards is silently closed to the store until
+somebody remembers to open it, which is the drift this decision reversed.
+
+Three more things a store cannot do are STRUCTURAL rather than listed, and
+worth saying out loud because they are what "only if our main system allows
+it" means: the transfer price and the terms version are not fields on the DTO
+at all (they are the seller's terms), the retail is checked against the store's
+own agreed range, and a store may not touch another store's or the seller's own
+order (a 404 that says nothing more).
+
+**The lifecycle stage binds both.** `CONTENTS_EDITABLE_STATUSES`
+(DRAFT, PENDING_CONFIRMATION — renamed from `RECIPIENT_EDITABLE_STATUSES`) is
+when what is IN the parcel may change: after confirmation stock is held, a
+waybill is booked and the box may be packed. Past it, a contents edit is
+`NOT_EDITABLE` for seller staff and the store alike.
+
+**The RECIPIENT is routed, and the router asks a fact.**
+`order/recipient-change-route.ts` is the ONE place, pure, read by
+`OrderService.edit` and — for the courier window — by `ShipmentAddressService`.
+The question is not "which order statuses may be edited"; it is "does anybody
+outside this building already hold this address?", and a WAYBILL is that fact:
+
+| Live parcel | Route |
+|---|---|
+| none, or no waybill | `DIRECT` — nobody outside has it, so we write it |
+| a waybill, courier window open | `COURIER` — ask them; stored only if they accept |
+| a waybill, window closed (their "Dispatched" is our OUT_FOR_DELIVERY) | `COURIER`, `courierWillAccept: false` |
+| a terminal order | `REFUSED` — no parcel left to redirect |
+
+Reading a status list instead would be wrong both ways: `AWAITING_COURIER` and
+a `CONFIRMED` order whose AWB job has not run carry no waybill and are safe to
+correct, while `PENDING_MANUAL_PLACEMENT` may carry one typed off a paper
+docket. `OrderService.edit` refuses a `COURIER` route with
+`COURIER_MUST_ACCEPT_ADDRESS_CHANGE`, naming the endpoint that asks them —
+`POST /seller/orders/:id/consignee` or `POST /store/orders/:id/consignee`.
+
+**The courier decides, and a refusal writes nothing** (owner answer B). On
+acceptance `ShipmentAddressService.change` writes the new name / phone /
+address to the SHIPMENT and — new on 2026-09-18 — to the ORDER, in the same
+transaction, so the label, the call centre and both portals say one thing. It
+used to leave the order alone and call the change row "how the two are
+reconciled", which left every screen showing an address the courier no longer
+had. On refusal neither is written, the courier's own words are kept on the
+change row, and BOTH sides are told them verbatim: the answer "they would not
+take it" is what somebody has to repeat to the customer.
+
+**The ONE place the store is narrower than seller staff, and why.** A store's
+post-handover consignee ask refuses `ASK_SELLER` by name
+(`STORE_ACTION_NEEDS_SELLER_NOW`). A held request is applied hours or a day
+later, and by then the courier's own window may have closed — so holding it
+would produce an approval that silently does nothing to a moving parcel while
+both parties believe the address changed. Seller staff make that one
+themselves, immediately.
+
+**Editing during a call is allowed** (owner decision 4). `EDIT_DURING_CALL`
+refused any change to the contents or the amount while an agent held the order.
+The risk it named is real; the refusal was not the answer to it. The call
+station copied the pulled assignment into React state and never looked again,
+so an agent could already be reading out an address moved by an admin edit, a
+god-mode change, a CSV patch or a second agent — none of which that guard
+covered. It cost a seller, and now a store, the ability to fix a wrong number
+at the one moment they find out it is wrong.
+
+What replaced it: the order event says `— WHILE AN AGENT WAS ON THE CALL` and
+the audit row carries `duringCall`, and the station re-reads the call it holds
+(`useCurrentCalls` polls every 20s, paused on a hidden tab) and shows "This
+order changed while you were on the call" above the panel, which is already
+showing the new version. The comparison is a CONTENT SIGNATURE — the recipient,
+the lines, the payment mode and the COD — never `updatedAt`: any write to the
+row moves that (rule 4b), so a nightly cost sync would flash a warning about a
+change nobody made, and a warning that fires on noise is one people learn to
+ignore.
+
+**The customer record.** `CustomerService.update` now accepts the seller's own
+customers AND their reseller stores' (`getEditableById`: scoped on `sellerId`,
+and for a store caller on the store too). A store edits its own at
+`PATCH /store/customers/:id` behind the new `customers.manage` store permission
+(granted to the admin and ops roles by the migration; finance and viewer read
+customers, they do not maintain them). The PHONE is not an editable field
+anywhere and the two partial uniques stand, so nothing here can merge a store's
+customer into the seller's own. **Deleting is still the seller's own row only**
+(`getOwnById`): deleting is not correcting, and a store's customer row is its
+record of somebody it sold to.
+
+**The money follows the order** — see "The money of a changed order" below.
+
+**A store change waiting on seller staff closes SUPERSEDED** in the same
+transaction when seller staff change the order themselves: two changes to one
+order cannot both stand, and approving the store's later would silently undo
+the seller's.
+
+**Whoever did not make the change is told, every time**, with old → new and,
+when it moved, the money's before and after (`order-change-description.ts` is
+the ONE description both notices read). The store hears by EMAIL —
+`store.order_changed_by_seller.email`, `store.customer_changed_by_seller.email`
+— because a reseller store has no in-app inbox. Seller staff hear IN-APP,
+addressed by PERMISSION `stores.manage` under the new topic
+`seller.store_changed_order`. Neither notifier throws (NOTIF-1), and both are
+awaited rather than fired and forgotten, so the e2e reset has nothing in flight
+to drain (NOTIF-19).
+
+### The money of a changed order (owner, 2026-09-18)
+
+`ResellerOrderMoneyService.recalculateAfterEdit` runs post-commit, in ONE
+transaction under the seller's WALLET lock (the seller and all their stores
+serialise together).
+
+**Which terms.** The ones SNAPSHOTTED ON THE ORDER — the six fee shares, both
+credit timings and each line's transfer price as placed. Never the store's
+current live terms or price list: re-pointing an existing order at newer terms
+would change a deal neither side agreed for it. A REPLACED line set goes
+through `ResellerOrderRetermService`: a KEPT line keeps its own snapshot, an
+ADDED line is priced from that store's catalogue as it stands, and one with no
+transfer price there is refused by name (`RESELLER_VARIANT_NOT_OFFERED`) rather
+than given a price we made up. A retail with nowhere to come from is
+`RESELLER_RETAIL_REQUIRED`, never defaulted to zero.
+
+**Which COD rates.** The ones stamped on the plan when it was made
+(`reseller_order_credits.gst_percent_at_plan`, `cod_fee_percent_at_plan`,
+`instant_pay_fee_percent_at_plan`, new columns). They are live per-seller
+settings (SET-1), so re-resolving them would let a rate somebody changed last
+week move the money of an order placed before it — a change the edit did not
+ask for, and one invisible in the before/after the store is shown. Rows planned
+before the stamp existed fall back to today's, and the audit row says so
+(`ratesFromPlan`).
+
+**What happens to money already posted.**
+
+| The credit row | What the recalculation does |
+|---|---|
+| WAITING / DUE / SKIPPED / REVERSED | nothing was written to a wallet, so the row IS the plan: its figures are rewritten by a guarded `updateMany` on the status it was read in. SKIPPED and REVERSED matter because a later courier payout can re-arm them, and a stale figure there would credit the old amount weeks later. |
+| CREDITED | money HAS moved. It is TAKEN BACK through the exact reversal path a return uses — every deduction refunded, the cash returned to capital — and WRITTEN AGAIN at the new figures. |
+
+The reversal-and-rewrite is deliberate. A signed difference across five
+directions is where a correcting movement goes wrong; the reversal path is
+already exact and already tested by returns, and both halves are operations
+whose cash rules keep TRE-8c true, so `held = max(0, seller + Σ stores)` holds
+after each step rather than only at the end. What the ledger shows is two
+legible entries — taken back, credited again — which is what somebody arguing
+about this in a month needs to see.
+
+A PREPAID order's up-front debit follows the same shape: refunded and retaken
+when the transfer total moved, and refused before anything is written when the
+store's wallet cannot carry the bigger one (`STORE_BALANCE_INSUFFICIENT`).
+
+**What is refused rather than guessed.** Changing how a PRICED order is paid
+for (`RESELLER_PAYMENT_MODE_LOCKED`, checked BEFORE the edit is written). COD
+and PREPAID are not two amounts of one thing — a COD order has a STORE credit
+and a prepaid one does not, and a prepaid one takes a debit up front — so
+turning one into the other after the plan exists means inventing a party's
+credit with no anchor to arm it from and guessing whether a debit already taken
+should come back. The order is called off and placed again instead.
+
+A recalculation that throws does NOT fail the edit, which has committed: it
+raises a HIGH `reseller_order.money_recalculation_failed` audit row naming the
+order, because until somebody looks the order says one thing and the credits
+behind it say another.
+
+Pinned by `settlement-bank-invariant.spec.ts` (four re-price scenarios over the
+in-memory book, including a CREDITED one), `reseller-money-recalculation.spec.ts`
+and `reseller-order-money.e2e-spec.ts` against a real database.
+
+### The held ORDER CHANGE (2026-09-16, widened 2026-09-18)
+
+`store_address_change_requests` is where a store's change WAITS. The table
+keeps its name — renaming a table and its status enum for a widened meaning is
+a migration's worth of risk with no user-visible benefit — and now carries the
+whole change.
+
+One nullable column per RECIPIENT field — the ten in `RECIPIENT_KEYS` — plus
+`patch` (JSONB, 2026-09-18: the validated store-scoped `UpdateOrderDto` minus
+`reason`), `reason`, `status`, `decided_by_seller_user_id`,
+`seller_decided_at`, `decision_note`, `applied_at` and `failure_reason`;
+indexed `(seller_id, status)` for the seller's queue and `(order_id)` for "is
+anything pending on this parcel"; all three FKs RESTRICT, because a decided
+change is the evidence for why an order moved and must outlive everything short
+of the order. A NULL column means "not part of this change", never "clear it" —
 a store correcting a misheard house number sends that field alone.
+
+**Why BOTH the columns and the patch.** A change that moves products,
+quantities or the money cannot be expressed as columns without one per DTO
+field, and adding ten more for the next widening is not a design. But the
+recipient columns are read by the seller's queue, by `summarise`, by the
+notices and by `toView`, and dropping them would have meant rewriting all of
+that in the same change. So the columns stay written whenever the change
+carries them, the patch is the authority when it is present, and a row held
+before the patch existed has its whole change in its columns — which is exactly
+what it always did. `AddressChangeRequestView` exposes both plus `changes`,
+the list of keys, so a screen can list what is proposed without guessing.
+
+**Applying re-runs the same validation a direct change does**, through the ONE
+applier (`StoreOrderEditService.apply`), so a variant archived between the ask
+and the answer is refused BY NAME and recorded FAILED rather than written. Two
+callers of the writer would drift, and the one that drifted would be the
+approval path — the one nobody exercises by hand.
 
 **The proposal lives in its own table, and never on the order.** The order
 must keep the address the courier was given until seller staff say otherwise.
@@ -1796,17 +1981,16 @@ null field will eventually infer it wrong.
 
 **`reason` is required on ASK_SELLER** (`ADDRESS_CHANGE_REASON_REQUIRED`):
 seller staff read it before deciding, and they cannot tell a corrected typo
-from a customer who has moved house without it. **It is also STRIPPED off the
-patch before it reaches `OrderService.edit`** — that method refuses every key
-outside `STORE_EDITABLE_KEYS` BY NAME (`STORE_EDIT_RECIPIENT_ONLY`) rather
-than ignoring it, which is the right behaviour and exactly why this field
-cannot be passed through. A future field on `StoreEditRecipientDto` has to be
-destructured off in the same way.
+from a customer who has moved house — or an extra unit the customer asked for
+from a mistake — without it. **It is also STRIPPED off the patch before it
+reaches `OrderService.edit`**: that method does not know the key, and the
+API's `forbidNonWhitelisted` would reject the whole call. A future field on
+`StoreEditRecipientDto` has to be destructured off in the same way.
 
-**One open correction per order** (`ADDRESS_CHANGE_ALREADY_OPEN`). Two
-proposals for one address cannot both be right, and approving them in whatever
-order they happened to be decided would apply the older one last. A patch
-carrying no recipient field at all is `ADDRESS_CHANGE_EMPTY`.
+**One open change per order** (`ADDRESS_CHANGE_ALREADY_OPEN`). Two proposals
+for one order cannot both be right, and approving them in whatever order they
+happened to be decided would apply the older one last. An empty patch is
+`ADDRESS_CHANGE_EMPTY`.
 
 Seller staff decide at `/seller/store-address-changes` (`stores.manage`) — a
 SIBLING of `/seller/store-action-requests` rather than part of it, since the
@@ -1820,21 +2004,24 @@ The answer lands in `decided_by_seller_user_id` / `seller_decided_at`, never a
 staff column, or "who allowed this" reads as Skydrop when it was the seller.
 Rejecting requires a reason.
 
-**Approving RUNS the correction, through the same `OrderService.edit` path a
-DIRECT correction takes** — so an approved correction and a direct one cannot
-drift, and the approval inherits the DRAFT/PENDING gate, the address
-revalidation and the `EDIT_DURING_CALL` rule rather than a second
-implementation of any of them. The edit is attributed to the STORE
+**Approving RUNS the change, through the same `StoreOrderEditService.apply`
+a DIRECT change takes** — so an approved change and a direct one cannot drift,
+and the approval inherits the stage gate, the courier route, the address
+revalidation, the line re-terming and the money recalculation rather than a
+second implementation of any of them. It applies the WHOLE patch, not a
+recipient-shaped subset of it. The edit is attributed to the STORE
 (`ActorType.STORE`, the requester) even though the seller allowed it: the
 timeline should say who asked, not only who permitted.
 
 **A yes that could not be carried out is its own outcome, and that is the
 point of the FAILED state.** Time passes between the ask and the answer, and
-the order may have been confirmed, cancelled or pulled into a call by then;
-`edit` refuses those by name. That refusal is NOT thrown at seller staff —
+the order may have been confirmed or cancelled by then, a variant may have
+been archived, or the parcel may have reached the courier; `edit` refuses those
+by name. That refusal is NOT thrown at seller staff —
 they answered correctly and the world changed underneath them. The row is
 recorded FAILED with the refusal kept verbatim (`[NOT_EDITABLE] …`,
-`[EDIT_DURING_CALL] …`) and the store is told, because "they agreed but it did
+`[COURIER_MUST_ACCEPT_ADDRESS_CHANGE] …`, `[RETAIL_OUT_OF_RANGE] …`) and the
+store is told, because "they agreed but it did
 not happen" is what somebody has to tell the customer. Throwing instead would
 leave the request APPROVED forever with nothing having happened and nobody
 told. The claim moves the row to APPROVED first and on to APPLIED or FAILED

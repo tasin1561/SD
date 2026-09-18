@@ -56,10 +56,11 @@ import {
  *     the picker set `productId` and read it nowhere, so nothing needed
  *     one. The field is gone.
  *   - "it prevents the seller rewriting an item the agent has already
- *     discussed" — the real version of that concern is narrower and now
- *     lives on the SERVER: an items or economics edit is refused while
- *     an agent is actually holding the order (EDIT_DURING_CALL), and
- *     allowed while it merely waits in the queue.
+ *     discussed" — that moved to the server as EDIT_DURING_CALL, and on
+ *     2026-09-18 the owner removed it too. The agent is told on their
+ *     own screen that the order changed under them and re-reads it;
+ *     refusing the seller bought nothing, because the call station was
+ *     reading a snapshot the guard never protected anyway.
  *
  * Nothing is committed before CONFIRMED — no stock reserved (ORD-10),
  * no waybill booked (CUR-2b), no shipment — so an edit here rewrites a
@@ -67,11 +68,13 @@ import {
  * advice that only worked on a DRAFT: a PENDING order with a wrong
  * product had no remedy at all short of cancelling it.
  *
- * The mid-call refusal is deliberately NOT mirrored client-side (FE-2):
- * the UI cannot know a call started thirty seconds ago, and a guess
- * would either lock a seller out of an order nobody is calling about or
- * promise an edit the server then refuses. The verdict surfaces
- * verbatim.
+ * A RESELLER STORE's order is edited here too (owner, 2026-09-18). The
+ * seller owns the goods and the risk, so the whole order is theirs to
+ * change; the store is emailed what moved, and the store's money is
+ * recalculated to the new order under the terms it was PLACED on. Two
+ * things the server still refuses and the UI does not pre-empt (FE-2):
+ * a line with no transfer price in that store's catalogue, and changing
+ * how a priced order is paid for.
  *   - "Discard draft" is a destructive secondary action with an
  *     inline typed-confirm.
  *   - "Save changes" PATCHes. "Save + submit" PATCHes then submits
@@ -419,12 +422,11 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     confirmation (no stock reserved, no waybill booked, no shipment), so
     the lock was earlier than the business needs.
 
-    The server still refuses these fields while an agent is actually on
-    the call (EDIT_DURING_CALL) and the refusal surfaces verbatim
-    (FE-2). Deliberately NOT mirrored here: the UI has no way to know a
-    call started thirty seconds ago, and a client-side guess would
-    either lock a seller out of an order nobody is calling about or
-    promise an edit the server then refuses.
+    And editable DURING the call too (owner, 2026-09-18): the moment an
+    agent is told the flat number is wrong is exactly when it needs
+    fixing. The call station re-reads the order it holds and says on
+    screen that it changed, which is what the refusal was standing in
+    for and never actually achieved.
   */
 
   return (

@@ -489,4 +489,200 @@ describe('reseller order money (e2e)', () => {
     expect(prepaid.status).toBe(409);
     expect((prepaid.body as { code: string }).code).toBe('STORE_BALANCE_INSUFFICIENT');
   });
+
+  /*
+    ── THE ORDER CHANGED, AND THE MONEY FOLLOWED IT (owner, 2026-09-18) ──
+
+    Seller staff may now change a reseller store's order. Against a real
+    database this pins the three things only Postgres shows: the credit
+    rows' guarded status moves, the re-priced figures, and the bank book
+    after a credit has been taken back and written again.
+  */
+  it('seller staff change the order: the credits are re-priced and the book still agrees', async () => {
+    const store = await makeStore();
+    const placed = (await placeOrder(store, 1)).body as { id: string };
+    await confirm(placed.id);
+    const before = await creditsOf(placed.id);
+    expect(before.map((c) => c.status)).toEqual(['WAITING', 'WAITING']);
+
+    // A second unit. The seller may change the order outright now; what
+    // stays fixed is the TERMS version and the line's snapshotted
+    // transfer price, so the store's deal is not re-struck.
+    const items = await h.prisma.orderItem.findMany({ where: { orderId: placed.id } });
+    const edited = await request(h.baseUrl)
+      .patch(`/seller/orders/${placed.id}`)
+      .set(sellerAuth)
+      .send({
+        items: [{ variantId: items[0]!.variantId, quantity: 2, unitPriceInr: 499 }],
+        codAmountInr: 998,
+      });
+    expect(edited.status).toBe(200);
+    await drainAll(h.app);
+
+    const line = await h.prisma.orderItem.findFirstOrThrow({ where: { orderId: placed.id } });
+    expect(line.quantity).toBe(2);
+    // The kept line keeps the price it was PLACED at (RS-4).
+    expect(line.resellerTransferPriceInr?.toFixed(2)).toBe('300.00');
+
+    const after = await creditsOf(placed.id);
+    // Still nothing written, so the rows themselves were rewritten.
+    expect(after.map((c) => c.status)).toEqual(['WAITING', 'WAITING']);
+    const sellerRow = after.find((c) => c.party === 'SELLER');
+    expect(sellerRow?.grossInr.toFixed(2)).toBe('600.00');
+    expect(sellerRow?.timesRepriced).toBe(1);
+    // The rates were stamped at the plan, so a later settings change
+    // cannot move an order placed before it.
+    expect(sellerRow?.gstPercentAtPlan).not.toBeNull();
+    await expectBookAgrees([store.storeId]);
+
+    // Paid at the NEW figures, and the book agrees at the paisa.
+    const cod = await codOf(placed.id);
+    expect(cod).toBe('998.00');
+    await deliver(placed.id);
+    await pay(cod, [[placed.id, cod]]);
+    const paid = await creditsOf(placed.id);
+    expect(paid.map((c) => c.status)).toEqual(['CREDITED', 'CREDITED']);
+    expect((await sellerBalance()).toFixed(2)).toBe(
+      paid.find((c) => c.party === 'SELLER')?.netInr.toFixed(2),
+    );
+    await expectBookAgrees([store.storeId]);
+  });
+
+  it('a change once the money is POSTED takes the credit back and writes it again', async () => {
+    const store = await makeStore();
+    const placed = (await placeOrder(store, 1)).body as { id: string };
+    await confirm(placed.id);
+    const cod = await codOf(placed.id);
+    await deliver(placed.id);
+    await pay(cod, [[placed.id, cod]]);
+    const credited = await creditsOf(placed.id);
+    expect(credited.map((c) => c.status)).toEqual(['CREDITED', 'CREDITED']);
+    const storeWas = (await storeBalance(store.storeId)).toFixed(2);
+
+    // Change the COD after the payout. The re-price is not a signed
+    // patch: each credit is REVERSED through the same path a return
+    // uses and written again at the new figures.
+    await h.app
+      .get(ResellerOrderMoneyService)
+      .recalculateAfterEdit(placed.id, { reason: 'Seller corrected the amount' })
+      .catch(() => undefined);
+    // Nothing moved — the order did not change — so no reversal was written.
+    expect(
+      await h.prisma.storeWalletEntry.count({
+        where: { linkedOrderId: placed.id, direction: 'ORDER_CREDIT_REVERSAL' },
+      }),
+    ).toBe(0);
+    expect((await storeBalance(store.storeId)).toFixed(2)).toBe(storeWas);
+
+    await h.prisma.order.update({
+      where: { id: placed.id },
+      data: { codAmountInr: new Prisma.Decimal('1996.00') },
+    });
+    const out = await h.app
+      .get(ResellerOrderMoneyService)
+      .recalculateAfterEdit(placed.id, { reason: 'Seller corrected the amount' });
+    expect(out.outcome).toBe('REPLANNED');
+    expect(out.parties.every((p) => p.what === 'RECREDITED')).toBe(true);
+    // One reversal and a second credit — two legible entries, not a
+    // silent adjustment.
+    expect(
+      await h.prisma.storeWalletEntry.count({
+        where: { linkedOrderId: placed.id, direction: 'ORDER_CREDIT_REVERSAL' },
+      }),
+    ).toBe(1);
+    expect(
+      await h.prisma.storeWalletEntry.count({
+        where: { linkedOrderId: placed.id, direction: 'ORDER_CREDIT' },
+      }),
+    ).toBe(2);
+    const now = await creditsOf(placed.id);
+    expect(now.map((c) => c.status)).toEqual(['CREDITED', 'CREDITED']);
+    expect((await storeBalance(store.storeId)).toFixed(2)).toBe(
+      now.find((c) => c.party === 'STORE')?.netInr.toFixed(2),
+    );
+    await expectBookAgrees([store.storeId]);
+  });
+
+  it('once the COURIER holds the address, neither party may write it — they must ask', async () => {
+    /*
+      "Never store an address the parcel is not going to" (owner answer B).
+
+      The routing question is a FACT, not a status list: does anybody
+      outside this building already hold this address? A waybill IS that
+      fact, so this stamps one and checks that BOTH the seller's edit and
+      the store's are refused by name, that the refusal points at the
+      endpoint that asks the courier, and that the stored address did not
+      move.
+    */
+    const store = await makeStore();
+    const placed = (await placeOrder(store, 1)).body as { id: string };
+    await confirm(placed.id);
+    await h.prisma.shipment.updateMany({
+      where: { orderShipments: { some: { orderId: placed.id } } },
+      data: { awbNumber: `E2E${Date.now()}`, status: 'IN_TRANSIT' },
+    });
+    await h.prisma.order.update({
+      where: { id: placed.id },
+      data: { status: OrderStatus.IN_TRANSIT },
+    });
+    const was = await h.prisma.order.findUniqueOrThrow({ where: { id: placed.id } });
+
+    for (const [who, auth, path] of [
+      ['seller', sellerAuth, `/seller/orders/${placed.id}`],
+      ['store', store.auth, `/store/orders/${placed.id}/recipient`],
+    ] as const) {
+      const res = await request(h.baseUrl)
+        .patch(path)
+        .set(auth)
+        .send({ recipientAddressLine1: '99 Somewhere Else' });
+      expect([409, 403]).toContain(res.status);
+      expect((res.body as { code: string }).code).toBe('COURIER_MUST_ACCEPT_ADDRESS_CHANGE');
+      // It names where to go instead, rather than just saying no.
+      expect(JSON.stringify(res.body)).toContain('consignee');
+      expect(who).toBeTruthy();
+    }
+
+    const still = await h.prisma.order.findUniqueOrThrow({ where: { id: placed.id } });
+    expect(still.recipientAddressLine1).toBe(was.recipientAddressLine1);
+
+    // With NO waybill the same edit is ours to write — the fact, not the
+    // status, is what decides.
+    await h.prisma.shipment.updateMany({
+      where: { orderShipments: { some: { orderId: placed.id } } },
+      data: { awbNumber: null },
+    });
+    await request(h.baseUrl)
+      .patch(`/seller/orders/${placed.id}`)
+      .set(sellerAuth)
+      .send({ recipientAddressLine1: '99 Somewhere Else' })
+      .expect(200);
+    const moved = await h.prisma.order.findUniqueOrThrow({ where: { id: placed.id } });
+    expect(moved.recipientAddressLine1).toBe('99 Somewhere Else');
+    // …and the CONTENTS still cannot change after confirmation, for
+    // either party. That limit is real and did not move.
+    const items = await h.prisma.orderItem.findMany({ where: { orderId: placed.id } });
+    const contents = await request(h.baseUrl)
+      .patch(`/seller/orders/${placed.id}`)
+      .set(sellerAuth)
+      .send({ items: [{ variantId: items[0]!.variantId, quantity: 5, unitPriceInr: 499 }] });
+    expect(contents.status).toBe(409);
+    expect((contents.body as { code: string }).code).toBe('NOT_EDITABLE');
+  });
+
+  it('a priced order’s payment mode cannot change — refused by name, nothing written', async () => {
+    // COD and PREPAID are not two amounts of one thing: different rows,
+    // a different debit, different deductions. Turning one into the
+    // other once the plan exists means guessing, so it is refused.
+    const store = await makeStore();
+    const placed = (await placeOrder(store, 1)).body as { id: string };
+    await confirm(placed.id);
+    const res = await request(h.baseUrl)
+      .patch(`/seller/orders/${placed.id}`)
+      .set(sellerAuth)
+      .send({ paymentMode: 'PREPAID' });
+    expect(res.status).toBe(409);
+    expect((res.body as { code: string }).code).toBe('RESELLER_PAYMENT_MODE_LOCKED');
+    const row = await h.prisma.order.findUniqueOrThrow({ where: { id: placed.id } });
+    expect(row.paymentMode).toBe('COD');
+  });
 });

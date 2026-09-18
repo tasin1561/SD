@@ -343,13 +343,15 @@ describe('reseller store orders (e2e)', () => {
       .set(sellerAuth)
       .expect(200);
     expect(bySearch.body.total).toBe(1);
-    // …cannot change the store's deal on it…
-    const edit = await request(h.baseUrl)
+    // …and MAY CHANGE ANYTHING ON IT (owner, 2026-09-18). The seller owns
+    // the goods, the warehouse slot, the courier and the money at risk;
+    // `RESELLER_ORDER_NOT_EDITABLE` on a seller edit is gone.
+    await request(h.baseUrl)
       .patch(`/seller/orders/${orderId}`)
       .set(sellerAuth)
-      .send({ sellerNotes: 'Changed' });
-    expect(edit.body.code).toBe('RESELLER_ORDER_NOT_EDITABLE');
-    // …but may correct the customer's details (owner, 2026-09-17), with NO
+      .send({ sellerNotes: 'Changed' })
+      .expect(200);
+    // …including the customer's details (owner, 2026-09-17), with NO
     // seller-initials prefix on the name (RS-10: it prints on the label).
     const fixed = await request(h.baseUrl)
       .patch(`/seller/orders/${orderId}`)
@@ -358,7 +360,12 @@ describe('reseller store orders (e2e)', () => {
       .expect(200);
     expect(fixed.body.recipientName).toBe('Asha V. Verma');
 
-    // A snapshot is immutable: a later price change does not re-price it.
+    /*
+      A SNAPSHOT IS IMMUTABLE AGAINST THE CATALOGUE — still, and this is
+      the half of ORD-6 that did NOT move on 2026-09-18. Seller staff and
+      the store may change the order between them; a price list changed
+      afterwards may not re-price an order either of them placed.
+    */
     await request(h.baseUrl)
       .put(`/seller/reseller-price-list/${variantId}`)
       .set(sellerAuth)
@@ -366,6 +373,19 @@ describe('reseller store orders (e2e)', () => {
       .expect(200);
     const again = await h.prisma.orderItem.findFirstOrThrow({ where: { orderId } });
     expect(again.resellerTransferPriceInr?.toFixed(2)).toBe('300.00');
+
+    // And a seller changing the QUANTITY keeps that snapshotted transfer
+    // price on the kept line, rather than picking up the new list price.
+    const items = await h.prisma.orderItem.findMany({ where: { orderId } });
+    await request(h.baseUrl)
+      .patch(`/seller/orders/${orderId}`)
+      .set(sellerAuth)
+      .send({ items: [{ variantId: items[0]!.variantId, quantity: 2, unitPriceInr: 499 }] })
+      .expect(200);
+    const reterm = await h.prisma.orderItem.findFirstOrThrow({ where: { orderId } });
+    expect(reterm.quantity).toBe(2);
+    expect(reterm.resellerTransferPriceInr?.toFixed(2)).toBe('300.00');
+    expect(reterm.resellerRetailUnitInr?.toFixed(2)).toBe('499.00');
 
     // The store sees it in full.
     const own = await request(h.baseUrl)

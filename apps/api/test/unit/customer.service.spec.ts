@@ -23,8 +23,12 @@ function makeService() {
     return 1;
   });
   const client = { customer, $executeRaw } as unknown as PrismaService['client'];
-  const svc = new CustomerService({ client } as unknown as PrismaService);
-  return { svc, client, customer, $executeRaw, order };
+  const notifier = {
+    customerChangedByStore: jest.fn(async () => undefined),
+    customerChangedBySeller: jest.fn(async () => undefined),
+  };
+  const svc = new CustomerService({ client } as unknown as PrismaService, notifier as never);
+  return { svc, client, customer, $executeRaw, order, notifier };
 }
 
 describe('CustomerService', () => {
@@ -205,21 +209,33 @@ describe('CustomerService', () => {
     });
   });
 
-  it('a WRITE is still the seller’s OWN customer only', async () => {
-    // Reading widened on 2026-09-16; changing did not. A store's customer
-    // row is the store's to maintain, so update and softDelete go through
-    // `getOwnById`, which keeps `resellerStoreId: null` in the WHERE.
+  it('seller staff may EDIT one of their reseller stores’ customers (owner, 2026-09-18)', async () => {
+    // Reading widened on 2026-09-16 and changing on 2026-09-18: the
+    // seller rings that customer about a failed delivery and takes the
+    // loss when the parcel comes back, so a wrong second number is
+    // theirs to fix. The scope is still THEIRS — no `resellerStoreId`
+    // predicate, but `sellerId` stays.
     const { svc, customer } = makeService();
     await svc.update('s1', 'c1', { name: 'X' });
     expect(customer.findFirst.mock.calls[0]![0].where).toEqual({
       id: 'c1',
       sellerId: 's1',
-      resellerStoreId: null,
       deletedAt: null,
     });
   });
 
-  it('softDelete sets deletedAt after the scope check', async () => {
+  it('a STORE editing a customer that is not its own is a 404', async () => {
+    // Scoped by the token's store; a miss says nothing about whether the
+    // row exists (RS-2).
+    const { svc } = makeService();
+    await expect(
+      svc.update('s1', 'c1', { name: 'X' }, { storeId: 'another-store' }),
+    ).rejects.toMatchObject({ response: { code: 'CUSTOMER_NOT_FOUND' } });
+  });
+
+  it('DELETING is still the seller’s OWN customer only', async () => {
+    // Deleting is not correcting: a store's customer row is the store's
+    // record of somebody it sold to, and its own screens read it.
     const { svc, customer } = makeService();
     await svc.softDelete('s1', 'c1');
     expect(customer.findFirst).toHaveBeenCalledTimes(1);

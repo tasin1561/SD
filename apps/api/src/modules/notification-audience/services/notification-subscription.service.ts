@@ -97,6 +97,15 @@ export class NotificationSubscriptionService {
    * credential message always has a template behind it.
    */
   private async assertMutable(topic: string): Promise<void> {
+    // A NAMED topic first: the exception overrides its category, and this
+    // is the write half of it (`mutesFor` is the read half).
+    const named = this.policy.topicImmutableReason(topic);
+    if (named !== null) {
+      throw new ConflictException({
+        code: 'NOTIFICATION_NOT_MUTABLE',
+        message: `"${topic}" cannot be switched off. ${named}`,
+      });
+    }
     const template = await this.prisma.client.notificationTemplate.findFirst({
       where: { code: topic },
       select: { category: true },

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { ResellerStoreActionMode } from '@skydrop/db';
 import {
   ACTION_CAPABILITIES,
+  CAPABILITY_COLUMN,
   DEFAULT_POLICY,
   ResellerStoreActionPolicyService,
   effectivePolicy,
@@ -55,7 +56,7 @@ describe('reseller store action policy (2026-09-16)', () => {
 
     it('everything that spends nobody’s money is DIRECT; the two that send a van are not', () => {
       expect(DEFAULT_POLICY.recall).toBe(ResellerStoreActionMode.DIRECT);
-      expect(DEFAULT_POLICY.addressFix).toBe(ResellerStoreActionMode.DIRECT);
+      expect(DEFAULT_POLICY.orderChange).toBe(ResellerStoreActionMode.DIRECT);
       expect(DEFAULT_POLICY.cancel).toBe(ResellerStoreActionMode.DIRECT);
       expect(DEFAULT_POLICY.callCapDecision).toBe(ResellerStoreActionMode.DIRECT);
       expect(DEFAULT_POLICY.chaseSkydrop).toBe(ResellerStoreActionMode.DIRECT);
@@ -74,11 +75,13 @@ describe('reseller store action policy (2026-09-16)', () => {
         ),
         'utf8',
       );
-      const snake = (c: string): string => c.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
+      // Through CAPABILITY_COLUMN, not by snake-casing the field name:
+      // `orderChange` lives in `address_fix` (widened 2026-09-18, same
+      // column on purpose), and deriving the name would miss it.
       for (const capability of ACTION_CAPABILITIES) {
         const want =
           DEFAULT_POLICY[capability] === ResellerStoreActionMode.DIRECT ? 'direct' : 'ask_seller';
-        expect(sql).toMatch(new RegExp(`"${snake(capability)}"[^,]*DEFAULT '${want}'`));
+        expect(sql).toMatch(new RegExp(`"${CAPABILITY_COLUMN[capability]}"[^,]*DEFAULT '${want}'`));
       }
     });
   });

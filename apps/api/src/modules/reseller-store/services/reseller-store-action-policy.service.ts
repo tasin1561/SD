@@ -29,7 +29,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
  *   sendBack        — the courier is asked to cancel on the store's click,
  *                     and the parcel turns round. No person in between.
  *   cancel          — the order is called off, now.
- *   addressFix      — the correction is written onto the order, now.
+ *   orderChange      — the correction is written onto the order, now.
  *   callCapDecision — the answer is applied to the review, now.
  *   chaseSkydrop    — the issue ticket opens with Skydrop, now.
  * ASK_SELLER holds every one of the seven for seller staff to approve or
@@ -41,7 +41,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 /** The capabilities a policy covers. A new one is a COLUMN and a decision. */
 export const ACTION_CAPABILITIES = [
   'recall',
-  'addressFix',
+  'orderChange',
   'cancel',
   'callCapDecision',
   'chaseSkydrop',
@@ -50,6 +50,26 @@ export const ACTION_CAPABILITIES = [
 ] as const;
 
 export type ActionCapability = (typeof ACTION_CAPABILITIES)[number];
+
+/**
+ * The COLUMN each capability lives in. Only `orderChange` differs from
+ * its own name, and deliberately: it was `addressFix` until 2026-09-18,
+ * when the owner widened it from "correct the address" to "change the
+ * order". Keeping the column means no data migration and no store
+ * silently losing the setting its seller chose; the map is what stops
+ * anything deriving the column name from the field name and getting it
+ * wrong. `reseller-store-action-policy.spec.ts` reads the migration
+ * through this map.
+ */
+export const CAPABILITY_COLUMN: Readonly<Record<ActionCapability, string>> = {
+  recall: 'recall',
+  orderChange: 'address_fix',
+  cancel: 'cancel',
+  callCapDecision: 'call_cap_decision',
+  chaseSkydrop: 'chase_skydrop',
+  reattempt: 'reattempt',
+  sendBack: 'send_back',
+};
 
 /**
  * What a store may do before anybody decides anything.
@@ -65,7 +85,11 @@ export type ActionCapability = (typeof ACTION_CAPABILITIES)[number];
  */
 export const DEFAULT_POLICY: Readonly<Record<ActionCapability, ResellerStoreActionMode>> = {
   recall: ResellerStoreActionMode.DIRECT,
-  addressFix: ResellerStoreActionMode.DIRECT,
+  // WIDENED 2026-09-18 (owner): "change the order", not only its
+  // address. Same column, same default — a store that could correct an
+  // address directly can now change the order directly, which is exactly
+  // what the owner asked for.
+  orderChange: ResellerStoreActionMode.DIRECT,
   cancel: ResellerStoreActionMode.DIRECT,
   callCapDecision: ResellerStoreActionMode.DIRECT,
   chaseSkydrop: ResellerStoreActionMode.DIRECT,

@@ -1,29 +1,20 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { ActorType, ShipmentStatus } from '@skydrop/db';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ActorType, SellerStoreKind, ShipmentStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CourierOpsDispatchService } from '../../courier-ops/services/courier-ops-dispatch.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
+import { StoreRequestNotifier } from '../../store-order-request/services/store-request-notifier.service';
+import { COURIER_EDITABLE_SHIPMENT_STATUSES } from '../../order/recipient-change-route';
 
 /**
- * When the courier will still accept a correction.
- *
- * Delhivery's own rule, from the verified contract: forward parcels are
- * editable while Manifested, In Transit or Pending, and never once
- * Dispatched, Delivered, DTO, RTO, LOST or Closed.
- *
- * The mapping that matters and is easy to get wrong: their "Dispatched"
- * is OUR `OUT_FOR_DELIVERY`. A parcel on the van is already past the
- * point of changing where it is going, so that status is OUTSIDE the
- * window even though it feels like the moment you would most want it.
+ * When the courier will still accept a correction — the ONE list, shared
+ * with `OrderService.edit` through `recipientChangeRoute` (2026-09-18).
+ * It used to be declared here as well, which is two lists that have to
+ * agree about a fact neither owns; the surviving copy is beside the
+ * routing decision that reads it.
  */
-const EDITABLE_STATUSES: ReadonlySet<ShipmentStatus> = new Set([
-  ShipmentStatus.AWB_GENERATED,
-  ShipmentStatus.HANDED_TO_COURIER,
-  ShipmentStatus.IN_TRANSIT,
-  ShipmentStatus.AT_HUB,
-  ShipmentStatus.DELIVERY_ATTEMPTED,
-]);
+const EDITABLE_STATUSES = COURIER_EDITABLE_SHIPMENT_STATUSES;
 
 export interface AddressEditability {
   readonly editable: boolean;
@@ -79,15 +70,25 @@ export interface ChangeResult {
  */
 @Injectable()
 export class ShipmentAddressService {
+  private readonly logger = new Logger(ShipmentAddressService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ops: CourierOpsDispatchService,
     private readonly audit: AuditLogService,
+    // 2026-09-18 — a reseller store's order has two parties, and both are
+    // told whether the courier took the change. Imports nothing
+    // order-shaped, so this closes no cycle.
+    private readonly notifier: StoreRequestNotifier,
   ) {}
 
   /** What the seller may change right now, and the current values. */
-  async editability(orderId: string, sellerId: string | null): Promise<AddressEditability> {
-    const s = await this.liveShipment(orderId, sellerId);
+  async editability(
+    orderId: string,
+    sellerId: string | null,
+    storeId?: string,
+  ): Promise<AddressEditability> {
+    const s = await this.liveShipment(orderId, sellerId, storeId);
     const editable = EDITABLE_STATUSES.has(s.status);
     return {
       editable,
@@ -110,17 +111,24 @@ export class ShipmentAddressService {
   async change(input: {
     orderId: string;
     sellerId: string | null;
+    /** RS-5: set when a reseller STORE is correcting its own parcel. */
+    storeId?: string;
     name?: string;
     phone?: string;
     addressLine1?: string;
-    actor: { type: ActorType; staffId?: string | null; sellerId?: string | null };
+    actor: {
+      type: ActorType;
+      staffId?: string | null;
+      sellerId?: string | null;
+      storeUserId?: string | null;
+    };
   }): Promise<ChangeResult> {
-    const s = await this.liveShipment(input.orderId, input.sellerId);
+    const s = await this.liveShipment(input.orderId, input.sellerId, input.storeId);
 
     if (!EDITABLE_STATUSES.has(s.status)) {
       throw new ConflictException({
         code: 'COURIER_WILL_NOT_ACCEPT_CHANGES',
-        message: (await this.editability(input.orderId, input.sellerId)).reason,
+        message: (await this.editability(input.orderId, input.sellerId, input.storeId)).reason,
       });
     }
     if (s.awbNumber === null) {
@@ -173,16 +181,39 @@ export class ShipmentAddressService {
       },
       // A seller correcting their own parcel is a SELLER action, not
       // ours — the audit row has to say which.
-      input.actor.type === ActorType.SELLER
-        ? courierActor.seller(input.actor.sellerId ?? '', null)
-        : courierActor.operator(input.actor.staffId ?? ''),
+      // WHO told the courier to redirect this parcel. A store's ask is a
+      // STORE action, not the seller's and not ours — the CUR-1 decrypt
+      // audit has to say which, because only one of the three has to
+      // answer for it when the customer rings.
+      input.actor.type === ActorType.STORE
+        ? courierActor.store(input.storeId ?? '', input.actor.storeUserId ?? null)
+        : input.actor.type === ActorType.SELLER
+          ? courierActor.seller(input.actor.sellerId ?? '', null)
+          : courierActor.operator(input.actor.staffId ?? ''),
     );
 
     if (!outcome.success) {
+      /*
+        REFUSED — AND THE ORDER KEEPS THE ADDRESS THE PARCEL IS GOING TO
+        (owner, 2026-09-18).
+
+        Nothing is written to the shipment or the order. That is the whole
+        rule: a stored address the courier never took is a promise nobody
+        can keep, and it would be read out by the call centre, printed on
+        a return label and believed by both parties. The change row keeps
+        the courier's OWN WORDS so the refusal can be repeated to a
+        customer verbatim rather than paraphrased into something softer.
+      */
       await this.prisma.client.shipmentAddressChange.update({
         where: { id: change.id },
         data: { courierMessage: (outcome.message ?? 'The courier refused it.').slice(0, 500) },
       });
+      await this.tellBothSides(
+        input.orderId,
+        { name, phone, address },
+        false,
+        outcome.message ?? null,
+      );
       return { accepted: false, changeId: change.id, message: outcome.message ?? null };
     }
 
@@ -192,15 +223,34 @@ export class ShipmentAddressService {
         data: { courierAcceptedAt: new Date(), courierMessage: outcome.message ?? null },
       }),
       // Our copy follows the courier's, because this is what the label,
-      // the POD and every later tracking match are addressed from. The
-      // ORDER's snapshot is untouched (ORD-6) — the change row is how
-      // the two are reconciled.
+      // the POD and every later tracking match are addressed from.
       this.prisma.client.shipment.update({
         where: { id: s.id },
         data: {
           ...(name === null ? {} : { destRecipientName: name }),
           ...(phone === null ? {} : { destRecipientPhoneE164: phone }),
           ...(address === null ? {} : { destAddressLine1: address }),
+        },
+      }),
+      /*
+        AND THE ORDER FOLLOWS IT TOO (owner, 2026-09-18).
+
+        This used to leave the order alone and call the change row "how
+        the two are reconciled", citing ORD-6. That was a reading of ORD-6
+        the owner has now overruled, and it was a real divergence: the
+        order's recipient block is what the call centre reads out, what
+        the seller and the store see on screen, and what any later parcel
+        for this order is provisioned from — so an accepted change left
+        every one of those showing an address the courier no longer had.
+        Only ever written on ACCEPTANCE, which is what makes "never store
+        an address the parcel is not going to" true in both directions.
+      */
+      this.prisma.client.order.update({
+        where: { id: input.orderId },
+        data: {
+          ...(name === null ? {} : { recipientName: name }),
+          ...(phone === null ? {} : { recipientPhoneE164: phone }),
+          ...(address === null ? {} : { recipientAddressLine1: address }),
         },
       }),
     ]);
@@ -217,12 +267,92 @@ export class ShipmentAddressService {
       metadata: { changeId: change.id, awbNumber: s.awbNumber, orderId: input.orderId },
     });
 
+    await this.tellBothSides(
+      input.orderId,
+      { name, phone, address },
+      true,
+      outcome.message ?? null,
+    );
     return { accepted: true, changeId: change.id, message: outcome.message ?? null };
   }
 
+  /**
+   * On a reseller store's order, tell the party who did not ask — and on
+   * a REFUSAL tell BOTH, because the answer "the courier would not take
+   * it" is what somebody has to repeat to the customer (owner, 2026-09-18).
+   *
+   * Never throws: the courier's answer and the change row are the durable
+   * facts. Awaited rather than fired and forgotten, so the e2e reset has
+   * no in-flight write to drain (NOTIF-19).
+   */
+  private async tellBothSides(
+    orderId: string,
+    fields: { name: string | null; phone: string | null; address: string | null },
+    accepted: boolean,
+    courierSaid: string | null,
+  ): Promise<void> {
+    try {
+      const order = await this.prisma.client.order.findFirst({
+        where: { id: orderId, storeKind: SellerStoreKind.RESELLER },
+        select: {
+          id: true,
+          orderNumber: true,
+          sellerId: true,
+          storeId: true,
+          storeNameSnapshot: true,
+        },
+      });
+      if (order === null) return;
+      const seller = await this.prisma.client.seller.findUnique({
+        where: { id: order.sellerId },
+        select: { companyName: true },
+      });
+      const changed = [
+        fields.name === null ? null : `Name → ${fields.name}`,
+        fields.phone === null ? null : `Phone → ${fields.phone}`,
+        fields.address === null ? null : `Address → ${fields.address}`,
+      ]
+        .filter((l): l is string => l !== null)
+        .join('\n');
+      const money = accepted
+        ? 'The courier accepted the change, so this is where the parcel is now going.'
+        : 'THE COURIER REFUSED IT, so the parcel is still going to the address it had. ' +
+          (courierSaid === null ? '' : `They said: “${courierSaid}”.`);
+      const eventKey = `${orderId}:consignee:${accepted ? 'yes' : 'no'}:${Date.now()}`;
+      await this.notifier.orderChangedBySeller({
+        storeId: order.storeId,
+        eventKey,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        sellerName: seller?.companyName ?? 'Your seller',
+        changes: changed,
+        money,
+        supersededRequest: false,
+      });
+      await this.notifier.orderChangedByStore({
+        sellerId: order.sellerId,
+        eventKey,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        storeName: order.storeNameSnapshot ?? 'a reseller store',
+        changes: changed,
+        money,
+      });
+    } catch (err) {
+      this.logger.warn(
+        { orderId, err: err instanceof Error ? err.message : err },
+        'Could not tell both sides what the courier said about a consignee change',
+      );
+    }
+  }
+
   /** The audit trail for one order, oldest first. */
-  async history(orderId: string, sellerId: string | null): Promise<readonly AddressChangeRow[]> {
-    const s = await this.liveShipment(orderId, sellerId);
+  async history(
+    orderId: string,
+    sellerId: string | null,
+    storeId?: string,
+  ): Promise<readonly AddressChangeRow[]> {
+    const s = await this.liveShipment(orderId, sellerId, storeId);
     const rows = await this.prisma.client.shipmentAddressChange.findMany({
       where: { shipmentId: s.id },
       orderBy: { createdAt: 'asc' },
@@ -246,12 +376,21 @@ export class ShipmentAddressService {
     return rows;
   }
 
-  private async liveShipment(orderId: string, sellerId: string | null) {
+  private async liveShipment(orderId: string, sellerId: string | null, storeId?: string) {
     const link = await this.prisma.client.orderShipment.findFirst({
       where: {
         orderId,
         shipment: { deletedAt: null, supersededAt: null },
-        ...(sellerId === null ? {} : { order: { sellerId } }),
+        // Scoped in the WHERE clause, never fetched then compared: a
+        // store reaching for another store's parcel finds nothing.
+        ...(sellerId === null && storeId === undefined
+          ? {}
+          : {
+              order: {
+                ...(sellerId === null ? {} : { sellerId }),
+                ...(storeId === undefined ? {} : { storeId, storeKind: SellerStoreKind.RESELLER }),
+              },
+            }),
       },
       orderBy: { shipmentSequence: 'desc' },
       select: {

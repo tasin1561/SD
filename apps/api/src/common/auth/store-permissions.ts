@@ -167,6 +167,19 @@ export const STORE_PERMISSIONS = [
     sensitive: true,
   },
   {
+    // 2026-09-18 (owner): the store keeps its own customers' records. Its
+    // own key rather than folding into `customers.view`, for the reason
+    // the seller's pair was split — seeing a phone number and changing
+    // what we hold about somebody are different acts. The PHONE is never
+    // editable (ORD-7).
+    key: 'customers.manage',
+    label: 'Edit customers',
+    description:
+      'Correct a customer’s name, email, second phone or language. Their phone number is how we tell one customer from another and never changes.',
+    group: 'Customers',
+    sensitive: true,
+  },
+  {
     key: 'integrations.manage',
     label: 'Manage integrations',
     description:
@@ -274,6 +287,9 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
       // parcel to be tried again; this is their daily work.
       'orders.actions',
       'customers.view',
+      // 2026-09-18. Also granted to existing admin/ops roles by
+      // 20260918000000_seller_and_store_edit_reseller_orders.
+      'customers.manage',
       // RS-7. Also granted to existing ops roles by the 250000 migration.
       'tickets.view',
       'tickets.manage',

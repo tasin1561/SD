@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CustomerRiskLevel, Prisma } from '@skydrop/db';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { StoreRequestNotifier } from '../../store-order-request/services/store-request-notifier.service';
 
 type TxOrClient = Prisma.TransactionClient | PrismaService['client'];
 
@@ -77,7 +78,15 @@ const E164 = /^\+[1-9]\d{6,14}$/;
  */
 @Injectable()
 export class CustomerService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CustomerService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    // 2026-09-18 (owner): a reseller store's customer may be changed by
+    // either party, and the other is told. The notifier imports nothing
+    // order-shaped, so this closes no cycle.
+    private readonly notifier: StoreRequestNotifier,
+  ) {}
 
   /**
    * RS-5: identity is per OWNER — the seller, or one of their reseller
@@ -171,7 +180,41 @@ export class CustomerService {
     return customer;
   }
 
-  /** The seller's OWN customer row — the one they may also CHANGE. */
+  /**
+   * A customer row this SELLER may change.
+   *
+   * AMENDED 2026-09-18 (owner): their own, AND one of their reseller
+   * stores'. RS-5 kept a store's customers out of every write, and
+   * 2026-09-16 opened only the read. The owner has now opened the write
+   * too, on the same argument the read was opened on: the seller sees the
+   * order in full, rings that customer about a failed delivery and takes
+   * the loss when the parcel comes back, so a wrong second phone number
+   * is theirs to fix. The STORE is told what changed, because it spoke to
+   * that person and must not hear it from them.
+   *
+   * What did NOT widen is IDENTITY: the phone is not an editable field
+   * anywhere (ORD-7 — it is what tells one customer from another), and
+   * the two partial uniques stand, so nothing here can merge a store's
+   * customer into the seller's own or the other way about.
+   *
+   * Returns the store id when the row belongs to one, so the caller knows
+   * whom to tell.
+   */
+  private async getEditableById(
+    sellerId: string,
+    id: string,
+  ): Promise<CustomerView & { resellerStoreId: string | null }> {
+    const customer = await this.prisma.client.customer.findFirst({
+      where: { id, sellerId, deletedAt: null },
+      select: { ...VIEW_SELECT, resellerStoreId: true },
+    });
+    if (!customer) {
+      throw new NotFoundException(`Customer ${id} not found`);
+    }
+    return customer;
+  }
+
+  /** The seller's OWN customer row — the one they may also DELETE. */
   private async getOwnById(sellerId: string, id: string): Promise<CustomerView> {
     const customer = await this.prisma.client.customer.findFirst({
       where: { id, sellerId, resellerStoreId: null, deletedAt: null },
@@ -244,10 +287,21 @@ export class CustomerService {
    * immutable by construction (ORD-7). sellerId is taken from the caller's
    * auth context, never the body, so the seller scope can't be moved.
    */
-  async update(sellerId: string, id: string, input: UpdateCustomerInput): Promise<CustomerView> {
-    // Existence + ownership check (also guards soft-deleted). The seller's
-    // OWN row only — a store's customer is the store's to maintain.
-    await this.getOwnById(sellerId, id);
+  async update(
+    sellerId: string,
+    id: string,
+    input: UpdateCustomerInput,
+    /** RS-5: set when a reseller STORE is changing its own customer. */
+    storeScope?: { readonly storeId: string },
+  ): Promise<CustomerView & { resellerStoreId: string | null }> {
+    // Existence + ownership check (also guards soft-deleted). Either the
+    // seller's own row or one of their stores' (owner, 2026-09-18).
+    const before = await this.getEditableById(sellerId, id);
+    if (storeScope !== undefined && before.resellerStoreId !== storeScope.storeId) {
+      // A store reaching for the seller's own customer, or another
+      // store's. A 404 rather than a 403: saying more confirms it exists.
+      throw new NotFoundException({ code: 'CUSTOMER_NOT_FOUND', message: 'No such customer' });
+    }
     const data: Prisma.CustomerUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.email !== undefined) data.email = input.email;
@@ -256,15 +310,101 @@ export class CustomerService {
     if (input.preferredLanguage !== undefined) {
       data.preferredLanguage = input.preferredLanguage;
     }
-    return this.prisma.client.customer.update({
+    const saved = await this.prisma.client.customer.update({
       where: { id },
       data,
-      select: VIEW_SELECT,
+      select: { ...VIEW_SELECT, resellerStoreId: true },
     });
+    // A reseller store's customer has two parties who read it, so
+    // whoever did NOT make the change is told — the same rule an order
+    // change follows (owner, 2026-09-18). Never throws (NOTIF-1).
+    if (before.resellerStoreId !== null) {
+      await this.tellTheOtherSide(
+        before,
+        saved,
+        this.describeCustomerChange(before, input),
+        storeScope !== undefined,
+      );
+    }
+    return saved;
+  }
+
+  /** Never throws: the customer row is the durable fact. */
+  private async tellTheOtherSide(
+    before: CustomerView & { resellerStoreId: string | null },
+    saved: CustomerView,
+    changes: string,
+    byStore: boolean,
+  ): Promise<void> {
+    const storeId = before.resellerStoreId;
+    if (storeId === null || changes === '') return;
+    try {
+      const [seller, store] = await Promise.all([
+        this.prisma.client.seller.findUnique({
+          where: { id: before.sellerId },
+          select: { companyName: true },
+        }),
+        this.prisma.client.sellerStore.findUnique({
+          where: { id: storeId },
+          select: { name: true, displayName: true },
+        }),
+      ]);
+      // Keyed on the row and the moment, so a retry of one edit is one
+      // notice (NOTIF-2's dedup gate does the rest).
+      const eventKey = `${saved.id}:${Date.now()}`;
+      const customerName = saved.name ?? saved.phoneE164;
+      if (byStore) {
+        await this.notifier.customerChangedByStore({
+          sellerId: before.sellerId,
+          eventKey,
+          storeName: store?.displayName ?? store?.name ?? 'a reseller store',
+          customerName,
+          changes,
+        });
+        return;
+      }
+      await this.notifier.customerChangedBySeller({
+        storeId,
+        eventKey,
+        sellerName: seller?.companyName ?? 'Your seller',
+        customerName,
+        changes,
+      });
+    } catch (err) {
+      this.logger.warn(
+        { customerId: saved.id, err: err instanceof Error ? err.message : err },
+        'Could not tell the other side that a reseller store’s customer was changed',
+      );
+    }
+  }
+
+  /** What a customer edit moved, old → new — for the other side's notice. */
+  describeCustomerChange(before: CustomerView, input: UpdateCustomerInput): string {
+    const labels: Readonly<Record<string, string>> = {
+      name: 'Name',
+      email: 'Email',
+      altPhoneE164: 'Second phone',
+      riskNotes: 'Notes',
+      preferredLanguage: 'Language',
+    };
+    const out: string[] = [];
+    for (const [key, label] of Object.entries(labels)) {
+      const next = (input as Record<string, unknown>)[key];
+      if (next === undefined) continue;
+      const prev = (before as unknown as Record<string, unknown>)[key];
+      const show = (v: unknown): string => (v === null || v === '' ? '(blank)' : String(v));
+      if (show(prev) === show(next)) continue;
+      out.push(`${label}: ${show(prev)} → ${show(next)}`);
+    }
+    return out.join('\n');
   }
 
   /** Soft-delete (user-facing data — CLAUDE.md soft-delete rule). */
   async softDelete(sellerId: string, id: string): Promise<void> {
+    // The seller's OWN row only. Deleting is not correcting: a store's
+    // customer row is the store's record of somebody it sold to, and its
+    // own screens read it — removing it takes a person off their list,
+    // which is a decision about the store's business, not the seller's.
     await this.getOwnById(sellerId, id);
     await this.prisma.client.customer.update({
       where: { id },

@@ -15,8 +15,13 @@ import {
   SellerStoreKind,
   VariantStatus,
   SellerCapability,
+  ShipmentStatus,
 } from '@skydrop/db';
-import { resellerOrderColumns, type ResellerCreateContext } from '../reseller-order-snapshot';
+import {
+  resellerOrderColumns,
+  type ResellerCreateContext,
+  type ResellerLineTerms,
+} from '../reseller-order-snapshot';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -39,28 +44,43 @@ import { SellerCreditService } from '../../seller-credit/services/seller-credit.
 import { SellerStoreService } from '../../seller-store/services/seller-store.service';
 import { StoreOrderRequestService } from '../../store-order-request/services/store-order-request.service';
 import { StoreRequestNotifier } from '../../store-order-request/services/store-request-notifier.service';
+import {
+  ResellerOrderMoneyService,
+  type ResellerMoneyRecalculation,
+} from '../../reseller-order-money/services/reseller-order-money.service';
+import { ResellerOrderRetermService } from './reseller-order-reterm.service';
+import { recipientChangeRoute } from '../recipient-change-route';
+import { describeMoneyMove, describeOrderChanges } from '../order-change-description';
 
 /**
- * The statuses in which `edit` accepts anything at all — the ONE list,
- * read by `edit` (which refuses outside it, `NOT_EDITABLE`) and by the
- * reseller store's order view, which offers the address correction only
- * inside it (cosmetic, FE-2).
+ * The statuses in which the order's CONTENTS may still change — the ONE
+ * list, read by `edit` (which refuses outside it, `NOT_EDITABLE`) and by
+ * the reseller store's order view (cosmetic, FE-2).
+ *
+ * Nothing is committed before confirmation: no stock is reserved (ORD-10),
+ * no waybill is booked (CUR-2b books it on entry to CONFIRMED), no
+ * shipment exists. After it, all three are true, so what is IN the parcel
+ * is fixed for BOTH parties. Where it is GOING is a separate question
+ * with a separate answer — `recipientChangeRoute`.
+ *
+ * Named `RECIPIENT_EDITABLE_STATUSES` until 2026-09-18, when the
+ * recipient stopped being bounded by it (owner decision 3).
  */
-export const RECIPIENT_EDITABLE_STATUSES: ReadonlySet<OrderStatus> = new Set([
+export const CONTENTS_EDITABLE_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.DRAFT,
   OrderStatus.PENDING_CONFIRMATION,
 ]);
 
 /**
- * What a RESELLER STORE may change on its own order (2026-09-16).
+ * The recipient block — WHERE the parcel is going.
  *
- * The recipient block only — where the parcel is going. Never the items
- * and never the six economic fields: those are the deal the store struck
- * with its customer under a snapshotted terms version, and correcting an
- * address is not renegotiating it. Notes are out too; they are the
- * seller's own working notes on their order.
+ * Named `STORE_EDITABLE_KEYS` until 2026-09-18, when it stopped being
+ * the limit of what a store may change (see `STORE_FORBIDDEN_KEYS`) and
+ * became what it always described: the ten fields that make up an
+ * address. Still the ONE list, read by the edit's revalidation trigger,
+ * the held-change columns and every label.
  */
-export const STORE_EDITABLE_KEYS = [
+export const RECIPIENT_KEYS = [
   'recipientName',
   'recipientPhoneE164',
   'recipientAltPhoneE164',
@@ -73,18 +93,40 @@ export const STORE_EDITABLE_KEYS = [
   'recipientPostalCode',
 ] as const;
 
-/** What a person calls each recipient field, for the store's email. */
-const RECIPIENT_FIELD_LABEL: Readonly<Record<(typeof STORE_EDITABLE_KEYS)[number], string>> = {
-  recipientName: 'Name',
-  recipientPhoneE164: 'Phone',
-  recipientAltPhoneE164: 'Second phone',
-  recipientEmail: 'Email',
-  recipientAddressLine1: 'Address',
-  recipientAddressLine2: 'Landmark line',
-  recipientLandmark: 'Landmark',
-  recipientCity: 'City',
-  recipientStateProvince: 'State',
-  recipientPostalCode: 'PIN code',
+/**
+ * What a RESELLER STORE may NOT change on its own order (owner,
+ * 2026-09-18) — and it is a DENY list on purpose.
+ *
+ * The rule the owner gave is "the store may change the order, limited
+ * only by what our main system allows, never by an extra restriction
+ * because it is the store". An allow list encodes the opposite: every
+ * field added to the DTO afterwards is silently closed to the store
+ * until somebody remembers to open it, which is exactly the drift this
+ * decision was reversing. So the store may reach every key except these
+ * two, each closed for a reason about the FIELD rather than about who is
+ * asking:
+ *
+ *   internalNotes — Skydrop's own working notes on the order. Not the
+ *                   seller's to read either way, and not a fact about
+ *                   the sale.
+ *   storeId       — which shopfront the sale is filed under. Moving an
+ *                   order to another store would move its money, its
+ *                   customer identity (ORD-7) and its terms snapshot to
+ *                   a deal that was never struck for it.
+ *
+ * Everything else a store genuinely cannot do is structural rather than
+ * listed: the transfer price and the terms version are not fields on the
+ * DTO at all (they are the seller's terms), the retail is checked against
+ * the store's own agreed range, and the phone stays the customer's
+ * identity (ORD-7).
+ */
+export const STORE_FORBIDDEN_KEYS = ['internalNotes', 'storeId'] as const;
+
+/** Why each forbidden key is forbidden — said to the store, by name. */
+const STORE_FORBIDDEN_REASON: Readonly<Record<(typeof STORE_FORBIDDEN_KEYS)[number], string>> = {
+  internalNotes: 'internal notes are Skydrop’s own working notes on the order',
+  storeId:
+    'which shopfront an order belongs to cannot move — its money, its customer and its terms were all agreed for this one',
 };
 
 const ORDER_VIEW_INCLUDE = {
@@ -289,6 +331,11 @@ export class OrderService {
     // primitive that imports nothing order-shaped.
     private readonly storeRequests: StoreOrderRequestService,
     private readonly storeRequestNotifier: StoreRequestNotifier,
+    // 2026-09-18 (owner) — a changed reseller order keeps its terms and
+    // its money follows it. Both imports are one-way: neither module
+    // imports the order domain back.
+    private readonly resellerReterm: ResellerOrderRetermService,
+    private readonly resellerMoney: ResellerOrderMoneyService,
   ) {}
 
   /**
@@ -861,81 +908,137 @@ export class OrderService {
     actor: EventActor,
     ctx: ClientContext,
     /**
-     * 2026-09-16 — set when a RESELLER STORE is correcting its OWN
-     * order's consignee, never by a seller path.
+     * 2026-09-16 — set when a RESELLER STORE is changing its OWN order,
+     * never by a seller path.
      *
      * The store gets in here rather than a parallel edit method so it
-     * inherits the whole of this one: the DRAFT/PENDING gate, address
-     * revalidation, the canonical state casing, and the EDIT_DURING_CALL
-     * rule. A second implementation would drift from those, and the one
-     * that drifted would be the one nobody was testing.
+     * inherits the whole of this one: the stage gate, the courier route,
+     * address revalidation, the canonical state casing, the line
+     * re-terming, the money recalculation and the notice to the other
+     * side. A second implementation would drift from all of that, and the
+     * one that drifted would be the one nobody was testing.
      */
     storeScope?: { readonly storeId: string },
   ): Promise<OrderView> {
     const order = await this.loadOwned(sellerId, id);
 
-    // RS-5: a reseller store's order is the STORE's deal — its retail, its
-    // lines, its terms snapshot. An edit to any of those from the seller's
-    // side would re-price it outside the store's terms, so they stay
-    // refused (ORD-6).
-    //
-    // AMENDED 2026-09-17 (owner decision b): SELLER STAFF may correct the
-    // RECIPIENT — the same `STORE_EDITABLE_KEYS` the store may — under the
-    // same status and call rules below, recorded as the seller's act, and
-    // the store is emailed what changed. The seller reads the order in full
-    // (ORD-7 amended 2026-09-16) and rings the customer about a failed
-    // delivery, so a wrong flat number is theirs to fix too.
-    const sellerEditingResellerOrder =
-      order.storeKind === SellerStoreKind.RESELLER && storeScope === undefined;
-    if (order.storeKind === SellerStoreKind.RESELLER) {
+    /*
+      BOTH SIDES MAY CHANGE A RESELLER STORE'S ORDER (owner, 2026-09-18).
+
+      RS-5 refused a seller edit outright ("only the store can change
+      it"), and 2026-09-17 opened the recipient. The owner has now
+      overruled the rest, in both directions:
+
+        - SELLER STAFF own the goods, the warehouse slot, the courier and
+          the money at risk, so they may change anything on the order.
+        - The RESELLER STORE sold it, holds the customer, and is limited
+          ONLY by what the system genuinely cannot allow — never by an
+          extra restriction because it is the store (STORE_FORBIDDEN_KEYS
+          says which two fields and why).
+
+      What did NOT move is the set of REAL constraints, and they bind the
+      two identically: the lifecycle stage below; the courier's word on a
+      post-handover address (`recipientChangeRoute`); a line with no
+      transfer price under the store's catalogue; the phone as the
+      customer's identity (ORD-7); and money only through
+      `ResellerOrderMoneyService`.
+
+      ORD-6 is deliberately narrowed by this: the order's snapshot is
+      immutable against the CATALOGUE and the store's live terms — a later
+      price-list change never re-prices a placed order — but it is not
+      immutable against the two parties to the sale agreeing to change it.
+      Every change writes an order event and tells the other side.
+    */
+    const isReseller = order.storeKind === SellerStoreKind.RESELLER;
+    const sellerEditingResellerOrder = isReseller && storeScope === undefined;
+    if (isReseller) {
       if (storeScope !== undefined && order.storeId !== storeScope.storeId) {
-        throw new ConflictException({
-          code: 'RESELLER_ORDER_NOT_EDITABLE',
-          message:
-            'This order was placed by a reseller store. Only the store can change it — ask them to cancel it and place it again.',
-        });
-      }
-      if (sellerEditingResellerOrder) {
-        const allowed = new Set<string>(STORE_EDITABLE_KEYS);
-        const reached = (Object.keys(input) as Array<keyof UpdateOrderDto>).filter(
-          (k) => input[k] !== undefined && !allowed.has(k as string),
-        );
-        if (reached.length > 0) {
-          throw new ConflictException({
-            code: 'RESELLER_ORDER_NOT_EDITABLE',
-            message: `This order was placed by a reseller store. You may correct the customer's details only — its products, prices and terms are the store's. Remove: ${reached.join(', ')}.`,
-          });
-        }
+        // Another store's order. A store may not reach it, and saying so
+        // in any more detail would confirm it exists.
+        throw new NotFoundException(`Order ${id} not found`);
       }
     } else if (storeScope !== undefined) {
-      // A store reaching for a channel order. Same 404-shaped refusal as
-      // everywhere else on the store surface.
+      // A store reaching for a channel order — the seller's own. Same
+      // 404-shaped refusal as everywhere else on the store surface.
       throw new NotFoundException(`Order ${id} not found`);
     }
 
     if (storeScope !== undefined) {
-      // The store fixes WHERE IT IS GOING and nothing else. Items and the
-      // economics are the deal it struck with its customer under a terms
-      // snapshot; letting either move here would re-price an order after
-      // the fact, which is the very thing the seller's refusal protects.
-      const allowed = new Set<string>(STORE_EDITABLE_KEYS);
-      const reached = (Object.keys(input) as Array<keyof UpdateOrderDto>).filter(
-        (k) => input[k] !== undefined && !allowed.has(k as string),
+      const forbidden = (Object.keys(input) as Array<keyof UpdateOrderDto>).filter(
+        (k) =>
+          input[k] !== undefined &&
+          (STORE_FORBIDDEN_KEYS as readonly string[]).includes(k as string),
       );
-      if (reached.length > 0) {
+      if (forbidden.length > 0) {
         throw new ForbiddenException({
-          code: 'STORE_EDIT_RECIPIENT_ONLY',
-          message: `A store may correct where the parcel is going, nothing else. Remove: ${reached.join(', ')}.`,
+          code: 'STORE_EDIT_FIELD_NOT_YOURS',
+          message: `A store cannot change ${forbidden
+            .map((k) => STORE_FORBIDDEN_REASON[k as (typeof STORE_FORBIDDEN_KEYS)[number]])
+            .join('; ')}. Remove: ${forbidden.join(', ')}.`,
         });
       }
     }
 
-    const isPending = order.status === OrderStatus.PENDING_CONFIRMATION;
-    if (!RECIPIENT_EDITABLE_STATUSES.has(order.status)) {
-      throw new ConflictException({
-        code: 'NOT_EDITABLE',
-        message: `An order in ${order.status} cannot be edited`,
+    // BEFORE anything is written: an edit the money could not follow is
+    // refused by name rather than committed and then discovered. Today
+    // that is exactly one case — changing how a priced order is paid for.
+    if (isReseller) {
+      await this.resellerMoney.assertEditKeepsMoneyCorrectable(id, {
+        paymentMode: input.paymentMode,
       });
+    }
+
+    const isPending = order.status === OrderStatus.PENDING_CONFIRMATION;
+    const touchesOnlyRecipient = (Object.keys(input) as Array<keyof UpdateOrderDto>).every(
+      (k) => input[k] === undefined || (RECIPIENT_KEYS as readonly string[]).includes(k as string),
+    );
+    if (!CONTENTS_EDITABLE_STATUSES.has(order.status)) {
+      /*
+        PAST THE POINT THE CONTENTS MAY CHANGE (owner decision 3).
+
+        Once the order is confirmed, stock is reserved, a waybill is
+        booked and the parcel may already be packed — so what is IN it
+        cannot change here, for either party. That is a real system limit
+        rather than a rule about who is asking, and it binds seller staff
+        and the store identically.
+
+        The RECIPIENT still may change, and `recipientChangeRoute` — the
+        ONE place — says how. DIRECT means no waybill exists yet, so
+        nobody outside holds the address and we write it. COURIER means
+        they do, and the owner's rule is absolute: ask them, and store it
+        only if they accept. This refusal names the endpoint that asks.
+      */
+      if (!touchesOnlyRecipient) {
+        throw new ConflictException({
+          code: 'NOT_EDITABLE',
+          message:
+            `An order in ${order.status} cannot have its contents changed — its stock is held, its ` +
+            'waybill is booked and it may already be packed. The customer’s details can still be corrected.',
+        });
+      }
+      const route = recipientChangeRoute({
+        orderStatus: order.status,
+        isTerminal: this.stateMachine.isTerminal(order.status),
+        liveShipment: await this.liveShipmentForRoute(id),
+      });
+      if (route.kind === 'REFUSED') {
+        throw new ConflictException({ code: 'NOT_EDITABLE', message: route.reason });
+      }
+      if (route.kind === 'COURIER') {
+        throw new ConflictException({
+          code: 'COURIER_MUST_ACCEPT_ADDRESS_CHANGE',
+          message:
+            'The courier already has this parcel’s address, so only they can change it. Send the ' +
+            'correction to them instead — the name, phone and street address can still be ' +
+            'corrected, and it is only stored if they accept it. ' +
+            route.reason,
+          details: {
+            endpoint: `${storeScope === undefined ? 'seller' : 'store'}/orders/${id}/consignee`,
+            courierWillAccept: route.courierWillAccept,
+          },
+        });
+      }
+      // DIRECT: no waybill anywhere, so this is ours to write.
     }
 
     /*
@@ -952,60 +1055,40 @@ export class OrderService {
       or contents at all — the fee is per seller, and GST is a percent of
       the fee. So an edit here rewrites a row and nothing else.
 
-      WHAT IS STILL REFUSED IS AN EDIT UNDER A LIVE CALL. An agent
-      holding this order is reading the contents and the amount to the
-      customer; changing either underneath them means the customer
-      agrees to one order and we ship a different one, and neither of
-      them would know. Waiting in the queue is NOT a call — blocking on
-      that would lock a seller out for as long as the queue is deep — so
-      the gate is an ASSIGNED entry specifically, asked of the queue
-      primitive rather than by reading its tables (MUST #17).
+      AND IT IS EDITABLE DURING THE CALL TOO (owner decision 4,
+      2026-09-18). `EDIT_DURING_CALL` used to refuse any change to the
+      contents or the amount while an agent held the order, because the
+      agent is reading both to the customer and a change underneath them
+      means the customer agrees to one order and we ship another.
 
-      A recipient correction stays allowed even mid-call, unchanged: an
-      agent who has just been told the flat number is wrong wants it
-      fixed now, and it describes the same order rather than replacing
-      it.
+      That risk is real, and the answer to it is not a refusal — it is
+      that the agent MUST BE LOOKING AT THE ORDER AS IT IS NOW. A refusal
+      protected an agent who was, in fact, reading a snapshot taken when
+      they pulled the call: the station copied the pulled assignment into
+      its own state and never looked again, so the address an agent read
+      out could already be stale for reasons this guard never covered (a
+      second agent, an admin, a god-mode edit, a CSV patch). The guard
+      bought nothing against the real hazard and cost a seller — and now a
+      store — the ability to fix a wrong number while somebody has the
+      customer on the line, which is exactly when they find out.
+
+      So: every change writes a visible order event (below), and the call
+      station re-reads its held call and tells the agent, on screen, that
+      the order changed mid-call. `callQueue.activeAssignment` is still
+      read — not to refuse, but to record on the event that somebody was
+      on the phone when it happened, which is what makes a later "the
+      customer agreed to something else" answerable.
     */
-    const economicKeys = [
-      'paymentMode',
-      'codAmountInr',
-      'declaredValueInr',
-      'totalWeightGrams',
-      'packageType',
-      'isUrgent',
-    ] as const;
-    const touchedEconomic = economicKeys.some((k) => input[k] !== undefined);
-    const touchesTheDeal = input.items !== undefined || touchedEconomic;
-    if (isPending && touchesTheDeal) {
-      const call = await this.callQueue.activeAssignment(id);
-      if (call !== null) {
-        throw new ConflictException({
-          code: 'EDIT_DURING_CALL',
-          message:
-            'An agent is confirming this order with the customer right now. The contents and the ' +
-            'amount cannot change mid-call — correct the address if you need to, or wait for the ' +
-            'call to finish and edit then.',
-        });
-      }
-    }
+    const activeCall = isPending ? await this.callQueue.activeAssignment(id) : null;
 
     const data: Prisma.OrderUpdateInput = {};
     const changed: string[] = [];
 
     // ── Recipient block (+ revalidation when any recipient field set) ──
-    const recipientKeys = [
-      'recipientName',
-      'recipientPhoneE164',
-      'recipientAltPhoneE164',
-      'recipientEmail',
-      'recipientAddressLine1',
-      'recipientAddressLine2',
-      'recipientLandmark',
-      'recipientCity',
-      'recipientStateProvince',
-      'recipientPostalCode',
-    ] as const;
-    const touchedRecipient = recipientKeys.some((k) => input[k] !== undefined);
+    // The ONE list (`RECIPIENT_KEYS`), not a second copy of it: this used
+    // to restate all ten, which is how one of the two comes to be missing
+    // a field and the revalidation silently stops firing for it.
+    const touchedRecipient = RECIPIENT_KEYS.some((k) => input[k] !== undefined);
 
     if (touchedRecipient) {
       const merged = {
@@ -1163,8 +1246,25 @@ export class OrderService {
 
     // ── Lines: full replace (until the call confirms it) ───────────────
     let replacementLines: Awaited<ReturnType<OrderService['resolveLines']>> | null = null;
+    // RS-4/RS-5: one per replacement line, in the SAME order. Null on a
+    // channel order — it has no reseller terms and its item columns stay
+    // null by CHECK.
+    let replacementTerms: readonly ResellerLineTerms[] | null = null;
     if (input.items !== undefined) {
       replacementLines = await this.resolveLines(sellerId, input.items);
+      if (isReseller && order.storeId !== null) {
+        // The order's OWN terms (ORD-6/RS-4): a kept line keeps its
+        // snapshot, a new one is priced from the store's catalogue, and a
+        // product with no transfer price there is refused by name rather
+        // than given one nobody agreed. Never the store's live terms
+        // VERSION — that stays exactly as placed.
+        replacementTerms = await this.resellerReterm.retermLines({
+          orderId: id,
+          storeId: order.storeId,
+          sellerId,
+          items: input.items,
+        });
+      }
       if (input.declaredValueInr === undefined) {
         data.declaredValueInr = replacementLines.reduce(
           (sum, l) => sum.add((l.unitDeclaredValueInr ?? new Prisma.Decimal(0)).mul(l.quantity)),
@@ -1213,17 +1313,34 @@ export class OrderService {
         if (replacementLines !== null) {
           await tx.orderItem.deleteMany({ where: { orderId: id } });
           data.items = {
-            create: replacementLines.map((l) => ({
-              variantId: l.variantId,
-              skuCode: l.skuCode,
-              productName: l.productName,
-              variantLabel: l.variantLabel,
-              imageUrl: l.imageUrl,
-              quantity: l.quantity,
-              unitWeightGrams: l.unitWeightGrams,
-              unitDeclaredValueInr: l.unitDeclaredValueInr,
-              unitPriceInr: l.unitPriceInr,
-            })),
+            create: replacementLines.map((l, i) => {
+              // A reseller line carries all five terms or none — the
+              // table's CHECK says so, and the money reads them.
+              const terms = replacementTerms?.[i];
+              return {
+                variantId: l.variantId,
+                skuCode: l.skuCode,
+                productName: l.productName,
+                variantLabel: l.variantLabel,
+                imageUrl: l.imageUrl,
+                quantity: l.quantity,
+                unitWeightGrams: l.unitWeightGrams,
+                unitDeclaredValueInr: l.unitDeclaredValueInr,
+                // On a reseller order the RETAIL is the unit price — the
+                // same mapping `toCreateOrderDto` makes at create, so a
+                // line edited later reads identically to one placed.
+                unitPriceInr: terms?.retailUnitInr ?? l.unitPriceInr,
+                ...(terms === undefined
+                  ? {}
+                  : {
+                      resellerTransferPriceInr: terms.transferPriceInr,
+                      resellerRetailUnitInr: terms.retailUnitInr,
+                      resellerMinRetailInr: terms.minRetailInr,
+                      resellerMaxRetailInr: terms.maxRetailInr,
+                      resellerStockMode: terms.stockMode,
+                    }),
+              };
+            }),
           };
         }
 
@@ -1232,19 +1349,38 @@ export class OrderService {
           data,
           include: ORDER_VIEW_INCLUDE,
         });
-        if (sellerEditingResellerOrder) {
-          // A correction the store had waiting on seller staff cannot
-          // stand beside this one — closed as SUPERSEDED in the same tx.
+        if (isReseller) {
+          /*
+            A change the store had waiting on seller staff cannot stand
+            beside this one — closed as SUPERSEDED in the same tx.
+
+            For EITHER party (2026-09-18). It was seller-only, which left a
+            hole: a seller who switches the store's policy from "ask me
+            first" to "directly" while a request is open leaves the store
+            able to change the order AND a stale proposal sitting in the
+            seller's queue, which approving would apply on top. Only
+            PENDING rows move, so an approval already in flight (APPROVED)
+            is untouched and finishes normally.
+
+            `decidedBySellerUserId` is a SELLER-user column, so a store's
+            edit passes null rather than stamping a store user id into it:
+            "who decided this" must never read as somebody it was not.
+          */
           supersededAddressChanges = await this.storeRequests.supersedeAddressChanges(
             tx,
             id,
-            actor.id ?? null,
+            storeScope === undefined ? (actor.id ?? null) : null,
           );
         }
         await this.events.note(
           tx,
           id,
-          `Order edited (${changed.join(', ')})${phoneChanged ? '; customer re-linked' : ''}`,
+          `Order edited (${changed.join(', ')})${phoneChanged ? '; customer re-linked' : ''}` +
+            // Whoever picks this order up later — the agent, the seller,
+            // Skydrop — has to be able to see that the order moved while
+            // somebody had the customer on the phone. It is no longer
+            // refused (owner decision 4), so the record is the safeguard.
+            (activeCall === null ? '' : ' — WHILE AN AGENT WAS ON THE CALL'),
           actor,
           true,
         );
@@ -1261,9 +1397,11 @@ export class OrderService {
               status: order.status,
               changed,
               phoneChanged,
+              duringCall: activeCall !== null,
               ...(sellerEditingResellerOrder
                 ? { resellerStoreId: order.storeId, supersededAddressChanges }
                 : {}),
+              ...(storeScope === undefined ? {} : { byResellerStoreId: storeScope.storeId }),
               ...this.ctxMeta(ctx),
             },
           },
@@ -1271,15 +1409,22 @@ export class OrderService {
         );
         return updated;
       });
-      if (sellerEditingResellerOrder && order.storeId !== null) {
-        // The store sold to this customer: it is told what the parcel now
-        // carries. Post-commit and never throwing (NOTIF-1).
-        await this.tellStoreSellerCorrectedRecipient(
-          order.storeId,
+      if (isReseller && order.storeId !== null) {
+        // The money follows the order, then WHOEVER DID NOT MAKE THE
+        // CHANGE is told — the store by email (it has no inbox), seller
+        // staff in-app by permission. Post-commit, and neither may throw
+        // (NOTIF-1): the edit is the durable fact.
+        const money = await this.recalculateResellerMoney(id, order.orderNumber, changed);
+        await this.tellTheOtherSideAboutTheEdit({
+          storeId: order.storeId,
           saved,
+          before: order,
           input,
-          supersededAddressChanges > 0,
-        );
+          changed,
+          money,
+          byStore: storeScope !== undefined,
+          supersededRequest: supersededAddressChanges > 0,
+        });
       }
       return saved;
     } catch (e) {
@@ -1298,38 +1443,132 @@ export class OrderService {
   }
 
   /**
-   * Email a reseller store that seller staff corrected the customer's
-   * details on one of its orders (2026-09-17). Never throws.
+   * The keys whose change moves a reseller order's money. `items` moves
+   * the transfer total and the retail; the COD is what the customer pays;
+   * the payment mode changes the shape (and is refused once priced).
    */
-  private async tellStoreSellerCorrectedRecipient(
-    storeId: string,
-    saved: { id: string; orderNumber: string; sellerId: string; updatedAt: Date },
-    input: UpdateOrderDto,
-    supersededRequest: boolean,
-  ): Promise<void> {
+  private static readonly MONEY_KEYS: readonly string[] = ['items', 'codAmountInr', 'paymentMode'];
+
+  /**
+   * Re-price a reseller order after it changed. Never throws: the edit is
+   * committed and the money is its reflection — a failure here raises a
+   * HIGH audit row naming the order rather than leaving the caller with a
+   * 500 on an edit that did happen.
+   */
+  private async recalculateResellerMoney(
+    orderId: string,
+    orderNumber: string,
+    changed: readonly string[],
+  ): Promise<ResellerMoneyRecalculation | null> {
+    if (!changed.some((k) => OrderService.MONEY_KEYS.includes(k))) return null;
     try {
-      const seller = await this.prisma.client.seller.findUnique({
-        where: { id: saved.sellerId },
-        select: { companyName: true },
+      return await this.resellerMoney.recalculateAfterEdit(orderId, {
+        reason: `Order ${orderNumber} was changed (${changed.join(', ')})`,
       });
-      const lines = STORE_EDITABLE_KEYS.filter((k) => input[k] !== undefined).map(
-        (k) => `${RECIPIENT_FIELD_LABEL[k]}: ${String(input[k])}`,
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        { orderId, err: message },
+        'A reseller order was changed but not re-priced',
       );
-      await this.storeRequestNotifier.recipientChangedBySeller({
-        storeId,
-        eventKey: `${saved.id}:${saved.updatedAt.getTime()}`,
-        orderId: saved.id,
-        orderNumber: saved.orderNumber,
+      await this.audit.log({
+        actorType: ActorType.SYSTEM,
+        actorId: null,
+        action: 'reseller_order.money_recalculation_failed',
+        entityType: 'order',
+        entityId: orderId,
+        // Somebody has to look: the order says one thing and the credits
+        // behind it say another until they do.
+        severity: 'HIGH',
+        metadata: { orderNumber, changed: [...changed], error: message },
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Tell WHOEVER DID NOT MAKE THE CHANGE (owner, 2026-09-18).
+   *
+   * A reseller order has two parties and one of them just changed it, so
+   * the other finds out every time — with the old value beside the new
+   * one, and the money's before and after when it moved. The store hears
+   * by EMAIL (a reseller store has no in-app inbox, so an in-app leg
+   * would be written to a feed nobody there can open); seller staff hear
+   * IN-APP, addressed by PERMISSION (NOTIF-10), exactly as every other
+   * seller-side store topic is.
+   *
+   * Never throws (NOTIF-1). Awaited rather than fired and forgotten, so
+   * the e2e reset has no in-flight write to drain (NOTIF-19).
+   */
+  private async tellTheOtherSideAboutTheEdit(input: {
+    storeId: string;
+    saved: { id: string; orderNumber: string; sellerId: string; updatedAt: Date };
+    before: OrderView;
+    input: UpdateOrderDto;
+    changed: readonly string[];
+    money: ResellerMoneyRecalculation | null;
+    byStore: boolean;
+    supersededRequest: boolean;
+  }): Promise<void> {
+    try {
+      const [seller, store] = await Promise.all([
+        this.prisma.client.seller.findUnique({
+          where: { id: input.saved.sellerId },
+          select: { companyName: true },
+        }),
+        this.prisma.client.sellerStore.findUnique({
+          where: { id: input.storeId },
+          select: { name: true, displayName: true },
+        }),
+      ]);
+      const changes = describeOrderChanges(input.before, input.input, input.changed);
+      const money = describeMoneyMove(input.money);
+      const eventKey = `${input.saved.id}:${input.saved.updatedAt.getTime()}`;
+      if (input.byStore) {
+        await this.storeRequestNotifier.orderChangedByStore({
+          sellerId: input.saved.sellerId,
+          eventKey,
+          orderId: input.saved.id,
+          orderNumber: input.saved.orderNumber,
+          storeName: store?.displayName ?? store?.name ?? 'a reseller store',
+          changes,
+          money,
+        });
+        return;
+      }
+      await this.storeRequestNotifier.orderChangedBySeller({
+        storeId: input.storeId,
+        eventKey,
+        orderId: input.saved.id,
+        orderNumber: input.saved.orderNumber,
         sellerName: seller?.companyName ?? 'Your seller',
-        changes: lines.join('\n'),
-        supersededRequest,
+        changes,
+        money,
+        supersededRequest: input.supersededRequest,
       });
     } catch (err) {
       this.logger.warn(
-        { orderId: saved.id, err: err instanceof Error ? err.message : err },
-        'Could not tell the reseller store its order details were corrected',
+        { orderId: input.saved.id, err: err instanceof Error ? err.message : err },
+        'Could not tell the other side that a reseller order was changed',
       );
     }
+  }
+
+  /**
+   * The order's live parcel, for `recipientChangeRoute` — the ONE fact
+   * that decides whether an address is ours to write or the courier's to
+   * accept. Superseded and voided parcels are excluded: neither is what
+   * the courier is carrying.
+   */
+  private async liveShipmentForRoute(
+    orderId: string,
+  ): Promise<{ status: ShipmentStatus; awbNumber: string | null } | null> {
+    const link = await this.prisma.client.orderShipment.findFirst({
+      where: { orderId, shipment: { deletedAt: null, supersededAt: null } },
+      orderBy: { shipmentSequence: 'desc' },
+      select: { shipment: { select: { status: true, awbNumber: true } } },
+    });
+    return link?.shipment ?? null;
   }
 
   /** Seller-scoped load (ownership + soft-delete guard). */

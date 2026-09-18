@@ -305,7 +305,7 @@ export type StoreActionMode = 'OFF' | 'ASK_SELLER' | 'DIRECT';
 /** The seven capabilities the seller sets for this store. */
 export type StoreActionCapability =
   | 'recall'
-  | 'addressFix'
+  | 'orderChange'
   | 'cancel'
   | 'callCapDecision'
   | 'chaseSkydrop'
@@ -411,7 +411,7 @@ export function useRequestStoreAction(): UseMutationResult<
 /**
  * 2026-09-16 — correcting where this store's own parcel is going.
  *
- * WHAT a correction does is the seller's `addressFix` policy, and the
+ * WHAT a correction does is the seller's `orderChange` policy, and the
  * SERVER decides it, not this file: DIRECT writes the new details onto
  * the order there and then, ASK_SELLER holds them until seller staff
  * answer, OFF refuses by name. Which of the two happened is the
@@ -458,7 +458,7 @@ export interface AddressChangeRequestView {
 
 export interface StoreAddressChanges {
   readonly items: readonly AddressChangeRequestView[];
-  /** The seller's `addressFix` policy for this store, as it stands now. */
+  /** The seller's `orderChange` policy for this store, as it stands now. */
   readonly mode: StoreActionMode;
 }
 
@@ -648,5 +648,107 @@ export function useDeleteStoreWebhook(): UseMutationResult<void, Error, { readon
     mutationFn: ({ id }) =>
       client.request<void>(`/api/store/webhook-endpoints/${id}`, { method: 'DELETE' }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: WEBHOOKS }),
+  });
+}
+
+// ── Correcting a parcel already with the courier (owner, 2026-09-18) ──
+
+/**
+ * A store may change its own order — and once the courier holds the
+ * address, only THEY can change it. These reach the same service seller
+ * staff use, so the courier's word is the answer for both and neither
+ * side can store an address the parcel is not going to.
+ */
+export interface StoreConsignee {
+  readonly editable: boolean;
+  readonly reason: string;
+  readonly currentName: string;
+  readonly currentPhone: string;
+  readonly currentAddressLine1: string;
+  readonly city: string;
+  readonly stateProvince: string;
+  readonly postalCode: string;
+}
+
+export interface StoreConsigneeChange {
+  readonly id: string;
+  readonly nameBefore: string | null;
+  readonly nameAfter: string | null;
+  readonly phoneBefore: string | null;
+  readonly phoneAfter: string | null;
+  readonly addressBefore: string | null;
+  readonly addressAfter: string | null;
+  readonly courierAcceptedAt: string | null;
+  readonly courierMessage: string | null;
+  readonly createdAt: string;
+}
+
+export function useStoreConsignee(orderId: string): UseQueryResult<StoreConsignee> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['store', 'consignee', orderId],
+    queryFn: () => client.request<StoreConsignee>(`/api/store/orders/${orderId}/consignee`),
+  });
+}
+
+export function useStoreConsigneeHistory(
+  orderId: string,
+): UseQueryResult<readonly StoreConsigneeChange[]> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['store', 'consignee-history', orderId],
+    queryFn: () =>
+      client.request<readonly StoreConsigneeChange[]>(
+        `/api/store/orders/${orderId}/consignee/history`,
+      ),
+  });
+}
+
+export function useChangeStoreConsignee(): UseMutationResult<
+  { accepted: boolean; changeId: string; message: string | null },
+  Error,
+  { orderId: string; name?: string; phone?: string; addressLine1?: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, ...body }) =>
+      client.request<{ accepted: boolean; changeId: string; message: string | null }>(
+        `/api/store/orders/${orderId}/consignee`,
+        { method: 'POST', body },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['store', 'consignee'] });
+      void qc.invalidateQueries({ queryKey: ['store', 'consignee-history'] });
+    },
+  });
+}
+
+/**
+ * A store correcting its OWN customer's record (owner, 2026-09-18).
+ *
+ * The phone is not here and never will be: it is what tells one customer
+ * from another (ORD-7). Seller staff may make the same correction and
+ * each side is told when the other does.
+ */
+export function useUpdateStoreCustomer(): UseMutationResult<
+  StoreCustomer,
+  Error,
+  {
+    readonly id: string;
+    readonly name?: string;
+    readonly email?: string | null;
+    readonly altPhoneE164?: string | null;
+    readonly preferredLanguage?: string;
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) =>
+      client.request<StoreCustomer>(`/api/store/customers/${id}`, { method: 'PATCH', body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CUSTOMERS });
+    },
   });
 }

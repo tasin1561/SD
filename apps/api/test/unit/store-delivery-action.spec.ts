@@ -35,7 +35,7 @@ function make(
     forStore: jest.fn().mockResolvedValue({
       storeId: 'store-1',
       recall: mode,
-      addressFix: mode,
+      orderChange: mode,
       cancel: mode,
       callCapDecision: mode,
       chaseSkydrop: mode,

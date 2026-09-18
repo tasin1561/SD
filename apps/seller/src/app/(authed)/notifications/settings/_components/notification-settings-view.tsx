@@ -301,9 +301,20 @@ function YourTopics({
                             <span className="text-text-faint font-mono text-[11px]">{d.topic}</span>
                           </div>
                           <div className="text-text-muted mt-0.5 text-xs">{d.description}</div>
+                          {d.mutable === false ? (
+                            /* A switch that always refuses teaches people
+                               to ignore refusals, so it is locked ON with
+                               the server's OWN reason beside it. Cosmetic
+                               — the API refuses the mute either way
+                               (FE-2). */
+                            <div className="text-warning mt-1 text-xs">
+                              Always on. {d.immutableReason ?? ''}
+                            </div>
+                          ) : null}
                         </div>
                         <Switch
                           checked={isOn}
+                          disabled={d.mutable === false}
                           label={`Notify me about: ${d.label}`}
                           onChange={() => {
                             setError(null);

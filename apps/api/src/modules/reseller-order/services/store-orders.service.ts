@@ -18,7 +18,7 @@ import {
   OrderWriteService,
   SELLER_CANCELLABLE_STATES,
 } from '../../order/services/order-write.service';
-import { RECIPIENT_EDITABLE_STATUSES } from '../../order/services/order.service';
+import { CONTENTS_EDITABLE_STATUSES } from '../../order/services/order.service';
 import { DELIVERY_ACTION_STATUSES } from '../../delivery-action/delivery-action-stages';
 import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
@@ -79,7 +79,17 @@ export interface StoreOrderView {
     readonly cancel: boolean;
     /** Call the customer again / try again / send it back — out for delivery or just failed. */
     readonly deliveryActions: boolean;
-    /** Correct the delivery details — before the call confirms the order. */
+    /**
+     * Change the ORDER itself — the customer's details, what is in the
+     * parcel, the money — which is possible until the confirmation call
+     * settles it (`CONTENTS_EDITABLE_STATUSES`). Past that the customer's
+     * details may still change, but the COURIER decides
+     * (`/store/orders/:id/consignee`), which is the panel the portal
+     * shows instead.
+     *
+     * Keeps its old name so no saved link or stored client breaks; the
+     * capability behind it widened on 2026-09-18 (owner).
+     */
     readonly addressCorrection: boolean;
   };
   readonly source: OrderSource;
@@ -313,7 +323,7 @@ export class StoreOrdersService {
       stages: {
         cancel: SELLER_CANCELLABLE_STATES.has(o.status),
         deliveryActions: DELIVERY_ACTION_STATUSES.has(o.status),
-        addressCorrection: RECIPIENT_EDITABLE_STATUSES.has(o.status),
+        addressCorrection: CONTENTS_EDITABLE_STATUSES.has(o.status),
       },
       source: o.source,
       placedAt: o.placedAt.toISOString(),

@@ -232,9 +232,13 @@ describe('store permission surface (RS-2)', () => {
     ]);
     // 2026-09-17: the store reads its own effective action policy.
     expect(got('store-action-policy.controller.ts')).toEqual(['Get get → orders.view']);
+    // 2026-09-18 (owner): a store maintains its own customers' records.
+    // Its OWN key, not folded into `customers.view` — seeing a phone
+    // number and changing what we hold about somebody are different acts.
     expect(got('store-customer.controller.ts')).toEqual([
       'Get list → customers.view',
       'Get get → customers.view',
+      'Patch update → customers.manage',
     ]);
     expect(
       got('store-order-csv-import.controller.ts').every((h) => h.endsWith('→ orders.create')),

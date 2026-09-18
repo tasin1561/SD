@@ -1124,6 +1124,28 @@ export function useCurrentCalls(): UseQueryResult<{
     queryKey: ['agent-calls', 'current'],
     queryFn: () =>
       client.request<{ assignments: ReadonlyArray<PulledAssignment> }>(`/api/agent/calls/current`),
+    /*
+      RE-READ WHILE A CALL IS IN HAND (owner decision 4, 2026-09-18).
+
+      `EDIT_DURING_CALL` used to refuse a seller — and now a reseller
+      store — any change to the contents or the amount while an agent
+      held the order. The owner has removed that refusal, and the thing
+      that makes removing it safe is THIS: the station stops reading a
+      copy taken when the call was pulled.
+
+      It was always reading one. The refusal never covered an admin edit,
+      a god-mode change, a CSV patch or a second agent, so an agent could
+      already be reading out an address that had moved. `listCurrent`
+      re-reads the order live on every call, so polling it is the whole
+      fix; the station diffs what comes back and says so on screen.
+
+      20 seconds: fast enough that an agent dialling and then reading the
+      order sees the current one, slow enough to be one request per agent
+      per twenty seconds. Paused on a hidden tab for the same reason the
+      auto-advance is — nobody is reading it.
+    */
+    refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
   });
 }
 

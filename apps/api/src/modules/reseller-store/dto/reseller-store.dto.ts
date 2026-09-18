@@ -138,10 +138,11 @@ export class SetStoreActionPolicyDto {
 
   @ApiProperty({
     enum: ResellerStoreActionMode,
-    description: 'Correct the address before confirmation',
+    description:
+      'Change the order — the customer’s details, what is in it, and the money the customer pays',
   })
   @IsEnum(ResellerStoreActionMode)
-  addressFix!: ResellerStoreActionMode;
+  orderChange!: ResellerStoreActionMode;
 
   @ApiProperty({ enum: ResellerStoreActionMode, description: 'Call the order off' })
   @IsEnum(ResellerStoreActionMode)

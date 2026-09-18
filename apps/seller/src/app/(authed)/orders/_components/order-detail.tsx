@@ -55,7 +55,6 @@ import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 import { ConsigneePanel } from '../[id]/_components/consignee-panel';
-import { ResellerRecipientEditor } from '../[id]/_components/reseller-recipient-editor';
 import { ResellerMoneyPanel } from '../[id]/_components/reseller-money-panel';
 
 /** The public tracking site. Env-driven so a domain change is a deploy
@@ -217,18 +216,21 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 <Button variant="secondary" size="sm" onClick={() => setRaiseOpen(true)}>
                   Raise an issue
                 </Button>
-                {/* A Reseller store's order is not the full form's to
-                    edit — its customer is corrected from the Recipient
-                    card, and nothing else on it is the seller's. */}
-                {detail.data.storeKind !== 'RESELLER' &&
-                  (detail.data.status === 'DRAFT' ||
-                    detail.data.status === 'PENDING_CONFIRMATION') && (
-                    <Link href={`/orders/${orderId}/edit`}>
-                      <Button variant="secondary" size="sm">
-                        <Pencil size={12} /> Edit
-                      </Button>
-                    </Link>
-                  )}
+                {/* A Reseller store's order is EDITABLE HERE TOO (owner,
+                    2026-09-18). You own the goods, the warehouse slot,
+                    the courier and the money at risk, so the whole order
+                    is yours to change — its products, quantities, prices
+                    and the customer's details. The store is emailed what
+                    moved, and its money is recalculated to the new order
+                    under the terms it was placed on. */}
+                {(detail.data.status === 'DRAFT' ||
+                  detail.data.status === 'PENDING_CONFIRMATION') && (
+                  <Link href={`/orders/${orderId}/edit`}>
+                    <Button variant="secondary" size="sm">
+                      <Pencil size={12} /> Edit
+                    </Button>
+                  </Link>
+                )}
                 {/* The customer declined, so nothing calls this order
                     again on its own. Asking is the only path — and it is
                     an ASK: an admin decides. */}
@@ -373,18 +375,12 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   // Gating on anything else shows an Edit whose save
                   // comes back 403 — cosmetic RBAC that disagrees with
                   // the boundary is worse than none.
-                  // A Reseller store's order (2026-09-17): Seller staff may
-                  // correct the CUSTOMER until the call confirms it, through
-                  // the order edit — recorded as theirs, and the store is
-                  // emailed. Nothing else on it is theirs to change.
-                  identity !== null &&
-                  can(identity, 'orders.create') &&
-                  detail.data.storeKind === 'RESELLER' ? (
-                    detail.data.status === 'DRAFT' ||
-                    detail.data.status === 'PENDING_CONFIRMATION' ? (
-                      <ResellerRecipientEditor order={detail.data} />
-                    ) : undefined
-                  ) : identity !== null && can(identity, 'orders.create') ? (
+                  // A Reseller store's order uses the SAME editor
+                  // (2026-09-18, owner): Seller staff may change anything
+                  // on it, and the store is told what moved. A separate
+                  // narrow editor for reseller orders was the old rule
+                  // wearing a component.
+                  identity !== null && can(identity, 'orders.create') ? (
                     <Button
                       variant="ghost"
                       size="sm"

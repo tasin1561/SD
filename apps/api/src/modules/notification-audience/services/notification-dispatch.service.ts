@@ -94,6 +94,7 @@ export class NotificationDispatchService {
       for (const person of chunk) {
         const channels = this.policy.resolveChannels({
           category: input.category,
+          topic: input.topic,
           requested: input.channels,
           mutedChannels: mutes.get(`${person.subjectType}:${person.recipientId}`) ?? [],
         });
@@ -140,6 +141,11 @@ export class NotificationDispatchService {
   ): Promise<Map<string, NotificationChannel[]>> {
     const out = new Map<string, NotificationChannel[]>();
     if (!this.policy.isMutable(category)) return out;
+    // A named-unmutable topic skips the lookup for the same reason an
+    // immutable category does: the answer cannot change the outcome, and
+    // a mute recorded before the topic became unmutable must not survive
+    // as a back door (see `IMMUTABLE_TOPICS`).
+    if (!this.policy.isTopicMutable(topic)) return out;
 
     const rows = await this.prisma.client.notificationSubscription.findMany({
       where: {

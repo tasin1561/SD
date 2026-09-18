@@ -123,7 +123,7 @@ describe('reseller store request races (e2e)', () => {
   /** The seller's policy for the store, written straight to its row (test setup only). */
   async function setPolicy(
     storeId: string,
-    over: Partial<Record<'recall' | 'addressFix' | 'cancel', ResellerStoreActionMode>>,
+    over: Partial<Record<'recall' | 'orderChange' | 'cancel', ResellerStoreActionMode>>,
   ): Promise<void> {
     await h.prisma.resellerStoreActionPolicy.upsert({
       where: { storeId },
@@ -413,7 +413,7 @@ describe('reseller store request races (e2e)', () => {
 
     it('two store corrections at once on one order leave exactly ONE request', async () => {
       const store = await makeStore('ac-held');
-      await setPolicy(store.storeId, { addressFix: ResellerStoreActionMode.ASK_SELLER });
+      await setPolicy(store.storeId, { orderChange: ResellerStoreActionMode.ASK_SELLER });
       const orderId = await placeOrder(store);
 
       const ask = () =>
@@ -430,7 +430,7 @@ describe('reseller store request races (e2e)', () => {
 
     it('two seller approvals at once: one applies it, the other is ALREADY_DECIDED', async () => {
       const store = await makeStore('ac-approve');
-      await setPolicy(store.storeId, { addressFix: ResellerStoreActionMode.ASK_SELLER });
+      await setPolicy(store.storeId, { orderChange: ResellerStoreActionMode.ASK_SELLER });
       const orderId = await placeOrder(store);
       await request(h.baseUrl)
         .patch(`/store/orders/${orderId}/recipient`)
@@ -460,7 +460,7 @@ describe('reseller store request races (e2e)', () => {
 
     it('an approval racing the expiry sweep ends in exactly one outcome', async () => {
       const store = await makeStore('ac-expiry');
-      await setPolicy(store.storeId, { addressFix: ResellerStoreActionMode.ASK_SELLER });
+      await setPolicy(store.storeId, { orderChange: ResellerStoreActionMode.ASK_SELLER });
       const orderId = await placeOrder(store);
       await request(h.baseUrl)
         .patch(`/store/orders/${orderId}/recipient`)

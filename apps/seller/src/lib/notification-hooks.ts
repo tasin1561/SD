@@ -30,6 +30,14 @@ export interface TopicDef {
   label: string;
   description: string;
   group: string;
+  /**
+   * False for a topic that cannot be silenced at all (2026-09-18) — the
+   * flag comes from the SERVER (`IMMUTABLE_TOPICS`) rather than being
+   * guessed here, so a second list cannot drift from the one that
+   * actually refuses.
+   */
+  mutable?: boolean;
+  immutableReason?: string | null;
 }
 
 export interface SubscriptionView {

@@ -216,7 +216,13 @@ export class StoreOrderRequestService {
         status: StoreAddressChangeStatus.SUPERSEDED,
         decidedBySellerUserId: sellerUserId,
         sellerDecidedAt: new Date(),
-        decisionNote: 'Seller staff corrected the delivery details on the order themselves.',
+        // Whoever it was, said in one sentence the store can read: the
+        // seller-user column is null on a store's own edit, so the note
+        // cannot be derived from it.
+        decisionNote:
+          sellerUserId === null
+            ? 'Closed because the order was changed directly.'
+            : 'Seller staff changed the order themselves.',
       },
     });
     return closed.count;

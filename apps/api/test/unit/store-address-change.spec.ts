@@ -123,6 +123,7 @@ describe('StoreAddressChangeService — holding a correction', () => {
       orderId: 'order-1',
       reason: 'Customer rang to say the house number is wrong',
       fields: { recipientAddressLine1: '42 New Street' },
+      patch: { recipientAddressLine1: '42 New Street' },
     });
     expect(view.status).toBe(StoreAddressChangeStatus.PENDING);
     expect(notifier.waitingOnSeller).toHaveBeenCalledTimes(1);
@@ -141,6 +142,7 @@ describe('StoreAddressChangeService — holding a correction', () => {
       orderId: 'order-1',
       reason: 'Customer rang to say the house number is wrong',
       fields: { recipientAddressLine1: '42 New Street' },
+      patch: { recipientAddressLine1: '42 New Street' },
     });
     expect(prisma.client.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.client.locks).toEqual([
@@ -170,6 +172,7 @@ describe('StoreAddressChangeService — holding a correction', () => {
         orderId: 'order-1',
         reason: 'Customer rang to say the house number is wrong',
         fields: { recipientAddressLine1: '42 New Street' },
+        patch: { recipientAddressLine1: '42 New Street' },
       })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ConflictException);
@@ -191,6 +194,7 @@ describe('StoreAddressChangeService — holding a correction', () => {
         orderId: 'order-1',
         reason: 'Customer rang to say the house number is wrong',
         fields: {},
+        patch: {},
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -199,7 +203,7 @@ describe('StoreAddressChangeService — holding a correction', () => {
 describe('SellerAddressChangeDecisionService — the answer', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  function build(editImpl: jest.Mock, prisma = makePrisma()) {
+  function build(applyImpl: jest.Mock, prisma = makePrisma()) {
     const decided = jest.fn();
     const requests = new StoreAddressChangeService(
       prisma as never,
@@ -209,7 +213,9 @@ describe('SellerAddressChangeDecisionService — the answer', () => {
     const svc = new SellerAddressChangeDecisionService(
       prisma as never,
       audit as never,
-      { edit: editImpl } as never,
+      // THE ONE APPLIER (2026-09-18): approving runs the same method a
+      // direct change does, so the two cannot drift.
+      { apply: applyImpl } as never,
       requests,
       { decided, waitingOnSeller: jest.fn() } as never,
     );
@@ -219,34 +225,36 @@ describe('SellerAddressChangeDecisionService — the answer', () => {
   const seller = { id: 'seller-1', userId: 'seller-user-1' } as never;
   const ctx = { ipAddress: null, userAgent: null, requestId: null };
 
-  it('approving applies the WHOLE correction, not an empty patch', async () => {
-    const edit = jest.fn().mockResolvedValue(undefined);
-    const { svc } = build(edit);
+  it('approving applies the WHOLE change, not an empty patch', async () => {
+    const apply = jest.fn().mockResolvedValue(undefined);
+    const { svc } = build(apply);
     await svc.approve(seller, 'req-1', null, ctx);
-    expect(edit).toHaveBeenCalledTimes(1);
-    expect(edit.mock.calls[0]![2]).toEqual({
-      recipientAddressLine1: '42 New Street',
-      recipientPostalCode: '560001',
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![0]).toMatchObject({
+      patch: { recipientAddressLine1: '42 New Street', recipientPostalCode: '560001' },
+      // The store scope is what makes this the store's own order, and the
+      // actor is the store: the timeline says who ASKED, not only who
+      // allowed it.
+      storeId: 'store-1',
+      storeUserId: 'store-user-1',
     });
-    // The store scope is what makes this the store's own order, and the
-    // actor is the store: the timeline says who ASKED, not only who
-    // allowed it.
-    expect(edit.mock.calls[0]![5]).toEqual({ storeId: 'store-1' });
-    expect(edit.mock.calls[0]![3]).toEqual({ type: 'STORE', id: 'store-user-1' });
   });
 
   it('a yes the order has moved past is recorded FAILED, verbatim, and still told', async () => {
-    const edit = jest.fn().mockRejectedValue({
-      response: { code: 'EDIT_DURING_CALL', message: 'An agent is on the phone about this order' },
+    const apply = jest.fn().mockRejectedValue({
+      response: {
+        code: 'COURIER_MUST_ACCEPT_ADDRESS_CHANGE',
+        message: 'Only the courier can change it now',
+      },
     });
-    const { svc, prisma, decided } = build(edit);
+    const { svc, prisma, decided } = build(apply);
     await expect(svc.approve(seller, 'req-1', null, ctx)).resolves.toBeDefined();
     // The claim is updateMany call 0; the outcome is call 1, guarded on APPROVED.
     expect(prisma.client.storeAddressChangeRequest.updateMany.mock.calls[1]![0]).toMatchObject({
       where: { id: 'req-1', status: StoreAddressChangeStatus.APPROVED },
       data: {
         status: StoreAddressChangeStatus.FAILED,
-        failureReason: '[EDIT_DURING_CALL] An agent is on the phone about this order',
+        failureReason: '[COURIER_MUST_ACCEPT_ADDRESS_CHANGE] Only the courier can change it now',
       },
     });
     expect(prisma.client.storeAddressChangeRequest.update).not.toHaveBeenCalled();
@@ -257,8 +265,8 @@ describe('SellerAddressChangeDecisionService — the answer', () => {
   });
 
   it('an applied correction is written guarded on APPROVED, never a plain update', async () => {
-    const edit = jest.fn().mockResolvedValue(undefined);
-    const { svc, prisma } = build(edit);
+    const apply = jest.fn().mockResolvedValue(undefined);
+    const { svc, prisma } = build(apply);
     await svc.approve(seller, 'req-1', null, ctx);
     expect(prisma.client.storeAddressChangeRequest.updateMany.mock.calls[1]![0]).toMatchObject({
       where: { id: 'req-1', status: StoreAddressChangeStatus.APPROVED },
@@ -268,30 +276,30 @@ describe('SellerAddressChangeDecisionService — the answer', () => {
   });
 
   it('a store user who no longer exists is recorded as the STORE with no id — never the seller user', async () => {
-    const edit = jest.fn().mockResolvedValue(undefined);
+    const apply = jest.fn().mockResolvedValue(undefined);
     const prisma = makePrisma({
       findUniqueOrThrow: jest
         .fn()
         .mockResolvedValue({ ...pendingRow(), requestedByStoreUserId: null }),
     });
-    const { svc } = build(edit, prisma);
+    const { svc } = build(apply, prisma);
     await svc.approve(seller, 'req-1', null, ctx);
-    expect(edit.mock.calls[0]![3]).toEqual({ type: 'STORE', id: null });
+    expect(apply.mock.calls[0]![0]).toMatchObject({ storeUserId: null });
   });
 
   it('a request somebody else already decided is a conflict, not a second edit', async () => {
-    const edit = jest.fn();
+    const apply = jest.fn();
     const prisma = makePrisma({ updateMany: jest.fn().mockResolvedValue({ count: 0 }) });
-    const { svc } = build(edit, prisma);
+    const { svc } = build(apply, prisma);
     await expect(svc.approve(seller, 'req-1', null, ctx)).rejects.toBeInstanceOf(ConflictException);
-    expect(edit).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
   });
 
   it('rejecting tells the store and never edits the order', async () => {
-    const edit = jest.fn();
-    const { svc, decided } = build(edit);
+    const apply = jest.fn();
+    const { svc, decided } = build(apply);
     await svc.reject(seller, 'req-1', 'The customer confirmed the original address');
-    expect(edit).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
     expect(decided).toHaveBeenCalledWith(expect.objectContaining({ approved: false }));
   });
 });

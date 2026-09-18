@@ -63,10 +63,13 @@ const CAPABILITIES: ReadonlyArray<{
     direct: 'Directly: the call is queued with our call centre the moment the store asks.',
   },
   {
-    key: 'addressFix',
-    label: 'Correct the address',
-    what: 'Fix the delivery details before the order is confirmed.',
-    direct: 'Directly: the new details are written onto the order as soon as the store sends them.',
+    key: 'orderChange',
+    label: 'Change the order',
+    what:
+      'Correct the customer’s details, change what is in the parcel or the money the customer pays. ' +
+      'Once the order is confirmed only the customer’s details can change, and once it is with the ' +
+      'courier only they can accept it.',
+    direct: 'Directly: the change is written onto the order as soon as the store sends it.',
   },
   {
     key: 'cancel',

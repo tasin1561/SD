@@ -5,12 +5,11 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import type { UpdateOrderDto } from '../../order/dto/update-order.dto';
-import { OrderService } from '../../order/services/order.service';
 import { AddressChangeNotifier } from './address-change-notifier.service';
+import { StoreOrderEditService } from './store-order-edit.service';
 import {
   StoreAddressChangeService,
   summarise,
-  type AddressChangeFields,
   type AddressChangeRequestView,
 } from './store-address-change.service';
 
@@ -53,7 +52,7 @@ export class SellerAddressChangeDecisionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
-    private readonly orders: OrderService,
+    private readonly applier: StoreOrderEditService,
     private readonly requests: StoreAddressChangeService,
     private readonly notifier: AddressChangeNotifier,
   ) {}
@@ -101,8 +100,15 @@ export class SellerAddressChangeDecisionService {
   ): Promise<AddressChangeRequestView> {
     const row = await this.claim(seller, requestId, true, note);
     // Off the WHOLE row: the claim's own narrow projection would leave
-    // every recipient column undefined and apply an empty correction.
-    const fields = this.requests.toView(row).fields;
+    // every recipient column undefined and apply an empty change.
+    const view = this.requests.toView(row);
+    const fields = view.fields;
+    // The WHOLE proposed change (2026-09-18) — the patch when the row
+    // carries one, else the recipient columns, which ARE the whole change
+    // for a row held before the patch existed. Approving must apply
+    // exactly what seller staff were shown, not a recipient-shaped
+    // subset of it.
+    const patch = (view.patch ?? fields) as unknown as UpdateOrderDto;
 
     await this.audit.log({
       actorType: ActorType.SELLER,
@@ -111,36 +117,33 @@ export class SellerAddressChangeDecisionService {
       action: 'seller.store_address_change.approved',
       entityType: 'store_address_change_request',
       entityId: requestId,
-      // Where a parcel is going, changed on the seller's say-so about
-      // somebody else's customer.
+      // What a parcel carries and where it is going, changed on the
+      // seller's say-so about somebody else's customer.
       severity: 'MEDIUM',
-      metadata: { orderId: row.orderId, storeId: row.storeId, fields: Object.keys(fields) },
+      metadata: { orderId: row.orderId, storeId: row.storeId, changes: view.changes },
     });
 
-    // The SAME path a DIRECT correction takes — the store scope is what
-    // makes this the store's own order rather than any of the seller's.
+    // THE SAME METHOD a DIRECT change runs (`StoreOrderEditService.apply`),
+    // not a second call to `edit` alongside it: two callers of the writer
+    // drift, and the one that drifts is the approval path, which nobody
+    // exercises by hand.
     let applied = true;
     let failureReason: string | null = null;
     try {
-      await this.orders.edit(
-        row.sellerId,
-        row.orderId,
-        fields as unknown as UpdateOrderDto,
-        // The SELLER approved it, but the correction is the STORE's: the
-        // timeline should say who asked, not only who allowed it. A store
-        // user who no longer exists is a STORE actor with no id — never
-        // the seller user's id stamped as a store actor, which would name
-        // somebody who did not ask.
-        { type: ActorType.STORE, id: row.requestedByStoreUserId },
+      await this.applier.apply({
+        sellerId: row.sellerId,
+        storeId: row.storeId,
+        orderId: row.orderId,
+        patch,
+        storeUserId: row.requestedByStoreUserId,
         ctx,
-        { storeId: row.storeId },
-      );
+      });
     } catch (err) {
       applied = false;
       failureReason = this.refusal(err);
       this.logger.warn(
         { requestId, err: failureReason },
-        'An approved address correction could not be applied',
+        'An approved store change could not be applied',
       );
     }
 
@@ -157,7 +160,7 @@ export class SellerAddressChangeDecisionService {
       where: { id: requestId },
     });
 
-    await this.tellTheStore(row, fields, true, applied, failureReason, note);
+    await this.tellTheStore(row, view, true, applied, failureReason, note);
     return this.requests.toView(done);
   }
 
@@ -179,7 +182,7 @@ export class SellerAddressChangeDecisionService {
       metadata: { orderId: row.orderId, storeId: row.storeId },
     });
 
-    await this.tellTheStore(row, this.requests.toView(row).fields, false, false, null, note);
+    await this.tellTheStore(row, this.requests.toView(row), false, false, null, note);
     return this.requests.toView(row);
   }
 
@@ -187,7 +190,7 @@ export class SellerAddressChangeDecisionService {
    * The server's own words for why an approved correction did not land.
    *
    * Kept VERBATIM where the refusal carried a code — `NOT_EDITABLE`,
-   * `EDIT_DURING_CALL`, `RESELLER_ORDER_NOT_EDITABLE` — because the store
+   * `COURIER_MUST_ACCEPT_ADDRESS_CHANGE`, `RETAIL_OUT_OF_RANGE` — because the store
    * has to tell a customer something specific, and "it failed" is not
    * something anybody can act on.
    */
@@ -204,7 +207,7 @@ export class SellerAddressChangeDecisionService {
   /** Email the store what was decided. They have no inbox. Never throws. */
   private async tellTheStore(
     row: RequestRow,
-    fields: AddressChangeFields,
+    view: AddressChangeRequestView,
     approved: boolean,
     applied: boolean,
     failureReason: string | null,
@@ -225,7 +228,7 @@ export class SellerAddressChangeDecisionService {
       orderNumber: order.orderNumber,
       sellerName: order.seller.companyName,
       reason: row.reason,
-      summary: summarise(fields),
+      summary: summarise(view.fields, view.changes),
       decisionNote: note?.trim() === '' ? null : (note?.trim() ?? null),
     });
   }

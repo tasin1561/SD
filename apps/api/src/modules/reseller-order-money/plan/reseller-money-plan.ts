@@ -208,6 +208,69 @@ export function planCredits(input: PlanCreditsInput): ResellerCreditPlan {
   };
 }
 
+/** The six figures a credit row carries — what a re-price compares. */
+export interface CreditFigures {
+  readonly grossInr: string;
+  readonly transferInr: string;
+  readonly taxShareInr: string;
+  readonly codFeeShareInr: string;
+  readonly instantFeeShareInr: string;
+  readonly netInr: string;
+}
+
+type FiguresLike = {
+  readonly grossInr: Prisma.Decimal;
+  readonly transferInr: Prisma.Decimal;
+  readonly taxShareInr: Prisma.Decimal;
+  readonly codFeeShareInr: Prisma.Decimal;
+  readonly instantFeeShareInr: Prisma.Decimal;
+  readonly netInr: Prisma.Decimal;
+};
+
+/** The figures as rupees-and-paise strings, for a person to read. */
+export function figures(row: FiguresLike): CreditFigures {
+  return {
+    grossInr: row.grossInr.toFixed(2),
+    transferInr: row.transferInr.toFixed(2),
+    taxShareInr: row.taxShareInr.toFixed(2),
+    codFeeShareInr: row.codFeeShareInr.toFixed(2),
+    instantFeeShareInr: row.instantFeeShareInr.toFixed(2),
+    netInr: row.netInr.toFixed(2),
+  };
+}
+
+/** The columns a re-price writes. Kept beside `figures` so neither can
+ *  grow a seventh figure the other does not know about. */
+export function figureColumns(next: FiguresLike): {
+  grossInr: Prisma.Decimal;
+  transferInr: Prisma.Decimal;
+  taxShareInr: Prisma.Decimal;
+  codFeeShareInr: Prisma.Decimal;
+  instantFeeShareInr: Prisma.Decimal;
+  netInr: Prisma.Decimal;
+} {
+  return {
+    grossInr: next.grossInr,
+    transferInr: next.transferInr,
+    taxShareInr: next.taxShareInr,
+    codFeeShareInr: next.codFeeShareInr,
+    instantFeeShareInr: next.instantFeeShareInr,
+    netInr: next.netInr,
+  };
+}
+
+/**
+ * Did the edit actually move this party's money? Compared to the PAISA
+ * on every figure, not on the net alone: a change that moves the tax
+ * share and the gross by the same amount leaves the net still and would
+ * otherwise leave a stale breakdown on the row the reports read.
+ */
+export function figuresMoved(before: FiguresLike, after: FiguresLike): boolean {
+  const a = figures(before);
+  const b = figures(after);
+  return (Object.keys(a) as Array<keyof CreditFigures>).some((k) => a[k] !== b[k]);
+}
+
 // ── WHEN ─────────────────────────────────────────────────────────────
 
 /** The event a trigger counts from. */

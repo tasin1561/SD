@@ -26,6 +26,7 @@ import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order
 import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
 import { OrderPostCommitHooksService } from './services/order-post-commit-hooks.service';
 import { ResellerOrderService } from './services/reseller-order.service';
+import { ResellerOrderRetermService } from './services/reseller-order-reterm.service';
 
 /**
  * Module 6 — INTERNAL core (the Module-5 `inventory-shared` analogue).
@@ -106,6 +107,8 @@ import { ResellerOrderService } from './services/reseller-order.service';
     OrderAdminOverrideService,
     OrderPostCommitHooksService,
     ResellerOrderService,
+    // 2026-09-18 — a changed reseller order keeps its own terms.
+    ResellerOrderRetermService,
   ],
   exports: [
     // Intra-Module-6 only (the store-order and CSV submodules place a

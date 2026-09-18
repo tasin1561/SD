@@ -4,11 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, SellerStoreKind, StoreAddressChangeStatus } from '@skydrop/db';
+import { ActorType, Prisma, SellerStoreKind, StoreAddressChangeStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { STORE_EDITABLE_KEYS } from '../../order/services/order.service';
+import { RECIPIENT_KEYS } from '../../order/services/order.service';
 import type { UpdateOrderDto } from '../../order/dto/update-order.dto';
 import { AddressChangeNotifier } from './address-change-notifier.service';
 
@@ -46,15 +46,24 @@ export const OPEN_ADDRESS_CHANGE_STATUSES: readonly StoreAddressChangeStatus[] =
 ];
 
 /** What the store is proposing, as columns on the request row. */
-export type AddressChangeFields = Partial<Record<(typeof STORE_EDITABLE_KEYS)[number], string>>;
+export type AddressChangeFields = Partial<Record<(typeof RECIPIENT_KEYS)[number], string>>;
 
 export interface AddressChangeRequestView {
   readonly id: string;
   readonly orderId: string;
   readonly status: StoreAddressChangeStatus;
   readonly reason: string;
-  /** Only the fields this correction actually proposes. */
+  /** Only the RECIPIENT fields this change proposes. */
   readonly fields: AddressChangeFields;
+  /**
+   * The WHOLE proposed change (2026-09-18) — the recipient fields above
+   * and anything else the store sent: products, quantities, retail, the
+   * money the customer pays. Null on rows held before this existed, whose
+   * proposal is entirely in `fields`.
+   */
+  readonly patch: Record<string, unknown> | null;
+  /** The keys it proposes, for a screen that lists them. */
+  readonly changes: readonly string[];
   readonly decisionNote: string | null;
   readonly sellerDecidedAt: string | null;
   readonly appliedAt: string | null;
@@ -63,7 +72,7 @@ export interface AddressChangeRequestView {
 }
 
 /** What a person calls each field, for the notice and the seller's queue. */
-const FIELD_LABEL: Readonly<Record<(typeof STORE_EDITABLE_KEYS)[number], string>> = {
+const FIELD_LABEL: Readonly<Record<(typeof RECIPIENT_KEYS)[number], string>> = {
   recipientName: 'the name',
   recipientPhoneE164: 'the phone number',
   recipientAltPhoneE164: 'the second phone number',
@@ -76,21 +85,50 @@ const FIELD_LABEL: Readonly<Record<(typeof STORE_EDITABLE_KEYS)[number], string>
   recipientPostalCode: 'the PIN code',
 };
 
-/** "the address and the PIN code" — what the seller is told is changing. */
-export function summarise(fields: AddressChangeFields): string {
-  const names = (Object.keys(fields) as Array<keyof AddressChangeFields>)
-    .filter((k) => fields[k] !== undefined)
-    .map((k) => FIELD_LABEL[k]);
+/**
+ * "the address and the PIN code" — what the seller is told is changing.
+ *
+ * `changed` is every key the change proposes (2026-09-18), which may
+ * include things that are not recipient fields at all; those are named
+ * by their own words rather than left out, or a change that only moves
+ * the quantities would read as "nothing".
+ */
+export function summarise(fields: AddressChangeFields, changed?: readonly string[]): string {
+  const recipient = (Object.keys(fields) as Array<keyof AddressChangeFields>).filter(
+    (k) => fields[k] !== undefined,
+  );
+  const names = [
+    ...recipient.map((k) => FIELD_LABEL[k]),
+    ...(changed ?? [])
+      .filter((k) => !(recipient as readonly string[]).includes(k))
+      .map((k) => OTHER_LABEL[k] ?? k),
+  ];
   if (names.length === 0) return 'nothing';
   const last = names[names.length - 1];
   if (names.length === 1 || last === undefined) return names[0] ?? 'nothing';
   return `${names.slice(0, -1).join(', ')} and ${last}`;
 }
 
+/** What a person calls the non-recipient things a change can move. */
+const OTHER_LABEL: Readonly<Record<string, string>> = {
+  items: 'what is in the parcel',
+  codAmountInr: 'the cash to collect',
+  paymentMode: 'how it is paid for',
+  advanceAmountInr: 'the advance already paid',
+  deliveryFeeInr: 'the delivery charged to the customer',
+  discountInr: 'the discount',
+  declaredValueInr: 'the declared value',
+  totalWeightGrams: 'the weight',
+  packageType: 'the package',
+  isUrgent: 'whether it is urgent',
+  sellerOrderRef: 'the reference',
+  sellerNotes: 'the notes',
+};
+
 /** The proposed fields off a patch — only what was actually sent. */
 export function fieldsFromPatch(patch: UpdateOrderDto): AddressChangeFields {
   const out: AddressChangeFields = {};
-  for (const key of STORE_EDITABLE_KEYS) {
+  for (const key of RECIPIENT_KEYS) {
     const value = (patch as Record<string, unknown>)[key];
     if (typeof value === 'string') out[key] = value;
   }
@@ -119,11 +157,13 @@ export class StoreAddressChangeService {
     orderId: string;
     reason: string;
     fields: AddressChangeFields;
+    /** The whole proposed change — a superset of `fields` (2026-09-18). */
+    patch: Record<string, unknown>;
   }): Promise<AddressChangeRequestView> {
-    if (Object.keys(input.fields).length === 0) {
+    if (Object.keys(input.patch).length === 0) {
       throw new BadRequestException({
         code: 'ADDRESS_CHANGE_EMPTY',
-        message: 'Nothing to correct — send at least one of the delivery details.',
+        message: 'Nothing to change — send at least one thing.',
       });
     }
 
@@ -151,7 +191,11 @@ export class StoreAddressChangeService {
           storeId: input.storeId,
           requestedByStoreUserId: input.storeUserId,
           reason: input.reason.trim(),
+          // BOTH: the recipient columns keep every existing reader
+          // working (the seller's queue, `summarise`, the notices), and
+          // the patch carries what columns cannot express.
           ...input.fields,
+          patch: input.patch as Prisma.InputJsonValue,
         },
       });
     });
@@ -167,7 +211,7 @@ export class StoreAddressChangeService {
       metadata: {
         orderId: input.orderId,
         storeId: input.storeId,
-        fields: Object.keys(input.fields),
+        changes: Object.keys(input.patch),
       },
     });
 
@@ -180,7 +224,7 @@ export class StoreAddressChangeService {
       storeName: order.storeName,
       orderNumber: order.orderNumber,
       reason: input.reason.trim(),
-      summary: summarise(input.fields),
+      summary: summarise(input.fields, Object.keys(input.patch)),
     });
 
     return this.toView(row);
@@ -206,6 +250,7 @@ export class StoreAddressChangeService {
     orderId: string;
     status: StoreAddressChangeStatus;
     reason: string;
+    patch?: Prisma.JsonValue | null;
     decisionNote: string | null;
     sellerDecidedAt: Date | null;
     appliedAt: Date | null;
@@ -213,16 +258,24 @@ export class StoreAddressChangeService {
     createdAt: Date;
   }): AddressChangeRequestView {
     const fields: AddressChangeFields = {};
-    for (const key of STORE_EDITABLE_KEYS) {
+    for (const key of RECIPIENT_KEYS) {
       const value = (row as unknown as Record<string, unknown>)[key];
       if (typeof value === 'string') fields[key] = value;
     }
+    const patch =
+      row.patch !== null && typeof row.patch === 'object' && !Array.isArray(row.patch)
+        ? (row.patch as Record<string, unknown>)
+        : null;
     return {
       id: row.id,
       orderId: row.orderId,
       status: row.status,
       reason: row.reason,
       fields,
+      patch,
+      // A row held before `patch` existed proposed only recipient fields,
+      // so its own columns ARE the whole change.
+      changes: Object.keys(patch ?? fields),
       decisionNote: row.decisionNote,
       sellerDecidedAt: row.sellerDecidedAt?.toISOString() ?? null,
       appliedAt: row.appliedAt?.toISOString() ?? null,

@@ -137,7 +137,7 @@ export class StoreDeliveryActionService {
       items: rows.map((r) => this.actions.toView(r)),
       allowed: {
         recall: policy.recall,
-        addressFix: policy.addressFix,
+        orderChange: policy.orderChange,
         cancel: policy.cancel,
         callCapDecision: policy.callCapDecision,
         chaseSkydrop: policy.chaseSkydrop,

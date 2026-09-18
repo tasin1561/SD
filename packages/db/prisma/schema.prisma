@@ -9091,30 +9091,43 @@ enum ResellerCreditStatus {
 /// the same COD and fees would credit its seller. Delivery and return
 /// fees are split when Skydrop bills them, not here.
 model ResellerOrderCredit {
-  id                 String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  orderId            String                @map("order_id") @db.Uuid
-  sellerId           String                @map("seller_id") @db.Uuid
-  storeId            String                @map("store_id") @db.Uuid
-  party              ResellerMoneyParty
-  trigger            ResellerCreditTrigger
-  days               Int
-  status             ResellerCreditStatus  @default(WAITING)
+  id                         String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  orderId                    String                @map("order_id") @db.Uuid
+  sellerId                   String                @map("seller_id") @db.Uuid
+  storeId                    String                @map("store_id") @db.Uuid
+  party                      ResellerMoneyParty
+  trigger                    ResellerCreditTrigger
+  days                       Int
+  status                     ResellerCreditStatus  @default(WAITING)
   /// When it runs — set when the trigger's event happens.
-  dueAt              DateTime?             @map("due_at") @db.Timestamptz
-  creditedAt         DateTime?             @map("credited_at") @db.Timestamptz
-  reversedAt         DateTime?             @map("reversed_at") @db.Timestamptz
-  skippedReason      String?               @map("skipped_reason")
-  grossInr           Decimal               @map("gross_inr") @db.Decimal(14, 2)
-  transferInr        Decimal               @map("transfer_inr") @db.Decimal(14, 2)
-  taxShareInr        Decimal               @map("tax_share_inr") @db.Decimal(14, 2)
-  codFeeShareInr     Decimal               @map("cod_fee_share_inr") @db.Decimal(14, 2)
-  instantFeeShareInr Decimal               @map("instant_fee_share_inr") @db.Decimal(14, 2)
-  netInr             Decimal               @map("net_inr") @db.Decimal(14, 2)
+  dueAt                      DateTime?             @map("due_at") @db.Timestamptz
+  creditedAt                 DateTime?             @map("credited_at") @db.Timestamptz
+  reversedAt                 DateTime?             @map("reversed_at") @db.Timestamptz
+  skippedReason              String?               @map("skipped_reason")
+  grossInr                   Decimal               @map("gross_inr") @db.Decimal(14, 2)
+  transferInr                Decimal               @map("transfer_inr") @db.Decimal(14, 2)
+  taxShareInr                Decimal               @map("tax_share_inr") @db.Decimal(14, 2)
+  codFeeShareInr             Decimal               @map("cod_fee_share_inr") @db.Decimal(14, 2)
+  instantFeeShareInr         Decimal               @map("instant_fee_share_inr") @db.Decimal(14, 2)
+  netInr                     Decimal               @map("net_inr") @db.Decimal(14, 2)
+  /// The seller's COD rates AT THE MOMENT THIS WAS PLANNED (SET-1), kept
+  /// so a RECALCULATION after seller staff edit the order re-prices only
+  /// what the edit changed. Re-resolving them would let a rate somebody
+  /// changed last week move the money of an order placed before it.
+  /// Null on rows planned before 2026-09-18 — those resolve fresh.
+  gstPercentAtPlan           Decimal?              @map("gst_percent_at_plan") @db.Decimal(5, 2)
+  codFeePercentAtPlan        Decimal?              @map("cod_fee_percent_at_plan") @db.Decimal(5, 2)
+  instantPayFeePercentAtPlan Decimal?              @map("instant_pay_fee_percent_at_plan") @db.Decimal(5, 2)
+  /// How many times its figures have been re-planned because seller staff
+  /// changed the order (owner, 2026-09-18). A recalculation that moves a
+  /// CREDITED row takes the credit back and writes it again at the new
+  /// figures, so this is also how often that pair was written.
+  timesRepriced              Int                   @default(0) @map("times_repriced")
   /// How many times it has been written (a reversed credit re-armed by a
   /// later payout is written again).
-  timesCredited      Int                   @default(0) @map("times_credited")
-  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  timesCredited              Int                   @default(0) @map("times_credited")
+  createdAt                  DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                  DateTime              @updatedAt @map("updated_at") @db.Timestamptz
 
   order  Order       @relation(fields: [orderId], references: [id], onDelete: Restrict)
   seller Seller      @relation(fields: [sellerId], references: [id], onDelete: Restrict)
@@ -9449,8 +9462,15 @@ model ResellerStoreActionPolicy {
 
   /// Ask OUR call centre to phone the customer again. No courier write.
   recall          ResellerStoreActionMode @default(DIRECT)
-  /// Correct the consignee before the order is confirmed.
-  addressFix      ResellerStoreActionMode @default(DIRECT) @map("address_fix")
+  /// CHANGE THE ORDER (widened 2026-09-18, owner). Was "correct the
+  /// consignee before the order is confirmed"; it now covers everything a
+  /// store may change on its own order — the recipient, the products and
+  /// quantities, the retail inside its agreed range, the money the
+  /// customer pays. Deliberately the SAME column and the same default:
+  /// a second switch would be one more thing for a seller to find, and
+  /// the question ("may this store change its order, and do I see it
+  /// first?") is one question.
+  orderChange     ResellerStoreActionMode @default(DIRECT) @map("address_fix")
   /// Call off the order. Stores already hold `orders.cancel`, so DIRECT
   /// here is what they have today — this row must not quietly remove it.
   cancel          ResellerStoreActionMode @default(DIRECT)
@@ -9526,11 +9546,23 @@ model StoreAddressChangeRequest {
   /// record must outlive the person.
   requestedByStoreUserId String? @map("requested_by_store_user_id") @db.Uuid
 
-  /// Why the customer's details are wrong, in the store's words. Seller
-  /// staff read this before deciding.
+  /// Why the change is needed, in the store's words. Seller staff read
+  /// this before deciding.
   reason String @db.Text
 
-  /// The correction itself — only the fields the store sent.
+  /// THE WHOLE PROPOSED CHANGE (2026-09-18, owner), as the store sent it:
+  /// the validated, store-scoped `UpdateOrderDto` minus `reason`. The ten
+  /// recipient columns below are still written when the change carries
+  /// them — every existing reader (the seller's queue, `summarise`, the
+  /// notices) keeps working off those — but a change that also moves
+  /// products, quantities or the money cannot be expressed as columns
+  /// without one per DTO field, so the patch is the authority when it is
+  /// present. Applying re-runs the SAME validation a direct change does,
+  /// so a variant archived in the meantime is refused by name rather
+  /// than written.
+  patch Json?
+
+  /// The correction itself — only the recipient fields the store sent.
   recipientName          String? @map("recipient_name")
   recipientPhoneE164     String? @map("recipient_phone_e164")
   recipientAltPhoneE164  String? @map("recipient_alt_phone_e164")

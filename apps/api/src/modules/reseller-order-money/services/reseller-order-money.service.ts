@@ -39,7 +39,12 @@ import {
   planCredits,
   prepaidDebit,
   REARM_ON_PAYOUT_REASONS,
+  figureColumns,
+  figures,
+  figuresMoved,
+  type CodRates,
   type CreditAnchor,
+  type CreditFigures,
   type PartyCreditPlan,
 } from '../plan/reseller-money-plan';
 import { readResellerOrderSnapshot } from '../reseller-order-snapshot.read';
@@ -83,6 +88,27 @@ export interface ResellerOrderHead {
 }
 
 type CreditRow = Prisma.ResellerOrderCreditGetPayload<object>;
+
+/** What happened to ONE party's credit when the order was re-priced. */
+export interface RecalculatedParty {
+  readonly party: ResellerMoneyParty;
+  /**
+   * UNCHANGED — the edit did not move this party's money.
+   * REPLANNED  — nothing was written yet; the plan's figures were rewritten.
+   * RECREDITED — money HAD been written: it was taken back and written
+   *              again at the new figures (see `recalculateAfterEdit`).
+   */
+  readonly what: 'UNCHANGED' | 'REPLANNED' | 'RECREDITED';
+  readonly before: CreditFigures;
+  readonly after: CreditFigures;
+}
+
+export interface ResellerMoneyRecalculation {
+  readonly outcome: 'NOT_A_RESELLER_ORDER' | 'NOT_PLANNED_YET' | 'UNCHANGED' | 'REPLANNED';
+  readonly parties: readonly RecalculatedParty[];
+  /** A prepaid order's up-front debit, when the change moved it. */
+  readonly prepaid: { readonly beforeInr: string; readonly afterInr: string } | null;
+}
 
 export interface CourierReversalOutcome {
   readonly outcome: 'REVERSED' | 'NEVER_CREDITED' | 'ALREADY_REVERSED';
@@ -199,6 +225,10 @@ export class ResellerOrderMoneyService {
    * The COD rates are the seller's AT THAT MOMENT (usually confirmation) —
    * the snapshot principle: later edits never re-price an order. The
    * caller holds the seller's WALLET lock, so two callers cannot both plan.
+   *
+   * The rates are STAMPED onto the rows (2026-09-18) so a later
+   * recalculation re-prices only what the edit changed — see
+   * `ratesFor` and `recalculateAfterEdit`.
    */
   async ensurePlan(tx: Tx, orderId: string): Promise<CreditRow[]> {
     const existing = await tx.resellerOrderCredit.findMany({
@@ -208,21 +238,7 @@ export class ResellerOrderMoneyService {
     if (existing.length > 0) return existing;
     const snap = await readResellerOrderSnapshot(tx, orderId);
     if (snap === null) return [];
-    const rates = {
-      gstPercent: await this.sellerDecimal(tx, snap.sellerId, GST_KEY, DEFAULT_GST_PERCENT),
-      codFeePercent: await this.sellerDecimal(
-        tx,
-        snap.sellerId,
-        COLLECTION_FEE_KEY,
-        DEFAULT_COLLECTION_FEE_PERCENT,
-      ),
-      instantPayFeePercent: await this.sellerDecimal(
-        tx,
-        snap.sellerId,
-        INSTANT_FEE_KEY,
-        DEFAULT_INSTANT_FEE_PERCENT,
-      ),
-    };
+    const rates = await this.resolveRates(tx, snap.sellerId);
     const plan = planCredits({
       paymentMode: snap.paymentMode,
       codInr: snap.codAmountInr,
@@ -247,10 +263,68 @@ export class ResellerOrderMoneyService {
         codFeeShareInr: p.codFeeShareInr,
         instantFeeShareInr: p.instantFeeShareInr,
         netInr: p.netInr,
+        gstPercentAtPlan: rates.gstPercent,
+        codFeePercentAtPlan: rates.codFeePercent,
+        instantPayFeePercentAtPlan: rates.instantPayFeePercent,
       })),
       skipDuplicates: true,
     });
     return tx.resellerOrderCredit.findMany({ where: { orderId }, orderBy: { party: 'asc' } });
+  }
+
+  /** The seller's COD rates right now (SET-1). */
+  private async resolveRates(tx: Tx, sellerId: string): Promise<CodRates> {
+    return {
+      gstPercent: await this.sellerDecimal(tx, sellerId, GST_KEY, DEFAULT_GST_PERCENT),
+      codFeePercent: await this.sellerDecimal(
+        tx,
+        sellerId,
+        COLLECTION_FEE_KEY,
+        DEFAULT_COLLECTION_FEE_PERCENT,
+      ),
+      instantPayFeePercent: await this.sellerDecimal(
+        tx,
+        sellerId,
+        INSTANT_FEE_KEY,
+        DEFAULT_INSTANT_FEE_PERCENT,
+      ),
+    };
+  }
+
+  /**
+   * The rates a RECALCULATION must use: the ones stamped when the order
+   * was planned, not today's.
+   *
+   * A seller's COD fee percent is a live setting. Re-resolving it here
+   * would let a rate somebody changed last week move the money of an
+   * order placed before it — which is not what the edit asked for, and
+   * would be invisible in the before/after the store is shown. Rows
+   * planned before the stamp existed have nothing to read, so those fall
+   * back to today's; that is the honest best available answer and it is
+   * named in the audit row.
+   */
+  private async ratesFor(
+    tx: Tx,
+    sellerId: string,
+    rows: readonly CreditRow[],
+  ): Promise<{ rates: CodRates; fromPlan: boolean }> {
+    const stamped = rows.find((r) => r.gstPercentAtPlan !== null);
+    if (
+      stamped !== undefined &&
+      stamped.gstPercentAtPlan !== null &&
+      stamped.codFeePercentAtPlan !== null &&
+      stamped.instantPayFeePercentAtPlan !== null
+    ) {
+      return {
+        rates: {
+          gstPercent: stamped.gstPercentAtPlan,
+          codFeePercent: stamped.codFeePercentAtPlan,
+          instantPayFeePercent: stamped.instantPayFeePercentAtPlan,
+        },
+        fromPlan: true,
+      };
+    }
+    return { rates: await this.resolveRates(tx, sellerId), fromPlan: false };
   }
 
   private async sellerDecimal(
@@ -746,6 +820,267 @@ export class ResellerOrderMoneyService {
       note: `Prepaid order ${head.orderNumber} refunded — ${why}`,
     });
     return true;
+  }
+
+  // ── The order CHANGED (owner, 2026-09-18) ──────────────────────────
+
+  /**
+   * An edit that would move money is refused BEFORE it is written when
+   * the money can no longer follow it. Called by `OrderService.edit`
+   * outside its transaction, for a reseller order only.
+   *
+   * The one case: the PAYMENT MODE, once the credits are planned. COD and
+   * PREPAID are not two amounts of the same thing — they are different
+   * rows (a COD order has a STORE credit, a prepaid one does not), a
+   * different debit (the store pays for a prepaid order up front) and a
+   * different set of deductions. Turning one into the other after the
+   * plan exists means inventing a party's credit with no anchor to arm it
+   * from and guessing whether a debit already taken should come back. We
+   * do not guess: the order is called off and placed again, which is two
+   * clicks and leaves a correct ledger.
+   */
+  async assertEditKeepsMoneyCorrectable(
+    orderId: string,
+    next: { readonly paymentMode?: PaymentMode | undefined },
+  ): Promise<void> {
+    if (next.paymentMode === undefined) return;
+    const head = await this.head(this.prisma.client, orderId);
+    if (head === null || head.paymentMode === next.paymentMode) return;
+    const planned = await this.prisma.client.resellerOrderCredit.count({ where: { orderId } });
+    if (planned === 0) return;
+    throw new ConflictException({
+      code: 'RESELLER_PAYMENT_MODE_LOCKED',
+      message:
+        `Order ${head.orderNumber} is already priced as ` +
+        `${head.paymentMode === PaymentMode.COD ? 'cash on delivery' : 'prepaid'}, and the store’s ` +
+        'money has been worked out from that. Changing how it is paid for now would leave a credit ' +
+        'nobody can work out. Call this order off and place it again the other way.',
+    });
+  }
+
+  /**
+   * Re-price a reseller order after seller staff — or the store — changed
+   * it (owner, 2026-09-18). Post-commit; the order row already carries the
+   * new contents.
+   *
+   * ── WHICH TERMS ──────────────────────────────────────────────────────
+   * The ones SNAPSHOTTED ON THE ORDER (ORD-6 / RS-4): the six fee shares,
+   * both credit timings and the per-line transfer price as placed, read
+   * back by `readResellerOrderSnapshot`. Never the store's current live
+   * terms or price list — re-pointing an existing order at newer terms
+   * would change a deal neither side agreed for it. The seller's COD
+   * rates likewise come from the plan's own stamp (`ratesFor`).
+   *
+   * ── WHAT HAPPENS TO MONEY ALREADY POSTED ─────────────────────────────
+   * A credit row in any state EXCEPT `CREDITED` has written nothing to a
+   * wallet: its figures are a plan, and a guarded `updateMany` on the
+   * status it was read in rewrites them. That covers WAITING, DUE,
+   * SKIPPED and REVERSED — the last two matter because a later courier
+   * payout can re-arm them (`REARM_ON_PAYOUT_REASONS`), and a stale
+   * figure there would credit the OLD amount weeks later.
+   *
+   * A `CREDITED` row HAS moved money. It is not patched with a signed
+   * difference across five directions — it is TAKEN BACK through the
+   * exact reversal path a return uses (every deduction refunded, the cash
+   * returned to capital, `cashTakenOnReversal`) and then WRITTEN AGAIN at
+   * the new figures. The net movement is the difference; what the ledger
+   * shows is two legible entries — "taken back because the order changed"
+   * and the new credit — which is what somebody arguing about this in a
+   * month needs to see. Both halves are operations whose cash rules
+   * already keep TRE-8c true, so the invariant holds after each step
+   * rather than only at the end.
+   *
+   * A PREPAID order's up-front debit follows the same shape: refunded and
+   * retaken when the transfer total moved, and refused before anything is
+   * written if the store's wallet cannot carry the bigger one.
+   *
+   * ONE transaction, under the seller's WALLET lock (the seller and all
+   * their stores serialise together), so nothing else credits, reverses or
+   * pays out between the reversal and the re-credit.
+   */
+  async recalculateAfterEdit(
+    orderId: string,
+    input: { readonly reason: string },
+  ): Promise<ResellerMoneyRecalculation> {
+    const head = await this.head(this.prisma.client, orderId);
+    if (head === null) return { outcome: 'NOT_A_RESELLER_ORDER', parties: [], prepaid: null };
+
+    const result = await this.prisma.client.$transaction(async (tx) => {
+      await this.lock(tx, head.sellerId);
+      const rows = await tx.resellerOrderCredit.findMany({
+        where: { orderId },
+        orderBy: { party: 'asc' },
+      });
+      if (rows.length === 0) {
+        // Nothing has been planned, so nothing is stale: the plan is made
+        // at confirmation and will read the order as it now stands.
+        return { outcome: 'NOT_PLANNED_YET' as const, parties: [], prepaid: null };
+      }
+      const snap = await readResellerOrderSnapshot(tx, orderId);
+      if (snap === null) return { outcome: 'NOT_PLANNED_YET' as const, parties: [], prepaid: null };
+
+      const { rates, fromPlan } = await this.ratesFor(tx, head.sellerId, rows);
+      const plan = planCredits({
+        paymentMode: snap.paymentMode,
+        codInr: snap.codAmountInr,
+        transferTotalInr: snap.transferTotalInr,
+        storePercents: snap.storePercents,
+        storeCredit: snap.storeCredit,
+        sellerCredit: snap.sellerCredit,
+        rates,
+      });
+      const planned = new Map<ResellerMoneyParty, PartyCreditPlan>();
+      if (plan.store !== null) planned.set(ResellerMoneyParty.STORE, plan.store);
+      planned.set(ResellerMoneyParty.SELLER, plan.seller);
+
+      const now = new Date();
+      const parties: RecalculatedParty[] = [];
+      for (const row of rows) {
+        const next = planned.get(row.party);
+        if (next === undefined) {
+          // Unreachable: a payment-mode change is refused before the edit
+          // (`assertEditKeepsMoneyCorrectable`), and nothing else removes
+          // a party. Left as a named refusal rather than a silent skip —
+          // a credit with no plan behind it must stop a person, not be
+          // quietly abandoned.
+          throw new ConflictException({
+            code: 'RESELLER_CREDIT_HAS_NO_PLAN',
+            message:
+              `The ${row.party.toLowerCase()}’s credit on order ${head.orderNumber} no longer has ` +
+              'a plan behind it, so this change cannot be priced. Nothing was changed.',
+          });
+        }
+        if (!figuresMoved(row, next)) {
+          parties.push({
+            party: row.party,
+            what: 'UNCHANGED',
+            before: figures(row),
+            after: figures(row),
+          });
+          continue;
+        }
+        const before = figures(row);
+        if (row.status === ResellerCreditStatus.CREDITED) {
+          await this.reverseCreditedWithTake(tx, head, [row], input.reason);
+          const rewritten = await tx.resellerOrderCredit.updateMany({
+            where: { id: row.id, status: ResellerCreditStatus.REVERSED },
+            data: {
+              ...figureColumns(next),
+              status: ResellerCreditStatus.DUE,
+              dueAt: now,
+              skippedReason: null,
+              timesRepriced: { increment: 1 },
+            },
+          });
+          if (rewritten.count === 0) {
+            // Something else moved the row between the reversal and here,
+            // inside our own lock — impossible today, and a silent skip
+            // would leave a reversed credit nobody re-writes.
+            throw new ConflictException({
+              code: 'RESELLER_CREDIT_MOVED',
+              message: `The ${row.party.toLowerCase()}’s credit on order ${head.orderNumber} changed while it was being re-priced.`,
+            });
+          }
+          await this.executeRow(tx, row.id, now, null);
+          parties.push({ party: row.party, what: 'RECREDITED', before, after: figures(next) });
+          continue;
+        }
+        // Nothing written for this party yet: the row IS the plan.
+        await tx.resellerOrderCredit.updateMany({
+          where: { id: row.id, status: row.status },
+          data: { ...figureColumns(next), timesRepriced: { increment: 1 } },
+        });
+        parties.push({ party: row.party, what: 'REPLANNED', before, after: figures(next) });
+      }
+
+      const prepaid = await this.repricePrepaidDebit(tx, head, input.reason);
+
+      const moved = parties.some((p) => p.what !== 'UNCHANGED') || prepaid !== null;
+      if (moved) {
+        await this.audit.log(
+          {
+            actorType: ActorType.SYSTEM,
+            actorId: null,
+            sellerId: head.sellerId,
+            action: 'reseller_order.money_recalculated',
+            entityType: 'order',
+            entityId: orderId,
+            severity: 'MEDIUM',
+            metadata: {
+              storeId: head.storeId,
+              orderNumber: head.orderNumber,
+              reason: input.reason,
+              ratesFromPlan: fromPlan,
+              parties: parties.map((p) => ({
+                party: p.party,
+                what: p.what,
+                beforeNetInr: p.before.netInr,
+                afterNetInr: p.after.netInr,
+              })),
+              ...(prepaid === null ? {} : { prepaid }),
+            },
+          },
+          tx,
+        );
+      }
+      return {
+        outcome: moved ? ('REPLANNED' as const) : ('UNCHANGED' as const),
+        parties,
+        prepaid,
+      };
+    }, RESELLER_MONEY_TX_OPTIONS);
+
+    if (result.outcome === 'REPLANNED') {
+      await this.afterCommit(head.sellerId, 'reseller-order-repriced');
+    }
+    return result;
+  }
+
+  /**
+   * A prepaid order's up-front debit, after its transfer total moved.
+   * Refund what was taken and take the new figure — never a signed patch,
+   * for the same reason a credit is reversed and re-written. Returns what
+   * changed, or null when nothing was owed differently.
+   */
+  private async repricePrepaidDebit(
+    tx: Tx,
+    head: ResellerOrderHead,
+    reason: string,
+  ): Promise<{ readonly beforeInr: string; readonly afterInr: string } | null> {
+    if (head.paymentMode !== PaymentMode.PREPAID) return null;
+    const taken = await this.latestUnreturnedStore(
+      tx,
+      head.id,
+      StoreWalletEntryDirection.PREPAID_DEBIT,
+      StoreWalletEntryDirection.PREPAID_REFUND,
+      null,
+    );
+    if (taken === null) return null;
+    const seller = await tx.resellerOrderCredit.findFirst({
+      where: { orderId: head.id, party: ResellerMoneyParty.SELLER },
+    });
+    if (seller === null || seller.grossInr.equals(taken.amount)) return null;
+    const extra = seller.grossInr.sub(taken.amount);
+    if (extra.greaterThan(0)) {
+      const can = await this.storeWallet.storeCanSpend(tx, {
+        storeId: head.storeId,
+        sellerId: head.sellerId,
+        amount: extra,
+      });
+      if (!can.allowed) {
+        throw new ConflictException({
+          code: 'STORE_BALANCE_INSUFFICIENT',
+          message:
+            `This change makes prepaid order ${head.orderNumber} cost the store ₹${extra.toFixed(2)} more, ` +
+            `and its wallet holds ₹${can.balanceInr} with ₹${can.limitInr} of room below zero. ` +
+            'Top the store up, or make the change smaller. Nothing was changed.',
+          details: { requiredInr: extra.toFixed(2), balanceInr: can.balanceInr },
+        });
+      }
+    }
+    await this.refundPrepaidDebit(tx, head, reason);
+    await this.takePrepaidDebit(tx, head, seller);
+    return { beforeInr: taken.amount.toFixed(2), afterInr: seller.grossInr.toFixed(2) };
   }
 
   // ── Lifecycle events ───────────────────────────────────────────────

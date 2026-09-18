@@ -30,7 +30,7 @@ function make(mode: ResellerStoreActionMode) {
   const orders = { edit: jest.fn().mockResolvedValue({ id: 'order-1' }) };
   const storeOrders = { detail: jest.fn().mockResolvedValue({ id: 'order-1' }) };
   const policies = {
-    forStore: jest.fn().mockResolvedValue({ storeId: 'store-1', addressFix: mode }),
+    forStore: jest.fn().mockResolvedValue({ storeId: 'store-1', orderChange: mode }),
   };
   const holds = {
     hold: jest.fn().mockResolvedValue({ id: 'req-1', status: 'PENDING' }),
@@ -50,11 +50,12 @@ function make(mode: ResellerStoreActionMode) {
   };
 }
 
-describe('a store correcting its own order’s address (2026-09-16)', () => {
+describe('a store changing its own order (2026-09-16, widened 2026-09-18)', () => {
   it('DIRECT edits through the SELLER’s edit path, scoped to the store', async () => {
     // Reusing `OrderService.edit` is the point: the store inherits the
-    // DRAFT/PENDING gate, address revalidation and EDIT_DURING_CALL
-    // rather than a second implementation that would drift from them.
+    // stage gate, the courier route, address revalidation, the money
+    // recalculation and the notice to the seller — rather than a second
+    // implementation that would drift from all of them.
     const { svc, orders, storeOrders, holds } = make(ResellerStoreActionMode.DIRECT);
     const out = await svc.editRecipient(INPUT);
     const call = orders.edit.mock.calls[0]!;
@@ -69,10 +70,9 @@ describe('a store correcting its own order’s address (2026-09-16)', () => {
   });
 
   it('never lets `reason` reach the order — `edit` refuses unknown keys BY NAME', async () => {
-    // `OrderService.edit` rejects every key outside STORE_EDITABLE_KEYS
-    // with STORE_EDIT_RECIPIENT_ONLY, which is correct and is exactly
-    // why the reason — which belongs to the REQUEST, not the order —
-    // has to be stripped before the patch gets there.
+    // `reason` belongs to the REQUEST, not the order: `edit` does not
+    // know the key and `forbidNonWhitelisted` would reject the whole
+    // call, so it has to come off before the patch gets there.
     const { svc, orders } = make(ResellerStoreActionMode.DIRECT);
     await svc.editRecipient(WITH_REASON);
     expect(orders.edit.mock.calls[0]![2]).toEqual({ recipientAddressLine1: '12 MG Road' });
@@ -114,8 +114,38 @@ describe('a store correcting its own order’s address (2026-09-16)', () => {
       sellerId: 'seller-1',
       orderId: 'order-1',
       fields: { recipientAddressLine1: '12 MG Road' },
+      // 2026-09-18: the WHOLE proposed change travels with it, so
+      // approving applies exactly what seller staff were shown.
+      patch: { recipientAddressLine1: '12 MG Road' },
     });
     expect(orders.edit).not.toHaveBeenCalled();
+  });
+
+  it('holds a change that moves the PRODUCTS too, not a recipient-shaped subset', async () => {
+    // The widened capability is why the request grew a patch column: a
+    // change that also moves quantities cannot be expressed as recipient
+    // columns, and a hold that dropped them would apply half of what the
+    // store asked for.
+    const { svc, holds } = make(ResellerStoreActionMode.ASK_SELLER);
+    await svc.editRecipient({
+      ...INPUT,
+      patch: {
+        recipientAddressLine1: '12 MG Road',
+        items: [{ variantId: 'v1', quantity: 3, unitPriceInr: 700 }],
+        codAmountInr: 2100,
+        reason: 'Customer asked for a third one on the phone',
+      } as never,
+    });
+    expect(holds.hold.mock.calls[0]![0]).toMatchObject({
+      fields: { recipientAddressLine1: '12 MG Road' },
+      patch: {
+        recipientAddressLine1: '12 MG Road',
+        items: [{ variantId: 'v1', quantity: 3, unitPriceInr: 700 }],
+        codAmountInr: 2100,
+      },
+    });
+    // `reason` is the request's, never the order's.
+    expect(holds.hold.mock.calls[0]![0].patch).not.toHaveProperty('reason');
   });
 
   it('the mode travels with the list, so the portal can render honestly', async () => {
