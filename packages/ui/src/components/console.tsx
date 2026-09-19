@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import type { ReactElement, ReactNode } from 'react';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
 
 /**
  * CONSOLE CHROME — the motifs the PRECISION LOGISTICS comps lean on.
@@ -42,11 +42,11 @@ export type Crumb = {
  * this module has no reason to pull the shell in; the shape is the
  * caller's `next/link`, and the package still takes no Next dependency.
  */
-export type CrumbLink = (props: {
+export type CrumbLink = ComponentType<{
   href: string;
   className: string;
   children: ReactNode;
-}) => ReactElement;
+}>;
 
 export function Crumbs({
   items,
