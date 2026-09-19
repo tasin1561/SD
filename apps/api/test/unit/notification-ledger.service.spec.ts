@@ -105,12 +105,24 @@ function makeSut(opts: { simulateUVOnSecondCreate?: boolean } = {}) {
   };
 }
 
+/**
+ * A seller template that still EMAILS.
+ *
+ * Was `seller.order_dispatched.email` until 2026-09-20, when that one's
+ * email leg was retired in favour of the inbox — after which every case
+ * below came back RETIRED and stopped exercising the dedup gate, the
+ * enqueue and the error path they exist for. This suite is about the
+ * ledger's mechanics, so it wants a template whose mechanics still run;
+ * the retirement itself is covered by its own case at the bottom.
+ */
+const LIVE_SELLER_TEMPLATE = 'seller.order_cancelled.email';
+
 const BASE_INPUT = {
   eventId: 'order_status:order-1:CONFIRMED:DISPATCHED',
   recipientType: NotificationRecipientType.SELLER,
   recipientId: 'seller-uuid-1',
   channel: NotificationChannel.EMAIL,
-  templateCode: 'seller.order_dispatched.email',
+  templateCode: LIVE_SELLER_TEMPLATE,
   locale: 'en',
   toEmail: 'seller@example.com',
   variables: { order_number: 'SD-2026-01-000001' },
@@ -177,7 +189,7 @@ describe('NotificationLedgerService', () => {
         ...BASE_INPUT,
         recipientType: NotificationRecipientType.SELLER,
         recipientId: 'seller-1',
-        templateCode: 'seller.order_dispatched.email',
+        templateCode: LIVE_SELLER_TEMPLATE,
       });
       const customerRes = await svc.enqueue({
         ...BASE_INPUT,
@@ -265,6 +277,37 @@ describe('NotificationLedgerService', () => {
 
       await expect(svc.enqueue(BASE_INPUT)).rejects.toThrow(/unexpected db kaboom/);
       expect((emailQueue.enqueue as jest.Mock).mock.calls).toHaveLength(0);
+    });
+  });
+
+  describe('a retired email leg (owner, 2026-09-20)', () => {
+    it('writes NO row and enqueues nothing — the inbox carries it now', async () => {
+      // BEFORE the row, deliberately. A row written for a send that can
+      // never happen sits QUEUED for ever, and NOTIF-22's watchdog would
+      // find it, re-queue it once, then report a HIGH `email-undelivered`
+      // issue about a message nobody meant to send.
+      const { svc, store, enqueued } = makeSut();
+
+      const res = await svc.enqueue({
+        ...BASE_INPUT,
+        templateCode: 'seller.order_dispatched.email',
+      });
+
+      expect(res.kind).toBe('RETIRED');
+      expect(store.rows).toHaveLength(0);
+      expect(enqueued).toHaveLength(0);
+    });
+
+    it('still sends a template that was NOT retired', async () => {
+      // The other half: the gate is keyed on the template code, so a
+      // message nobody retired has to be untouched by it.
+      const { svc, store, enqueued } = makeSut();
+
+      const res = await svc.enqueue(BASE_INPUT);
+
+      expect(res.kind).toBe('ENQUEUED');
+      expect(store.rows).toHaveLength(1);
+      expect(enqueued).toHaveLength(1);
     });
   });
 });

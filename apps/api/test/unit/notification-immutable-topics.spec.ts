@@ -21,11 +21,32 @@ import { STORE_REQUEST_REMINDER_TOPIC } from '../../src/modules/store-order-requ
 describe('IMMUTABLE_TOPICS (2026-09-18)', () => {
   const policy = new NotificationPolicyService();
 
-  it('names exactly the 24-hour reminder, with its reason', () => {
-    // If this list grows, somebody has decided a second thing may not be
-    // silenced. That is a decision, and it should be made here.
-    expect([...IMMUTABLE_TOPICS.keys()]).toEqual([STORE_REQUEST_REMINDER_TOPIC]);
+  it('names exactly ONE seller topic — the 24-hour reminder — with its reason', () => {
+    // If a SECOND seller topic appears here, somebody has decided
+    // another thing may not be silenced. That is a decision, and it
+    // should be made here.
+    //
+    // The store's own unsilenceable kinds joined the map on 2026-09-19
+    // (the owner's three: the answer to something the store asked,
+    // anything about its money, and a change to one of its orders) and
+    // are pinned BY NAME in `notification-topic-catalog.service.spec.ts`
+    // against what `forSubject(STORE_USER)` serves. Asserting the whole
+    // map here as well would mean two lists to keep in step, so this
+    // one keeps the half it is about: the seller's.
+    const sellerSide = [...IMMUTABLE_TOPICS.keys()].filter((t) => !t.startsWith('store.'));
+    expect(sellerSide).toEqual([STORE_REQUEST_REMINDER_TOPIC]);
     expect(IMMUTABLE_TOPICS.get(STORE_REQUEST_REMINDER_TOPIC)).toContain('waiting a day');
+  });
+
+  it('every locked topic says WHY, in words a person can read', () => {
+    // A switch that always refuses teaches people to ignore refusals,
+    // so the reason travels with the lock for BOTH the API's refusal and
+    // the screen that renders it (FE-2).
+    for (const [topic, reason] of IMMUTABLE_TOPICS) {
+      expect(typeof reason).toBe('string');
+      expect(reason.length).toBeGreaterThan(40);
+      expect(policy.topicImmutableReason(topic)).toBe(reason);
+    }
   });
 
   it('the other three store topics stay mutable', () => {

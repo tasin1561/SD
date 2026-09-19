@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   InviteLeadStatus,
+  NotificationCategory,
+  NotificationChannel,
   NotificationRecipientType,
   Prisma,
   ShippingDirection,
@@ -11,6 +13,20 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ActorType } from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
 import { EmailQueue } from '../../email/queue/email.queue';
+import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
+
+/**
+ * The in-app topic the new-lead alert is carried on since 2026-09-20,
+ * when its email leg was retired (`RETIRED_EMAIL_TEMPLATES`).
+ *
+ * Addressed by `leads.view` — the permission that OPENS the leads page
+ * — rather than by the SUPER_ADMIN role the email used. A notification
+ * pointing at a page the reader cannot open is a dead end (NOTIF-16),
+ * and a role is a row an admin can rename while a permission is the
+ * durable fact about what somebody does (NOTIF-10).
+ */
+export const INVITE_LEAD_TOPIC = 'staff.invite_lead';
+const LEADS_VIEW_PERMISSION = 'leads.view';
 
 /**
  * People asking to be let into the beta.
@@ -115,6 +131,7 @@ export class InviteLeadService {
     private readonly audit: AuditLogService,
     private readonly email: EmailQueue,
     private readonly env: EnvService,
+    private readonly dispatch: NotificationDispatchService,
   ) {}
 
   /**
@@ -279,6 +296,32 @@ export class InviteLeadService {
         this.logger.error(
           { leadId, err: (e as Error).message },
           'Could not queue the requester acknowledgement; the lead IS stored',
+        );
+      }
+
+      // The alert itself, in the inbox of everybody who can work the
+      // queue (NOTIF-14/NOTIF-16). This is the channel the message now
+      // arrives on; the loop below still runs because an OVERRIDE
+      // address is a mailbox with no account and therefore no inbox —
+      // `EmailQueue` withholds the mail from the staff recipients that
+      // do have one and lets the ad-hoc address through.
+      try {
+        await this.dispatch.dispatch({
+          topic: INVITE_LEAD_TOPIC,
+          category: NotificationCategory.OPERATIONAL,
+          title: 'A new invite request',
+          body:
+            `${lead.fullName}${lead.companyName === '' ? '' : ` (${lead.companyName})`} ` +
+            'asked to be let into the beta.',
+          channels: [NotificationChannel.IN_APP],
+          audience: [{ kind: 'STAFF_PERMISSION', permission: LEADS_VIEW_PERMISSION }],
+          triggerEvent: 'marketing.invite_lead.created',
+          eventId: `invite_lead:${leadId}`,
+        });
+      } catch (e) {
+        this.logger.error(
+          { leadId, err: (e as Error).message },
+          'Could not put the invite-lead alert in anybody’s inbox; the lead IS stored',
         );
       }
 

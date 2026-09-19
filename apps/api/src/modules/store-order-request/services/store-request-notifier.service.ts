@@ -13,7 +13,7 @@ export const STORE_CUSTOMER_CHANGED_BY_SELLER_TEMPLATE = 'store.customer_changed
 export const STORE_ORDER_CHANGED_BY_ADMIN_TEMPLATE = 'store.order_changed_by_admin.email';
 
 /**
- * The STORE-side in-app topics the same five messages carry since
+ * The STORE-side in-app topics the same six messages carry since
  * 2026-09-19 — each the email's code without `.email` (NOTIF-14).
  */
 export const STORE_REQUEST_APPROVED_TOPIC = 'store.request_approved';
@@ -21,6 +21,13 @@ export const STORE_REQUEST_REJECTED_TOPIC = 'store.request_rejected';
 export const STORE_REQUEST_EXPIRED_TOPIC = 'store.request_expired';
 export const STORE_ORDER_CHANGED_BY_SELLER_TOPIC = 'store.order_changed_by_seller';
 export const STORE_CUSTOMER_CHANGED_BY_SELLER_TOPIC = 'store.customer_changed_by_seller';
+/**
+ * SKYDROP changed the order's money through god mode. It reaches the
+ * store on BOTH channels like the other five: it is a change to one of
+ * its orders AND about its money, which is two of the owner's three
+ * unsilenceable kinds, so `IMMUTABLE_TOPICS` locks it.
+ */
+export const STORE_ORDER_CHANGED_BY_ADMIN_TOPIC = 'store.order_changed_by_admin';
 
 /**
  * The seller-side topics this notifier sends (NOTIF-17 — pinned against
@@ -371,9 +378,16 @@ export class StoreRequestNotifier {
     changes: string;
     money: string;
   }): Promise<void> {
-    await this.emailStore(input.storeId, input.eventKey, {
-      eventId: `store_order_changed_by_admin:${input.eventKey}`,
+    await this.tellStore({
+      storeId: input.storeId,
+      ref: input.eventKey,
+      topic: STORE_ORDER_CHANGED_BY_ADMIN_TOPIC,
       templateCode: STORE_ORDER_CHANGED_BY_ADMIN_TEMPLATE,
+      eventId: `store_order_changed_by_admin:${input.eventKey}`,
+      title: `Skydrop changed order ${input.orderNumber}`,
+      body:
+        `Skydrop changed order ${input.orderNumber} directly. What moved:\n${input.changes}` +
+        (input.money === '' ? '' : `\n\n${input.money}`),
       orderId: input.orderId,
       triggerEvent: 'reseller_store.order_changed_by_admin',
       variables: {

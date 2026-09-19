@@ -11,7 +11,16 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
 import { EnvService } from '../../../config/env.service';
-import { NotificationChannel, NotificationRecipientType } from '@skydrop/db';
+import { NotificationCategory, NotificationChannel, NotificationRecipientType } from '@skydrop/db';
+import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
+
+/**
+ * The in-app topic the needs-attention alert is carried on since
+ * 2026-09-20, when its email leg was retired
+ * (`RETIRED_EMAIL_TEMPLATES`). Addressed by `orders.view` — the people
+ * who can open the order it is about.
+ */
+export const ORDER_NEEDS_ATTENTION_TOPIC = 'seller.order_needs_attention';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -204,6 +213,12 @@ export class OrderAttentionService {
     // The order WRITE facade — only to re-provision a confirmed order's
     // missing shipment through the same post-commit path (idempotent).
     private readonly orderWrite: OrderWriteService,
+    // The needs-attention alert's inbox leg (NOTIF-14). APPENDED, not
+    // slotted in beside the ledger it belongs with: the unit specs build
+    // this service positionally, so inserting an argument in the middle
+    // silently shifts every dependency after it — which presents as
+    // `this.issues.raise is not a function`, nowhere near the change.
+    private readonly dispatch: NotificationDispatchService,
   ) {}
 
   /**
@@ -1296,6 +1311,31 @@ export class OrderAttentionService {
     });
     if (order === null) return;
     const ship = order.orderShipments[0]?.shipment ?? null;
+
+    // The inbox leg — the channel this alert arrives on now. Its key
+    // carries the day for exactly the reason the email's does.
+    try {
+      await this.dispatch.dispatch({
+        topic: ORDER_NEEDS_ATTENTION_TOPIC,
+        category: NotificationCategory.OPERATIONAL,
+        title: `${order.orderNumber} needs attention`,
+        body:
+          `${OrderAttentionService.dayPhrase(day)} — ${order.orderNumber} to ` +
+          `${order.recipientName} has not moved and needs somebody to look at it.`,
+        channels: [NotificationChannel.IN_APP],
+        audience: [
+          { kind: 'SELLER_PERMISSION', sellerId: order.sellerId, permission: 'orders.view' },
+        ],
+        triggerEvent: `order.nsa_raised.day_${day}`,
+        orderId,
+        eventId: `nsa:${orderId}:${day}:inapp`,
+      });
+    } catch (err) {
+      this.logger.warn(
+        { orderId, day, err: err instanceof Error ? err.message : err },
+        'Could not put the needs-attention alert in anybody’s inbox',
+      );
+    }
 
     await this.ledger.enqueue({
       // The day is part of the key on purpose: two sweeps on one

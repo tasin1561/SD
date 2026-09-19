@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { EmailModule } from '../email/email.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { SettingsModule } from '../settings/settings.module';
 import { WarehouseResolverService } from './warehouse-resolver.service';
 import { StockMutationService } from './stock-mutation.service';
@@ -42,12 +43,14 @@ import { BinPolicyService } from './bin-policy.service';
  *    stock_unit_events. WRAPS the aggregate layer inside the caller's tx;
  *    stock_levels.qtyOnHand stays authoritative (INV-1/INV-3 untouched).
  *
- * Imports CatalogReadModule + EmailModule solely for StockAlertService
- * (variant lookup + the low-stock email). Neither imports any inventory
- * module, so there is no cycle.
+ * Imports CatalogReadModule + EmailModule + NotificationAudienceModule
+ * solely for StockAlertService (variant lookup, and the low-stock alert's
+ * two legs). None of them imports any inventory module, so there is no
+ * cycle — the audience module reaches only auth-common, email and the
+ * notification ledger.
  */
 @Module({
-  imports: [CatalogReadModule, EmailModule, SettingsModule],
+  imports: [CatalogReadModule, EmailModule, SettingsModule, NotificationAudienceModule],
   providers: [
     WarehouseResolverService,
     StockMutationService,

@@ -214,7 +214,9 @@ describe('planTicketNotification', () => {
       },
       TICKET,
     );
-    expect(plan).toEqual({ seller: null, staff: null });
+    // `store` joined the plan on 2026-09-19 (RS-7 gained an inbox), so
+    // "tells nobody" is now all THREE sides being null.
+    expect(plan).toEqual({ seller: null, staff: null, store: null });
   });
 
   it('files a ticket under the email category it is about (F2)', () => {

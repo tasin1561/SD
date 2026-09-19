@@ -121,6 +121,11 @@ export const IMMUTABLE_TOPICS: ReadonlyMap<string, string> = new Map([
       'who it goes to. Silenced, the store finds out from the customer.',
   ],
   [
+    'store.order_changed_by_admin',
+    'Skydrop changed one of YOUR orders directly — what the customer pays, or how they pay. ' +
+      'Neither you nor the seller made the change, so nobody else is going to mention it.',
+  ],
+  [
     'store.ticket_resolved',
     'A settled dispute moves money between your store and the seller, and your wallet is ' +
       'the only other place it shows. Silenced, a balance changes with nothing to say why.',

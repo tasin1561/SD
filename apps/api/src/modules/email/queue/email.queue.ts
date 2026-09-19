@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Queue, type JobsOptions } from 'bullmq';
+import { emailRetired } from '../../../common/notifications/retired-email-templates';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import type { EmailDispatchInput } from '../email.types';
 
@@ -32,8 +33,40 @@ export class EmailQueue implements OnModuleInit, OnModuleDestroy {
     if (this.queue) await this.queue.close();
   }
 
-  /** Enqueues an email send job. Returns the BullMQ job id. */
+  /**
+   * Enqueues an email send job. Returns the BullMQ job id, or the empty
+   * string when the template's email leg has been retired.
+   *
+   * THE BACKSTOP for `RETIRED_EMAIL_TEMPLATES` (owner, 2026-09-20).
+   * Every email in the estate passes through here — the NOTIF-4
+   * lifecycle fan-out, the audience dispatcher, and the dozen pre-M11
+   * callers that hold an `EmailQueue` of their own — so this is the one
+   * place that can promise a retired template is never sent, whoever
+   * asks. The ledger gate upstream is what stops a row being written for
+   * a send that will not happen; this is what stops the send itself.
+   *
+   * Callers that create their notification_logs row inside the send (the
+   * pre-M11 CREATE path) leave no trace when this refuses, which is
+   * correct: nothing was attempted.
+   */
   async enqueue(input: EmailDispatchInput, opts?: JobsOptions): Promise<string> {
+    // ONLY withheld from somebody who HAS an inbox to read it in.
+    //
+    // An `id` of null is an ad-hoc address — a shared mailbox an
+    // operator pointed a setting at, not an account. There is no inbox
+    // behind it, so withholding the mail would not move the message to
+    // another channel, it would delete it. The live case is
+    // `marketing.lead_notification_email`: empty by default (every
+    // SUPER_ADMIN, all of whom have inboxes), and set to something like
+    // sales@ when one team should own the queue.
+    const hasInbox = input.recipient.id !== null && input.recipient.id !== undefined;
+    if (hasInbox && emailRetired(input.templateCode)) {
+      this.logger.debug(
+        { templateCode: input.templateCode },
+        'Email leg retired in favour of the inbox; not enqueued',
+      );
+      return '';
+    }
     const job = await this.queue.add(EMAIL_JOB_NAME, input, opts);
     return String(job.id);
   }

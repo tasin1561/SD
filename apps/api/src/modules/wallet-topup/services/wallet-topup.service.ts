@@ -25,6 +25,15 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { EmailQueue } from '../../email/queue/email.queue';
+import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
+import { NotificationCategory, NotificationChannel } from '@skydrop/db';
+
+/**
+ * The in-app topic the top-up acknowledgement is carried on since
+ * 2026-09-20, when its email leg was retired
+ * (`RETIRED_EMAIL_TEMPLATES`).
+ */
+export const TOPUP_SUBMITTED_TOPIC = 'seller.topup_submitted';
 import { FxRateService } from '../../fx/services/fx-rate.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
@@ -115,6 +124,9 @@ export class WalletTopupService {
     private readonly email: EmailQueue,
     private readonly bank: BankLedgerService,
     private readonly attribution: SellerCashAttributionService,
+    // The acknowledgement's inbox leg (NOTIF-14). APPENDED so the unit
+    // specs that build this service positionally keep their wiring.
+    private readonly dispatch: NotificationDispatchService,
   ) {}
 
   private readonly logger = new Logger(WalletTopupService.name);
@@ -293,11 +305,34 @@ export class WalletTopupService {
       },
     });
 
+    const amountLabel = `${bank.currency} ${amount.toFixed(2)}`;
     await this.notifySeller(sellerId, 'seller.topup_submitted.email', {
-      amount: `${bank.currency} ${amount.toFixed(2)}`,
+      amount: amountLabel,
       bank_label: bank.label,
       reference: ref.length > 0 ? ref : 'receipt uploaded',
     });
+    // The inbox leg — the channel this acknowledgement arrives on since
+    // 2026-09-20 (`RETIRED_EMAIL_TEMPLATES`). `wallet.view` rather than
+    // `wallet.topup`: the person who filed it already knows, and the
+    // people who need to see money arriving are whoever watches the
+    // wallet.
+    try {
+      await this.dispatch.dispatch({
+        topic: TOPUP_SUBMITTED_TOPIC,
+        category: NotificationCategory.OPERATIONAL,
+        title: 'Top-up submitted',
+        body: `${amountLabel} was declared against ${bank.label}. We credit it once we see it in the bank.`,
+        channels: [NotificationChannel.IN_APP],
+        audience: [{ kind: 'SELLER_PERMISSION', sellerId, permission: 'wallet.view' }],
+        triggerEvent: 'seller.topup_submitted',
+        eventId: `topup_submitted:${row.id}`,
+      });
+    } catch (e) {
+      this.logger.warn(
+        { sellerId, err: (e as Error).message },
+        'Could not put the top-up acknowledgement in anybody’s inbox',
+      );
+    }
 
     return this.toView(row, bank);
   }
