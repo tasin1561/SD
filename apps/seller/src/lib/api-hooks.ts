@@ -869,9 +869,12 @@ export function useStockList(query: ListSellerStockQuery): UseQueryResult<Seller
   });
 }
 
-export function useStockSummary(): UseQueryResult<SellerStockSummary> {
+export function useStockSummary(opts?: {
+  readonly enabled?: boolean;
+}): UseQueryResult<SellerStockSummary> {
   const client = useApiClient();
   return useQuery({
+    enabled: opts?.enabled ?? true,
     queryKey: ['seller-stock', 'summary'],
     queryFn: () => client.request<SellerStockSummary>(`/api/seller/stock/summary`),
   });
