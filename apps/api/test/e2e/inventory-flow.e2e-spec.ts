@@ -179,12 +179,22 @@ describe('Inventory flow (e2e)', () => {
       }),
     );
     expect(completedEmail).toBeTruthy();
-    const varianceEmail = await waitFor(() =>
+    // The variance notice, in the INBOX. Its email leg was retired on
+    // 2026-09-20 (`RETIRED_EMAIL_TEMPLATES`); the in-app leg is
+    // addressed by `inbound.view` — whoever can open the receipt it is
+    // about — and dispatched post-commit, because its email used to be
+    // enqueued inside the counting transaction (INV-5).
+    const varianceNotice = await waitFor(() =>
       h.prisma.notificationLog.findFirst({
-        where: { templateCode: 'seller.goods_receipt_discrepancy.email' },
+        where: { templateCode: 'seller.goods_receipt_discrepancy' },
       }),
     );
-    expect(varianceEmail).toBeTruthy();
+    expect(varianceNotice).toBeTruthy();
+    expect(
+      await h.prisma.notificationLog.count({
+        where: { templateCode: 'seller.goods_receipt_discrepancy.email' },
+      }),
+    ).toBe(0);
 
     // TKT-3: the short count opened ONE ticket, keyed on the receipt, in
     // our words — and the count above still completed and stocked.
@@ -349,23 +359,32 @@ describe('Inventory flow (e2e)', () => {
         .expect(201);
     };
 
+    // The alert now arrives in the INBOX, not by email (retired
+    // 2026-09-20), addressed by `inventory.view`. The INV-9 state
+    // machine is what this test is about and is unchanged: one alert on
+    // the breach, none while it stays active.
     await dropTo(-17); // 20 → 3, first breach
     await waitFor(() =>
       h.prisma.notificationLog.findFirst({
-        where: { templateCode: 'seller.stock_low_alert.email' },
+        where: { templateCode: 'seller.stock_low_alert' },
       }),
     );
-    let alertEmails = await h.prisma.notificationLog.count({
-      where: { templateCode: 'seller.stock_low_alert.email' },
+    let alerts = await h.prisma.notificationLog.count({
+      where: { templateCode: 'seller.stock_low_alert' },
     });
-    expect(alertEmails).toBe(1);
+    expect(alerts).toBe(1);
+    expect(
+      await h.prisma.notificationLog.count({
+        where: { templateCode: 'seller.stock_low_alert.email' },
+      }),
+    ).toBe(0);
 
-    await dropTo(-1); // 3 → 2, still below, already active → no new email
+    await dropTo(-1); // 3 → 2, still below, already active → no new alert
     await new Promise((r) => setTimeout(r, 300));
-    alertEmails = await h.prisma.notificationLog.count({
-      where: { templateCode: 'seller.stock_low_alert.email' },
+    alerts = await h.prisma.notificationLog.count({
+      where: { templateCode: 'seller.stock_low_alert' },
     });
-    expect(alertEmails).toBe(1);
+    expect(alerts).toBe(1);
 
     // Recover above threshold → alert state clears (lowStockAlertSentAt
     // preserved for the cooldown calc).

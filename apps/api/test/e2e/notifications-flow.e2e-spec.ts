@@ -305,29 +305,28 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
 
   // ── Scenario 1: DISPATCHED → 2 rows + tracking URL ────────────────
 
-  it('DISPATCHED → 2 SENT ledger rows (seller + customer) with M10 tracking URL in customer body', async () => {
+  it('DISPATCHED → the CUSTOMER’s email, with the M10 tracking URL in its body', async () => {
     const orderId = await placeOrder();
     const { awbNumber } = await driveToDispatched(orderId);
 
-    // Two fanout phases hit during the lifecycle:
-    //   - CONFIRMED → seller + customer (2 rows)
-    //   - DISPATCHED → seller + customer (2 rows)
+    // Two fanout phases hit during the lifecycle, and since 2026-09-20
+    // each leaves ONE email:
+    //   - CONFIRMED  → customer (the seller's leg is retired)
+    //   - DISPATCHED → customer (likewise)
     // (intermediate PENDING_PICK / PICKED / PACKED / PENDING_DISPATCH
     // map to []).
-    // Wait for all 4 to land as SENT.
-    const sent = await waitForLogCount(orderId, 4, NotificationStatus.SENT);
-    expect(sent).toHaveLength(4);
+    //
+    // The seller still hears about both — in their INBOX, which the
+    // scenario further down asserts. `RETIRED_EMAIL_TEMPLATES` withholds
+    // the duplicate before a row is written, which is why the count
+    // here halved rather than the rows turning up SKIPPED.
+    const sent = await waitForLogCount(orderId, 2, NotificationStatus.SENT);
+    expect(sent).toHaveLength(2);
+    expect(sent.every((r) => r.recipientType === NotificationRecipientType.CUSTOMER)).toBe(true);
 
-    // Of the four, two should be the DISPATCHED set.
-    const dispatched = sent.filter(
-      (r) =>
-        r.templateCode === 'seller.order_dispatched.email' ||
-        r.templateCode === 'customer.order_dispatched.email',
-    );
-    expect(dispatched).toHaveLength(2);
-    const seller = dispatched.find((r) => r.recipientType === NotificationRecipientType.SELLER);
-    const customer = dispatched.find((r) => r.recipientType === NotificationRecipientType.CUSTOMER);
-    expect(seller).toBeDefined();
+    const dispatched = sent.filter((r) => r.templateCode === 'customer.order_dispatched.email');
+    expect(dispatched).toHaveLength(1);
+    const customer = dispatched[0];
     expect(customer).toBeDefined();
 
     // Customer body contains the M10 tracking URL: ${PUBLIC_TRACKING_URL}/${awb}.
@@ -342,21 +341,32 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     expect(customer!.body).toContain('---');
     expect(customer!.body).toContain('यहाँ ट्रैक करें');
 
-    // Seller body has AWB in the subject (Q5 seller template).
-    expect(seller!.subject).toContain(awbNumber);
-
-    // Both rows are status SENT.
-    expect(seller!.status).toBe(NotificationStatus.SENT);
     expect(customer!.status).toBe(NotificationStatus.SENT);
 
-    // Both rows have the same eventId pattern (order_status:<statusEventId>);
-    // the DISPATCHED occurrence eventId is the OrderEvent.id of the
-    // CONFIRMED→...→DISPATCHED STATUS_CHANGED row.
+    // The eventId is `order_status:<statusEventId>` — the OrderEvent.id
+    // of the CONFIRMED→…→DISPATCHED STATUS_CHANGED row.
     const dispatchedEvent = await h.prisma.orderEvent.findFirstOrThrow({
       where: { orderId, type: OrderEventType.STATUS_CHANGED, toStatus: OrderStatus.DISPATCHED },
     });
-    expect(seller!.eventId).toBe(`order_status:${dispatchedEvent.id}`);
     expect(customer!.eventId).toBe(`order_status:${dispatchedEvent.id}`);
+
+    // The seller heard about the same dispatch in their INBOX, keyed on
+    // the SAME lifecycle event with the `:inapp` suffix the two legs are
+    // deliberately kept distinct by. The AWB-in-the-subject assertion
+    // that used to sit here went with the seller's email leg: an inbox
+    // line has no subject, and its body is one sentence by design.
+    const sellerInbox = await waitFor(
+      async () =>
+        h.prisma.notificationLog.findFirst({
+          where: {
+            orderId,
+            channel: NotificationChannel.IN_APP,
+            templateCode: 'seller.order_dispatched',
+          },
+        }),
+      { timeoutMs: 15_000, description: 'the seller’s in-app dispatch line' },
+    );
+    expect(sellerInbox.eventId).toBe(`order_status:${dispatchedEvent.id}:inapp`);
   });
 
   // ── Scenario 2: NOTIF-8 SKIPPED (no customer email) ───────────────
@@ -365,10 +375,6 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     const orderId = await placeOrder({ customerEmail: null });
     await driveToDispatched(orderId);
 
-    // Two SENT rows: seller-CONFIRMED + seller-DISPATCHED.
-    const sent = await waitForLogCount(orderId, 2, NotificationStatus.SENT);
-    expect(sent.every((r) => r.recipientType === NotificationRecipientType.SELLER)).toBe(true);
-
     // Two SKIPPED rows: customer-CONFIRMED + customer-DISPATCHED.
     const skipped = await waitForLogCount(orderId, 2, NotificationStatus.SKIPPED);
     expect(skipped.every((r) => r.recipientType === NotificationRecipientType.CUSTOMER)).toBe(true);
@@ -376,6 +382,16 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     // SKIPPED rows have eventId set — they consume the dedup gate so a
     // re-emit doesn't insert a 2nd SKIPPED row.
     expect(skipped.every((r) => r.eventId !== null && r.eventId !== '')).toBe(true);
+
+    // And NO sent email at all. Both seller legs are retired, and the
+    // customer — the only remaining email recipient on this order — has
+    // no address, so the whole email channel is silent here. Asserted
+    // AFTER the SKIPPED rows have landed, because a count of zero is
+    // true before anything has happened and would pass on an empty table.
+    const sent = await h.prisma.notificationLog.count({
+      where: { orderId, status: NotificationStatus.SENT, channel: NotificationChannel.EMAIL },
+    });
+    expect(sent).toBe(0);
   });
 
   // ── Scenario 3: PENDING_MANUAL_PLACEMENT → no notifications ────────
@@ -392,12 +408,13 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       actor: { type: ActorType.STAFF, id: staffId },
     });
 
-    // 2 notifications for CONFIRMED (seller + customer).
-    await waitForLogCount(orderId, 2, NotificationStatus.SENT);
+    // ONE email for CONFIRMED — the customer's. The seller's leg is
+    // retired in favour of their inbox.
+    await waitForLogCount(orderId, 1, NotificationStatus.SENT);
     const beforeManual = await h.prisma.notificationLog.count({
       where: { orderId, channel: NotificationChannel.EMAIL },
     });
-    expect(beforeManual).toBe(2);
+    expect(beforeManual).toBe(1);
 
     // Drive PENDING_PICK → PENDING_MANUAL_PLACEMENT (M8 WMS-4
     // fail-routing edge). The order has no shipment in start-able
@@ -417,11 +434,11 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     // Give the listener / worker a moment for any rogue notifications.
     await new Promise((r) => setTimeout(r, 500));
 
-    // Still exactly 2 — the PENDING_MANUAL_PLACEMENT mapping is [].
+    // Still exactly 1 — the PENDING_MANUAL_PLACEMENT mapping is [].
     const afterManual = await h.prisma.notificationLog.count({
       where: { orderId, channel: NotificationChannel.EMAIL },
     });
-    expect(afterManual).toBe(2);
+    expect(afterManual).toBe(1);
   });
 
   // ── Scenario 4: NOTIF-1 PROOF — Resend failure does not block the
@@ -434,7 +451,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     // The CONFIRMED notifications land normally first — we'll wait for
     // them, then turn on the failure injection, then drive DISPATCHED.
     const { awbNumber } = await driveToPendingDispatch(orderId);
-    await waitForLogCount(orderId, 2, NotificationStatus.SENT);
+    await waitForLogCount(orderId, 1, NotificationStatus.SENT);
 
     // Now install the failure injection — every subsequent Resend send
     // returns FAILED. The fan-out for DISPATCHED is the only fan-out
@@ -457,11 +474,15 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
         actor: { type: ActorType.STAFF, id: staffId },
       });
 
-      // DISPATCHED produces 2 notifications, both should land FAILED.
-      const failed = await waitForLogCount(orderId, 2, NotificationStatus.FAILED);
+      // DISPATCHED produces ONE email now — the customer's — and it
+      // should land FAILED. The seller's leg is retired, so the proof
+      // rests on the customer's; what is being tested is that a send
+      // failure never reaches back into the transition, and one failing
+      // row demonstrates that exactly as two did.
+      const failed = await waitForLogCount(orderId, 1, NotificationStatus.FAILED);
       expect(failed.every((r) => r.failureCode === 'INJECTED_TEST_FAILURE')).toBe(true);
       expect(new Set(failed.map((r) => r.templateCode))).toEqual(
-        new Set(['seller.order_dispatched.email', 'customer.order_dispatched.email']),
+        new Set(['customer.order_dispatched.email']),
       );
 
       // THE INVARIANT: the order is still DISPATCHED + the transition's
@@ -492,9 +513,9 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     const orderId = await placeOrder();
     await driveToDispatched(orderId);
 
-    // 4 rows expected (CONFIRMED + DISPATCHED, each seller+customer).
-    const sent = await waitForLogCount(orderId, 4, NotificationStatus.SENT);
-    expect(sent).toHaveLength(4);
+    // 2 rows expected — CONFIRMED and DISPATCHED, customer only.
+    const sent = await waitForLogCount(orderId, 2, NotificationStatus.SENT);
+    expect(sent).toHaveLength(2);
 
     const dispatchedEvent = await h.prisma.orderEvent.findFirstOrThrow({
       where: { orderId, type: OrderEventType.STATUS_CHANGED, toStatus: OrderStatus.DISPATCHED },
@@ -518,11 +539,11 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     // Give the listener a moment to attempt + dedup.
     await new Promise((r) => setTimeout(r, 800));
 
-    // Still exactly 4 rows. NO new ledger rows, NO new BullMQ enqueue.
+    // Still exactly 2 rows. NO new ledger rows, NO new BullMQ enqueue.
     const after = await h.prisma.notificationLog.findMany({
       where: { orderId, channel: NotificationChannel.EMAIL },
     });
-    expect(after).toHaveLength(4);
+    expect(after).toHaveLength(2);
   });
 
   // ── Scenario 6: NDR CYCLE — distinct occurrences each fan out ─────
@@ -533,7 +554,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
 
     // Wait for the CONFIRMED + DISPATCHED notifications to land first
     // so they don't muddy the cycle assertions.
-    await waitForLogCount(orderId, 4, NotificationStatus.SENT);
+    await waitForLogCount(orderId, 2, NotificationStatus.SENT);
 
     const ow = h.app.get(OrderWriteService);
 
@@ -567,13 +588,15 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
       actor: { type: ActorType.STAFF, id: staffId },
     });
 
-    // Q5 mapping for the cycle (excluding CONFIRMED/DISPATCHED):
+    // Q5 mapping for the cycle (excluding CONFIRMED/DISPATCHED). The
+    // seller's DELIVERY_FAILED email is retired, so every row here is
+    // the customer's:
     //   OFD(occ1)               → 1 customer row
-    //   DELIVERY_FAILED(occ1)   → 1 seller + 1 customer row
+    //   DELIVERY_FAILED(occ1)   → 1 customer row
     //   OFD(occ2)               → 1 customer row
-    //   DELIVERY_FAILED(occ2)   → 1 seller + 1 customer row
-    // Total NEW = 6 rows on top of the prior 4.
-    await waitForLogCount(orderId, 10, NotificationStatus.SENT);
+    //   DELIVERY_FAILED(occ2)   → 1 customer row
+    // Total NEW = 4 rows on top of the prior 2.
+    await waitForLogCount(orderId, 6, NotificationStatus.SENT);
 
     const cycleRows = await h.prisma.notificationLog.findMany({
       where: {
@@ -582,12 +605,11 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
         OR: [
           { templateCode: 'customer.order_out_for_delivery.email' },
           { templateCode: 'customer.order_delivery_failed.email' },
-          { templateCode: 'seller.order_delivery_failed.email' },
         ],
       },
       orderBy: { createdAt: 'asc' },
     });
-    expect(cycleRows).toHaveLength(6);
+    expect(cycleRows).toHaveLength(4);
 
     // OFD occurrences — both customer rows, each from a DIFFERENT
     // OrderEvent (distinct eventIds).
@@ -598,24 +620,36 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     const ofdEventIds = new Set(ofdRows.map((r) => r.eventId));
     expect(ofdEventIds.size).toBe(2); // distinct — no dedup-collapse
 
-    // DELIVERY_FAILED occurrences — 2 seller + 2 customer = 4 rows
-    // across 2 distinct eventIds (each eventId produces seller+customer).
+    // DELIVERY_FAILED occurrences — 2 customer rows across 2 distinct
+    // eventIds. THE POINT OF THIS TEST IS THE EVENT IDS, not the
+    // recipients: two genuine re-entries of one status must not collapse
+    // into a single notification through the NOTIF-2 dedup gate. That
+    // property is untouched by the seller's leg being retired.
     const ndrRows = cycleRows.filter(
-      (r) =>
-        r.templateCode === 'customer.order_delivery_failed.email' ||
-        r.templateCode === 'seller.order_delivery_failed.email',
+      (r) => r.templateCode === 'customer.order_delivery_failed.email',
     );
-    expect(ndrRows).toHaveLength(4);
+    expect(ndrRows).toHaveLength(2);
     const ndrEventIds = new Set(ndrRows.map((r) => r.eventId));
     expect(ndrEventIds.size).toBe(2); // 2 distinct occurrence-eventIds
-    // Each NDR eventId appears EXACTLY twice (seller + customer).
+    // Each NDR eventId appears EXACTLY once now — the customer's.
     for (const eid of ndrEventIds) {
       const matching = ndrRows.filter((r) => r.eventId === eid);
-      expect(matching).toHaveLength(2);
-      expect(new Set(matching.map((r) => r.recipientType))).toEqual(
-        new Set([NotificationRecipientType.SELLER, NotificationRecipientType.CUSTOMER]),
-      );
+      expect(matching).toHaveLength(1);
+      expect(matching[0]?.recipientType).toBe(NotificationRecipientType.CUSTOMER);
     }
+
+    // The seller heard about each failure too — in their inbox, which
+    // is the whole reason the email was retired. Two in-app rows, one
+    // per occurrence, on the same two event ids.
+    const ndrInbox = await h.prisma.notificationLog.findMany({
+      where: {
+        orderId,
+        channel: NotificationChannel.IN_APP,
+        templateCode: 'seller.order_delivery_failed',
+      },
+    });
+    expect(ndrInbox).toHaveLength(2);
+    expect(new Set(ndrInbox.map((r) => r.eventId?.replace(/:inapp$/, '')))).toEqual(ndrEventIds);
 
     // Cross-check against order_events: the matrix really did produce
     // 2 distinct STATUS_CHANGED rows for each re-entered status, and
@@ -638,7 +672,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
   it('the same lifecycle event also lands in the seller’s own inbox', async () => {
     const orderId = await placeOrder();
     await driveToDispatched(orderId);
-    await waitForLogCount(orderId, 4, NotificationStatus.SENT);
+    await waitForLogCount(orderId, 2, NotificationStatus.SENT);
 
     const owner = await h.prisma.sellerUser.findFirstOrThrow({
       where: { seller: { email: { contains: 'notif-seller-' } } },
@@ -688,7 +722,7 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     expect(feed.body.unreadCount).toBe(2);
   });
 
-  it('a person who silences the topic stops getting it in their inbox, and still gets the email', async () => {
+  it('a person who silences the topic stops getting it — and reaches no further than their own inbox', async () => {
     await request(h.baseUrl)
       .post('/seller/notifications/subscriptions')
       .set(sellerAuth)
@@ -697,10 +731,16 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
 
     const orderId = await placeOrder();
     await driveToDispatched(orderId);
-    // The EMAIL leg is unaffected — it is the company's address and
-    // the company's per-category preference governs it, not a
-    // person's own inbox choice. Four email rows, exactly as before.
-    await waitForLogCount(orderId, 4, NotificationStatus.SENT);
+    // This asserted "and still gets the email" until 2026-09-20, when
+    // the seller's own dispatch email was retired — there is no longer
+    // a second leg of THEIR notification for a mute to leave alone.
+    //
+    // The property worth keeping is the one that remains observable and
+    // is the more important half anyway: a person's choice about their
+    // own inbox must not reach the CUSTOMER's mail. Both customer
+    // emails land, untouched.
+    const sent = await waitForLogCount(orderId, 2, NotificationStatus.SENT);
+    expect(sent.every((r) => r.recipientType === NotificationRecipientType.CUSTOMER)).toBe(true);
 
     await new Promise((r) => setTimeout(r, 800));
     const inbox = await h.prisma.notificationLog.findMany({
@@ -725,16 +765,13 @@ describe('M11 Notifications — lifecycle fan-out e2e (NOTIF-1..8)', () => {
     const orderId = await placeOrder();
     await driveToDispatched(orderId);
 
-    // CONFIRMED is ORDER_UPDATES and untouched, so its two emails
-    // still land. DISPATCHED is SHIPMENT_UPDATES: the seller's email
-    // is gone, the CUSTOMER's is not.
-    const sent = await waitForLogCount(orderId, 3, NotificationStatus.SENT);
+    // Both customer emails still land. Since 2026-09-20 neither seller
+    // leg is an email at all, so what the company's switch is observed
+    // to stop is the INBOX line below — and what it must NOT stop is
+    // either of these.
+    const sent = await waitForLogCount(orderId, 2, NotificationStatus.SENT);
     const codes = sent.map((r) => r.templateCode).sort();
-    expect(codes).toEqual([
-      'customer.order_confirmed.email',
-      'customer.order_dispatched.email',
-      'order.confirmed.seller.email',
-    ]);
+    expect(codes).toEqual(['customer.order_confirmed.email', 'customer.order_dispatched.email']);
 
     // A seller must not be able to silence the emails their own
     // customers rely on — they are not the company's to switch off.

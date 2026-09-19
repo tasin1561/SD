@@ -47,6 +47,7 @@ function makeInvoiceService(kind: SellerStoreKind): {
     {} as never,
     { enqueue: jest.fn() } as never,
     {} as never,
+    { dispatch: async () => undefined } as never,
   );
   return { svc, invoiceFindUnique, invoiceFindFirst };
 }

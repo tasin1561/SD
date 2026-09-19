@@ -78,9 +78,16 @@ function makeSut(opts: {
   } as unknown as CatalogReadService;
   const enqueue = jest.fn(async () => 'job1');
   const email = { enqueue } as unknown as EmailQueue;
+  // The alert's INBOX leg (NOTIF-14). The service still hands its email
+  // to `EmailQueue` exactly as before — the retirement gate lives inside
+  // the real queue, not here — so the `enqueue` assertions below are
+  // unchanged and still describe what this service does.
+  const dispatch = jest.fn(async () => undefined);
 
-  const svc = new StockAlertService(prisma, env, availability, catalog, email);
-  return { svc, upsert, enqueue };
+  const svc = new StockAlertService(prisma, env, availability, catalog, email, {
+    dispatch,
+  } as never);
+  return { svc, upsert, enqueue, dispatch };
 }
 
 describe('StockAlertService — INV-9 state machine', () => {
