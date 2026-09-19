@@ -22,6 +22,7 @@ function make(
     autoPickupEnabled?: boolean;
     pickupTime?: string;
     pickupLocation?: string;
+    shiprocketPickupLocation?: string;
     existingToday?: AnyArgs | null;
     waiting?: Array<{ courierShipmentId: string | null }>;
     requestPickupResult?: { success: boolean; pickupId: string | null; message: string | null };
@@ -49,7 +50,13 @@ function make(
     'courier.delhivery_auto_pickup_enabled': { valueBoolean: opts.autoPickupEnabled ?? false },
     'courier.shiprocket_auto_pickup_enabled': { valueBoolean: opts.autoPickupEnabled ?? false },
     'courier.default_pickup_time': { valueString: opts.pickupTime ?? '' },
+    // The location key is composed PER COURIER since 2026-09-19. Both are
+    // here, holding DIFFERENT names, so a read of the wrong one is a
+    // failing assertion rather than a test that happens to pass.
     'courier.delhivery_pickup_location': { valueString: opts.pickupLocation ?? 'Skydrop' },
+    'courier.shiprocket_pickup_location': {
+      valueString: opts.shiprocketPickupLocation ?? 'Skydrop Bengaluru (SR)',
+    },
   };
 
   const findUniqueSetting = jest.fn(async ({ where }: { where: { key: string } }) => {
@@ -101,10 +108,25 @@ function make(
     },
   };
 
+  // The dispatcher's pickup capabilities. These mirror
+  // `CourierOpsDispatchService`'s own answers, which
+  // `courier-ops-dispatch.service.spec.ts` pins — the pickup service
+  // must never restate them (CUR-12), so the fake restates them exactly
+  // once, here, where a drift shows up as a failing branch rather than
+  // as a van asked for from the wrong company.
+  const pickupCourierCodes = jest.fn(() => ['delhivery', 'shiprocket'] as readonly string[]);
+  const pickupNeedsLocationName = jest.fn((code: string) => code === 'delhivery');
+  const pickupSchedulesPerParcel = jest.fn((code: string) => code === 'shiprocket');
+
   const svc = new CourierPickupService(
     prisma as never,
     { log: audit } as never,
-    { requestPickup } as never,
+    {
+      requestPickup,
+      pickupCourierCodes,
+      pickupNeedsLocationName,
+      pickupSchedulesPerParcel,
+    } as never,
     { raise: raiseIssue, resolveByKey } as never,
   );
   return {
@@ -399,6 +421,83 @@ describe('CourierPickupService.raiseIfDue — nothing fails quietly', () => {
     await svc.raiseIfDue({ ...BOX, courierAccountId: 'acc-1' } as never);
     expect((create.mock.calls[0]?.[0]?.data as AnyArgs)['pickupLocationName']).toBe('MS-ACCOUNT');
     expect(requestPickup.mock.calls[0]?.[0]).toMatchObject({ pickupLocation: 'MS-ACCOUNT' });
+  });
+
+  /**
+   * The van is asked for from the courier that is CARRYING the parcel,
+   * with that courier's own settings — CUR-12. Until 2026-09-19 the
+   * service held `const COURIER_CODE = 'delhivery'` and one constant
+   * `courier.delhivery_pickup_location`, so a Shiprocket warehouse's
+   * collection was either requested under Delhivery's registered
+   * warehouse name, or refused by a message naming a Delhivery setting
+   * that has nothing to do with it.
+   */
+  it("reads the SHIPROCKET location key for a Shiprocket box, never Delhivery's", async () => {
+    const { svc, create, requestPickup } = make({
+      autoPickupEnabled: true,
+      pickupLocation: 'DELHIVERY-WAREHOUSE',
+      shiprocketPickupLocation: 'SHIPROCKET-WAREHOUSE',
+    });
+    const r = await svc.raiseIfDue({ ...BOX, courierCode: 'shiprocket' });
+    expect(r.fired).toBe(true);
+    expect((create.mock.calls[0]?.[0]?.data as AnyArgs)['pickupLocationName']).toBe(
+      'SHIPROCKET-WAREHOUSE',
+    );
+    expect(requestPickup.mock.calls[0]?.[0]).toMatchObject({
+      courierCode: 'shiprocket',
+      pickupLocation: 'SHIPROCKET-WAREHOUSE',
+    });
+  });
+
+  /**
+   * Shiprocket's own `generate/pickup` takes shipment ids and nothing
+   * else, so demanding a registered name there refused a collection
+   * that would have worked. Whether a name is needed at all is the
+   * DISPATCHER's answer (`pickupNeedsLocationName`), never a branch here.
+   */
+  it('asks for a Shiprocket van with NO location configured — their call does not use one', async () => {
+    const { svc, create, requestPickup } = make({
+      autoPickupEnabled: true,
+      shiprocketPickupLocation: '',
+    });
+    const r = await svc.raiseIfDue({ ...BOX, courierCode: 'shiprocket' });
+    expect(r.fired).toBe(true);
+    expect((create.mock.calls[0]?.[0]?.data as AnyArgs)['pickupLocationName']).toBe('');
+    expect(requestPickup).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The same absence for DELHIVERY is still a refusal: their manifest
+   * matches on the registered name byte for byte, so a van asked for
+   * without one is a collection nobody can hand parcels to. The
+   * asymmetry is the COURIER'S, not ours.
+   */
+  it('still refuses a DELHIVERY van with no location configured', async () => {
+    const { svc, create, requestPickup } = make({ autoPickupEnabled: true, pickupLocation: '' });
+    const r = await svc.raiseIfDue(BOX);
+    expect(r.fired).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+    expect(requestPickup).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Shiprocket schedules per PARCEL; Delhivery per location and day.
+   * The caller resolves WHICH parcels are waiting (our question) but
+   * asks the dispatcher WHETHER to bother — it used to be "anything
+   * that is not Delhivery", which would hand a third courier's
+   * per-location pickup a parcel list it has no use for.
+   */
+  it('sends the waiting parcels to Shiprocket and none to Delhivery', async () => {
+    const waiting = [{ courierShipmentId: 'sr-1' }, { courierShipmentId: 'sr-2' }];
+    const sr = make({ autoPickupEnabled: true, waiting });
+    await sr.svc.raiseIfDue({ ...BOX, courierCode: 'shiprocket' });
+    expect(sr.requestPickup.mock.calls[0]?.[0]).toMatchObject({
+      courierShipmentIds: ['sr-1', 'sr-2'],
+    });
+
+    const dl = make({ autoPickupEnabled: true, waiting });
+    await dl.svc.raiseIfDue(BOX);
+    expect(dl.requestPickup.mock.calls[0]?.[0]).toMatchObject({ courierShipmentIds: [] });
   });
 
   it("a box closed after today's van time asks for TOMORROW's van", async () => {

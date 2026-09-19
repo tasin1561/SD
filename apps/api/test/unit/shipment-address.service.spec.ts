@@ -3,7 +3,14 @@ import { ShipmentAddressService } from '../../src/modules/shipment-address/servi
 
 type Any = Record<string, unknown>;
 
-function makeSut(opts: { status?: ShipmentStatus; editOk?: boolean } = {}) {
+function makeSut(
+  opts: {
+    status?: ShipmentStatus;
+    editOk?: boolean;
+    /** This courier answers from its stub while production is live (CUR-15). */
+    stubbed?: boolean;
+  } = {},
+) {
   const shipment = {
     id: 'sh1',
     status: opts.status ?? ShipmentStatus.IN_TRANSIT,
@@ -55,16 +62,19 @@ function makeSut(opts: { status?: ShipmentStatus; editOk?: boolean } = {}) {
     success: opts.editOk ?? true,
     message: opts.editOk === false ? 'refused' : null,
   }));
+  // 2026-09-19 — the correction now passes the CUR-15 stub guard before
+  // anything is written, so the dispatcher double answers it too.
+  const isStubbedInProduction = jest.fn(async () => opts.stubbed ?? false);
   const svc = new ShipmentAddressService(
     prisma as never,
-    { edit } as never,
+    { edit, isStubbedInProduction } as never,
     { log: jest.fn(async () => 'a1') } as never,
     {
       orderChangedBySeller: jest.fn(async () => undefined),
       orderChangedByStore: jest.fn(async () => undefined),
     } as never,
   );
-  return { svc, edit, created, updated, orderUpdated };
+  return { svc, edit, created, updated, orderUpdated, isStubbedInProduction };
 }
 
 const ACTOR = { type: ActorType.SELLER, sellerId: 's1' };
@@ -125,6 +135,42 @@ describe('ShipmentAddressService — correcting a moving parcel', () => {
       await expect(
         sut.svc.change({ orderId: 'o1', sellerId: 's1', name: 'Asha', actor: ACTOR }),
       ).rejects.toMatchObject({ response: { code: 'NOTHING_TO_CHANGE' } });
+    });
+
+    /**
+     * A STUB MAY NOT CONFIRM A REAL ADDRESS CHANGE (CUR-15).
+     *
+     * Both adapters' edit paths answer `{success: true}` from their stub
+     * BEFORE the live-write guard runs — right in dev and CI, and in a
+     * MIXED production (one courier live, one stubbed) the worst version
+     * of the failure CUR-15 exists to stop. The correction is reported
+     * ACCEPTED, the new address is written to the change row, the
+     * shipment and the order, and the courier never heard of it: the
+     * driver still has the old address while every screen of ours
+     * agrees with every other screen.
+     *
+     * The guard sits BEFORE the change row, because a row recording
+     * what was asked is only useful when something was actually asked.
+     */
+    it('refuses BY NAME when the courier is stubbed in production, and writes nothing', async () => {
+      const sut = makeSut({ stubbed: true });
+      await expect(
+        sut.svc.change({ orderId: 'o1', sellerId: 's1', name: 'New Name', actor: ACTOR }),
+      ).rejects.toMatchObject({ response: { code: 'COURIER_STUBBED' } });
+      expect(sut.edit).not.toHaveBeenCalled();
+      expect(sut.created).toHaveLength(0);
+      expect(sut.orderUpdated).toHaveLength(0);
+    });
+
+    it("asks about the SHIPMENT's own courier, not a fixed one", async () => {
+      const sut = makeSut();
+      await sut.svc.change({
+        orderId: 'o1',
+        sellerId: 's1',
+        phone: '+919999900000',
+        actor: ACTOR,
+      });
+      expect(sut.isStubbedInProduction).toHaveBeenCalledWith('delhivery');
     });
   });
 

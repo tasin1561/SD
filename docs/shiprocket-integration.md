@@ -223,6 +223,17 @@ proving run; read the live values from the database or from
   `courier.shiprocket_return_address` (JSON; their return create spells
   out both ends, so a collection cannot be booked without it). Both
   seeded EMPTY and refused by name rather than guessed.
+  - **Two calls, two answers, and they are not the same question.**
+    BOOKING a parcel (`orders/create/adhoc`) carries `pickup_location`,
+    so with neither the account's own name nor this setting the booking
+    is refused as TRANSIENT (`PICKUP_LOCATION_NOT_CONFIGURED`) — a setup
+    gap, deliberately not an opinion about the parcel, so it neither
+    fails over nor lands in manual placement. Asking for the VAN
+    (`courier/generate/pickup`) takes shipment ids and nothing else, so
+    it needs no name at all, and demanding one there refused collections
+    that would have worked. `CourierOpsDispatchService.pickupNeedsLocationName`
+    is the ONE place that knows the second half; do not "fix" the two to
+    agree.
 
 `ShiprocketHttpService` already caches a per-account bearer for **nine
 days against their ten**, keyed on `courierAccountId` (never one shared

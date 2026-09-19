@@ -338,7 +338,9 @@ function RaisePickupModal({
           <Select
             id="pu-courier"
             value={courierCode}
-            onChange={(e) => setCourierCode(e.target.value === 'shiprocket' ? 'shiprocket' : 'delhivery')}
+            onChange={(e) =>
+              setCourierCode(e.target.value === 'shiprocket' ? 'shiprocket' : 'delhivery')
+            }
           >
             <option value="delhivery">Delhivery</option>
             <option value="shiprocket">Shiprocket</option>

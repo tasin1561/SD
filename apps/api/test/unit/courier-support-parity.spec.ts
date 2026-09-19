@@ -1,7 +1,13 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { CourierOutboxKind, CourierOutboxStatus, SystemIssueKind } from '@skydrop/db';
+import {
+  CourierOutboxKind,
+  CourierOutboxStatus,
+  SystemIssueKind,
+  TicketHandling,
+} from '@skydrop/db';
 import { DelhiverySupportAdapterService } from '../../src/modules/courier-delhivery/services/delhivery-support-adapter.service';
+import { TicketHandlingService } from '../../src/modules/ticket-handling/services/ticket-handling.service';
 import { ShiprocketSupportAdapterService } from '../../src/modules/courier-shiprocket/services/shiprocket-support-adapter.service';
 import { CourierSupportRegistryService } from '../../src/modules/courier-escalation/services/courier-support-registry.service';
 import { CourierSupportDeskService } from '../../src/modules/courier-escalation/services/courier-support-desk.service';
@@ -53,6 +59,59 @@ describe('both couriers have a support desk, and neither takes tickets from soft
     const caps = reg.for(code)?.capabilities();
     expect(caps?.postComment).toBe(false);
     expect(caps?.raiseTicket).toBe(false);
+  });
+
+  /*
+    ── THE STAMP AGREES WITH THE ADAPTER, BOTH WAYS (2026-09-19) ──────
+
+    `TicketHandlingService` decides whether a new ticket is stamped AUTO
+    ("software is carrying this to the courier") or MANUAL ("a person
+    is"), from its own `AUTOMATED_COURIERS` list. That list said
+    `['delhivery']` while Delhivery's adapter — three files away —
+    reported `raiseTicket: false`, so the two disagreed about the same
+    fact and only one of them was right.
+
+    Nothing caught it because the automation is dormant: it sits behind
+    a seeded-off switch with `portalMode` OFF in production, so the
+    wrong label never rendered. The day somebody flipped the switch,
+    Delhivery tickets would have been stamped AUTO and then moved by
+    nobody — a ticket in a queue everybody assumes software has.
+
+    So the stamp is pinned against the adapter, per courier, IN BOTH
+    DIRECTIONS: a courier is stamped AUTO exactly when its own adapter
+    says it can raise a ticket. Adding an automation means the adapter
+    and the list change together or this fails.
+  */
+  describe('the ticket stamp agrees with the adapter that would carry it', () => {
+    function handling(): TicketHandlingService {
+      // The operator switch is ON, so a courier that is stamped MANUAL
+      // here is stamped MANUAL because of its ADAPTER, not the switch.
+      return new TicketHandlingService({
+        client: {
+          ticket: { updateMany: jest.fn(), update: jest.fn() },
+          systemSetting: { findUnique: jest.fn(async () => ({ valueBoolean: true })) },
+        },
+      } as never);
+    }
+
+    it.each(['delhivery', 'shiprocket'])(
+      '%s is stamped AUTO exactly when its adapter can raise a ticket',
+      async (code) => {
+        const canRaise = reg.for(code)?.capabilities().raiseTicket ?? false;
+        const stamp = await handling().initialFor(code);
+        expect(stamp).toBe(canRaise ? TicketHandling.AUTO : TicketHandling.MANUAL);
+      },
+    );
+
+    it('and today that means NOT ONE of them — CUR-20', async () => {
+      // Stated on its own so the day this changes, somebody has to
+      // delete a test that says it out loud rather than watch a
+      // parameterised one quietly start passing differently.
+      for (const code of reg.known()) {
+        expect(reg.for(code)?.capabilities().raiseTicket).toBe(false);
+        await expect(handling().initialFor(code)).resolves.toBe(TicketHandling.MANUAL);
+      }
+    });
   });
 
   it('the escalation module registers both adapters', () => {
@@ -408,7 +467,7 @@ describe('no courier-code branch upstream of the adapters (CUR-12)', () => {
     },
     {
       path: 'courier-ops/services/courier-margin-report.service.ts',
-      why: 'the two couriers report a parcel\'s real cost from different places',
+      why: "the two couriers report a parcel's real cost from different places",
     },
     {
       path: 'courier-ops/services/courier-warehouse-registration.service.ts',

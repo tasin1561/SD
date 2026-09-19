@@ -14,6 +14,12 @@ function makeSut(
     throwWith?: string;
     /** The account's registered pickup location; null = none recorded. */
     pickupLocationName?: string | null;
+    /**
+     * `courier.shiprocket_pickup_location` — SHIPROCKET's own fallback
+     * key, the sibling of Delhivery's, seeded EMPTY. Undefined here
+     * means the row is absent.
+     */
+    pickupLocationSetting?: string;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -43,6 +49,16 @@ function makeSut(
           pickupLocationName:
             opts.pickupLocationName === undefined ? 'warehouse' : opts.pickupLocationName,
         }),
+      },
+      // The account's name wins; this is the single-account fallback,
+      // and it is SHIPROCKET's own key. Reading Delhivery's would send
+      // a name registered with one company to the other.
+      systemSetting: {
+        findUnique: async ({ where }: { where: { key: string } }) =>
+          where.key === 'courier.shiprocket_pickup_location' &&
+          opts.pickupLocationSetting !== undefined
+            ? { valueString: opts.pickupLocationSetting }
+            : null,
       },
     },
   } as unknown as PrismaService;
@@ -128,6 +144,52 @@ describe('ShiprocketClientService.generateAwb — two calls, one waybill', () =>
     expect((r as { message: string }).message).toMatch(/PICKUP_LOCATION_NOT_CONFIGURED/);
     expect(sut.calls).toHaveLength(0);
     expect(sut.assertWritable).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The fallback is SHIPROCKET's own setting key, not Delhivery's —
+   * the sibling of `courier.delhivery_pickup_location`, the shape every
+   * other `courier.<code>_*` switch already has. Reading Delhivery's
+   * would send a name registered with one company to the other, and
+   * their booking would be refused for a location that is not theirs.
+   */
+  it("falls back to SHIPROCKET's own pickup-location setting when the account has none", async () => {
+    const sut = makeSut({
+      pickupLocationName: null,
+      pickupLocationSetting: 'Skydrop Bengaluru (SR)',
+      responses: { 'orders/create/adhoc': OK_CREATE, 'courier/assign/awb': OK_ASSIGN },
+    });
+    await sut.svc.generateAwb(REQ, 'acct-1');
+    expect((sut.calls[0]?.body as { pickup_location: string }).pickup_location).toBe(
+      'Skydrop Bengaluru (SR)',
+    );
+  });
+
+  /**
+   * Seeded EMPTY on purpose (never guess a registered name), so an
+   * empty row is the same setup gap as no row at all.
+   */
+  it('treats an EMPTY setting as no location at all', async () => {
+    const sut = makeSut({
+      pickupLocationName: null,
+      pickupLocationSetting: '   ',
+      responses: { 'orders/create/adhoc': OK_CREATE, 'courier/assign/awb': OK_ASSIGN },
+    });
+    const r = await sut.svc.generateAwb(REQ, 'acct-1');
+    expect(r).toMatchObject({ ok: false, failure: 'TRANSIENT' });
+    expect(sut.calls).toHaveLength(0);
+  });
+
+  it("the ACCOUNT's own name still wins over the setting", async () => {
+    const sut = makeSut({
+      pickupLocationName: 'account-warehouse',
+      pickupLocationSetting: 'setting-warehouse',
+      responses: { 'orders/create/adhoc': OK_CREATE, 'courier/assign/awb': OK_ASSIGN },
+    });
+    await sut.svc.generateAwb(REQ, 'acct-1');
+    expect((sut.calls[0]?.body as { pickup_location: string }).pickup_location).toBe(
+      'account-warehouse',
+    );
   });
 
   it('converts grams to KILOGRAMS, because their API takes kg', async () => {

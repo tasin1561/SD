@@ -31,6 +31,24 @@ function makeSut(
     lengthCm: '15',
     widthCm: '5',
     heightCm: '5',
+    /*
+      THE PARCEL'S OWN LINES (ORD-6 snapshot), declared on the return.
+
+      Delhivery's reverse takes a description and nothing else, so this
+      used to send `items: []` — fine until Shiprocket's return booking
+      was built, because THEIRS REFUSES an empty `order_items`. What is
+      coming back is what went out, so the snapshot is what is declared,
+      never the live catalogue.
+    */
+    items: [
+      {
+        skuCode: 'SKU-1',
+        productName: 'Kurta, blue',
+        quantity: 2,
+        unitPriceInr: '499',
+        unitDeclaredValueInr: '450',
+      },
+    ],
     ...(opts.shipment ?? {}),
   };
 
@@ -92,6 +110,65 @@ describe('ReversePickupBookingService — this sends a van', () => {
     // A return collects nothing. Sending the forward COD would ask the
     // customer to pay for their own return.
     expect(req.codAmountInr).toBeNull();
+  });
+
+  /**
+   * The return DECLARES ITS LINES.
+   *
+   * Delhivery's reverse takes a description and nothing else, so this
+   * sent `items: []` — harmless until Shiprocket's return booking was
+   * built, because their API REFUSES an empty `order_items` and every
+   * reverse through them would have been rejected with nothing on our
+   * side pointing at why.
+   *
+   * They come from the PARCEL'S OWN SNAPSHOT (ORD-6): what is coming
+   * back is what went out, and the live catalogue may have been renamed
+   * or archived since.
+   */
+  it("declares the parcel's own lines, from its snapshot", async () => {
+    const sut = makeSut();
+    await sut.svc.book(INPUT);
+    const req = sut.generate.mock.calls[0]?.[0] as unknown as {
+      items: { name: string; sku: string; quantity: number; unitPriceInr: number }[];
+    };
+    expect(req.items).toEqual([
+      { name: 'Kurta, blue', sku: 'SKU-1', quantity: 2, unitPriceInr: 499 },
+    ]);
+  });
+
+  /**
+   * A line that never carried a price falls back to its declared value,
+   * then to 0. A return declares no money changing hands, so a missing
+   * figure is a gap in the record — never a reason to refuse the van.
+   */
+  it('falls back to the declared value, then to zero, rather than refusing', async () => {
+    const sut = makeSut({
+      shipment: {
+        items: [
+          // No price, but a declared value — the middle rung.
+          {
+            skuCode: 'A',
+            productName: 'A',
+            quantity: 1,
+            unitPriceInr: null,
+            unitDeclaredValueInr: '350',
+          },
+          // Neither.
+          {
+            skuCode: 'B',
+            productName: 'B',
+            quantity: 1,
+            unitPriceInr: null,
+            unitDeclaredValueInr: null,
+          },
+        ],
+      },
+    });
+    await sut.svc.book(INPUT);
+    const req = sut.generate.mock.calls[0]?.[0] as unknown as {
+      items: { unitPriceInr: number }[];
+    };
+    expect(req.items.map((i) => i.unitPriceInr)).toEqual([350, 0]);
   });
 
   it('CLAIMS before it calls, guarded on nothing being claimed yet', async () => {
