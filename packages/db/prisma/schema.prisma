@@ -7276,6 +7276,28 @@ model Ticket {
   /// (`resolution_wallet_entry_id` holds the seller half).
   resolutionStoreEntryId String?             @unique @map("resolution_store_entry_id") @db.Uuid
 
+  /// RS-7 (2026-09-19) — WHAT KIND of store ↔ seller dispute this is.
+  /// NULL on every ticket that is not a STORE_DISPUTE.
+  ///
+  /// GENERAL is the original shape ("you sent the wrong colour").
+  /// FIGURE_CORRECTION is the answer to "the money on this order is
+  /// wrong and it has already been paid": the once-per-order wallet
+  /// unique means a credit cannot be reversed and rewritten, so the
+  /// correction is settled BETWEEN the two wallets through the existing
+  /// settlement path rather than by a second credit.
+  disputeKind           StoreDisputeKind?   @map("dispute_kind")
+  /// A FIGURE_CORRECTION's CLAIM: what the raiser says is owed, and by
+  /// whom. Never money — staff settle with their own figures and this
+  /// pre-fills the form, so the settlement is not typed from nothing.
+  disputeClaimAmountInr Decimal?            @map("dispute_claim_amount_inr") @db.Decimal(14, 2)
+  disputeClaimPayer     ResellerMoneyParty? @map("dispute_claim_payer")
+  /// The order's money AS BOTH SIDES SAW IT when the correction was
+  /// raised — the per-party credit plan and the fee split, stamped by
+  /// the service (never sent by the raiser). Read a month later, "what
+  /// were we arguing about" is answered by the figures that were on the
+  /// table, not by today's ledger.
+  disputedFigures       Json?               @map("disputed_figures")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -9091,6 +9113,22 @@ enum ResellerMoneyParty {
   SELLER @map("seller")
 
   @@map("reseller_money_party")
+}
+
+/// RS-7 (2026-09-19) — what a store ↔ seller dispute is ABOUT.
+///
+/// Deliberately NOT a second `TicketType`: the settlement that moves
+/// money between the two wallets is gated on `STORE_DISPUTE` and must
+/// stay the ONE money path, so a correction is a KIND of dispute rather
+/// than a new type with its own (second) settlement route.
+enum StoreDisputeKind {
+  /// "You sent the wrong colour" — the original RS-7 shape.
+  GENERAL           @map("general")
+  /// "The money worked out on this order is wrong." Raised by either
+  /// side, settled between the two wallets exactly as any dispute is.
+  FIGURE_CORRECTION @map("figure_correction")
+
+  @@map("store_dispute_kind")
 }
 
 /// RS-6 phase 3c — where one party's credit on a reseller order stands.

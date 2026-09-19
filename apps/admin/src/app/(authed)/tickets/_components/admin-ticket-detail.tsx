@@ -275,12 +275,67 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         </CardBody>
       </Card>
 
+      {/*
+        RS-7 (2026-09-19) — a figure correction shows the money AS IT
+        STOOD when it was raised, for anyone who reads the ticket: the
+        ledger has moved since, so the live panel answers a different
+        question from the one being argued.
+      */}
+      {t.disputeKind === 'FIGURE_CORRECTION' && t.disputedFigures != null ? (
+        <>
+          <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">
+            The figures when this was raised
+          </h2>
+          <Card>
+            <CardBody>
+              <p className="text-text-muted text-xs">
+                As at {new Date(t.disputedFigures.capturedAt).toLocaleString()} · order{' '}
+                {t.disputedFigures.orderNumber} · {t.disputedFigures.paymentMode}
+                {t.disputedFigures.codInr === null ? null : ` · COD ₹${t.disputedFigures.codInr}`} ·
+                transfer ₹{t.disputedFigures.transferTotalInr} · retail ₹
+                {t.disputedFigures.retailTotalInr}
+              </p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {t.disputedFigures.parties.map((p) => (
+                  <li key={p.party}>
+                    <span className="font-medium">{p.party === 'STORE' ? 'Store' : 'Seller'}</span>{' '}
+                    net ₹{p.netInr}{' '}
+                    <span className="text-text-muted">
+                      (gross ₹{p.grossInr}, transfer ₹{p.transferInr}, tax ₹{p.taxShareInr}, COD fee
+                      ₹{p.codFeeShareInr}, instant ₹{p.instantFeeShareInr} —{' '}
+                      {p.status.toLowerCase()})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {t.disputedFigures.fees.length > 0 ? (
+                <ul className="text-text-muted mt-2 space-y-0.5 text-xs">
+                  {t.disputedFigures.fees.map((f) => (
+                    <li key={f.fee}>
+                      {f.fee}: store ₹{f.storeInr} · seller ₹{f.sellerInr} · total ₹{f.totalInr}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </CardBody>
+          </Card>
+        </>
+      ) : null}
+
       {canResolve && t.resolvedAt === null && isStoreDispute ? (
         <>
           <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">
             Settle between store and seller
           </h2>
-          <StoreDisputeSettle ticketId={ticketId} storeName={t.storeName ?? null} />
+          <StoreDisputeSettle
+            ticketId={ticketId}
+            storeName={t.storeName ?? null}
+            // RS-7 (2026-09-19) — seeded from the claim on a figure
+            // correction; absent on an ordinary dispute, which leaves the
+            // form exactly as it was.
+            claimAmountInr={t.disputeClaimAmountInr ?? null}
+            claimPayer={t.disputeClaimPayer ?? null}
+          />
         </>
       ) : null}
 

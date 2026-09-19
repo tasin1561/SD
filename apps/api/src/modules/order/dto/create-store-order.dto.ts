@@ -29,15 +29,29 @@ export class CreateStoreOrderItemDto {
   @Max(100_000)
   quantity!: number;
 
+  /**
+   * What the store sells ONE unit for (INR).
+   *
+   * OPTIONAL since 2026-09-19 (owner, for the CSV column — but the rule
+   * lives HERE so all three doors read the column the same way). Omitted,
+   * the line takes the SUGGESTED RETAIL the seller set for this product
+   * in this store's catalogue (RS-3); with no suggestion either it is
+   * refused by name (`RESELLER_RETAIL_REQUIRED`) rather than defaulted to
+   * zero, which would tell the customer the goods were free. It is NEVER
+   * derived from the COD amount — that is a total over every line plus
+   * delivery, less any advance.
+   */
   @ApiProperty({
+    required: false,
     minimum: 0,
     description:
-      'What the store sells ONE unit for (INR). Must sit inside the retail range the seller set for this product, where one is set.',
+      'What the store sells ONE unit for (INR). Must sit inside the retail range the seller set for this product, where one is set. Left out, the seller’s suggested retail for this store is used.',
   })
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  retailUnitPriceInr!: number;
+  retailUnitPriceInr?: number;
 }
 
 /**

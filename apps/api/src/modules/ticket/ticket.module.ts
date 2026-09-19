@@ -13,6 +13,7 @@ import { NotificationAudienceModule } from '../notification-audience/notificatio
 import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
 import { SellerNotificationPreferenceModule } from '../seller-notification-preference/seller-notification-preference.module';
 import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order-money.module';
+import { ResellerOrderMoneyViewModule } from '../reseller-order-money-view/reseller-order-money-view.module';
 import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { StoreTicketController } from './controllers/store-ticket.controller';
 import { StoreIssueController } from './controllers/store-issue.controller';
@@ -50,6 +51,10 @@ import { StoreOrderRequestModule } from '../store-order-request/store-order-requ
     // 2026-09-17 — a store's issue held for seller staff (ASK_SELLER). An
     // R3 primitive: it imports nothing ticket-shaped.
     StoreOrderRequestModule,
+    // RS-7 (2026-09-19) — a FIGURE_CORRECTION dispute stamps the order's
+    // money onto the ticket as both sides saw it. Read-only, imports only
+    // AuthCommonModule, so no cycle.
+    ResellerOrderMoneyViewModule,
   ],
   controllers: [
     SellerTicketController,

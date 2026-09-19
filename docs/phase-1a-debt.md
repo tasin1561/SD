@@ -1286,17 +1286,42 @@ rather than guessed. **Two of the three are now closed (2026-09-19) —
 items 2 and 3 below say what was built; item 1 is still open and is a
 product question about the CSV format, not a wiring job.**
 
-**1. A CSV re-upload still cannot patch a reseller order.**
-`OrderService.applyBulkPatch` keeps `RESELLER_ORDER_NOT_EDITABLE`. It
-re-snapshots the single line from the LIVE catalogue with no reseller
-terms at all — no transfer price, no retail range, no stock mode — so a
-patched line would carry the order's `store_kind = RESELLER` with null
-term columns, which the table's own CHECK refuses, and the money would
-have nothing to re-plan from. Making it work means routing the CSV line
-through `ResellerOrderRetermService` and deciding what a CSV row means by
-"the retail" (it carries a COD amount, not a per-line price). That is a
-product question about the CSV format, not a wiring job. The portal, the
-API key and the seller's edit form all reach the same capability.
+**1. DONE (2026-09-19) — a store's CSV re-upload patches its own order,
+and the selling price is a COLUMN with a stated fallback.**
+
+The product question this entry named — what a CSV row means by "the
+retail" — was answered by the owner: the store's CSV carries a SELLING
+PRICE column, and a row that leaves it blank takes the SUGGESTED RETAIL
+the seller set for that store (RS-3). A row with neither is refused BY
+NAME (`RESELLER_RETAIL_REQUIRED`), never priced at ₹0 and never derived
+from the COD amount — that is one total over every line plus delivery,
+less any advance, so splitting it back out would invent a price nobody
+agreed and then snapshot it as if they had.
+
+The rule lives in `ResellerOrderService.create` rather than in the CSV
+worker, so the portal, the API key and the CSV all read the column the
+same way; `CreateStoreOrderDto.retailUnitPriceInr` became optional to
+carry it. The column is on the store template and in
+`ORDER_CSV_ALIAS_MAP`, and is deliberately NOT in
+`ORDER_CSV_STORE_REQUIRED_FIELDS` any more: demanding it made an
+otherwise-valid file unmappable for a store that prices everything at
+its seller's suggestion.
+
+`OrderService.applyBulkPatch` still refuses a reseller order, and for
+the reason this entry gave — it re-snapshots the line from the LIVE
+catalogue with no reseller terms, which the table's CHECK refuses and
+the money could not re-plan from. The store's CSV does not go through
+it: `OrderCsvImportProcessorService.patchStoreOrder` routes the row to
+`OrderService.edit` with the STORE's scope — the same call the store's
+portal makes — so the line is re-termed by `ResellerOrderRetermService`
+under the ORDER's own snapshot (a kept line keeps its transfer price and
+range, a line whose SKU moved is priced from the store's catalogue and
+refused when it has no price there), the money is re-planned under the
+terms the order was PLACED on, and the seller is told. ORD-9 is now
+whole for a store: new → place, DRAFT/PENDING_CONFIRMATION → patch,
+CONFIRMED+ → error row. A row that changes nothing comes back
+`NOTHING_TO_UPDATE` and is counted as skipped, not failed — the same
+file uploaded twice is the ordinary shape.
 
 **2. A god-moded money change diverging silently — FIXED 2026-09-19.**
 
@@ -1344,10 +1369,47 @@ Still open, and unchanged: the underlying "correct a paid reseller
 order" flow. A CREDITED row is refused rather than reversed and
 re-written because the ledger's once-per-order unique
 (`seller_wallet_entries_once_per_order_uq`) would refuse the second
-`cod_collection` a rewrite needs, and weakening that index trades the
-double-credit guard for a case that should not arise. The answer remains
-a store dispute or a re-placed order; a first-class correction would need
-its own wallet directions and nobody has asked for one.
+`cod_collection` a rewrite needs.
+
+**DONE (2026-09-19) — the case BEHIND that refusal has an answer, and it
+is the dispute Skydrop already referees.** A paid reseller order whose
+figures are wrong is corrected through `TicketType.STORE_DISPUTE`'s
+existing settlement (`POST /admin/tickets/:id/store-dispute-settlement`),
+which moves money BETWEEN the store's wallet and the seller's as one
+pair with no bank entry. No second credit, no weakened index, ONE money
+path — the once-per-order unique stays exactly as it is, because it is
+the guard against paying an order twice.
+
+What the correction case ADDS is only what a settlement needs to be
+argued from: `tickets.dispute_kind` (`GENERAL` | `FIGURE_CORRECTION`),
+the raiser's CLAIM (`dispute_claim_amount_inr` +
+`dispute_claim_payer` — what they say is owed and by whom, required on a
+correction and refused on an ordinary dispute) and
+`tickets.disputed_figures`, a snapshot of the order's money AS BOTH
+SIDES SAW IT at the moment it was raised, taken from
+`ResellerOrderMoneyReadService` — the same computation behind the
+store's, the seller's and staff's own money panels, so the snapshot
+cannot disagree with what either party was looking at, and the argument
+stays legible after the live ledger has moved. Staff settle with their
+own figure; the claim pre-fills the form.
+
+**EITHER SIDE may raise it now.** The store already could
+(`POST /store/tickets`); Seller staff could not, which made "we disagree
+about this order" a one-directional right when both sides see the same
+figures and both can be wrong about them.
+`POST /seller/tickets/store-disputes` is the other half, and the STORE
+is read off the ORDER rather than named in the request, so a seller
+cannot file against a store that had nothing to do with it. The seller
+raises it from the order's own money panel ("Raise with the store"),
+which is where the numbers being disputed are on screen.
+
+`settlement-bank-invariant.spec.ts` carries the scenario: a correction
+settling AFTER both credits were paid moves the two wallets in opposite
+directions by exactly the settled amount, leaves the bank book, capital
+and `held for a seller` untouched (the money stays inside the seller's
+group), and `held = max(0, seller wallet + Σ their store wallets)` holds
+after every step — including when the payer goes negative, which is the
+group's exposure and never cash we invent an entry for.
 
 `repricePrepaidDebit`'s `STORE_BALANCE_INSUFFICIENT` guard is now
 REACHABLE (god mode can force a confirmed prepaid order's payment mode),

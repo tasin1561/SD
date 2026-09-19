@@ -24,7 +24,14 @@ import type {
   OrderCsvPreviewResult,
 } from './order-csv-import.service';
 
-/** The store's template: the seller's columns plus the retail price. */
+/**
+ * The store's template: the seller's columns plus the SELLING PRICE.
+ *
+ * The column is offered but not REQUIRED (2026-09-19): a row that leaves
+ * it blank is priced at the seller's suggested retail for this store. It
+ * stays on the template because stating it is the common case and a
+ * column nobody can see is a column nobody fills in.
+ */
 const STORE_TEMPLATE_COLUMNS: Array<[string, string]> = [
   ['Product SKU', 'TSHIRT-001-RED-M'],
   ['Quantity', '2'],

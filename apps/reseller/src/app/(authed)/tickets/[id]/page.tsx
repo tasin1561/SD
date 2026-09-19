@@ -99,6 +99,61 @@ function Outcome({ t }: { t: StoreTicketView }): ReactElement | null {
   );
 }
 
+/**
+ * RS-7 (2026-09-19) — a "correct the figures" dispute: what is being
+ * claimed, and the money AS IT STOOD when it was raised.
+ *
+ * The snapshot is shown rather than a live read on purpose. The ledger
+ * keeps moving — a later payout, a courier cost, a refund — so "the
+ * figures we were arguing about" and "the figures now" are different
+ * questions, and only the first one explains what was asked for.
+ */
+function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
+  if (t.disputeKind !== 'FIGURE_CORRECTION') return null;
+  const f = t.disputedFigures;
+  return (
+    <Section
+      title="The figures"
+      subtitle="What was claimed, and what the order’s money looked like when this was raised."
+    >
+      <Card>
+        <CardBody>
+          {t.disputeClaimAmountInr !== null ? (
+            <p className="text-sm">
+              Claimed: <Money amount={t.disputeClaimAmountInr} convert={false} />{' '}
+              <span className="text-text-muted">
+                {t.disputeClaimPayer === 'STORE' ? '— we owe the seller' : '— the seller owes us'}
+              </span>
+            </p>
+          ) : null}
+          {f === null ? (
+            <p className="text-text-muted mt-2 text-sm">No figures were recorded with this one.</p>
+          ) : (
+            <div className="mt-3 space-y-1.5 text-sm">
+              <p className="text-text-muted text-xs">
+                As at {when(f.capturedAt)} · order {f.orderNumber} · {f.paymentMode}
+                {f.codInr === null ? null : (
+                  <>
+                    {' · COD '}
+                    <Money amount={f.codInr} convert={false} />
+                  </>
+                )}
+              </p>
+              {f.parties.map((p) => (
+                <p key={p.party}>
+                  {p.party === 'STORE' ? 'Us' : 'The seller'}: net{' '}
+                  <Money amount={p.netInr} convert={false} />{' '}
+                  <span className="text-text-muted">({p.status.toLowerCase()})</span>
+                </p>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+    </Section>
+  );
+}
+
 function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
   const me = useStoreIdentity();
   const events = useStoreTicketEvents(t.id);
@@ -149,6 +204,7 @@ function TicketBody({ t }: { t: StoreTicketView }): ReactElement {
         }
       />
       <Outcome t={t} />
+      <Correction t={t} />
       <Section title="Conversation">
         {t.description !== null ? (
           <p className="mb-3 text-sm whitespace-pre-wrap">{t.description}</p>

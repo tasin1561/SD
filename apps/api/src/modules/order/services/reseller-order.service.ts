@@ -182,7 +182,36 @@ export class ResellerOrderService {
           message: `${label(item.variantId)} is not in this store’s catalogue.`,
         });
       }
-      const retail = new D(item.retailUnitPriceInr);
+      /*
+        THE SELLING PRICE, AND WHERE IT COMES FROM WHEN THE CALLER STATES NONE
+        (owner, 2026-09-19 — asked for the CSV; decided HERE so the
+        portal, the CSV worker and the API key cannot drift).
+
+        Stated ⇒ used. Not stated ⇒ the seller's own SUGGESTED RETAIL for
+        this product in this store's catalogue — a figure the seller set,
+        for this store, which is why it is a fallback rather than a guess.
+        Neither ⇒ refused BY NAME. It is never derived from the COD
+        amount: that is one total covering every line, the delivery fee
+        and any advance, so splitting it back out would invent a price
+        nobody agreed and then snapshot it (ORD-6) as if they had.
+
+        `RESELLER_RETAIL_REQUIRED` is the same code and the same shape
+        `ResellerOrderRetermService` uses when a line is ADDED to an
+        existing order with nothing to price it by.
+      */
+      const retail =
+        item.retailUnitPriceInr === undefined
+          ? price.suggestedRetailInr
+          : new D(item.retailUnitPriceInr);
+      if (retail === null) {
+        throw new BadRequestException({
+          code: 'RESELLER_RETAIL_REQUIRED',
+          message:
+            `Say what ${label(item.variantId)} is being sold to the customer for — the seller has ` +
+            'suggested no retail price for it.',
+          details: { variantId: item.variantId },
+        });
+      }
       const tooLow = price.minRetailInr !== null && retail.lt(price.minRetailInr);
       const tooHigh = price.maxRetailInr !== null && retail.gt(price.maxRetailInr);
       if (tooLow || tooHigh) {
@@ -361,10 +390,17 @@ export function toCreateOrderDto(
   const { items, notes, ...rest } = input;
   const dto = {
     ...rest,
-    items: items.map((i) => ({
+    // `unitPriceInr` carries the RETAIL on a reseller order, and it is
+    // read from the RESOLVED line rather than from the request: the
+    // caller may have stated no price, in which case the resolved one is
+    // the seller's suggested retail (2026-09-19). Taking it from the
+    // request here would write NULL alongside a snapshot that says
+    // otherwise, and every reader that shows a unit price would disagree
+    // with the money.
+    items: items.map((i, idx) => ({
       variantId: i.variantId,
       quantity: i.quantity,
-      unitPriceInr: i.retailUnitPriceInr,
+      unitPriceInr: Number((lines[idx]?.retailUnitInr ?? new D(0)).toFixed(2)),
     })),
     ...(notes === undefined ? {} : { sellerNotes: notes }),
   } as CreateOrderDto;

@@ -16,6 +16,32 @@ import { STORE_ORDERS_KEY, type StoreOrderRequestView } from './order-hooks';
  * path is the store's own (`/api/store/tickets*`), scoped by the token.
  */
 
+/** RS-7 — the money as both sides saw it when a correction was raised. */
+export interface DisputedFiguresSnapshot {
+  readonly capturedAt: string;
+  readonly orderNumber: string;
+  readonly paymentMode: string;
+  readonly codInr: string | null;
+  readonly transferTotalInr: string;
+  readonly retailTotalInr: string;
+  readonly parties: ReadonlyArray<{
+    readonly party: 'STORE' | 'SELLER';
+    readonly status: string;
+    readonly grossInr: string;
+    readonly transferInr: string;
+    readonly taxShareInr: string;
+    readonly codFeeShareInr: string;
+    readonly instantFeeShareInr: string;
+    readonly netInr: string;
+  }>;
+  readonly fees: ReadonlyArray<{
+    readonly fee: string;
+    readonly storeInr: string;
+    readonly sellerInr: string;
+    readonly totalInr: string;
+  }>;
+}
+
 export interface StoreTicketView {
   readonly id: string;
   readonly ticketNumber: string;
@@ -31,6 +57,11 @@ export interface StoreTicketView {
   readonly resolutionNotes: string | null;
   readonly resolvedAt: string | null;
   readonly createdAt: string;
+  /** RS-7 (2026-09-19) — the correction case. */
+  readonly disputeKind: 'GENERAL' | 'FIGURE_CORRECTION' | null;
+  readonly disputeClaimAmountInr: string | null;
+  readonly disputeClaimPayer: 'STORE' | 'SELLER' | null;
+  readonly disputedFigures: DisputedFiguresSnapshot | null;
 }
 
 export interface StoreTicketEvent {
@@ -84,10 +115,24 @@ export function useStoreTicketEvents(id: string): UseQueryResult<readonly StoreT
   });
 }
 
+/**
+ * RS-7 — raise a dispute with the seller. A FIGURE_CORRECTION additionally
+ * says what is owed and by whom; the server refuses one without it, and
+ * refuses a claim on a GENERAL dispute (FE-2 — we do not pre-empt it).
+ */
+export interface RaiseStoreDisputeInput {
+  readonly orderId: string;
+  readonly subject: string;
+  readonly description?: string;
+  readonly disputeKind?: 'GENERAL' | 'FIGURE_CORRECTION';
+  readonly claimAmountInr?: string;
+  readonly claimPayer?: 'STORE' | 'SELLER';
+}
+
 export function useRaiseStoreDispute(): UseMutationResult<
   StoreTicketView,
   Error,
-  { readonly orderId: string; readonly subject: string; readonly description?: string }
+  RaiseStoreDisputeInput
 > {
   const client = useApiClient();
   const qc = useQueryClient();

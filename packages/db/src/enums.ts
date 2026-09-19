@@ -176,3 +176,5 @@ export { ResellerMoneyParty, ResellerCreditStatus } from '@prisma/client';
 // first of the two layers a store message passes through; the second is
 // a person's own per-topic mute in `notification_subscriptions`.
 export { StoreNotificationCategory } from '@prisma/client';
+// RS-7 (2026-09-19) — what a store ↔ seller dispute is about.
+export { StoreDisputeKind } from '@prisma/client';

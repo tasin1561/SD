@@ -286,6 +286,41 @@ export function useCreateTicket(): UseMutationResult<
   });
 }
 
+/**
+ * RS-7 (2026-09-19) — raise a dispute with one of YOUR reseller stores.
+ *
+ * Its own endpoint and its own mutation rather than a flag on
+ * `useCreateTicket`: that one opens a conversation with SKYDROP about a
+ * parcel (and opens a courier escalation behind it); this opens one with
+ * a STORE that Skydrop referees and may settle between the two wallets.
+ *
+ * FIGURE_CORRECTION is the case behind `RESELLER_CREDIT_ALREADY_PAID` —
+ * the money on the order is already paid and the ledger will not write a
+ * second credit, so the correction is settled between the wallets
+ * instead. It must carry what is owed and by whom; the server refuses it
+ * otherwise and we do not pre-empt that (FE-2).
+ */
+export function useRaiseStoreDispute(): UseMutationResult<
+  TicketView,
+  Error,
+  {
+    orderId: string;
+    subject: string;
+    description?: string;
+    disputeKind?: 'GENERAL' | 'FIGURE_CORRECTION';
+    claimAmountInr?: string;
+    claimPayer?: 'STORE' | 'SELLER';
+  }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) =>
+      client.request<TicketView>('/api/seller/tickets/store-disputes', { method: 'POST', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['seller-tickets'] }),
+  });
+}
+
 // ───────── Inbound freight (R3) ─────────
 
 export function useSellerFreight(query: { status?: string }): UseQueryResult<{

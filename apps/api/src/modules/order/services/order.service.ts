@@ -1911,14 +1911,25 @@ export class OrderService {
       },
     });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
-    // RS-5: a patch re-snapshots the line from the live catalogue with no
-    // reseller terms, which would re-price a store's order outside them.
-    // The store's CSV path never calls this (a repeated reference is an
-    // error row there); refused here too so no future caller can.
+    /*
+      RS-5: THIS path re-snapshots the line from the LIVE catalogue with
+      no reseller terms on it, so a patched line would carry
+      `store_kind = RESELLER` with null term columns — which
+      `order_items_reseller_snapshot_ck` refuses — and the money would
+      have nothing to re-plan from. It stays refused.
+
+      A store's OWN CSV re-upload is patchable since 2026-09-19, and it
+      does NOT come through here: `OrderCsvImportProcessorService`
+      routes a store row to `OrderService.edit` with the store's scope,
+      which re-terms the line under the ORDER's snapshot and re-plans the
+      money. This refusal is what stops a future caller from taking the
+      cheap route instead.
+    */
     if (order.storeKind === SellerStoreKind.RESELLER) {
       throw new ConflictException({
         code: 'RESELLER_ORDER_NOT_EDITABLE',
-        message: 'A reseller store’s order cannot be changed by a CSV re-upload',
+        message:
+          'A reseller store’s order cannot be changed by this path — it carries terms a live-catalogue re-snapshot would lose',
       });
     }
     if (order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.PENDING_CONFIRMATION) {

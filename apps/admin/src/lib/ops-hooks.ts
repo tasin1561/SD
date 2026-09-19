@@ -67,6 +67,39 @@ export interface TicketView {
   readonly storeId?: string | null;
   readonly storeName?: string | null;
   readonly disputePayer?: 'STORE' | 'SELLER' | null;
+  /**
+   * RS-7 (2026-09-19) — the "correct the figures" case: what kind of
+   * dispute it is, what the raiser says is owed and by whom, and the
+   * order's money as BOTH SIDES saw it when they raised it. The snapshot
+   * is what a settlement is argued from — the live ledger has moved.
+   */
+  readonly disputeKind?: 'GENERAL' | 'FIGURE_CORRECTION' | null;
+  readonly disputeClaimAmountInr?: string | null;
+  readonly disputeClaimPayer?: 'STORE' | 'SELLER' | null;
+  readonly disputedFigures?: {
+    readonly capturedAt: string;
+    readonly orderNumber: string;
+    readonly paymentMode: string;
+    readonly codInr: string | null;
+    readonly transferTotalInr: string;
+    readonly retailTotalInr: string;
+    readonly parties: ReadonlyArray<{
+      readonly party: 'STORE' | 'SELLER';
+      readonly status: string;
+      readonly grossInr: string;
+      readonly transferInr: string;
+      readonly taxShareInr: string;
+      readonly codFeeShareInr: string;
+      readonly instantFeeShareInr: string;
+      readonly netInr: string;
+    }>;
+    readonly fees: ReadonlyArray<{
+      readonly fee: string;
+      readonly storeInr: string;
+      readonly sellerInr: string;
+      readonly totalInr: string;
+    }>;
+  } | null;
   readonly status: TicketStatus;
   readonly sellerId: string;
   readonly orderId: string | null;

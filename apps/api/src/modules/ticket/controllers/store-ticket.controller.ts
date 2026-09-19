@@ -70,6 +70,11 @@ export class StoreTicketController {
       orderId: body.orderId,
       subject: body.subject,
       description: body.description ?? null,
+      // RS-7 (2026-09-19) — a "correct the figures" dispute carries what
+      // is being corrected. Absent, this is the ordinary GENERAL dispute.
+      ...(body.disputeKind === undefined ? {} : { disputeKind: body.disputeKind }),
+      ...(body.claimAmountInr === undefined ? {} : { claimAmountInr: body.claimAmountInr }),
+      ...(body.claimPayer === undefined ? {} : { claimPayer: body.claimPayer }),
     });
   }
 

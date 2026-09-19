@@ -170,7 +170,7 @@ export default function StoreOrderImportPage(): ReactElement {
       </Link>
       <PageHeader
         title="Upload orders"
-        subtitle="One row is one order. Every row needs a Retail Price — what you sell the product for."
+        subtitle="One row is one order. Retail Price is what you sell the product for; leave it blank and we use your seller’s suggested price. Re-upload a row with the same reference to correct an order you have not had confirmed yet."
       />
       <Section title="Upload">
         <Card>

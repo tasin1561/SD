@@ -1,10 +1,12 @@
 'use client';
 
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import type { ResellerOrderMoneyView, ResellerPartyCreditView } from '@skydrop/api-client';
 import { ApiError } from '@skydrop/api-client';
+import { useSellerIdentity } from '@skydrop/auth/client';
 import type { StoreWalletEntryDirection, WalletEntryDirection } from '@skydrop/db';
 import {
+  Button,
   Card,
   CardBody,
   ErrorState,
@@ -25,7 +27,9 @@ import {
   walletDirectionLabel,
 } from '@skydrop/ui/status';
 import { useResellerOrderMoney } from '@/lib/api-hooks';
+import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
+import { DisputeFiguresModal } from './dispute-figures-modal';
 
 /** The fee a split line is a share of, in words. */
 export function feeLabel(fee: WalletEntryDirection | StoreWalletEntryDirection | string): string {
@@ -72,6 +76,29 @@ function when(p: ResellerPartyCreditView): string {
 }
 
 /**
+ * RS-7 (2026-09-19) — "Raise with the store", beside the figures it is
+ * about.
+ *
+ * Here rather than on the tickets page because this is where the numbers
+ * somebody is disagreeing with are on screen, and because the order is
+ * then not something they have to go and look up. Cosmetic gating only
+ * (FE-2): `tickets.create` is what the server checks.
+ */
+function DisputeFiguresAction({ orderId }: { readonly orderId: string }): ReactElement | null {
+  const [open, setOpen] = useState(false);
+  const identity = useSellerIdentity();
+  if (!can(identity, 'tickets.create')) return null;
+  return (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        Raise with the store
+      </Button>
+      <DisputeFiguresModal open={open} onOpenChange={setOpen} orderId={orderId} />
+    </>
+  );
+}
+
+/**
  * RS-6 phase 3c — what one of your reseller stores' orders earns YOU:
  * the transfer price, your share of each fee, and when it lands. The
  * figures come from the API (the plan is decided there, never here).
@@ -110,6 +137,7 @@ export function ResellerMoneyPanel({
     <Section
       title="Reseller store money"
       subtitle="Your transfer price for the goods, your share of Skydrop's fees on this order, and when it reaches your wallet."
+      action={<DisputeFiguresAction orderId={orderId} />}
     >
       <Card>
         <CardBody>
