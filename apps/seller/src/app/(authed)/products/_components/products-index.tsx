@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { ProductStatus } from '@skydrop/db';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useProductsList, useStockSummary } from '@/lib/api-hooks';
-import { canSeePath } from '@/lib/page-access';
+import { can, canSeePath } from '@/lib/page-access';
 import { Boxes, Layers, Plus, TriangleAlert, Wallet } from 'lucide-react';
 import {
   BandBody,
@@ -143,7 +143,14 @@ export function ProductsIndex(): ReactElement {
   // (a variant is a SKU), so every tile says "SKUs" rather than
   // "products" — the two numbers differ and conflating them would make
   // the tiles disagree with the table on purpose.
-  const stock = useStockSummary();
+  //
+  // GATED, and the gate is passed to `enabled` rather than only hiding
+  // the tiles: this page is reachable on `catalog.view`, but the summary
+  // needs `inventory.view`. Rendering nothing while still FIRING the
+  // request means somebody who may only see the catalogue collects a 403
+  // on load for doing nothing at all.
+  const canSeeStock = identity !== null && can(identity, 'inventory.view');
+  const stock = useStockSummary({ enabled: canSeeStock });
 
   const filtered = params.status !== '' || params.search !== '';
 
@@ -198,71 +205,73 @@ export function ProductsIndex(): ReactElement {
              then becomes 14,820 has told you something false in the
              meantime, and this is the screen a seller checks before
              deciding whether to ship more. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Active SKUs"
-          icon={<Layers size={13} aria-hidden />}
-          value={stock.data?.totalSkus ?? <span className="text-text-faint">—</span>}
-          unit={stock.data === undefined ? undefined : 'SKUs'}
-          tone="neutral"
-        />
-        <Stat
-          label="Units in stock"
-          icon={<Boxes size={13} aria-hidden />}
-          value={stock.data?.totalQtyOnHand ?? <span className="text-text-faint">—</span>}
-          unit={stock.data === undefined ? undefined : 'units'}
-          tone="neutral"
-          {...(stock.data === undefined
-            ? {}
-            : {
-                foot: [
-                  { label: 'Sellable now', value: stock.data.totalQtyAvailable },
-                  { label: 'Held for orders', value: stock.data.totalQtyReserved },
-                ],
-              })}
-        />
-        <Stat
-          label="Low on stock"
-          icon={<TriangleAlert size={13} aria-hidden />}
-          value={stock.data?.lowStockSkus ?? <span className="text-text-faint">—</span>}
-          unit={stock.data === undefined ? undefined : 'SKUs'}
-          tone={stock.data !== undefined && stock.data.lowStockSkus > 0 ? 'warn' : 'neutral'}
-          hint={
-            stock.data !== undefined && stock.data.lowStockSkus > 0
-              ? 'At or under the threshold you set.'
-              : undefined
-          }
-        />
-        <Stat
-          label="Stock value at cost"
-          icon={<Wallet size={13} aria-hidden />}
-          value={
-            stock.data === undefined ? (
-              <span className="text-text-faint">—</span>
-            ) : (
-              <Money amount={stock.data.valueAtWarehouseInr} />
-            )
-          }
-          tone="neutral"
-          {...(stock.data === undefined
-            ? {}
-            : {
-                foot: [
-                  {
-                    label: 'In transit',
-                    value: <Money amount={stock.data.valueInTransitInr} />,
-                  },
-                  // NOT folded into the total as zero. A batch with no
-                  // recorded cost is worth something unknown, and the
-                  // summary counts those units separately for exactly
-                  // this reason (TRE-6's "uncovered, never defaulted").
-                  ...(stock.data.valueUnknownUnits > 0
-                    ? [{ label: 'Units with no cost', value: stock.data.valueUnknownUnits }]
-                    : []),
-                ],
-              })}
-        />
-      </div>
+      {canSeeStock && (
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Stat
+            label="Active SKUs"
+            icon={<Layers size={13} aria-hidden />}
+            value={stock.data?.totalSkus ?? <span className="text-text-faint">—</span>}
+            unit={stock.data === undefined ? undefined : 'SKUs'}
+            tone="neutral"
+          />
+          <Stat
+            label="Units in stock"
+            icon={<Boxes size={13} aria-hidden />}
+            value={stock.data?.totalQtyOnHand ?? <span className="text-text-faint">—</span>}
+            unit={stock.data === undefined ? undefined : 'units'}
+            tone="neutral"
+            {...(stock.data === undefined
+              ? {}
+              : {
+                  foot: [
+                    { label: 'Sellable now', value: stock.data.totalQtyAvailable },
+                    { label: 'Held for orders', value: stock.data.totalQtyReserved },
+                  ],
+                })}
+          />
+          <Stat
+            label="Low on stock"
+            icon={<TriangleAlert size={13} aria-hidden />}
+            value={stock.data?.lowStockSkus ?? <span className="text-text-faint">—</span>}
+            unit={stock.data === undefined ? undefined : 'SKUs'}
+            tone={stock.data !== undefined && stock.data.lowStockSkus > 0 ? 'warn' : 'neutral'}
+            hint={
+              stock.data !== undefined && stock.data.lowStockSkus > 0
+                ? 'At or under the threshold you set.'
+                : undefined
+            }
+          />
+          <Stat
+            label="Stock value at cost"
+            icon={<Wallet size={13} aria-hidden />}
+            value={
+              stock.data === undefined ? (
+                <span className="text-text-faint">—</span>
+              ) : (
+                <Money amount={stock.data.valueAtWarehouseInr} />
+              )
+            }
+            tone="neutral"
+            {...(stock.data === undefined
+              ? {}
+              : {
+                  foot: [
+                    {
+                      label: 'In transit',
+                      value: <Money amount={stock.data.valueInTransitInr} />,
+                    },
+                    // NOT folded into the total as zero. A batch with no
+                    // recorded cost is worth something unknown, and the
+                    // summary counts those units separately for exactly
+                    // this reason (TRE-6's "uncovered, never defaulted").
+                    ...(stock.data.valueUnknownUnits > 0
+                      ? [{ label: 'Units with no cost', value: stock.data.valueUnknownUnits }]
+                      : []),
+                  ],
+                })}
+          />
+        </div>
+      )}
 
       <SectionBand
         index="01"
