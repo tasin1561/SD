@@ -29,7 +29,10 @@ import {
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { OrderEventWriterService, type EventActor } from './order-event-writer.service';
 import { OrderSideEffect, OrderStateMachineService } from './order-state-machine.service';
-import { OrderPostCommitHooksService } from './order-post-commit-hooks.service';
+import {
+  OrderPostCommitHooksService,
+  type ResellerMoneyEditOutcome,
+} from './order-post-commit-hooks.service';
 
 const DEFAULT_WAREHOUSE_SETTING_KEY = 'ops.default_warehouse_id';
 
@@ -386,6 +389,18 @@ export class OrderWriteService {
     orderId: string,
   ): Promise<{ readonly shipmentId: string; readonly created: boolean }> {
     return this.postCommit.ensureShipmentProvisioned(orderId);
+  }
+
+  /**
+   * Ask again for a reseller order whose money was not re-worked-out
+   * after it changed (2026-09-19). The SAME shared hook the edit runs,
+   * so a retry cannot price it differently from the original attempt.
+   * For the hourly sweep (`OrderAttentionService`), which reads the open
+   * `reseller-money-stale:` issues as its worklist. Never throws; the
+   * outcome says whether the alarm cleared.
+   */
+  async retryResellerMoneyRecalculation(orderId: string): Promise<ResellerMoneyEditOutcome> {
+    return this.postCommit.retryResellerMoneyRecalculation(orderId);
   }
 
   /**

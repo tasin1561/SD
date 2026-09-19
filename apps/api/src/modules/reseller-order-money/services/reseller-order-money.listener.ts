@@ -4,7 +4,7 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { ActorType, OrderStatus } from '@skydrop/db';
+import { ActorType, OrderStatus, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import type { Subscription } from 'rxjs';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -18,7 +18,22 @@ import {
   REFUNDABLE_FROM_STATES,
   VOIDABLE_TERMINAL_STATES,
 } from '../../order/order-carriage';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { ResellerOrderMoneyService } from './reseller-order-money.service';
+
+/**
+ * One open issue per order whose money did not follow it (2026-09-19).
+ *
+ * Every failure here used to be a HIGH audit row and nothing else, and
+ * nothing reads audit rows: a store and a seller simply went uncredited
+ * on a delivered order, and the first sign of it was somebody asking why
+ * a balance looked wrong. It clears itself the next time ANY money step
+ * on that order succeeds — every step is idempotent and `handle` is the
+ * documented manual re-trigger, so re-running it is the fix.
+ */
+export function resellerMoneyStepFailedKey(orderId: string): string {
+  return `reseller-money-step:${orderId}`;
+}
 
 /** The statuses that mean the parcel is physically back with us. */
 const RETURNED: ReadonlySet<OrderStatus> = new Set([
@@ -59,6 +74,7 @@ export class ResellerOrderMoneyListener implements OnApplicationBootstrap, OnMod
     private readonly money: ResellerOrderMoneyService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -121,12 +137,20 @@ export class ResellerOrderMoneyListener implements OnApplicationBootstrap, OnMod
       } else if (RETURNED.has(event.to) && !RETURNED.has(event.from)) {
         await this.money.onReturned(event.orderId, 'the parcel came back to us');
       }
+      // Whatever was wrong is not wrong any more.
+      await this.issues.resolveByKey(
+        resellerMoneyStepFailedKey(event.orderId),
+        'A later money step on this order ran.',
+      );
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       this.logger.error(
         { orderId: event.orderId, to: event.to, err: error },
         'Reseller order money step FAILED — the order moved and its money did not',
       );
+      // The audit row is the HISTORY. It is NOT the alarm: nothing reads
+      // audit rows, which is why an uncredited store could stay
+      // uncredited until somebody noticed a balance looked wrong.
       await this.audit
         .log({
           actorType: ActorType.SYSTEM,
@@ -145,6 +169,32 @@ export class ResellerOrderMoneyListener implements OnApplicationBootstrap, OnMod
           },
         })
         .catch(() => undefined);
+      await this.issues.raise({
+        kind: SystemIssueKind.MONEY,
+        severity: SystemIssueSeverity.HIGH,
+        title: `${head.orderNumber}: the order moved and its money did not`,
+        detail:
+          `This reseller order went to ${event.to.toLowerCase().replaceAll('_', ' ')} and the ` +
+          `money that goes with it failed: ${error}\n\n` +
+          'Depending on which step it was, the store and the seller may not have been credited ' +
+          'at all, a prepaid debit may not have been taken or given back, or a credit that ' +
+          'should have been reversed is still standing. Every step is idempotent, so the fix is ' +
+          'to re-run it once the cause is dealt with; this clears itself the next time any ' +
+          'money step on this order succeeds.',
+        source: 'ResellerOrderMoneyListener',
+        dedupeKey: resellerMoneyStepFailedKey(event.orderId),
+        metadata: {
+          orderId: event.orderId,
+          orderNumber: head.orderNumber,
+          storeId: head.storeId,
+          sellerId: event.sellerId,
+          fromStatus: event.from,
+          toStatus: event.to,
+          trigger:
+            event.source === ADMIN_OVERRIDE_SOURCE ? 'force_mutation' : 'lifecycle_transition',
+          error,
+        },
+      });
     }
   }
 }

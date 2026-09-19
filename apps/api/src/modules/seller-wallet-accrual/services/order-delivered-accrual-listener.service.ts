@@ -4,14 +4,27 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { ActorType, OrderStatus } from '@skydrop/db';
+import { ActorType, OrderStatus, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import type { Subscription } from 'rxjs';
 import {
   OrderLifecycleEventBus,
   type OrderLifecycleEvent,
 } from '../../lifecycle-events/order-lifecycle-event-bus.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { DeliveredAccrualService } from './delivered-accrual.service';
+
+/**
+ * One open issue per order whose delivery-time money did not run
+ * (2026-09-19). Every failure here used to be a HIGH audit row and
+ * nothing else, and nothing reads audit rows: a delivered order could
+ * stay unbilled, an Instant Pay seller uncredited and a freight share
+ * uncollected, with the first sign being a figure somebody queried
+ * weeks later. It clears itself the next time the accrual runs.
+ */
+export function deliveredAccrualFailedKey(orderId: string): string {
+  return `delivered-accrual-failed:${orderId}`;
+}
 
 /**
  * The ONE path by which a delivery is billed. The work itself — tier
@@ -64,6 +77,7 @@ export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, On
     private readonly bus: OrderLifecycleEventBus,
     private readonly delivered: DeliveredAccrualService,
     private readonly audit: AuditLogService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -110,6 +124,10 @@ export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, On
     if (event.to !== OrderStatus.DELIVERED) return;
     try {
       await this.delivered.accrueForDelivered(event.orderId);
+      await this.issues.resolveByKey(
+        deliveredAccrualFailedKey(event.orderId),
+        'The delivery-time money ran.',
+      );
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       const trigger = event.source === 'ADMIN_OVERRIDE' ? 'force_mutation' : 'lifecycle_transition';
@@ -134,6 +152,33 @@ export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, On
           },
         })
         .catch(() => undefined);
+      // The audit row is the HISTORY. It is NOT the alarm — nothing
+      // reads audit rows, which is exactly how a delivered order could
+      // stay unbilled until somebody queried a figure weeks later. Every
+      // step of the accrual is idempotent under the WALLET lock, so
+      // re-running `handle` once the cause is dealt with is the fix, and
+      // that success clears this.
+      await this.issues.raise({
+        kind: SystemIssueKind.MONEY,
+        severity: SystemIssueSeverity.HIGH,
+        title: 'A delivered order was not billed',
+        detail:
+          `This order reached DELIVERED and the money that goes with it failed: ${error}\n\n` +
+          'Depending on how far it got, the delivery charge may not have been taken, an Instant ' +
+          'Pay seller may not have been credited their COD, and the inbound-freight share of the ' +
+          'units that left may still be owed. Every step is idempotent under the wallet lock, so ' +
+          'the fix is to re-run it; this clears itself once the delivery-time money runs.',
+        source: 'OrderDeliveredAccrualListener',
+        dedupeKey: deliveredAccrualFailedKey(event.orderId),
+        metadata: {
+          orderId: event.orderId,
+          sellerId: event.sellerId,
+          trigger,
+          fromStatus: event.from,
+          statusEventId: event.statusEventId,
+          error,
+        },
+      });
     }
   }
 }

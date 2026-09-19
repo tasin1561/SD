@@ -237,6 +237,17 @@ export interface ForceMutationResult {
    *  The saga does NOT block on shortfall — god mode opts out of
    *  compensation. */
   readonly reserveOutcomes: readonly ReserveAttemptOutcome[] | null;
+  /**
+   * What the force did to a RESELLER order's money (2026-09-19). `ran`
+   * is false when nothing money-affecting moved. A non-null `refusal`
+   * means the order and the credits behind it now DISAGREE and a person
+   * has to settle it — surfaced here rather than left to be discovered
+   * on /system-issues later.
+   */
+  readonly resellerMoney: {
+    readonly ran: boolean;
+    readonly refusal: 'ALREADY_PAID' | 'FAILED' | null;
+  };
 }
 
 export interface ReleaseReservationsRequest {

@@ -266,6 +266,17 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
       'A store changed an order of its own — the customer’s details, what is in the parcel, or the money — or changed a customer’s record. You own the goods, so you are told what moved.',
     group: 'Reseller stores',
   },
+  {
+    // Sent by StoreRequestNotifier (2026-09-19) when a Skydrop admin
+    // changes a money-affecting field on a reseller order through god
+    // mode (ORD-2). Neither you nor the store made that change, so both
+    // of you are told.
+    topic: 'seller.store_order_money_changed_by_admin',
+    label: 'Skydrop changed the money on a reseller order',
+    description:
+      'A Skydrop admin changed what is collected on one of your reseller stores’ orders. You and the store are both told what moved, and what each of you is now credited.',
+    group: 'Reseller stores',
+  },
 ];
 
 /**

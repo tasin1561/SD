@@ -24,8 +24,11 @@ import { OrderEventWriterService } from './order-event-writer.service';
 import type { ForceMutationFieldsDto } from '../dto/force-mutation.dto';
 import {
   ADMIN_OVERRIDE_SOURCE,
+  MONEY_AFFECTING_ORDER_FIELDS,
   OrderPostCommitHooksService,
+  type ResellerMoneyEditOutcome,
 } from './order-post-commit-hooks.service';
+import { describeFieldMoves } from '../order-change-description';
 
 const DEFAULT_WAREHOUSE_SETTING_KEY = 'ops.default_warehouse_id';
 const MIN_REASON_LEN = 30;
@@ -90,6 +93,14 @@ export interface ForceMutateResult {
    */
   shipmentsSynced: number;
   reserveOutcomes: ReserveAttemptOutcome[] | null;
+  /**
+   * What the force did to a RESELLER order's money (2026-09-19). Surfaced
+   * rather than swallowed, for the same reason `reserveOutcomes` is: a
+   * non-null `refusal` means the order and its credits now disagree and
+   * a person has to settle it — the admin who forced it should read that
+   * on the response, not discover it on `/system-issues` later.
+   */
+  resellerMoney: ResellerMoneyEditOutcome;
 }
 
 export interface ReleaseReservationsInput {
@@ -226,6 +237,13 @@ export class OrderAdminOverrideService {
         sellerId: true,
         orderNumber: true,
         status: true,
+        // The money-affecting fields, as they stand BEFORE the force —
+        // so the re-pricing hook can say old → new, and the two parties
+        // are told a figure that moved rather than only the new one.
+        codAmountInr: true,
+        paymentMode: true,
+        storeId: true,
+        storeKind: true,
         items: { select: { id: true, variantId: true, quantity: true } },
       },
     });
@@ -244,7 +262,10 @@ export class OrderAdminOverrideService {
       reserveOutcomes = await this.attemptReservations(order);
     }
 
-    const { data, applied } = this.buildUpdate(input.fieldChanges, input.targetStatus);
+    // One instant for the whole force, so the notice's event id is the
+    // same on every leg of it (NOTIF-2).
+    const forcedAt = new Date();
+    const { data, applied } = this.buildUpdate(input.fieldChanges, input.targetStatus, forcedAt);
     const destData = this.buildShipmentDestUpdate(input.fieldChanges);
 
     // A status CHANGE, not merely a status supplied: forcing an order to
@@ -353,6 +374,35 @@ export class OrderAdminOverrideService {
       return changedId;
     });
 
+    // ── POST-COMMIT: the money a forced field change moved ─────────────
+    // FIRST, before anything reacts to the new status: a reseller
+    // order's credits are a PLAN read at confirmation, delivery and
+    // payout, and the lifecycle emit below is what sets those off. A
+    // plan re-priced afterwards would be corrected only after the stale
+    // figure had already been credited.
+    //
+    // The SAME shared hook `OrderService.edit` runs (2026-09-19). God
+    // mode may write `codAmountInr` and `paymentMode`, and before this
+    // it called nothing: the order said one figure and the credits
+    // behind it were worked out from another, silently. It still opts
+    // out of the STOCK saga, and only of that.
+    const moneyMoved = await this.postCommit.runForMoneyAffectingEdit({
+      orderId: order.id,
+      sellerId: order.sellerId,
+      orderNumber: order.orderNumber,
+      changed: applied,
+      reason: `Order ${order.orderNumber} was force-changed by an admin (${applied.join(', ')})`,
+      // God mode has no notice of its own, so the hook tells the two
+      // parties: neither of them made this change, so both are the
+      // "other side" the 2026-09-18 rule addresses.
+      announce: {
+        storeId: order.storeId,
+        storeKind: order.storeKind,
+        changes: this.describeForcedMoneyMoves(order, input.fieldChanges),
+        eventKey: `${order.id}:${forcedAt.getTime()}`,
+      },
+    });
+
     // ── POST-COMMIT: the consequences of where the order now is ────────
     // The SAME method transitionStatus runs — call queue, pack
     // eligibility, shipment provision/void, the cancel-time refund, and
@@ -385,6 +435,7 @@ export class OrderAdminOverrideService {
       fieldChangesApplied: applied,
       shipmentsSynced,
       reserveOutcomes,
+      resellerMoney: moneyMoved,
     };
   }
 
@@ -613,6 +664,31 @@ export class OrderAdminOverrideService {
 
   // ── helpers ──────────────────────────────────────────────────────────
 
+  /**
+   * The forced change in words, old → new — the SAME sentences an
+   * ordinary edit produces (`describeFieldMoves`), so the store reads one
+   * phrasing whoever made the change.
+   *
+   * Narrowed to the MONEY fields, because those are the only ones whose
+   * before value was read (the pre-read selects two columns, not the
+   * whole recipient block). Describing a field we did not read would
+   * print "(blank) → X" as its old value, which is a stated fact that is
+   * not true — worse than leaving it out. God mode reaches no order
+   * LINES either, so there is no contents half to describe.
+   */
+  private describeForcedMoneyMoves(
+    before: Readonly<Record<string, unknown>>,
+    fieldChanges: ForceMutationFieldsDto | undefined,
+  ): string {
+    if (fieldChanges === undefined) return 'Nothing on the money changed.';
+    const moves = describeFieldMoves(
+      before,
+      fieldChanges as unknown as Record<string, unknown>,
+      MONEY_AFFECTING_ORDER_FIELDS,
+    );
+    return moves.length === 0 ? 'Nothing on the money changed.' : moves.join('\n');
+  }
+
   private async attemptReservations(order: {
     id: string;
     sellerId: string;
@@ -692,6 +768,7 @@ export class OrderAdminOverrideService {
   private buildUpdate(
     fieldChanges: ForceMutationFieldsDto | undefined,
     targetStatus: OrderStatus | undefined,
+    now: Date,
   ): { data: Prisma.OrderUpdateInput; applied: string[] } {
     const data: Prisma.OrderUpdateInput = {};
     const applied: string[] = [];
@@ -711,7 +788,6 @@ export class OrderAdminOverrideService {
     if (targetStatus !== undefined) {
       data.status = targetStatus;
       applied.push('status');
-      const now = new Date();
       // Keep canonical timestamps coherent for downstream modules even
       // on a forced transition (data sanity, not a guardrail).
       if (targetStatus === OrderStatus.CONFIRMED) {

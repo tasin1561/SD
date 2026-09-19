@@ -1,5 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
-import { OrderStatus } from '@skydrop/db';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { OrderStatus, Prisma, SellerStoreKind } from '@skydrop/db';
 import { OrderAdminOverrideService } from '../../src/modules/order/services/order-admin-override.service';
 import { OrderPostCommitHooksService } from '../../src/modules/order/services/order-post-commit-hooks.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -25,6 +25,8 @@ function makeService(
     emitThrows?: boolean;
     /** The order's status moved between the override's read and write. */
     staleStatus?: boolean;
+    /** What the reseller re-pricing does when the hook asks it. */
+    recalcThrows?: Error;
   } = {},
 ) {
   const order =
@@ -34,6 +36,10 @@ function makeService(
           sellerId: 's1',
           orderNumber: 'SD-2026-26-000001',
           status: OrderStatus.PENDING_CONFIRMATION,
+          codAmountInr: new Prisma.Decimal('1180.00'),
+          paymentMode: 'COD',
+          storeId: 'store-1',
+          storeKind: SellerStoreKind.RESELLER,
           items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
         }
       : opts.order;
@@ -128,6 +134,12 @@ function makeService(
     value: 'delhivery' as unknown,
     source: 'SYSTEM_DEFAULT' as 'SYSTEM_DEFAULT' | 'SELLER_OVERRIDE',
   }));
+  const recalculateAfterEdit = jest.fn(async () => {
+    if (opts.recalcThrows !== undefined) throw opts.recalcThrows;
+    return { outcome: 'REPLANNED', parties: [], prepaid: null };
+  });
+  const orderChangedByAdmin = jest.fn(async (_i: AnyArgs) => undefined);
+  const raiseIssue = jest.fn(async (_i: AnyArgs) => undefined);
   const postCommit = new OrderPostCommitHooksService(
     { client } as unknown as PrismaService,
     audit as never,
@@ -142,7 +154,11 @@ function makeService(
       retirePendingAccrual: jest.fn(async () => 0),
       reverseUncoveredInstantPayCredit: jest.fn(async () => ({ reversed: false })),
     } as never,
-    { raise: jest.fn(async () => undefined), resolveByKey: jest.fn(async () => 0) } as never,
+    { raise: raiseIssue, resolveByKey: jest.fn(async () => 0) } as never,
+    // RS-6 phase 3c: the re-pricing of a changed reseller order, and the
+    // notice to the two parties when god mode is the one that changed it.
+    { recalculateAfterEdit } as never,
+    { orderChangedByAdmin } as never,
   );
   const svc = new OrderAdminOverrideService(
     { client } as unknown as PrismaService,
@@ -155,6 +171,9 @@ function makeService(
     svc,
     settingsResolve,
     refundIfCharged,
+    recalculateAfterEdit,
+    orderChangedByAdmin,
+    raiseIssue,
     emit,
     enqueueOrder,
     dequeueOrder,
@@ -818,5 +837,104 @@ describe('forceMutate — the post-commit hooks a matrix transition runs', () =>
     await m.svc.forceMutate({ ...baseInput, targetStatus: OrderStatus.PACKED });
     expect(m.reserve).not.toHaveBeenCalled();
     expect(m.release).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * FIX 1 (2026-09-19) — god mode may change a reseller order's MONEY, so
+ * it re-prices it through the same shared hook the edit form uses.
+ *
+ * `codAmountInr` is in god mode's field whitelist and it called nothing
+ * at all: the order said ₹1,500 while the store's and seller's credits
+ * were still worked out from ₹1,180, with an audit row nobody reads as
+ * the only trace. God mode bypasses the MATRIX and the EDIT RULES; the
+ * money it moves is not one of the things it gets to bypass — the same
+ * reasoning as WAL-8, where a forced DELIVERED bills on purpose.
+ */
+describe('OrderAdminOverrideService — a forced money change re-prices the order', () => {
+  it('a forced COD asks for the money to be worked out again', async () => {
+    const h = makeService();
+    const res = await h.svc.forceMutate({
+      orderId: 'o1',
+      fieldChanges: { codAmountInr: 1500 },
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      actorStaffId: 'staff-1',
+    });
+    expect(h.recalculateAfterEdit).toHaveBeenCalledTimes(1);
+    expect(res.resellerMoney.ran).toBe(true);
+    expect(res.resellerMoney.refusal).toBeNull();
+  });
+
+  it('a forced RECIPIENT change asks for nothing — it moves no figure', async () => {
+    const h = makeService();
+    await h.svc.forceMutate({
+      orderId: 'o1',
+      fieldChanges: { recipientName: 'Corrected Name' },
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      actorStaffId: 'staff-1',
+    });
+    expect(h.recalculateAfterEdit).not.toHaveBeenCalled();
+    expect(h.orderChangedByAdmin).not.toHaveBeenCalled();
+  });
+
+  it('a paid credit that cannot be re-priced is RAISED, and the edit still stands', async () => {
+    const h = makeService({
+      recalcThrows: new ConflictException({
+        code: 'RESELLER_CREDIT_ALREADY_PAID',
+        message: 'already paid',
+      }),
+    });
+    const res = await h.svc.forceMutate({
+      orderId: 'o1',
+      fieldChanges: { codAmountInr: 1500 },
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      actorStaffId: 'staff-1',
+    });
+    // The force is not refused — that is god mode's whole point.
+    expect(res.fieldChangesApplied).toContain('codAmountInr');
+    expect(res.resellerMoney.refusal).toBe('ALREADY_PAID');
+    expect(h.raiseIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'MONEY',
+        severity: 'HIGH',
+        dedupeKey: 'reseller-money-diverged:o1',
+      }),
+    );
+  });
+
+  it('tells the store and seller staff what moved, old → new', async () => {
+    const h = makeService();
+    await h.svc.forceMutate({
+      orderId: 'o1',
+      fieldChanges: { codAmountInr: 1500 },
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      actorStaffId: 'staff-1',
+    });
+    expect(h.orderChangedByAdmin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storeId: 'store-1',
+        sellerId: 's1',
+        changes: expect.stringContaining('1180.00 → 1500'),
+      }),
+    );
+  });
+
+  it('runs the money BEFORE the lifecycle emit, so nothing credits the stale plan', async () => {
+    const h = makeService();
+    await h.svc.forceMutate({
+      orderId: 'o1',
+      fieldChanges: { codAmountInr: 1500 },
+      targetStatus: OrderStatus.DELIVERED,
+      reason: LONG_REASON,
+      acknowledgeDataIntegrityRisk: true,
+      actorStaffId: 'staff-1',
+    });
+    const priced = h.recalculateAfterEdit.mock.invocationCallOrder[0] ?? Infinity;
+    const emitted = h.emit.mock.invocationCallOrder[0] ?? -Infinity;
+    expect(priced).toBeLessThan(emitted);
   });
 });

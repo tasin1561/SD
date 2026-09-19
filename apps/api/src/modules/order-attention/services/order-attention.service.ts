@@ -16,7 +16,10 @@ import { SystemIssueService } from '../../system-issues/services/system-issue.se
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import { OrderReadService } from '../../order/services/order-read.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
-import { shipmentMissingIssueKey } from '../../order/services/order-post-commit-hooks.service';
+import {
+  RESELLER_MONEY_STALE_KEY_PREFIX,
+  shipmentMissingIssueKey,
+} from '../../order/services/order-post-commit-hooks.service';
 import { AwbGenerationJobService } from '../../courier-awb/services/awb-generation-job.service';
 import { TrackingEventAppendService } from '../../tracking-events/services/tracking-event-append.service';
 import { AwbLabelRecoveryService } from '../../courier-awb/services/awb-label-recovery.service';
@@ -67,6 +70,9 @@ const SHIPMENT_EXPECTED_STATUSES: readonly OrderStatus[] = [
 
 /** Per sweep — a backlog drains over the hourly runs. */
 const SHIPMENTLESS_SWEEP_LIMIT = 50;
+/** How many failed re-pricings one run asks about again. Bounded for the
+ *  same reason every other sweep is: an hourly job must finish. */
+const RESELLER_MONEY_SWEEP_LIMIT = 50;
 
 const RTO_UNDERWAY: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.RTO_INITIATED,
@@ -128,6 +134,9 @@ export interface NsaSweepSummary {
   /** Pre-dispatch waybills still without a stored label after an hour,
    *  having been asked for again on this run. */
   readonly labelless: number;
+  /** Reseller orders whose money is still not re-worked-out after this
+   *  run asked again — the ones a person will have to look at. */
+  readonly staleResellerMoney: number;
 }
 
 /** One issue per voided shipment; the suffix is the shipment id. */
@@ -263,6 +272,7 @@ export class OrderAttentionService {
       unreceivedReturns: 0,
       liveWaybills: 0,
       labelless: 0,
+      staleResellerMoney: 0,
     };
 
     // Runs even when the NSA half is switched off, and before the
@@ -296,6 +306,12 @@ export class OrderAttentionService {
     // Also unconditional: a parcel with a waybill and no label cannot be
     // scanned at the pack bench, whatever the NSA switch says.
     summary.labelless = await this.checkLabellessAwbs(now);
+
+    // Also unconditional: a reseller order whose money was never
+    // re-worked-out after it changed will pay out the stale figure, and
+    // the seller and the store split it between them. Nothing to do with
+    // NSA, so nothing to do with its switch.
+    summary.staleResellerMoney = await this.checkStaleResellerMoney();
 
     if (!enabled) return summary;
 
@@ -652,6 +668,64 @@ export class OrderAttentionService {
         );
       }
       await this.issues.resolveByKey(key, 'The order has a shipment now.');
+    }
+    return stuck;
+  }
+
+  /**
+   * A reseller order changed, and the money behind it was never
+   * re-worked-out (2026-09-19).
+   *
+   * ── WHAT THIS CATCHES ────────────────────────────────────────────────
+   * `OrderPostCommitHooksService.runForMoneyAffectingEdit` re-prices a
+   * reseller order's credits after its COD, contents or payment mode
+   * move. It runs POST-COMMIT and swallows its own failure on purpose —
+   * the edit is the durable fact and the money is its reflection (the
+   * visible-vs-silent rule). Until now the only trace was a HIGH audit
+   * row, and nothing reads audit rows: the order said one figure, the
+   * plan behind it another, and the STALE one is what would be paid to
+   * the store and the seller weeks later.
+   *
+   * ── THE OPEN ISSUES ARE THE WORKLIST ─────────────────────────────────
+   * Nothing on the order records "this still needs re-pricing", and a
+   * column for it would be a second source of truth for what the issue
+   * already states. So the sweep asks the issue tracker which orders are
+   * still flagged and re-runs the SAME hook on each — a success clears
+   * the issue, a failure bumps it, and a failure that turns out to be
+   * unrecoverable (a credit already paid) swaps it for the divergence,
+   * which is never retried because asking again cannot change the
+   * answer.
+   *
+   * Bounded per run, and every order isolated: one order that cannot be
+   * priced must not stop the next from being.
+   */
+  private async checkStaleResellerMoney(): Promise<number> {
+    let keys: readonly string[];
+    try {
+      keys = await this.issues.openDedupeKeys(RESELLER_MONEY_STALE_KEY_PREFIX);
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Stale reseller-money check could not read its own issues this run; the sweep continues',
+      );
+      return 0;
+    }
+
+    let stuck = 0;
+    for (const key of keys.slice(0, RESELLER_MONEY_SWEEP_LIMIT)) {
+      const orderId = key.slice(RESELLER_MONEY_STALE_KEY_PREFIX.length);
+      if (orderId === '') continue;
+      try {
+        const outcome = await this.orderWrite.retryResellerMoneyRecalculation(orderId);
+        if (outcome.refusal !== null) stuck += 1;
+      } catch (err) {
+        // The hook never throws; this is the belt to its braces.
+        stuck += 1;
+        this.logger.warn(
+          { orderId, err: err instanceof Error ? err.message : String(err) },
+          'Re-pricing a reseller order threw on retry; its issue stays open',
+        );
+      }
     }
     return stuck;
   }

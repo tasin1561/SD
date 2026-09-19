@@ -3829,6 +3829,30 @@ const notificationTemplates: TemplateSeed[] = [
       'See the order at {{ order_url }}',
     ].join('\n'),
   },
+  // 2026-09-19 — a Skydrop admin changed the money on a reseller order
+  // through god mode (ORD-2). Its own template rather than the seller's:
+  // telling a store "your seller changed this" when the seller did not
+  // would send them to the wrong party with the question.
+  {
+    code: 'store.order_changed_by_admin.email',
+    name: 'Reseller store — Skydrop changed the money on your order',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: 'Skydrop changed order {{ order_number }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      'Skydrop changed order {{ order_number }} directly. This is what moved:',
+      '',
+      '{{ changes }}',
+      '',
+      '{{ money }}',
+      '',
+      'If this does not look right, reply on the order’s ticket and we will look into it.',
+      '',
+      'See the order at {{ order_url }}',
+    ].join('\n'),
+  },
   // 2026-09-18 (owner) — seller staff changed a customer record belonging
   // to one of their reseller stores. The store spoke to that person.
   {

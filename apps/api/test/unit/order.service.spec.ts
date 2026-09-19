@@ -206,6 +206,16 @@ function makeService(
         prepaid: null,
       })),
     } as never,
+    // The shared post-commit hooks (2026-09-19). `edit` reaches the
+    // reseller re-pricing through it, so god mode and the edit form
+    // cannot price a change differently.
+    {
+      runForMoneyAffectingEdit: jest.fn(async () => ({
+        ran: false,
+        result: null,
+        refusal: null,
+      })),
+    } as never,
   );
   return {
     svc,

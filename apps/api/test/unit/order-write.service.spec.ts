@@ -167,6 +167,16 @@ function makeService(
       reverseUncoveredInstantPayCredit: jest.fn(async () => ({ reversed: false })),
     } as never,
     { raise: jest.fn(async () => undefined), resolveByKey: jest.fn(async () => 0) } as never,
+    // RS-6 phase 3c: re-pricing a changed reseller order, and telling
+    // the two parties when god mode changed it — inert here.
+    {
+      recalculateAfterEdit: jest.fn(async () => ({
+        outcome: 'NOT_A_RESELLER_ORDER',
+        parties: [],
+        prepaid: null,
+      })),
+    } as never,
+    { orderChangedByAdmin: jest.fn(async () => undefined) } as never,
   );
   const svc = new OrderWriteService(
     { client } as unknown as PrismaService,

@@ -94,19 +94,43 @@ function lineText(l: {
   return `${l.quantity} × ${l.skuCode}${price}`;
 }
 
-export function describeOrderChanges(
-  before: OrderBefore,
-  patch: UpdateOrderDto,
-  changed: readonly string[],
-): string {
+/**
+ * The SCALAR half of an order diff, old → new, in the same words
+ * wherever it is read.
+ *
+ * Exported so god mode (ORD-2) describes a forced change exactly as an
+ * ordinary edit does — "Cash to collect: ₹1,180.00 → ₹1,500.00" — rather
+ * than growing a second phrasing of the one thing the reader compares.
+ * A field the patch did not send, or sent unchanged, is not listed.
+ *
+ * `only` narrows it to the fields the caller actually READ a before
+ * value for. Without it a caller that selected two columns would print
+ * "Name: (blank) → X" for a field it never looked at — a stated old
+ * value that is not the old value, which is worse than saying nothing.
+ */
+export function describeFieldMoves(
+  before: Readonly<Record<string, unknown>>,
+  patch: Readonly<Record<string, unknown>>,
+  only?: readonly string[],
+): string[] {
   const out: string[] = [];
   for (const key of Object.keys(FIELD_LABEL)) {
-    const next = (patch as Record<string, unknown>)[key];
+    if (only !== undefined && !only.includes(key)) continue;
+    const next = patch[key];
     if (next === undefined) continue;
     const prev = before[key];
     if (same(prev, next)) continue;
     out.push(`${FIELD_LABEL[key] ?? key}: ${show(prev)} → ${show(next)}`);
   }
+  return out;
+}
+
+export function describeOrderChanges(
+  before: OrderBefore,
+  patch: UpdateOrderDto,
+  changed: readonly string[],
+): string {
+  const out = describeFieldMoves(before, patch as unknown as Record<string, unknown>);
   if (changed.includes('items') && patch.items !== undefined) {
     const was = before.items.map((l) => lineText(l)).join('; ');
     // The patch carries variant ids, not SKU codes — the reader gets the
@@ -154,4 +178,36 @@ export function describeMoneyMove(result: ResellerMoneyRecalculation | null): st
     );
   }
   return lines.join('\n');
+}
+
+/**
+ * The money line INCLUDING the two ways it can fail to move (2026-09-19).
+ *
+ * `describeMoneyMove` above says what moved. It cannot say what did NOT
+ * move and should have, and that is the case somebody has to be told
+ * about: the order now says one figure and the credits behind it were
+ * worked out from another. Both parties read this sentence, so it names
+ * neither of them in the second person.
+ *
+ * Pure, and the ONE wording for it — the god-mode notice and the
+ * ordinary edit notice both read it, so the store cannot be told one
+ * thing on one path and something else on the other.
+ */
+export function describeMoneyOutcome(outcome: {
+  readonly result: ResellerMoneyRecalculation | null;
+  readonly refusal: 'ALREADY_PAID' | 'FAILED' | null;
+}): string {
+  if (outcome.refusal === 'ALREADY_PAID') {
+    return (
+      'The money on this order had already been paid out, so it could not be worked out again ' +
+      'from the new figures. Skydrop has been told and will settle the difference with you.'
+    );
+  }
+  if (outcome.refusal === 'FAILED') {
+    return (
+      'The money on this order has not been worked out again yet. Skydrop has been told and is ' +
+      'retrying; what each side is credited may still change.'
+    );
+  }
+  return describeMoneyMove(outcome.result);
 }

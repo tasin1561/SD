@@ -11,6 +11,7 @@ import {
   StaffRole,
 } from '@skydrop/db';
 import { CourierSettlementService } from '../../src/modules/courier-settlement/services/courier-settlement.service';
+import { OrderAdminOverrideService } from '../../src/modules/order/services/order-admin-override.service';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { ResellerOrderMoneyService } from '../../src/modules/reseller-order-money/services/reseller-order-money.service';
 import {
@@ -658,6 +659,94 @@ describe('reseller order money (e2e)', () => {
       select: { severity: true },
     });
     expect(audited?.severity).toBe('HIGH');
+  });
+
+  it("GOD MODE moves a PAID order's COD: the edit stands, and the divergence is impossible to miss", async () => {
+    /*
+      FIX 1 (2026-09-19). `codAmountInr` is in god mode's field whitelist
+      and god mode called the re-pricing NOWHERE, so a forced COD left
+      the order saying one figure while the credits behind it were worked
+      out from another — with nothing said.
+
+      God mode is NOT refused: that is its whole point, and WAL-8 already
+      settled that a forced status bills on purpose. What this pins is
+      that the divergence it causes is LOUD — a HIGH MONEY system issue
+      naming the order and what each party was actually paid, the refusal
+      on the override's own response, and BOTH parties told (neither of
+      them made this change). And that nothing moved in the wallets: the
+      re-pricing rolls back whole.
+
+      The service is the entry point god mode's controller calls; the
+      test drives it so the whole post-commit chain runs for real.
+    */
+    const store = await makeStore();
+    const placed = (await placeOrder(store, 1)).body as { id: string };
+    await confirm(placed.id);
+    const cod = await codOf(placed.id);
+    await deliver(placed.id);
+    await pay(cod, [[placed.id, cod]]);
+    const credited = await creditsOf(placed.id);
+    expect(credited.map((c) => c.status)).toEqual(['CREDITED', 'CREDITED']);
+    const was = {
+      store: (await storeBalance(store.storeId)).toFixed(2),
+      seller: (await sellerBalance()).toFixed(2),
+    };
+
+    const forced = await h.app.get(OrderAdminOverrideService).forceMutate({
+      orderId: placed.id,
+      fieldChanges: { codAmountInr: 4321 },
+      reason: 'Customer paid a different amount at the door; correcting the record on the order',
+      acknowledgeDataIntegrityRisk: true,
+      actorStaffId: staffId,
+    });
+    await drainAll(h.app);
+
+    // The force STANDS — god mode is the sanctioned bypass.
+    expect(forced.fieldChangesApplied).toContain('codAmountInr');
+    expect(
+      (
+        await h.prisma.order.findUniqueOrThrow({
+          where: { id: placed.id },
+          select: { codAmountInr: true },
+        })
+      ).codAmountInr?.toFixed(2),
+    ).toBe('4321.00');
+
+    // The admin who did it is told on the response, not a week later.
+    expect(forced.resellerMoney).toMatchObject({ ran: true, refusal: 'ALREADY_PAID' });
+
+    // Nothing was written: no reversal, no second credit, no moved balance.
+    expect(
+      await h.prisma.storeWalletEntry.count({
+        where: {
+          linkedOrderId: placed.id,
+          direction: { in: ['ORDER_CREDIT_REVERSAL', 'SHARE_REFUND'] },
+        },
+      }),
+    ).toBe(0);
+    expect((await storeBalance(store.storeId)).toFixed(2)).toBe(was.store);
+    expect((await sellerBalance()).toFixed(2)).toBe(was.seller);
+    expect((await creditsOf(placed.id)).every((c) => c.timesRepriced === 0)).toBe(true);
+    await expectBookAgrees([store.storeId]);
+
+    // A person is told, and it stays told until one closes it.
+    const issue = await h.prisma.systemIssue.findFirst({
+      where: { dedupeKey: `reseller-money-diverged:${placed.id}`, resolvedAt: null },
+      select: { kind: true, severity: true, detail: true },
+    });
+    expect(issue).not.toBeNull();
+    expect(issue?.kind).toBe('MONEY');
+    expect(issue?.severity).toBe('HIGH');
+    // It names what was actually paid, which is the figure to settle from.
+    expect(issue?.detail).toContain('was paid');
+
+    // And the store hears about its own order — by email, since a
+    // reseller store has no inbox to write to.
+    expect(
+      await h.prisma.notificationLog.count({
+        where: { orderId: placed.id, templateCode: 'store.order_changed_by_admin.email' },
+      }),
+    ).toBeGreaterThan(0);
   });
 
   it('once the COURIER holds the address, neither party may write it — they must ask', async () => {

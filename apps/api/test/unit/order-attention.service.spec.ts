@@ -134,6 +134,11 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     /** Confirmed orders with no live shipment. */
     shipmentless?: Array<{ id: string; orderNumber: string; status: string }>;
     reprovisionThrows?: string;
+    /** Open `reseller-money-stale:` issue keys — the sweep's worklist. */
+    openStaleMoneyKeys?: string[];
+    /** Order ids whose retry still cannot be priced. */
+    moneyStillStuck?: string[];
+    moneyRetryThrows?: string;
   }) {
     const processOrder = jest.fn(async () => ({ result: 'ERROR' }));
     const raise = jest.fn(async () => undefined);
@@ -143,8 +148,15 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
         ? (opts.openLiveWaybillKeys ?? [])
         : prefix === 'awb-label-missing:'
           ? (opts.openLabelKeys ?? [])
-          : [],
+          : prefix === 'reseller-money-stale:'
+            ? (opts.openStaleMoneyKeys ?? [])
+            : [],
     );
+    const retryResellerMoneyRecalculation = jest.fn(async (orderId: string) => {
+      if (opts.moneyRetryThrows !== undefined) throw new Error(opts.moneyRetryThrows);
+      const stuck = (opts.moneyStillStuck ?? []).includes(orderId);
+      return { ran: true, result: null, refusal: stuck ? ('FAILED' as const) : null };
+    });
     const retryMissing = jest.fn(async () => ({
       results: opts.labelResults ?? [],
       sawEverything: opts.labelSawEverything ?? true,
@@ -281,7 +293,7 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       { retryMissing } as never,
       // Re-provisioning a confirmed order with no shipment goes through
       // the order write facade.
-      { reprovisionShipment } as never,
+      { reprovisionShipment, retryResellerMoneyRecalculation } as never,
     );
     return {
       svc,
@@ -291,6 +303,7 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       shipmentFindMany,
       retryMissing,
       reprovisionShipment,
+      retryResellerMoneyRecalculation,
     };
   }
 
@@ -705,6 +718,55 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
         'utf8',
       );
       expect(src).not.toMatch(/courier-ops|courier-delhivery|courier-shiprocket/);
+    });
+  });
+
+  /**
+   * FIX 2 (2026-09-19) — a reseller order whose money was never
+   * re-worked-out after it changed is ASKED AGAIN, hourly.
+   *
+   * The re-pricing is post-commit and swallows its own failure on purpose
+   * (the edit is the durable fact, the money is its reflection). Its only
+   * trace was a HIGH audit row, and nothing reads audit rows — meanwhile
+   * the STALE figure is what the store and the seller would be paid. The
+   * open issues are the worklist: nothing on the order records "this still
+   * needs pricing", and a column for it would be a second source of truth
+   * for what the issue already says.
+   */
+  describe('OrderAttentionService — a re-pricing that failed is asked again', () => {
+    it('retries every open stale-money issue, by the order id in its key', async () => {
+      const h = makeService({
+        openStaleMoneyKeys: ['reseller-money-stale:o1', 'reseller-money-stale:o2'],
+      });
+      const out = await h.svc.sweep(new Date('2026-09-19T12:00:00Z'));
+      expect(h.retryResellerMoneyRecalculation).toHaveBeenCalledWith('o1');
+      expect(h.retryResellerMoneyRecalculation).toHaveBeenCalledWith('o2');
+      expect(out.staleResellerMoney).toBe(0);
+    });
+
+    it('counts the ones still stuck — those are what a person has to look at', async () => {
+      const h = makeService({
+        openStaleMoneyKeys: ['reseller-money-stale:o1', 'reseller-money-stale:o2'],
+        moneyStillStuck: ['o2'],
+      });
+      const out = await h.svc.sweep(new Date('2026-09-19T12:00:00Z'));
+      expect(out.staleResellerMoney).toBe(1);
+    });
+
+    it('with nothing open it asks nobody', async () => {
+      const h = makeService({});
+      await h.svc.sweep(new Date('2026-09-19T12:00:00Z'));
+      expect(h.retryResellerMoneyRecalculation).not.toHaveBeenCalled();
+    });
+
+    it('a retry that throws leaves its issue open and does not stop the sweep', async () => {
+      const h = makeService({
+        openStaleMoneyKeys: ['reseller-money-stale:o1'],
+        moneyRetryThrows: 'db blinked',
+      });
+      const out = await h.svc.sweep(new Date('2026-09-19T12:00:00Z'));
+      expect(out.staleResellerMoney).toBe(1);
+      expect(out.ranAt).toBeInstanceOf(Date);
     });
   });
 });

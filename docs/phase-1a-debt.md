@@ -1282,7 +1282,9 @@ Found because a live consignment was standing in it: CN-2026-08-000003,
 The owner opened a reseller store's order to BOTH parties (CLAUDE.md
 ORD-6, `docs/reseller-stores.md` "Both sides may change the order"). What
 went in is complete for the decisions taken; these three are recorded
-rather than guessed.
+rather than guessed. **Two of the three are now closed (2026-09-19) —
+items 2 and 3 below say what was built; item 1 is still open and is a
+product question about the CSV format, not a wiring job.**
 
 **1. A CSV re-upload still cannot patch a reseller order.**
 `OrderService.applyBulkPatch` keeps `RESELLER_ORDER_NOT_EDITABLE`. It
@@ -1296,32 +1298,83 @@ through `ResellerOrderRetermService` and deciding what a CSV row means by
 product question about the CSV format, not a wiring job. The portal, the
 API key and the seller's edit form all reach the same capability.
 
-**2. A prepaid re-price is guarded but unreachable through `edit`.**
-`repricePrepaidDebit` refuses with `STORE_BALANCE_INSUFFICIENT` when a
-change makes a prepaid order cost the store more than its wallet can
-carry — and by the time that could bite, the debit has been taken at
-CONFIRMED, which is past `CONTENTS_EDITABLE_STATUSES`. So today only a
-direct call to `recalculateAfterEdit` can reach it. It is written because
-the service is the boundary, not because a route exists; if god mode or a
-future path ever moves a confirmed prepaid order's contents, the guard is
-already there rather than discovered missing.
+**2. A god-moded money change diverging silently — FIXED 2026-09-19.**
 
-The same reasoning is why a CREDITED credit row is REFUSED
-(`RESELLER_CREDIT_ALREADY_PAID`) rather than reversed and re-written: an
-edit cannot reach one, and the ledger's once-per-order unique
+`OrderAdminOverrideService.forceMutate` can write `codAmountInr` and
+`paymentMode` (both are in its whitelist), and it called the reseller
+re-pricing NOWHERE. A forced COD left the order saying ₹1,500 while the
+store's and the seller's credits were still worked out from ₹1,180, with
+nothing said — and the stale figure is what a later delivery or payout
+would pay.
+
+The fix is the shape ORD-2 already uses for CC-6, the shipment, the
+cancel-time refund and the lifecycle emit: ONE shared hook,
+`OrderPostCommitHooksService.runForMoneyAffectingEdit`, which BOTH
+writers of a money-affecting field call — `OrderService.edit` and god
+mode. `MONEY_AFFECTING_ORDER_FIELDS` is declared there, so the two
+cannot disagree about what "this moved the money" means.
+`order-post-commit-hooks-shared.spec.ts` pins that both call it and
+neither calls `recalculateAfterEdit` itself. God mode runs it BEFORE
+`runForStatusChange`, because the lifecycle emit is what sets a credit
+running and a plan corrected afterwards would be corrected only after
+the stale figure had been paid.
+
+God mode is NOT refused — that is its whole point, and WAL-8 already
+settled that a forced status bills on purpose. What changed is that
+where the money cannot follow, it is impossible to miss:
+
+* `RESELLER_CREDIT_ALREADY_PAID` (and `RESELLER_CREDIT_HAS_NO_PLAN`)
+  raise a HIGH MONEY system issue `reseller-money-diverged:<orderId>`
+  naming the order, what each party was actually credited, and what to
+  do — settle on the order's ticket (RS-7) or call it off and place it
+  again. NEVER retried: a paid credit will be paid tomorrow too. It
+  clears itself if a later recalculation ever succeeds.
+* The refusal is also on the force's own response
+  (`resellerMoney.refusal`) and rendered on the god-mode result panel,
+  so the admin who caused it reads it there rather than on
+  `/system-issues` a week later.
+* BOTH parties are told, because neither of them made the change — the
+  store by email (`store.order_changed_by_admin.email`; its own template
+  rather than the seller's, since telling a store "your seller changed
+  this" would send them to the wrong party), seller staff in-app under
+  `seller.store_order_money_changed_by_admin`. The money line is the ONE
+  wording, `describeMoneyOutcome`, shared with the ordinary edit notice.
+
+Still open, and unchanged: the underlying "correct a paid reseller
+order" flow. A CREDITED row is refused rather than reversed and
+re-written because the ledger's once-per-order unique
 (`seller_wallet_entries_once_per_order_uq`) would refuse the second
-`cod_collection` a rewrite needs. What is genuinely open is the case
-BEHIND that refusal — a paid order whose figures somebody needs to
-correct. Today the answer is the order's ticket (a store dispute settles
-between the two wallets, RS-7) or calling the order off and placing it
-again. A first-class "correct a paid reseller order" flow would need its
-own directions rather than a second credit, and nobody has asked for one.
+`cod_collection` a rewrite needs, and weakening that index trades the
+double-credit guard for a case that should not arise. The answer remains
+a store dispute or a re-placed order; a first-class correction would need
+its own wallet directions and nobody has asked for one.
 
-**3. A recalculation that fails leaves the edit standing.** The edit has
-committed by then, so `recalculateResellerMoney` swallows the failure and
-raises a HIGH `reseller_order.money_recalculation_failed` audit row naming
-the order. That is the right ordering (the edit is the durable fact and
-the money is its reflection), but nothing SWEEPS for those rows: somebody
-has to be reading audit logs. The cheap follow-up is a system issue rather
-than an audit row, keyed on the order and self-clearing when a later
-recalculation succeeds — the shape `OrderAttentionService` already uses.
+`repricePrepaidDebit`'s `STORE_BALANCE_INSUFFICIENT` guard is now
+REACHABLE (god mode can force a confirmed prepaid order's payment mode),
+and it is treated as retryable rather than a divergence — a store that
+tops up fixes it, which is exactly what the sweep below is for.
+
+**3. A recalculation that fails leaving the edit standing — FIXED
+2026-09-19.** The ordering was right and stays right: the edit has
+committed, so the re-pricing swallows its failure (the edit is the
+durable fact, the money is its reflection). What was wrong is that the
+only trace was a HIGH `reseller_order.money_recalculation_failed` audit
+row, and nothing reads audit rows.
+
+The audit row is KEPT — it is the history. It is no longer the alarm.
+A failure now raises a HIGH MONEY `reseller-money-stale:<orderId>`, and
+`OrderAttentionService.checkStaleResellerMoney` (hourly, unconditional —
+this has nothing to do with the NSA switch) asks again for every one
+still open, through `OrderWriteService.retryResellerMoneyRecalculation`
+→ the SAME shared hook, so a retry cannot price it differently from the
+original attempt. A success clears it; a failure bumps it; a failure
+that turns out to be unrecoverable swaps it for the divergence above.
+
+**The open issues ARE the worklist.** Nothing on the order records "this
+still needs pricing", and a column for it would be a second source of
+truth for what the issue already states (the CNS-2 / BIN-1 rule). Both
+raise and sweep, deliberately: the failure is known only at the moment
+it happens, so a sweep alone would have nothing to look at, and a raise
+alone would leave a transient blip as a permanent row somebody has to
+close by hand — which is how people learn to close issues without
+acting.

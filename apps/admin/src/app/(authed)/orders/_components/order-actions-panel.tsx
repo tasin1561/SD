@@ -409,6 +409,24 @@ function OverrideResultPanel({
         <dd className="text-critical font-mono">true (permanent)</dd>
       </dl>
 
+      {result.resellerMoney?.refusal != null && (
+        <div className="mt-2 pt-2 border-t border-[var(--color-critical-ring)]">
+          <div className="text-text-muted text-xs uppercase tracking-wide mb-1">
+            The money on this reseller order did NOT follow the change
+          </div>
+          <p className="text-xs text-critical leading-snug">
+            {result.resellerMoney.refusal === 'ALREADY_PAID'
+              ? 'A credit on this order had already been paid, so it could not be worked out again. The order now says one figure and the wallets say another.'
+              : 'Re-pricing this order failed. The stale figures are what would be paid until it succeeds.'}
+          </p>
+          <div className="text-text-faint text-xs mt-1.5 leading-snug">
+            This is open on /system-issues (MONEY, HIGH) and the store and seller staff have been
+            told. Settle the difference on the order’s ticket, or call the order off and place it
+            again.
+          </div>
+        </div>
+      )}
+
       {result.reserveOutcomes && result.reserveOutcomes.length > 0 && (
         <div className="mt-2 pt-2 border-t border-[var(--color-critical-ring)]">
           <div className="text-text-muted text-xs uppercase tracking-wide mb-1">

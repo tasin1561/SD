@@ -42,7 +42,22 @@ const HOOK_COLLABORATORS: readonly RegExp[] = [
   /\.refundIfCharged\(/,
   /\.emit\(/,
   /'pack_queue\.eligible'/,
+  // 2026-09-19: re-pricing a changed reseller order is a hook too.
+  /\.recalculateAfterEdit\(/,
+  /\bStoreRequestNotifier\b/,
 ];
+
+/**
+ * The writers of a MONEY-AFFECTING order field: the ordinary edit and god
+ * mode. Both must reach the reseller re-pricing through the same hook.
+ *
+ * God mode may write `codAmountInr` and `paymentMode` and called nothing
+ * at all until 2026-09-19 — the order said one figure while the credits
+ * behind it were worked out from another, with nothing anywhere saying
+ * so. A behavioural test proves what one writer does; only reading the
+ * sources catches the next money hook being wired into one of them.
+ */
+const MONEY_WRITERS = ['order.service.ts', 'order-admin-override.service.ts'] as const;
 
 describe('both writers of orders.status share ONE set of post-commit hooks', () => {
   it.each(WRITERS)('%s calls the shared method', (file) => {
@@ -59,6 +74,17 @@ describe('both writers of orders.status share ONE set of post-commit hooks', () 
     expect(read('order-admin-override.service.ts')).toMatch(/source: ADMIN_OVERRIDE_SOURCE/);
   });
 
+  it.each(MONEY_WRITERS)('%s re-prices a reseller order through the shared method', (file) => {
+    expect(read(file)).toMatch(/this\.postCommit\.runForMoneyAffectingEdit\(/);
+  });
+
+  it.each(MONEY_WRITERS)('%s never calls the re-pricing itself', (file) => {
+    // `OrderService` legitimately holds ResellerOrderMoneyService for the
+    // PRE-edit guard (`assertEditKeepsMoneyCorrectable`), so the rule is
+    // about the re-pricing call, not about holding the service.
+    expect(read(file)).not.toMatch(/\.recalculateAfterEdit\(/);
+  });
+
   it('the shared service is stock-free by construction', () => {
     const src = read('order-post-commit-hooks.service.ts');
     expect(src).not.toMatch(/inventory-stock|inventory-shared/);
@@ -68,6 +94,9 @@ describe('both writers of orders.status share ONE set of post-commit hooks', () 
     // a settings read, not a stock collaborator), endedMoney (the money an
     // order ending undelivered gives back) and issues (a provision that
     // failed is raised) — none of them stock.
-    expect(OrderPostCommitHooksService.length).toBe(9);
+    // + resellerMoney (the re-pricing of a changed reseller order — a
+    // money collaborator) and storeNotifier (god mode has no notice of
+    // its own, so the two parties are told from here). Neither is stock.
+    expect(OrderPostCommitHooksService.length).toBe(11);
   });
 });

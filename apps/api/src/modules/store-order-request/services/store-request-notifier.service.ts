@@ -11,6 +11,8 @@ export const STORE_REQUEST_REJECTED_TEMPLATE = 'store.request_rejected.email';
 export const STORE_REQUEST_EXPIRED_TEMPLATE = 'store.request_expired.email';
 export const STORE_ORDER_CHANGED_BY_SELLER_TEMPLATE = 'store.order_changed_by_seller.email';
 export const STORE_CUSTOMER_CHANGED_BY_SELLER_TEMPLATE = 'store.customer_changed_by_seller.email';
+/** SKYDROP changed the order's money through god mode (ORD-2). */
+export const STORE_ORDER_CHANGED_BY_ADMIN_TEMPLATE = 'store.order_changed_by_admin.email';
 
 /**
  * The seller-side topics this notifier sends (NOTIF-17 — pinned against
@@ -20,6 +22,8 @@ export const STORE_REQUEST_WAITING_TOPIC = 'seller.store_request_waiting';
 export const STORE_REQUEST_REMINDER_TOPIC = 'seller.store_request_reminder';
 /** The store changed one of its own orders, or its customer's record. */
 export const STORE_CHANGED_ORDER_TOPIC = 'seller.store_changed_order';
+/** SKYDROP changed the money on a reseller order (god mode, ORD-2). */
+export const ADMIN_CHANGED_ORDER_MONEY_TOPIC = 'seller.store_order_money_changed_by_admin';
 
 /** Who at the seller hears about a store's request: whoever runs their stores. */
 const STORES_MANAGE_PERMISSION = 'stores.manage';
@@ -300,6 +304,65 @@ export class StoreRequestNotifier {
           : '',
       },
     });
+  }
+
+  /**
+   * SKYDROP changed the money on a reseller order — god mode (ORD-2).
+   *
+   * The 2026-09-18 rule is "whoever did not make the change is told".
+   * When a Skydrop admin forces a change, NEITHER party made it, so both
+   * are the other side and both hear: the store by email, seller staff
+   * in-app, exactly as an ordinary edit reaches them.
+   *
+   * Its own template and its own topic rather than
+   * `orderChangedBySeller` with the name swapped: a store told "your
+   * seller changed the cash to collect" would ring the seller about
+   * something the seller did not do, which is the same false record the
+   * codebase refuses everywhere else it attributes an action.
+   */
+  async orderChangedByAdmin(input: {
+    sellerId: string;
+    storeId: string;
+    eventKey: string;
+    orderId: string;
+    orderNumber: string;
+    changes: string;
+    money: string;
+  }): Promise<void> {
+    await this.emailStore(input.storeId, input.eventKey, {
+      eventId: `store_order_changed_by_admin:${input.eventKey}`,
+      templateCode: STORE_ORDER_CHANGED_BY_ADMIN_TEMPLATE,
+      orderId: input.orderId,
+      triggerEvent: 'reseller_store.order_changed_by_admin',
+      variables: {
+        order_number: input.orderNumber,
+        changes: input.changes,
+        money: input.money,
+      },
+    });
+    try {
+      await this.dispatch.dispatch({
+        topic: ADMIN_CHANGED_ORDER_MONEY_TOPIC,
+        category: NotificationCategory.OPERATIONAL,
+        title: `Skydrop changed the money on order ${input.orderNumber}`,
+        body:
+          `Skydrop changed order ${input.orderNumber} directly. What moved:\n${input.changes}` +
+          (input.money === '' ? '' : `\n\n${input.money}`),
+        channels: [NotificationChannel.IN_APP],
+        audience: [
+          {
+            kind: 'SELLER_PERMISSION',
+            sellerId: input.sellerId,
+            permission: STORES_MANAGE_PERMISSION,
+          },
+        ],
+        triggerEvent: 'reseller_store.order_changed_by_admin',
+        eventId: `store_order_changed_by_admin:${input.eventKey}:inapp`,
+        orderId: input.orderId,
+      });
+    } catch (err) {
+      this.warn('Could not tell seller staff Skydrop changed a store order', input.eventKey, err);
+    }
   }
 
   /**

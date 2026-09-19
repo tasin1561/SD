@@ -35,6 +35,7 @@ import {
 import { STORE_ADDRESS_CHANGE_WAITING_TOPIC } from '../../src/modules/reseller-order/services/address-change-notifier.service';
 import { STORE_ACTION_WAITING_TOPIC } from '../../src/modules/delivery-action/services/store-action-notifier.service';
 import {
+  ADMIN_CHANGED_ORDER_MONEY_TOPIC,
   STORE_CHANGED_ORDER_TOPIC,
   STORE_REQUEST_REMINDER_TOPIC,
   STORE_REQUEST_WAITING_TOPIC,
@@ -68,6 +69,8 @@ const OTHER_SELLER_SENDERS = [
   STORE_REQUEST_REMINDER_TOPIC,
   // 2026-09-18: a store changed one of its own orders, or a customer.
   STORE_CHANGED_ORDER_TOPIC,
+  // 2026-09-19: god mode changed the money on a reseller order.
+  ADMIN_CHANGED_ORDER_MONEY_TOPIC,
 ];
 
 /** Staff topics that are not system issues (TKT-3), by their sender's constant. */

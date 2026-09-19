@@ -44,13 +44,14 @@ import { SellerCreditService } from '../../seller-credit/services/seller-credit.
 import { SellerStoreService } from '../../seller-store/services/seller-store.service';
 import { StoreOrderRequestService } from '../../store-order-request/services/store-order-request.service';
 import { StoreRequestNotifier } from '../../store-order-request/services/store-request-notifier.service';
-import {
-  ResellerOrderMoneyService,
-  type ResellerMoneyRecalculation,
-} from '../../reseller-order-money/services/reseller-order-money.service';
+import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
 import { ResellerOrderRetermService } from './reseller-order-reterm.service';
+import {
+  OrderPostCommitHooksService,
+  type ResellerMoneyEditOutcome,
+} from './order-post-commit-hooks.service';
 import { recipientChangeRoute } from '../recipient-change-route';
-import { describeMoneyMove, describeOrderChanges } from '../order-change-description';
+import { describeMoneyOutcome, describeOrderChanges } from '../order-change-description';
 
 /**
  * The statuses in which the order's CONTENTS may still change — the ONE
@@ -336,6 +337,10 @@ export class OrderService {
     // imports the order domain back.
     private readonly resellerReterm: ResellerOrderRetermService,
     private readonly resellerMoney: ResellerOrderMoneyService,
+    // 2026-09-19 — re-pricing a changed reseller order is a POST-COMMIT
+    // hook shared with god mode, so the two writers of a money-affecting
+    // field cannot drift (ORD-2 / `order-post-commit-hooks-shared.spec`).
+    private readonly postCommit: OrderPostCommitHooksService,
   ) {}
 
   /**
@@ -1414,7 +1419,15 @@ export class OrderService {
         // CHANGE is told — the store by email (it has no inbox), seller
         // staff in-app by permission. Post-commit, and neither may throw
         // (NOTIF-1): the edit is the durable fact.
-        const money = await this.recalculateResellerMoney(id, order.orderNumber, changed);
+        const money = await this.postCommit.runForMoneyAffectingEdit({
+          orderId: id,
+          sellerId,
+          orderNumber: order.orderNumber,
+          changed,
+          reason: `Order ${order.orderNumber} was changed (${changed.join(', ')})`,
+          // No `announce`: this path tells them itself, just below, with
+          // the same money line and the full field-by-field diff.
+        });
         await this.tellTheOtherSideAboutTheEdit({
           storeId: order.storeId,
           saved,
@@ -1443,50 +1456,6 @@ export class OrderService {
   }
 
   /**
-   * The keys whose change moves a reseller order's money. `items` moves
-   * the transfer total and the retail; the COD is what the customer pays;
-   * the payment mode changes the shape (and is refused once priced).
-   */
-  private static readonly MONEY_KEYS: readonly string[] = ['items', 'codAmountInr', 'paymentMode'];
-
-  /**
-   * Re-price a reseller order after it changed. Never throws: the edit is
-   * committed and the money is its reflection — a failure here raises a
-   * HIGH audit row naming the order rather than leaving the caller with a
-   * 500 on an edit that did happen.
-   */
-  private async recalculateResellerMoney(
-    orderId: string,
-    orderNumber: string,
-    changed: readonly string[],
-  ): Promise<ResellerMoneyRecalculation | null> {
-    if (!changed.some((k) => OrderService.MONEY_KEYS.includes(k))) return null;
-    try {
-      return await this.resellerMoney.recalculateAfterEdit(orderId, {
-        reason: `Order ${orderNumber} was changed (${changed.join(', ')})`,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(
-        { orderId, err: message },
-        'A reseller order was changed but not re-priced',
-      );
-      await this.audit.log({
-        actorType: ActorType.SYSTEM,
-        actorId: null,
-        action: 'reseller_order.money_recalculation_failed',
-        entityType: 'order',
-        entityId: orderId,
-        // Somebody has to look: the order says one thing and the credits
-        // behind it say another until they do.
-        severity: 'HIGH',
-        metadata: { orderNumber, changed: [...changed], error: message },
-      });
-      return null;
-    }
-  }
-
-  /**
    * Tell WHOEVER DID NOT MAKE THE CHANGE (owner, 2026-09-18).
    *
    * A reseller order has two parties and one of them just changed it, so
@@ -1506,7 +1475,7 @@ export class OrderService {
     before: OrderView;
     input: UpdateOrderDto;
     changed: readonly string[];
-    money: ResellerMoneyRecalculation | null;
+    money: ResellerMoneyEditOutcome;
     byStore: boolean;
     supersededRequest: boolean;
   }): Promise<void> {
@@ -1522,7 +1491,7 @@ export class OrderService {
         }),
       ]);
       const changes = describeOrderChanges(input.before, input.input, input.changed);
-      const money = describeMoneyMove(input.money);
+      const money = describeMoneyOutcome(input.money);
       const eventKey = `${input.saved.id}:${input.saved.updatedAt.getTime()}`;
       if (input.byStore) {
         await this.storeRequestNotifier.orderChangedByStore({
