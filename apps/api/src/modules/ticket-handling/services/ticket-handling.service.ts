@@ -23,10 +23,11 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
  * the day somebody enabled the switch, Delhivery tickets would have been
  * labelled AUTO and then moved by nobody.
  *
- * `courier-support-capabilities.spec.ts` pins this against every
- * adapter's `capabilities()` in both directions, so it cannot drift
- * again — a courier belongs here exactly when its adapter says it can
- * raise a ticket.
+ * `courier-support-parity.spec.ts` pins this against every adapter's
+ * `capabilities()` in BOTH DIRECTIONS — with the operator switch on, so
+ * a MANUAL stamp there is the adapter's doing and not the switch's — so
+ * it cannot drift again: a courier belongs here exactly when its own
+ * adapter says it can raise a ticket.
  */
 const AUTOMATED_COURIERS: readonly string[] = [];
 

@@ -92,10 +92,19 @@ function make(
     },
   };
 
+  // The dispatcher's pickup capabilities (CUR-12, 2026-09-19). These
+  // mirror `CourierOpsDispatchService`'s own answers, which
+  // `courier-per-courier-routing.spec.ts` pins; the pickup service must
+  // never restate them, so the fake restates them exactly once, here.
   const svc = new CourierPickupService(
     prisma as never,
     { log: audit } as never,
-    { requestPickup } as never,
+    {
+      requestPickup,
+      pickupCourierCodes: jest.fn(() => ['delhivery', 'shiprocket'] as readonly string[]),
+      pickupNeedsLocationName: jest.fn((code: string) => code === 'delhivery'),
+      pickupSchedulesPerParcel: jest.fn((code: string) => code === 'shiprocket'),
+    } as never,
     { raise: jest.fn(async () => null), resolveByKey: jest.fn(async () => 0) } as never,
   );
   return { svc, create, update, del, audit, requestPickup };

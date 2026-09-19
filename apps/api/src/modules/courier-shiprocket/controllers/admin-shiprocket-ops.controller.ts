@@ -228,7 +228,10 @@ export class AdminShiprocketOpsController {
    * reading only the success row would report a job that has been
    * failing for a week as having last run a week ago and fine.
    */
-  private async lastRun(okAction: string, failedAction: string): Promise<ShiprocketJobRunView | null> {
+  private async lastRun(
+    okAction: string,
+    failedAction: string,
+  ): Promise<ShiprocketJobRunView | null> {
     const row = await this.prisma.client.auditLog.findFirst({
       where: { action: { in: [okAction, failedAction] } },
       orderBy: { createdAt: 'desc' },

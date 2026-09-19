@@ -60,6 +60,8 @@ function make(ctx: Ctx = {}) {
     },
   };
 
+  const candidateQuery = prisma.client.shipment.findMany;
+
   const listNdr = jest.fn().mockResolvedValue([]);
 
   const svc = new NdrRunnerService(
@@ -86,6 +88,13 @@ function make(ctx: Ctx = {}) {
             : { eligible: true },
         ),
       takeAction,
+      // WHICH couriers an NDR action can be asked of, read off the NDR
+      // dispatcher rather than restated here (CUR-12) — the runner's
+      // candidate query filters on it, so a local copy would silently
+      // stop sweeping a third courier the dispatcher already supports.
+      // `courier-per-courier-routing.spec.ts` pins the real answer.
+      adapterCourierCodes: jest.fn(() => ['delhivery', 'shiprocket'] as readonly string[]),
+      pollsOutcome: jest.fn((code: string) => code === 'delhivery'),
     } as never,
     // The Shiprocket NDR list. Every fixture here is Delhivery, so it
     // asserts by never being consulted.
@@ -96,7 +105,7 @@ function make(ctx: Ctx = {}) {
     { log: jest.fn().mockResolvedValue(undefined) } as never,
   );
 
-  return { svc, takeAction, fetchTracking, created, listNdr, updates };
+  return { svc, takeAction, fetchTracking, created, listNdr, updates, candidateQuery };
 }
 
 describe('NdrRunnerService — the gates', () => {
@@ -156,6 +165,29 @@ describe('NdrRunnerService — the gates', () => {
     const out = await svc.run();
     expect(takeAction).toHaveBeenCalledTimes(1);
     expect(out.submitted).toBe(1);
+  });
+
+  /**
+   * The sweep only picks up parcels we can actually ASK.
+   *
+   * There was no courier filter, so a MANUAL parcel — a waybill an
+   * operator typed off a paper docket, with no account and no API
+   * behind it (CUR-8) — was pulled in like any other and cost a
+   * rate-limited Delhivery tracking read before the dispatcher refused
+   * the action by name. The refusal was right; the read was wasted,
+   * and it comes out of a budget whose exhaustion has the WAF block
+   * our whole egress IP.
+   *
+   * The list comes from the NDR DISPATCHER (CUR-12) rather than a copy
+   * here, so a third courier joins the sweep by implementing the
+   * interface — a local list would silently keep skipping it.
+   */
+  it('asks only for couriers the NDR dispatcher supports, and never a manual parcel', async () => {
+    const { svc, candidateQuery } = make();
+    await svc.run();
+    const where = (candidateQuery.mock.calls[0]?.[0] as { where: Record<string, unknown> }).where;
+    expect(where['courierCode']).toEqual({ in: ['delhivery', 'shiprocket'] });
+    expect(where['isManualCourier']).toBe(false);
   });
 });
 

@@ -63,10 +63,10 @@ interface Captured {
   readonly body: Record<string, unknown>;
 }
 
-function client(opts: {
-  returnAddress?: unknown;
-  assign?: Record<string, unknown>;
-}): { svc: ShiprocketClientService; calls: Captured[] } {
+function client(opts: { returnAddress?: unknown; assign?: Record<string, unknown> }): {
+  svc: ShiprocketClientService;
+  calls: Captured[];
+} {
   const calls: Captured[] = [];
   const http = {
     isStubMode: jest.fn().mockResolvedValue(false),
@@ -148,7 +148,14 @@ describe('a Shiprocket return is booked on the RETURN endpoint', () => {
     const { svc, calls } = client({});
     await svc.generateAwb(request(), 'acc-1');
     expect(calls[0]?.body.order_items).toEqual([
-      { name: 'Kurta', sku: 'KUR-01', units: 2, selling_price: 499, discount: '0', qc_enable: false },
+      {
+        name: 'Kurta',
+        sku: 'KUR-01',
+        units: 2,
+        selling_price: 499,
+        discount: '0',
+        qc_enable: false,
+      },
     ]);
   });
 

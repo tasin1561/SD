@@ -51,6 +51,8 @@ interface Deps {
   cancel: jest.Mock;
   ndrTakeAction: jest.Mock;
   ewaybillUpdate: jest.Mock;
+  /** What the DISPATCHER was asked for the e-way bill — courier code included. */
+  attachEwaybillDispatch: jest.Mock;
   audit: jest.Mock;
   /** shipment.updateMany — the courier-cancel stamp. */
   stamp: jest.Mock;
@@ -98,6 +100,29 @@ function make(
     message: 'ok',
     raw: null,
   }));
+
+  /**
+   * The e-way bill leg joined the dispatcher on 2026-09-19 (CUR-12).
+   * DELHIVERY forwards to the same `ewaybillUpdate` mock so every
+   * existing assertion keeps meaning what it did; anything else is
+   * refused BY NAME, which is the whole point of the change — a
+   * Shiprocket parcel's number must never reach Delhivery's API under
+   * a waybill Delhivery never issued.
+   */
+  const attachEwaybillDispatch = jest.fn(
+    async (input: {
+      courierCode: string;
+      awbNumber: string;
+      invoiceNumber: string;
+      ewaybillNumber: string;
+    }) => {
+      if (input.courierCode !== 'delhivery') {
+        return { success: false, message: `no e-way bill support for ${input.courierCode}` };
+      }
+      const r = await ewaybillUpdate();
+      return { success: r.success, message: r.message };
+    },
+  );
 
   const deliveryAttemptFindFirst = jest.fn(async () => opts.latestAttempt ?? null);
 
@@ -153,6 +178,7 @@ function make(
         void courierShipmentId;
         return edit(rest, actor);
       },
+      attachEwaybill: attachEwaybillDispatch,
     } as never,
     { requiresEwaybill: (v: number) => v > 50_000, update: ewaybillUpdate } as never,
     ndr as never,
@@ -163,6 +189,7 @@ function make(
     cancel,
     ndrTakeAction,
     ewaybillUpdate,
+    attachEwaybillDispatch,
     audit,
     stamp,
     resolve: contextSvc.resolve,
@@ -594,6 +621,58 @@ describe('CourierShipmentActionService — e-way bill', () => {
       CLIENT,
     );
     expect(ewaybillUpdate).toHaveBeenCalled();
+  });
+
+  /**
+   * THE BUG (fixed 2026-09-19). This method called Delhivery's e-way
+   * bill endpoint with NO courier branch at all, so a Shiprocket
+   * parcel's number was sent to DELHIVERY'S account under a waybill
+   * Delhivery never issued — a live write against the wrong carrier,
+   * which our own audit row then recorded as a success.
+   *
+   * What this pins is the ROUTING, not the courier's answer: the
+   * dispatcher is asked with the SHIPMENT's own courier code, and
+   * `courier-per-courier-routing.spec.ts` pins what it answers for
+   * each one.
+   */
+  it("asks the dispatcher with the SHIPMENT's courier — never Delhivery by default", async () => {
+    const { svc, attachEwaybillDispatch, ewaybillUpdate } = make({
+      context: { courierCode: 'shiprocket', declaredValueInr: '75000.00' },
+    });
+    const r = await svc.attachEwaybill(
+      'staff-1',
+      SHIPMENT_ID,
+      { invoiceNumber: 'INV-1', ewaybillNumber: 'EWB-1' },
+      CLIENT,
+    );
+    expect(attachEwaybillDispatch.mock.calls[0]?.[0]).toMatchObject({
+      courierCode: 'shiprocket',
+      invoiceNumber: 'INV-1',
+      ewaybillNumber: 'EWB-1',
+    });
+    // Delhivery's own service was never reached.
+    expect(ewaybillUpdate).not.toHaveBeenCalled();
+    expect(r.success).toBe(false);
+  });
+
+  /**
+   * The refusal is a RECORDED fact, not a silent one — and the row
+   * names WHICH courier was asked, which is the exact question the
+   * missing branch above got wrong.
+   */
+  it('audits the courier it asked, and the outcome, even on a refusal', async () => {
+    const { svc, audit } = make({
+      context: { courierCode: 'shiprocket', declaredValueInr: '75000.00' },
+    });
+    await svc.attachEwaybill(
+      'staff-1',
+      SHIPMENT_ID,
+      { invoiceNumber: 'INV-1', ewaybillNumber: 'EWB-1' },
+      CLIENT,
+    );
+    const row = audit.mock.calls[0]?.[0] as { action: string; metadata: Record<string, unknown> };
+    expect(row.action).toBe('courier.shipment.ewaybill_attached');
+    expect(row.metadata).toMatchObject({ courierCode: 'shiprocket', success: false });
   });
 });
 

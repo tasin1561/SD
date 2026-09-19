@@ -111,10 +111,11 @@ describe('the dispatcher owns the two pickup asymmetries', () => {
 });
 
 describe('a STUB may not confirm a real address change (CUR-15)', () => {
-  function addressService(opts: {
-    stubbed: boolean;
-    edit?: jest.Mock;
-  }): { svc: ShipmentAddressService; created: jest.Mock; edit: jest.Mock } {
+  function addressService(opts: { stubbed: boolean; edit?: jest.Mock }): {
+    svc: ShipmentAddressService;
+    created: jest.Mock;
+    edit: jest.Mock;
+  } {
     const created = jest.fn().mockResolvedValue({ id: 'chg-1' });
     const edit = opts.edit ?? jest.fn().mockResolvedValue({ success: true, message: null });
     const prisma = {
