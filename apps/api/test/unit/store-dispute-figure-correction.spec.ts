@@ -1,4 +1,7 @@
-import { ActorType, Prisma, ResellerMoneyParty, StoreDisputeKind, TicketType } from '@skydrop/db';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ActorType, ResellerMoneyParty, StoreDisputeKind, TicketType } from '@skydrop/db';
+import type { Prisma } from '@skydrop/db';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
@@ -97,7 +100,10 @@ function makeSut(opts: {
       ? { id: 'order-1', sellerId: 'seller-1', storeId: 'store-1' }
       : opts.order;
   const orderFindFirst = jest.fn(async () => order);
-  const ticketCreate = jest.fn(async (a: { data: Record<string, unknown> }) => ({
+  const ticketCreate = jest.fn<
+    Promise<Record<string, unknown>>,
+    [{ data: Record<string, unknown> }]
+  >(async (a) => ({
     id: '019fad84-7acd-754e-8ee4-43cf858fed90',
     events: [],
     order: { orderNumber: 'SD-2026-37-000001' },
@@ -352,9 +358,8 @@ describe('RS-7 — the correction has NO money path of its own', () => {
     // route would be a new method that pays somebody, and the point of
     // the correction being a KIND rather than a TYPE is that the money
     // still goes through the one path that claims the ticket first.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- a source scan, not a runtime import
-    const src: string = require('node:fs').readFileSync(
-      require('node:path').join(__dirname, '../../src/modules/ticket/services/ticket.service.ts'),
+    const src = readFileSync(
+      join(__dirname, '../../src/modules/ticket/services/ticket.service.ts'),
       'utf8',
     );
     const settlers = src.match(/this\.resellerMoney\.settleStoreDispute\(/g) ?? [];

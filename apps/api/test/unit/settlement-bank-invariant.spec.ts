@@ -2313,6 +2313,10 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     const bookWas = w.accountTotal();
     const capitalWas = w.capital();
     const heldWas = w.held('s');
+    // The row COUNT, not only the total: a pair summing to zero would
+    // leave every figure below unchanged while still writing cash lines
+    // for money that never moved between banks. RS-7 writes NEITHER.
+    const bankRowsWere = w.bankRows();
     agrees(w);
 
     // Re-pricing is refused — that is what the correction exists for.
@@ -2337,6 +2341,7 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     expect(w.accountTotal()).toBe(bookWas);
     expect(w.capital()).toBe(capitalWas);
     expect(w.held('s')).toBe(heldWas);
+    expect(w.bankRows()).toBe(bankRowsWere);
     agrees(w);
 
     // The other direction, on the same order: a store may owe too.
@@ -2354,6 +2359,7 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     expect(w.accountTotal()).toBe(bookWas);
     expect(w.capital()).toBe(capitalWas);
     expect(w.held('s')).toBe(heldWas);
+    expect(w.bankRows()).toBe(bankRowsWere);
     agrees(w);
 
     // And the CREDITS are untouched — a settlement corrects the figures
@@ -2369,6 +2375,7 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     await deliver(w, 'r1');
     await w.pay('1180', [['r1', '1180']]);
     const bookWas = w.accountTotal();
+    const bankRowsWere = w.bankRows();
     await w.resellerMoney.settleStoreDispute(w.tx as never, {
       storeId: 'st-a',
       sellerId: 's',
@@ -2381,8 +2388,12 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     });
     expect(w.storeBalance('st-a')).toBe('-115.00');
     expect(w.balance('s')).toBe('1105.00');
-    // The group still owes 990 in total, so the book is unmoved.
+    // The group still owes 990 in total, so the book is unmoved — and
+    // NOT ONE bank row was written. The store's debt to the seller is a
+    // receivable inside the group; inventing a cash line for it would
+    // put a number in the book no statement will ever agree with.
     expect(w.accountTotal()).toBe(bookWas);
+    expect(w.bankRows()).toBe(bankRowsWere);
     expect(w.held('s')).toBe('990.00');
     agrees(w);
   });
