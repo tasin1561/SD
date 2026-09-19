@@ -4,6 +4,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 import { DelhiveryNdrService } from '../../courier-delhivery/services/delhivery-ndr.service';
+import { CourierNdrDispatchService } from '../../courier-ops/services/courier-ndr-dispatch.service';
 import { TicketService } from '../../ticket/services/ticket.service';
 import { CourierEscalationService } from '../../courier-escalation/services/courier-escalation.service';
 import { NdrSettingsService } from './ndr-settings.service';
@@ -54,6 +55,7 @@ export class NdrUplPollerService {
     private readonly prisma: PrismaService,
     private readonly settings: NdrSettingsService,
     private readonly ndr: DelhiveryNdrService,
+    private readonly ndrDispatch: CourierNdrDispatchService,
     private readonly tickets: TicketService,
     private readonly escalations: CourierEscalationService,
     private readonly audit: AuditLogService,
@@ -64,8 +66,32 @@ export class NdrUplPollerService {
     const deadlineMinutes = await this.settings.pollDeadlineMinutes();
     const cutoff = new Date(Date.now() - deadlineMinutes * 60_000);
 
+    /*
+      ── ONLY THE COURIERS THAT ACTUALLY HAND BACK A HANDLE ──────────
+
+      This asked for EVERY SUBMITTED row and put each one to
+      DELHIVERY'S `checkStatus`. A Shiprocket request that reached
+      SUBMITTED — their submit is synchronous and is meant to be
+      CONFIRMED on the spot, so any row that gets here is already an
+      anomaly — would have been read as "no UPL id" and closed FAILED,
+      then escalated to a person as a re-attempt the courier ignored.
+      The re-attempt would have worked.
+
+      Which couriers decide asynchronously is the NDR dispatcher's
+      question, not ours (CUR-12). A row whose courier is not among them
+      is deliberately LEFT ALONE rather than force-closed: it means
+      something upstream marked it SUBMITTED when it should not have,
+      and the honest response is not to invent an outcome for it.
+    */
+    const polledCouriers = this.ndrDispatch
+      .adapterCourierCodes()
+      .filter((code) => this.ndrDispatch.pollsOutcome(code));
+
     const pending = await this.prisma.client.ndrActionRequest.findMany({
-      where: { status: NdrRequestStatus.SUBMITTED },
+      where: {
+        status: NdrRequestStatus.SUBMITTED,
+        shipment: { courierCode: { in: [...polledCouriers] } },
+      },
       select: {
         id: true,
         uplId: true,

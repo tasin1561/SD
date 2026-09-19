@@ -3625,6 +3625,23 @@ model Shipment {
   /// keys their label, pickup and cancel calls. Delhivery has one
   /// number and leaves this null.
   courierOrderId           String?          @map("courier_order_id")
+  /// WHICH CARRIER actually took the parcel, when the courier we booked
+  /// with is an aggregator.
+  ///
+  /// `courierCode` is who we have the account and the money with;
+  /// this is whose van it went in. Delhivery IS the carrier, so booking
+  /// with them answers both and this stays null. Shiprocket resells a
+  /// dozen carriers and tells us which one it picked in the assign
+  /// reply (`response.data.courier_name`, e.g. "Blue Dart Air") — we
+  /// were dropping that on the floor, which is the fact a POD chase, a
+  /// cost query and "why is this parcel slow" all start from. The
+  /// carrier may differ from `chosenCourierCompanyId` when a policy
+  /// asked for one and their ranking gave another, so it is recorded
+  /// from THEIR reply rather than from what we asked for.
+  ///
+  /// A display string, never keyed on: it is their wording and they are
+  /// free to re-word it.
+  carrierName              String?          @map("carrier_name")
   serviceType              String?          @map("service_type")
   originWarehouseId        String           @map("origin_warehouse_id") @db.Uuid
   destRecipientName        String           @map("dest_recipient_name")

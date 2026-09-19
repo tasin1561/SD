@@ -903,6 +903,50 @@ const systemSettings: SystemSettingSeed[] = [
       "Name of the warehouse pickup location pre-registered in Delhivery's partner portal. Required when real mode is enabled (DelhiveryAwbService passes it as pickup_location.name on create-shipment). Phase-1A is single-warehouse (CCU-01); a multi-warehouse setup adds one key per origin.",
   },
   {
+    // The Shiprocket half of the same fact. Seeded EMPTY, never guessed:
+    // a pickup location name is matched byte for byte on their side, and
+    // a wrong one is a rejected manifest rather than a warning.
+    //
+    // Their own `generate/pickup` call does NOT use it (they schedule
+    // per parcel, so a pickup goes through with this unset —
+    // `pickupNeedsLocationName` is what knows that). It is the BOOKING
+    // that needs it: ShiprocketClientService sends it as
+    // `pickup_location` on create-order, and refuses to book without
+    // one. Kept here beside Delhivery's so the per-courier pattern is
+    // visible in one place rather than inferred.
+    key: 'courier.shiprocket_pickup_location',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Shiprocket Pickup Location Name',
+    description:
+      "Name of the warehouse pickup location registered on Shiprocket (Settings → Pickup Addresses), matched exactly when a parcel is booked. The courier account's own pickupLocationName wins over this; this is the fallback for a single-account setup. Unlike Delhivery, Shiprocket CAN list its registered locations (GET /v1/external/settings/company/pickup), so a typo here is checkable rather than only discoverable by a failed booking.",
+  },
+  {
+    // WHERE A SHIPROCKET RETURN COMES BACK TO.
+    //
+    // Their `/orders/create/return` spells out BOTH ends: the customer
+    // is the pickup and we are the shipping side, so a registered
+    // pickup-location NAME (which is all a forward booking needs) is not
+    // enough — there is no address behind it we can read back. Our
+    // `warehouses` table holds no address at all, which is a deliberate
+    // gap documented on CourierWarehouseRegistrationService, so the
+    // operator records it here once.
+    //
+    // Seeded EMPTY, and the booking refuses by name when it is unset or
+    // half filled (SHIPROCKET_RETURN_ADDRESS_NOT_CONFIGURED). A guessed
+    // return address is a van delivering somebody's goods to a place
+    // that does not exist — the same reasoning that keeps
+    // courier.<code>_support_email empty.
+    key: 'courier.shiprocket_return_address',
+    category: 'courier',
+    valueType: SettingValueType.JSON,
+    valueJson: {},
+    displayName: 'Shiprocket Return Address',
+    description:
+      'Where a Shiprocket customer-return is DELIVERED TO — our warehouse. Required before a Shiprocket return collection can be booked; Delhivery does not need it (their reverse uses the account\'s own pickup location). Shape: {"name","addressLine1","addressLine2","city","state","pincode","phone","email"}. addressLine2 and email may be empty; the rest are required and a partial address is refused rather than sent.',
+  },
+  {
     key: 'courier.delhivery_origin_pincode',
     category: 'courier',
     valueType: SettingValueType.STRING,

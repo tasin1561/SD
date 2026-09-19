@@ -1,6 +1,7 @@
 import { ActorType } from '@skydrop/db';
 import { CourierOpsDispatchService } from '../../src/modules/courier-ops/services/courier-ops-dispatch.service';
 import type { DelhiveryShipmentEditService } from '../../src/modules/courier-delhivery/services/delhivery-shipment-edit.service';
+import type { DelhiveryEwaybillService } from '../../src/modules/courier-delhivery/services/delhivery-ewaybill.service';
 import type { DelhiveryPickupService } from '../../src/modules/courier-delhivery/services/delhivery-pickup.service';
 import type { DelhiveryWarehouseService } from '../../src/modules/courier-delhivery/services/delhivery-warehouse.service';
 import type { ShiprocketClientService } from '../../src/modules/courier-shiprocket/services/shiprocket-client.service';
@@ -36,6 +37,10 @@ function makeService(
 
   const svc = new CourierOpsDispatchService(
     { cancel: dlCancel } as unknown as DelhiveryShipmentEditService,
+    // The e-way bill leg: routed through the dispatcher since
+    // 2026-09-19, so a Shiprocket parcel's number stops reaching
+    // Delhivery's account under a waybill they never issued.
+    { update: jest.fn() } as unknown as DelhiveryEwaybillService,
     { requestPickup: dlPickup } as unknown as DelhiveryPickupService,
     { register: dlWarehouse, update: dlWarehouse } as unknown as DelhiveryWarehouseService,
     {
@@ -199,6 +204,7 @@ describe('CourierOpsDispatchService — editing a live parcel', () => {
     >(async () => ({ ok: true, message: null }));
     const svc = new CourierOpsDispatchService(
       { cancel: jest.fn(), edit: dlEdit } as unknown as DelhiveryShipmentEditService,
+      { update: jest.fn() } as unknown as DelhiveryEwaybillService,
       { requestPickup: jest.fn() } as unknown as DelhiveryPickupService,
       { register: jest.fn() } as unknown as DelhiveryWarehouseService,
       { editShipment: srEdit } as unknown as ShiprocketClientService,
@@ -294,6 +300,7 @@ describe('CourierOpsDispatchService.isStubbedInProduction', () => {
   function build(production: boolean, dlStub: boolean, srStub: boolean): CourierOpsDispatchService {
     return new CourierOpsDispatchService(
       {} as unknown as DelhiveryShipmentEditService,
+      {} as unknown as DelhiveryEwaybillService,
       {} as unknown as DelhiveryPickupService,
       {} as unknown as DelhiveryWarehouseService,
       {} as unknown as ShiprocketClientService,

@@ -1237,6 +1237,10 @@ export interface AdminShipmentRow {
   readonly courierCode: string;
   /** WHICH of our accounts with that courier carried it (CACC-1). */
   readonly courierAccountLabel: string | null;
+  /** WHICH CARRIER an aggregator's ranking gave us — "Blue Dart Air" on
+   *  a Shiprocket booking. Null for Delhivery (they ARE the carrier) and
+   *  for anything booked before we began recording it. */
+  readonly carrierName: string | null;
   readonly isManualCourier: boolean;
   /** WHO carried it when `courierCode` is 'manual'. Render via `courierLabel`. */
   readonly manualCourierName: string | null;

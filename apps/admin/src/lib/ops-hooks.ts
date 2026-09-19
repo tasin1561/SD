@@ -2150,6 +2150,9 @@ export function useRaisePickup(): UseMutationResult<
   Error,
   {
     warehouseId: string;
+    /** WHICH courier's van. Omitted means Delhivery, which is what this
+     *  screen asked for before the field existed. */
+    courierCode?: 'delhivery' | 'shiprocket';
     pickupDate: string;
     pickupTime: string;
     expectedPackageCount: number;
@@ -4738,5 +4741,87 @@ export function useRunShiprocketPortalProbe(): UseMutationResult<unknown, Error,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-shiprocket-cost'] });
     },
+  });
+}
+
+// ───────── Shiprocket ops console ─────────
+//
+// `/delhivery` has been a full console for months and this courier had
+// none — while production carries both live and failover reaches
+// Shiprocket without anybody choosing it per parcel. The wallet DETAIL
+// stays on /cost-sync, which already owns it.
+
+export interface ShiprocketAccountView {
+  readonly courierAccountId: string;
+  readonly label: string;
+  readonly isActive: boolean;
+  readonly pickupLocationName: string | null;
+  readonly walletBalanceInr: string | null;
+  readonly walletBalanceAt: string | null;
+}
+
+export interface ShiprocketJobRunView {
+  readonly at: string;
+  readonly ok: boolean;
+}
+
+export interface ShiprocketBookingView {
+  readonly shipmentId: string;
+  readonly shipmentNumber: string;
+  readonly awbNumber: string | null;
+  /** WHICH carrier their ranking gave us. Null on a pre-2026-09-19 row. */
+  readonly carrierName: string | null;
+  readonly status: string;
+  readonly bookedAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface ShiprocketOpsStatusView {
+  /** CUR-15's question, and the most important one on the page. */
+  readonly liveMode: boolean;
+  readonly liveWritesEnabled: boolean;
+  readonly intakeEnabled: boolean;
+  readonly returnAddressConfigured: boolean;
+  readonly accounts: readonly ShiprocketAccountView[];
+  readonly lastWalletSync: ShiprocketJobRunView | null;
+  readonly lastInvoiceCheck: ShiprocketJobRunView | null;
+  readonly recentBookings: readonly ShiprocketBookingView[];
+}
+
+export interface ShiprocketConnectivityView {
+  readonly reachedLiveApi: boolean;
+  readonly stubMode: boolean;
+  readonly pickupPincode: string | null;
+  readonly deliveryPincode: string | null;
+  readonly optionCount: number | null;
+  readonly cheapestInr: string | null;
+  readonly error: string | null;
+}
+
+export function useShiprocketStatus(): UseQueryResult<ShiprocketOpsStatusView> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['admin-shiprocket', 'status'],
+    queryFn: () => client.request<ShiprocketOpsStatusView>('/api/admin/shiprocket/status'),
+    // Live operational state: which mode the courier is in and whether
+    // writes are armed. A stale reading of either is worse than none.
+    refetchInterval: 30_000,
+  });
+}
+
+export function useShiprocketConnectivity(): UseMutationResult<
+  ShiprocketConnectivityView,
+  Error,
+  { from: string; to: string }
+> {
+  const client = useApiClient();
+  return useMutation({
+    // A MUTATION although it reads nothing: it spends a real round trip
+    // against a rate-limited courier API, so it fires when somebody
+    // asks rather than on every render of the page.
+    mutationFn: ({ from, to }) =>
+      client.request<ShiprocketConnectivityView>(
+        `/api/admin/shiprocket/connectivity?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      ),
   });
 }

@@ -109,6 +109,22 @@ export interface DispatchAwbResult {
    *  operator needs to find the parcel on their side. Null for a
    *  courier that has only one number. */
   readonly courierOrderId: string | null;
+  /**
+   * WHICH CARRIER took it, when the courier is an AGGREGATOR.
+   *
+   * Shiprocket's assign reply has named the carrier all along
+   * (`response.data.courier_name`, e.g. "Blue Dart Air") and their own
+   * client already parsed it — this result had nowhere to put it, so it
+   * was read and thrown away on every booking. That is the one fact a
+   * POD chase, a cost query and "why is this parcel slow" all begin
+   * from, and it is unrecoverable afterwards: nothing else on our side
+   * records it, and their reply is not stored.
+   *
+   * NULL for Delhivery, who IS the carrier — booking with them answers
+   * both questions at once, so inventing a value there would only be a
+   * copy of `courierCode` that could drift from it.
+   */
+  readonly carrierName: string | null;
   /** TRUE means "try again later"; FALSE means "this courier will not
    *  carry it", which is what makes failover and supersede correct. */
   readonly serviceable: boolean;
@@ -184,6 +200,7 @@ export class CourierAwbDispatchService {
         awbNumber: null,
         courierShipmentId: null,
         courierOrderId: null,
+        carrierName: null,
         serviceable: false,
         errorCode: 'COURIER_DISABLED',
         errorMessage: `${input.courierCode} is switched off for new parcels`,
@@ -231,6 +248,7 @@ export class CourierAwbDispatchService {
       awbNumber: null,
       courierShipmentId: null,
       courierOrderId: null,
+      carrierName: null,
       serviceable: false,
       errorCode: 'NO_ADAPTER',
       errorMessage: `${input.courierCode} has no integration — book it by hand`,
@@ -367,6 +385,7 @@ export class CourierAwbDispatchService {
       // Delhivery's waybill IS the identifier for everything after.
       courierShipmentId: null,
       courierOrderId: null,
+      carrierName: null,
       serviceable: r.ok ? true : r.serviceable,
       errorCode: r.ok ? null : (r.errorCode ?? null),
       errorMessage: r.ok ? null : (r.errorMessage ?? null),
@@ -374,28 +393,28 @@ export class CourierAwbDispatchService {
   }
 
   private async viaShiprocket(input: DispatchAwbInput): Promise<DispatchAwbResult> {
-    // Refused BY NAME rather than silently degraded (CUR-12/13).
-    //
-    // Shiprocket's reverse booking is a different call we have not
-    // built. Dropping the flag and booking anyway would create a
-    // FORWARD parcel: a van sent to our own warehouse to collect from
-    // ourselves, while the customer keeps the goods and the seller is
-    // told a return is on its way. `serviceable: false` because asking
-    // again later changes nothing.
-    if (input.isReverse === true) {
-      return {
-        ok: false,
-        awbNumber: null,
-        courierShipmentId: null,
-        courierOrderId: null,
-        serviceable: false,
-        errorCode: 'REVERSE_NOT_SUPPORTED',
-        errorMessage:
-          'Shiprocket reverse pickup is not implemented — book this return with Delhivery, or arrange it by hand.',
-      };
-    }
+    /*
+      ── THE RETURN LEG IS BUILT NOW (2026-09-19) ────────────────────
 
+      This used to answer `REVERSE_NOT_SUPPORTED`, which meant a
+      customer return on a Shiprocket parcel could never be collected:
+      `ReversePickupBookingService` raised a HIGH issue and the goods
+      stayed with the customer. The owner's decision is that the courier
+      who delivered it collects it — one account, one cost trail.
+
+      `isReverse` is passed STRAIGHT THROUGH to the adapter, exactly as
+      it is for Delhivery. What a reverse means on the wire is the
+      adapter's business (CUR-12): for Delhivery it is
+      `payment_mode: 'Pickup'`, for Shiprocket a different endpoint with
+      the address naming inverted. Neither shape belongs here.
+
+      The addresses are NOT swapped by this dispatcher, for the reason
+      `DispatchAwbInput.isReverse` already states: on a reverse leg the
+      recipient fields are where the parcel is COLLECTED, and marshalling
+      that intent twice is how the two copies come to disagree.
+    */
     const req: ShiprocketAwbRequest = {
+      ...(input.isReverse === true ? { isReverse: true } : {}),
       shipmentId: input.shipmentId,
       orderNumber: input.orderNumber,
       recipient: {
@@ -434,6 +453,7 @@ export class CourierAwbDispatchService {
         awbNumber: r.awbNumber,
         courierShipmentId: r.courierShipmentId,
         courierOrderId: r.courierOrderId,
+        carrierName: r.courierName,
         serviceable: true,
         errorCode: null,
         errorMessage: null,
@@ -444,6 +464,7 @@ export class CourierAwbDispatchService {
       awbNumber: null,
       courierShipmentId: null,
       courierOrderId: null,
+      carrierName: null,
       // Their two failure kinds map onto the one field the saga reads.
       serviceable: r.failure === 'TRANSIENT',
       errorCode: r.failure,

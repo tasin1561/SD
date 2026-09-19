@@ -138,6 +138,33 @@ export class ShipmentAddressService {
       });
     }
 
+    /*
+      ── A STUB MAY NOT CONFIRM A REAL ADDRESS CHANGE (CUR-15) ─────
+
+      Both adapters' edit paths answer `{success: true, message: 'stub'}`
+      BEFORE the live-write guard runs. That is exactly right in dev and
+      CI. In production, with one courier live and another stubbed, it
+      is the most consequential version of the failure CUR-15 exists to
+      stop: a seller's or a store's correction is reported ACCEPTED, the
+      new address is written to the change row, the shipment AND the
+      order (all three, below) — and the courier never heard of it. The
+      driver still has the old address, the call centre reads out the
+      new one, and the divergence is invisible because every screen
+      agrees with every other screen.
+
+      This is the same guard `CourierShipmentActionService.cancelWithCourier`
+      already applies, for the same reason, and it was the only place
+      that applied it. Refused BY NAME, and BEFORE the change row is
+      created: a row saying what was asked is only useful when
+      something was actually asked.
+    */
+    if (await this.ops.isStubbedInProduction(s.courierCode)) {
+      throw new ConflictException({
+        code: 'COURIER_STUBBED',
+        message: `${s.courierCode} is not connected to its live API here, so this correction would reach nobody and we would store an address the parcel is not going to. Change it in the courier's own portal.`,
+      });
+    }
+
     // Only what actually differs. Sending a field back unchanged asks
     // the courier to re-write it for no reason, and would record an
     // audit row saying something changed when nothing did.

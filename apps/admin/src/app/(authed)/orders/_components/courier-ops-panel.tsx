@@ -287,9 +287,22 @@ function CourierOpsBody({
           <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
             Correct recipient
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setEwaybilling(true)}>
-            Attach e-way bill
-          </Button>
+          {/*
+            DELISTED, NOT DELETED — "Attach e-way bill" (2026-09-19).
+
+            An e-way bill is required above ₹50,000
+            (EWAYBILL_THRESHOLD_INR). The owner's figure is that no
+            parcel Skydrop ships exceeds ₹10,000, so this control
+            applied to nothing on the floor while sitting between two
+            buttons that are used every day — and it only ever worked on
+            Delhivery (it reached their API whatever carrier held the
+            parcel, which is the bug CUR-12 now stops in the dispatcher).
+
+            The endpoint and the modal below both stay: this is one line
+            away the day a parcel above the threshold is normal, and
+            deleting it would mean rebuilding it from scratch to answer
+            a question the codebase has already answered.
+          */}
           <Button variant="destructive" size="sm" onClick={() => setConfirmCancel(true)}>
             Cancel with courier
           </Button>

@@ -16,10 +16,18 @@ import { ShiprocketClientService } from './shiprocket-client.service';
  * as "not found" — which reads exactly like a parcel that has not moved.
  * The poller therefore groups by account before calling.
  *
- * `maxAwbsPerCall` is 1 because their track endpoint takes ONE AWB in
- * the path. The client loops internally, so the poller's batching still
- * works; setting this honestly is what keeps the poller's per-batch
- * failure isolation meaningful rather than an all-or-nothing call.
+ * `maxAwbsPerCall` is a BATCH SIZE, not a wire limit — and this comment
+ * said 1 while the value has been 25 (corrected 2026-09-19). Their track
+ * endpoint genuinely does take ONE AWB in the path, so `fetchTracking`
+ * loops internally; what this number actually decides is how many
+ * waybills the POLLER hands over per call, and therefore how much is
+ * lost when one call throws. 25 is a deliberate granularity choice for
+ * the poller's per-batch failure isolation, and it is honest about
+ * nothing on the wire.
+ *
+ * Reading 1 as "their limit" would have been an argument for never
+ * raising it. The real question is how big a group is worth losing
+ * together.
  */
 @Injectable()
 export class ShiprocketTrackingSourceService implements CourierTrackingSource {

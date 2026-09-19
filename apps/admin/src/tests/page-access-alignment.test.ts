@@ -109,6 +109,7 @@ describe('a single-purpose page takes the permission of its purpose', () => {
     ['/reports', 'modules/admin-reports/admin-reports.controller.ts'],
     ['/webhooks', 'modules/admin-webhook-deliveries/admin-webhook-deliveries.controller.ts'],
     ['/delhivery', 'modules/courier-delhivery/controllers/admin-delhivery-ops.controller.ts'],
+    ['/shiprocket', 'modules/courier-shiprocket/controllers/admin-shiprocket-ops.controller.ts'],
     ['/system/capacity', 'modules/system-capacity/controllers/admin-capacity.controller.ts'],
     ['/settings', 'modules/system-settings/controllers/admin-system-settings.controller.ts'],
   ];

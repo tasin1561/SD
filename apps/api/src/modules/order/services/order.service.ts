@@ -1753,6 +1753,12 @@ export class OrderService {
       courierCode: string;
       /** WHICH of our accounts with that courier carried it (CACC-1). */
       courierAccountLabel: string | null;
+      /** WHICH CARRIER an aggregator's ranking actually gave us — e.g.
+       *  "Blue Dart Air" on a Shiprocket booking. Null for Delhivery,
+       *  who is the carrier, and null for anything booked before we
+       *  started recording it (their reply is not stored, so it cannot
+       *  be backfilled). */
+      carrierName: string | null;
       isManualCourier: boolean;
       manualCourierName: string | null;
       createdAt: Date;
@@ -1783,6 +1789,7 @@ export class OrderService {
             awbNumber: true,
             courierCode: true,
             courierAccount: { select: { label: true } },
+            carrierName: true,
             isManualCourier: true,
             manualCourierName: true,
             createdAt: true,

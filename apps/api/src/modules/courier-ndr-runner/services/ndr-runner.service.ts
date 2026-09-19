@@ -437,7 +437,21 @@ export class NdrRunnerService {
         awbNumber: { not: null },
         supersededAt: null,
         deletedAt: null,
-        ndrActionRequests: { none: { status: NdrRequestStatus.SUBMITTED } },
+        // ONLY COURIERS WE CAN ACTUALLY ASK.
+        //
+        // There was no courier filter here, so a MANUAL parcel — a
+        // waybill an operator typed off a paper docket, with no account
+        // and no API behind it (CUR-8) — was pulled in like any other,
+        // and the loop below spent a rate-limited Delhivery tracking
+        // read on it before the dispatcher refused the action by name.
+        // The refusal was correct; the read was wasted, and it is taken
+        // from a budget whose exhaustion has the WAF block our whole
+        // egress IP.
+        //
+        // The list is the NDR dispatcher's (CUR-12), not a local copy:
+        // a third courier appears here by implementing the interface.
+        courierCode: { in: [...this.ndr.adapterCourierCodes()] },
+        isManualCourier: false,
       },
       select: {
         id: true,

@@ -64,6 +64,16 @@ export function OrderShipmentsSection({
                         this one — so "which account" is the first thing
                         asked when a parcel goes wrong. */}
                     {s.courierAccountLabel === null ? null : ` · ${s.courierAccountLabel}`}
+                    {/* WHICH CARRIER an aggregator picked. `courierCode`
+                        says who we booked with and hold the account
+                        with; this says whose van it is in, and it is the
+                        first thing anyone needs when chasing a POD or
+                        asking why a parcel is slow. Absent for Delhivery
+                        (they are the carrier) and for parcels booked
+                        before we recorded it, so it is shown only when
+                        we have it rather than rendered as an em dash
+                        beside every Delhivery row. */}
+                    {s.carrierName === null ? null : ` · via ${s.carrierName}`}
                     {s.isManualCourier ? ' (placed by hand)' : ''} ·{' '}
                     {new Date(s.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
                     {s.supersedesShipmentId && (

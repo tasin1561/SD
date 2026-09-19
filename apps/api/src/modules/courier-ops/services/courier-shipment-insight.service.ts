@@ -293,6 +293,35 @@ export class CourierShipmentInsightService {
       };
     }
 
+    /*
+      ── AND ANY OTHER COURIER IS REFUSED BY NAME ────────────────────
+
+      Everything that is not Shiprocket used to fall through to
+      DELHIVERY'S document endpoint. For a MANUAL parcel that means
+      asking Delhivery for the paperwork of a waybill an operator read
+      off somebody else's paper docket (CUR-8) — a live read against the
+      wrong carrier's account, under a number Delhivery never issued,
+      and whatever it answers is either nothing or somebody else's
+      document. The rest of this class goes through `requireAwb`, which
+      is where that guard lives; this method resolves the shipment
+      directly and so had none.
+
+      Refused rather than degraded, and the message says what to do
+      instead: for a manual courier the POD is a piece of paper the
+      operator asks the shop for.
+    */
+    if (shipment.courierCode !== 'delhivery') {
+      return {
+        shipmentId: shipment.shipmentId,
+        awbNumber: shipment.awbNumber,
+        docType,
+        url: null,
+        message: shipment.isManualCourier
+          ? 'This parcel was placed by hand, so there is no courier account holding its paperwork — ask the courier for it directly.'
+          : `We hold no document integration for ${shipment.courierCode}, so this cannot be fetched here.`,
+      };
+    }
+
     const result = await this.documents.fetch(
       shipment.awbNumber,
       docType,

@@ -424,6 +424,17 @@ export class CourierShipmentActionService {
    * without it the goods can be detained in transit and penalised. We
    * accept the number below the threshold too — the operator may know
    * something the declared value does not say.
+   *
+   * ── IT GOES THROUGH THE DISPATCHER (CUR-12) ──────────────────────
+   * This called Delhivery's e-way bill endpoint directly, with no
+   * courier branch. A Shiprocket or manual parcel's number was
+   * therefore sent to DELHIVERY, under a waybill Delhivery never
+   * issued — a live write against the wrong carrier, and our audit row
+   * recorded it as a success. The routing now lives in
+   * `CourierOpsDispatchService.attachEwaybill`, which refuses a courier
+   * with no support BY NAME; the audit row, the operator attribution
+   * and the shipment lookup stay here, written once, as with every
+   * other action on this class.
    */
   async attachEwaybill(
     staffId: string,
@@ -433,8 +444,9 @@ export class CourierShipmentActionService {
   ): Promise<ActionOutcome> {
     const shipment = await this.requireAwb(shipmentId);
 
-    const result = await this.ewaybill.update(
+    const result = await this.opsDispatch.attachEwaybill(
       {
+        courierCode: shipment.courierCode,
         awbNumber: shipment.awbNumber,
         invoiceNumber: input.invoiceNumber,
         ewaybillNumber: input.ewaybillNumber,
@@ -450,6 +462,10 @@ export class CourierShipmentActionService {
       entityId: shipment.shipmentId,
       severity: 'MEDIUM',
       metadata: {
+        // WHICH courier was asked. Without it the row cannot answer
+        // "did we send this to the carrier that holds the parcel", which
+        // is the exact question the missing branch above got wrong.
+        courierCode: shipment.courierCode,
         awbNumber: shipment.awbNumber,
         invoiceNumber: input.invoiceNumber,
         ewaybillNumber: input.ewaybillNumber,

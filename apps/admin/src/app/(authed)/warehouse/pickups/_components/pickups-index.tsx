@@ -289,6 +289,11 @@ function RaisePickupModal({
   const raise = useRaisePickup();
 
   const [warehouseId, setWarehouseId] = useState('');
+  // WHICH courier's van. Delhivery is the default because that is what
+  // this form asked for before it could ask anything else — the field
+  // had not existed, so a Shiprocket parcel could summon its own van
+  // automatically while nobody could raise one here.
+  const [courierCode, setCourierCode] = useState<'delhivery' | 'shiprocket'>('delhivery');
   const [pickupDate, setPickupDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [pickupTime, setPickupTime] = useState('16:00:00');
   const [count, setCount] = useState('');
@@ -299,6 +304,7 @@ function RaisePickupModal({
     try {
       await raise.mutateAsync({
         warehouseId,
+        courierCode,
         pickupDate,
         pickupTime,
         expectedPackageCount: Number(count),
@@ -323,6 +329,22 @@ function RaisePickupModal({
       description="One request covers every parcel leaving this warehouse today. Raise it when they are packed and ready to hand over — not when they are manifested."
     >
       <div className="space-y-3">
+        <FormField
+          label="Courier"
+          htmlFor="pu-courier"
+          required
+          hint="One van per courier per building per day — a warehouse handing over to both needs one request each."
+        >
+          <Select
+            id="pu-courier"
+            value={courierCode}
+            onChange={(e) => setCourierCode(e.target.value === 'shiprocket' ? 'shiprocket' : 'delhivery')}
+          >
+            <option value="delhivery">Delhivery</option>
+            <option value="shiprocket">Shiprocket</option>
+          </Select>
+        </FormField>
+
         <FormField label="Warehouse" htmlFor="pu-warehouse" required>
           <Select
             id="pu-warehouse"

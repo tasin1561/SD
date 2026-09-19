@@ -14,6 +14,9 @@ import {
   type ShiprocketAwbResult,
   type ShiprocketCreateOrderRequest,
   type ShiprocketCreateOrderResponse,
+  type ShiprocketCreateReturnRequest,
+  type ShiprocketCreateReturnResponse,
+  type ShiprocketReturnAddress,
   type ShiprocketLabelResponse,
   type ShiprocketServiceabilityResponse,
   type ShiprocketTrackingResponse,
@@ -87,7 +90,14 @@ export class ShiprocketClientService {
    * our internal warehouse id here, a UUID no Shiprocket account has ever
    * registered, so every real booking would have been refused. Delhivery
    * never noticed because it resolves its own name the same way this now
-   * does. Null when the account has none recorded.
+   * does. Null when neither the account nor the setting has one.
+   *
+   * ── AND THE SETTING IS SHIPROCKET'S OWN ──────────────────────────
+   * `courier.shiprocket_pickup_location`, the sibling of Delhivery's.
+   * The account's own name still wins; the setting is the fallback for
+   * a single-account setup, which is the shape every other
+   * `courier.<code>_*` switch already has. Falling back to DELHIVERY's
+   * key would send a name registered with one company to the other.
    */
   private async pickupLocationName(courierAccountId: string): Promise<string | null> {
     const row = await this.prisma.client.courierAccount.findUnique({
@@ -95,7 +105,14 @@ export class ShiprocketClientService {
       select: { pickupLocationName: true },
     });
     const name = (row?.pickupLocationName ?? '').trim();
-    return name === '' ? null : name;
+    if (name !== '') return name;
+
+    const setting = await this.prisma.client.systemSetting.findUnique({
+      where: { key: 'courier.shiprocket_pickup_location' },
+      select: { valueString: true },
+    });
+    const fallback = (setting?.valueString ?? '').trim();
+    return fallback === '' ? null : fallback;
   }
 
   private actor(): CourierCredentialActor {
@@ -129,6 +146,24 @@ export class ShiprocketClientService {
     courierCompanyId?: number,
   ): Promise<ShiprocketAwbResult> {
     if (await this.http.isStubMode()) return this.stubAwb(req);
+
+    /*
+      ── A RETURN IS A DIFFERENT CALL, NOT A FLAG ON THIS ONE ────────
+
+      `/orders/create/return` rather than `/orders/create/adhoc`, and the
+      address naming inverts: the customer is the PICKUP and we are the
+      SHIPPING side. It also needs OUR address spelled out, which a
+      forward booking never does (a registered pickup-location name is
+      enough there).
+
+      Split out before the pickup-location lookup because a return does
+      not use one — demanding it would refuse a collection for a setting
+      that has nothing to do with it, which is the same mistake the
+      pickup service had.
+    */
+    if (req.isReverse === true) {
+      return this.createReturn(req, courierAccountId, courierCompanyId);
+    }
 
     // A setup gap, not an opinion about the parcel: TRANSIENT, so it is
     // neither failed over nor pushed to manual placement, and the
@@ -192,6 +227,241 @@ export class ShiprocketClientService {
       this.logger.error(
         { orderNumber: req.orderNumber, shipmentId: created.shipmentId, message },
         'Shiprocket created the order but would not assign an AWB',
+      );
+      return { ok: false, failure: this.classify(message), message };
+    }
+  }
+
+  /**
+   * WHERE A RETURN IS DELIVERED TO — our warehouse, as ops recorded it.
+   *
+   * Read from `courier.shiprocket_return_address` (JSON), seeded EMPTY.
+   * Never guessed and never derived from the pickup-location NAME: that
+   * name is a label registered on their side and carries no address we
+   * can read back, and a return delivered to an address we invented is
+   * somebody's goods going to a place that does not exist.
+   *
+   * Null when unset or incomplete, which the caller reports as a setup
+   * gap (TRANSIENT) rather than as the courier refusing the parcel.
+   */
+  private async returnAddress(): Promise<ShiprocketReturnAddress | null> {
+    const row = await this.prisma.client.systemSetting
+      .findUnique({
+        where: { key: 'courier.shiprocket_return_address' },
+        select: { valueJson: true },
+      })
+      .catch(() => null);
+
+    const raw: unknown = row?.valueJson ?? null;
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const str = (k: string): string => (typeof o[k] === 'string' ? (o[k] as string).trim() : '');
+
+    const addr: ShiprocketReturnAddress = {
+      name: str('name'),
+      addressLine1: str('addressLine1'),
+      addressLine2: str('addressLine2'),
+      city: str('city'),
+      state: str('state'),
+      pincode: str('pincode'),
+      phone: str('phone'),
+      email: str('email'),
+    };
+    // Every field their return create validates. A partial address is
+    // refused here rather than at their end, where the message would be
+    // about one field and give no hint that the SETTING is half filled.
+    const required = [
+      addr.name,
+      addr.addressLine1,
+      addr.city,
+      addr.state,
+      addr.pincode,
+      addr.phone,
+    ];
+    return required.some((v) => v === '') ? null : addr;
+  }
+
+  /**
+   * Book the RETURN leg with Shiprocket.
+   *
+   * ── WHY THIS EXISTS AT ALL ──────────────────────────────────────
+   * It did not, and `CourierAwbDispatchService` answered
+   * `REVERSE_NOT_SUPPORTED` — so a customer return on a Shiprocket
+   * parcel could never be collected: `ReversePickupBookingService`
+   * raised a HIGH issue and the goods stayed with the customer. The
+   * owner's call is that the courier who delivered it collects it: one
+   * account, one cost trail, one parcel's history.
+   *
+   * ── SAME TWO STEPS, SAME SEAM, SAME REASONING ───────────────────
+   * Create then assign, exactly as the forward path — including NOT
+   * retrying the create when the assign fails, because a retry makes a
+   * second return order for one parcel and two vans is worse than one
+   * orphaned row an operator can see in their dashboard.
+   *
+   * ── WHAT IS NOT PROVEN ──────────────────────────────────────────
+   * No return has been booked on this account. The request shape is
+   * their documented one and every field here is one they name; what has
+   * NOT been observed is whether their AWB assign needs `is_return` for
+   * a return shipment id (we send it — see the note at the call), and
+   * whether omitting `qc_enable` differs from sending it false. Both are
+   * marked below rather than quietly assumed.
+   */
+  private async createReturn(
+    req: ShiprocketAwbRequest,
+    courierAccountId: string,
+    courierCompanyId?: number,
+  ): Promise<ShiprocketAwbResult> {
+    const destination = await this.returnAddress();
+    if (destination === null) {
+      // A SETUP gap, not an opinion about the parcel — same
+      // classification as a missing pickup location on the forward path,
+      // so it is neither failed over nor pushed to manual placement and
+      // a retry after somebody fills the setting in simply works.
+      return {
+        ok: false,
+        failure: 'TRANSIENT',
+        message:
+          'SHIPROCKET_RETURN_ADDRESS_NOT_CONFIGURED: a return needs the address it comes back TO, ' +
+          'and `courier.shiprocket_return_address` is unset or incomplete. Set it on /settings ' +
+          '(name, addressLine1, city, state, pincode, phone — addressLine2 and email optional).',
+      };
+    }
+
+    if (req.items.length === 0) {
+      // Their return create validates `order_items`, and an empty one is
+      // refused. Named here because the message they send back is about
+      // a field, and the real answer is "this parcel has no line
+      // snapshot" — which is a data problem on our side.
+      return {
+        ok: false,
+        failure: 'TRANSIENT',
+        message:
+          'SHIPROCKET_RETURN_NEEDS_ITEMS: Shiprocket will not create a return with no lines, and ' +
+          'this parcel carries no item snapshot to send.',
+      };
+    }
+
+    // A van is about to be sent to a customer's door. Same guard, same
+    // placement as the forward create: before the ORDER exists on their
+    // side, because that is the row somebody would have to go and cancel.
+    await this.writeGuard.assertWritable('shiprocket', 'shipment.create', {
+      shipmentId: req.shipmentId,
+      orderNumber: req.orderNumber,
+      reverse: true,
+    });
+
+    const [firstName, ...rest] = req.recipient.name.trim().split(/\s+/);
+    const [destFirst, ...destRest] = destination.name.trim().split(/\s+/);
+    const body: ShiprocketCreateReturnRequest = {
+      order_id: req.orderNumber,
+      order_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      // PICKUP = the customer. Inverted from the forward create, which
+      // is the one thing about this endpoint that is easy to get wrong
+      // and impossible to notice: a swapped pair books a van to our own
+      // warehouse while the customer keeps the goods.
+      pickup_customer_name: firstName ?? req.recipient.name,
+      pickup_last_name: rest.length > 0 ? rest.join(' ') : (firstName ?? ''),
+      pickup_address: req.recipient.addressLine1,
+      pickup_address_2: req.recipient.addressLine2,
+      pickup_city: req.recipient.city,
+      pickup_state: req.recipient.state,
+      pickup_country: 'India',
+      pickup_pincode: Number(req.recipient.pincode),
+      pickup_email: req.recipient.email ?? '',
+      // A bare ten-digit number, as on the forward create.
+      pickup_phone: req.recipient.phoneE164.replace(/^\+91/, '').replace(/\D/g, ''),
+      pickup_isd_code: '91',
+      // SHIPPING = us.
+      shipping_customer_name: destFirst ?? destination.name,
+      shipping_last_name: destRest.length > 0 ? destRest.join(' ') : (destFirst ?? ''),
+      shipping_address: destination.addressLine1,
+      shipping_address_2: destination.addressLine2,
+      shipping_city: destination.city,
+      shipping_country: 'India',
+      shipping_pincode: Number(destination.pincode),
+      shipping_state: destination.state,
+      shipping_email: destination.email,
+      shipping_isd_code: '91',
+      shipping_phone: destination.phone.replace(/^\+91/, '').replace(/\D/g, ''),
+      order_items: req.items.map((i) => ({
+        name: i.name,
+        sku: i.sku,
+        units: i.quantity,
+        selling_price: i.unitPriceInr,
+        discount: '0',
+        // See the type's note: we have no QC process to feed or to act
+        // on, and an unread check delays every collection.
+        qc_enable: false,
+      })),
+      // A return collects nothing from the customer, whatever the
+      // outbound leg was — sending COD here would ask them to pay for
+      // their own return.
+      payment_method: 'PREPAID',
+      total_discount: '0',
+      sub_total: req.subTotalInr,
+      length: req.lengthCm,
+      breadth: req.breadthCm,
+      height: req.heightCm,
+      weight: req.weightGrams / 1000,
+    };
+
+    let created: ShiprocketCreateReturnResponse;
+    try {
+      created = await this.http.request<ShiprocketCreateReturnResponse>({
+        method: 'POST',
+        path: '/v1/external/orders/create/return',
+        body,
+        actor: this.actor(),
+        courierAccountId,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, failure: this.classify(message), message };
+    }
+
+    if (typeof created.shipment_id !== 'number' || created.shipment_id === 0) {
+      return {
+        ok: false,
+        failure: 'TRANSIENT',
+        message: 'Shiprocket accepted the return but returned no shipment id',
+      };
+    }
+
+    try {
+      const assigned = await this.http.request<ShiprocketAssignAwbResponse>({
+        method: 'POST',
+        path: '/v1/external/courier/assign/awb',
+        body: {
+          shipment_id: created.shipment_id,
+          // THEIR documented flag for a return shipment. NOT verified
+          // against a live booking — no return has been placed on this
+          // account — so if a first real collection is refused here,
+          // this field is the first thing to check.
+          is_return: 1,
+          ...(courierCompanyId === undefined ? {} : { courier_id: courierCompanyId }),
+        },
+        actor: this.actor(),
+        courierAccountId,
+      });
+
+      const awb = assigned.response?.data?.awb_code;
+      if (assigned.awb_assign_status !== 1 || typeof awb !== 'string' || awb === '') {
+        const message =
+          assigned.message ?? 'Shiprocket assigned no AWB to the return and gave no reason';
+        return { ok: false, failure: this.classify(message), message };
+      }
+      return {
+        ok: true,
+        awbNumber: awb,
+        courierShipmentId: String(created.shipment_id),
+        courierOrderId: String(created.order_id),
+        courierName: assigned.response?.data?.courier_name ?? null,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        { orderNumber: req.orderNumber, shipmentId: created.shipment_id, message },
+        'Shiprocket created the RETURN order but would not assign an AWB',
       );
       return { ok: false, failure: this.classify(message), message };
     }

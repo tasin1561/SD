@@ -15,7 +15,6 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { DelhiveryTrackingService } from '../../courier-delhivery/services/delhivery-tracking.service';
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import {
   TrackingEventAppendService,
@@ -148,7 +147,6 @@ export class WebhookProcessorService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly courierDelhivery: DelhiveryTrackingService,
     @Inject(COURIER_TRACKING_SOURCES)
     private readonly sources: readonly CourierTrackingSource[],
     private readonly mapping: TrackingStatusMappingService,
@@ -208,8 +206,28 @@ export class WebhookProcessorService {
     // returns UNMAPPABLE, so the scan is stored and no transition
     // fires, and a delivered parcel sits at DISPATCHED with a timeline
     // that looks populated.
-    const source =
-      this.sources.find((x) => x.courierCode === wh.courierCode) ?? this.courierDelhivery;
+    //
+    // AND AN UNKNOWN COURIER IS REFUSED BY NAME, NOT READ AS DELHIVERY.
+    //
+    // This fell back to `this.courierDelhivery`, which is the same
+    // mistake one line lower down: a payload signed for a courier we
+    // have no tracking source for was normalised against DELHIVERY'S
+    // status table. It does not throw — their vocabularies overlap
+    // enough to map to something plausible — so the outcome is a real
+    // order transition driven by another company's status word. The
+    // endpoint is per courier and HMAC'd per courier, so reaching here
+    // at all means a source was removed or a secret was set for a
+    // courier that has none; both are configuration, both need a
+    // person, and neither is helped by guessing.
+    const source = this.sources.find((x) => x.courierCode === wh.courierCode);
+    if (source === undefined) {
+      this.logger.error(
+        { webhookId, courierCode: wh.courierCode, known: this.sources.map((x) => x.courierCode) },
+        'Authenticated webhook from a courier with no tracking source — not normalising it as another courier',
+      );
+      await this.markIgnored(webhookId, `NO_TRACKING_SOURCE:${wh.courierCode}`);
+      return { kind: 'IGNORED', webhookId, reason: `NO_TRACKING_SOURCE:${wh.courierCode}` };
+    }
     const normalized = source.normalizeScan({
       awbNumber: parsed.awbNumber,
       rawStatus: parsed.rawStatus,

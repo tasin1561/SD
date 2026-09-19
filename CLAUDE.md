@@ -884,6 +884,31 @@ The canonical reference implementation is `OrderWriteService.transitionStatus()`
     > `PackService.complete` never asks for a van** — seeded or imported
     > straight to DISPATCHED, or a god-mode jump past PACKED; its van is
     > arranged on /warehouse/pickups.
+    >
+    > **Amendment, 2026-09-19 — the per-courier location key is now TRUE,
+    > and a courier that does not use one is not asked for one.** The
+    > paragraph above claimed `courier.<code>_pickup_location`; the pickup
+    > service actually held `const PICKUP_LOCATION_SETTING =
+    > 'courier.delhivery_pickup_location'` and read it for EVERY courier,
+    > beside a `const COURIER_CODE = 'delhivery'` used for every other
+    > per-courier decision in the file. So a Shiprocket pickup either sent
+    > DELHIVERY'S warehouse name to Shiprocket, or (with no account-level
+    > name) was refused by a message naming a Delhivery setting that has
+    > nothing to do with it. The key is composed per courier now,
+    > `courier.shiprocket_pickup_location` is seeded EMPTY, and
+    > **`CourierOpsDispatchService.pickupNeedsLocationName` is the ONE place
+    > that knows a courier's own call does not use one** — Shiprocket's
+    > `generate/pickup` takes shipment ids and nothing else, so demanding a
+    > registered name there refused a collection that would have worked.
+    > `pickupSchedulesPerParcel` and `pickupCourierCodes` moved to the same
+    > dispatcher for the same reason: they were the dispatcher's switch
+    > restated at the call site. The default courier for a pickup raised
+    > with none named reads `ops.default_courier_code` (CUR-19's one key)
+    > and **FAILS CLOSED** (`PICKUP_COURIER_REQUIRED`) rather than guessing
+    > which company to send a real van request to. The manual
+    > `/warehouse/pickups` form gained a courier picker — until then it
+    > could only ever raise a Delhivery van, while the automatic trigger
+    > passed the parcel's own courier, so the two halves disagreed.
 
     > **CUR-10 amendment #4, 2026-09-12 — a cancelled order's waybill is closed by a person, and chased until it is.**
     > A waybill is booked and charged at confirmation (CUR-2b); cancelling or

@@ -324,6 +324,34 @@ describe('CourierEscalationWatchService — an unsent message is chased, any cou
   });
 });
 
+/*
+  ── THE SCAN, WIDENED (2026-09-19) ──────────────────────────────────
+
+  It read ONE directory (`courier-escalation`) and ONE shape
+  (`=== 'delhivery'`). Both halves were too narrow, and an audit found
+  what fell through each of them:
+
+    • the DIRECTORY — `courier-pickup.service.ts` in `courier-ops` held
+      `const COURIER_CODE = 'delhivery'` and used it for every courier;
+      `tracking-poll.service.ts` held the same constant and stamped it
+      on every scan it wrote, for every courier it polled;
+      `ticket-handling.service.ts` listed Delhivery as ticket-automated
+      while Delhivery's own adapter reported `raiseTicket: false`.
+
+    • the SHAPE — a `const X = 'delhivery'` is neither a comparison nor
+      a `case`, so none of those three would have matched even inside
+      the one directory it did read. Nor does a settings key written out
+      as the literal `'courier.delhivery_…'`, which is how a Shiprocket
+      pickup came to demand a Delhivery-keyed location name.
+
+  So it now sweeps `courier-*`, `tracking-*` and `ticket-handling`, and
+  looks for all four fingerprints. COMMENTS are stripped first: these
+  fixes are worth explaining, and an explanation has to be able to quote
+  the literal it removed.
+
+  ALLOWED, each because it IS the one place that knows: a courier's own
+  adapter directory, and the dispatchers CUR-12 names.
+*/
 describe('no courier-code branch upstream of the adapters (CUR-12)', () => {
   function sources(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
@@ -333,13 +361,130 @@ describe('no courier-code branch upstream of the adapters (CUR-12)', () => {
     });
   }
 
-  it('the escalation module never compares or switches on a courier code', () => {
-    const dir = join(__dirname, '../../src/modules/courier-escalation');
-    const offenders = sources(dir).filter((file) =>
-      /(?:===|!==)\s*'(?:delhivery|shiprocket)'|case\s+'(?:delhivery|shiprocket)'/.test(
-        readFileSync(file, 'utf8'),
-      ),
-    );
+  /** Comments are where a fix explains the literal it deleted. */
+  function code(file: string): string {
+    return readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+  }
+
+  const MODULES = join(__dirname, '../../src/modules');
+
+  /**
+   * Each entry is a place the courier's name is legitimately known, OR
+   * a standing debt somebody decided not to pay today — and each says
+   * which. The list is at its FLOOR: every remaining entry was looked
+   * at on 2026-09-19 and kept on purpose, so anything NEW appearing
+   * here is a regression rather than part of a backlog.
+   */
+  const ALLOWED: ReadonlyArray<{ readonly path: string; readonly why: string }> = [
+    // ── The one place that knows, by design ──────────────────────
+    { path: 'courier-delhivery/', why: "a courier's own adapter: its name IS the job" },
+    { path: 'courier-shiprocket/', why: 'same' },
+    {
+      path: 'courier-ops/services/courier-ops-dispatch.service.ts',
+      why: 'CUR-12 ops dispatcher — cancel / edit / pickup / warehouse / e-way bill',
+    },
+    {
+      path: 'courier-ops/services/courier-ndr-dispatch.service.ts',
+      why: 'CUR-12 NDR dispatcher — also owns "does this courier hand back a handle to poll"',
+    },
+    { path: 'courier-awb/services/courier-awb-dispatch.service.ts', why: 'CUR-12 AWB dispatcher' },
+    {
+      path: 'courier-escalation/services/courier-support-registry.service.ts',
+      why: 'CUR-12 support-desk registry',
+    },
+
+    // ── Genuine per-courier asymmetries, at the call site ────────
+    //
+    // Each of these is a REAL difference the dispatcher does not cover,
+    // named rather than silently degraded, and each was read on
+    // 2026-09-19. They are candidates for moving behind a dispatcher
+    // question (as `pickupNeedsLocationName` and `pollsOutcome` were),
+    // but none of them is currently WRONG.
+    {
+      path: 'courier-ops/services/courier-shipment-insight.service.ts',
+      why: 'Shiprocket holds one document where Delhivery holds four, and its cost/TAT reads have no Shiprocket equivalent',
+    },
+    {
+      path: 'courier-ops/services/courier-margin-report.service.ts',
+      why: 'the two couriers report a parcel\'s real cost from different places',
+    },
+    {
+      path: 'courier-ops/services/courier-warehouse-registration.service.ts',
+      why: 'Shiprocket has add-only pickup locations (no edit), refused by name',
+    },
+    {
+      path: 'courier-ndr-runner/services/ndr-runner.service.ts',
+      why: "Shiprocket's NDR list is fetched once per account per run; Delhivery has no such list",
+    },
+    {
+      path: 'courier-awb/services/courier-choice.service.ts',
+      why: 'CUR-17: only an AGGREGATOR has a carrier to choose, and only Shiprocket is one',
+    },
+    {
+      path: 'courier-escalation/services/courier-escalation.service.ts',
+      why: 'CUR-20: the documented fallback for a ticket with NO parcel, named LEGACY_DEFAULT_COURIER',
+    },
+
+    // ── A STANDING DEBT, stated rather than hidden ───────────────
+    //
+    // `courier.delhivery_origin_pincode` is read as OUR dispatch origin
+    // by three services that are not about Delhivery at all — the lane
+    // for a TAT estimate, a serviceability check and a rate lookup. It
+    // is the pincode goods leave from, so it is the same pin whoever
+    // carries them, and today it is only ever asked of Delhivery. It
+    // becomes wrong the day a second origin exists or a courier wants
+    // its own; the honest fix is an origin on the WAREHOUSE row, which
+    // `courier-warehouse-registration.service.ts` already says is where
+    // an address belongs. Not changed here because picking that shape
+    // is a decision, not a rename.
+    {
+      path: 'courier-ops/services/shipment-courier-context.service.ts',
+      why: 'reads courier.delhivery_origin_pincode as OUR origin — see the standing-debt note above',
+    },
+    {
+      path: 'courier-serviceability/services/order-serviceability.service.ts',
+      why: 'same origin-pincode debt',
+    },
+    {
+      path: 'courier-portal/',
+      why: "Playwright driving each courier's own panel — the page it is on is the courier",
+    },
+    {
+      path: 'courier-shared/services/courier-distribution.service.ts',
+      why: 'the global split IS two named settings (courier.default_{delhivery,shiprocket}_account); the WEIGHT no longer reads a courier code (2026-09-19)',
+    },
+  ];
+
+  const SWEPT = readdirSync(MODULES).filter(
+    (name) =>
+      (name.startsWith('courier-') || name.startsWith('tracking-') || name === 'ticket-handling') &&
+      statSync(join(MODULES, name)).isDirectory(),
+  );
+
+  const FINGERPRINTS: ReadonlyArray<{ readonly label: string; readonly rx: RegExp }> = [
+    { label: "=== 'delhivery'", rx: /(?:===|!==)\s*'(?:delhivery|shiprocket)'/ },
+    { label: "case 'delhivery'", rx: /case\s+'(?:delhivery|shiprocket)'/ },
+    // The one the audit actually needed: a module-level constant, then
+    // used for couriers it has nothing to do with.
+    {
+      label: "const X = 'delhivery'",
+      rx: /(?:const|let)\s+\w+\s*(?::[^=]+)?=\s*'(?:delhivery|shiprocket)'/,
+    },
+    // A per-courier setting key written out rather than composed.
+    { label: "'courier.delhivery_…'", rx: /'courier\.(?:delhivery|shiprocket)_[a-z_]+'/ },
+  ];
+
+  it.each(FINGERPRINTS)('nothing upstream carries a $label', ({ rx }) => {
+    const offenders: string[] = [];
+    for (const mod of SWEPT) {
+      for (const file of sources(join(MODULES, mod))) {
+        const rel = file.slice(MODULES.length + 1);
+        if (ALLOWED.some((a) => rel.startsWith(a.path) || rel === a.path)) continue;
+        if (rx.test(code(file))) offenders.push(rel);
+      }
+    }
     expect(offenders).toEqual([]);
   });
 });

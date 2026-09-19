@@ -614,6 +614,16 @@ export class AwbGenerationService {
           ...(dispatched.courierOrderId === null
             ? {}
             : { courierOrderId: dispatched.courierOrderId }),
+          // WHICH CARRIER their ranking actually gave us, when the
+          // courier is an aggregator. Shiprocket has named it in every
+          // assign reply and we were dropping it, so the parcel recorded
+          // "shiprocket" and nothing said Blue Dart Air — which is what
+          // a POD chase, a cost query and a "why is this slow" all need,
+          // and is unrecoverable afterwards (their reply is not stored).
+          // Delhivery IS the carrier and sends null, which leaves the
+          // column alone rather than overwriting a value from a previous
+          // attempt with a meaningless one.
+          ...(dispatched.carrierName === null ? {} : { carrierName: dispatched.carrierName }),
         },
       });
       await this.audit.log(
@@ -627,6 +637,8 @@ export class AwbGenerationService {
           metadata: {
             awbNumber: awb.awbNumber,
             courierShipmentId: awb.courierShipmentId,
+            courierCode: carriedBy.courierCode,
+            carrierName: dispatched.carrierName,
           },
         },
         tx,
