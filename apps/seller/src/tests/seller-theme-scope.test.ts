@@ -72,15 +72,7 @@ describe('the seller login screen moved with the app', () => {
    * apps/admin's copy is deliberately NOT changed and keeps the cyan;
    * the two files diverged on purpose and the seller one says so.
    */
-  const CONSOLE = join(
-    REPO,
-    'apps',
-    'seller',
-    'src',
-    'components',
-    'auth-console',
-    'console.css',
-  );
+  const CONSOLE = join(REPO, 'apps', 'seller', 'src', 'components', 'auth-console', 'console.css');
 
   it('carries the new dark canvas rather than the old one', () => {
     const css = readFileSync(CONSOLE, 'utf8');

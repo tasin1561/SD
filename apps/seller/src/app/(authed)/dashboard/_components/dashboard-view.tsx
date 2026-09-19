@@ -196,7 +196,9 @@ export function DashboardView(): ReactElement {
   return (
     <div>
       <PageHeader
-        breadcrumb={<Crumbs items={[{ label: 'Seller console' }, { label: 'Dashboard' }]} Link={Link} />}
+        breadcrumb={
+          <Crumbs items={[{ label: 'Seller console' }, { label: 'Dashboard' }]} Link={Link} />
+        }
         title={`Hello, ${companyName}`}
         subtitle="Your most recent orders, what you are owed, and where to go next."
         meta={
