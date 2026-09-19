@@ -294,9 +294,7 @@ export function OrdersIndex(): ReactElement {
           summary.data === undefined ? undefined : (
             <>
               <MetaChip tone="accent">{summary.data.total} placed</MetaChip>
-              {countOf(MOVING) > 0 && (
-                <MetaChip dot>{countOf(MOVING)} on the road</MetaChip>
-              )}
+              {countOf(MOVING) > 0 && <MetaChip dot>{countOf(MOVING)} on the road</MetaChip>}
               {pendingCount > 0 && <MetaChip tone="warn">{pendingCount} pending</MetaChip>}
             </>
           )
@@ -348,9 +346,7 @@ export function OrdersIndex(): ReactElement {
           {...(summary.data === undefined
             ? {}
             : {
-                foot: [
-                  { label: 'COD placed', value: <Money amount={summary.data.totalCodInr} /> },
-                ],
+                foot: [{ label: 'COD placed', value: <Money amount={summary.data.totalCodInr} /> }],
               })}
         />
         <Stat
@@ -380,7 +376,11 @@ export function OrdersIndex(): ReactElement {
           label="On the road"
           icon={<Truck size={13} aria-hidden />}
           value={
-            summary.data === undefined ? <span className="text-text-faint">—</span> : countOf(MOVING)
+            summary.data === undefined ? (
+              <span className="text-text-faint">—</span>
+            ) : (
+              countOf(MOVING)
+            )
           }
           unit={summary.data === undefined ? undefined : 'parcels'}
           tone="neutral"
@@ -401,7 +401,9 @@ export function OrdersIndex(): ReactElement {
           value={
             summary.data === undefined ? (
               <span className="text-text-faint">—</span>
-            ) : (counts.get(OrderStatus.DELIVERED)?.count ?? 0)
+            ) : (
+              (counts.get(OrderStatus.DELIVERED)?.count ?? 0)
+            )
           }
           unit={summary.data === undefined ? undefined : 'settled'}
           tone="good"
@@ -628,106 +630,109 @@ export function OrdersIndex(): ReactElement {
         </BandBody>
       ) : (
         <BandBody flush>
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Order</Th>
-              <Th>Recipient</Th>
-              <Th>Phone</Th>
-              <Th>Status</Th>
-              <Th align="right">COD</Th>
-              <Th>Placed</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {list.data.items.map((o) => (
-              <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
-                <Td>
-                  <Link
-                    href={`/orders/${o.id}`}
-                    className="text-accent font-mono text-xs hover:underline"
-                  >
-                    {o.orderNumber}
-                  </Link>
-                  {o.sellerOrderRef !== null && o.sellerOrderRef !== '' && (
-                    <div className="text-text-faint mt-0.5 font-mono text-xs">
-                      ref {o.sellerOrderRef}
-                    </div>
-                  )}
-                  {/* RS-5: which reseller store placed it. */}
-                  {o.storeKind === 'RESELLER' && (
-                    <div className="text-text-muted mt-0.5 text-xs">
-                      via{' '}
-                      {o.storeId !== undefined ? (
-                        <Link
-                          href={`/reseller-stores/${o.storeId}`}
-                          className="text-accent hover:underline"
-                        >
-                          {o.storeNameSnapshot ?? 'a reseller store'}
-                        </Link>
-                      ) : (
-                        (o.storeNameSnapshot ?? 'a reseller store')
-                      )}
-                    </div>
-                  )}
-                </Td>
-                <Td>
-                  <div className="text-text-body">{o.recipientName}</div>
-                  {/* City is blank on everything placed since the form
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Order</Th>
+                <Th>Recipient</Th>
+                <Th>Phone</Th>
+                <Th>Status</Th>
+                <Th align="right">COD</Th>
+                <Th>Placed</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {list.data.items.map((o) => (
+                <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
+                  <Td>
+                    <Link
+                      href={`/orders/${o.id}`}
+                      className="text-accent font-mono text-xs hover:underline"
+                    >
+                      {o.orderNumber}
+                    </Link>
+                    {o.sellerOrderRef !== null && o.sellerOrderRef !== '' && (
+                      <div className="text-text-faint mt-0.5 font-mono text-xs">
+                        ref {o.sellerOrderRef}
+                      </div>
+                    )}
+                    {/* RS-5: which reseller store placed it. */}
+                    {o.storeKind === 'RESELLER' && (
+                      <div className="text-text-muted mt-0.5 text-xs">
+                        via{' '}
+                        {o.storeId !== undefined ? (
+                          <Link
+                            href={`/reseller-stores/${o.storeId}`}
+                            className="text-accent hover:underline"
+                          >
+                            {o.storeNameSnapshot ?? 'a reseller store'}
+                          </Link>
+                        ) : (
+                          (o.storeNameSnapshot ?? 'a reseller store')
+                        )}
+                      </div>
+                    )}
+                  </Td>
+                  <Td>
+                    <div className="text-text-body">{o.recipientName}</div>
+                    {/* City is blank on everything placed since the form
                       stopped asking (ORD-5), so the PIN carries the
                       destination and the city joins it when present. */}
-                  <div className="text-text-faint mt-0.5 text-xs">
-                    {[o.recipientCity, o.recipientPostalCode].filter((v) => v !== '').join(' · ') ||
-                      '—'}
+                    <div className="text-text-faint mt-0.5 text-xs">
+                      {[o.recipientCity, o.recipientPostalCode]
+                        .filter((v) => v !== '')
+                        .join(' · ') || '—'}
+                    </div>
+                  </Td>
+                  <Td className="text-text-muted font-mono text-xs">
+                    {o.recipientPhoneE164 || '—'}
+                  </Td>
+                  <Td>
+                    <OrderStatusBadge status={o.status} />
+                  </Td>
+                  <Td align="right">
+                    {o.codAmountInr === null ? (
+                      <span className="text-text-faint text-xs">Prepaid</span>
+                    ) : (
+                      <Money amount={o.codAmountInr} />
+                    )}
+                  </Td>
+                  <Td className="text-text-muted font-mono text-xs">
+                    {new Date(o.placedAt).toISOString().slice(0, 16).replace('T', ' ')}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+            <tfoot>
+              <tr>
+                <td colSpan={6} className="p-0">
+                  <div className="border-border-subtle flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
+                    <label className="text-text-faint flex items-center gap-2 text-xs">
+                      Rows
+                      <Select
+                        aria-label="Rows per page"
+                        value={params.pageSize}
+                        onChange={(e) => updateUrl({ pageSize: Number(e.target.value), page: 1 })}
+                        className="w-[76px]"
+                      >
+                        {PAGE_SIZES.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                    <TablePaginator
+                      page={params.page}
+                      pageSize={params.pageSize}
+                      total={list.data.total}
+                      onPageChange={(next) => updateUrl({ page: next })}
+                    />
                   </div>
-                </Td>
-                <Td className="text-text-muted font-mono text-xs">{o.recipientPhoneE164 || '—'}</Td>
-                <Td>
-                  <OrderStatusBadge status={o.status} />
-                </Td>
-                <Td align="right">
-                  {o.codAmountInr === null ? (
-                    <span className="text-text-faint text-xs">Prepaid</span>
-                  ) : (
-                    <Money amount={o.codAmountInr} />
-                  )}
-                </Td>
-                <Td className="text-text-muted font-mono text-xs">
-                  {new Date(o.placedAt).toISOString().slice(0, 16).replace('T', ' ')}
-                </Td>
-              </Tr>
-            ))}
-          </TBody>
-          <tfoot>
-            <tr>
-              <td colSpan={6} className="p-0">
-                <div className="border-border-subtle flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
-                  <label className="text-text-faint flex items-center gap-2 text-xs">
-                    Rows
-                    <Select
-                      aria-label="Rows per page"
-                      value={params.pageSize}
-                      onChange={(e) => updateUrl({ pageSize: Number(e.target.value), page: 1 })}
-                      className="w-[76px]"
-                    >
-                      {PAGE_SIZES.map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-                  <TablePaginator
-                    page={params.page}
-                    pageSize={params.pageSize}
-                    total={list.data.total}
-                    onPageChange={(next) => updateUrl({ page: next })}
-                  />
-                </div>
-              </td>
-            </tr>
-          </tfoot>
-        </Table>
+                </td>
+              </tr>
+            </tfoot>
+          </Table>
         </BandBody>
       )}
     </div>

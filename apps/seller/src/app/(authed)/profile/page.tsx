@@ -1,23 +1,27 @@
 'use client';
 
+import Link from 'next/link';
 import { Fragment, useEffect, useState, type FormEvent, type ReactElement } from 'react';
-import { Pencil } from 'lucide-react';
+import { BadgeCheck, Banknote, Coins, Mail, Pencil } from 'lucide-react';
 import type {
+  SellerStatusValue,
   SellerProfileView,
   UpdateSellerBankDetailsRequest,
   UpdateSellerProfileRequest,
 } from '@skydrop/api-client';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
+  Crumbs,
   ErrorState,
   FormField,
   Input,
   LoadingState,
+  MetaChip,
   PageHeader,
+  SectionBand,
   Select,
+  Stat,
   StatusBadge,
   useToast,
 } from '@skydrop/ui/components';
@@ -48,7 +52,16 @@ export default function ProfilePage(): ReactElement {
   if (detail.isLoading) {
     return (
       <>
-        <PageHeader title="Profile" subtitle="Company info + bank details." />
+        <PageHeader
+          breadcrumb={
+            <Crumbs
+              items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }]}
+              Link={Link}
+            />
+          }
+          title="Profile"
+          subtitle="Company info + bank details."
+        />
         <LoadingState label="Loading profile…" />
       </>
     );
@@ -56,7 +69,16 @@ export default function ProfilePage(): ReactElement {
   if (detail.isError) {
     return (
       <>
-        <PageHeader title="Profile" subtitle="Company info + bank details." />
+        <PageHeader
+          breadcrumb={
+            <Crumbs
+              items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }]}
+              Link={Link}
+            />
+          }
+          title="Profile"
+          subtitle="Company info + bank details."
+        />
         <ErrorState
           message={detail.error?.message ?? 'Failed to load profile.'}
           retry={() => void detail.refetch()}
@@ -67,7 +89,16 @@ export default function ProfilePage(): ReactElement {
   if (!detail.data) {
     return (
       <>
-        <PageHeader title="Profile" subtitle="Company info + bank details." />
+        <PageHeader
+          breadcrumb={
+            <Crumbs
+              items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }]}
+              Link={Link}
+            />
+          }
+          title="Profile"
+          subtitle="Company info + bank details."
+        />
         <ErrorState message="Profile not loaded." />
       </>
     );
@@ -76,25 +107,158 @@ export default function ProfilePage(): ReactElement {
   return (
     <div className="space-y-4">
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }]}
+            Link={Link}
+          />
+        }
         title="Profile"
-        subtitle="Company info + bank details. Edit a section by clicking the pencil."
+        subtitle="Your company as we hold it, and where your money goes."
+        /*
+          The comp's chip row here reads VERIFIED ENTITY, L-4
+          INSTITUTIONAL VERIFIED, SOC-2 TYPE II, FEMA/BB COMPLIANT and a
+          KYC tier. We run no KYC tiering, hold no certifications and
+          have no compliance grade to report — and a compliance badge is
+          exactly the kind of thing a seller would reasonably act on. So
+          the row says the two things that ARE recorded: whether the
+          account is approved, and which currency they read in.
+        */
+        meta={
+          <>
+            <MetaChip tone={detail.data.status === 'APPROVED' ? 'good' : 'warn'}>
+              {humaniseStatus(detail.data.status)}
+            </MetaChip>
+            <MetaChip>Reads in {detail.data.displayCurrency}</MetaChip>
+            {detail.data.emailVerifiedAt === null && (
+              <MetaChip tone="warn">Email not verified</MetaChip>
+            )}
+          </>
+        }
       />
+
+      {/* ── The account at a glance ─────────────────────────────────
+             Four standing facts, each a column on the seller row. The
+             comp puts KYC tier, an FX spread model, a SOC-2 grade and
+             an escrow protocol here; none of the four exists, so these
+             are the four that do. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Account status"
+          icon={<BadgeCheck size={13} aria-hidden />}
+          value={<span className="text-base">{humaniseStatus(detail.data.status)}</span>}
+          tone={statusTone(detail.data.status)}
+          hint={
+            detail.data.approvedAt === null
+              ? 'Not approved yet.'
+              : `Approved ${new Date(detail.data.approvedAt).toLocaleDateString()}.`
+          }
+        />
+        <Stat
+          label="You read amounts in"
+          icon={<Coins size={13} aria-hidden />}
+          value={<span className="text-base">{detail.data.displayCurrency}</span>}
+          tone="neutral"
+          // INR is the canonical currency everything is STORED in; BDT
+          // is a display conversion. Saying so here stops "my wallet is
+          // in taka" becoming a belief about where the money sits.
+          hint={
+            detail.data.displayCurrency === 'INR'
+              ? 'Balances are held in rupees.'
+              : 'Converted for display; balances are held in rupees.'
+          }
+        />
+        <Stat
+          label="Payouts go to"
+          icon={<Banknote size={13} aria-hidden />}
+          value={
+            detail.data.bankName === null || detail.data.bankName === '' ? (
+              <span className="text-text-faint text-base">Not set</span>
+            ) : (
+              <span className="text-base">{detail.data.bankName}</span>
+            )
+          }
+          tone={detail.data.bankName === null || detail.data.bankName === '' ? 'warn' : 'neutral'}
+          // Last four only. The full number is on the card below, where
+          // you went looking for it — a tile is read over a shoulder.
+          hint={
+            maskedAccount(detail.data.bankAccountNumber) ??
+            'Add one so withdrawals have somewhere to land.'
+          }
+        />
+        <Stat
+          label="Sign-in email"
+          icon={<Mail size={13} aria-hidden />}
+          value={<span className="text-base break-all">{detail.data.emailDisplay}</span>}
+          tone={detail.data.emailVerifiedAt === null ? 'warn' : 'neutral'}
+          hint={detail.data.emailVerifiedAt === null ? 'Not verified yet.' : 'Verified.'}
+        />
+      </div>
+
       <CompanyInfoSection profile={detail.data} />
       <LogoSection profile={detail.data} />
       <BankDetailsSection profile={detail.data} />
-      <div className="text-text-faint text-xs">
-        Account status:{' '}
-        <span className="uppercase tracking-wide text-text-body">{detail.data.status}</span>
-        {detail.data.approvedAt && (
-          <> · approved {new Date(detail.data.approvedAt).toLocaleDateString()}</>
-        )}
-      </div>
     </div>
   );
 }
 
 function fmtError(e: unknown): string {
   return serverVerdict(e, 'Action failed');
+}
+
+/**
+ * The four seller statuses, said as a person would.
+ *
+ * EXHAUSTIVE over `SellerStatusValue` (the F2 discipline) so a fifth
+ * status cannot quietly render as raw SCREAMING_SNAKE on the one screen
+ * that tells a seller whether their account works.
+ */
+function humaniseStatus(status: SellerStatusValue): string {
+  switch (status) {
+    case 'APPROVED':
+      return 'Approved';
+    case 'PENDING':
+      return 'Awaiting approval';
+    case 'REJECTED':
+      return 'Rejected';
+    case 'SUSPENDED':
+      return 'Suspended';
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
+}
+
+function statusTone(status: SellerStatusValue): 'neutral' | 'warn' | 'bad' | 'good' {
+  switch (status) {
+    case 'APPROVED':
+      return 'good';
+    case 'PENDING':
+      return 'warn';
+    case 'REJECTED':
+    case 'SUSPENDED':
+      return 'bad';
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
+}
+
+/**
+ * `•••• 5298`, or nothing at all.
+ *
+ * Returns undefined rather than a masked placeholder when there is no
+ * number: "•••• ••••" reads as a number we are withholding, when the
+ * truth is that none has been given yet, and the two want different
+ * responses from the seller.
+ */
+function maskedAccount(value: string | null): string | undefined {
+  if (value === null) return undefined;
+  const digits = value.replace(/\s/g, '');
+  if (digits.length < 4) return undefined;
+  return `•••• ${digits.slice(-4)}`;
 }
 
 function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }): ReactElement {
@@ -158,9 +322,11 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
   }
 
   return (
-    <Card>
-      <CardHeader
+    <div>
+      <SectionBand
+        index="01"
         title="Company info"
+        note="What we call you, and who we ring."
         action={
           canManage &&
           !editing && (
@@ -177,7 +343,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
           )
         }
       />
-      <CardBody>
+      <BandBody>
         {!editing ? (
           <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[180px_1fr] gap-x-3 sm:gap-x-6 gap-y-2 text-sm">
             <dt className="text-text-muted">Company</dt>
@@ -284,8 +450,8 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
             </div>
           </form>
         )}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
 
@@ -469,9 +635,11 @@ function BankDetailsSection({
   }
 
   return (
-    <Card>
-      <CardHeader
+    <div>
+      <SectionBand
+        index="03"
         title="Bank details"
+        note="Where a withdrawal actually lands."
         action={
           canManage &&
           !editing &&
@@ -491,7 +659,7 @@ function BankDetailsSection({
           )
         }
       />
-      <CardBody>
+      <BandBody>
         {!editing ? (
           !hasAccountOnFile && !pending ? (
             <div className="text-text-muted text-sm py-2">
@@ -674,8 +842,8 @@ function BankDetailsSection({
             </div>
           </form>
         )}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
 
@@ -745,9 +913,9 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
   }
 
   return (
-    <Card>
-      <CardHeader title="Company logo" />
-      <CardBody>
+    <div>
+      <SectionBand index="02" title="Company logo" note="Shown to your customers." />
+      <BandBody>
         {canManage ? (
           <>
             {/* Uploading or removing a logo is `profile.manage`; without it
@@ -823,7 +991,7 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
         ) : (
           <p className="text-text-muted text-xs">Your role cannot change the company logo.</p>
         )}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }

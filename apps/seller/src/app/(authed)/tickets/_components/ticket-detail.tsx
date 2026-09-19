@@ -2,20 +2,26 @@
 
 import type { ReactElement } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Wallet } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CircleDot, PackageSearch, Wallet } from 'lucide-react';
 import {
+  BandBody,
   Card,
   CardBody,
+  Crumbs,
   DescriptionList,
   ErrorNote,
   Ident,
   IssueCategoryLine,
+  MetaChip,
   Money,
   PageHeader,
-  Section,
+  SectionBand,
   Skeleton,
+  Stat,
   TicketStatusBadge,
 } from '@skydrop/ui/components';
+import type { TicketStatus } from '@skydrop/db';
+import { ticketStatusLabel } from '@skydrop/ui/status';
 import type { TicketView } from '@/lib/ops-hooks';
 import { useSellerTicket } from '@/lib/ticket-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -77,93 +83,203 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
       <BackLink />
 
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Support', href: '/tickets' },
+              { label: ticket.ticketNumber },
+            ]}
+            Link={Link}
+          />
+        }
         // The NUMBER leads: it is what you quote to us about this ticket.
-        title={`${ticket.ticketNumber} · ${ticket.subject}`}
+        title={
+          <span className="min-w-0">
+            <span className="font-mono">{ticket.ticketNumber}</span>
+            <span className="text-text-muted"> · </span>
+            {ticket.subject}
+          </span>
+        }
         subtitle={`${raisedByUs ? 'Raised by Skydrop' : 'Raised by you'} on ${formatDateTime(ticket.createdAt)}`}
+        /*
+          Standing facts about THIS ticket, under its number.
+
+          The comp's chip row here carries an SLA clock, a "CCTV
+          audited" seal and an escrow protocol. None of the three
+          exists: nothing measures a triage SLA per ticket, there is no
+          camera evidence store, and no money is held in escrow against
+          a dispute. What IS real is what kind of issue it is and who
+          the courier was, so that is what the row says.
+        */
+        meta={
+          <>
+            <MetaChip tone="accent">{humanise(ticket.ticketType)}</MetaChip>
+            {ticket.courierCode !== null && <MetaChip>{ticket.courierCode}</MetaChip>}
+            {raisedByUs && <MetaChip dot>Opened for you</MetaChip>}
+          </>
+        }
         action={<TicketStatusBadge status={ticket.status} />}
       />
 
+      {/* ── Where this ticket has got to ────────────────────────────
+             Four standing facts, on the shared `Stat`. Every one is a
+             column on the ticket, not a derivation: a tile that needed
+             arithmetic to exist would be a claim rather than a record.
+             A refund reads "—" until it is paid, never ₹0 — nothing
+             having been decided and nothing being owed look the same
+             at a glance otherwise. */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Status"
+          icon={<CircleDot size={13} aria-hidden />}
+          /*
+            `ticketStatusLabel`, NOT a local `humanise` of the enum.
+            The badge beside this tile reads NEGOTIATING as "Reviewing";
+            spelling the raw value put two different words for one
+            status on the same screen, three centimetres apart, which
+            reads as two different things having happened. The words
+            live in `@skydrop/ui/status` (FE-6) — a second vocabulary
+            here is the drift that rule exists to prevent.
+          */
+          value={<span className="text-base">{ticketStatusLabel(ticket.status)}</span>}
+          tone={statTone(ticket.status)}
+        />
+        <Stat
+          label="Refunded to you"
+          icon={<Wallet size={13} aria-hidden />}
+          value={
+            ticket.resolutionAmountInr === null ? (
+              <span className="text-text-faint">—</span>
+            ) : (
+              <Money amount={ticket.resolutionAmountInr} direction="credit" />
+            )
+          }
+          tone={ticket.resolutionAmountInr === null ? 'neutral' : 'good'}
+          hint={
+            ticket.resolutionAmountInr === null
+              ? 'Nothing credited yet.'
+              : 'In your wallet balance.'
+          }
+        />
+        <Stat
+          label="Raised"
+          icon={<CalendarClock size={13} aria-hidden />}
+          value={<span className="text-base">{formatDate(ticket.createdAt)}</span>}
+          tone="neutral"
+          hint={
+            ticket.resolvedAt === null ? 'Still open.' : `Closed ${formatDate(ticket.resolvedAt)}.`
+          }
+        />
+        <Stat
+          label="About"
+          icon={<PackageSearch size={13} aria-hidden />}
+          value={
+            ticket.orderNumber !== null ? (
+              <Link
+                href={ticket.orderId === null ? '/orders' : `/orders/${ticket.orderId}`}
+                className="text-accent font-mono text-base hover:underline"
+              >
+                {ticket.orderNumber}
+              </Link>
+            ) : ticket.receiptNumber !== null ? (
+              <span className="font-mono text-base">{ticket.receiptNumber}</span>
+            ) : (
+              <span className="text-text-faint">—</span>
+            )
+          }
+          tone="neutral"
+          hint={
+            ticket.orderNumber !== null
+              ? 'The order this is about.'
+              : ticket.receiptNumber !== null
+                ? 'The goods receipt this is about.'
+                : undefined
+          }
+        />
+      </div>
+
       {ticket.resolutionAmountInr !== null && <RefundBanner ticket={ticket} />}
 
-      <Section title="Ticket">
-        <Card>
-          <CardBody>
-            <DescriptionList
-              columns={3}
-              items={[
-                {
-                  label: 'Type',
-                  // Who is asking, then what about. The category the
-                  // seller picked is the fastest thing on the page for
-                  // recognising their own ticket in a list of four.
-                  value: (
-                    <span className="block">
-                      {humanise(ticket.ticketType)}
-                      <IssueCategoryLine
-                        categoryLabel={ticket.issueCategoryLabel}
-                        subcategoryLabel={ticket.issueSubcategoryLabel}
-                      />
-                    </span>
-                  ),
-                },
-                { label: 'Status', value: <TicketStatusBadge status={ticket.status} /> },
-                { label: 'Courier', value: ticket.courierCode ?? <Dash /> },
-                ...(ticket.receiptNumber == null
-                  ? []
-                  : [
-                      {
-                        // A short count at the warehouse (TKT-3): the
-                        // receipt and the consignment it belongs to.
-                        label: 'Goods receipt',
-                        value: (
-                          <span className="font-mono text-xs">
-                            {ticket.receiptNumber}
-                            {ticket.consignmentNumber == null
-                              ? ''
-                              : ` · ${ticket.consignmentNumber}`}
-                          </span>
-                        ),
-                      },
-                    ]),
-                {
-                  label: 'Order',
-                  // The NUMBER, not the uuid. A uuid cannot be read
-                  // aloud, repeated down a phone, or matched against
-                  // the order list; the id is still what the link uses.
-                  value:
-                    ticket.orderId === null ? (
-                      <Dash />
-                    ) : (
-                      <Link
-                        href={`/orders/${ticket.orderId}`}
-                        className="text-accent font-mono hover:underline"
-                      >
-                        {ticket.orderNumber ?? <Ident value={ticket.orderId} />}
-                      </Link>
+      <SectionBand index="01" title="Ticket" note="The facts we hold about it." />
+      {/* No <Card> inside: `BandBody` IS the bordered surface the band
+          caps, and nesting one drew a second border a hair inside the
+          first. */}
+      <BandBody className="mb-4">
+        <DescriptionList
+          columns={3}
+          items={[
+            {
+              label: 'Type',
+              // Who is asking, then what about. The category the
+              // seller picked is the fastest thing on the page for
+              // recognising their own ticket in a list of four.
+              value: (
+                <span className="block">
+                  {humanise(ticket.ticketType)}
+                  <IssueCategoryLine
+                    categoryLabel={ticket.issueCategoryLabel}
+                    subcategoryLabel={ticket.issueSubcategoryLabel}
+                  />
+                </span>
+              ),
+            },
+            { label: 'Status', value: <TicketStatusBadge status={ticket.status} /> },
+            { label: 'Courier', value: ticket.courierCode ?? <Dash /> },
+            ...(ticket.receiptNumber == null
+              ? []
+              : [
+                  {
+                    // A short count at the warehouse (TKT-3): the
+                    // receipt and the consignment it belongs to.
+                    label: 'Goods receipt',
+                    value: (
+                      <span className="font-mono text-xs">
+                        {ticket.receiptNumber}
+                        {ticket.consignmentNumber == null ? '' : ` · ${ticket.consignmentNumber}`}
+                      </span>
                     ),
-                },
-                {
-                  label: 'Parcel',
-                  // A seller has no shipment page — parcels are shown on
-                  // the order — so the id is evidence to quote at us, not
-                  // a link to nowhere.
-                  value:
-                    ticket.shipmentId === null ? (
-                      <Dash />
-                    ) : ticket.shipmentNumber !== null ? (
-                      <span className="font-mono text-xs">{ticket.shipmentNumber}</span>
-                    ) : (
-                      <Ident value={ticket.shipmentId} />
-                    ),
-                },
-                {
-                  label: 'Closed',
-                  value: ticket.resolvedAt === null ? <Dash /> : formatDateTime(ticket.resolvedAt),
-                },
-              ]}
-            />
+                  },
+                ]),
+            {
+              label: 'Order',
+              // The NUMBER, not the uuid. A uuid cannot be read
+              // aloud, repeated down a phone, or matched against
+              // the order list; the id is still what the link uses.
+              value:
+                ticket.orderId === null ? (
+                  <Dash />
+                ) : (
+                  <Link
+                    href={`/orders/${ticket.orderId}`}
+                    className="text-accent font-mono hover:underline"
+                  >
+                    {ticket.orderNumber ?? <Ident value={ticket.orderId} />}
+                  </Link>
+                ),
+            },
+            {
+              label: 'Parcel',
+              // A seller has no shipment page — parcels are shown on
+              // the order — so the id is evidence to quote at us, not
+              // a link to nowhere.
+              value:
+                ticket.shipmentId === null ? (
+                  <Dash />
+                ) : ticket.shipmentNumber !== null ? (
+                  <span className="font-mono text-xs">{ticket.shipmentNumber}</span>
+                ) : (
+                  <Ident value={ticket.shipmentId} />
+                ),
+            },
+            {
+              label: 'Closed',
+              value: ticket.resolvedAt === null ? <Dash /> : formatDateTime(ticket.resolvedAt),
+            },
+          ]}
+        />
 
-            {/*
+        {/*
               The description is NOT repeated here.
 
               It is the first thing the seller said, and the conversation
@@ -172,10 +288,8 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
               centimetres apart, with nothing to say why. This card is
               for the facts ABOUT the ticket; what was said belongs in
               the thread, in order, with a time against it.
-            */}
-          </CardBody>
-        </Card>
-      </Section>
+        */}
+      </BandBody>
 
       {/*
         ONE thread, not a status log above a separate courier box. Our
@@ -185,16 +299,14 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
         Negotiating" is bookkeeping, and putting it in a chat makes the
         messages harder to find rather than the history clearer.
       */}
-      <Section
+      <SectionBand
+        index="02"
         title="Conversation"
-        subtitle="What you told us, what we found out, and anything the courier said."
-      >
-        <Card>
-          <CardBody>
-            <TicketConversation ticket={ticket} />
-          </CardBody>
-        </Card>
-      </Section>
+        note="What you told us, what we found out, and anything the courier said."
+      />
+      <BandBody>
+        <TicketConversation ticket={ticket} />
+      </BandBody>
     </div>
   );
 }
@@ -296,6 +408,57 @@ function Dash(): ReactElement {
 
 function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('en-IN');
+}
+
+/** Day and month only — a tile is a glance, not a timestamp. */
+function formatDate(value: string): string {
+  return new Date(value).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/**
+ * The tone of the STATUS tile.
+ *
+ * EXHAUSTIVE over `TicketStatus` (the F2 discipline): the `never`
+ * assignment means a new value fails to COMPILE until somebody decides
+ * whether it reads as settled or as still-being-argued. The first cut
+ * of this function was written from memory and invented three statuses
+ * that do not exist (`RESOLVED_REPLACEMENT`, `RESOLVED_NO_ACTION`,
+ * `CLOSED`) while missing two that do — a `string` parameter let all
+ * five through silently and defaulted the real ones to neutral.
+ *
+ * Deliberately NOT a reach into `ticketStatusKind`, which answers a
+ * different question — what colour a BADGE is. A tile has four tones,
+ * and the distinction worth drawing here is "finished" versus "still
+ * open", which is what a seller is scanning the page for.
+ */
+function statTone(status: TicketStatus): 'neutral' | 'warn' | 'bad' | 'good' {
+  switch (status) {
+    case 'RESOLVED_REFUND':
+    case 'RESOLVED_RETURNED':
+      return 'good';
+    // Settled, but not in the seller's favour — the goods are gone and
+    // nothing is coming back. Neutral rather than green: it is closed,
+    // and calling it good would be our word for somebody else's loss.
+    case 'RESOLVED_WRITE_OFF_ACCEPTED':
+      return 'neutral';
+    case 'REJECTED':
+      return 'bad';
+    case 'OPEN':
+    case 'NEGOTIATING':
+      return 'warn';
+    // The courier shut their side and we have NOT decided an outcome,
+    // so from the seller's view this is still open.
+    case 'CLOSED_BY_COURIER':
+      return 'warn';
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
 }
 
 function humanise(value: string): string {
