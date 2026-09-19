@@ -2742,7 +2742,7 @@ model SellerStore {
   /// RS-6 phase 3c — each order's credits, per party.
   resellerOrderCredits    ResellerOrderCredit[]
   /// RS-7 — disputes this store raised.
-  tickets                 Ticket[]                     @relation("TicketStore")
+  tickets                 Ticket[]                      @relation("TicketStore")
   storeApiKeys            StoreApiKey[]
   webhookEndpoints        SellerWebhookEndpoint[]
   bulkOrderUploads        BulkOrderUpload[]
@@ -2760,6 +2760,11 @@ model SellerStore {
   addressChangeRequests   StoreAddressChangeRequest[]
   /// Cancels, call-cap answers and issues this store asked seller staff to approve.
   storeOrderRequests      StoreOrderRequest[]
+  /// What the STORE — as a whole, for everybody signed in to it — has
+  /// said it wants to hear about (2026-09-19). The store half of the
+  /// two-layer rule; a PERSON's own per-topic choices are
+  /// `notification_subscriptions`.
+  notificationPreferences StoreNotificationPreference[]
   /// A partial unique — `(seller_id) WHERE is_default AND deleted_at IS
   /// NULL` — lives in the migration. Prisma cannot express one, so it
   /// is invisible here and will not drift-check; it is what makes two
@@ -4774,6 +4779,17 @@ model NotificationLog {
   toEmail              String?                   @map("to_email")
   toPhoneE164          String?                   @map("to_phone_e164")
   toInAppUserId        String?                   @map("to_in_app_user_id") @db.Uuid
+  /// The reseller store an in-app row belongs to (2026-09-19), NULL for
+  /// every seller and staff row.
+  ///
+  /// `notification_logs` is polymorphic, so before this the ONLY thing
+  /// tying a row to a store was a join through `store_users` that no
+  /// read performed. The store inbox scopes on this column AND on the
+  /// person's own id, both taken from the TOKEN — which makes the
+  /// isolation a property of the WHERE clause rather than of an
+  /// invariant in another table, and means a person moved between
+  /// stores does not carry the other store's inbox with them.
+  toStoreId            String?                   @map("to_store_id") @db.Uuid
   /// Groups the deliveries of ONE notification across channels, so
   /// "this went to their inbox and their email" is one thing and not
   /// two unrelated rows.
@@ -6364,6 +6380,11 @@ enum NotificationBroadcastStatus {
 enum NotificationSubjectType {
   SELLER_USER @map("seller_user")
   STAFF_USER  @map("staff_user")
+  /// A reseller store's own person (RS-2, 2026-09-19). The third
+  /// identity gets a third subject: a store user's standing choices are
+  /// theirs, not their seller's, and a subscription row keyed on a bare
+  /// uuid with no subject type would collide the day two id spaces meet.
+  STORE_USER  @map("store_user")
 
   @@map("notification_subject_type")
 }
@@ -9714,4 +9735,85 @@ model StoreOrderRequest {
   @@index([orderId, kind])
   @@index([status, createdAt])
   @@map("store_order_requests")
+}
+
+/// What KIND of thing a reseller store is being told about, as the STORE
+/// decides about it (2026-09-19, owner).
+///
+/// ── WHY A SECOND CATEGORY ENUM AND NOT `NotificationCategory` ────────
+/// `NotificationCategory` answers "what kind of MESSAGE is this", and it
+/// decides CHANNELS (NOTIF-9): CREDENTIAL is email-only by construction.
+/// This answers a different question — "what part of the business is
+/// this about" — and it is the grain the STORE chooses at. Folding them
+/// would mean a store could switch off CREDENTIAL, which is exactly what
+/// NOTIF-9 makes unrepresentable.
+///
+/// ── WHY IT MIRRORS `SellerNotificationCategory` RATHER THAN REUSING IT ─
+/// A store does not have stock alerts, call-centre outcomes, billing or
+/// marketing; it has its orders, its money, its disputes and its terms.
+/// Reusing the seller list would have put four categories on the store's
+/// settings page that nothing can ever send — the NOTIF-15 defect: a
+/// control that does nothing is worse than no control.
+///
+/// MONEY carries no topic TODAY and is deliberately here anyway: the
+/// owner named money as one of the three kinds that can never be
+/// silenced, and `store-notification-catalog.spec.ts` pins that every
+/// topic filed under it is immutable — so the rule binds the first money
+/// topic somebody adds rather than being remembered at the time.
+enum StoreNotificationCategory {
+  /// The store's own orders and the answers to what it asked about them.
+  ORDER_UPDATES @map("order_updates")
+  /// Its wallet, its credits, its share of a fee, what it prepaid.
+  MONEY         @map("money")
+  /// Disputes with its seller, and issues it raised with Skydrop.
+  SUPPORT       @map("support")
+  /// The seller's terms: who pays which fee, and when each side is paid.
+  TERMS         @map("terms")
+  /// Skydrop speaking to an audience the store is part of.
+  ANNOUNCEMENTS @map("announcements")
+
+  @@map("store_notification_category")
+}
+
+/// What a reseller STORE — as a whole — has said it wants to hear about
+/// (2026-09-19, owner decision (c)).
+///
+/// The seller's `seller_notification_preferences` twin, for the third
+/// identity, and the FIRST of the two layers a store message passes
+/// through. The store decides whether a category leaves the building at
+/// all; a PERSON then decides what reaches their own bell
+/// (`notification_subscriptions`, keyed on `STORE_USER`). Both can only
+/// ever REMOVE a delivery, never add one, so they compose by
+/// intersection and neither can surprise the other.
+///
+/// ── WHAT IS DELIBERATELY ABSENT ──────────────────────────────────────
+/// No SMS, no webhook, no frequency, no quiet hours. The seller's row
+/// carries all four and three of them were REMOVED from its screen
+/// (NOTIF-15) because nothing read them; quiet hours exist there and
+/// hold an email overnight, which is a real behaviour a store could
+/// have — and does not have a reader here, so it is not a column here.
+/// Add one the day something honours it, not before.
+///
+/// An ABSENT ROW MEANS SEND. A store that existed before a category did
+/// has said nothing about it, and reading silence as "no" would switch
+/// off a notification nobody chose to switch off.
+model StoreNotificationPreference {
+  id                   String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId              String                    @map("store_id") @db.Uuid
+  category             StoreNotificationCategory
+  emailEnabled         Boolean                   @default(true) @map("email_enabled")
+  inAppEnabled         Boolean                   @default(true) @map("in_app_enabled")
+  /// Who at the store last changed it — the audit answers "why did we
+  /// stop hearing about this".
+  updatedByStoreUserId String?                   @map("updated_by_store_user_id") @db.Uuid
+  createdAt            DateTime                  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime                  @updatedAt @map("updated_at") @db.Timestamptz
+
+  /// CASCADE: the preference is a property of the store and means
+  /// nothing without it. Nothing reads it for history.
+  store SellerStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, category])
+  @@index([storeId])
+  @@map("store_notification_preferences")
 }

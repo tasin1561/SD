@@ -18,6 +18,12 @@ import { NotificationPolicyService } from '../../src/modules/notification-audien
  * somebody else's notifications; and the comparison is exactly the kind
  * of line a refactor deletes because "the id is already checked above".
  */
+/**
+ * The caller, as the token describes them: a seller or staff person, so
+ * no store. `storeId: null` is part of the filter, not its absence.
+ */
+const ME = { userId: 'me', storeId: null } as const;
+
 describe('NotificationFeedService', () => {
   function make() {
     const findMany = jest.fn(async () => []);
@@ -47,19 +53,48 @@ describe('NotificationFeedService', () => {
 
   it('the list is filtered by the caller’s id and the IN_APP channel', async () => {
     const c = make();
-    await c.svc.list('me');
+    await c.svc.list(ME);
     expect(c.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         // `dismissedAt: null` is part of the filter, not incidental —
         // a cleared notification has to be gone from the list.
         where: {
           toInAppUserId: 'me',
+          toStoreId: null,
           channel: NotificationChannel.IN_APP,
           dismissedAt: null,
         },
         orderBy: { createdAt: 'desc' },
       }),
     );
+  });
+
+  it('a store user’s reads carry their store, and a write is guarded on it too', async () => {
+    // Both halves come from the token. `toStoreId` is a real predicate on
+    // every path, so one store's row can never surface in another's inbox
+    // even if the two user-id spaces ever produced the same uuid — and a
+    // person moved between stores does not carry the old store's messages.
+    const c = make();
+    const store = { userId: 'su-1', storeId: 'store-a' } as const;
+
+    await c.svc.list(store);
+    expect(c.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          toInAppUserId: 'su-1',
+          toStoreId: 'store-a',
+          channel: NotificationChannel.IN_APP,
+          dismissedAt: null,
+        },
+      }),
+    );
+
+    await c.svc.markRead(store, 'n1');
+    expect(c.updateMany.mock.calls[0]?.[0]?.where).toMatchObject({
+      id: 'n1',
+      toInAppUserId: 'su-1',
+      toStoreId: 'store-a',
+    });
   });
 
   it('paging fetches one extra row to decide whether there is a next page', async () => {
@@ -75,7 +110,7 @@ describe('NotificationFeedService', () => {
     }));
     c.findMany.mockImplementationOnce(async () => rows as never);
 
-    const page = await c.svc.list('me');
+    const page = await c.svc.list(ME);
     // Twenty shown, the twenty-first only ever used as the answer to
     // "is there more" — never rendered, so the page size stays honest.
     expect(page.items).toHaveLength(20);
@@ -98,13 +133,13 @@ describe('NotificationFeedService', () => {
           },
         ] as never,
     );
-    const page = await c.svc.list('me');
+    const page = await c.svc.list(ME);
     expect(page.nextCursor).toBeNull();
   });
 
   it('a cursor skips the row it names rather than repeating it', async () => {
     const c = make();
-    await c.svc.list('me', 'n19');
+    await c.svc.list(ME, 'n19');
     expect(c.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ cursor: { id: 'n19' }, skip: 1 }),
     );
@@ -112,7 +147,7 @@ describe('NotificationFeedService', () => {
 
   it('marking read guards on the caller’s id IN the write', async () => {
     const c = make();
-    await c.svc.markRead('me', 'n1');
+    await c.svc.markRead(ME, 'n1');
     const where = c.updateMany.mock.calls[0]?.[0]?.where;
     expect(where).toMatchObject({ id: 'n1', toInAppUserId: 'me', readAt: null });
   });
@@ -120,7 +155,7 @@ describe('NotificationFeedService', () => {
   it('somebody else’s notification is a 404, not a silent success', async () => {
     const c = make();
     c.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
-    await expect(c.svc.markRead('me', 'theirs')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(c.svc.markRead(ME, 'theirs')).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('marking an already-read one again is idempotent, not an error', async () => {
@@ -129,12 +164,12 @@ describe('NotificationFeedService', () => {
     c.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
     c.findFirst.mockImplementationOnce(async () => ({ readAt }) as never);
     // Two tabs, two clicks. The second is not a failure.
-    await expect(c.svc.markRead('me', 'n1')).resolves.toEqual({ readAt });
+    await expect(c.svc.markRead(ME, 'n1')).resolves.toEqual({ readAt });
   });
 
   it('mark-all-read touches only the caller’s unread rows', async () => {
     const c = make();
-    await c.svc.markAllRead('me');
+    await c.svc.markAllRead(ME);
     const where = c.updateMany.mock.calls[0]?.[0]?.where;
     expect(where).toMatchObject({
       toInAppUserId: 'me',
@@ -166,7 +201,7 @@ describe('NotificationFeedService — unread and clearing', () => {
 
   it('marking unread clears readAt, scoped to the caller', async () => {
     const c = make();
-    await c.svc.markUnread('me', 'n1');
+    await c.svc.markUnread(ME, 'n1');
     expect(c.updateMany.mock.calls[0]?.[0]).toMatchObject({
       where: { id: 'n1', toInAppUserId: 'me', dismissedAt: null },
       data: { readAt: null },
@@ -176,7 +211,7 @@ describe('NotificationFeedService — unread and clearing', () => {
   it('somebody else’s notification cannot be un-read', async () => {
     const c = make();
     c.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
-    await expect(c.svc.markUnread('me', 'theirs')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(c.svc.markUnread(ME, 'theirs')).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('DELETE dismisses — it never removes the row', async () => {
@@ -184,7 +219,7 @@ describe('NotificationFeedService — unread and clearing', () => {
     // Deleting a row would let a re-emit of the same event send again,
     // so "delete" on screen has to mean "hide it from this person".
     const c = make();
-    await c.svc.dismiss('me', 'n1');
+    await c.svc.dismiss(ME, 'n1');
     const call = c.updateMany.mock.calls[0]?.[0];
     expect(call?.data).toMatchObject({ dismissedAt: expect.any(Date) });
     expect(call?.where).toMatchObject({ id: 'n1', toInAppUserId: 'me' });
@@ -195,18 +230,18 @@ describe('NotificationFeedService — unread and clearing', () => {
     const c = make({ dismissedAt });
     c.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
     // Two tabs and a slow network are not a failure.
-    await expect(c.svc.dismiss('me', 'n1')).resolves.toEqual({ dismissedAt });
+    await expect(c.svc.dismiss(ME, 'n1')).resolves.toEqual({ dismissedAt });
   });
 
   it('dismissing something that is not yours is a 404', async () => {
     const c = make(null);
     c.updateMany.mockImplementationOnce(async () => ({ count: 0 }));
-    await expect(c.svc.dismiss('me', 'theirs')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(c.svc.dismiss(ME, 'theirs')).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('clear-all touches only this person’s undismissed in-app rows', async () => {
     const c = make();
-    await c.svc.dismissAll('me');
+    await c.svc.dismissAll(ME);
     expect(c.updateMany.mock.calls[0]?.[0]?.where).toMatchObject({
       toInAppUserId: 'me',
       channel: NotificationChannel.IN_APP,
@@ -219,8 +254,8 @@ describe('NotificationFeedService — unread and clearing', () => {
     // pointing at nothing — the shape that makes people stop trusting
     // the number.
     const c = make();
-    await c.svc.list('me');
-    await c.svc.unreadCount('me');
+    await c.svc.list(ME);
+    await c.svc.unreadCount(ME);
     const prisma = (
       c.svc as unknown as {
         prisma: {

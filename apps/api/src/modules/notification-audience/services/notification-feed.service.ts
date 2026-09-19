@@ -19,6 +19,25 @@ export interface FeedPage {
 }
 
 /**
+ * WHOSE inbox — every field taken from the caller's token, never from a
+ * request (2026-09-19).
+ *
+ * `storeId` is NOT optional, and that is the point. A seller or staff
+ * caller passes `null`, which means `to_store_id IS NULL` in the WHERE
+ * clause rather than "do not filter" — so a store's rows are invisible
+ * to them by construction, and a store user's `storeId` is the only
+ * store whose rows they can reach. An optional field would have made the
+ * safe value the one you get by forgetting, which is backwards: here,
+ * forgetting does not compile.
+ */
+export interface InboxScope {
+  /** The PERSON — SellerUser.id, StaffUser.id or StoreUser.id. */
+  readonly userId: string;
+  /** The reseller store, for a store user; `null` for everybody else. */
+  readonly storeId: string | null;
+}
+
+/**
  * A person's own in-app inbox.
  *
  * Reads and writes are ALWAYS scoped to the calling user's id, taken
@@ -34,10 +53,10 @@ export class NotificationFeedService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(userId: string, cursor?: string): Promise<FeedPage> {
+  async list(scope: InboxScope, cursor?: string): Promise<FeedPage> {
     const rows = await this.prisma.client.notificationLog.findMany({
       where: {
-        toInAppUserId: userId,
+        ...owned(scope),
         channel: NotificationChannel.IN_APP,
         dismissedAt: null,
       },
@@ -68,15 +87,15 @@ export class NotificationFeedService {
         readAt: r.readAt,
         orderId: r.orderId,
       })),
-      unreadCount: await this.unreadCount(userId),
+      unreadCount: await this.unreadCount(scope),
       nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
     };
   }
 
-  async unreadCount(userId: string): Promise<number> {
+  async unreadCount(scope: InboxScope): Promise<number> {
     return this.prisma.client.notificationLog.count({
       where: {
-        toInAppUserId: userId,
+        ...owned(scope),
         channel: NotificationChannel.IN_APP,
         readAt: null,
         dismissedAt: null,
@@ -93,15 +112,15 @@ export class NotificationFeedService {
    * else's row. A miss is a 404 and says nothing about whether the row
    * exists.
    */
-  async markRead(userId: string, id: string): Promise<{ readAt: Date }> {
+  async markRead(scope: InboxScope, id: string): Promise<{ readAt: Date }> {
     const readAt = new Date();
     const res = await this.prisma.client.notificationLog.updateMany({
-      where: { id, toInAppUserId: userId, readAt: null, dismissedAt: null },
+      where: { id, ...owned(scope), readAt: null, dismissedAt: null },
       data: { readAt },
     });
     if (res.count === 0) {
       const already = await this.prisma.client.notificationLog.findFirst({
-        where: { id, toInAppUserId: userId },
+        where: { id, ...owned(scope) },
         select: { readAt: true },
       });
       if (already?.readAt != null) return { readAt: already.readAt };
@@ -122,9 +141,9 @@ export class NotificationFeedService {
    * un-read it. Guarded on the caller's own id in the WHERE, like every
    * other write here.
    */
-  async markUnread(userId: string, id: string): Promise<{ readAt: null }> {
+  async markUnread(scope: InboxScope, id: string): Promise<{ readAt: null }> {
     const res = await this.prisma.client.notificationLog.updateMany({
-      where: { id, toInAppUserId: userId, dismissedAt: null },
+      where: { id, ...owned(scope), dismissedAt: null },
       data: { readAt: null },
     });
     if (res.count === 0) {
@@ -149,15 +168,15 @@ export class NotificationFeedService {
    * Idempotent: dismissing an already-dismissed row is not an error,
    * because two tabs and a slow network are not a failure.
    */
-  async dismiss(userId: string, id: string): Promise<{ dismissedAt: Date }> {
+  async dismiss(scope: InboxScope, id: string): Promise<{ dismissedAt: Date }> {
     const dismissedAt = new Date();
     const res = await this.prisma.client.notificationLog.updateMany({
-      where: { id, toInAppUserId: userId, dismissedAt: null },
+      where: { id, ...owned(scope), dismissedAt: null },
       data: { dismissedAt },
     });
     if (res.count === 0) {
       const already = await this.prisma.client.notificationLog.findFirst({
-        where: { id, toInAppUserId: userId },
+        where: { id, ...owned(scope) },
         select: { dismissedAt: true },
       });
       if (already?.dismissedAt != null) return { dismissedAt: already.dismissedAt };
@@ -170,10 +189,10 @@ export class NotificationFeedService {
   }
 
   /** Clear everything currently in this person's inbox. */
-  async dismissAll(userId: string): Promise<{ dismissed: number }> {
+  async dismissAll(scope: InboxScope): Promise<{ dismissed: number }> {
     const res = await this.prisma.client.notificationLog.updateMany({
       where: {
-        toInAppUserId: userId,
+        ...owned(scope),
         channel: NotificationChannel.IN_APP,
         dismissedAt: null,
       },
@@ -182,10 +201,10 @@ export class NotificationFeedService {
     return { dismissed: res.count };
   }
 
-  async markAllRead(userId: string): Promise<{ marked: number }> {
+  async markAllRead(scope: InboxScope): Promise<{ marked: number }> {
     const res = await this.prisma.client.notificationLog.updateMany({
       where: {
-        toInAppUserId: userId,
+        ...owned(scope),
         channel: NotificationChannel.IN_APP,
         readAt: null,
         dismissedAt: null,
@@ -194,4 +213,23 @@ export class NotificationFeedService {
     });
     return { marked: res.count };
   }
+}
+
+/**
+ * The ownership predicate, in ONE place.
+ *
+ * Both halves of it are from the token: the person's own id, and — for a
+ * reseller store user — their store. `toStoreId: null` for a seller or
+ * staff caller is a real filter, not an absent one, so a store's rows
+ * can never surface in somebody else's inbox even if two id spaces ever
+ * produced the same uuid, and a person moved between stores does not
+ * carry the old store's messages with them.
+ *
+ * Written into the WHERE rather than fetched and compared: a
+ * read-then-check here would be one missing comparison away from letting
+ * anybody read somebody else's row, and a miss is a 404 that says
+ * nothing about whether the row exists.
+ */
+function owned(scope: InboxScope): { toInAppUserId: string; toStoreId: string | null } {
+  return { toInAppUserId: scope.userId, toStoreId: scope.storeId };
 }

@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { NotificationCategory, NotificationChannel, NotificationRecipientType } from '@skydrop/db';
-import { EnvService } from '../../../config/env.service';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { NotificationCategory, NotificationChannel } from '@skydrop/db';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
-import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
+import { StoreNotificationSender } from '../../notification-audience/services/store-notification-sender.service';
 
 /** The store-user emails (NOTIF-14: the code without `.email`). */
 export const STORE_ADDRESS_CHANGE_APPROVED_TEMPLATE = 'store.address_change_approved.email';
 export const STORE_ADDRESS_CHANGE_REJECTED_TEMPLATE = 'store.address_change_rejected.email';
+/** The STORE-side in-app topics the same two messages carry (2026-09-19). */
+export const STORE_ADDRESS_CHANGE_APPROVED_TOPIC = 'store.address_change_approved';
+export const STORE_ADDRESS_CHANGE_REJECTED_TOPIC = 'store.address_change_rejected';
 /** Who at the seller is told a correction is waiting: whoever runs their stores. */
 export const STORES_MANAGE_PERMISSION = 'stores.manage';
 /**
@@ -31,10 +32,13 @@ export const STORE_ADDRESS_CHANGE_WAITING_TOPIC = 'seller.store_address_change_w
  * everybody's dependency. So this is a second notifier of the same
  * SHAPE, deliberately, rather than a new module edge.
  *
- * ── THE STORE HEARS BY EMAIL, AND ONLY BY EMAIL ──────────────────────
- * A reseller store has no in-app inbox, so an in-app leg would be
- * written to a feed nobody there can open — NOTIF-15's "a setting that
- * changes nothing", in notification form.
+ * ── THE STORE HEARS ON BOTH CHANNELS (amended 2026-09-19) ────────────
+ * This said "by email, and only by email", because a reseller store had
+ * no inbox. It has one now, so the same message goes to both through
+ * `StoreNotificationSender`, the email unchanged. Neither leg can be
+ * silenced: "your correction was agreed — and the courier then refused
+ * it" is exactly the message a store cannot afford to miss, and it is on
+ * `IMMUTABLE_TOPICS` for that reason.
  *
  * ── THE SELLER HEARS IN-APP ──────────────────────────────────────────
  * Addressed by PERMISSION (NOTIF-10), so it reaches whoever runs the
@@ -50,10 +54,8 @@ export class AddressChangeNotifier {
   private readonly logger = new Logger(AddressChangeNotifier.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly dispatch: NotificationDispatchService,
-    private readonly ledger: NotificationLedgerService,
-    private readonly env: EnvService,
+    private readonly store: StoreNotificationSender,
   ) {}
 
   /** A store corrected an address and the seller's policy said "ask me". */
@@ -111,58 +113,55 @@ export class AddressChangeNotifier {
     summary: string;
     decisionNote: string | null;
   }): Promise<void> {
-    try {
-      const people = await this.prisma.client.storeUser.findMany({
-        where: {
-          storeId: input.storeId,
-          deletedAt: null,
-          role: {
-            deletedAt: null,
-            OR: [{ isOwner: true }, { permissions: { some: { permission: 'orders.actions' } } }],
-          },
-        },
-        select: { id: true, emailDisplay: true, fullName: true },
-      });
-      for (const person of people) {
-        try {
-          await this.ledger.enqueue({
-            // Per decision, not per request: a rejection and a later
-            // approval of the same correction are two things to say.
-            eventId: `store_address_change_decided:${input.requestId}:${
-              input.approved ? (input.applied ? 'yes' : 'yes-failed') : 'no'
-            }`,
-            recipientType: NotificationRecipientType.STORE_USER,
-            recipientId: person.id,
-            channel: NotificationChannel.EMAIL,
-            templateCode: input.approved
-              ? STORE_ADDRESS_CHANGE_APPROVED_TEMPLATE
-              : STORE_ADDRESS_CHANGE_REJECTED_TEMPLATE,
-            locale: 'en',
-            toEmail: person.emailDisplay,
-            variables: {
-              full_name: person.fullName,
-              seller_name: input.sellerName,
-              order_number: input.orderNumber,
-              change_summary: input.summary,
-              reason: input.reason,
-              decision_note: input.decisionNote ?? '',
-              // Empty on the ordinary approval, so the template's line
-              // renders as nothing rather than as a missing variable.
-              failure_reason: input.applied ? '' : (input.failureReason ?? ''),
-              order_url: `${this.env.resellerAppUrl}/orders/${input.orderId}`,
-              app_url: this.env.resellerAppUrl,
-            },
-            orderId: input.orderId,
-            shipmentId: null,
-            triggerEvent: 'reseller_store.address_change_decided',
-          });
-        } catch (err) {
-          this.warn('Decision email to a store user could not be queued', input.requestId, err);
-        }
-      }
-    } catch (err) {
-      this.warn('Could not tell the store what was decided', input.requestId, err);
-    }
+    const note = input.decisionNote === null ? '' : ` They said: “${input.decisionNote}”.`;
+    // The case that matters most: agreed, and then it did not happen.
+    // The inbox line has to carry it, or the store reads "agreed" and
+    // tells a customer an address moved that did not.
+    const failed =
+      input.approved && !input.applied
+        ? ` It could not be written onto the order: ${input.failureReason ?? 'the order had moved on'}.`
+        : '';
+
+    await this.store.tell({
+      storeId: input.storeId,
+      topic: input.approved
+        ? STORE_ADDRESS_CHANGE_APPROVED_TOPIC
+        : STORE_ADDRESS_CHANGE_REJECTED_TOPIC,
+      templateCode: input.approved
+        ? STORE_ADDRESS_CHANGE_APPROVED_TEMPLATE
+        : STORE_ADDRESS_CHANGE_REJECTED_TEMPLATE,
+      // Per decision, not per request: a rejection and a later approval
+      // of the same correction are two things to say. UNCHANGED from
+      // what the email was already keyed on.
+      eventId: `store_address_change_decided:${input.requestId}:${
+        input.approved ? (input.applied ? 'yes' : 'yes-failed') : 'no'
+      }`,
+      title: input.approved
+        ? input.applied
+          ? `Address corrected — ${input.orderNumber}`
+          : `Agreed, but not applied — ${input.orderNumber}`
+        : `Address correction turned down — ${input.orderNumber}`,
+      body: input.approved
+        ? `${input.sellerName} agreed to your correction on order ${input.orderNumber}: ` +
+          `${input.summary}.${note}${failed}`
+        : `${input.sellerName} said no to your correction on order ${input.orderNumber}: ` +
+          `${input.summary}. The parcel keeps the details it already had.${note}`,
+      variables: {
+        seller_name: input.sellerName,
+        order_number: input.orderNumber,
+        change_summary: input.summary,
+        reason: input.reason,
+        decision_note: input.decisionNote ?? '',
+        // Empty on the ordinary approval, so the template's line renders
+        // as nothing rather than as a missing variable.
+        failure_reason: input.applied ? '' : (input.failureReason ?? ''),
+      },
+      orderId: input.orderId,
+      triggerEvent: 'reseller_store.address_change_decided',
+      // The audience this email has always had: the people who asked.
+      permissions: ['orders.actions'],
+      ref: input.requestId,
+    });
   }
 
   private warn(what: string, requestId: string, err: unknown): void {

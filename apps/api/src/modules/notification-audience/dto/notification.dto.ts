@@ -4,11 +4,13 @@ import {
   NotificationCategory,
   NotificationChannel,
   NotificationSubscriptionMode,
+  StoreNotificationCategory,
 } from '@skydrop/db';
 import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsObject,
@@ -97,4 +99,26 @@ export class SendBroadcastDto extends BroadcastPreviewDto {
   @IsInt()
   @Min(0)
   expectedRecipientCount?: number;
+}
+
+/**
+ * The STORE's own say about one category (2026-09-19).
+ *
+ * Both switches are REQUIRED rather than optional: a PUT that left one
+ * out would have to mean "keep whatever it was", which makes the body's
+ * meaning depend on stored state nobody sent — and the screen always
+ * knows both, because it renders both.
+ */
+export class SetStoreNotificationPreferenceDto {
+  @ApiProperty({ enum: StoreNotificationCategory })
+  @IsEnum(StoreNotificationCategory)
+  category!: StoreNotificationCategory;
+
+  @ApiProperty({ description: 'May this category be emailed to the store at all?' })
+  @IsBoolean()
+  emailEnabled!: boolean;
+
+  @ApiProperty({ description: 'May it reach the bells of the people at this store?' })
+  @IsBoolean()
+  inAppEnabled!: boolean;
 }

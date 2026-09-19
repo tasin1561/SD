@@ -1,9 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { NotificationCategory, NotificationChannel, NotificationRecipientType } from '@skydrop/db';
-import { EnvService } from '../../../config/env.service';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { NotificationCategory, NotificationChannel } from '@skydrop/db';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
-import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
+import { StoreNotificationSender } from '../../notification-audience/services/store-notification-sender.service';
 
 /** The store-user emails (NOTIF-14: the code without `.email`). */
 export const STORE_REQUEST_APPROVED_TEMPLATE = 'store.request_approved.email';
@@ -13,6 +11,16 @@ export const STORE_ORDER_CHANGED_BY_SELLER_TEMPLATE = 'store.order_changed_by_se
 export const STORE_CUSTOMER_CHANGED_BY_SELLER_TEMPLATE = 'store.customer_changed_by_seller.email';
 /** SKYDROP changed the order's money through god mode (ORD-2). */
 export const STORE_ORDER_CHANGED_BY_ADMIN_TEMPLATE = 'store.order_changed_by_admin.email';
+
+/**
+ * The STORE-side in-app topics the same five messages carry since
+ * 2026-09-19 — each the email's code without `.email` (NOTIF-14).
+ */
+export const STORE_REQUEST_APPROVED_TOPIC = 'store.request_approved';
+export const STORE_REQUEST_REJECTED_TOPIC = 'store.request_rejected';
+export const STORE_REQUEST_EXPIRED_TOPIC = 'store.request_expired';
+export const STORE_ORDER_CHANGED_BY_SELLER_TOPIC = 'store.order_changed_by_seller';
+export const STORE_CUSTOMER_CHANGED_BY_SELLER_TOPIC = 'store.customer_changed_by_seller';
 
 /**
  * The seller-side topics this notifier sends (NOTIF-17 — pinned against
@@ -42,9 +50,13 @@ const STORE_ORDER_PERMISSIONS = ['orders.actions', 'orders.cancel', 'tickets.man
  * expiry of a delivery action or address correction too, so that "nobody
  * answered" reads the same whichever queue it happened in.
  *
- * The STORE hears by EMAIL only: a reseller store has no inbox, so an
- * in-app leg would be written to a feed nobody there can open. SELLER
- * STAFF hear in-app, addressed by PERMISSION (NOTIF-10).
+ * The STORE hears on BOTH channels since 2026-09-19 — it has an inbox
+ * now, and the same message goes to each through
+ * `StoreNotificationSender`, the emails byte-identical to what they
+ * were. Four of the five can never be silenced (`IMMUTABLE_TOPICS`):
+ * three are answers to something the store asked, and the fourth is
+ * somebody else changing one of its orders. SELLER STAFF hear in-app,
+ * addressed by PERMISSION (NOTIF-10).
  *
  * NEVER THROWS (NOTIF-1): the request and its decision are the durable
  * facts. Awaited by callers, never fire-and-forget, so the e2e reset has
@@ -55,10 +67,8 @@ export class StoreRequestNotifier {
   private readonly logger = new Logger(StoreRequestNotifier.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly dispatch: NotificationDispatchService,
-    private readonly ledger: NotificationLedgerService,
-    private readonly env: EnvService,
+    private readonly store: StoreNotificationSender,
   ) {}
 
   /** A store asked for something seller staff must answer. */
@@ -154,11 +164,24 @@ export class StoreRequestNotifier {
     decisionNote: string | null;
   }): Promise<void> {
     const suffix = input.approved ? (input.carriedOut ? 'yes' : 'yes-failed') : 'no';
-    await this.emailStore(input.storeId, input.requestId, {
-      eventId: `store_request_decided:${input.requestId}:${suffix}`,
+    const note = input.decisionNote === null ? '' : ` They said: “${input.decisionNote}”.`;
+    await this.tellStore({
+      storeId: input.storeId,
+      ref: input.requestId,
+      topic: input.approved ? STORE_REQUEST_APPROVED_TOPIC : STORE_REQUEST_REJECTED_TOPIC,
       templateCode: input.approved
         ? STORE_REQUEST_APPROVED_TEMPLATE
         : STORE_REQUEST_REJECTED_TEMPLATE,
+      eventId: `store_request_decided:${input.requestId}:${suffix}`,
+      title: input.approved
+        ? `${input.sellerName} agreed — ${input.orderNumber}`
+        : `${input.sellerName} said no — ${input.orderNumber}`,
+      body:
+        `You asked ${input.sellerName} to approve this on order ${input.orderNumber}: ` +
+        `${input.label}. ` +
+        (input.approved ? 'They agreed.' : 'They said no.') +
+        note +
+        (input.outcome === '' ? '' : ` ${input.outcome}`),
       orderId: input.orderId,
       triggerEvent: 'reseller_store.request_decided',
       variables: {
@@ -181,9 +204,17 @@ export class StoreRequestNotifier {
     label: string;
     expireHours: number;
   }): Promise<void> {
-    await this.emailStore(input.storeId, input.requestId, {
-      eventId: `store_request_expired:${input.requestId}`,
+    await this.tellStore({
+      storeId: input.storeId,
+      ref: input.requestId,
+      topic: STORE_REQUEST_EXPIRED_TOPIC,
       templateCode: STORE_REQUEST_EXPIRED_TEMPLATE,
+      eventId: `store_request_expired:${input.requestId}`,
+      title: `Nobody answered — ${input.orderNumber}`,
+      body:
+        `Your request on order ${input.orderNumber} (${input.label}) went unanswered for ` +
+        `${input.expireHours} hours, so it closed itself. The order kept what it already had. ` +
+        `You can ask ${input.sellerName} again.`,
       orderId: input.orderId,
       triggerEvent: 'reseller_store.request_expired',
       variables: {
@@ -289,9 +320,20 @@ export class StoreRequestNotifier {
     money: string;
     supersededRequest: boolean;
   }): Promise<void> {
-    await this.emailStore(input.storeId, input.eventKey, {
-      eventId: `store_order_changed_by_seller:${input.eventKey}`,
+    await this.tellStore({
+      storeId: input.storeId,
+      ref: input.eventKey,
+      topic: STORE_ORDER_CHANGED_BY_SELLER_TOPIC,
       templateCode: STORE_ORDER_CHANGED_BY_SELLER_TEMPLATE,
+      eventId: `store_order_changed_by_seller:${input.eventKey}`,
+      title: `${input.sellerName} changed order ${input.orderNumber}`,
+      body:
+        `${input.sellerName} changed one of your orders. What moved:\n${input.changes}` +
+        (input.money === '' ? '' : `\n\n${input.money}`) +
+        (input.supersededRequest
+          ? '\n\nThe change you had sent them for approval on this order has been closed — ' +
+            'what is above is what the order now carries.'
+          : ''),
       orderId: input.orderId,
       triggerEvent: 'reseller_store.order_changed_by_seller',
       variables: {
@@ -377,9 +419,14 @@ export class StoreRequestNotifier {
     customerName: string;
     changes: string;
   }): Promise<void> {
-    await this.emailStore(input.storeId, input.eventKey, {
-      eventId: `store_customer_changed_by_seller:${input.eventKey}`,
+    await this.tellStore({
+      storeId: input.storeId,
+      ref: input.eventKey,
+      topic: STORE_CUSTOMER_CHANGED_BY_SELLER_TOPIC,
       templateCode: STORE_CUSTOMER_CHANGED_BY_SELLER_TEMPLATE,
+      eventId: `store_customer_changed_by_seller:${input.eventKey}`,
+      title: `${input.sellerName} changed a customer’s details`,
+      body: `${input.sellerName} changed what we hold for ${input.customerName}:\n${input.changes}`,
       orderId: null,
       triggerEvent: 'reseller_store.customer_changed_by_seller',
       variables: {
@@ -390,63 +437,40 @@ export class StoreRequestNotifier {
     });
   }
 
-  private async emailStore(
-    storeId: string,
-    ref: string,
-    mail: {
-      eventId: string;
-      templateCode: string;
-      /** Null when the message is not about one order (a customer record). */
-      orderId: string | null;
-      triggerEvent: string;
-      variables: Record<string, string>;
-    },
-  ): Promise<void> {
-    try {
-      const people = await this.prisma.client.storeUser.findMany({
-        where: {
-          storeId,
-          deletedAt: null,
-          role: {
-            deletedAt: null,
-            OR: [
-              { isOwner: true },
-              { permissions: { some: { permission: { in: [...STORE_ORDER_PERMISSIONS] } } } },
-            ],
-          },
-        },
-        select: { id: true, emailDisplay: true, fullName: true },
-      });
-      for (const person of people) {
-        try {
-          await this.ledger.enqueue({
-            eventId: mail.eventId,
-            recipientType: NotificationRecipientType.STORE_USER,
-            recipientId: person.id,
-            channel: NotificationChannel.EMAIL,
-            templateCode: mail.templateCode,
-            locale: 'en',
-            toEmail: person.emailDisplay,
-            variables: {
-              full_name: person.fullName,
-              ...mail.variables,
-              order_url:
-                mail.orderId === null
-                  ? this.env.resellerAppUrl
-                  : `${this.env.resellerAppUrl}/orders/${mail.orderId}`,
-              app_url: this.env.resellerAppUrl,
-            },
-            orderId: mail.orderId,
-            shipmentId: null,
-            triggerEvent: mail.triggerEvent,
-          });
-        } catch (err) {
-          this.warn('An email to a store user could not be queued', ref, err);
-        }
-      }
-    } catch (err) {
-      this.warn('Could not email the store', ref, err);
-    }
+  /**
+   * One message to the store, on both channels.
+   *
+   * The private `emailStore` this replaces resolved the store's people
+   * itself and looped enqueueing; three notifiers had the same twenty
+   * lines. `StoreNotificationSender` is the ONE place now, so the
+   * audience, the store's own category switch and each person's mute are
+   * decided once for the pair rather than separately per leg.
+   */
+  private async tellStore(input: {
+    storeId: string;
+    ref: string;
+    topic: string;
+    templateCode: string;
+    eventId: string;
+    title: string;
+    body: string;
+    orderId: string | null;
+    triggerEvent: string;
+    variables: Record<string, string>;
+  }): Promise<void> {
+    await this.store.tell({
+      storeId: input.storeId,
+      topic: input.topic,
+      templateCode: input.templateCode,
+      eventId: input.eventId,
+      title: input.title,
+      body: input.body,
+      variables: input.variables,
+      orderId: input.orderId,
+      triggerEvent: input.triggerEvent,
+      permissions: STORE_ORDER_PERMISSIONS,
+      ref: input.ref,
+    });
   }
 
   private warn(what: string, ref: string, err: unknown): void {

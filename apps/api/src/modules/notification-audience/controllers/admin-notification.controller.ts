@@ -59,13 +59,13 @@ export class AdminNotificationController {
   @Get()
   @ApiOperation({ summary: 'This staff member’s in-app notifications, newest first' })
   list(@CurrentStaff() staff: AuthenticatedStaff, @Query() q: FeedQueryDto): Promise<FeedPage> {
-    return this.feed.list(staff.id, q.cursor);
+    return this.feed.list({ userId: staff.id, storeId: null }, q.cursor);
   }
 
   @Get('unread-count')
   @ApiOperation({ summary: 'How many unread — for the bell' })
   async unread(@CurrentStaff() staff: AuthenticatedStaff): Promise<{ unread: number }> {
-    return { unread: await this.feed.unreadCount(staff.id) };
+    return { unread: await this.feed.unreadCount({ userId: staff.id, storeId: null }) };
   }
 
   @Post(':id/read')
@@ -75,7 +75,7 @@ export class AdminNotificationController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @Param('id') id: string,
   ): Promise<{ readAt: Date }> {
-    return this.feed.markRead(staff.id, id);
+    return this.feed.markRead({ userId: staff.id, storeId: null }, id);
   }
 
   @Post(':id/unread')
@@ -88,7 +88,7 @@ export class AdminNotificationController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @Param('id') id: string,
   ): Promise<{ readAt: null }> {
-    return this.feed.markUnread(staff.id, id);
+    return this.feed.markUnread({ userId: staff.id, storeId: null }, id);
   }
 
   @Delete(':id')
@@ -101,21 +101,21 @@ export class AdminNotificationController {
     @CurrentStaff() staff: AuthenticatedStaff,
     @Param('id') id: string,
   ): Promise<{ dismissedAt: Date }> {
-    return this.feed.dismiss(staff.id, id);
+    return this.feed.dismiss({ userId: staff.id, storeId: null }, id);
   }
 
   @Delete()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Clear everything currently in your inbox.' })
   dismissAll(@CurrentStaff() staff: AuthenticatedStaff): Promise<{ dismissed: number }> {
-    return this.feed.dismissAll(staff.id);
+    return this.feed.dismissAll({ userId: staff.id, storeId: null });
   }
 
   @Post('read-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark everything read' })
   readAll(@CurrentStaff() staff: AuthenticatedStaff): Promise<{ marked: number }> {
-    return this.feed.markAllRead(staff.id);
+    return this.feed.markAllRead({ userId: staff.id, storeId: null });
   }
 
   @Get('topics')

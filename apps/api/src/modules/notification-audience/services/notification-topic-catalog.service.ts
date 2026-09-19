@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { NotificationSubjectType, SystemIssueKind } from '@skydrop/db';
+import { NotificationSubjectType, StoreNotificationCategory, SystemIssueKind } from '@skydrop/db';
 import { IMMUTABLE_TOPICS } from './notification-policy.service';
 
 export interface TopicDef {
@@ -8,6 +8,19 @@ export interface TopicDef {
   readonly label: string;
   readonly description: string;
   readonly group: string;
+}
+
+/**
+ * A reseller store's topic, which additionally declares WHICH of the
+ * store's own categories it belongs to (2026-09-19).
+ *
+ * Declared on the topic rather than in a second topic→category table,
+ * for the reason NOTIF-15 gives for `sellerCategory` living on the
+ * fan-out entry: a second table is a second thing to keep in step, and
+ * the one that is not on the send path is the one that drifts.
+ */
+export interface StoreTopicDef extends TopicDef {
+  readonly category: StoreNotificationCategory;
 }
 
 /**
@@ -24,6 +37,13 @@ export interface TopicView extends TopicDef {
   readonly mutable: boolean;
   /** Why it cannot be silenced, in the same words the refusal uses. */
   readonly immutableReason: string | null;
+  /**
+   * Which of the STORE's own categories this belongs to — present only
+   * on a store topic, so the settings page can group a person's switches
+   * under the same headings the store's own half uses, and say which
+   * category a locked topic sits in.
+   */
+  readonly storeCategory?: StoreNotificationCategory;
 }
 
 /**
@@ -52,12 +72,52 @@ export interface TopicView extends TopicDef {
 @Injectable()
 export class NotificationTopicCatalogService {
   forSubject(subjectType: NotificationSubjectType): readonly TopicView[] {
-    const defs = subjectType === NotificationSubjectType.SELLER_USER ? SELLER_TOPICS : STAFF_TOPICS;
-    return defs.map((d) => ({
+    return defsFor(subjectType).map((d) => ({
       ...d,
       mutable: !IMMUTABLE_TOPICS.has(d.topic),
       immutableReason: IMMUTABLE_TOPICS.get(d.topic) ?? null,
+      // Only a STORE topic carries one. Spread-when-present rather than
+      // `storeCategory: undefined`: under exactOptionalPropertyTypes an
+      // explicit undefined is not the same as an absent key, and the
+      // seller and staff lists have no category to give.
+      ...(isStoreTopic(d) ? { storeCategory: d.category } : {}),
     }));
+  }
+
+  /**
+   * Which of a store's categories a topic belongs to — the ONE place
+   * that question is answered, read by the dispatcher when it applies the
+   * store's own half of the two layers.
+   *
+   * An unknown topic has no category and is therefore NOT gated by the
+   * store's preferences: a message the catalogue does not know about must
+   * still arrive. Same reason the preference resolver fails open (NOTIF-15)
+   * — silently dropping a notification nobody chose to drop is the worse
+   * of the two failures.
+   */
+  storeCategoryOf(topic: string): StoreNotificationCategory | null {
+    return STORE_TOPICS.find((t) => t.topic === topic)?.category ?? null;
+  }
+}
+
+/** A topic that declares which of the STORE's categories it belongs to. */
+function isStoreTopic(def: TopicDef): def is StoreTopicDef {
+  return 'category' in def;
+}
+
+function defsFor(subjectType: NotificationSubjectType): readonly TopicDef[] {
+  switch (subjectType) {
+    case NotificationSubjectType.SELLER_USER:
+      return SELLER_TOPICS;
+    case NotificationSubjectType.STAFF_USER:
+      return STAFF_TOPICS;
+    case NotificationSubjectType.STORE_USER:
+      return STORE_TOPICS;
+    default: {
+      // F2: a fourth identity has to be given a list before this builds.
+      const never: never = subjectType;
+      throw new Error(`Unhandled notification subject type: ${String(never)}`);
+    }
   }
 }
 
@@ -394,6 +454,134 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     description:
       'Somebody asked to reprint a damaged or lost serial label. A second person has to approve it before it can be printed.',
     group: 'Warehouse',
+  },
+];
+
+/**
+ * What a RESELLER STORE's own people can hear about (2026-09-19).
+ *
+ * One entry per message Skydrop already sends a store, keyed on the
+ * email template code WITHOUT its `.email` suffix — the NOTIF-14 rule,
+ * because the two legs of one notification are silenced by different
+ * people and must not share a key.
+ *
+ * ── EVERY ONE OF THESE WAS ALREADY BEING SENT ────────────────────────
+ * The store has been emailed about all of it since RS-4/RS-5 and the
+ * 2026-09-16..18 store-action work. What was missing was an inbox to
+ * put it in, a way to choose, and — for disputes — anything at all.
+ *
+ * ── WHY SOME ARE LOCKED ──────────────────────────────────────────────
+ * The owner named three kinds that can never be switched off: the answer
+ * to something the store asked, anything about its money, and a change
+ * to one of its orders. Each locked topic here is one of those, and its
+ * reason lives in `IMMUTABLE_TOPICS` so the refusal and the screen say
+ * the same words (`mutable: false` is derived from that map, never
+ * restated here).
+ *
+ * `store-notification-catalog.spec.ts` pins BOTH directions: every topic
+ * the store is sent is listed, every listed topic is sent, and every
+ * topic filed under MONEY is immutable — which binds the first money
+ * topic somebody adds, rather than leaving it to be remembered.
+ */
+export const STORE_TOPICS: readonly StoreTopicDef[] = [
+  // ── The answers to what the store asked ────────────────────────────
+  {
+    topic: 'store.request_approved',
+    label: 'The seller agreed',
+    description:
+      'Something you sent the seller to approve — calling an order off, whether to keep ringing a customer, or an issue for Skydrop — was agreed, and what happened next.',
+    group: 'Your requests',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  {
+    topic: 'store.request_rejected',
+    label: 'The seller said no',
+    description: 'Something you sent the seller to approve was turned down, with their reason.',
+    group: 'Your requests',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  {
+    topic: 'store.request_expired',
+    label: 'Nobody answered in time',
+    description:
+      'A request you sent the seller went unanswered long enough that it closed itself. The order kept what it already had.',
+    group: 'Your requests',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  {
+    topic: 'store.action_approved',
+    label: 'Your delivery request was agreed',
+    description:
+      'The seller agreed to have a customer called again, another delivery attempt made, or a parcel sent back.',
+    group: 'Your requests',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  {
+    topic: 'store.action_rejected',
+    label: 'Your delivery request was turned down',
+    description:
+      'The seller said no to a call, a re-attempt or a return you asked for, with their reason.',
+    group: 'Your requests',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  {
+    topic: 'store.address_change_approved',
+    label: 'Your address correction was agreed',
+    description:
+      'The seller agreed to correct a delivery address — and whether it actually went onto the order, because a courier can still refuse one after the seller has said yes.',
+    group: 'Your requests',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  {
+    topic: 'store.address_change_rejected',
+    label: 'Your address correction was turned down',
+    description:
+      'The seller said no to a delivery-address correction. The parcel keeps the details it already had.',
+    group: 'Your requests',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  // ── Somebody else changed your things ──────────────────────────────
+  {
+    topic: 'store.order_changed_by_seller',
+    label: 'The seller changed one of your orders',
+    description:
+      'What is in the parcel, what the customer pays, or who it goes to — with the old value beside the new one, and the money’s before and after when it moved.',
+    group: 'Your orders',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  {
+    topic: 'store.customer_changed_by_seller',
+    label: 'The seller changed a customer’s details',
+    description:
+      'The seller corrected what we hold about one of your customers — their name, email, second phone or language. Their phone number never changes.',
+    group: 'Your orders',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  // ── Disputes and issues ────────────────────────────────────────────
+  {
+    topic: 'store.ticket_reply',
+    label: 'A reply on your ticket',
+    description:
+      'Skydrop or the seller answered on a dispute or an issue you raised, and may be waiting on you.',
+    group: 'Tickets',
+    category: StoreNotificationCategory.SUPPORT,
+  },
+  {
+    topic: 'store.ticket_resolved',
+    label: 'A ticket was settled or closed',
+    description:
+      'One of your disputes or issues was settled or closed — including any money moved between your wallet and the seller’s.',
+    group: 'Tickets',
+    category: StoreNotificationCategory.SUPPORT,
+  },
+  // ── The seller's terms ─────────────────────────────────────────────
+  {
+    topic: 'store.terms_published',
+    label: 'New terms to accept',
+    description:
+      'The seller published a new version of your terms — who pays which Skydrop fee, and when each side is credited. You cannot place new orders until somebody accepts it.',
+    group: 'Terms',
+    category: StoreNotificationCategory.TERMS,
   },
 ];
 

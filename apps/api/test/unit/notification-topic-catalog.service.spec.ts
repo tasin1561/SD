@@ -2,14 +2,30 @@ import {
   NotificationRecipientType,
   NotificationSubjectType,
   OrderStatus,
+  StoreNotificationCategory,
   SystemIssueKind,
 } from '@skydrop/db';
 import {
   NotificationTopicCatalogService,
   SELLER_TOPICS,
   STAFF_TOPICS,
+  STORE_TOPICS,
   topicForIssue,
 } from '../../src/modules/notification-audience/services/notification-topic-catalog.service';
+import { IMMUTABLE_TOPICS } from '../../src/modules/notification-audience/services/notification-policy.service';
+import {
+  STORE_ACTION_APPROVED_TOPIC,
+  STORE_ACTION_REJECTED_TOPIC,
+} from '../../src/modules/delivery-action/services/store-action-notifier.service';
+import {
+  STORE_ADDRESS_CHANGE_APPROVED_TOPIC,
+  STORE_ADDRESS_CHANGE_REJECTED_TOPIC,
+} from '../../src/modules/reseller-order/services/address-change-notifier.service';
+import { STORE_TERMS_PUBLISHED_TOPIC } from '../../src/modules/reseller-store-terms/services/reseller-terms-notifier.service';
+import {
+  STORE_TICKET_REPLY_TOPIC,
+  STORE_TICKET_RESOLVED_TOPIC,
+} from '../../src/modules/ticket/services/ticket-notification-plan';
 import { NotificationEventMappingService } from '../../src/modules/notifications/services/notification-event-mapping.service';
 import { permissionsFor } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { WITHDRAWAL_AUTO_REJECTED_TOPIC } from '../../src/modules/seller-wallet-withdrawal/services/unpayable-withdrawal.service';
@@ -37,9 +53,36 @@ import { STORE_ACTION_WAITING_TOPIC } from '../../src/modules/delivery-action/se
 import {
   ADMIN_CHANGED_ORDER_MONEY_TOPIC,
   STORE_CHANGED_ORDER_TOPIC,
+  STORE_CUSTOMER_CHANGED_BY_SELLER_TOPIC,
+  STORE_ORDER_CHANGED_BY_SELLER_TOPIC,
+  STORE_REQUEST_APPROVED_TOPIC,
+  STORE_REQUEST_EXPIRED_TOPIC,
+  STORE_REQUEST_REJECTED_TOPIC,
   STORE_REQUEST_REMINDER_TOPIC,
   STORE_REQUEST_WAITING_TOPIC,
 } from '../../src/modules/store-order-request/services/store-request-notifier.service';
+
+/**
+ * Every topic a reseller STORE is sent, named by its SENDER's own
+ * constant (2026-09-19) — the third direction of the same check the
+ * seller and staff lists get. A topic on the store's settings page that
+ * no notifier sends is a switch with nothing behind it; a topic a
+ * notifier sends that is not listed cannot be chosen about on any screen.
+ */
+const STORE_SENDERS = [
+  STORE_REQUEST_APPROVED_TOPIC,
+  STORE_REQUEST_REJECTED_TOPIC,
+  STORE_REQUEST_EXPIRED_TOPIC,
+  STORE_ORDER_CHANGED_BY_SELLER_TOPIC,
+  STORE_CUSTOMER_CHANGED_BY_SELLER_TOPIC,
+  STORE_ACTION_APPROVED_TOPIC,
+  STORE_ACTION_REJECTED_TOPIC,
+  STORE_ADDRESS_CHANGE_APPROVED_TOPIC,
+  STORE_ADDRESS_CHANGE_REJECTED_TOPIC,
+  STORE_TERMS_PUBLISHED_TOPIC,
+  STORE_TICKET_REPLY_TOPIC,
+  STORE_TICKET_RESOLVED_TOPIC,
+];
 
 /** Seller topics sent by something other than the lifecycle listener,
  *  each named by its sender's own constant. */
@@ -167,6 +210,67 @@ describe('NotificationTopicCatalogService', () => {
     }
   });
 
+  it('every topic a store can silence is one a notifier actually sends', () => {
+    const sent = new Set(STORE_SENDERS);
+    const orphaned = STORE_TOPICS.map((t) => t.topic).filter((t) => !sent.has(t));
+    expect(orphaned).toEqual([]);
+  });
+
+  it('every message a store is sent is one it can find on its settings page', () => {
+    // The other direction, and the one that bites: a notification with
+    // no catalogue entry cannot be switched off through any screen, and
+    // the store's settings page would not even name it.
+    const listed = new Set(STORE_TOPICS.map((t) => t.topic));
+    expect(STORE_SENDERS.filter((t) => !listed.has(t))).toEqual([]);
+  });
+
+  it('a store topic is the email template code without `.email` (NOTIF-14)', () => {
+    // The two legs of one notification are silenced by different people
+    // — the person for the bell, the store for the category — so they
+    // must not share a key, and the in-app one is the email's minus the
+    // suffix. A topic ending in `.email` means somebody keyed the inbox
+    // leg on the email's code.
+    for (const t of STORE_TOPICS) expect(t.topic.endsWith('.email')).toBe(false);
+  });
+
+  it('the owner\u2019s three unsilenceable kinds are locked, and say why', () => {
+    const store = svc.forSubject(NotificationSubjectType.STORE_USER);
+    const locked = store.filter((t) => !t.mutable).map((t) => t.topic);
+    // Decisions on its requests, anything about its money, and changes
+    // to its orders (owner, 2026-09-19).
+    expect([...locked].sort()).toEqual(
+      [
+        STORE_ACTION_APPROVED_TOPIC,
+        STORE_ACTION_REJECTED_TOPIC,
+        STORE_ADDRESS_CHANGE_APPROVED_TOPIC,
+        STORE_ADDRESS_CHANGE_REJECTED_TOPIC,
+        STORE_ORDER_CHANGED_BY_SELLER_TOPIC,
+        STORE_REQUEST_APPROVED_TOPIC,
+        STORE_REQUEST_EXPIRED_TOPIC,
+        STORE_REQUEST_REJECTED_TOPIC,
+        STORE_TICKET_RESOLVED_TOPIC,
+      ].sort(),
+    );
+    // Locked with a REASON, in the same words the refusal uses — a
+    // switch that always refuses teaches people to ignore refusals.
+    for (const t of store.filter((x) => !x.mutable)) {
+      expect(t.immutableReason ?? '').not.toBe('');
+      expect(t.immutableReason).toBe(IMMUTABLE_TOPICS.get(t.topic));
+    }
+    // And something is still choosable, or the page is a list of locks.
+    expect(store.filter((t) => t.mutable).length).toBeGreaterThan(0);
+  });
+
+  it('every store topic filed under MONEY can never be silenced', () => {
+    // Vacuous today (no money topic is sent to a store yet) and binding
+    // the moment one is added — which is the point: the owner named
+    // money as one of the three kinds, and this makes the rule hold for
+    // a topic nobody has written yet rather than for a list somebody
+    // has to remember to extend.
+    const money = STORE_TOPICS.filter((t) => t.category === StoreNotificationCategory.MONEY);
+    expect(money.filter((t) => !IMMUTABLE_TOPICS.has(t.topic))).toEqual([]);
+  });
+
   it('serves the right list per subject, and they do not overlap', () => {
     // BY TOPIC, not by array identity: since 2026-09-18 `forSubject`
     // decorates each entry with whether it can be silenced at all
@@ -178,8 +282,16 @@ describe('NotificationTopicCatalogService', () => {
     expect(svc.forSubject(NotificationSubjectType.STAFF_USER).map((t) => t.topic)).toEqual(
       STAFF_TOPICS.map((t) => t.topic),
     );
+    expect(svc.forSubject(NotificationSubjectType.STORE_USER).map((t) => t.topic)).toEqual(
+      STORE_TOPICS.map((t) => t.topic),
+    );
     const seller = new Set(SELLER_TOPICS.map((t) => t.topic));
     expect(STAFF_TOPICS.filter((t) => seller.has(t.topic))).toEqual([]);
+    // The store's list must not collide with either of the others: a
+    // shared key would let one identity's mute silence another's.
+    const storeKeys = new Set(STORE_TOPICS.map((t) => t.topic));
+    expect(SELLER_TOPICS.filter((t) => storeKeys.has(t.topic))).toEqual([]);
+    expect(STAFF_TOPICS.filter((t) => storeKeys.has(t.topic))).toEqual([]);
   });
 
   it('carries whether each topic can be silenced, so a screen need not guess', () => {
@@ -197,7 +309,7 @@ describe('NotificationTopicCatalogService', () => {
   });
 
   it('every entry is written for a person, not an enum', () => {
-    for (const t of [...SELLER_TOPICS, ...STAFF_TOPICS]) {
+    for (const t of [...SELLER_TOPICS, ...STAFF_TOPICS, ...STORE_TOPICS]) {
       expect(t.label.length).toBeGreaterThan(3);
       expect(t.description.length).toBeGreaterThan(20);
       expect(t.group.length).toBeGreaterThan(2);

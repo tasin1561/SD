@@ -65,6 +65,66 @@ export const IMMUTABLE_TOPICS: ReadonlyMap<string, string> = new Map([
       'Silenced, the request closes itself, the store is told nobody answered, and their ' +
       'customer is left on a promise nobody kept.',
   ],
+  // ── A RESELLER STORE'S THREE UNSILENCEABLE KINDS (owner, 2026-09-19) ──
+  //
+  // The owner named three: the ANSWER to something the store asked,
+  // anything about its MONEY, and a CHANGE to one of its orders. Each is
+  // listed here individually rather than as a rule over categories,
+  // because `IMMUTABLE_TOPICS` is what BOTH halves read — the write
+  // (`assertMutable`) and the read (`mutesFor`) — and a rule that has to
+  // be re-derived in two places is a rule that will disagree with itself.
+  //
+  // What they have in common is the shape of the failure: the store
+  // cannot find out any other way and has a customer waiting on the
+  // answer. A seller's order notification silenced is a seller not
+  // watching their own business; a store's decision notification silenced
+  // is a store repeating a promise that has already been broken.
+  [
+    'store.request_approved',
+    'It is the answer to something your store asked for. Silenced, nobody at the store ' +
+      'learns the seller said yes, and the customer is told whatever was true yesterday.',
+  ],
+  [
+    'store.request_rejected',
+    'It is the answer to something your store asked for. Silenced, the store keeps waiting ' +
+      'for a decision that has already been made, and the customer with it.',
+  ],
+  [
+    'store.request_expired',
+    'It says nobody answered in time and the request closed itself. Silenced, the store ' +
+      'believes it is still being considered.',
+  ],
+  [
+    'store.action_approved',
+    'It is the answer to something your store asked for about a live parcel. Silenced, the ' +
+      'store does not know whether the customer is being called again or the parcel turned round.',
+  ],
+  [
+    'store.action_rejected',
+    'It is the answer to something your store asked for about a live parcel. Silenced, the ' +
+      'store waits on a van, a call or a return that is not coming.',
+  ],
+  [
+    'store.address_change_approved',
+    'It says whether the delivery details on one of your orders actually moved — including ' +
+      'when the seller agreed and the courier then refused. Silenced, a parcel goes to the ' +
+      'old address with the store believing it was corrected.',
+  ],
+  [
+    'store.address_change_rejected',
+    'It is the answer to a correction your store asked for. Silenced, the parcel keeps the ' +
+      'old address and nobody at the store knows why.',
+  ],
+  [
+    'store.order_changed_by_seller',
+    'Somebody else changed one of YOUR orders — what is in it, what the customer pays, or ' +
+      'who it goes to. Silenced, the store finds out from the customer.',
+  ],
+  [
+    'store.ticket_resolved',
+    'A settled dispute moves money between your store and the seller, and your wallet is ' +
+      'the only other place it shows. Silenced, a balance changes with nothing to say why.',
+  ],
 ]);
 
 @Injectable()

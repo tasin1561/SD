@@ -3799,6 +3799,45 @@ const notificationTemplates: TemplateSeed[] = [
   // time. EMAIL only (a reseller store has no inbox). OPERATIONAL — none
   // of the codes matches the credential pattern.
   {
+    // 2026-09-19 — the store's own copy of what happened on its ticket.
+    // RS-7 gave a store the right to raise a dispute and have Skydrop
+    // referee it, and told the store nothing: our replies and the
+    // seller's went to everybody but the party that raised it.
+    code: 'store.ticket_reply.email',
+    name: 'Reseller store — a reply on your ticket',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: 'A reply on {{ ticket_number }}: {{ ticket_subject }}',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      'There is a new reply on {{ ticket_number }} ({{ ticket_subject }}):',
+      '',
+      '{{ message }}',
+      '',
+      'Read it and answer at {{ ticket_url }}',
+    ].join('\n'),
+  },
+  {
+    code: 'store.ticket_resolved.email',
+    name: 'Reseller store — your ticket was settled or closed',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STORE_USER,
+    subject: '{{ ticket_number }} is closed',
+    bodyTemplate: [
+      'Hi {{ full_name }},',
+      '',
+      '{{ ticket_number }} ({{ ticket_subject }}) is closed.',
+      '',
+      '{{ message }}',
+      '',
+      'A settlement moves money between your wallet and the seller’s — your wallet',
+      'ledger shows the entry.',
+      '',
+      'See the ticket at {{ ticket_url }}',
+    ].join('\n'),
+  },
+  {
     code: 'store.request_approved.email',
     name: 'Reseller store — the seller approved your request',
     channel: NotificationChannel.EMAIL,

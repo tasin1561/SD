@@ -53,6 +53,10 @@ describe('NotificationDispatchService', () => {
           recipientId: p.id,
           email: p.email,
           name: 'Someone',
+          sellerId: null,
+          // Seller recipients: no store, so the store layer is skipped
+          // entirely and the stub below is never asked anything.
+          storeId: null,
         })),
       ),
     };
@@ -61,12 +65,23 @@ describe('NotificationDispatchService', () => {
         enqueued.push(job);
       }),
     };
+    // The ledger is only reached by the TEMPLATED email leg (2026-09-19),
+    // which these cases never use; a stub that throws would say so loudly
+    // if that ever changed silently.
+    const ledger = {
+      enqueue: jest.fn(async () => {
+        throw new Error('the templated email leg is not under test here');
+      }),
+    };
+    const storePrefs = { decide: jest.fn(async () => ({ email: true, inApp: true })) };
 
     const svc = new NotificationDispatchService(
       prisma as never,
       audience as never,
       new NotificationPolicyService(),
       emailQueue as never,
+      ledger as never,
+      storePrefs as never,
     );
     return { svc, created, enqueued, subFindMany, logCreate };
   }

@@ -9,11 +9,14 @@ import {
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EmailQueue } from '../../email/queue/email.queue';
+import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
+import type { EmailVariables } from '../../email/email.types';
 import {
   NotificationAudienceService,
   type ResolvedRecipient,
 } from './notification-audience.service';
 import { NotificationPolicyService } from './notification-policy.service';
+import { StoreNotificationPreferenceService } from './store-notification-preference.service';
 import type { AudienceSelector } from './notification-audience.service';
 
 export interface DispatchInput {
@@ -31,6 +34,44 @@ export interface DispatchInput {
   readonly triggerEvent: string;
   readonly orderId?: string | null;
   readonly broadcastId?: string | null;
+  /**
+   * Send the EMAIL leg through a real TEMPLATE instead of the generic
+   * title/body (2026-09-19).
+   *
+   * ── WHY THIS IS HERE AND NOT A SECOND CALL ───────────────────────────
+   * A reseller store's messages have had proper templates and proper
+   * variables since RS-4, written by each notifier through the ledger,
+   * and the owner's instruction was to keep every email exactly as it is
+   * while adding an inbox line beside it. Sending the two legs as two
+   * calls would have meant resolving the audience twice, applying the
+   * store's own preference twice and the person's mute twice — three
+   * chances for the halves to disagree about who gets what, in a design
+   * whose whole claim is that the two decisions compose.
+   *
+   * So the ONE call carries both, and the policy / store / person layers
+   * run once over the pair. `variables` is a function because the email
+   * templates address the reader by name; the in-app leg has no such
+   * need and keeps the title/body it was given.
+   */
+  readonly email?: {
+    readonly templateCode: string;
+    readonly variables: (person: ResolvedRecipient) => EmailVariables;
+    /**
+     * The EMAIL leg's OWN dedup key, distinct from the in-app leg's
+     * (`DispatchInput.eventId`) — NOTIF-14's rule that the two legs of
+     * one notification never share a key.
+     *
+     * Required in practice rather than by the type, because the callers
+     * that use this path are migrating emails that ALREADY have keys:
+     * inheriting the in-app leg's would silently re-key every stored
+     * row's successor and re-send something already sent. Omitting it
+     * falls back to the in-app key, which is only ever right for a
+     * brand-new pair.
+     */
+    readonly eventId?: string;
+    readonly locale?: string;
+    readonly shipmentId?: string | null;
+  };
 }
 
 export interface DispatchResult {
@@ -47,11 +88,20 @@ export interface DispatchResult {
  * ── ORDER OF OPERATIONS, AND WHY ─────────────────────────────────────
  *   1. AUDIENCE decides who is eligible.
  *   2. POLICY decides which channels that KIND of message may use.
- *   3. PREFERENCE removes the channels that person silenced.
+ *   3. The STORE's own say removes what a reseller store switched off
+ *      for everybody there (2026-09-19; seller and staff recipients skip
+ *      this step entirely — they have no store).
+ *   4. PREFERENCE removes the channels that person silenced.
  *
  * Policy sits ABOVE preference deliberately. It is what makes the
  * credential rule real: a caller cannot ask for in-app, and a recipient
  * cannot opt INTO it, because the category never permitted it.
+ *
+ * Steps 3 and 4 are the two layers the owner asked for, and each can
+ * only ever REMOVE a channel — so they compose by intersection, the
+ * order between them cannot change the answer, and neither can turn on
+ * something the other turned off. A topic on `IMMUTABLE_TOPICS` is
+ * exempt from both.
  *
  * ── IN-APP IS A WRITE, NOT A SEND ────────────────────────────────────
  * The notification_logs row IS the in-app delivery — there is no
@@ -74,6 +124,8 @@ export class NotificationDispatchService {
     private readonly audience: NotificationAudienceService,
     private readonly policy: NotificationPolicyService,
     private readonly emailQueue: EmailQueue,
+    private readonly ledger: NotificationLedgerService,
+    private readonly storePrefs: StoreNotificationPreferenceService,
   ) {}
 
   async dispatch(input: DispatchInput): Promise<DispatchResult> {
@@ -84,6 +136,7 @@ export class NotificationDispatchService {
     }
 
     const mutes = await this.mutesFor(input.topic, people, input.category);
+    const storeDecisions = await this.storeDecisionsFor(input, people);
 
     let delivered = 0;
     let skipped = 0;
@@ -92,12 +145,20 @@ export class NotificationDispatchService {
     for (let i = 0; i < people.length; i += NotificationDispatchService.CHUNK) {
       const chunk = people.slice(i, i + NotificationDispatchService.CHUNK);
       for (const person of chunk) {
-        const channels = this.policy.resolveChannels({
+        // ORDER: policy (what this KIND of message may use) → the STORE's
+        // own say → the PERSON's own mute. Each step only ever removes,
+        // so the order cannot change the answer; it is written this way
+        // because that is the order the rules are argued in.
+        const permitted = this.policy.resolveChannels({
           category: input.category,
           topic: input.topic,
           requested: input.channels,
           mutedChannels: mutes.get(`${person.subjectType}:${person.recipientId}`) ?? [],
         });
+        const channels =
+          person.storeId === null
+            ? permitted
+            : permitted.filter((c) => allowedByStore(storeDecisions.get(person.storeId ?? ''), c));
         if (channels.length === 0) {
           skipped += 1;
           continue;
@@ -166,6 +227,39 @@ export class NotificationDispatchService {
     return out;
   }
 
+  /**
+   * What each STORE in the audience has said about this topic, in one
+   * lookup per store rather than one per person.
+   *
+   * A store's team is small, so this is usually one query for the whole
+   * dispatch; it is written as a map anyway because a `SUBSCRIBERS`
+   * audience can legitimately span stores, and a per-person lookup there
+   * would be the same defect `mutesFor` already avoids.
+   *
+   * No store users in the audience ⇒ no query at all: the seller and
+   * staff paths must not pay for a layer that cannot apply to them.
+   */
+  private async storeDecisionsFor(
+    input: DispatchInput,
+    people: readonly ResolvedRecipient[],
+  ): Promise<Map<string, { email: boolean; inApp: boolean }>> {
+    const out = new Map<string, { email: boolean; inApp: boolean }>();
+    const storeIds = [
+      ...new Set(people.map((p) => p.storeId).filter((id): id is string => id !== null)),
+    ];
+    for (const storeId of storeIds) {
+      out.set(
+        storeId,
+        await this.storePrefs.decide({
+          storeId,
+          topic: input.topic,
+          notificationCategory: input.category,
+        }),
+      );
+    }
+    return out;
+  }
+
   /** @returns true when a delivery row was written, false when deduped. */
   private async deliver(
     input: DispatchInput,
@@ -176,6 +270,30 @@ export class NotificationDispatchService {
     const isEmail = channel === NotificationChannel.EMAIL;
     if (isEmail && person.email.trim() === '') return false;
 
+    // A TEMPLATED email leg goes through the ledger exactly as its own
+    // notifier used to, so the message the recipient reads is unchanged:
+    // same template code, same variables, same store-then-send row, same
+    // NOTIF-2 dedup. What has changed is only that the decision about
+    // WHETHER to send it was made once, beside the in-app leg's.
+    if (isEmail && input.email !== undefined) {
+      const result = await this.ledger.enqueue({
+        eventId:
+          input.email.eventId ?? input.eventId ?? `${input.triggerEvent}:${person.recipientId}`,
+        recipientType: person.recipientType,
+        recipientId: person.recipientId,
+        channel,
+        templateCode: input.email.templateCode,
+        locale: input.email.locale ?? 'en',
+        toEmail: person.email,
+        variables: input.email.variables(person),
+        orderId: input.orderId ?? null,
+        shipmentId: input.email.shipmentId ?? null,
+        triggerEvent: input.triggerEvent,
+        toStoreId: person.storeId,
+      });
+      return result.kind === 'ENQUEUED';
+    }
+
     const data: Prisma.NotificationLogUncheckedCreateInput = {
       templateCode: input.templateCode ?? input.topic,
       templateVersion: 1,
@@ -184,6 +302,9 @@ export class NotificationDispatchService {
       recipientId: person.recipientId,
       toEmail: isEmail ? person.email : null,
       toInAppUserId: isEmail ? null : person.recipientId,
+      // NULL for a seller or staff row; the store inbox scopes on it
+      // together with the person's own id, both taken from the token.
+      toStoreId: person.storeId,
       subject: input.title,
       body: input.body,
       variables: { title: input.title, body: input.body, name: person.name ?? '' },
@@ -224,4 +345,26 @@ export class NotificationDispatchService {
     }
     return true;
   }
+}
+
+/**
+ * Whether a store's own per-category choice permits one channel.
+ *
+ * An UNKNOWN store (no decision resolved — which cannot happen through
+ * `dispatch`, but could if a caller ever shapes its own map) is treated
+ * as permitting everything, for the same reason the resolver fails open:
+ * the failure of silently dropping a message is worse than the failure
+ * of sending one somebody switched off.
+ */
+function allowedByStore(
+  decision: { email: boolean; inApp: boolean } | undefined,
+  channel: NotificationChannel,
+): boolean {
+  if (decision === undefined) return true;
+  if (channel === NotificationChannel.EMAIL) return decision.email;
+  if (channel === NotificationChannel.IN_APP) return decision.inApp;
+  // SMS and WhatsApp have no sender in Phase-1A and no switch here; a
+  // caller asking for one is not silently refused by a layer that was
+  // never asked about it.
+  return true;
 }

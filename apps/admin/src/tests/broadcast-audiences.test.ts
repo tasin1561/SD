@@ -30,6 +30,12 @@ const API_KINDS = [
   'STAFF_ROLE',
   'STAFF_PERMISSION',
   'STAFF_USER',
+  // RS-2's third identity (2026-09-19). Scoped to one store by
+  // construction — there is no ALL_STORES, because a message to every
+  // reseller store would cross seller boundaries.
+  'STORE_ORG',
+  'STORE_PERMISSION',
+  'STORE_USER',
   'SUBSCRIBERS',
 ] as const;
 
@@ -40,7 +46,7 @@ describe('the broadcast screen reaches every audience the API has', () => {
     expect(/kind: '[A-Z_]+'/.test(src)).toBe(true);
   });
 
-  it('offers all ten', () => {
+  it('offers every one of them', () => {
     const offered = new Set([...src.matchAll(/kind: '([A-Z_]+)'/g)].map((m) => m[1]));
     const missing = API_KINDS.filter((k) => !offered.has(k));
     expect(missing).toEqual([]);
@@ -55,7 +61,7 @@ describe('the broadcast screen reaches every audience the API has', () => {
     // Each option is one `label:`-headed block; ALL_SELLERS and
     // ALL_STAFF are the only two that legitimately need nothing typed.
     const blocks = src.split(/\n  \{\n    label:/).slice(1);
-    expect(blocks.length).toBe(10);
+    expect(blocks.length).toBe(API_KINDS.length);
     for (const block of blocks) {
       const kind = /kind: '([A-Z_]+)'/.exec(block)?.[1] ?? '';
       const fields = /fields: \[([^\]]*)\]/.exec(block)?.[1]?.trim() ?? '';

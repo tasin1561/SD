@@ -92,11 +92,28 @@ describe('store permission surface (RS-2)', () => {
     expect(unknown).toEqual([]);
   });
 
-  it('self-service is only the caller’s own session and credentials', () => {
+  it('self-service is only the caller’s own session, credentials and inbox', () => {
+    // Each entry is named WITH ITS REASON, so a third one has to be
+    // argued for rather than added.
+    //
+    //   store-auth.controller.ts   — the caller's own session and
+    //     password. A permission there would be a question the token has
+    //     already answered.
+    //
+    //   store-notification.controller.ts (NOTIF-11, 2026-09-19) — the
+    //     caller's own inbox. Same argument, plus a second: a permission
+    //     has to be GRANTED, and a key added today reaches no role that
+    //     already exists — so every store login in production would have
+    //     seen a bell that rendered and then 403'd. Every row is
+    //     addressed by the user id AND the store id on the token, and
+    //     both go into the WHERE clause. The STORE-WIDE half of the same
+    //     feature is a SEPARATE controller behind `store.profile.*`,
+    //     because the guard short-circuits its whole permission gate on a
+    //     class-level self-service marker.
     const files = [
       ...new Set(HANDLERS.filter((h) => h.permissions === 'self-service').map((h) => h.file)),
     ];
-    expect(files).toEqual(['store-auth.controller.ts']);
+    expect(files.sort()).toEqual(['store-auth.controller.ts', 'store-notification.controller.ts']);
   });
 
   it('every store permission is held by at least one endpoint', () => {

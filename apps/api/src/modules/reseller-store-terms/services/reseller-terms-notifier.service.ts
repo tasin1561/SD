@@ -1,15 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { NotificationCategory, NotificationChannel, NotificationRecipientType } from '@skydrop/db';
+import { NotificationCategory, NotificationChannel } from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
-import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
+import { StoreNotificationSender } from '../../notification-audience/services/store-notification-sender.service';
 
 /** In-app topics (NOTIF-14 / NOTIF-17), pinned by notification-topic-catalog.service.spec.ts. */
 export const RESELLER_TERMS_ACCEPTED_TOPIC = 'seller.reseller_terms_accepted';
 export const RESELLER_TERMS_NEED_REVISION_TOPIC = 'seller.reseller_terms_need_revision';
 /** The store-user email (OPERATIONAL — no credential word in the code). */
 export const STORE_TERMS_PUBLISHED_TEMPLATE = 'store.terms_published.email';
+/** The STORE-side in-app topic the same message carries (2026-09-19). */
+export const STORE_TERMS_PUBLISHED_TOPIC = 'store.terms_published';
 /** Who at the seller hears about terms: the people who publish them. */
 export const STORES_PRICING_PERMISSION = 'stores.pricing';
 /** Who at the store is emailed a new version: the people who may accept it. */
@@ -19,11 +20,14 @@ export const TERMS_ACCEPT_PERMISSION = 'terms.accept';
  * RS-4 — the three notices terms produce.
  *
  *  1. A seller published a version → an EMAIL to every store user who may
- *     accept it (owner, or a role holding `terms.accept`). Store users have
- *     no inbox in phase 1; the portal's in-app surface for this is the
- *     banner every page shows while the current version is unaccepted —
- *     stronger than a dismissible notice, because it cannot be dismissed,
- *     only answered.
+ *     accept it (owner, or a role holding `terms.accept`), and since
+ *     2026-09-19 an inbox line beside it. The BANNER survives and is not
+ *     replaced: it is a BLOCKING CONDITION rather than an event — the
+ *     store cannot place orders until the version is accepted — and the
+ *     whole value of a banner is that it cannot be dismissed, only
+ *     answered. An inbox line is the opposite kind of thing: it says
+ *     "this happened", and it is dismissible on purpose. Both, for the
+ *     same fact, each doing what the other cannot.
  *  2. A store accepted → in-app to the seller's people holding
  *     `stores.pricing`.
  *  3. Skydrop switched credit-after-confirmation off while stores' current
@@ -41,9 +45,8 @@ export class ResellerTermsNotifier {
   private readonly logger = new Logger(ResellerTermsNotifier.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly dispatch: NotificationDispatchService,
-    private readonly ledger: NotificationLedgerService,
+    private readonly store: StoreNotificationSender,
     private readonly env: EnvService,
   ) {}
 
@@ -54,50 +57,30 @@ export class ResellerTermsNotifier {
     storeName: string;
     sellerName: string;
   }): Promise<void> {
-    try {
-      const people = await this.prisma.client.storeUser.findMany({
-        where: {
-          storeId: input.storeId,
-          deletedAt: null,
-          role: {
-            deletedAt: null,
-            OR: [
-              { isOwner: true },
-              { permissions: { some: { permission: TERMS_ACCEPT_PERMISSION } } },
-            ],
-          },
-        },
-        select: { id: true, emailDisplay: true, fullName: true },
-      });
-      for (const person of people) {
-        try {
-          await this.ledger.enqueue({
-            eventId: `reseller_terms_published:${input.termsVersionId}`,
-            recipientType: NotificationRecipientType.STORE_USER,
-            recipientId: person.id,
-            channel: NotificationChannel.EMAIL,
-            templateCode: STORE_TERMS_PUBLISHED_TEMPLATE,
-            locale: 'en',
-            toEmail: person.emailDisplay,
-            variables: {
-              full_name: person.fullName,
-              store_name: input.storeName,
-              seller_name: input.sellerName,
-              version: String(input.version),
-              terms_url: `${this.env.resellerAppUrl}/terms`,
-              app_url: this.env.resellerAppUrl,
-            },
-            orderId: null,
-            shipmentId: null,
-            triggerEvent: 'reseller_store.terms_published',
-          });
-        } catch (err) {
-          this.warn('Terms email to a store user could not be queued', input.storeId, err);
-        }
-      }
-    } catch (err) {
-      this.warn('Terms-published notice failed', input.storeId, err);
-    }
+    await this.store.tell({
+      storeId: input.storeId,
+      topic: STORE_TERMS_PUBLISHED_TOPIC,
+      templateCode: STORE_TERMS_PUBLISHED_TEMPLATE,
+      // UNCHANGED from what the email was already keyed on.
+      eventId: `reseller_terms_published:${input.termsVersionId}`,
+      title: `New terms to accept — version ${input.version}`,
+      body:
+        `${input.sellerName} published version ${input.version} of your terms — who pays ` +
+        'which Skydrop fee on your orders, and when each side is credited. ' +
+        `${input.storeName} cannot place new orders until somebody accepts it.`,
+      variables: {
+        store_name: input.storeName,
+        seller_name: input.sellerName,
+        version: String(input.version),
+        terms_url: `${this.env.resellerAppUrl}/terms`,
+      },
+      orderId: null,
+      triggerEvent: 'reseller_store.terms_published',
+      // The people who may ACCEPT it, which is who this email has always
+      // gone to — not the order permissions the sender defaults to.
+      permissions: [TERMS_ACCEPT_PERMISSION],
+      ref: input.storeId,
+    });
   }
 
   async accepted(input: {
