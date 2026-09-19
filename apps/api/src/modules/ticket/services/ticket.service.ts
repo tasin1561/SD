@@ -1794,8 +1794,7 @@ export class TicketService {
       disputedFigures:
         row.disputedFigures == null
           ? null
-          : // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- our own stamped JSON, written by `captureDisputedFigures` alone
-            (row.disputedFigures as unknown as DisputedFiguresSnapshot),
+          : (row.disputedFigures as unknown as DisputedFiguresSnapshot),
     };
   }
 }

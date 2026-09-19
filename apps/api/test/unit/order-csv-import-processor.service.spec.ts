@@ -55,7 +55,9 @@ function makeService(opts: {
     return { id: 'o9' };
   });
   const orders = {
-    getBySellerOrderRef: jest.fn(async () => (opts.existing === undefined ? null : opts.existing)),
+    getBySellerOrderRef: jest.fn<Promise<{ id: string; status: OrderStatus } | null>, unknown[]>(
+      async () => (opts.existing === undefined ? null : opts.existing),
+    ),
     create: jest.fn<Promise<{ id: string }>, unknown[]>(async () => ({ id: 'o1' })),
     applyBulkPatch: jest.fn(async () => 'PATCHED' as const),
     edit,
