@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { EmailModule } from '../email/email.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { AdminInviteLeadController } from './controllers/admin-invite-lead.controller';
 import { PublicInviteLeadController } from './controllers/public-invite-lead.controller';
 import { InviteLeadService } from './services/invite-lead.service';
@@ -15,7 +16,8 @@ import { InviteLeadService } from './services/invite-lead.service';
 @Module({
   // For the new-lead alert. EmailModule is the M1 substrate every
   // fire-once caller already uses.
-  imports: [EmailModule],
+  // The alert's inbox leg (NOTIF-14) alongside the mail substrate.
+  imports: [EmailModule, NotificationAudienceModule],
   controllers: [PublicInviteLeadController, AdminInviteLeadController],
   providers: [InviteLeadService, StaffJwtGuard],
 })

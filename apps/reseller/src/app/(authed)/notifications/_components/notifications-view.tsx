@@ -73,13 +73,20 @@ export function NotificationsView(): ReactElement {
     return m;
   }, [topics.data]);
 
-  const page = feed.data?.items ?? [];
   const items = useMemo(() => {
+    // The page is read INSIDE the memo: `feed.data?.items ?? []` is a
+    // fresh array identity on every render, so as a dependency it would
+    // rebuild this list on each keystroke in the search box.
+    const page = feed.data?.items ?? [];
     const seen = new Set<string>();
     return [...older, ...page].filter((n) => (seen.has(n.id) ? false : (seen.add(n.id), true)));
-  }, [older, page]);
+  }, [older, feed.data]);
 
-  const now = useMemo(() => Date.now(), [items]);
+  // ONE `now` per render pass, so no two rows can disagree about what it
+  // is mid-list. Deliberately not memoised on `items`: `Row` is not
+  // memoised either, so pinning it bought nothing, and `Date.now()` did
+  // not read the list it claimed to depend on.
+  const now = Date.now();
 
   /** Only the groups actually present — a tab that cannot be empty. */
   const tabs = useMemo(() => {

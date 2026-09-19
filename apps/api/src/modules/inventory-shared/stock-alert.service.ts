@@ -4,9 +4,17 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../config/env.service';
 import { CatalogReadService } from '../catalog-read/services/catalog-read.service';
 import { EmailQueue } from '../email/queue/email.queue';
+import { NotificationDispatchService } from '../notification-audience/services/notification-dispatch.service';
+import { NotificationCategory, NotificationChannel } from '@skydrop/db';
 import { StockAvailabilityService } from './stock-availability.service';
 
 const ALERT_TEMPLATE = 'seller.stock_low_alert.email';
+/**
+ * The in-app topic the low-stock alert is carried on since 2026-09-20,
+ * when its email leg was retired (`RETIRED_EMAIL_TEMPLATES`). Addressed
+ * by `inventory.view` — whoever can open the stock it is about.
+ */
+export const STOCK_LOW_ALERT_TOPIC = 'seller.stock_low_alert';
 const COOLDOWN_SETTING_KEY = 'ops.stock_alert_cooldown_hours';
 const DEFAULT_COOLDOWN_HOURS = 24;
 
@@ -54,6 +62,7 @@ export class StockAlertService {
     private readonly availability: StockAvailabilityService,
     private readonly catalog: CatalogReadService,
     private readonly email: EmailQueue,
+    private readonly dispatch: NotificationDispatchService,
   ) {}
 
   async evaluate(
@@ -181,6 +190,35 @@ export class StockAlertService {
         });
       }
     });
+
+    // The inbox leg, POST-COMMIT (INV-5): the dispatcher writes with its
+    // own client, so running it inside the state transaction above would
+    // both escape that transaction and hold it open on a fan-out. A
+    // failure here costs the inbox line, never the alert state.
+    if (enqueue) {
+      try {
+        await this.dispatch.dispatch({
+          topic: STOCK_LOW_ALERT_TOPIC,
+          category: NotificationCategory.OPERATIONAL,
+          title: 'Stock running low',
+          body:
+            `${variant.skuCode}${variant.variantLabel === null || variant.variantLabel === '' ? '' : ` (${variant.variantLabel})`} ` +
+            `is down to ${qtyAvailable ?? 0}, at or under its threshold of ${threshold ?? 0}.`,
+          channels: [NotificationChannel.IN_APP],
+          audience: [{ kind: 'SELLER_PERMISSION', sellerId, permission: 'inventory.view' }],
+          triggerEvent: 'inventory.stock.low',
+          // The same grain the alert state machine uses (INV-9), so a
+          // re-fire after the cooldown is a new line and a duplicate
+          // evaluation within it is not.
+          eventId: `stock_low:${sellerId}:${variantId}:${warehouseId}:${nextSentAt?.toISOString() ?? ''}`,
+        });
+      } catch (err) {
+        this.logger.warn(
+          { sellerId, variantId, warehouseId, err: err instanceof Error ? err.message : err },
+          'Could not put the low-stock alert in anybody’s inbox',
+        );
+      }
+    }
 
     this.logger.log(
       { sellerId, variantId, warehouseId, outcome, qtyAvailable, threshold },

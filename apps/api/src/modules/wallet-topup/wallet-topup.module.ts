@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EmailModule } from '../email/email.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { FxModule } from '../fx/fx.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
@@ -21,7 +22,14 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 @Module({
   // AuthCommonModule for AuditLogService: every change to a bank
   // account sellers pay into is recorded with who and when.
-  imports: [SellerWalletModule, FxModule, EmailModule, TreasuryModule, AuthCommonModule],
+  imports: [
+    SellerWalletModule,
+    FxModule,
+    EmailModule,
+    TreasuryModule,
+    AuthCommonModule,
+    NotificationAudienceModule,
+  ],
   controllers: [SellerTopupController, AdminTopupController, AdminPlatformBankAccountController],
   providers: [WalletTopupService, SellerJwtGuard, StaffJwtGuard],
   exports: [WalletTopupService],

@@ -3,12 +3,26 @@ import { isResellerOrder } from '../../../common/brand/customer-facing-brand';
 
 /** RS-10 — the refusal code for a tax invoice on a reseller-store order. */
 export const RESELLER_ORDER_NO_INVOICE = 'INVOICE_NOT_FOR_RESELLER_ORDER';
-import { ChargeType, NotificationRecipientType, OrderStatus, Prisma } from '@skydrop/db';
+import {
+  ChargeType,
+  NotificationCategory,
+  NotificationChannel,
+  NotificationRecipientType,
+  OrderStatus,
+  Prisma,
+} from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { stripSellerPrefix } from '../../../common/text/recipient-name';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EmailQueue } from '../../email/queue/email.queue';
+import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
+
+/**
+ * The in-app topic the invoice notice is carried on since 2026-09-20,
+ * when its email leg was retired (`RETIRED_EMAIL_TEMPLATES`).
+ */
+export const INVOICE_DELIVERED_TOPIC = 'seller.invoice.delivered';
 import { InvoiceNumberingService } from './invoice-numbering.service';
 import { InvoicePdfService, type InvoicePayload } from './invoice-pdf.service';
 
@@ -42,11 +56,15 @@ export class InvoiceService {
     private readonly pdf: InvoicePdfService,
     private readonly email: EmailQueue,
     private readonly env: EnvService,
+    // The invoice notice's inbox leg (NOTIF-14).
+    private readonly dispatch: NotificationDispatchService,
   ) {}
 
   private async sendInvoiceEmail(
     to: string,
     sellerName: string,
+    sellerId: string,
+    orderId: string,
     payload: {
       invoiceNumber: string;
       orderNumber: string;
@@ -54,10 +72,32 @@ export class InvoiceService {
       pdfUrl: string;
     },
   ): Promise<void> {
+    // The inbox leg — the channel this notice arrives on since
+    // 2026-09-20 (`RETIRED_EMAIL_TEMPLATES`). Addressed by `orders.view`
+    // because the invoice is read from the order's own page, which is
+    // also where the link below points.
+    try {
+      await this.dispatch.dispatch({
+        topic: INVOICE_DELIVERED_TOPIC,
+        category: NotificationCategory.OPERATIONAL,
+        title: `Invoice ${payload.invoiceNumber}`,
+        body: `Order ${payload.orderNumber} was delivered. Its invoice is ₹${payload.totalInr}.`,
+        channels: [NotificationChannel.IN_APP],
+        audience: [{ kind: 'SELLER_PERMISSION', sellerId, permission: 'orders.view' }],
+        triggerEvent: 'invoice.issued',
+        orderId,
+        eventId: `invoice:${payload.invoiceNumber}`,
+      });
+    } catch {
+      // Best-effort: the invoice itself is the durable fact.
+    }
     try {
       await this.email.enqueue({
         templateCode: 'seller.invoice.delivered.email',
-        recipient: { type: NotificationRecipientType.SELLER, email: to },
+        // The seller's OWN id, so the retired-email gate can tell an
+        // account (which has an inbox) from an ad-hoc address (which
+        // does not) — and so the ledger row says who it was for.
+        recipient: { type: NotificationRecipientType.SELLER, id: sellerId, email: to },
         variables: {
           contact_name: sellerName,
           invoice_number: payload.invoiceNumber,
@@ -321,12 +361,18 @@ export class InvoiceService {
     // that outlives the inbox it was sent to — forwarded, archived,
     // indexed by whatever scans the mailbox. The dashboard page mints a
     // fresh URL for whoever is actually signed in.
-    await this.sendInvoiceEmail(order.seller.email, order.seller.companyName, {
-      invoiceNumber: created.invoiceNumber,
-      orderNumber: order.orderNumber,
-      totalInr: totalInr.toFixed(2),
-      pdfUrl: `${this.env.sellerAppUrl.replace(/\/$/, '')}/orders/${order.id}`,
-    });
+    await this.sendInvoiceEmail(
+      order.seller.email,
+      order.seller.companyName,
+      order.seller.id,
+      order.id,
+      {
+        invoiceNumber: created.invoiceNumber,
+        orderNumber: order.orderNumber,
+        totalInr: totalInr.toFixed(2),
+        pdfUrl: `${this.env.sellerAppUrl.replace(/\/$/, '')}/orders/${order.id}`,
+      },
+    );
 
     return {
       id: created.id,

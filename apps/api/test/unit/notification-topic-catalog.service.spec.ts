@@ -37,6 +37,12 @@ import {
   TICKET_SELLER_REPLIED_TOPIC,
 } from '../../src/modules/ticket/services/ticket-notification-plan';
 import { RECEIPT_SURPLUS_TOPIC } from '../../src/modules/inventory-receipt/services/receipt-shortfall-ticket.service';
+import { GOODS_RECEIPT_DISCREPANCY_TOPIC } from '../../src/modules/inventory-receipt/services/goods-receipt.service';
+import { ORDER_NEEDS_ATTENTION_TOPIC } from '../../src/modules/order-attention/services/order-attention.service';
+import { STOCK_LOW_ALERT_TOPIC } from '../../src/modules/inventory-shared/stock-alert.service';
+import { INVOICE_DELIVERED_TOPIC } from '../../src/modules/invoice/services/invoice.service';
+import { TOPUP_SUBMITTED_TOPIC } from '../../src/modules/wallet-topup/services/wallet-topup.service';
+import { INVITE_LEAD_TOPIC } from '../../src/modules/invite-lead/services/invite-lead.service';
 import { RESELLER_STORE_PENDING_TOPIC } from '../../src/modules/reseller-store/services/reseller-store-notifier.service';
 import { RESELLER_SET_ASIDE_SHRUNK_TOPIC } from '../../src/modules/reseller-catalogue/services/reseller-set-aside-notifier.service';
 import { LABEL_REPRINT_REQUESTED_TOPIC } from '../../src/modules/consignment/services/label-reprint-request.service';
@@ -54,6 +60,7 @@ import {
   ADMIN_CHANGED_ORDER_MONEY_TOPIC,
   STORE_CHANGED_ORDER_TOPIC,
   STORE_CUSTOMER_CHANGED_BY_SELLER_TOPIC,
+  STORE_ORDER_CHANGED_BY_ADMIN_TOPIC,
   STORE_ORDER_CHANGED_BY_SELLER_TOPIC,
   STORE_REQUEST_APPROVED_TOPIC,
   STORE_REQUEST_EXPIRED_TOPIC,
@@ -74,6 +81,7 @@ const STORE_SENDERS = [
   STORE_REQUEST_REJECTED_TOPIC,
   STORE_REQUEST_EXPIRED_TOPIC,
   STORE_ORDER_CHANGED_BY_SELLER_TOPIC,
+  STORE_ORDER_CHANGED_BY_ADMIN_TOPIC,
   STORE_CUSTOMER_CHANGED_BY_SELLER_TOPIC,
   STORE_ACTION_APPROVED_TOPIC,
   STORE_ACTION_REJECTED_TOPIC,
@@ -114,6 +122,16 @@ const OTHER_SELLER_SENDERS = [
   STORE_CHANGED_ORDER_TOPIC,
   // 2026-09-19: god mode changed the money on a reseller order.
   ADMIN_CHANGED_ORDER_MONEY_TOPIC,
+  // 2026-09-20: the five standalone senders whose EMAIL leg was retired,
+  // so the inbox is the only channel they arrive on now. Each is pinned
+  // to its sender's own constant for the reason the rest of this list is
+  // — a topic on the settings page that the dispatcher never looks up
+  // reads to a person as a switch they flicked that did nothing.
+  ORDER_NEEDS_ATTENTION_TOPIC,
+  STOCK_LOW_ALERT_TOPIC,
+  GOODS_RECEIPT_DISCREPANCY_TOPIC,
+  INVOICE_DELIVERED_TOPIC,
+  TOPUP_SUBMITTED_TOPIC,
 ];
 
 /** Staff topics that are not system issues (TKT-3), by their sender's constant. */
@@ -121,6 +139,9 @@ const OTHER_STAFF_SENDERS = [
   TICKET_SELLER_OPENED_TOPIC,
   TICKET_SELLER_REPLIED_TOPIC,
   LABEL_REPRINT_REQUESTED_TOPIC,
+  // 2026-09-20: a new invite request. Its email leg was retired, so for
+  // anybody with an account this is the only channel it arrives on.
+  INVITE_LEAD_TOPIC,
 ];
 
 /**
@@ -245,6 +266,7 @@ describe('NotificationTopicCatalogService', () => {
         STORE_ADDRESS_CHANGE_APPROVED_TOPIC,
         STORE_ADDRESS_CHANGE_REJECTED_TOPIC,
         STORE_ORDER_CHANGED_BY_SELLER_TOPIC,
+        STORE_ORDER_CHANGED_BY_ADMIN_TOPIC,
         STORE_REQUEST_APPROVED_TOPIC,
         STORE_REQUEST_EXPIRED_TOPIC,
         STORE_REQUEST_REJECTED_TOPIC,

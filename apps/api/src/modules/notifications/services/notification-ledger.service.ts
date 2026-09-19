@@ -5,6 +5,7 @@ import {
   NotificationStatus,
   Prisma,
 } from '@skydrop/db';
+import { emailRetired } from '../../../common/notifications/retired-email-templates';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import type { EmailDispatchInput, EmailVariables } from '../../email/email.types';
@@ -67,6 +68,14 @@ export interface NotificationLedgerInput {
 
 export type NotificationLedgerResult =
   | { readonly kind: 'ENQUEUED'; readonly notificationLogId: string }
+  /**
+   * The template's EMAIL leg has been retired in favour of the inbox
+   * (owner, 2026-09-20). No row and no job: a ledger row written for a
+   * send that will never happen would sit QUEUED for ever and be found
+   * by NOTIF-22's watchdog, which would re-queue it and then report a
+   * HIGH `email-undelivered` issue about a message nobody meant to send.
+   */
+  | { readonly kind: 'RETIRED' }
   | { readonly kind: 'SKIPPED'; readonly notificationLogId: string; readonly reason: 'NO_ADDRESS' }
   | { readonly kind: 'DEDUPED'; readonly notificationLogId: string };
 
@@ -123,6 +132,18 @@ export class NotificationLedgerService {
     // SKIPPED row. Currently EMAIL is the only channel — for the
     // Phase-2 SMS/WhatsApp shapes "no address" generalises to
     // "no phone/no whatsapp number".
+    // The owner retired this message's email leg; the inbox carries it
+    // now (`RETIRED_EMAIL_TEMPLATES`). Checked BEFORE the row is written
+    // — see the note on `kind: 'RETIRED'`. The in-app leg is a separate
+    // call and is unaffected.
+    if (input.channel === NotificationChannel.EMAIL && emailRetired(input.templateCode)) {
+      this.logger.debug(
+        { templateCode: input.templateCode, eventId: input.eventId },
+        'NotificationLedgerService: email leg retired; the inbox carries this one',
+      );
+      return { kind: 'RETIRED' };
+    }
+
     if (input.channel === NotificationChannel.EMAIL && !input.toEmail) {
       return this.insertSkipped(input);
     }

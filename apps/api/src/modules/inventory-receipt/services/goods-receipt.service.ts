@@ -15,7 +15,13 @@ import {
   Prisma,
   VariantStatus,
 } from '@skydrop/db';
-import { NotificationRecipientType, StockMovementType } from '@skydrop/db';
+import {
+  NotificationCategory,
+  NotificationChannel,
+  NotificationRecipientType,
+  StockMovementType,
+} from '@skydrop/db';
+import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
@@ -46,6 +52,17 @@ const EMAIL_COMPLETED = 'seller.goods_receipt_completed.email';
 const EMAIL_CONSIGNMENT_BD_RECEIVED = 'seller.consignment_bd_received.email';
 const EMAIL_CONSIGNMENT_ARRIVED = 'seller.consignment_arrived.email';
 const EMAIL_DISCREPANCY = 'seller.goods_receipt_discrepancy.email';
+/**
+ * The in-app topic the discrepancy notice is carried on since
+ * 2026-09-20, when its email leg was retired
+ * (`RETIRED_EMAIL_TEMPLATES`). Addressed by `inbound.view` — whoever can
+ * open the receipt it is about.
+ *
+ * Only the NON-consignment branch sends it. A consignment leg's variance
+ * rides along in its own milestone mail (`variance_note`), and those
+ * emails keep both legs.
+ */
+export const GOODS_RECEIPT_DISCREPANCY_TOPIC = 'seller.goods_receipt_discrepancy';
 
 const RECEIPT_VIEW_INCLUDE = {
   lines: {
@@ -162,6 +179,8 @@ export class GoodsReceiptService {
     private readonly spaces: SpacesService,
     // TKT-3: a short count opens a ticket once the count has committed.
     private readonly shortfall: ReceiptShortfallTicketService,
+    // The discrepancy notice's inbox leg (NOTIF-14).
+    private readonly dispatch: NotificationDispatchService,
   ) {}
 
   // ---------------- seller declaration ----------------
@@ -674,287 +693,311 @@ export class GoodsReceiptService {
     // and re-reading them per attempt buys nothing).
     const { modeByVariantId, serialPrefix } = await this.resolveUnitContext(id);
 
-    const { view, affectedVariantIds, sellerId, warehouseId, unitsRegistered, consignmentId } =
-      await this.mutation.runWithRetry(async (tx) => {
-        const receipt = await tx.goodsReceipt.findUniqueOrThrow({
-          where: { id },
-          include: RECEIPT_VIEW_INCLUDE,
-        });
-        const variantIds: string[] = [];
-        const transitVariance: Array<{
-          lineId: string;
-          variantId: string;
-          moved: number;
-          lost: number;
-          surplus: number;
-          lostSerials: readonly string[];
-        }> = [];
-        let totalReceived = 0;
-        let unitCount = 0;
+    const {
+      view,
+      affectedVariantIds,
+      sellerId,
+      warehouseId,
+      unitsRegistered,
+      consignmentId,
+      // Carried OUT of the transaction so the inbox leg can be sent
+      // post-commit: the dispatcher writes with its own client, so
+      // sending it inside would escape this transaction (INV-5).
+      discrepancy,
+    } = await this.mutation.runWithRetry(async (tx) => {
+      // Declared per ATTEMPT, not outside: `runWithRetry` may run this
+      // callback again on a version clash (INV-6), and a holder shared
+      // across attempts would keep a summary from a rolled-back one.
+      let discrepancy: {
+        receiptNumber: string;
+        warehouseName: string;
+        notes: string;
+      } | null = null;
+      const receipt = await tx.goodsReceipt.findUniqueOrThrow({
+        where: { id },
+        include: RECEIPT_VIEW_INCLUDE,
+      });
+      const variantIds: string[] = [];
+      const transitVariance: Array<{
+        lineId: string;
+        variantId: string;
+        moved: number;
+        lost: number;
+        surplus: number;
+        lostSerials: readonly string[];
+      }> = [];
+      let totalReceived = 0;
+      let unitCount = 0;
 
-        for (const [i, line] of receipt.lines.entries()) {
-          if (line.receivedQty <= 0) continue;
-          if (!line.putawayBinId) {
-            throw new BadRequestException({
-              code: 'PUTAWAY_BIN_REQUIRED',
-              message: `Line ${line.id} has ${line.receivedQty} units but no putaway bin`,
-            });
-          }
-          const strict = modeByVariantId.get(line.variantId) === InventoryMode.STRICT;
-
-          // An ARRIVAL of stock we dispatched to ourselves. The goods
-          // already exist, parked in this warehouse's TRANSIT bin since
-          // dispatch, against a batch that travelled with them. Posting
-          // RECEIVING here would double them — and the second copy would
-          // be the sellable one.
-          if (receipt.dispatchedAt !== null && line.batchId !== null) {
-            const transitBinId = await this.binPolicy.transitBinId(receipt.warehouseId, tx);
-            const arrival = await this.transitArrival.writeArrivalLine(tx, {
-              sellerId: receipt.sellerId,
-              variantId: line.variantId,
-              warehouseId: receipt.warehouseId,
-              goodsReceiptLineId: line.id,
-              batchId: line.batchId,
-              transitBinId,
-              putawayBinId: line.putawayBinId,
-              receivedQty: line.receivedQty,
-              staffId,
-              receiptNumber: receipt.receiptNumber,
-              strict,
-            });
-            transitVariance.push({
-              lineId: line.id,
-              variantId: line.variantId,
-              ...arrival,
-            });
-            // A strict SURPLUS is the one case "nothing blocks" cannot
-            // hold on its own: units with no serial cannot be picked
-            // (UNIT-2 needs exactly `quantity` serials). So they get
-            // labelled where they surfaced — the one-station rule is
-            // about where the WORK happens, not a ban on ever printing
-            // elsewhere.
-            if (strict && arrival.surplus > 0) {
-              const registered = await this.units.registerUnits(tx, {
-                sellerId: receipt.sellerId,
-                variantId: line.variantId,
-                warehouseId: receipt.warehouseId,
-                binId: line.putawayBinId,
-                batchId: line.batchId,
-                goodsReceiptLineId: line.id,
-                quantity: arrival.surplus,
-                serialPrefix,
-                actorType: ActorType.STAFF,
-                actorId: staffId,
-                note: `Unlabelled surplus found at arrival ${receipt.receiptNumber}`,
-              });
-              unitCount += registered.length;
-            }
-            variantIds.push(line.variantId);
-            totalReceived += line.receivedQty;
-            continue;
-          }
-
-          const batch = await tx.stockBatch.create({
-            data: {
-              sellerId: receipt.sellerId,
-              variantId: line.variantId,
-              warehouseId: receipt.warehouseId,
-              batchCode: `${receipt.receiptNumber}-L${i + 1}`,
-              manufacturedAt: line.manufacturedAt,
-              expiresAt: line.expiresAt,
-              unitCostInr: line.unitCostInr,
-              initialQty: line.receivedQty,
-              receivedAt: now,
-              receivedById: staffId,
-              receivingNoteId: receipt.id,
-            },
-            select: { id: true },
+      for (const [i, line] of receipt.lines.entries()) {
+        if (line.receivedQty <= 0) continue;
+        if (!line.putawayBinId) {
+          throw new BadRequestException({
+            code: 'PUTAWAY_BIN_REQUIRED',
+            message: `Line ${line.id} has ${line.receivedQty} units but no putaway bin`,
           });
-          await this.mutation.apply(tx, {
+        }
+        const strict = modeByVariantId.get(line.variantId) === InventoryMode.STRICT;
+
+        // An ARRIVAL of stock we dispatched to ourselves. The goods
+        // already exist, parked in this warehouse's TRANSIT bin since
+        // dispatch, against a batch that travelled with them. Posting
+        // RECEIVING here would double them — and the second copy would
+        // be the sellable one.
+        if (receipt.dispatchedAt !== null && line.batchId !== null) {
+          const transitBinId = await this.binPolicy.transitBinId(receipt.warehouseId, tx);
+          const arrival = await this.transitArrival.writeArrivalLine(tx, {
             sellerId: receipt.sellerId,
             variantId: line.variantId,
             warehouseId: receipt.warehouseId,
-            binId: line.putawayBinId,
-            batchId: batch.id,
-            qtyChange: line.receivedQty,
-            type: StockMovementType.RECEIVING,
-            actorType: ActorType.STAFF,
-            actorId: staffId,
-            reason: `Goods receipt ${receipt.receiptNumber}`,
+            goodsReceiptLineId: line.id,
+            batchId: line.batchId,
+            transitBinId,
+            putawayBinId: line.putawayBinId,
+            receivedQty: line.receivedQty,
+            staffId,
+            receiptNumber: receipt.receiptNumber,
+            strict,
           });
-          await tx.goodsReceiptLine.update({
-            where: { id: line.id },
-            data: { batchId: batch.id },
+          transitVariance.push({
+            lineId: line.id,
+            variantId: line.variantId,
+            ...arrival,
           });
-
-          // R4: a STRICT-mode SKU gets one stock_unit row per physical
-          // unit, registered in THIS tx alongside the aggregate RECEIVING
-          // movement — so units and qtyOnHand can never disagree because
-          // one of the two writes was lost.
-          if (strict) {
-            const supplied = serialsByLineId?.[line.id];
+          // A strict SURPLUS is the one case "nothing blocks" cannot
+          // hold on its own: units with no serial cannot be picked
+          // (UNIT-2 needs exactly `quantity` serials). So they get
+          // labelled where they surfaced — the one-station rule is
+          // about where the WORK happens, not a ban on ever printing
+          // elsewhere.
+          if (strict && arrival.surplus > 0) {
             const registered = await this.units.registerUnits(tx, {
               sellerId: receipt.sellerId,
               variantId: line.variantId,
               warehouseId: receipt.warehouseId,
               binId: line.putawayBinId,
-              batchId: batch.id,
+              batchId: line.batchId,
               goodsReceiptLineId: line.id,
-              quantity: line.receivedQty,
-              ...(supplied === undefined ? {} : { serials: supplied }),
+              quantity: arrival.surplus,
               serialPrefix,
               actorType: ActorType.STAFF,
               actorId: staffId,
-              note: `Goods receipt ${receipt.receiptNumber}`,
+              note: `Unlabelled surplus found at arrival ${receipt.receiptNumber}`,
             });
             unitCount += registered.length;
           }
-
           variantIds.push(line.variantId);
           totalReceived += line.receivedQty;
+          continue;
         }
 
-        // A variance is a RECORDED NUMBER, not a blocking state. Counts
-        // move in both directions — a line can arrive over as easily as
-        // under.
-        //
-        // The per-line variance is NOT written here any more. Every
-        // screen that shows this note also shows the lines, with names
-        // and both quantities, so the sentence only ever duplicated
-        // them — and being a STORED string it kept whatever wording it
-        // was written with, which is how raw variant uuids were still on
-        // screen hours after they stopped being generated. What stays is
-        // what the lines cannot say: a transit loss, an operator's note.
-        const varianceLine = variances.length > 0 ? this.emailVarianceSummary(variances) : '';
-        const notes = [
-          transitVariance.some((v) => v.lost > 0 || v.surplus > 0)
-            ? this.formatTransitNotes(transitVariance)
-            : null,
-          completionNote,
-          receipt.discrepancyNotes,
-        ]
-          .filter((n): n is string => n !== null && n.length > 0)
-          .join('\n');
-
-        const row = await tx.goodsReceipt.update({
-          where: { id },
+        const batch = await tx.stockBatch.create({
           data: {
-            status: GoodsReceiptStatus.COMPLETED,
-            hasDiscrepancies:
-              variances.length > 0 || transitVariance.some((v) => v.lost > 0 || v.surplus > 0),
+            sellerId: receipt.sellerId,
+            variantId: line.variantId,
+            warehouseId: receipt.warehouseId,
+            batchCode: `${receipt.receiptNumber}-L${i + 1}`,
+            manufacturedAt: line.manufacturedAt,
+            expiresAt: line.expiresAt,
+            unitCostInr: line.unitCostInr,
+            initialQty: line.receivedQty,
             receivedAt: now,
             receivedById: staffId,
-            ...(notes.length > 0 ? { discrepancyNotes: notes } : {}),
+            receivingNoteId: receipt.id,
           },
-          include: RECEIPT_VIEW_INCLUDE,
+          select: { id: true },
+        });
+        await this.mutation.apply(tx, {
+          sellerId: receipt.sellerId,
+          variantId: line.variantId,
+          warehouseId: receipt.warehouseId,
+          binId: line.putawayBinId,
+          batchId: batch.id,
+          qtyChange: line.receivedQty,
+          type: StockMovementType.RECEIVING,
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+          reason: `Goods receipt ${receipt.receiptNumber}`,
+        });
+        await tx.goodsReceiptLine.update({
+          where: { id: line.id },
+          data: { batchId: batch.id },
         });
 
-        // The consignment's timeline and its derived status, written in
-        // the SAME tx as the count. Reached through the R3 primitive
-        // (consignment-core) because the consignment module imports this
-        // one and the reverse call would close a cycle.
-        if (typeof receipt.consignmentId === 'string') {
-          await this.consignmentEvents.append(
-            {
-              consignmentId: receipt.consignmentId,
-              type:
-                receipt.leg === ConsignmentLeg.BD_INTAKE
-                  ? ConsignmentEventType.BD_RECEIVED
-                  : ConsignmentEventType.IN_RECEIVED,
-              description: `Counted ${totalReceived} units across ${receipt.lines.length} products`,
-              data: {
-                receiptId: receipt.id,
-                receiptNumber: receipt.receiptNumber,
-                totalReceived,
-                declaredVariance: variances,
-                transitVariance: transitVariance.map((v) => ({
-                  variantId: v.variantId,
-                  lost: v.lost,
-                  surplus: v.surplus,
-                  lostSerials: v.lostSerials,
-                })),
-              },
-              actorType: ActorType.STAFF,
-              actorId: staffId,
-            },
-            tx,
-          );
-        }
-        await this.audit.log(
-          {
+        // R4: a STRICT-mode SKU gets one stock_unit row per physical
+        // unit, registered in THIS tx alongside the aggregate RECEIVING
+        // movement — so units and qtyOnHand can never disagree because
+        // one of the two writes was lost.
+        if (strict) {
+          const supplied = serialsByLineId?.[line.id];
+          const registered = await this.units.registerUnits(tx, {
+            sellerId: receipt.sellerId,
+            variantId: line.variantId,
+            warehouseId: receipt.warehouseId,
+            binId: line.putawayBinId,
+            batchId: batch.id,
+            goodsReceiptLineId: line.id,
+            quantity: line.receivedQty,
+            ...(supplied === undefined ? {} : { serials: supplied }),
+            serialPrefix,
             actorType: ActorType.STAFF,
-            staffUserId: staffId,
-            action: 'inventory.goods_receipt.completed',
-            entityType: 'goods_receipt',
-            entityId: id,
-            metadata: {
+            actorId: staffId,
+            note: `Goods receipt ${receipt.receiptNumber}`,
+          });
+          unitCount += registered.length;
+        }
+
+        variantIds.push(line.variantId);
+        totalReceived += line.receivedQty;
+      }
+
+      // A variance is a RECORDED NUMBER, not a blocking state. Counts
+      // move in both directions — a line can arrive over as easily as
+      // under.
+      //
+      // The per-line variance is NOT written here any more. Every
+      // screen that shows this note also shows the lines, with names
+      // and both quantities, so the sentence only ever duplicated
+      // them — and being a STORED string it kept whatever wording it
+      // was written with, which is how raw variant uuids were still on
+      // screen hours after they stopped being generated. What stays is
+      // what the lines cannot say: a transit loss, an operator's note.
+      const varianceLine = variances.length > 0 ? this.emailVarianceSummary(variances) : '';
+      const notes = [
+        transitVariance.some((v) => v.lost > 0 || v.surplus > 0)
+          ? this.formatTransitNotes(transitVariance)
+          : null,
+        completionNote,
+        receipt.discrepancyNotes,
+      ]
+        .filter((n): n is string => n !== null && n.length > 0)
+        .join('\n');
+
+      const row = await tx.goodsReceipt.update({
+        where: { id },
+        data: {
+          status: GoodsReceiptStatus.COMPLETED,
+          hasDiscrepancies:
+            variances.length > 0 || transitVariance.some((v) => v.lost > 0 || v.surplus > 0),
+          receivedAt: now,
+          receivedById: staffId,
+          ...(notes.length > 0 ? { discrepancyNotes: notes } : {}),
+        },
+        include: RECEIPT_VIEW_INCLUDE,
+      });
+
+      // The consignment's timeline and its derived status, written in
+      // the SAME tx as the count. Reached through the R3 primitive
+      // (consignment-core) because the consignment module imports this
+      // one and the reverse call would close a cycle.
+      if (typeof receipt.consignmentId === 'string') {
+        await this.consignmentEvents.append(
+          {
+            consignmentId: receipt.consignmentId,
+            type:
+              receipt.leg === ConsignmentLeg.BD_INTAKE
+                ? ConsignmentEventType.BD_RECEIVED
+                : ConsignmentEventType.IN_RECEIVED,
+            description: `Counted ${totalReceived} units across ${receipt.lines.length} products`,
+            data: {
+              receiptId: receipt.id,
+              receiptNumber: receipt.receiptNumber,
               totalReceived,
-              lineCount: receipt.lines.length,
-              serializedUnits: unitCount,
-              note: completionNote,
-              ...this.ctxMeta(ctx),
+              declaredVariance: variances,
+              transitVariance: transitVariance.map((v) => ({
+                variantId: v.variantId,
+                lost: v.lost,
+                surplus: v.surplus,
+                lostSerials: v.lostSerials,
+              })),
             },
+            actorType: ActorType.STAFF,
+            actorId: staffId,
           },
           tx,
         );
-        const warehouseName = await this.warehouseName(tx, receipt.warehouseId);
-        if (typeof receipt.consignmentId === 'string') {
-          // A consignment leg gets the milestone mail for the stop it
-          // actually is. "Your goods reached Dhaka but cannot be sold
-          // yet" and "your goods landed and are now sellable" are
-          // different facts, and the generic receipt mail said neither.
-          const consignment = await tx.consignment.findUnique({
-            where: { id: receipt.consignmentId },
-            select: { consignmentNumber: true },
-          });
-          await this.enqueueReceiptEmail(
-            tx,
-            receipt.leg === ConsignmentLeg.BD_INTAKE
-              ? EMAIL_CONSIGNMENT_BD_RECEIVED
-              : EMAIL_CONSIGNMENT_ARRIVED,
-            receipt.sellerId,
-            {
-              consignment_number: consignment?.consignmentNumber ?? receipt.receiptNumber,
-              warehouse_name: warehouseName,
-              total_received: totalReceived,
-              line_count: receipt.lines.length,
-              // Told, not asked — the variance needs no decision from the
-              // seller and nothing waits on their reply. Empty when the
-              // count matched, so the sentence simply is not there.
-              variance_note: varianceLine === '' ? '' : `Note: ${varianceLine}`,
-              app_url: this.env.sellerAppUrl,
-            },
-          );
-        } else {
-          await this.enqueueReceiptEmail(tx, EMAIL_COMPLETED, receipt.sellerId, {
-            receipt_number: receipt.receiptNumber,
+      }
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          action: 'inventory.goods_receipt.completed',
+          entityType: 'goods_receipt',
+          entityId: id,
+          metadata: {
+            totalReceived,
+            lineCount: receipt.lines.length,
+            serializedUnits: unitCount,
+            note: completionNote,
+            ...this.ctxMeta(ctx),
+          },
+        },
+        tx,
+      );
+      const warehouseName = await this.warehouseName(tx, receipt.warehouseId);
+      if (typeof receipt.consignmentId === 'string') {
+        // A consignment leg gets the milestone mail for the stop it
+        // actually is. "Your goods reached Dhaka but cannot be sold
+        // yet" and "your goods landed and are now sellable" are
+        // different facts, and the generic receipt mail said neither.
+        const consignment = await tx.consignment.findUnique({
+          where: { id: receipt.consignmentId },
+          select: { consignmentNumber: true },
+        });
+        await this.enqueueReceiptEmail(
+          tx,
+          receipt.leg === ConsignmentLeg.BD_INTAKE
+            ? EMAIL_CONSIGNMENT_BD_RECEIVED
+            : EMAIL_CONSIGNMENT_ARRIVED,
+          receipt.sellerId,
+          {
+            consignment_number: consignment?.consignmentNumber ?? receipt.receiptNumber,
             warehouse_name: warehouseName,
             total_received: totalReceived,
             line_count: receipt.lines.length,
+            // Told, not asked — the variance needs no decision from the
+            // seller and nothing waits on their reply. Empty when the
+            // count matched, so the sentence simply is not there.
+            variance_note: varianceLine === '' ? '' : `Note: ${varianceLine}`,
             app_url: this.env.sellerAppUrl,
+          },
+        );
+      } else {
+        await this.enqueueReceiptEmail(tx, EMAIL_COMPLETED, receipt.sellerId, {
+          receipt_number: receipt.receiptNumber,
+          warehouse_name: warehouseName,
+          total_received: totalReceived,
+          line_count: receipt.lines.length,
+          app_url: this.env.sellerAppUrl,
+        });
+        // Gated on the VARIANCE, not on whether a note happened to be
+        // written. The per-line detail no longer goes into the note, so
+        // gating on the note would have silently stopped telling
+        // sellers about a short count at all.
+        if (varianceLine !== '' || notes.length > 0) {
+          discrepancy = {
+            receiptNumber: receipt.receiptNumber,
+            warehouseName,
+            notes: [varianceLine, notes].filter((x) => x !== '').join(' '),
+          };
+          await this.enqueueReceiptEmail(tx, EMAIL_DISCREPANCY, receipt.sellerId, {
+            receipt_number: receipt.receiptNumber,
+            warehouse_name: warehouseName,
+            discrepancy_notes: discrepancy.notes,
+            support_email: this.env.supportEmail,
           });
-          // Gated on the VARIANCE, not on whether a note happened to be
-          // written. The per-line detail no longer goes into the note, so
-          // gating on the note would have silently stopped telling
-          // sellers about a short count at all.
-          if (varianceLine !== '' || notes.length > 0) {
-            await this.enqueueReceiptEmail(tx, EMAIL_DISCREPANCY, receipt.sellerId, {
-              receipt_number: receipt.receiptNumber,
-              warehouse_name: warehouseName,
-              discrepancy_notes: [varianceLine, notes].filter((x) => x !== '').join(' '),
-              support_email: this.env.supportEmail,
-            });
-          }
         }
-        return {
-          view: row,
-          affectedVariantIds: [...new Set(variantIds)],
-          sellerId: receipt.sellerId,
-          warehouseId: receipt.warehouseId,
-          unitsRegistered: unitCount,
-          consignmentId: receipt.consignmentId,
-        };
-      });
+      }
+      return {
+        view: row,
+        affectedVariantIds: [...new Set(variantIds)],
+        sellerId: receipt.sellerId,
+        warehouseId: receipt.warehouseId,
+        unitsRegistered: unitCount,
+        consignmentId: receipt.consignmentId,
+        discrepancy,
+      };
+    });
 
     // The consignment's status is DERIVED from its legs and from where
     // its stock physically sits, so it must be recomputed AFTER the
@@ -975,6 +1018,30 @@ export class GoodsReceiptService {
     // never throws: a completion must not fail over a ticket. A short
     // receipt left without one is what the backfill's dry run lists.
     await this.shortfall.afterCompletion(id);
+
+    // The discrepancy notice's inbox leg (NOTIF-14), post-commit for the
+    // same reason everything else here is. A separate message from the
+    // TKT-3 ticket above: that one is a conversation we are opening,
+    // this one is the count itself.
+    if (discrepancy !== null) {
+      try {
+        await this.dispatch.dispatch({
+          topic: GOODS_RECEIPT_DISCREPANCY_TOPIC,
+          category: NotificationCategory.OPERATIONAL,
+          title: `Count difference on ${discrepancy.receiptNumber}`,
+          body: `At ${discrepancy.warehouseName}: ${discrepancy.notes}`,
+          channels: [NotificationChannel.IN_APP],
+          audience: [{ kind: 'SELLER_PERMISSION', sellerId, permission: 'inbound.view' }],
+          triggerEvent: 'inventory.goods_receipt.discrepancy',
+          eventId: `goods_receipt_discrepancy:${id}`,
+        });
+      } catch (err) {
+        this.logger.warn(
+          { receiptId: id, err: err instanceof Error ? err.message : err },
+          'Could not put the receipt discrepancy in anybody’s inbox',
+        );
+      }
+    }
     if (unitsRegistered > 0) {
       this.logger.log(
         { receiptId: id, unitsRegistered },

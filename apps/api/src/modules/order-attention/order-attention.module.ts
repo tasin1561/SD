@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
+import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { CourierAwbModule } from '../courier-awb/courier-awb.module';
 import { TrackingEventsModule } from '../tracking-events/tracking-events.module';
 import { OrderModule } from '../order/order.module';
@@ -32,6 +33,9 @@ import { OrderAttentionService } from './services/order-attention.service';
   imports: [
     AuthCommonModule,
     NotificationLedgerModule,
+    // The alert's inbox leg (NOTIF-14). Another leaf-safe import: the
+    // audience module reaches only auth-common, email and the ledger.
+    NotificationAudienceModule,
     CourierAwbModule,
     TrackingEventsModule,
     // The stranded-tracking watchdog asks the order facade whether a

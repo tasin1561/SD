@@ -178,6 +178,43 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
     description: 'A returned parcel came back and was checked in.',
     group: 'Returns',
   },
+  // Not NOTIF-4 legs: standalone senders whose EMAIL leg was retired on
+  // 2026-09-20, so the inbox is now the only channel they arrive on
+  // (`RETIRED_EMAIL_TEMPLATES`). The spec pins each key to the constant
+  // its sender exports.
+  {
+    topic: 'seller.order_needs_attention',
+    label: 'An order needs attention',
+    description:
+      'An order has stopped moving and somebody should look at it — raised by the nightly sweep, and again if it is still stuck.',
+    group: 'Orders',
+  },
+  {
+    topic: 'seller.stock_low_alert',
+    label: 'Stock running low',
+    description: 'A SKU fell to or below its low-stock threshold at one of the warehouses.',
+    group: 'Inventory',
+  },
+  {
+    topic: 'seller.goods_receipt_discrepancy',
+    label: 'A count did not match',
+    description:
+      'What we counted at the warehouse differs from what the receipt expected, or something arrived damaged.',
+    group: 'Inventory',
+  },
+  {
+    topic: 'seller.invoice.delivered',
+    label: 'An invoice was issued',
+    description: 'An order was delivered and its tax invoice is ready on the order’s page.',
+    group: 'Wallet',
+  },
+  {
+    topic: 'seller.topup_submitted',
+    label: 'Top-up submitted',
+    description:
+      'Somebody at your company declared a bank transfer. It is credited once we have seen it in the bank.',
+    group: 'Wallet',
+  },
   {
     // Not a NOTIF-4 leg: sent by UnpayableWithdrawalService. The spec
     // pins this key to that service's exported constant.
@@ -445,6 +482,15 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     description: 'A seller answered on one of their tickets, and may be waiting on us.',
     group: 'Tickets',
   },
+  // Not a system issue: a stranger asked to be let into the beta. Its
+  // email leg was retired on 2026-09-20, so for anybody with an account
+  // this is the only channel it arrives on.
+  {
+    topic: 'staff.invite_lead',
+    label: 'A new invite request',
+    description: 'Somebody asked to be let into the beta from the marketing site.',
+    group: 'Sellers',
+  },
   // Not a system issue: somebody asked for a serial label to be reprinted
   // (LBL-5b), sent by LabelReprintRequestService to everyone who can
   // approve it.
@@ -546,6 +592,14 @@ export const STORE_TOPICS: readonly StoreTopicDef[] = [
     label: 'The seller changed one of your orders',
     description:
       'What is in the parcel, what the customer pays, or who it goes to — with the old value beside the new one, and the money’s before and after when it moved.',
+    group: 'Your orders',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
+  {
+    topic: 'store.order_changed_by_admin',
+    label: 'Skydrop changed one of your orders',
+    description:
+      'Skydrop changed an order directly — what the customer pays, or how they pay — with the money\u2019s before and after. Neither you nor the seller made this change.',
     group: 'Your orders',
     category: StoreNotificationCategory.ORDER_UPDATES,
   },
