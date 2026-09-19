@@ -194,7 +194,7 @@ export class OrderChargesService {
         code: 'PRICING_UNRESOLVED',
         message:
           `Cannot price order ${orderId}: the flat delivery fee resolved to ₹0.00. ` +
-          `Set pricing.flat_delivery_fee_inr (or this seller's override of it) and compute ` +
+          `Set pricing.flat_delivery_fee (or this seller's override of it) and compute ` +
           `again — recording ₹0 would bill the seller nothing for this parcel.`,
       });
     }

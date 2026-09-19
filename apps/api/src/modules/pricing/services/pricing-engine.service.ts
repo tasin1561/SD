@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { type ChargeType, type PaymentMode, Prisma, type ServiceArea } from '@skydrop/db';
+import { type ChargeType, Currency, type PaymentMode, Prisma, type ServiceArea } from '@skydrop/db';
+import { type InrRateAt, inrRateAt, toInr } from '../../../common/fx/inr-rate-at';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
 import { MarginCalculationService, type MarginResult } from './margin-calculation.service';
@@ -9,12 +10,12 @@ import { MarginCalculationService, type MarginResult } from './margin-calculatio
  *
  * One price to deliver a parcel anywhere in India. No zones, no weight
  * slabs, no surcharges, no rate-card lookup. The number comes from
- * `pricing.flat_delivery_fee_inr`, and a per-seller override of that key
+ * `pricing.flat_delivery_fee`, and a per-seller override of that key
  * beats the global default — the override is the one that counts, since
  * the rate is what was agreed with that particular seller.
  *
  * A returned parcel costs the delivery fee PLUS
- * `pricing.flat_rto_fee_inr` (default 200 + 30 = 230). The RTO half is
+ * `pricing.flat_rto_fee` (default 200 + 30 = 230). The RTO half is
  * deliberately NOT computed here: it is charged when the return is
  * physically received, which is a warehouse event rather than an
  * order-create one. See `RtoFeeService`.
@@ -58,7 +59,16 @@ export interface PricingComputeInput {
  * to decide whether a price is safe to persist, and a one-member union
  * invites that check quietly being dropped.
  */
-export type UnresolvedReason = 'NO_FLAT_DELIVERY_FEE';
+export type UnresolvedReason =
+  | 'NO_FLAT_DELIVERY_FEE'
+  /** The fee is held in a currency we have no rate for, so it cannot be
+   *  priced in rupees. Deliberately NOT a silent zero: charging nothing
+   *  for a parcel that cost money is the failure this whole flag exists
+   *  to prevent. */
+  | 'NO_FX_RATE_FOR_FEE'
+  /** The currency setting holds something that is not a currency. Fails
+   *  closed for the same reason. */
+  | 'BAD_FEE_CURRENCY';
 
 export interface UnresolvedFallback {
   readonly reason: UnresolvedReason;
@@ -114,17 +124,77 @@ export interface PricingComputationContext {
     readonly deliveryFeeInr: string;
     readonly source: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
     readonly gstPercent: string;
+    /** The fee as AGREED, before conversion. */
+    readonly agreedAmount: string;
+    readonly agreedCurrency: Currency | null;
+    readonly currencySource: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
+    /** Null when the fee was already in rupees. */
+    readonly fxRate: string | null;
+    readonly fxRatePair: string | null;
+    readonly fxRateSource: 'HISTORY' | 'CURRENT' | 'IDENTITY' | null;
+    readonly fxRateRecordedAt: string | null;
   };
 }
 
-export const FLAT_DELIVERY_FEE_KEY = 'pricing.flat_delivery_fee_inr';
-export const CUSTOMER_RETURN_FEE_KEY = 'pricing.customer_return_fee_inr';
-const FLAT_RTO_FEE_KEY = 'pricing.flat_rto_fee_inr';
+export const FLAT_DELIVERY_FEE_KEY = 'pricing.flat_delivery_fee';
+export const CUSTOMER_RETURN_FEE_KEY = 'pricing.customer_return_fee';
+export const FLAT_RTO_FEE_KEY = 'pricing.flat_rto_fee';
 export const FLAT_FEE_GST_KEY = 'pricing.flat_fee_gst_percent';
 
+/**
+ * Every fee's currency lives in its own key beside the amount, and both
+ * are seller-overridable — so a negotiated fee is "৳250" or "₹180" as
+ * ONE decision. Kept as a map rather than a `${key}_currency` rule so
+ * that a fee without a currency key is a compile-time absence rather
+ * than a silent runtime miss.
+ */
+export const FEE_CURRENCY_KEY: Readonly<Record<string, string>> = {
+  [FLAT_DELIVERY_FEE_KEY]: 'pricing.flat_delivery_fee_currency',
+  [FLAT_RTO_FEE_KEY]: 'pricing.flat_rto_fee_currency',
+  [CUSTOMER_RETURN_FEE_KEY]: 'pricing.customer_return_fee_currency',
+};
+
+/** The currencies a fee may be agreed in. */
+export const FEE_CURRENCIES: readonly Currency[] = [Currency.INR, Currency.BDT];
+
 export interface ResolvedFee {
-  readonly amount: Prisma.Decimal;
+  /**
+   * The amount AS AGREED, in `currency` — NOT necessarily rupees.
+   *
+   * Deliberately not called `amount`: it was rupees for the whole life
+   * of this engine, and a caller that kept treating it as rupees after
+   * the currency arrived would bill ৳200 as ₹200 and typecheck clean.
+   * The rename makes every such call site fail to compile until it has
+   * been looked at. Use `priceDeliveryFee`/`priceRtoFee` to get rupees.
+   */
+  readonly agreedAmount: Prisma.Decimal;
+  readonly currency: Currency | null;
   readonly source: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
+  /** Where the CURRENCY came from; it is overridable independently. */
+  readonly currencySource: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
+}
+
+/**
+ * A fee resolved AND priced in rupees at a given instant.
+ *
+ * `priced` is the load-bearing field. False means we could not turn the
+ * agreed amount into rupees — no FX rate, or a currency setting holding
+ * something that is not a currency — and the caller must refuse rather
+ * than bill the zero. `amountInr` is 0 in that case only so arithmetic
+ * downstream does not need null-handling; nothing should reach that
+ * arithmetic with `priced` false.
+ */
+export interface PricedFee {
+  readonly amountInr: Prisma.Decimal;
+  readonly priced: boolean;
+  /** What was agreed, kept so the charge can be explained later. */
+  readonly sourceAmount: Prisma.Decimal;
+  readonly sourceCurrency: Currency | null;
+  /** The rate used; null when the fee was already in rupees or unpriceable. */
+  readonly rate: InrRateAt | null;
+  readonly source: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
+  readonly currencySource: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
+  readonly unresolved: readonly UnresolvedFallback[];
 }
 
 const DEFAULT_SERVICE_TYPE = 'standard';
@@ -145,6 +215,28 @@ export class PricingEngineService {
    */
   async resolveDeliveryFee(sellerId: string): Promise<ResolvedFee> {
     return this.resolveMoneySetting(sellerId, FLAT_DELIVERY_FEE_KEY);
+  }
+
+  /**
+   * The delivery fee IN RUPEES at `at`.
+   *
+   * `at` is the moment the charge is taken, not the moment the order was
+   * placed — for delivery those coincide, but for the RTO fee they are
+   * weeks apart and a different rate, which is correct: the fee is
+   * charged then, so it is priced then.
+   */
+  async priceDeliveryFee(sellerId: string, at: Date): Promise<PricedFee> {
+    return this.priceFee(sellerId, FLAT_DELIVERY_FEE_KEY, at);
+  }
+
+  /** The return fee in rupees at the moment the return is received. */
+  async priceRtoFee(sellerId: string, at: Date): Promise<PricedFee> {
+    return this.priceFee(sellerId, FLAT_RTO_FEE_KEY, at);
+  }
+
+  /** The customer-return fee in rupees at the moment it is charged. */
+  async priceCustomerReturnFee(sellerId: string, at: Date): Promise<PricedFee> {
+    return this.priceFee(sellerId, CUSTOMER_RETURN_FEE_KEY, at);
   }
 
   /** The return fee, same resolution. Charged only when a parcel comes back. */
@@ -191,20 +283,26 @@ export class PricingEngineService {
     const asOf = input.asOf ?? new Date();
     const unresolved: UnresolvedFallback[] = [];
 
-    const fee = await this.resolveDeliveryFee(input.sellerId);
-    if (fee.amount.lessThanOrEqualTo(0)) {
+    const fee = await this.priceDeliveryFee(input.sellerId, asOf);
+    // A fee we could not price in rupees is flagged FIRST and on its own
+    // terms: "no BDT rate" is a different problem from "the fee is zero",
+    // and reporting the second when the first is true sends whoever
+    // reads it to the wrong setting.
+    unresolved.push(...fee.unresolved);
+    if (fee.amountInr.lessThanOrEqualTo(0) && fee.priced) {
       // Zero is almost always a missing setting rather than a decision to
       // ship for free. Flagging it lets OrderChargesService refuse to
       // record ₹0 as a real price — the exact failure the old engine had.
       unresolved.push({
         reason: 'NO_FLAT_DELIVERY_FEE',
-        detail: `${FLAT_DELIVERY_FEE_KEY} resolved to ${fee.amount.toFixed(2)}`,
+        detail:
+          `${FLAT_DELIVERY_FEE_KEY} resolved to ${fee.sourceAmount.toFixed(2)} ${fee.sourceCurrency ?? ''}`.trim(),
       });
     }
 
     const gstPercent = await this.resolveFeeGstPercent();
-    const gstAmount = fee.amount.times(gstPercent).dividedBy(100);
-    const totalInr = fee.amount.plus(gstAmount);
+    const gstAmount = fee.amountInr.times(gstPercent).dividedBy(100);
+    const totalInr = fee.amountInr.plus(gstAmount);
 
     // Weight is recorded, not charged on. It still matters elsewhere —
     // inbound freight is split by it — so the snapshot keeps it.
@@ -213,7 +311,7 @@ export class PricingEngineService {
     // Margin against a courier cost no longer read from a rate card. The
     // honest figure comes from the courier's own invoice (the courier-ops
     // margin report), so this stays null rather than pretending.
-    const margin = this.marginCalc.compute(fee.amount, null);
+    const margin = this.marginCalc.compute(fee.amountInr, null);
 
     const computationContext: PricingComputationContext = {
       engineVersion: 'flat-v1',
@@ -230,9 +328,19 @@ export class PricingEngineService {
       unresolved,
       margin,
       flatFee: {
-        deliveryFeeInr: fee.amount.toFixed(2),
+        deliveryFeeInr: fee.amountInr.toFixed(2),
         source: fee.source,
         gstPercent: gstPercent.toFixed(2),
+        // What was AGREED, and how it became rupees. Without these three
+        // "why was I charged ₹162.60?" has no answer a month later, when
+        // the rate has moved and the setting may have changed too.
+        agreedAmount: fee.sourceAmount.toFixed(2),
+        agreedCurrency: fee.sourceCurrency,
+        currencySource: fee.currencySource,
+        fxRate: fee.rate === null ? null : fee.rate.storedRate,
+        fxRatePair: fee.rate === null ? null : fee.rate.storedPair,
+        fxRateSource: fee.rate === null ? null : fee.rate.source,
+        fxRateRecordedAt: fee.rate?.recordedAt?.toISOString() ?? null,
       },
     };
 
@@ -245,7 +353,7 @@ export class PricingEngineService {
       zone: FLAT_ZONE,
       serviceArea: null,
       chargeableWeightGrams,
-      baseShippingInr: fee.amount.toFixed(2),
+      baseShippingInr: fee.amountInr.toFixed(2),
       sellerDiscountPercent: null,
       // Flat means flat. A returned parcel's extra fee is charged at RTO
       // receive, not predicted here.
@@ -263,11 +371,84 @@ export class PricingEngineService {
 
   private async resolveMoneySetting(sellerId: string, key: string): Promise<ResolvedFee> {
     const resolved = await this.settings.resolve(sellerId, key);
+    const currencyKey = FEE_CURRENCY_KEY[key];
+    // A fee with no currency key is an INR fee by construction — the
+    // shape every money setting had before currencies existed. Reading
+    // an absent key as INR keeps those working untouched.
+    const currencyResolved = currencyKey
+      ? await this.settings.resolve(sellerId, currencyKey)
+      : null;
+    const rawCurrency =
+      currencyResolved?.value === null || currencyResolved?.value === undefined
+        ? Currency.INR
+        : String(currencyResolved.value).toUpperCase();
+    const currency = (FEE_CURRENCIES as readonly string[]).includes(rawCurrency)
+      ? (rawCurrency as Currency)
+      : null;
+    const currencySource = currencyResolved?.source ?? 'SYSTEM_DEFAULT';
+
     const raw = resolved.value;
-    if (raw === null || raw === undefined) {
-      return { amount: new Prisma.Decimal(0), source: resolved.source };
+    const amount =
+      raw === null || raw === undefined ? new Prisma.Decimal(0) : new Prisma.Decimal(String(raw));
+    return { agreedAmount: amount, currency, source: resolved.source, currencySource };
+  }
+
+  /**
+   * Turn an agreed fee into rupees at `at`.
+   *
+   * Conversion goes through the SAME helper the P&L and inbound freight
+   * use (`inrRateAt`), so the rupees a seller is charged and the figure
+   * the report derives cannot disagree. It returns null when there is no
+   * rate at all, and that is passed through as `priced: false` rather
+   * than smoothed into a zero.
+   */
+  private async priceFee(sellerId: string, key: string, at: Date): Promise<PricedFee> {
+    const fee = await this.resolveMoneySetting(sellerId, key);
+    const base = {
+      sourceAmount: fee.agreedAmount,
+      sourceCurrency: fee.currency,
+      source: fee.source,
+      currencySource: fee.currencySource,
+    };
+    if (fee.currency === null) {
+      return {
+        ...base,
+        amountInr: new Prisma.Decimal(0),
+        priced: false,
+        rate: null,
+        unresolved: [
+          {
+            reason: 'BAD_FEE_CURRENCY',
+            detail: `${FEE_CURRENCY_KEY[key]} is not one of ${FEE_CURRENCIES.join(', ')}`,
+          },
+        ],
+      };
     }
-    return { amount: new Prisma.Decimal(String(raw)), source: resolved.source };
+    if (fee.currency === Currency.INR) {
+      return { ...base, amountInr: fee.agreedAmount, priced: true, rate: null, unresolved: [] };
+    }
+    const rate = await inrRateAt(this.prisma.client, fee.currency, at);
+    if (rate === null) {
+      return {
+        ...base,
+        amountInr: new Prisma.Decimal(0),
+        priced: false,
+        rate: null,
+        unresolved: [
+          {
+            reason: 'NO_FX_RATE_FOR_FEE',
+            detail: `no ${fee.currency} → INR rate at ${at.toISOString()}, so ${key} cannot be priced`,
+          },
+        ],
+      };
+    }
+    return {
+      ...base,
+      amountInr: toInr(fee.agreedAmount, rate),
+      priced: true,
+      rate,
+      unresolved: [],
+    };
   }
 }
 

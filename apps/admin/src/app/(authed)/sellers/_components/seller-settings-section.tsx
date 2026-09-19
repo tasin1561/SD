@@ -30,6 +30,7 @@ import {
   Textarea,
   Tr,
 } from '@skydrop/ui/components';
+import { FEE_CURRENCY_OPTIONS, isFeeCurrencyKey } from '@/lib/fee-currency';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -265,6 +266,25 @@ function OverrideDialog({
                 value={raw}
                 onChange={(e) => setRaw(e.target.value)}
               />
+            </FormField>
+          ) : isFeeCurrencyKey(setting.key) ? (
+            <FormField
+              label="Currency"
+              htmlFor="ov-value"
+              hint="What this seller's fee is AGREED in. A BDT fee is converted to rupees at the rate in force when the charge is taken, so the seller owes what was agreed rather than a rupee figure that drifts."
+            >
+              <select
+                id="ov-value"
+                className="sd-field font-mono"
+                value={raw}
+                onChange={(e) => setRaw(e.target.value)}
+              >
+                {FEE_CURRENCY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </FormField>
           ) : (
             <FormField

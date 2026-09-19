@@ -27,11 +27,19 @@ function makeSut(opts: {
   rtoFee?: string | null;
   source?: 'SELLER_OVERRIDE' | 'SYSTEM_DEFAULT';
   gstPercent?: string;
+  /** What currency the fees are AGREED in. Absent ⇒ INR, as before. */
+  currency?: string | null;
+  /** The stored BDT→INR rate, or null for "no rate configured at all". */
+  fxRate?: string | null;
 }): { svc: PricingEngineService } {
   const resolve = jest.fn(async (_sellerId: string, key: string) => ({
     key,
-    valueType: 'DECIMAL',
-    value: key.includes('rto') ? (opts.rtoFee ?? null) : (opts.deliveryFee ?? null),
+    valueType: key.endsWith('_currency') ? 'STRING' : 'DECIMAL',
+    value: key.endsWith('_currency')
+      ? (opts.currency ?? 'INR')
+      : key.includes('rto')
+        ? (opts.rtoFee ?? null)
+        : (opts.deliveryFee ?? null),
     source: opts.source ?? 'SYSTEM_DEFAULT',
   }));
   const settings = { resolve } as unknown as SettingsResolverService;
@@ -39,8 +47,18 @@ function makeSut(opts: {
   const findUnique = jest.fn(async () => ({
     valueDecimal: new Prisma.Decimal(opts.gstPercent ?? '0'),
   }));
+  // `inrRateAt` reads history first, then today's rate. Modelling both
+  // so the BDT path exercises the real helper rather than a stub of it.
+  const rateRow =
+    opts.fxRate === null || opts.fxRate === undefined
+      ? null
+      : { fromCurrency: 'BDT', toCurrency: 'INR', rate: new Prisma.Decimal(opts.fxRate) };
   const prisma = {
-    client: { systemSetting: { findUnique } },
+    client: {
+      systemSetting: { findUnique },
+      fxRateHistory: { findFirst: jest.fn(async () => null) },
+      fxRate: { findFirst: jest.fn(async () => rateRow) },
+    },
   } as unknown as PrismaService;
 
   return {
@@ -132,7 +150,7 @@ describe('PricingEngineService — flat fee', () => {
     expect(r.totalInr).toBe('200.00');
 
     const rto = await svc.resolveRtoFee(SELLER);
-    expect(rto.amount.toFixed(2)).toBe('30.00');
+    expect(rto.agreedAmount.toFixed(2)).toBe('30.00');
   });
 
   it('rejects a negative weight rather than pricing it', async () => {
@@ -140,5 +158,77 @@ describe('PricingEngineService — flat fee', () => {
     await expect(svc.compute({ ...INPUT, totalWeightGrams: -1 })).rejects.toMatchObject({
       response: { code: 'INVALID_WEIGHT' },
     });
+  });
+});
+
+describe('PricingEngineService — a fee agreed in taka', () => {
+  const BDT_TO_INR = '0.813008';
+
+  it('charges the rupee value at the rate in force, not the taka figure', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00', currency: 'BDT', fxRate: BDT_TO_INR });
+    const r = await svc.compute(INPUT);
+
+    // ৳200 at 0.813008 is ₹162.60 — NOT ₹200. Reading a taka amount as
+    // rupees is the exact bug the `agreedAmount` rename exists to stop.
+    expect(r.baseShippingInr).toBe('162.60');
+    expect(r.totalInr).toBe('162.60');
+    expect(r.unresolved).toEqual([]);
+  });
+
+  it('records what was agreed and how it became rupees', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00', currency: 'BDT', fxRate: BDT_TO_INR });
+    const r = await svc.compute(INPUT);
+
+    // Without these, "why was I charged ₹162.60?" has no answer once the
+    // rate has moved and the setting may have changed too.
+    expect(r.computationContext.flatFee).toMatchObject({
+      deliveryFeeInr: '162.60',
+      agreedAmount: '200.00',
+      agreedCurrency: 'BDT',
+      fxRate: BDT_TO_INR,
+      fxRatePair: 'BDT→INR',
+    });
+  });
+
+  it('an INR fee is unchanged, and carries no rate', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00', currency: 'INR', fxRate: BDT_TO_INR });
+    const r = await svc.compute(INPUT);
+
+    expect(r.baseShippingInr).toBe('200.00');
+    expect(r.computationContext.flatFee.fxRate).toBeNull();
+    expect(r.computationContext.flatFee.agreedCurrency).toBe('INR');
+  });
+
+  it('REFUSES to price a taka fee when there is no rate — it never falls back to zero', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00', currency: 'BDT', fxRate: null });
+    const r = await svc.compute(INPUT);
+
+    // Flagged on its own terms. "No BDT rate" sends somebody to the FX
+    // screen; the zero-fee flag would send them to the pricing screen,
+    // where they would find nothing wrong.
+    expect(r.unresolved.map((u) => u.reason)).toContain('NO_FX_RATE_FOR_FEE');
+    expect(r.baseShippingInr).toBe('0.00');
+  });
+
+  it('REFUSES a currency setting that is not a currency', async () => {
+    const { svc } = makeSut({ deliveryFee: '200.00', currency: 'TAKA', fxRate: BDT_TO_INR });
+    const r = await svc.compute(INPUT);
+
+    expect(r.unresolved.map((u) => u.reason)).toContain('BAD_FEE_CURRENCY');
+    expect(r.baseShippingInr).toBe('0.00');
+  });
+
+  it('GST is taken on the CONVERTED figure, not the taka one', async () => {
+    const { svc } = makeSut({
+      deliveryFee: '200.00',
+      currency: 'BDT',
+      fxRate: BDT_TO_INR,
+      gstPercent: '18',
+    });
+    const r = await svc.compute(INPUT);
+
+    // 18% of ₹162.60, not of 200.
+    expect(r.gstAmountInr).toBe('29.27');
+    expect(r.totalInr).toBe('191.87');
   });
 });

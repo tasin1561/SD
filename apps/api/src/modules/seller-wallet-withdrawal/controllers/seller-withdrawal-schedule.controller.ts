@@ -24,7 +24,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
  *
  * `sellerOverridable` means a key SUPPORTS a per-seller value — usually
  * one an admin negotiates. It does NOT mean the seller may set it: the
- * same flag is on `pricing.flat_delivery_fee_inr` and
+ * same flag is on `pricing.flat_delivery_fee` and
  * `wallet.minimum_balance_inr`. An endpoint that took a key NAME would
  * let a seller set their own delivery fee to zero.
  *

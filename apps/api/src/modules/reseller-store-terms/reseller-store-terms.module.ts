@@ -5,6 +5,7 @@ import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
 import { NotificationLedgerModule } from '../notification-ledger/notification-ledger.module';
+import { PricingModule } from '../pricing/pricing.module';
 import { SettingsModule } from '../settings/settings.module';
 import { AdminCreditAfterConfirmationController } from './controllers/admin-credit-after-confirmation.controller';
 import { AdminResellerStoreTermsController } from './controllers/admin-reseller-store-terms.controller';
@@ -30,7 +31,16 @@ import { ResellerTermsNotifier } from './services/reseller-terms-notifier.servic
  * without a cycle — the R3 rule applied up front rather than discovered.
  */
 @Module({
-  imports: [AuthCommonModule, SettingsModule, NotificationAudienceModule, NotificationLedgerModule],
+  imports: [
+    AuthCommonModule,
+    SettingsModule,
+    // A fee agreed in taka must be converted before it can be split:
+    // the store's share and the seller's remainder are rupee figures.
+    // PricingModule imports only SettingsModule, so this closes no cycle.
+    PricingModule,
+    NotificationAudienceModule,
+    NotificationLedgerModule,
+  ],
   controllers: [
     SellerResellerStoreTermsController,
     StoreTermsController,

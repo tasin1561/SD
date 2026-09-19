@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ResellerCreditTrigger, ResellerStoreStatus } from '@skydrop/db';
+import { Prisma as P } from '@skydrop/db';
 import type { ActorType, Prisma } from '@skydrop/db';
 import { AdvisoryLock, advisoryKey } from '../../src/common/db/advisory-lock';
 import type { AuthenticatedStoreUser } from '../../src/common/types/request';
@@ -146,27 +147,29 @@ function harness(opts: { storeStatus?: ResellerStoreStatus; afterConfirmation?: 
     $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)),
   };
   const audit = { log: jest.fn(async () => undefined) };
-  const settings = {
-    resolve: jest.fn(async (_s: string, key: string) => ({
-      key,
-      valueType: 'DECIMAL',
-      value: key === 'pricing.flat_delivery_fee_inr' ? '200.00' : '30.00',
-      source: 'SYSTEM_DEFAULT',
-    })),
-  };
   const credit = { isEnabled: jest.fn(async () => opts.afterConfirmation === true) };
   const notifier = {
     published: jest.fn(async () => undefined),
     accepted: jest.fn(async () => undefined),
   };
+  // The worked example is priced through the engine now, so a fee
+  // agreed in taka is a rupee figure by the time it is split.
+  const pricing = {
+    priceDeliveryFee: jest.fn(async () => ({ priced: true, amountInr: new P.Decimal('200.00') })),
+    priceRtoFee: jest.fn(async () => ({ priced: true, amountInr: new P.Decimal('30.00') })),
+    priceCustomerReturnFee: jest.fn(async () => ({
+      priced: true,
+      amountInr: new P.Decimal('200.00'),
+    })),
+  };
   const svc = new ResellerStoreTermsService(
     { client } as never,
     audit as never,
-    settings as never,
     credit as never,
     notifier as never,
+    pricing as never,
   );
-  return { svc, versions, log, audit, notifier, credit, tx };
+  return { svc, versions, log, audit, notifier, credit, pricing, tx };
 }
 
 const actor = { sellerUserId: '0190eeee-0000-7000-8000-000000000001', name: 'Seller Person' };

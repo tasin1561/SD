@@ -13,6 +13,14 @@ import { ResellerOrderMoneyService } from '../../reseller-order-money/services/r
 import { PricingEngineService } from '../../pricing/services/pricing-engine.service';
 import { OrderChargesAccrualService } from './order-charges-accrual.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import { SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
+import type { PricedFee } from '../../pricing/services/pricing-engine.service';
+
+/** One open issue per order whose return fee could not be priced. */
+export function returnFeeUnpricedKey(orderId: string): string {
+  return `return-fee-unpriced:${orderId}`;
+}
 
 /**
  * What a returned parcel costs.
@@ -50,6 +58,7 @@ export class RtoFeeAccrualService {
     private readonly pricing: PricingEngineService,
     private readonly chargesAccrual: OrderChargesAccrualService,
     private readonly resellerMoney: ResellerOrderMoneyService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   /**
@@ -100,7 +109,36 @@ export class RtoFeeAccrualService {
         });
     if (already) return { deliveryFeeSwept, rtoFeeInr: null };
 
-    const fee = { amount: await this.returnFeeFor(sellerId, isCustomerReturn) };
+    const priced = await this.returnFeeFor(sellerId, isCustomerReturn, new Date());
+    if (!priced.priced) {
+      // The fee is agreed in a currency we cannot convert right now. We
+      // do NOT charge a guess and we do NOT block the receive — the
+      // parcel is physically on the bench and refusing it over an FX
+      // rate would be the worse failure. The debt stays uncharged and
+      // LOUD; re-running the receive charge once a rate exists takes it.
+      await this.issues.raise({
+        kind: SystemIssueKind.MONEY,
+        severity: SystemIssueSeverity.HIGH,
+        title: 'A return fee could not be priced',
+        detail:
+          `This return's fee is agreed as ${priced.sourceAmount.toFixed(2)} ` +
+          `${priced.sourceCurrency ?? '(unreadable currency)'} and could not be converted to ` +
+          `rupees: ${priced.unresolved.map((u) => u.detail ?? u.reason).join('; ')}\n\n` +
+          'The parcel was received normally — only the fee is outstanding. Set the FX rate (or ' +
+          'the fee currency) and the charge can be taken; nothing else about the return is stuck.',
+        source: 'RtoFeeAccrualService',
+        dedupeKey: returnFeeUnpricedKey(orderId),
+        metadata: {
+          orderId,
+          sellerId,
+          agreedAmount: priced.sourceAmount.toFixed(2),
+          agreedCurrency: priced.sourceCurrency,
+          isCustomerReturn,
+        },
+      });
+      return { deliveryFeeSwept, rtoFeeInr: null };
+    }
+    const fee = { amount: priced.amountInr };
     if (fee.amount.lessThanOrEqualTo(0)) {
       // A zero fee is a legitimate configuration — a seller may have
       // been given free returns — so this is a quiet no-op, not an error.
@@ -150,10 +188,18 @@ export class RtoFeeAccrualService {
    * choice is made, so the backfill sweep asks the same question the
    * receive step does.
    */
-  async returnFeeFor(sellerId: string, isCustomerReturn: boolean): Promise<Prisma.Decimal> {
-    const fee = isCustomerReturn
-      ? await this.pricing.resolveCustomerReturnFee(sellerId)
-      : await this.pricing.resolveRtoFee(sellerId);
-    return fee.amount;
+  async returnFeeFor(
+    sellerId: string,
+    isCustomerReturn: boolean,
+    at: Date = new Date(),
+  ): Promise<PricedFee> {
+    // Priced at `at`, which is when the RETURN WAS RECEIVED — not when
+    // the order was placed, which may be weeks earlier at a different
+    // rate. The fee is charged now, so it is priced now; the two legs of
+    // one returned order can legitimately carry two different rates, and
+    // each charge records its own.
+    return isCustomerReturn
+      ? this.pricing.priceCustomerReturnFee(sellerId, at)
+      : this.pricing.priceRtoFee(sellerId, at);
   }
 }

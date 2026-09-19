@@ -341,12 +341,12 @@ describe('Warehouse RTO flow (e2e)', () => {
     // per-seller override exists because the rate is what was agreed
     // with that seller, and that is the one that counts.
     await request(h.baseUrl)
-      .patch(`/admin/sellers/${sellerId}/settings/pricing.flat_delivery_fee_inr`)
+      .patch(`/admin/sellers/${sellerId}/settings/pricing.flat_delivery_fee`)
       .set(staffAuth)
       .send({ valueType: 'DECIMAL', value: '149.50', note: 'Negotiated launch rate' })
       .expect(200);
     await request(h.baseUrl)
-      .patch(`/admin/sellers/${sellerId}/settings/pricing.flat_rto_fee_inr`)
+      .patch(`/admin/sellers/${sellerId}/settings/pricing.flat_rto_fee`)
       .set(staffAuth)
       .send({ valueType: 'DECIMAL', value: '25.00', note: 'Negotiated launch rate' })
       .expect(200);

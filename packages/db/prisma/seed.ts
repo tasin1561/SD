@@ -136,19 +136,36 @@ const systemSettings: SystemSettingSeed[] = [
     description: 'State of supply for IGST/CGST/SGST determination',
   },
   {
-    key: 'pricing.flat_delivery_fee_inr',
+    key: 'pricing.flat_delivery_fee',
     category: 'pricing',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '200.00',
-    displayName: 'Delivery Fee (INR, flat)',
+    displayName: 'Delivery Fee (flat)',
     description:
-      'What a seller is charged to deliver one parcel, anywhere in India. Flat — no zone, no weight slab, no surcharges. Per-seller override via seller_setting_overrides, and the override is the one that counts.',
+      'What a seller is charged to deliver one parcel, anywhere in India. Flat — no zone, no weight slab, no surcharges. The AMOUNT only; the currency it is held in is pricing.flat_delivery_fee_currency, and the two are set together. Per-seller override via seller_setting_overrides, and the override is the one that counts.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100000',
   },
   {
-    // DELIBERATELY NOT `pricing.flat_delivery_fee_inr`. That one is what
+    // The fee is AGREED in one currency and CHARGED in rupees. Holding
+    // the currency beside the amount is what lets a taka fee stay a taka
+    // fee: 200 BDT is converted at the rate in force when the charge is
+    // taken, so the seller owes what was agreed rather than a rupee
+    // figure that silently drifts as the rate moves. The key deliberately
+    // does NOT end in `_inr` any more — a name saying INR over a taka
+    // amount is the kind of lie that survives for months.
+    key: 'pricing.flat_delivery_fee_currency',
+    category: 'pricing',
+    valueType: SettingValueType.STRING,
+    valueString: 'BDT',
+    displayName: 'Delivery Fee — currency',
+    description:
+      'INR or BDT. Decides how pricing.flat_delivery_fee is read. A BDT fee is converted to rupees at the rate in force AT THE MOMENT THE CHARGE IS TAKEN, and the source amount, currency and rate are all recorded on the charge so the figure can be explained later. Seller-overridable alongside the amount.',
+    sellerOverridable: true,
+  },
+  {
+    // DELIBERATELY NOT `pricing.flat_delivery_fee`. That one is what
     // WE charge the seller to move a parcel, and it feeds the pricing
     // engine. This is what the SELLER charges their customer, and it
     // feeds nothing at all — it is a default for one field on the order
@@ -169,26 +186,55 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMaxDecimal: '100000',
   },
   {
-    key: 'pricing.customer_return_fee_inr',
+    key: 'pricing.customer_return_fee',
     category: 'pricing',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '200',
-    displayName: 'Customer Return Fee (INR)',
+    displayName: 'Customer Return Fee',
     description:
-      'What a seller pays when the CUSTOMER asks to send a delivered parcel back. It is a second delivery — the parcel travels the same distance again — so it costs the same as one, and the seller pays the outbound ₹200 plus this. Deliberately NOT pricing.flat_rto_fee_inr, which is the smaller fee for a parcel the courier never managed to deliver in the first place.',
+      'What a seller pays when the CUSTOMER asks to send a delivered parcel back. It is a second delivery — the parcel travels the same distance again — so it costs the same as one, and the seller pays the outbound ₹200 plus this. Deliberately NOT pricing.flat_rto_fee, which is the smaller fee for a parcel the courier never managed to deliver in the first place.',
     sellerOverridable: true,
   },
   {
-    key: 'pricing.flat_rto_fee_inr',
+    key: 'pricing.flat_rto_fee',
     category: 'pricing',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '30.00',
-    displayName: 'RTO Return Fee (INR, flat)',
+    displayName: 'RTO Return Fee (flat)',
     description:
-      'Charged ON TOP of the delivery fee when a parcel comes back, and only then — debited from the wallet at the moment the return is physically RECEIVED, not when the courier says it is coming. A returned parcel therefore costs delivery + RTO (default 200 + 30 = 230). Per-seller override via seller_setting_overrides.',
+      'Charged ON TOP of the delivery fee when a parcel comes back, and only then — debited from the wallet at the moment the return is physically RECEIVED, not when the courier says it is coming. A returned parcel therefore costs delivery + RTO (default ৳200 + ৳30). The AMOUNT only; its currency is pricing.flat_rto_fee_currency. Per-seller override via seller_setting_overrides.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100000',
+  },
+  {
+    // Converted at RECEIVE time, not at order create — which is weeks
+    // later and quite possibly a different rate. That is correct: the
+    // charge is taken then, so it is priced then, and the two legs of one
+    // returned order can legitimately carry two different rates. Each
+    // charge records its own, so neither is a mystery afterwards.
+    key: 'pricing.flat_rto_fee_currency',
+    category: 'pricing',
+    valueType: SettingValueType.STRING,
+    valueString: 'BDT',
+    displayName: 'RTO Return Fee — currency',
+    description:
+      'INR or BDT. Decides how pricing.flat_rto_fee is read. Converted at the rate in force when the return is physically received, which is when the fee is charged. Seller-overridable alongside the amount.',
+    sellerOverridable: true,
+  },
+  {
+    // Seeded INR, unlike its two siblings: nobody asked for this one to
+    // move, and changing the currency changes the price. It carries a
+    // currency key only so that every fee resolves through one mechanism
+    // rather than this one needing a special case.
+    key: 'pricing.customer_return_fee_currency',
+    category: 'pricing',
+    valueType: SettingValueType.STRING,
+    valueString: 'INR',
+    displayName: 'Customer Return Fee — currency',
+    description:
+      'INR or BDT. Decides how pricing.customer_return_fee is read. Converted at the rate in force when the customer return is charged. Seller-overridable alongside the amount.',
+    sellerOverridable: true,
   },
   {
     key: 'pricing.flat_fee_gst_percent',

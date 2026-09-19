@@ -50,7 +50,7 @@ describe('SellerWithdrawalScheduleController', () => {
 
     const keys = (setOverride.mock.calls as unknown as Array<[string, string]>).map((k) => k[1]);
     // `sellerOverridable` marks keys an ADMIN may set per seller — the
-    // same flag is on pricing.flat_delivery_fee_inr. An endpoint taking
+    // same flag is on pricing.flat_delivery_fee. An endpoint taking
     // a key NAME would let a seller zero their own delivery fee.
     expect(keys).toEqual([
       'wallet.auto_withdraw_enabled',

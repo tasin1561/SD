@@ -188,7 +188,7 @@ export class ChargesBillingBackfillService {
       const key = `${o.sellerId}|${customer ? 'customer' : 'rto'}`;
       let owes = feeCache.get(key);
       if (owes === undefined) {
-        owes = (await this.rtoFees.returnFeeFor(o.sellerId, customer)).greaterThan(0);
+        owes = (await this.rtoFees.returnFeeFor(o.sellerId, customer)).amountInr.greaterThan(0);
         feeCache.set(key, owes);
       }
       return owes;

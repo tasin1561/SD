@@ -11,11 +11,19 @@ function makeService(
   /** Sellers whose return fee resolves to 0 — given free returns. */
   freeReturns: string[] = [],
 ) {
-  // The fee the receive step would charge, resolved from settings.
-  const returnFeeFor = jest.fn(
-    async (sellerId: string, _customer: boolean) =>
-      new Prisma.Decimal(freeReturns.includes(sellerId) ? '0' : '30'),
-  );
+  // The fee the receive step would charge — PRICED in rupees, because
+  // since 2026-09-20 it may be agreed in taka and converted at the rate
+  // in force when the return was received.
+  const returnFeeFor = jest.fn(async (sellerId: string, _customer: boolean) => ({
+    amountInr: new Prisma.Decimal(freeReturns.includes(sellerId) ? '0' : '30'),
+    priced: true,
+    sourceAmount: new Prisma.Decimal(freeReturns.includes(sellerId) ? '0' : '30'),
+    sourceCurrency: 'INR',
+    rate: null,
+    source: 'SYSTEM_DEFAULT',
+    currencySource: 'SYSTEM_DEFAULT',
+    unresolved: [],
+  }));
   // Two queries: the unbilled orders, and received returns with no return
   // fee (told apart by the fee directions in their filter).
   const findMany = jest.fn<Promise<Candidate[]>, [AnyArgs]>(async (args) =>

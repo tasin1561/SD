@@ -207,7 +207,12 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
         findUnique: jest.fn(async ({ where }: { where: { key: string } }) =>
           where.key === 'ops.nsa_enabled' ? { valueBoolean: false } : null,
         ),
+        // The fee-currency sweep reads these. Every fee in INR means no
+        // exchange rate prices anything, so that check does nothing here
+        // — which keeps these cases about the thing they are named for.
+        findMany: jest.fn(async () => []),
       },
+      fxRate: { findFirst: jest.fn(async () => null) },
       orderShipment: {
         // Two checks share this. Only the stranded-tracking one filters
         // on the shipment's own updatedAt, so that is what tells them
@@ -441,7 +446,14 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     const summary = await svc.sweep(new Date('2026-09-02T12:00:00Z'));
 
     expect(summary.awbless).toBe(1);
-    expect(resolveByKey).not.toHaveBeenCalled();
+    // Scoped to THIS check's own key rather than the spy as a whole: the
+    // sweep runs other unconditional checks that legitimately resolve
+    // their own issues, and a blanket assertion here would fail the day
+    // one of them does — which is a fact about a different check.
+    expect(resolveByKey).not.toHaveBeenCalledWith(
+      expect.stringContaining('awb'),
+      expect.anything(),
+    );
     expect(raise).toHaveBeenCalledWith(
       expect.objectContaining({
         severity: 'HIGH',

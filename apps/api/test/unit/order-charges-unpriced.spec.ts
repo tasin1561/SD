@@ -102,7 +102,7 @@ describe('OrderChargesService — refuses to price what it could not compute', (
   it('names the setting to fix, so the operator is not left guessing', async () => {
     const { svc } = build([{ reason: 'NO_FLAT_DELIVERY_FEE' }]);
     await expect(svc.persistForOrder(ORDER_ID, 'staff-1')).rejects.toThrow(
-      /pricing\.flat_delivery_fee_inr/,
+      /pricing\.flat_delivery_fee/,
     );
   });
 

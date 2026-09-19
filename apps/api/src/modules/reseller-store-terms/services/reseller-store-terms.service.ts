@@ -16,7 +16,10 @@ import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock
 import type { AuthenticatedStoreUser } from '../../../common/types/request';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
-import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
+import {
+  type PricedFee,
+  PricingEngineService,
+} from '../../pricing/services/pricing-engine.service';
 import {
   FEE_SPLIT_ROUNDING,
   FeeSplitError,
@@ -257,9 +260,12 @@ export class ResellerStoreTermsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
-    private readonly settings: SettingsResolverService,
     private readonly credit: CreditAfterConfirmationService,
     private readonly notifier: ResellerTermsNotifier,
+    // LAST on purpose. A dependency inserted mid-list shifts every one
+    // after it, and the failure surfaces as a method missing on the
+    // wrong object, nowhere near the change that caused it.
+    private readonly pricing: PricingEngineService,
   ) {}
 
   // ════════════════════════════════════════════════════════════════════
@@ -738,10 +744,15 @@ export class ResellerStoreTermsService {
     sellerId: string,
     percents: StorePercents<Prisma.Decimal>,
   ): Promise<FeeExampleView[]> {
+    // Priced in RUPEES, because a store's wallet is in rupees and the
+    // split is taken from the figure actually charged. A fee agreed in
+    // taka must therefore be converted BEFORE `splitFee` runs, or the
+    // store's share and the seller's remainder would not sum to the fee.
+    const at = new Date();
     const [delivery, ret, customerReturn] = await Promise.all([
-      this.flatFee(sellerId, 'pricing.flat_delivery_fee_inr', '200.00'),
-      this.flatFee(sellerId, 'pricing.flat_rto_fee_inr', '30.00'),
-      this.flatFee(sellerId, 'pricing.customer_return_fee_inr', '200.00'),
+      this.flatFeeInr(() => this.pricing.priceDeliveryFee(sellerId, at), '200.00'),
+      this.flatFeeInr(() => this.pricing.priceRtoFee(sellerId, at), '30.00'),
+      this.flatFeeInr(() => this.pricing.priceCustomerReturnFee(sellerId, at), '200.00'),
     ]);
     const basisFor = (feeType: ResellerFeeType): { basis: string; amount: DecimalInput } => {
       switch (feeType) {
@@ -777,17 +788,20 @@ export class ResellerStoreTermsService {
     });
   }
 
-  private async flatFee(sellerId: string, key: string, fallback: string): Promise<string> {
+  /**
+   * A fee in rupees for the worked example, or the seeded default.
+   *
+   * Fails OPEN on purpose: this is the illustration a store reads while
+   * deciding whether to accept terms, not a charge. An unpriceable fee
+   * (no FX rate) shows the default rather than blanking the screen —
+   * and the real charge refuses separately and loudly, so nothing is
+   * billed off this number.
+   */
+  private async flatFeeInr(price: () => Promise<PricedFee>, fallback: string): Promise<string> {
     try {
-      const r = await this.settings.resolve(sellerId, key);
-      const v =
-        typeof r.value === 'string'
-          ? r.value
-          : typeof r.value === 'number'
-            ? String(r.value)
-            : null;
-      if (v !== null && /^\d+(\.\d+)?$/.test(v)) {
-        return new D(v).toDecimalPlaces(2, D.ROUND_HALF_UP).toFixed(2);
+      const fee = await price();
+      if (fee.priced && fee.amountInr.greaterThan(0)) {
+        return fee.amountInr.toDecimalPlaces(2, D.ROUND_HALF_UP).toFixed(2);
       }
     } catch {
       // fall through to the seeded default

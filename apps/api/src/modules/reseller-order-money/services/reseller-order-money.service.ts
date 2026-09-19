@@ -1,4 +1,10 @@
-import { ConflictException, HttpException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import {
   ActorType,
   ChargeType,
@@ -690,9 +696,19 @@ export class ResellerOrderMoneyService {
 
   /** The delivery fee a new order will be charged: the flat fee and its GST (the pricing engine's lines). */
   private async estimatedDeliveryFee(sellerId: string): Promise<Prisma.Decimal> {
-    const fee = await this.pricing.resolveDeliveryFee(sellerId);
+    // Priced NOW, because this estimates what an order placed now will
+    // be charged. An unpriceable fee is deliberately NOT treated as zero:
+    // this figure guards a prepaid store's balance, and understating it
+    // would let a store commit to an order it cannot pay for.
+    const fee = await this.pricing.priceDeliveryFee(sellerId, new Date());
     const gst = await this.pricing.resolveFeeGstPercent();
-    return fee.amount.add(fee.amount.times(gst).dividedBy(100).toDecimalPlaces(2));
+    if (!fee.priced) {
+      throw new BadRequestException({
+        code: 'DELIVERY_FEE_NOT_PRICEABLE',
+        message: fee.unresolved.map((u) => u.detail ?? u.reason).join('; '),
+      });
+    }
+    return fee.amountInr.add(fee.amountInr.times(gst).dividedBy(100).toDecimalPlaces(2));
   }
 
   /** What the store's accepted-but-unconfirmed prepaid orders will take. */

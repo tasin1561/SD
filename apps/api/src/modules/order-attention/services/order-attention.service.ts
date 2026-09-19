@@ -11,7 +11,12 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
 import { EnvService } from '../../../config/env.service';
-import { NotificationCategory, NotificationChannel, NotificationRecipientType } from '@skydrop/db';
+import {
+  Currency,
+  NotificationCategory,
+  NotificationChannel,
+  NotificationRecipientType,
+} from '@skydrop/db';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
 
 /**
@@ -24,6 +29,7 @@ export const ORDER_NEEDS_ATTENTION_TOPIC = 'seller.order_needs_attention';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { TrackingStatusMappingService } from '../../tracking-events/services/tracking-status-mapping.service';
 import { OrderReadService } from '../../order/services/order-read.service';
+import { FEE_CURRENCY_KEY } from '../../pricing/services/pricing-engine.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 import {
   RESELLER_MONEY_STALE_KEY_PREFIX,
@@ -146,6 +152,8 @@ export interface NsaSweepSummary {
   /** Reseller orders whose money is still not re-worked-out after this
    *  run asked again — the ones a person will have to look at. */
   readonly staleResellerMoney: number;
+  /** 1 when a fee's FX rate is too old to price with confidence. */
+  readonly staleFeeFxRate: number;
 }
 
 /** One issue per voided shipment; the suffix is the shipment id. */
@@ -192,6 +200,11 @@ const LABEL_SWEEP_LIMIT = 50;
  * since — a stale alarm on a delivered parcel is how people learn to
  * ignore the list.
  */
+/** One open issue for "the fee rate is old", not one per currency. */
+export function staleFeeFxRateKey(): string {
+  return 'fee-fx-rate-stale';
+}
+
 @Injectable()
 export class OrderAttentionService {
   private readonly logger = new Logger(OrderAttentionService.name);
@@ -288,6 +301,7 @@ export class OrderAttentionService {
       liveWaybills: 0,
       labelless: 0,
       staleResellerMoney: 0,
+      staleFeeFxRate: 0,
     };
 
     // Runs even when the NSA half is switched off, and before the
@@ -327,6 +341,12 @@ export class OrderAttentionService {
     // the seller and the store split it between them. Nothing to do with
     // NSA, so nothing to do with its switch.
     summary.staleResellerMoney = await this.checkStaleResellerMoney();
+
+    // Also unconditional, and for the same reason: since 2026-09-20 the
+    // delivery and RTO fees are AGREED IN TAKA and converted at charge
+    // time, so a stale rate is no longer a display problem — it silently
+    // decides what every seller is billed.
+    summary.staleFeeFxRate = await this.checkStaleFeeFxRate(now);
 
     if (!enabled) return summary;
 
@@ -714,6 +734,100 @@ export class OrderAttentionService {
    * Bounded per run, and every order isolated: one order that cannot be
    * priced must not stop the next from being.
    */
+  /**
+   * A fee agreed in a foreign currency is only as right as the rate.
+   *
+   * Nothing fetches rates automatically (M16 deferred that to Phase 1B),
+   * so `fx_rates` moves only when somebody sets it by hand — and on the
+   * day the fees became taka-denominated the stored BDT→INR rate was 27
+   * days old. Before that this was cosmetic: a stale rate made a display
+   * figure slightly wrong. Now it decides what every seller is charged
+   * on every parcel, and a rate nobody has touched in a month is a
+   * systematic mis-pricing that no other check would ever mention.
+   *
+   * MEDIUM, not HIGH: the charge is not wrong in a way that needs
+   * somebody at 3am, and raising louder for something that will be true
+   * every day until a human updates a number is how an alert gets
+   * ignored. It clears itself the moment the rate is set.
+   */
+  private async checkStaleFeeFxRate(now: Date): Promise<number> {
+    // A code constant rather than a setting: widening it only delays an
+    // alarm, and one more tunable earns less than it costs here.
+    const STALE_DAYS = 7;
+    // Read from the pricing engine's own map rather than restated here.
+    // A fourth fee then joins this sweep by existing, and there is no
+    // second list to drift — the CNS-2 / BIN-1 discipline.
+    const currencyKeys = Object.values(FEE_CURRENCY_KEY);
+    const rows = await this.prisma.client.systemSetting.findMany({
+      where: { key: { in: currencyKeys } },
+      select: { key: true, valueString: true },
+    });
+    // Only a NON-rupee fee depends on a rate at all.
+    const foreign = [
+      ...new Set(
+        rows
+          .map((r) => (r.valueString ?? 'INR').toUpperCase())
+          .filter((c) => c !== 'INR' && c !== ''),
+      ),
+    ];
+    if (foreign.length === 0) {
+      // Every fee is back in rupees, so the rate no longer prices
+      // anything — close the issue rather than leave it open forever.
+      await this.issues.resolveByKey(
+        staleFeeFxRateKey(),
+        'Every fee is agreed in INR again, so no exchange rate is used to price one.',
+      );
+      return 0;
+    }
+
+    const stale: string[] = [];
+    for (const currency of foreign) {
+      const pair = [
+        { fromCurrency: currency as Currency, toCurrency: Currency.INR },
+        { fromCurrency: Currency.INR, toCurrency: currency as Currency },
+      ];
+      const rate = await this.prisma.client.fxRate.findFirst({
+        where: { OR: pair },
+        select: { updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+      const ageDays =
+        rate === null
+          ? Number.POSITIVE_INFINITY
+          : (now.getTime() - rate.updatedAt.getTime()) / 86_400_000;
+      if (ageDays > STALE_DAYS) {
+        stale.push(
+          rate === null
+            ? `${currency}: no rate at all`
+            : `${currency}: last set ${Math.floor(ageDays)} days ago`,
+        );
+      }
+    }
+    if (stale.length === 0) {
+      await this.issues.resolveByKey(
+        staleFeeFxRateKey(),
+        'The exchange rate behind the fees has been updated.',
+      );
+      return 0;
+    }
+
+    await this.issues.raise({
+      kind: SystemIssueKind.MONEY,
+      severity: SystemIssueSeverity.MEDIUM,
+      title: 'A fee is priced from a stale exchange rate',
+      detail:
+        `The delivery and/or return fee is agreed in a currency whose rate has not been ` +
+        `updated recently, so every parcel is being charged from it: ${stale.join('; ')}.\n\n` +
+        'Nothing fetches rates automatically, so this only changes when somebody sets it on ' +
+        'the FX screen. Until then sellers are billed at the old rate — not wrong exactly, ' +
+        'but not current either. This clears itself once the rate is updated.',
+      source: 'OrderAttentionService',
+      dedupeKey: staleFeeFxRateKey(),
+      metadata: { stale, staleAfterDays: STALE_DAYS },
+    });
+    return 1;
+  }
+
   private async checkStaleResellerMoney(): Promise<number> {
     let keys: readonly string[];
     try {
