@@ -48,6 +48,7 @@ function makeSut(opts: { currency: Currency; amount: string; credited: string; r
     {} as never,
     bank as never,
     attribution as never,
+    { dispatch: async () => undefined } as never,
   );
   const existing = {
     id: 'topup-1',

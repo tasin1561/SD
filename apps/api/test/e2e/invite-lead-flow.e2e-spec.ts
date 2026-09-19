@@ -185,46 +185,66 @@ describe('Invite leads (e2e)', () => {
     expect(res.body.counts).toMatchObject({ NEW: 2, SPAM: 1 });
   });
 
-  it('emails every super-admin when a lead arrives', async () => {
-    // Default recipients are the SUPER_ADMINs rather than a hardcoded
-    // address: that stays correct as admins come and go, and cannot
-    // quietly point at a mailbox nobody opens.
+  it('puts a new lead in the inbox of whoever can work the queue — and mails nobody who has one', async () => {
+    // This asserted one EMAIL per SUPER_ADMIN until 2026-09-20, when
+    // that leg was retired in favour of the inbox
+    // (`RETIRED_EMAIL_TEMPLATES`). Staff have had both an inbox and a
+    // leads page for months, and this was the single biggest sender on
+    // the estate.
+    //
+    // The audience also changed shape, deliberately: `leads.view` — the
+    // permission that OPENS the page — rather than the SUPER_ADMIN role.
+    // A notification pointing at a page the reader cannot open is a dead
+    // end, and a role is a row an admin can rename.
     const before = await h.prisma.notificationLog.count({
-      where: { templateCode: 'staff.invite_lead.email' },
+      where: { templateCode: 'staff.invite_lead' },
     });
-    const admins = await h.prisma.staffUser.count({
-      where: { role: 'SUPER_ADMIN', deletedAt: null },
-    });
-    expect(admins).toBeGreaterThan(0);
 
     await request(h.baseUrl).post('/public/invite-leads').send(LEAD).expect(200);
     await new Promise((r) => setTimeout(r, 2500));
 
     const after = await h.prisma.notificationLog.count({
-      where: { templateCode: 'staff.invite_lead.email' },
+      where: { templateCode: 'staff.invite_lead' },
     });
-    expect(after - before).toBe(admins);
+    expect(after).toBeGreaterThan(before);
+
+    // And NOT also by email. Asserted rather than assumed: the gate is
+    // what stops the duplicate, and a regression there is silent —
+    // everybody simply starts being mailed again.
+    expect(
+      await h.prisma.notificationLog.count({
+        where: { templateCode: 'staff.invite_lead.email' },
+      }),
+    ).toBe(0);
   });
 
   it('stays quiet on a repeat — a double-click is not news', async () => {
     await request(h.baseUrl).post('/public/invite-leads').send(LEAD).expect(200);
     await new Promise((r) => setTimeout(r, 2500));
     const afterFirst = await h.prisma.notificationLog.count({
-      where: { templateCode: 'staff.invite_lead.email' },
+      where: { templateCode: 'staff.invite_lead' },
     });
+    expect(afterFirst).toBeGreaterThan(0);
 
     await request(h.baseUrl).post('/public/invite-leads').send(LEAD).expect(200);
     await new Promise((r) => setTimeout(r, 2500));
 
     expect(
       await h.prisma.notificationLog.count({
-        where: { templateCode: 'staff.invite_lead.email' },
+        where: { templateCode: 'staff.invite_lead' },
       }),
     ).toBe(afterFirst);
   });
 
   it('sends to the override address alone when one is configured', async () => {
     // A shared inbox, when one person should own the queue.
+    //
+    // THIS IS ALSO THE PROOF OF THE `hasInbox` RULE (2026-09-20): the
+    // template's email leg is retired, but an override address is a
+    // mailbox with no ACCOUNT behind it — `recipient.id` is null — so
+    // there is no inbox to move the message to and withholding the mail
+    // would delete it rather than reroute it. Exactly one email row,
+    // and it is this address: none of the staff accounts got one.
     await h.prisma.systemSetting.update({
       where: { key: 'marketing.lead_notification_email' },
       data: { valueString: 'leads@skydrop.test' },

@@ -294,6 +294,8 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       // Re-provisioning a confirmed order with no shipment goes through
       // the order write facade.
       { reprovisionShipment, retryResellerMoneyRecalculation } as never,
+      // The needs-attention alert's inbox leg (NOTIF-14).
+      { dispatch: async () => undefined } as never,
     );
     return {
       svc,

@@ -37,6 +37,7 @@ describe('InvoiceService.ensurePdfObject', () => {
       { render } as never,
       {} as never,
       {} as never,
+      { dispatch: async () => undefined } as never,
     );
     return { svc, render, putObject, update, spaces };
   }

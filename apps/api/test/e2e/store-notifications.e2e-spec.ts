@@ -466,9 +466,19 @@ describe('reseller store notifications (e2e)', () => {
       where: { toStoreId: store.storeId },
       select: { templateCode: true },
     });
-    expect(rows.map((r) => r.templateCode).sort()).toEqual([
-      'store.order_changed_by_seller',
-      'store.order_changed_by_seller.email',
-    ]);
+    // The INBOX ROW ONLY, against a real database (owner, 2026-09-20).
+    //
+    // This asserted both legs until the email was retired
+    // (`RETIRED_EMAIL_TEMPLATES`), and the change of expectation IS the
+    // point: the gate sits in `NotificationLedgerService` BEFORE the row
+    // is written, so a retired leg leaves no `notification_logs` row at
+    // all. A row would be worse than a stray email — it would sit QUEUED
+    // for ever and NOTIF-22's watchdog would re-queue it and then raise
+    // `email-undelivered` about a message nobody meant to send.
+    //
+    // The unit spec pins the MAP (every retired code names a topic the
+    // catalogue serves); this pins the BEHAVIOUR, which only a real
+    // database can show.
+    expect(rows.map((r) => r.templateCode).sort()).toEqual(['store.order_changed_by_seller']);
   });
 });

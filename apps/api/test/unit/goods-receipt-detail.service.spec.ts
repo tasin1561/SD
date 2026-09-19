@@ -61,6 +61,8 @@ function makeSut(opts: { modes?: Record<string, InventoryMode>; modeThrows?: boo
     // receiving tests about receiving.
     { presignGetUrl: async () => 'https://example.test/img' } as unknown as SpacesService,
     { afterCompletion: async () => undefined } as never,
+    // The inbox leg (NOTIF-14). Its own spec owns what it sends.
+    { dispatch: async () => undefined } as never,
   );
   return { svc, resolveForVariants, findFirst };
 }
