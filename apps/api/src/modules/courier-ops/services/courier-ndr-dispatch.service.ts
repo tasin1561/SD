@@ -68,6 +68,31 @@ export class CourierNdrDispatchService {
    * request, and a refusal an operator has to decode from a raw courier
    * message is worse than a button that explains why it is disabled.
    */
+  /**
+   * Does this courier decide ASYNCHRONOUSLY, handing back a handle to
+   * poll?
+   *
+   * Delhivery does (the UPL id). Shiprocket does NOT — their reply IS
+   * the outcome, which is why `takeAction` returns `uplId: null` there
+   * and the caller marks the request CONFIRMED at submit.
+   *
+   * Asked here because `courier-ops` is the ONE place that knows the
+   * difference (CUR-12), and because the UPL poller was querying EVERY
+   * SUBMITTED row and asking DELHIVERY about it. A Shiprocket row that
+   * reached SUBMITTED would have been read as "the submit produced no
+   * handle", marked FAILED and escalated — a re-attempt that had
+   * actually worked, reported to a human as a courier that ignored us.
+   */
+  pollsOutcome(courierCode: string): boolean {
+    return courierCode === 'delhivery';
+  }
+
+  /** Every courier an NDR action can be asked of at all — the `takeAction`
+   *  switch, as a list. A manual courier is a person and a phone call. */
+  adapterCourierCodes(): readonly string[] {
+    return ['delhivery', 'shiprocket'];
+  }
+
   checkEligibility(input: NdrDispatchInput): NdrDispatchEligibility {
     switch (input.courierCode) {
       case 'shiprocket':

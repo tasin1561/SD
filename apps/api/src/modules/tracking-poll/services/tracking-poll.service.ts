@@ -20,7 +20,23 @@ import { TrackingEventAppendService } from '../../tracking-events/services/track
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
 
-const COURIER_CODE = 'delhivery';
+/*
+  ── EVERY ROW THIS POLL WRITES NAMES THE COURIER THAT CARRIED IT ────
+
+  There used to be a `const COURIER_CODE = 'delhivery'` here, stamped on
+  every `tracking_events.courierCode` this service appended and quoted in
+  the transition reason — for EVERY courier it polled. The poll is a
+  fan-out over `COURIER_TRACKING_SOURCES` (CUR-12), so a Shiprocket
+  parcel's scans were stored saying Delhivery had scanned them, and the
+  order's timeline said "via delhivery". Nothing failed: the webhook
+  processor and manual tracking both stamped the real courier, so the two
+  halves of the same parcel's history disagreed, and the one that came
+  from the poll was simply wrong.
+
+  The courier is now taken from the SOURCE being polled — the only thing
+  that actually knows — and there is deliberately no module-level default
+  left to fall back to.
+*/
 
 /**
  * Order statuses for which polling is worthwhile — the shipment is
@@ -552,7 +568,7 @@ export class TrackingPollService {
         eventType: TrackingEventType.STATUS_SYNC,
         status: shipment.shipmentStatus,
         source: TrackingEventSource.COURIER_POLL,
-        courierCode: COURIER_CODE,
+        courierCode: source.courierCode,
         rawCourierStatus: scan.rawStatus,
         description: scan.description ?? null,
         locationName: scan.locationName ?? null,
@@ -578,7 +594,7 @@ export class TrackingPollService {
         eventType: TrackingEventType.STATUS_SYNC,
         status: normalized.shipmentStatus,
         source: TrackingEventSource.COURIER_POLL,
-        courierCode: COURIER_CODE,
+        courierCode: source.courierCode,
         rawCourierStatus: scan.rawStatus,
         metadata: { reject: true, reason: decision.reason },
         isVisibleToCustomer: false,
@@ -599,7 +615,7 @@ export class TrackingPollService {
       eventType: decision.trackingEventType,
       status: normalized.shipmentStatus,
       source: TrackingEventSource.COURIER_POLL,
-      courierCode: COURIER_CODE,
+      courierCode: source.courierCode,
       rawCourierStatus: scan.rawStatus,
       description: scan.description ?? null,
       locationName: scan.locationName ?? null,
@@ -642,7 +658,7 @@ export class TrackingPollService {
         to: decision.targetOrderStatus,
         expectedFrom: order.status,
         actor: { type: ActorType.SYSTEM },
-        reason: `Courier poll scan ${normalized.shipmentStatus} via ${COURIER_CODE}`,
+        reason: `Courier poll scan ${normalized.shipmentStatus} via ${source.courierCode}`,
       });
       await this.advanceShipmentStatus(shipment.id, normalized.shipmentStatus);
       return true;
@@ -810,10 +826,29 @@ export class TrackingPollService {
     const results: TrackingLookupResult[] = awbs.map((awb) => {
       const found = byAwb.get(awb);
       const scans = (found?.scans ?? []).map((raw) => {
-        const decision = (normalizerByAwb.get(awb) ?? this.sources[0])?.normalizeScan(raw) ?? {
-          kind: 'UNMAPPABLE' as const,
-          reason: 'NO_TRACKING_SOURCE_CONFIGURED',
-        };
+        // NORMALISED BY THE COURIER THAT ANSWERED, OR BY NOBODY.
+        //
+        // This fell back to `this.sources[0]` — Delhivery — so a scan
+        // that arrived with no source attributed to it was read against
+        // Delhivery's status table whatever courier it came from. That
+        // is the same mistake as the old module-level COURIER_CODE, and
+        // it is worse here because a wrong normalisation is a wrong
+        // STATUS rather than a wrong label: their vocabularies overlap
+        // enough to map to something plausible.
+        //
+        // `normalizerByAwb` is set for every AWB that produced scans, so
+        // this is unreachable in practice — but the fallback decided
+        // what would happen if it ever were, and "guess Delhivery" is
+        // not an answer. UNMAPPABLE stores the scan, fires no
+        // transition, and names the waybill.
+        const src = normalizerByAwb.get(awb);
+        const decision =
+          src === undefined
+            ? {
+                kind: 'UNMAPPABLE' as const,
+                reason: 'NO_TRACKING_SOURCE_FOR_AWB',
+              }
+            : src.normalizeScan(raw);
         return {
           rawStatus: raw.rawStatus,
           statusType: raw.statusType ?? null,

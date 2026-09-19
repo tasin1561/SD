@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DelhiveryShipmentEditService } from '../../courier-delhivery/services/delhivery-shipment-edit.service';
+import {
+  DelhiveryEwaybillService,
+  EWAYBILL_THRESHOLD_INR,
+} from '../../courier-delhivery/services/delhivery-ewaybill.service';
 import { DelhiveryPickupService } from '../../courier-delhivery/services/delhivery-pickup.service';
 import { DelhiveryWarehouseService } from '../../courier-delhivery/services/delhivery-warehouse.service';
 import { ShiprocketClientService } from '../../courier-shiprocket/services/shiprocket-client.service';
@@ -71,6 +75,7 @@ export class CourierOpsDispatchService {
 
   constructor(
     private readonly delhiveryEdit: DelhiveryShipmentEditService,
+    private readonly delhiveryEwaybill: DelhiveryEwaybillService,
     private readonly delhiveryPickup: DelhiveryPickupService,
     private readonly delhiveryWarehouse: DelhiveryWarehouseService,
     private readonly shiprocket: ShiprocketClientService,
@@ -253,6 +258,103 @@ export class CourierOpsDispatchService {
   }
 
   /**
+   * Attach an e-way bill number to a live consignment.
+   *
+   * ── WHY THIS IS HERE AND NOT A DIRECT ADAPTER CALL ───────────────
+   * It used to be one: `CourierShipmentActionService.attachEwaybill`
+   * called Delhivery's e-way bill endpoint with NO courier branch at
+   * all. So a Shiprocket (or manual) parcel's number was sent to
+   * DELHIVERY'S account, under a waybill Delhivery never issued — a
+   * live write against the wrong carrier, recorded in our audit as a
+   * success. CUR-12: the courier is reached through a dispatcher, and
+   * a courier with no support is refused BY NAME, never handed to
+   * somebody else's API.
+   *
+   * ── WHY SHIPROCKET IS REFUSED RATHER THAN BUILT ──────────────────
+   * An e-way bill is required above ₹50,000 (`EWAYBILL_THRESHOLD_INR`)
+   * and nothing Skydrop ships comes near that — the owner's own figure
+   * is that no parcel exceeds ₹10,000. Building a second courier's
+   * e-way bill integration would be building for a case that does not
+   * occur. The Delhivery leg stays because it already exists and is
+   * proven; the day a parcel crosses the threshold on Shiprocket, THIS
+   * is the one place that has to learn about it.
+   */
+  async attachEwaybill(
+    input: {
+      readonly courierCode: string;
+      readonly awbNumber: string;
+      readonly invoiceNumber: string;
+      readonly ewaybillNumber: string;
+    },
+    actor: CourierCredentialActor,
+  ): Promise<OpsActionResult> {
+    switch (input.courierCode) {
+      case 'delhivery': {
+        const r = await this.delhiveryEwaybill.update(
+          {
+            awbNumber: input.awbNumber,
+            invoiceNumber: input.invoiceNumber,
+            ewaybillNumber: input.ewaybillNumber,
+          },
+          actor,
+        );
+        return { success: r.success, message: r.message };
+      }
+      case 'shiprocket':
+        return {
+          success: false,
+          message:
+            'Shiprocket e-way bill attachment is not implemented. Nothing Skydrop ships reaches ' +
+            `the ₹${EWAYBILL_THRESHOLD_INR.toLocaleString('en-IN')} threshold, so this was never built — ` +
+            'add it on their panel, or tell us if parcels above the threshold are now normal.',
+        };
+      default:
+        return manualCourier(input.courierCode, 'attach the e-way bill');
+    }
+  }
+
+  /**
+   * Does this courier's pickup call need a registered LOCATION NAME?
+   *
+   * Delhivery schedules for a location and a day, and matches that name
+   * byte for byte — so booking without one is impossible. Shiprocket
+   * schedules per PARCEL: their `generate/pickup` call takes shipment
+   * ids and nothing else, so a location name is neither sent nor used.
+   *
+   * Asked here rather than tested at the call site because it is the
+   * same fact as `schedulesPerParcel` seen from the other side, and the
+   * pickup service used to demand a DELHIVERY-keyed location name from
+   * every courier — which refused a Shiprocket pickup that would have
+   * worked, quoting a setting that has nothing to do with it.
+   */
+  pickupNeedsLocationName(courierCode: string): boolean {
+    return courierCode === 'delhivery';
+  }
+
+  /**
+   * Every courier whose van can be asked for at all — the `requestPickup`
+   * switch, as a list.
+   *
+   * The pickup service tested `!== 'delhivery' && !== 'shiprocket'`
+   * itself, which is this switch restated at the call site and drifts
+   * the moment a third courier is added on one side and not the other.
+   */
+  pickupCourierCodes(): readonly string[] {
+    return ['delhivery', 'shiprocket'];
+  }
+
+  /**
+   * Does this courier want the day's PARCELS rather than a headcount?
+   *
+   * The other half of the asymmetry in the class doc. The caller
+   * resolves which parcels are waiting (our question, not the
+   * adapter's) but must know whether to bother asking.
+   */
+  pickupSchedulesPerParcel(courierCode: string): boolean {
+    return courierCode === 'shiprocket';
+  }
+
+  /**
    * Ask for a collection.
    *
    * Delhivery: one call for the location and day. Shiprocket: one call
@@ -342,9 +444,15 @@ export class CourierOpsDispatchService {
    * Register a pickup location on the courier's own account.
    *
    * Both couriers match the name EXACTLY on every shipment they create,
-   * and neither offers a "list my locations" endpoint to discover a
-   * typo from — so a wrong name here is found when parcels stop being
-   * accepted, not when it is entered.
+   * so a wrong name here is a rejected manifest rather than a warning.
+   *
+   * ── DISCOVERING A TYPO: ONE COURIER CAN, THE OTHER CANNOT ────────
+   * This used to say NEITHER offers a "list my locations" endpoint.
+   * That was true of Delhivery and got generalised. Measured against
+   * the live Shiprocket API on 2026-09-09:
+   * `GET /v1/external/settings/company/pickup` returns every registered
+   * pickup location. So on Shiprocket a name can be CHECKED; on
+   * Delhivery the only ways are their panel or a create attempt.
    */
   async registerWarehouse(
     input: WarehouseDispatchInput,

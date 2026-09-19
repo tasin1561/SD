@@ -92,6 +92,24 @@ describe('every integrated courier has its settings seeded', () => {
     });
   }
 
+  /**
+   * The registered pickup-location NAME, per courier.
+   *
+   * `courier.delhivery_pickup_location` was read for EVERY courier
+   * until 2026-09-19 — so a Shiprocket pickup either carried
+   * Delhivery's warehouse name or was refused quoting a Delhivery
+   * setting. A courier that reaches the wire needs its own row, seeded
+   * EMPTY: the name is matched byte for byte on their side, and a
+   * guessed one is a rejected manifest rather than a warning.
+   */
+  for (const code of INTEGRATED) {
+    it(`${code} has its own pickup-location key, seeded empty`, () => {
+      const at = SEED.indexOf(`key: 'courier.${code}_pickup_location'`);
+      expect(at).toBeGreaterThan(-1);
+      expect(SEED.slice(at, at + 300)).toContain("valueString: ''");
+    });
+  }
+
   it('every auto-pickup switch is a standing ON (2026-09-03) — the KILL SWITCH stays real', () => {
     // Reversed from its original default deliberately: CUR-10 amendment
     // #3's whole point is that the switch keeps working as an escape

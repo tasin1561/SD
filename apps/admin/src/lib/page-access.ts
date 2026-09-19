@@ -144,6 +144,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // controller.
   ['/cost-sync', 'courier.accounts.view'],
   ['/delhivery', 'courier.waybills.manage'],
+  // Same gate as its Delhivery sibling: it answers the same question
+  // about the same kind of thing.
+  ['/shiprocket', 'courier.waybills.manage'],
   ['/courier-escalation', 'courier.ops.view'],
   ['/reports', 'reports.view'],
   ['/webhooks', 'webhooks.view'],

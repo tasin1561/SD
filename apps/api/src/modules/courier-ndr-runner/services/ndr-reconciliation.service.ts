@@ -74,12 +74,22 @@ export class NdrReconciliationService {
         awbNumber: true,
         submittedAt: true,
         attemptCountAtSubmit: true,
+        // WHICH COURIER this request was made to. `ndr_action_requests`
+        // has no courier column — the parcel is the only thing that
+        // knows — and without it the alert below named Delhivery for
+        // every re-attempt we ever asked anybody for.
+        shipment: { select: { courierCode: true } },
       },
       take: 500,
     });
 
     let acted = 0;
     let notActed = 0;
+    // Per COURIER as well as in total. The question this job asks —
+    // "are they accepting our instructions and not acting on them" — is
+    // about one company at a time, and a sweep covering two of them
+    // answered it about neither.
+    const byCourier = new Map<string, { acted: number; notActed: number }>();
 
     for (const row of due) {
       // "A new attempt appeared" = a delivery_attempts row recorded
@@ -95,6 +105,12 @@ export class NdrReconciliationService {
       if (didAct) acted += 1;
       else notActed += 1;
 
+      const courierCode = row.shipment?.courierCode ?? 'unknown';
+      const tally = byCourier.get(courierCode) ?? { acted: 0, notActed: 0 };
+      if (didAct) tally.acted += 1;
+      else tally.notActed += 1;
+      byCourier.set(courierCode, tally);
+
       await this.prisma.client.ndrActionRequest.update({
         where: { id: row.id },
         data: { reconciledAt: new Date(), newAttemptSeen: didAct },
@@ -106,7 +122,29 @@ export class NdrReconciliationService {
     const alerted = checked > 0 && notActedPercent > threshold;
 
     if (alerted) {
-      await this.raiseAlert({ checked, acted, notActed, notActedPercent, threshold });
+      await this.raiseAlert({
+        checked,
+        acted,
+        notActed,
+        notActedPercent,
+        threshold,
+        // NAMED, not assumed. The audit row used to carry the literal
+        // `courierCode: 'delhivery'` at CRITICAL severity, so an alert
+        // about Shiprocket ignoring our re-attempts would have sent
+        // somebody to read Delhivery's panel.
+        couriers: [...byCourier.entries()]
+          .map(([courierCode, t]) => ({
+            courierCode,
+            checked: t.acted + t.notActed,
+            acted: t.acted,
+            notActed: t.notActed,
+            notActedPercent:
+              t.acted + t.notActed === 0
+                ? 0
+                : Math.round((t.notActed / (t.acted + t.notActed)) * 100),
+          }))
+          .sort((x, y) => y.notActed - x.notActed),
+      });
     }
 
     const summary: NdrReconciliationSummary = {
@@ -135,6 +173,14 @@ export class NdrReconciliationService {
     notActed: number;
     notActedPercent: number;
     threshold: number;
+    /** Worst offender first — the breakdown the metadata carries. */
+    couriers: ReadonlyArray<{
+      courierCode: string;
+      checked: number;
+      acted: number;
+      notActed: number;
+      notActedPercent: number;
+    }>;
   }): Promise<void> {
     await this.audit.log({
       actorType: ActorType.SYSTEM,
@@ -144,7 +190,10 @@ export class NdrReconciliationService {
       // CRITICAL: this is the signal that a courier is accepting our
       // instructions and not acting on them. Nothing else detects it.
       severity: 'CRITICAL',
-      metadata: { courierCode: 'delhivery', ...s },
+      // `entityId: null` above and the identifiers in metadata — a
+      // courier is not a row, so its code can never go in the uuid
+      // column (CLAUDE.md general rule 6).
+      metadata: { ...s, couriers: s.couriers.map((c) => ({ ...c })) },
     });
 
     const to = await this.settings.alertEmail();
@@ -166,6 +215,14 @@ export class NdrReconciliationService {
           not_acted: String(s.notActed),
           not_acted_percent: String(s.notActedPercent),
           threshold: String(s.threshold),
+          // WHO. The email said nothing about which courier, so a
+          // reader had to go and look it up — and would have found the
+          // audit row naming Delhivery whatever had actually happened.
+          // `throwOnUndefined: false` on the renderer means an existing
+          // template that does not use this variable is unaffected.
+          couriers: s.couriers
+            .map((c) => `${c.courierCode}: ${c.notActed}/${c.checked} not acted`)
+            .join('; '),
         },
       });
     } catch (err) {

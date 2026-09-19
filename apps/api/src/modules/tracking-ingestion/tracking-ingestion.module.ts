@@ -35,8 +35,12 @@ import { CourierDocumentIngestService } from './services/courier-document-ingest
  * Module imports
  *   - TrackingEventsModule — for TrackingStatusMappingService (commit 6)
  *     and TrackingEventAppendService (commit 7).
- *   - CourierDelhiveryModule — for DelhiveryTrackingService.normalizeScan
- *     (commit 6 / F8).
+ *   - CourierDelhiveryModule / CourierShiprocketModule — so each
+ *     courier's tracking source can be put into `COURIER_TRACKING_SOURCES`
+ *     below. The PROCESSOR no longer injects Delhivery's adapter
+ *     directly: it picks the source whose `courierCode` matches the
+ *     webhook's, and refuses a courier with no source rather than
+ *     normalising it against Delhivery's table (CUR-12).
  *   - OrderModule — for OrderWriteService.transitionStatus (ORD-3 sole
  *     cross-module order WRITE boundary).
  *   - CourierSharedModule — AuditLogService is @Global, but this also

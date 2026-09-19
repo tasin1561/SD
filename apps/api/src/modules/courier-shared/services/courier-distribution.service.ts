@@ -210,8 +210,27 @@ export class CourierDistributionService {
     // intention, and honouring it would send everything one way while
     // the setting claims otherwise.
     const share = Math.max(0, Math.min(100, sharePercent));
+    /*
+      ── WEIGHTED BY WHICH SETTING NAMED IT, NOT BY ITS COURIER CODE ──
+
+      This read `a.courier.code === 'delhivery' ? share : 100 - share`.
+      The split is a TWO-SETTING mechanism — `courier.default_*_account`
+      names one account each, and `courier.delhivery_share_percent` is
+      the share of the FIRST — so keying the weight on a courier code
+      asks a question the settings have already answered, in a way that
+      stops being true the moment there are three: every non-Delhivery
+      account would draw `100 - share` each, so adding a third courier
+      silently doubles the share of everyone who is not Delhivery while
+      the setting still claims a two-way split.
+
+      The account named by the delhivery-default setting takes `share`;
+      anything else named here takes the remainder. Same behaviour today
+      (the settings do name those two couriers), no courier literal, and
+      a third entry would have to bring its own setting rather than
+      quietly inheriting somebody else's weight.
+    */
     const candidates = usable.map((a) => ({
-      weight: a.courier.code === 'delhivery' ? share : 100 - share,
+      weight: a.id === delhiveryId ? share : 100 - share,
       account: {
         courierAccountId: a.id,
         courierCode: a.courier.code,

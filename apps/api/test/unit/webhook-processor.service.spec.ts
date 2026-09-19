@@ -16,7 +16,6 @@ import type {
   TrackingEventRow,
 } from '../../src/modules/tracking-events/services/tracking-event-append.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
-import type { DelhiveryTrackingService } from '../../src/modules/courier-delhivery/services/delhivery-tracking.service';
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import type { NormalizedScan } from '../../src/modules/courier-delhivery/types/delhivery.types';
@@ -358,7 +357,15 @@ function makeProcessor(setup: Setup = {}) {
 
   const svc = new WebhookProcessorService(
     { client } as unknown as PrismaService,
-    courierDelhivery as unknown as DelhiveryTrackingService,
+    // Delhivery's adapter is no longer INJECTED here (2026-09-19). It
+    // was the fallback when no source matched the webhook's courier,
+    // which meant an authenticated payload from a courier with no
+    // tracking source was normalised against DELHIVERY'S status table —
+    // it does not throw, their vocabularies overlap enough to map to
+    // something plausible, and the result is a real order transition
+    // driven by another company's status word. An unknown courier is
+    // now IGNORED by name.
+    //
     // Normalisation is routed by the courier that SENT the webhook.
     // These fixtures are all Delhivery, so the source list resolves to
     // the same double every existing assertion already exercises.

@@ -109,6 +109,110 @@ export interface ShiprocketCreateOrderResponse {
   readonly courier_name: string | null;
 }
 
+/**
+ * `/orders/create/return` — the RETURN leg.
+ *
+ * ── THE NAMING INVERTS, AND THAT IS THE WHOLE TRAP ───────────────────
+ * On their FORWARD create, `billing_*` is the recipient and the pickup
+ * location is ours. On a RETURN it is the other way round: `pickup_*` is
+ * where the van goes to COLLECT — the customer — and `shipping_*` is
+ * where the goods are delivered to, which is us. Getting that backwards
+ * does not error; it books a van to our own warehouse to collect from
+ * ourselves while the customer keeps the goods, which is exactly the
+ * outcome `REVERSE_NOT_SUPPORTED` was refusing rather than risking.
+ *
+ * Note there is NO `pickup_location` on a return: a registered location
+ * name is a place THEY collect from, and on a return that is the
+ * customer's door, so the address is spelled out instead. Ours has to be
+ * spelled out too — which is why it comes from a setting (we hold no
+ * address on the `warehouses` row; see
+ * `CourierWarehouseRegistrationService`'s note on exactly that).
+ */
+export interface ShiprocketCreateReturnRequest {
+  readonly order_id: string;
+  readonly order_date: string;
+  /** WHERE THE VAN GOES — the customer. */
+  readonly pickup_customer_name: string;
+  readonly pickup_last_name: string;
+  readonly pickup_address: string;
+  readonly pickup_address_2: string;
+  readonly pickup_city: string;
+  readonly pickup_state: string;
+  readonly pickup_country: string;
+  readonly pickup_pincode: number;
+  readonly pickup_email: string;
+  readonly pickup_phone: string;
+  readonly pickup_isd_code: string;
+  /** WHERE IT ENDS UP — our warehouse. */
+  readonly shipping_customer_name: string;
+  readonly shipping_last_name: string;
+  readonly shipping_address: string;
+  readonly shipping_address_2: string;
+  readonly shipping_city: string;
+  readonly shipping_country: string;
+  readonly shipping_pincode: number;
+  readonly shipping_state: string;
+  readonly shipping_email: string;
+  readonly shipping_isd_code: string;
+  readonly shipping_phone: string;
+  readonly order_items: readonly ShiprocketReturnOrderItem[];
+  readonly payment_method: 'PREPAID';
+  readonly total_discount: string;
+  readonly sub_total: number;
+  readonly length: number;
+  readonly breadth: number;
+  readonly height: number;
+  /** KILOGRAMS, as on the forward create. */
+  readonly weight: number;
+}
+
+/**
+ * A return's line. Their return items carry `qc_enable`, which the
+ * forward ones do not.
+ *
+ * `qc_enable: false` on purpose — quality-check-at-pickup asks the
+ * driver to inspect the goods on the customer's doorstep against
+ * expected values, and we have no process that produces those values or
+ * acts on the verdict. Asking for a check nobody reads would delay every
+ * collection and give a driver grounds to refuse one.
+ */
+export interface ShiprocketReturnOrderItem {
+  readonly name: string;
+  readonly sku: string;
+  readonly units: number;
+  readonly selling_price: number;
+  readonly discount: string;
+  readonly qc_enable: boolean;
+}
+
+/** Same shape as the forward create's reply. */
+export interface ShiprocketCreateReturnResponse {
+  readonly order_id: number;
+  readonly shipment_id: number;
+  readonly status?: string;
+  readonly status_code?: number;
+}
+
+/**
+ * Where a RETURN is delivered to — our warehouse, as ops recorded it.
+ *
+ * Not on the `warehouses` row because there is no address there at all
+ * (a deliberate gap: see `CourierWarehouseRegistrationService`). Held as
+ * the JSON setting `courier.shiprocket_return_address`, seeded EMPTY and
+ * never guessed — an invented return address is a van delivering
+ * somebody's goods to a place that does not exist.
+ */
+export interface ShiprocketReturnAddress {
+  readonly name: string;
+  readonly addressLine1: string;
+  readonly addressLine2: string;
+  readonly city: string;
+  readonly state: string;
+  readonly pincode: string;
+  readonly phone: string;
+  readonly email: string;
+}
+
 /** `/courier/assign/awb`. `courier_id` is optional — omitted, Shiprocket
  *  picks by its own rules, which is what we want until somebody sets a
  *  preference per account. */
@@ -213,6 +317,18 @@ export interface ShiprocketAwbRequest {
   /** RS-10 — the reseller store the customer bought from. Sent as
    *  `reseller_name`; absent for every other order. */
   readonly resellerName?: string;
+  /**
+   * Book the RETURN leg: collect from `recipient`, deliver to us.
+   *
+   * On the SAME request rather than a parallel type, because everything
+   * else about the parcel is identical — the address is where it is
+   * collected instead of delivered, which is a fact about the leg and
+   * not about the parcel. The client routes it to
+   * `/orders/create/return` and inverts the address naming there; the
+   * caller never has to swap the fields itself (the same reasoning
+   * `DispatchAwbInput.isReverse` already states).
+   */
+  readonly isReverse?: boolean;
 }
 
 export type ShiprocketAwbFailure = 'NON_SERVICEABLE' | 'TRANSIENT';

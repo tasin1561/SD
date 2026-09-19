@@ -48,8 +48,36 @@ export interface CourierTrackingSource {
     courierAccountId: string | null,
   ): Promise<CourierTrackingResult[]>;
 
-  /** Raw courier status → our vocabulary. Pure; no network. */
-  normalizeScan(raw: { awbNumber: string; rawStatus: string; eventAtIso: string }): NormalizedScan;
+  /**
+   * Raw courier status → our vocabulary. Pure; no network.
+   *
+   * ── THE WHOLE SCAN, NOT THREE FIELDS OF IT ───────────────────────
+   * This declared only `{awbNumber, rawStatus, eventAtIso}`, which is
+   * narrower than every implementation actually accepts and narrower
+   * than the webhook processor has. The processor got away with it
+   * because it injected Delhivery's adapter CONCRETELY as a fallback,
+   * so the call was typed against the class rather than this interface;
+   * removing that fallback (a courier with no source is now refused by
+   * name rather than read as Delhivery) is what exposed the gap.
+   *
+   * The extra fields are load-bearing, not decoration: without
+   * `statusType` a return leg cannot be told from ordinary transit, and
+   * without `nslCode` an NDR looks like transit too (D5) — so an
+   * interface that dropped them would have quietly degraded any
+   * implementation reached through it.
+   */
+  normalizeScan(raw: {
+    awbNumber: string;
+    rawStatus: string;
+    eventAtIso: string;
+    statusType?: string | null;
+    nslCode?: string | null;
+    locationName?: string | null;
+    locationCity?: string | null;
+    locationPincode?: string | null;
+    description?: string | null;
+    failureReason?: string | null;
+  }): NormalizedScan;
 
   /**
    * What an operator must actually do if this source is in stub mode

@@ -217,9 +217,37 @@ with the reactive path kept as the fallback for races.
 | RVP QC 3.0 | ✅ payload builder; refuses the silent-downgrade limits |
 | Real-cost margin check | ✅ margin vs what Delhivery actually charges |
 
-**Not yet wired into the order flow:** these are capabilities on the
-adapter. Deciding *when* the system calls pickup/NDR/e-waybill/MPS/QC —
-and surfacing them in the admin UI — is orchestration work on top.
+**Not yet wired into the order flow** *(written 2026-07-27; CORRECTED
+2026-09-19 — most of it has been wired since)*. What is actually true:
+
+- **Pickup requests** — WIRED, and automatic. `PackService.complete`'s
+  post-commit hook calls `CourierPickupService.raiseIfDue` (CUR-10
+  amendment #3), gated on `courier.delhivery_auto_pickup_enabled`, which
+  has been seeded ON since 2026-09-03. `/warehouse/pickups` is the
+  manual path and, since 19 Sep, lets an operator choose the courier —
+  before that it could only ever raise a Delhivery van.
+- **NDR actions** — WIRED. An operator's click goes through
+  `CourierNdrDispatchService`; the nightly `NdrRunnerService` batch
+  fires after 21:00 IST behind its own per-category auto list (seeded
+  empty) and the live-write guard, and `NdrUplPollerService` polls the
+  UPL. As of 19 Sep the poller asks only couriers whose NDR is
+  ASYNCHRONOUS — it used to ask Delhivery about Shiprocket's
+  synchronous rows and escalate re-attempts that had worked.
+- **E-waybill** — WIRED but DELISTED from the admin UI (19 Sep). It
+  reaches Delhivery through `CourierOpsDispatchService.attachEwaybill`,
+  which refuses any other courier by name; before that it called
+  Delhivery whatever carrier held the parcel. The control is off the
+  screen because the threshold is ₹50,000 and nothing Skydrop ships
+  comes near it — the endpoint is kept so it is one line away.
+- **MPS multi-box** and **RVP QC 3.0** — still NOT wired, and each for
+  its own reason (phase-1a-debt): MPS needs a `shipment_boxes` model,
+  N-waybill claiming and an AWB saga that breaks CUR-9; RVP QC needs a
+  reverse-pickup creation flow, which for Delhivery still does not
+  exist as an operator-facing path.
+
+The general shape of the original sentence stands for those last two:
+they are capabilities on the adapter, and deciding *when* the system
+calls them is orchestration work on top.
 
 **Still genuinely unknown** (needs Delhivery, not code): the exact
 `failureReason` vocabulary behind NDR codes, and whatever custom payload

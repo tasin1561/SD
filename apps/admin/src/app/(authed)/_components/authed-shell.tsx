@@ -197,6 +197,7 @@ export function AuthedShell({
         },
         { href: '/courier-accounts', label: 'Courier accounts', icon: <Building2 size={15} /> },
         { href: '/delhivery', label: 'Delhivery', icon: <Gauge size={15} /> },
+        { href: '/shiprocket', label: 'Shiprocket', icon: <Gauge size={15} /> },
         { href: '/cost-sync', label: 'Courier cost sync', icon: <RefreshCw size={15} /> },
         { href: '/courier-escalation', label: 'Escalations', icon: <Inbox size={15} /> },
       ],

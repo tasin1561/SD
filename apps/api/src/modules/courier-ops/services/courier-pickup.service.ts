@@ -21,8 +21,42 @@ import { SystemIssueService } from '../../system-issues/services/system-issue.se
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
 import { courierActor } from '../../courier-shared/services/courier-credential.service';
 
-const COURIER_CODE = 'delhivery';
-const PICKUP_LOCATION_SETTING = 'courier.delhivery_pickup_location';
+/**
+ * Where "which courier by default" lives — ONE key, CUR-19's.
+ *
+ * There was a `const COURIER_CODE = 'delhivery'` here that served as
+ * BOTH the default for a caller who named no courier AND the value every
+ * per-courier decision in this file was then made against. Splitting the
+ * two was the fix; hard-coding the remaining half would have left a
+ * second answer to a question `ops.default_courier_code` already
+ * answers, and the two drift the day somebody changes that setting and
+ * this screen carries on asking Delhivery for vans.
+ *
+ * Read GLOBALLY (no seller): a van comes to a BUILDING, and the parcels
+ * in it belong to many sellers, so a seller's own override is the wrong
+ * grain here — which is also why this reads the row rather than going
+ * through `SettingsResolverService`.
+ */
+const DEFAULT_COURIER_SETTING = 'ops.default_courier_code';
+
+/**
+ * Where a courier's registered pickup location name is kept.
+ *
+ * PER COURIER, like every other `courier.<code>_*` switch, and for the
+ * same reason (CLAUDE.md's per-courier switches note): a name registered
+ * with Delhivery means nothing to Shiprocket, who keep their own list
+ * and cannot see each other's.
+ *
+ * This was a CONSTANT — `courier.delhivery_pickup_location` — used for
+ * every courier. So a Shiprocket pickup either sent DELHIVERY'S
+ * warehouse name to Shiprocket, or (with no account-level name) was
+ * refused by a message naming a Delhivery setting that has nothing to
+ * do with it. CLAUDE.md already claimed the per-courier form; this
+ * makes the claim true.
+ */
+function pickupLocationSettingKey(courierCode: string): string {
+  return `courier.${courierCode}_pickup_location`;
+}
 
 /**
  * What a packed box's pickup check came to. Every value that is not
@@ -195,9 +229,12 @@ export class CourierPickupService {
     /** Named for the audit trail — WHICH parcel prompted the check. */
     triggeredByShipmentId: string;
   }): Promise<AutoPickupOutcome> {
-    // Only a courier with an adapter can be asked for a van at all —
-    // matches CourierOpsDispatchService.requestPickup's own switch.
-    if (input.courierCode !== 'delhivery' && input.courierCode !== 'shiprocket') {
+    // Only a courier with an adapter can be asked for a van at all.
+    // ASKED of the dispatcher rather than restated here: this used to
+    // be `!== 'delhivery' && !== 'shiprocket'`, which is the
+    // dispatcher's own switch written out a second time and drifts the
+    // moment a third courier lands on one side and not the other.
+    if (!this.opsDispatch.pickupCourierCodes().includes(input.courierCode)) {
       return { fired: false, reason: 'NO_ADAPTER', requestId: null };
     }
     try {
@@ -365,7 +402,7 @@ export class CourierPickupService {
       title: `No ${input.courierCode} pickup was requested for ${where}`,
       detail:
         code === 'PICKUP_LOCATION_NOT_CONFIGURED'
-          ? `A parcel was packed and no van was asked for, because no pickup location is configured. Set the courier account's pickup location name on /courier-accounts (or the system setting ${PICKUP_LOCATION_SETTING}) to the warehouse name registered with ${input.courierCode}, byte for byte, then raise today's pickup on /warehouse/pickups. Every box packed until then will say the same.`
+          ? `A parcel was packed and no van was asked for, because no pickup location is configured. Set the courier account's pickup location name on /courier-accounts (or the system setting ${pickupLocationSettingKey(input.courierCode)}) to the warehouse name registered with ${input.courierCode}, byte for byte, then raise today's pickup on /warehouse/pickups. Every box packed until then will say the same.`
           : `A parcel was packed and no van was asked for: [${code}] ${message}. Fix the cause, then raise today's pickup by hand on /warehouse/pickups.`,
       source: 'courier-pickup.auto',
       dedupeKey: autoPickupIssueKey(input.courierCode, input.warehouseId),
@@ -483,8 +520,11 @@ export class CourierPickupService {
       });
     }
 
-    const courierCode = input.courierCode ?? COURIER_CODE;
-    const pickupLocationName = await this.pickupLocationName(input.courierAccountId ?? null);
+    const courierCode = input.courierCode ?? (await this.defaultCourierCode());
+    const pickupLocationName = await this.pickupLocationName(
+      courierCode,
+      input.courierAccountId ?? null,
+    );
     const pickupDate = parseDate(input.pickupDate);
 
     // Claim the day FIRST. If the courier call then fails we still hold
@@ -508,7 +548,11 @@ export class CourierPickupService {
         throw new ConflictException({
           code: 'PICKUP_ALREADY_REQUESTED',
           message:
-            'An OPEN pickup already exists for this warehouse on this date. Delhivery accepts only one at a time — mark the existing one collected or called off once it is resolved, and a second can then be raised for the same day. If it failed and was never registered with them, release the day instead.',
+            `An OPEN ${courierCode} pickup already exists for this warehouse on this date. ` +
+            'One van covers the building, so we hold one open request at a time — mark the ' +
+            'existing one collected or called off once it is resolved, and a second can then be ' +
+            `raised for the same day. If it failed and was never registered with ${courierCode}, ` +
+            'release the day instead.',
         });
       }
       throw err;
@@ -524,14 +568,17 @@ export class CourierPickupService {
           pickupDate: input.pickupDate,
           pickupTime: input.pickupTime,
           expectedPackageCount: input.expectedPackageCount,
-          // Shiprocket schedules per PARCEL rather than per location and
-          // day, so it needs the day's parcels. Resolved here rather
-          // than in the dispatcher: which parcels are waiting at this
-          // warehouse is our question, not the courier adapter's.
-          courierShipmentIds:
-            courierCode === COURIER_CODE
-              ? []
-              : await this.awaitingPickup(warehouse.id, courierCode),
+          // A courier that schedules per PARCEL rather than per location
+          // and day needs the day's parcels. Resolved here rather than
+          // in the dispatcher: which parcels are waiting at this
+          // warehouse is our question, not the courier adapter's —
+          // but WHETHER to ask is the dispatcher's (CUR-12). This used
+          // to be "anything that is not Delhivery", which would hand a
+          // third courier's per-location pickup a parcel list it has no
+          // use for.
+          courierShipmentIds: this.opsDispatch.pickupSchedulesPerParcel(courierCode)
+            ? await this.awaitingPickup(warehouse.id, courierCode)
+            : [],
         },
         staffId === null
           ? courierActor.runner('pack-auto-pickup', row.id)
@@ -716,8 +763,54 @@ export class CourierPickupService {
    * read the global setting only, so an account with its own
    * registration would book parcels at one location and summon the van
    * to another.
+   *
+   * ── AND IT IS PER COURIER, IN BOTH HALVES ────────────────────────
+   * The setting key is `courier.<code>_pickup_location`, and a courier
+   * whose own pickup call does NOT use a location name is not asked for
+   * one: Shiprocket's `generate/pickup` takes shipment ids and nothing
+   * else, so demanding a registered name there refused a pickup that
+   * would have worked — quoting a Delhivery setting at somebody holding
+   * a Shiprocket parcel. `pickupNeedsLocationName` is the ONE place
+   * that knows which is which (CUR-12).
+   *
+   * The empty string is what goes on the row for such a courier. Not
+   * null: `courier_pickup_requests.pickup_location_name` is NOT NULL,
+   * and the honest value for "this courier does not schedule by
+   * location" is "no location", which is what '' reads as on the
+   * Pickups screen.
    */
-  private async pickupLocationName(courierAccountId: string | null): Promise<string> {
+  /**
+   * The default courier, for a caller that named none.
+   *
+   * FAILS CLOSED. An unset or unreadable setting refuses by name rather
+   * than picking one: this call ends with a real van being asked for at
+   * a real building, and guessing which company to ask is not a
+   * recoverable mistake — the wrong courier either refuses (noise) or
+   * sends a van for parcels it is not carrying (cost, and a driver's
+   * wasted morning). Every screen now sends the courier explicitly, so
+   * this is reachable only by an API caller who omitted it.
+   */
+  private async defaultCourierCode(): Promise<string> {
+    const row = await this.prisma.client.systemSetting
+      .findUnique({
+        where: { key: DEFAULT_COURIER_SETTING },
+        select: { valueString: true },
+      })
+      .catch(() => null);
+    const code = (row?.valueString ?? '').trim();
+    if (code === '') {
+      throw new BadRequestException({
+        code: 'PICKUP_COURIER_REQUIRED',
+        message: `No courier was given and ${DEFAULT_COURIER_SETTING} is not set, so there is nobody to ask for a van. Name the courier on the request.`,
+      });
+    }
+    return code;
+  }
+
+  private async pickupLocationName(
+    courierCode: string,
+    courierAccountId: string | null,
+  ): Promise<string> {
     if (courierAccountId !== null) {
       const account = await this.prisma.client.courierAccount.findUnique({
         where: { id: courierAccountId },
@@ -726,18 +819,22 @@ export class CourierPickupService {
       const perAccount = (account?.pickupLocationName ?? '').trim();
       if (perAccount !== '') return perAccount;
     }
+    const settingKey = pickupLocationSettingKey(courierCode);
     const row = await this.prisma.client.systemSetting.findUnique({
-      where: { key: PICKUP_LOCATION_SETTING },
+      where: { key: settingKey },
       select: { valueString: true },
     });
     const name = (row?.valueString ?? '').trim();
-    if (name === '') {
-      throw new BadRequestException({
-        code: 'PICKUP_LOCATION_NOT_CONFIGURED',
-        message: `No pickup location configured: the courier account has no pickup location name and system setting ${PICKUP_LOCATION_SETTING} is empty. It must match the warehouse name registered with the courier exactly.`,
-      });
-    }
-    return name;
+    if (name !== '') return name;
+
+    // Nothing configured. Whether that MATTERS is the courier's own
+    // question, asked of the dispatcher rather than answered here.
+    if (!this.opsDispatch.pickupNeedsLocationName(courierCode)) return '';
+
+    throw new BadRequestException({
+      code: 'PICKUP_LOCATION_NOT_CONFIGURED',
+      message: `No pickup location configured for ${courierCode}: the courier account has no pickup location name and system setting ${settingKey} is empty. It must match the warehouse name registered with ${courierCode} exactly.`,
+    });
   }
 
   private async auditRaise(

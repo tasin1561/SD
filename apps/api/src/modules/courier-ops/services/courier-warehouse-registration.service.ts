@@ -25,9 +25,18 @@ export interface WarehouseRegistrationOutcome {
  * changed after registration: their edit API takes it as the key and
  * updates everything else around it.
  *
- * There is also no "list my warehouses" endpoint, so the only ways to
- * check a registered name are their panel or a create attempt. Getting
- * it right the first time is not a nicety.
+ * There is also no "list my warehouses" endpoint ON DELHIVERY, so the
+ * only ways to check a registered name there are their panel or a
+ * create attempt. Getting it right the first time is not a nicety.
+ *
+ * **That is DELHIVERY-specific, and this comment used to generalise it
+ * to both couriers (corrected 2026-09-19).** Measured against the live
+ * Shiprocket API on 2026-09-09:
+ * `GET /v1/external/settings/company/pickup` returns every registered
+ * pickup location. So on Shiprocket a name CAN be checked — which is
+ * the difference between a rule and a hope, and worth knowing before
+ * somebody spends a failed booking discovering a typo. The exact-name
+ * guard below is right either way; only its unfixability was overstated.
  *
  * This service therefore refuses a name that differs from itself
  * trimmed, before anything reaches the wire — the adapter checks the

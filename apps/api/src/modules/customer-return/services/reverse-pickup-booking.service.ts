@@ -87,6 +87,25 @@ export class ReversePickupBookingService {
             lengthCm: true,
             widthCm: true,
             heightCm: true,
+            /*
+              THE LINES, because a return needs them.
+
+              Delhivery's reverse takes a description and nothing else,
+              so this passed `items: []` — which was fine right up until
+              Shiprocket's return booking was built, and theirs REFUSES
+              an empty `order_items`. The parcel's own snapshot (ORD-6)
+              is what is coming back, so it is what is declared: their
+              own line names, not the live catalogue's.
+            */
+            items: {
+              select: {
+                skuCode: true,
+                productName: true,
+                quantity: true,
+                unitPriceInr: true,
+                unitDeclaredValueInr: true,
+              },
+            },
           },
         },
       },
@@ -162,7 +181,17 @@ export class ReversePickupBookingService {
       // pay for their own return.
       codAmountInr: null,
       itemDescription: 'Customer return',
-      items: [],
+      // The parcel's own snapshot. `unitPriceInr` is what the customer
+      // paid; a line that never carried one falls back to its declared
+      // value and then to 0 — a return declares no money changing
+      // hands, so a missing figure is a gap in the record rather than a
+      // reason to refuse the collection.
+      items: s.items.map((i) => ({
+        name: i.productName,
+        sku: i.skuCode,
+        quantity: i.quantity,
+        unitPriceInr: Number(i.unitPriceInr ?? i.unitDeclaredValueInr ?? 0),
+      })),
     };
 
     try {

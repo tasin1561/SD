@@ -6,16 +6,29 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
  * Couriers whose support tickets software can actually raise.
  *
  * A LIST, because the answer is not a property of the courier but of
- * what we have built for it. Delhivery has a portal we drive; Shiprocket
- * has no ticket automation at all, and `manual` is by definition
- * somebody ringing a person. A parcel on either of those has no portal
- * to open, so its issue moves only if a person moves it.
+ * what we have built for it. Adding a courier here without building its
+ * automation would label tickets AUTO that nothing is carrying — which
+ * is exactly the failure this whole field exists to make visible.
  *
- * Adding a courier here without building its automation would label
- * tickets AUTO that nothing is carrying — which is exactly the failure
- * this whole field exists to make visible.
+ * ── AND IT IS EMPTY, BECAUSE NO COURIER TAKES TICKETS FROM US ────────
+ * It held `['delhivery']`, which contradicted Delhivery's OWN support
+ * adapter: `DelhiverySupportAdapterService.capabilities()` reports
+ * `raiseTicket: false` and `postComment: false`, because Delhivery One's
+ * MCP is read-only and their REST API has no ticketing endpoint. That is
+ * the whole of CUR-20 — support tickets are MANUAL for every courier,
+ * through one path — so this list was asserting a capability the
+ * adapter had already denied. It was dormant (the automation sits behind
+ * a seeded-off switch and `portalMode` is OFF in production), which is
+ * precisely why it could be wrong for months without anybody noticing:
+ * the day somebody enabled the switch, Delhivery tickets would have been
+ * labelled AUTO and then moved by nobody.
+ *
+ * `courier-support-capabilities.spec.ts` pins this against every
+ * adapter's `capabilities()` in both directions, so it cannot drift
+ * again — a courier belongs here exactly when its adapter says it can
+ * raise a ticket.
  */
-const AUTOMATED_COURIERS: readonly string[] = ['delhivery'];
+const AUTOMATED_COURIERS: readonly string[] = [];
 
 /**
  * WHO is carrying a ticket to the courier.

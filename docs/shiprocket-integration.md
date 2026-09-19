@@ -1,13 +1,34 @@
 # Shiprocket — access, account state, and what is actually blocking
 
-Companion to `docs/delhivery-integration.md`. That one records a wire
-contract validated against the live API; **this one records why ours has
-not been.** Everything in `courier-shiprocket` is transcribed from
-Shiprocket's published docs and has never made a real call.
+Companion to `docs/delhivery-integration.md`.
+
+> **CORRECTED 2026-09-19 — SHIPROCKET IS LIVE ON PRODUCTION.**
+>
+> This file opened by saying the wire contract "has not been" validated
+> and that everything here "has never made a real call", and further down
+> that production was "inert again" with an empty base URL and live
+> writes off. **None of that is still true.** Checked against the
+> production database: `Courier.isActive` is TRUE, the base URL is
+> `https://apiv2.shiprocket.in`, and
+> `courier.shiprocket_live_writes_enabled` is TRUE. Failover from
+> Delhivery reaches Shiprocket for real (CUR-14), without anybody
+> choosing it per parcel.
+>
+> **Reason about the posture from the DATABASE, never from this file.**
+> The two questions are `courier.shiprocket_live_writes_enabled` and
+> `courier.shiprocket_api_base_url`, and `/shiprocket` in the admin app
+> now shows both (it was built on 19 Sep precisely because the courier
+> failover can reach had no page).
+>
+> What is STILL unproven on the wire is the RETURN leg
+> (`/orders/create/return`, built 19 Sep): no return has been booked on
+> this account, so its request shape is their documented one rather than
+> an observed one.
 
 Sourced from the founder's setup notes (2026-09-08) and re-checked
-against the code and the production database on the same day. No
-credentials here, or anywhere in the repo — see "Credentials" below.
+against the code and the production database on the same day; the state
+section below was corrected on 2026-09-19. No credentials here, or
+anywhere in the repo — see "Credentials" below.
 
 ---
 
@@ -61,9 +82,14 @@ courierOrderId:    1574450075
 cancel:            "Shipment(s) have been cancelled"
 ```
 
-The live-write switches were on only for the length of that run.
-Production is inert again: `Courier.isActive` false, base URL empty,
-live writes off — so no ordinary traffic can route to Shiprocket.
+The live-write switches were on only for the length of that run, and
+production went inert again immediately after it.
+
+**That is no longer the state (corrected 2026-09-19).** Production now
+carries `Courier.isActive` true, the real base URL and live writes on;
+ordinary traffic does not DEFAULT here (`ops.default_courier_code` is
+`delhivery` and no seller overrides it), but a parcel Delhivery refuses
+fails over and is booked on Shiprocket for real.
 
 ### What the live run found
 
@@ -177,17 +203,26 @@ engineering time.
 
 ## Where the code stands
 
-Verified against production on 2026-09-08 and unchanged since, apart
-from the classifier fix above:
+**The settings list below is the 2026-09-08 reading and is STALE — it
+says stub mode and live writes off, and production is neither.** It is
+kept as the record of what the account looked like the day after the
+proving run; read the live values from the database or from
+`/shiprocket`, which was built for exactly this reason.
 
-- `courier.shiprocket_api_base_url` = `''` ⇒ **stub mode**, which is
-  what CUR-15 requires while Delhivery is live: a stub may never answer
-  for a live courier, and the failover guard enforces it.
-- `courier.shiprocket_live_writes_enabled` = **false**.
+- `courier.shiprocket_api_base_url` = `''` ⇒ **stub mode** *(as of
+  2026-09-08; the real base URL is set on production today)*, which was
+  what CUR-15 required while Delhivery alone was live: a stub may never
+  answer for a live courier, and the failover guard enforces it.
+- `courier.shiprocket_live_writes_enabled` = **false** *(TRUE today)*.
 - `courier.default_account_shiprocket` = `''` — no account linked.
-- `courier.shiprocket_auto_pickup_enabled` = true, which is harmless
-  and deliberate: `assertWritable` refuses first, so the pickup switch
-  only starts meaning anything on the day live writes are turned on.
+- `courier.shiprocket_auto_pickup_enabled` = true, which was harmless
+  while `assertWritable` refused first. With live writes ON it now
+  means what it says.
+- **New 2026-09-19:** `courier.shiprocket_pickup_location` (the sibling
+  of Delhivery's — read for EVERY courier until then) and
+  `courier.shiprocket_return_address` (JSON; their return create spells
+  out both ends, so a collection cannot be booked without it). Both
+  seeded EMPTY and refused by name rather than guessed.
 
 `ShiprocketHttpService` already caches a per-account bearer for **nine
 days against their ten**, keyed on `courierAccountId` (never one shared

@@ -70,6 +70,10 @@ export class AdminPickupController {
       staff.id,
       {
         warehouseId: body.warehouseId,
+        // WHICH courier's van. Omitted keeps the pre-2026-09-19
+        // behaviour (Delhivery), which is what this screen has raised
+        // since it existed; the service resolves the default.
+        ...(body.courierCode === undefined ? {} : { courierCode: body.courierCode }),
         pickupDate: body.pickupDate,
         pickupTime: body.pickupTime,
         expectedPackageCount: body.expectedPackageCount,

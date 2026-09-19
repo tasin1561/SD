@@ -103,6 +103,30 @@ export class RaisePickupDto {
   @IsUUID('7')
   readonly warehouseId!: string;
 
+  /**
+   * WHICH COURIER'S van.
+   *
+   * There was no such field, so the manual Pickups screen could only
+   * ever raise a DELHIVERY pickup — the service defaulted to it. The
+   * automatic trigger passes the parcel's own courier, so the two
+   * halves disagreed: a box packed for Shiprocket could summon its own
+   * van while an operator on the screen could not ask for one.
+   *
+   * Optional rather than required, because the screen has raised
+   * Delhivery pickups for months and an existing caller must not start
+   * failing; omitted, it still means the default courier. Validated
+   * against the couriers whose pickup can actually be asked for, so a
+   * typo is refused here rather than becoming a row nobody can act on.
+   */
+  @ApiPropertyOptional({
+    enum: ['delhivery', 'shiprocket'],
+    description:
+      'Courier to ask for the van. Defaults to Delhivery, which is what this screen did before the field existed.',
+  })
+  @IsOptional()
+  @IsIn(['delhivery', 'shiprocket'])
+  readonly courierCode?: 'delhivery' | 'shiprocket';
+
   @ApiProperty({
     description:
       'YYYY-MM-DD. Delhivery accepts one open request per location per day, so this is the slot being claimed.',

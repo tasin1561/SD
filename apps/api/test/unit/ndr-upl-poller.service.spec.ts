@@ -63,6 +63,15 @@ function make(ctx: Ctx = {}) {
     prisma as never,
     { pollDeadlineMinutes: jest.fn().mockResolvedValue(240) } as never,
     { checkStatus } as never,
+    // WHICH couriers hand back a handle to poll (2026-09-19). This
+    // queried every SUBMITTED row and asked DELHIVERY about it, so a
+    // Shiprocket row — whose submit is synchronous and CONFIRMED on the
+    // spot — was read as "no UPL id", closed FAILED and escalated as a
+    // re-attempt the courier had ignored. It had worked.
+    {
+      adapterCourierCodes: () => ['delhivery', 'shiprocket'],
+      pollsOutcome: (code: string) => code === 'delhivery',
+    } as never,
     { open } as never,
     // The escalation service — the entry point that was missing until
     // 2026-08-06. A failed NDR request now BEGINS a courier conversation
