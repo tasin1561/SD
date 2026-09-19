@@ -406,12 +406,12 @@ describe('Inventory flow (e2e)', () => {
     expect(suppressed.outcome).toBe('SUPPRESSED_COOLDOWN');
     expect(
       await h.prisma.notificationLog.count({
-        where: { templateCode: 'seller.stock_low_alert.email' },
+        where: { templateCode: 'seller.stock_low_alert' },
       }),
     ).toBe(1);
 
     // Reset to the post-recovery state, then let the cooldown elapse →
-    // a fresh breach refires (2nd email logged end-to-end).
+    // a fresh breach refires (2nd inbox row logged end-to-end).
     await h.prisma.stockAlertState.updateMany({
       where: { variantId },
       data: { wasAlertActive: false, lowStockAlertSentAt: sentAt },
@@ -421,7 +421,7 @@ describe('Inventory flow (e2e)', () => {
     expect(refired.outcome).toBe('FIRED');
     await waitFor(async () => {
       const c = await h.prisma.notificationLog.count({
-        where: { templateCode: 'seller.stock_low_alert.email' },
+        where: { templateCode: 'seller.stock_low_alert' },
       });
       return c === 2 ? c : null;
     });
