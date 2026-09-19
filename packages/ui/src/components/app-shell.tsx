@@ -638,9 +638,17 @@ export function AppShell({
           // thing added to a shell whose responsive spec asserts no
           // horizontal scroll at 320px, and a row of facts is exactly
           // the shape that overflows if it is allowed to.
+          // `pt-2`, NOT `py-2`: the inline style below sets
+          // padding-bottom, and an inline declaration beats a utility
+          // outright (FE-7). A `py-` utility here would have its bottom
+          // half silently erased — harmless today because the inline
+          // value adds the same 0.5rem back, and a trap the moment
+          // somebody edits one of the two and not the other. Letting
+          // the utility own the top and the inline own the bottom
+          // means the two never describe the same side.
           <div
             data-slot="status-strip"
-            className="border-border text-text-faint min-w-0 border-t px-3 py-2 text-xs sm:px-5 lg:px-6"
+            className="border-border text-text-faint min-w-0 border-t px-3 pt-2 text-xs sm:px-5 lg:px-6"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
           >
             {statusStrip}
