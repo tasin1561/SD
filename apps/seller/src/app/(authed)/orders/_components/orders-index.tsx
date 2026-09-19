@@ -8,14 +8,18 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { useOrderStatusSummary, usePendingRows, useOrdersList } from '@/lib/api-hooks';
 import { can, canSeePath } from '@/lib/page-access';
 import { useResellerStores } from '@/lib/reseller-store-hooks';
-import { Plus, Search } from 'lucide-react';
+import { CheckCircle2, PhoneCall, Plus, Search, ShoppingCart, Truck } from 'lucide-react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
+  Crumbs,
+  FilterChip,
   Input,
+  MetaChip,
   Money,
+  SectionBand,
   Select,
+  Stat,
   Table,
   TBody,
   Td,
@@ -63,6 +67,20 @@ import { useStores } from '@/lib/store-hooks';
  *
  * Every colour comes from the shared tokens (FE-6), so both themes are
  * one implementation rather than two.
+ *
+ * ── THE 2026-09-19 PASS (PRECISION LOGISTICS) ────────────────────────
+ * The structure above was already right; this is the skin and the
+ * furniture. The tiles moved onto the SHARED `Stat` (which grew
+ * `icon` / `unit` / `foot` for exactly this shape), the local `Chip`
+ * became `FilterChip` in `@skydrop/ui/components`, and the four
+ * separate cards — filters, chips, table, footer — became ONE banded
+ * region under a `SectionBand`, because a filter and the rows it
+ * governs sitting in two bordered boxes read as unrelated panels.
+ *
+ * The exclusions above still stand. Two more from the newer comps:
+ * a "Gateway: 99.98% nominal" reading (no such metric exists) and a
+ * "Corridor sync: 2s ago" line (nothing polls, so there is no sync to
+ * report the age of).
  */
 
 const STATUSES = Object.values(OrderStatus);
@@ -264,8 +282,25 @@ export function OrdersIndex(): ReactElement {
   return (
     <div>
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[{ label: 'Seller console' }, { label: 'Fulfilment' }, { label: 'Orders' }]}
+            Link={Link}
+          />
+        }
         title="Orders"
         subtitle="Everything you have sent us, and where each one has got to."
+        meta={
+          summary.data === undefined ? undefined : (
+            <>
+              <MetaChip tone="accent">{summary.data.total} placed</MetaChip>
+              {countOf(MOVING) > 0 && (
+                <MetaChip dot>{countOf(MOVING)} on the road</MetaChip>
+              )}
+              {pendingCount > 0 && <MetaChip tone="warn">{pendingCount} pending</MetaChip>}
+            </>
+          )
+        }
         action={
           <div className="flex items-center gap-2">
             {/* Only when there IS something waiting. A permanent nav
@@ -296,62 +331,110 @@ export function OrdersIndex(): ReactElement {
         }
       />
 
-      {/* ── How the day is going, before the table says anything ──── */}
+      {/* ── How the day is going, before the table says anything ────
+             Four tiles on the shared `Stat`, each carrying its own
+             breakdown under a hairline — the comps' shape, and the
+             reason `Stat` grew `icon`/`unit`/`foot` rather than this
+             page keeping a tile of its own. A value is ABSENT rather
+             than 0 while loading: a tile reading "0 delivered" that
+             then becomes 8 has told you something false in between. */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <OrderStat
+        <Stat
           label="Total orders"
-          value={summary.data?.total}
+          icon={<ShoppingCart size={13} aria-hidden />}
+          value={summary.data?.total ?? <span className="text-text-faint">—</span>}
+          unit={summary.data === undefined ? undefined : 'orders'}
           tone="neutral"
-          foot={
-            summary.data === undefined ? null : (
-              <>
-                COD placed <Money amount={summary.data.totalCodInr} />
-              </>
-            )
-          }
+          {...(summary.data === undefined
+            ? {}
+            : {
+                foot: [
+                  { label: 'COD placed', value: <Money amount={summary.data.totalCodInr} /> },
+                ],
+              })}
         />
-        <OrderStat
+        <Stat
           label="Being processed"
-          value={summary.data === undefined ? undefined : countOf(PROCESSING)}
+          icon={<PhoneCall size={13} aria-hidden />}
+          value={
+            summary.data === undefined ? (
+              <span className="text-text-faint">—</span>
+            ) : (
+              countOf(PROCESSING)
+            )
+          }
+          unit={summary.data === undefined ? undefined : 'orders'}
           tone={countOf(PROCESSING) > 0 ? 'warn' : 'neutral'}
-          foot={
-            summary.data === undefined ? null : (
-              <>{counts.get(OrderStatus.PENDING_CONFIRMATION)?.count ?? 0} awaiting the call</>
-            )
-          }
+          {...(summary.data === undefined
+            ? {}
+            : {
+                foot: [
+                  {
+                    label: 'Awaiting the call',
+                    value: counts.get(OrderStatus.PENDING_CONFIRMATION)?.count ?? 0,
+                  },
+                ],
+              })}
         />
-        <OrderStat
+        <Stat
           label="On the road"
-          value={summary.data === undefined ? undefined : countOf(MOVING)}
+          icon={<Truck size={13} aria-hidden />}
+          value={
+            summary.data === undefined ? <span className="text-text-faint">—</span> : countOf(MOVING)
+          }
+          unit={summary.data === undefined ? undefined : 'parcels'}
           tone="neutral"
-          foot={
-            summary.data === undefined ? null : (
-              <>
-                <Money amount={String(codOf(MOVING))} /> still to collect
-              </>
-            )
-          }
+          {...(summary.data === undefined
+            ? {}
+            : {
+                foot: [
+                  {
+                    label: 'Still to collect',
+                    value: <Money amount={String(codOf(MOVING))} />,
+                  },
+                ],
+              })}
         />
-        <OrderStat
+        <Stat
           label="Delivered"
-          value={summary.data === undefined ? undefined : counts.get(OrderStatus.DELIVERED)?.count}
-          tone="good"
-          foot={
-            summary.data === undefined ? null : (
-              <>
-                {countOf(RETURNING)} coming back ·{' '}
-                <Money amount={String(counts.get(OrderStatus.DELIVERED)?.cod ?? 0)} /> collected
-              </>
-            )
+          icon={<CheckCircle2 size={13} aria-hidden />}
+          value={
+            summary.data === undefined ? (
+              <span className="text-text-faint">—</span>
+            ) : (counts.get(OrderStatus.DELIVERED)?.count ?? 0)
           }
+          unit={summary.data === undefined ? undefined : 'settled'}
+          tone="good"
+          {...(summary.data === undefined
+            ? {}
+            : {
+                foot: [
+                  {
+                    label: 'Collected',
+                    value: <Money amount={String(counts.get(OrderStatus.DELIVERED)?.cod ?? 0)} />,
+                  },
+                  { label: 'Coming back', value: countOf(RETURNING) },
+                ],
+              })}
         />
       </div>
 
-      {/* ── Search. No date range and no "more filters": the endpoint
-             takes status and search, and a control that cannot filter
-             is worse than an absent one. ─────────────────────────── */}
-      <Card className="mb-3">
-        <CardBody className="flex flex-wrap items-center gap-2 py-3">
+      {/* ── ONE banded region: the band names it, the filters narrow
+             it, the chips say what is in it, and the table is it.
+             They were four separate cards with gaps between them, so
+             a filter and the rows it governs read as unrelated
+             panels. ───────────────────────────────────────────── */}
+      <SectionBand
+        index="04"
+        title="Consignment monitor"
+        note={
+          list.data === undefined
+            ? undefined
+            : `${list.data.items.length} of ${list.data.total} shown`
+        }
+      />
+      <div className="border-border bg-surface border border-b-0 px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -488,55 +571,63 @@ export function OrdersIndex(): ReactElement {
               Clear
             </Button>
           )}
-        </CardBody>
-      </Card>
+        </div>
 
-      {/* ── Chips. The counts live HERE rather than only in a dropdown,
-             because "how many are stuck at the call" is the question
-             this page is opened to answer. ───────────────────────── */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        <Chip
-          label="All"
-          count={summary.data?.total}
-          active={params.status === ''}
-          onClick={() => updateUrl({ status: '', page: 1 })}
-        />
-        {CHIP_STATUSES.map((s) => {
-          const n = counts.get(s)?.count ?? 0;
-          // A status this seller has never had is not a filter worth
-          // offering; one they have had stays even at zero, so a
-          // filter cannot vanish out from under somebody mid-task.
-          if (n === 0 && params.status !== s) return null;
-          return (
-            <Chip
-              key={s}
-              label={statusLabel(s)}
-              count={n}
-              kind={orderStatusKind(s)}
-              active={params.status === s}
-              onClick={() => updateUrl({ status: s, page: 1 })}
-            />
-          );
-        })}
+        {/* ── Chips. The counts live HERE rather than only in a
+               dropdown, because "how many are stuck at the call" is the
+               question this page is opened to answer. ───────────── */}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <FilterChip
+            label="All"
+            count={summary.data?.total}
+            active={params.status === ''}
+            onClick={() => updateUrl({ status: '', page: 1 })}
+          />
+          {CHIP_STATUSES.map((s) => {
+            const n = counts.get(s)?.count ?? 0;
+            // A status this seller has never had is not a filter worth
+            // offering; one they have had stays even at zero, so a
+            // filter cannot vanish out from under somebody mid-task.
+            if (n === 0 && params.status !== s) return null;
+            return (
+              <FilterChip
+                key={s}
+                label={statusLabel(s)}
+                count={n}
+                dotColor={`var(--status-${orderStatusKind(s)}-fg)`}
+                active={params.status === s}
+                onClick={() => updateUrl({ status: s, page: 1 })}
+              />
+            );
+          })}
+        </div>
       </div>
 
       {list.isLoading ? (
-        <LoadingState label="Loading orders…" />
+        <BandBody>
+          <LoadingState label="Loading orders…" />
+        </BandBody>
       ) : list.isError ? (
-        <ErrorState
-          message={list.error?.message ?? 'Failed to load orders.'}
-          retry={() => void list.refetch()}
-        />
+        <BandBody>
+          <ErrorState
+            message={list.error?.message ?? 'Failed to load orders.'}
+            retry={() => void list.refetch()}
+          />
+        </BandBody>
       ) : !list.data || list.data.items.length === 0 ? (
-        <EmptyState
-          title={filtered ? 'No orders match that' : 'No orders yet'}
-          description={
-            filtered
-              ? 'Try clearing the filters — the counts on the chips above show what you do have.'
-              : 'Orders appear here as you create them or your CSVs import.'
-          }
-        />
+        <BandBody>
+          <EmptyState
+            title={filtered ? 'No orders match that' : 'No orders yet'}
+            description={
+              filtered
+                ? 'Try clearing the filters — the counts on the chips above show what you do have.'
+                : 'Orders appear here as you create them or your CSVs import.'
+            }
+            bare
+          />
+        </BandBody>
       ) : (
+        <BandBody flush>
         <Table>
           <THead>
             <Tr>
@@ -637,79 +728,8 @@ export function OrdersIndex(): ReactElement {
             </tr>
           </tfoot>
         </Table>
+        </BandBody>
       )}
     </div>
-  );
-}
-
-/**
- * One tile.
- *
- * `tone` is what carries colour in the light theme (tokens.css tints a
- * `data-tone` tile and its figure); in dark it is a border. The value
- * is deliberately absent rather than 0 while loading — a tile that
- * reads "0 delivered" and then changes to 8 has told you something
- * false in between.
- */
-function OrderStat({
-  label,
-  value,
-  foot,
-  tone,
-}: {
-  readonly label: string;
-  readonly value: number | undefined;
-  readonly foot: ReactElement | null;
-  readonly tone: 'neutral' | 'warn' | 'bad' | 'good';
-}): ReactElement {
-  return (
-    <div data-tone={tone} className="border-border bg-surface-raised rounded-lg border px-4 py-3">
-      <div className="text-text-muted text-xs font-medium uppercase tracking-wide">{label}</div>
-      {/* `data-stat-value` is the hook tokens.css uses to put the
-          figure in the deeper hue of its tone — without it a tinted
-          tile has a pale ground and a plain number sitting on it. */}
-      <div data-stat-value className="mt-1 text-2xl font-semibold tabular-nums">
-        {value === undefined ? <span className="text-text-faint">—</span> : value}
-      </div>
-      <div className="text-text-faint mt-0.5 text-xs">{foot ?? ' '}</div>
-    </div>
-  );
-}
-
-/** A filter chip carrying its own count. */
-function Chip({
-  label,
-  count,
-  active,
-  kind,
-  onClick,
-}: {
-  readonly label: string;
-  readonly count: number | undefined;
-  readonly active: boolean;
-  readonly kind?: string;
-  readonly onClick: () => void;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={
-        active
-          ? 'bg-accent-fill text-accent-fg rounded-full px-3 py-1 text-xs font-medium'
-          : 'border-border text-text-muted hover:text-text-body hover:border-border-strong rounded-full border px-3 py-1 text-xs transition-colors'
-      }
-    >
-      {kind !== undefined && !active && (
-        <span
-          aria-hidden
-          className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
-          style={{ background: `var(--status-${kind}-fg)` }}
-        />
-      )}
-      {label}
-      {count !== undefined && <span className="ml-1.5 tabular-nums opacity-70">{count}</span>}
-    </button>
   );
 }

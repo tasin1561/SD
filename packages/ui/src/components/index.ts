@@ -17,6 +17,7 @@ export * from './app-shell';
 export * from './barcode';
 export * from './button';
 export * from './card';
+export * from './console';
 export * from './data-table';
 export * from './feedback';
 export * from './money';

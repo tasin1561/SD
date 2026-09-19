@@ -66,6 +66,19 @@ export type NavItem = {
 export type NavGroup = {
   /** Omit for a single ungrouped list. */
   readonly heading?: string;
+  /**
+   * A short ordinal shown at the END of the heading row — "01", "02".
+   *
+   * Optional and additive: an app that sets none renders exactly as
+   * before, which is what keeps apps/admin unchanged while apps/seller
+   * takes the numbered sections its comps call for.
+   *
+   * It is a LABEL, not a count. The count belongs on the item
+   * (`badge`), because "three things are waiting in here" and "this is
+   * the second section" are different claims and only one of them
+   * changes during the day.
+   */
+  readonly index?: string;
   readonly items: readonly NavItem[];
 };
 
@@ -141,8 +154,16 @@ function NavLinks({
       {groups.map((group, gi) => (
         <div key={group.heading ?? `group-${gi}`} className="mb-1">
           {group.heading !== undefined && (
-            <div className="text-text-faint px-4 pt-3 pb-1 text-xs font-semibold tracking-[0.09em] uppercase">
-              {group.heading}
+            <div className="text-text-faint flex items-center gap-2 px-4 pt-3 pb-1 text-xs font-semibold tracking-[0.09em] uppercase">
+              <span className="min-w-0 truncate">{group.heading}</span>
+              {/* Pushed right and `aria-hidden`: it orders the sections
+                  for the eye and says nothing a screen reader needs,
+                  which already gets the headings in order. */}
+              {group.index !== undefined && (
+                <span aria-hidden className="ml-auto shrink-0 font-normal opacity-70">
+                  {group.index}
+                </span>
+              )}
             </div>
           )}
           {group.items.map((item) => {
@@ -296,6 +317,7 @@ export function AppShell({
   headerCenter,
   drawerActions,
   footerNote,
+  statusStrip,
   pathname,
   Link,
   onSignOut,
@@ -357,6 +379,20 @@ export function AppShell({
    */
   readonly drawerActions?: ReactNode;
   readonly footerNote?: string;
+  /**
+   * A thin strip along the bottom of the content column.
+   *
+   * Optional, and an app that passes none renders exactly as before.
+   * It is for standing FACTS — a rate, a mode, a setting that changes
+   * what every page on top of it means — never for alerts: something
+   * that needs acting on belongs where the acting happens, and a
+   * permanent strip is the one place a person stops looking.
+   *
+   * Inside the scrolling column rather than fixed to the viewport, so
+   * it never covers the last row of a list on a phone (the shell
+   * deliberately does not create an inner scroll container).
+   */
+  readonly statusStrip?: ReactNode;
   readonly pathname: string | null;
   readonly Link: LinkLike;
   readonly onSignOut: () => void;
@@ -385,7 +421,14 @@ export function AppShell({
       }}
     >
       {/* ── Desktop sidebar ───────────────────────────────────────── */}
-      <aside className="border-border bg-surface hidden w-[236px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex lg:h-dvh">
+      {/* `data-slot`, matching the drawer's: a theme that wants to paint
+          the rail has a hook that names it rather than reaching for the
+          only <aside> on the page and hoping it stays the only one. It
+          changes no styles on its own. */}
+      <aside
+        data-slot="nav-rail"
+        className="border-border bg-surface hidden w-[236px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex lg:h-dvh"
+      >
         <BrandBlock
           brand={brand}
           subtitle={subtitle}
@@ -589,6 +632,20 @@ export function AppShell({
         >
           {children}
         </main>
+
+        {statusStrip !== undefined && (
+          // `min-w-0` and nothing that can push: the strip is the last
+          // thing added to a shell whose responsive spec asserts no
+          // horizontal scroll at 320px, and a row of facts is exactly
+          // the shape that overflows if it is allowed to.
+          <div
+            data-slot="status-strip"
+            className="border-border text-text-faint min-w-0 border-t px-3 py-2 text-xs sm:px-5 lg:px-6"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+          >
+            {statusStrip}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -23,11 +23,28 @@ import type { ReactElement, ReactNode } from 'react';
 export function PageHeader({
   title,
   subtitle,
+  breadcrumb,
+  meta,
   action,
   className,
 }: {
   readonly title: ReactNode;
   readonly subtitle?: ReactNode;
+  /**
+   * Where this page sits — a `<Crumbs>`, above the title.
+   *
+   * Optional and additive: a page that passes none renders exactly as
+   * it did, which is what leaves apps/admin untouched.
+   */
+  readonly breadcrumb?: ReactNode;
+  /**
+   * Standing facts about the page, under the title — `<MetaChip>`s.
+   *
+   * Facts, never actions. An action goes in `action`, where a person
+   * looks for one; a row of chips that sometimes does something is a
+   * row nobody trusts to click.
+   */
+  readonly meta?: ReactNode;
   readonly action?: ReactNode;
   readonly className?: string;
 }): ReactElement {
@@ -43,10 +60,14 @@ export function PageHeader({
       )}
     >
       <div className="min-w-0">
+        {breadcrumb !== undefined && <div className="mb-1.5">{breadcrumb}</div>}
         <h1 className="text-text-bright flex items-center gap-2 text-lg font-semibold tracking-tight sm:text-xl">
           {title}
           {help.trigger}
         </h1>
+        {meta !== undefined && (
+          <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">{meta}</div>
+        )}
         {/*
           A <div>, NEVER a <p>. The panel is itself a <div> (the
           grid-rows disclosure), and a subtitle is often a paragraph of

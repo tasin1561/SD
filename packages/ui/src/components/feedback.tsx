@@ -105,13 +105,35 @@ export function ErrorNote({
 export function Stat({
   label,
   value,
+  unit,
+  icon,
   hint,
+  foot,
   tone = 'neutral',
   className,
 }: {
   readonly label: string;
   readonly value: ReactNode;
+  /**
+   * The word after the figure — "orders", "parcels", "settled".
+   *
+   * Set small and beside the number rather than folded into it, so the
+   * figure stays the thing the eye lands on. Optional; a tile that
+   * passes none is byte-identical to what it was.
+   */
+  readonly unit?: ReactNode;
+  /** A glyph in a tinted square, top-right. `aria-hidden` by the caller. */
+  readonly icon?: ReactNode;
   readonly hint?: ReactNode;
+  /**
+   * Label/value pairs below a hairline — what the figure is MADE of.
+   *
+   * The comps put two or three under every tile, and they earn the
+   * space: "28 confirmed" is a number, "6 orders still queued at the
+   * call desk" is the reason to do something. Rendered as a definition
+   * list so the pairing is in the accessibility tree too.
+   */
+  readonly foot?: ReadonlyArray<{ readonly label: ReactNode; readonly value: ReactNode }>;
   readonly tone?: 'neutral' | 'warn' | 'bad' | 'good';
   readonly className?: string;
 }): ReactElement {
@@ -130,20 +152,46 @@ export function Stat({
         className,
       )}
     >
-      <p className="text-text-muted text-xs font-medium tracking-wide uppercase">{label}</p>
-      <div
-        data-stat-value
-        className={clsx(
-          'mt-1.5 text-xl font-semibold',
-          tone === 'neutral' && 'text-text-bright',
-          tone === 'warn' && 'text-[var(--status-pending-fg)]',
-          tone === 'bad' && 'text-[var(--color-critical)]',
-          tone === 'good' && 'text-[var(--status-delivered-fg)]',
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-text-muted min-w-0 text-xs font-medium tracking-wide uppercase">
+          {label}
+        </p>
+        {icon !== undefined && (
+          <span className="bg-surface-hover text-text-muted grid h-6 w-6 shrink-0 place-items-center rounded-[var(--radius-2)]">
+            {icon}
+          </span>
         )}
-      >
-        {value}
+      </div>
+      <div className="mt-1.5 flex items-baseline gap-1.5">
+        <span
+          data-stat-value
+          className={clsx(
+            'text-xl font-semibold',
+            tone === 'neutral' && 'text-text-bright',
+            tone === 'warn' && 'text-[var(--status-pending-fg)]',
+            tone === 'bad' && 'text-[var(--color-critical)]',
+            tone === 'good' && 'text-[var(--status-delivered-fg)]',
+          )}
+        >
+          {value}
+        </span>
+        {unit !== undefined && <span className="text-text-faint text-xs">{unit}</span>}
       </div>
       {hint !== undefined && <p className="text-text-faint mt-1 text-xs leading-snug">{hint}</p>}
+      {foot !== undefined && foot.length > 0 && (
+        <dl className="border-border mt-2.5 space-y-1 border-t pt-2">
+          {foot.map((row, i) => (
+            // `gap-3` and `min-w-0` on the label: these sit four across
+            // on a desktop and one across on a phone, and a long label
+            // beside a long figure is the shape that pushes a page
+            // sideways.
+            <div key={i} className="flex items-baseline justify-between gap-3">
+              <dt className="text-text-faint min-w-0 text-xs">{row.label}</dt>
+              <dd className="text-text-body shrink-0 text-xs font-medium">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }

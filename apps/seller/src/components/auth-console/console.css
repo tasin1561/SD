@@ -7,65 +7,88 @@
  * therefore renders in the marketing palette without touching a single
  * component class outside this route.
  *
- * Palette source: docs/design-direction.md
- * Shared verbatim with apps/admin/src/app/login/login-console.css —
- * keep the two in sync.
+ * Palette source: PRECISION LOGISTICS — `packages/ui/src/seller-theme.css`.
+ *
+ * ── 2026-09-19: this file DIVERGED from apps/admin's copy, on purpose ──
+ * The two were kept byte-identical for months and the header said so.
+ * They cannot be any more: apps/seller moved to the reference comps and
+ * apps/admin did not, and the login screen is the FIRST thing a seller
+ * sees. Left on the old cyan it would have been a different product
+ * from the console behind it — which is exactly the "theme change
+ * touches SIX blocks" trap FE-6 names, arriving as a login page that
+ * reads like a broken deploy.
+ *
+ * So the TOKEN VALUES here now track `seller-theme.css` and nothing
+ * else. What is NOT copied from it is the instrument chrome below —
+ * the grid, the ticks, the telemetry caps, the boot rise. That is this
+ * screen's own structure rather than a palette, it is what makes a
+ * login feel like an instrument, and the comps have no login page to
+ * say otherwise.
+ *
+ * apps/admin/src/components/auth-console/console.css is UNCHANGED and
+ * keeps the cyan. Do not "re-sync" the two.
  */
 
 .mc-login {
-  /* MISSION CONTROL raw palette */
-  --sky: #38bdf8;
-  --sky-deep: #0284c7;
-  --saffron: #f59e0b;
+  /* The instrument accents. `--sky` is the glow, the grid and the
+     status rule; it is the app's own accent now rather than a cyan
+     that appears nowhere else in the product. */
+  --sky: #4b83f0;
+  --sky-deep: #2563eb;
+  --saffron: #fbbf24;
   --green: #34d399;
-  --grid: rgba(56, 189, 248, 0.05);
-  --glow: rgba(56, 189, 248, 0.35);
+  --grid: rgba(148, 163, 184, 0.06);
+  --glow: rgba(37, 99, 235, 0.35);
 
-  /* @skydrop/ui token overrides → NIGHT OPS */
-  --color-bg: #060b16;
-  --color-surface: #0c1424;
-  --color-surface-raised: #131d31;
-  --color-surface-hover: rgba(56, 189, 248, 0.06);
-  --color-border: rgba(148, 178, 255, 0.1);
-  --color-border-strong: rgba(148, 178, 255, 0.22);
-  --color-text-faint: #6c8098;
-  --color-text-muted: #8296ae;
-  --color-text-body: #c3d0e0;
-  --color-text-bright: #f3f7fc;
-  --color-accent: #38bdf8;
-  --color-accent-hover: #7dd3fc;
-  /* The console keeps its own cyan — this screen is MISSION CONTROL,
-     not the app palette. It needs the fill token all the same, or the
-     primary Button (now `bg-accent-fill`) renders with no background
-     at all. Near-black on the cyan is 8.96; keeping the DARKER cyan as
-     the hover would drop it to 4.69, so the hover goes lighter. */
-  --color-accent-fill: #38bdf8;
-  --color-accent-fill-hover: #7dd3fc;
-  --color-accent-fg: #051018;
-  --color-accent-ring: rgba(56, 189, 248, 0.45);
+  /* @skydrop/ui token overrides → PRECISION LOGISTICS, dark.
+     Byte-for-byte the `:root` block of seller-theme.css, so the login
+     screen and the console behind it are one surface. */
+  --color-bg: #090d16;
+  --color-surface: #0f1623;
+  --color-surface-raised: #1c2940;
+  --color-surface-hover: #162032;
+  --color-border: #1c283d;
+  --color-border-strong: #2e405e;
+  --color-text-faint: #8296b0;
+  --color-text-muted: #94a3b8;
+  --color-text-body: #cbd5e1;
+  --color-text-bright: #f8fafc;
+  /* Split accent, the tokens.css rule: #b4c5ff reads as a link at 11.5
+     on this ground, #2563eb carries white at 5.17, and no one value
+     does both. The old cyan fill took NEAR-BLACK text; this one takes
+     white, so `--color-accent-fg` inverts with it. */
+  --color-accent: #b4c5ff;
+  --color-accent-hover: #dbe1ff;
+  --color-accent-fill: #2563eb;
+  --color-accent-fill-hover: #1d4ed8;
+  --color-accent-fg: #ffffff;
+  --color-accent-ring: rgba(96, 137, 235, 0.5);
   --color-critical: #f87171;
-  --color-critical-tint: rgba(248, 113, 113, 0.12);
-  --color-critical-ring: rgba(248, 113, 113, 0.4);
+  --color-critical-tint: rgba(248, 113, 113, 0.14);
+  --color-critical-ring: rgba(248, 113, 113, 0.42);
 }
 
 /* DAY OPS — follows the OS unless the app pinned a theme. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme='dark']) .mc-login {
-    /* DAY CORRIDOR — matches @skydrop/ui's light tokens, so the login
-       screen and the app behind it are one product. Byte-identical to
-       the [data-theme='light'] copy below. */
+    /* PRECISION LOGISTICS, light — the `[data-theme='light']` block of
+       seller-theme.css, so the login screen and the console behind it
+       are one product. The DECLARATION LIST is byte-identical to the
+       [data-theme='light'] copy below; only the nesting indent differs.
+       Drift between the two means the theme changes when you touch the
+       toggle, which is the exact failure FE-6 names. */
     --sky: #2563eb;
     --sky-deep: #1d4ed8;
-    --grid: rgba(37, 99, 235, 0.07);
-    --glow: rgba(37, 99, 235, 0.2);
+    --grid: rgba(195, 198, 215, 0.25);
+    --glow: rgba(0, 74, 198, 0.18);
 
     --color-bg: #f8f9ff;
     --color-surface: #ffffff;
-    --color-surface-raised: #ffffff;
+    --color-surface-raised: #e5eeff;
     --color-surface-hover: #eff4ff;
-    --color-border: #c3c6d7;
-    --color-border-strong: #737686;
-    --color-text-faint: #5f6274;
+    --color-border: #e2e8f0;
+    --color-border-strong: #cbd5e1;
+    --color-text-faint: #5b6376;
     --color-text-muted: #4d5064;
     --color-text-body: #434655;
     --color-text-bright: #0b1c30;
@@ -79,21 +102,20 @@
 }
 
 [data-theme='light'] .mc-login {
-  /* DAY CORRIDOR — matches @skydrop/ui's light tokens, so the login
-     screen and the app behind it are one product. Byte-identical to
-     the [data-theme='light'] copy below. */
+  /* PRECISION LOGISTICS, light — the pinned-theme copy. The
+     DECLARATION LIST is byte-identical to the media-query copy above. */
   --sky: #2563eb;
   --sky-deep: #1d4ed8;
-  --grid: rgba(37, 99, 235, 0.07);
-  --glow: rgba(37, 99, 235, 0.2);
+  --grid: rgba(195, 198, 215, 0.25);
+  --glow: rgba(0, 74, 198, 0.18);
 
   --color-bg: #f8f9ff;
   --color-surface: #ffffff;
-  --color-surface-raised: #ffffff;
+  --color-surface-raised: #e5eeff;
   --color-surface-hover: #eff4ff;
-  --color-border: #c3c6d7;
-  --color-border-strong: #737686;
-  --color-text-faint: #5f6274;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-text-faint: #5b6376;
   --color-text-muted: #4d5064;
   --color-text-body: #434655;
   --color-text-bright: #0b1c30;
