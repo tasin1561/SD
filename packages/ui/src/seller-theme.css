@@ -1,0 +1,488 @@
+/*
+ * PRECISION LOGISTICS — the apps/seller skin.
+ * ═════════════════════════════════════════════════════════════════════
+ *
+ * A LAYER OVER `tokens.css`, NOT A REPLACEMENT FOR IT.
+ *
+ * ── Why a separate file rather than editing tokens.css ───────────────
+ * `tokens.css` is imported by apps/admin AND apps/seller (FE-6). The
+ * owner asked for apps/seller to move to the reference comps and for
+ * apps/admin to look EXACTLY as it does today, so a palette edit in the
+ * shared file is not available: every value there is read by both.
+ *
+ * Three ways to scope a palette to one app were on the table:
+ *
+ *   (a) New token NAMES (`--sd-seller-bg`) consumed only by seller.
+ *       Rejected: every component in `@skydrop/ui/components` reads the
+ *       existing names, so seller would need a forked copy of all 24
+ *       primitives — the parallel component set FE-6 exists to prevent.
+ *   (b) A `[data-console='seller']` attribute wrapper.
+ *       Rejected as unnecessary: the attribute would have to be on
+ *       <html>, which is exactly what the import boundary already is,
+ *       and it adds a selector level to every rule for no extra safety.
+ *   (c) THIS — REDEFINE the same variables, in a file only apps/seller
+ *       imports, loaded AFTER tokens.css.
+ *
+ * (c) wins because it is provable by construction and cheap to check:
+ * apps/admin's `globals.css` does not contain this file's name, so not
+ * one of these declarations can reach it. `seller-theme-is-seller-only`
+ * in apps/seller's tests reads both stylesheets and pins that.
+ *
+ * The components are untouched. They already read `--color-surface`,
+ * `--status-*` and the rest; resolving those differently is the whole
+ * mechanism — the same technique tokens.css already uses to paint the
+ * light nav rail without rewriting AppShell.
+ *
+ * ── The two themes ──────────────────────────────────────────────────
+ * Sampled from `SkY_DrOp_ThEme/<page>_{Light,Dark}/DESIGN.md`, which is
+ * one token sheet for every light page and one for every dark page
+ * (verified: all six light sheets are byte-identical, likewise dark).
+ * The status colours are not in that front-matter — they live in each
+ * comp's `code.html` Tailwind config, and are taken from there.
+ *
+ * DARK REMAINS THE DEFAULT. `tokens.css` declares dark on `:root` and
+ * light under `[data-theme='light']` ONLY — there is no
+ * `prefers-color-scheme` copy in this design world, because the theme is
+ * pinned by cookie and defaults to dark regardless of the OS (FE-7).
+ * This file mirrors that shape exactly, which is also why it has no
+ * media-query copy to keep byte-identical: apps/track and apps/marketing
+ * are the two worlds that need both copies, and neither imports this.
+ *
+ * ── Contrast ────────────────────────────────────────────────────────
+ * Computed, not eyeballed (the FE-6 rule). Every pairing that ships
+ * clears 4.5:1:
+ *
+ *   dark   body 13.1 · muted 7.6 · faint 6.4 on the canvas; accent as
+ *          text 11.5; white on the accent fill 5.17; every chip ≥ 5.8
+ *          on its own tint.
+ *   light  body 8.9 on the ground and 9.4 on a card; faint 6.0; accent
+ *          as a link 7.5; white on the accent fill 5.17; every chip
+ *          ≥ 4.8 on its own tint; the whole rail ramp ≥ 5.4.
+ */
+
+/* ═════════════════════════════════════════════════════════════════════
+ * DARK — the default.
+ *
+ * Deeper and bluer than the shared dark theme: the comps put a near
+ * black-navy canvas under cards that are themselves navy, so a card
+ * reads as a raised object rather than as a lighter grey rectangle.
+ * That separation is what makes the dense tables legible, and it is the
+ * same "contrast of surface" argument the light theme already makes.
+ * ═════════════════════════════════════════════════════════════════════ */
+:root {
+  --color-bg: #090d16; /* bg-canvas-dark */
+  --color-surface: #0f1623; /* bg-surface-dark — cards, the rail */
+  --color-surface-raised: #1c2940; /* bg-surface-raised-dark — table heads */
+  --color-surface-hover: #162032; /* bg-surface-hover-dark */
+  --color-border: #1c283d; /* border-subtle-dark */
+  --color-border-strong: #2e405e; /* border-strong-dark */
+
+  /* The text ramp is slate, as the comps are. `faint` is NOT the
+     reference's #64748b: that is 4.08 on this canvas, and faint carries
+     timestamps and column captions — real reading, not decoration. */
+  --color-text-faint: #8296b0;
+  --color-text-muted: #94a3b8; /* text-body-dark */
+  --color-text-body: #cbd5e1;
+  --color-text-strong: #e2e8f0; /* text-strong-dark */
+  --color-text-bright: #f8fafc; /* text-bright-dark */
+
+  /* Accent stays SPLIT (the tokens.css rule): #b4c5ff reads as a link
+     at 11.5, #2563eb carries white at 5.17, and no single value does
+     both. Both come from the dark sheet — `primary` and
+     `primary-container`. */
+  --color-accent: #b4c5ff;
+  --color-accent-hover: #dbe1ff;
+  --color-accent-fill: #2563eb;
+  --color-accent-fill-hover: #1d4ed8;
+  --color-accent-fg: #ffffff;
+  --color-accent-tint: rgba(37, 99, 235, 0.16);
+  --color-accent-ring: rgba(96, 137, 235, 0.5);
+
+  --color-critical: #f87171; /* status-error, dark config */
+  --color-critical-tint: rgba(248, 113, 113, 0.14);
+  --color-critical-ring: rgba(248, 113, 113, 0.42);
+
+  /*
+   * Status chips — OPAQUE tints, not alpha.
+   *
+   * The shared dark theme uses `rgba(…, 0.12)` fills, which change with
+   * whatever is behind them: a chip on a hovered row, on a raised table
+   * head and on a card were three different colours. These are mixed
+   * once against the card ground and stay put.
+   */
+  --status-draft-bg: #19202e;
+  --status-draft-fg: #9aa8bd;
+  --status-draft-ring: #2b3547;
+
+  --status-pending-bg: #2a2112;
+  --status-pending-fg: #fbbf24; /* status-warn, dark config */
+  --status-pending-ring: #4a3a16;
+
+  --status-confirmed-bg: #0c2231;
+  --status-confirmed-fg: #38bdf8; /* status-info */
+  --status-confirmed-ring: #14415c;
+
+  --status-in-transit-bg: #1f1c36;
+  --status-in-transit-fg: #a78bfa;
+  --status-in-transit-ring: #392f63;
+
+  --status-delivered-bg: #0c2620;
+  --status-delivered-fg: #34d399; /* status-success */
+  --status-delivered-ring: #14503f;
+
+  --status-rto-bg: #2a1c11;
+  --status-rto-fg: #fb923c;
+  --status-rto-ring: #4c3118;
+
+  --status-failed-bg: #2b1517;
+  --status-failed-fg: #f87171; /* status-error */
+  --status-failed-ring: #55262a;
+
+  --status-cancelled-bg: #161d2a;
+  --status-cancelled-fg: #8b98ad;
+  --status-cancelled-ring: #28313f;
+
+  /*
+   * Type. IBM Plex Sans for prose, JetBrains Mono for anything that is
+   * an IDENTIFIER or a FIGURE — a waybill, an order number, a SKU, an
+   * amount, a timestamp. The comps lean on that split heavily and it is
+   * doing work rather than decorating: a column of proportional digits
+   * does not line up, and a waybill in a humanist sans is a waybill you
+   * misread.
+   *
+   * The values are the `next/font/local` variables declared in
+   * apps/seller's root layout, with a real fallback stack behind them.
+   *
+   * NOTE the shape change: tokens.css names a family LITERALLY
+   * (`'Geist', ui-sans-serif, …`) while the layout declares
+   * `--font-geist-sans`. next/font mints its own family name
+   * (`__geist_abc123`), so the literal 'Geist' has never matched
+   * anything and both apps have been rendering in the system sans all
+   * along. This file wires the variable, so the committed face is
+   * actually the one you see. apps/admin is LEFT AS IT IS — the brief
+   * is that it renders exactly as today, and fixing that would change
+   * every glyph on it.
+   */
+  --font-sans:
+    var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /*
+   * The type scale, from the sheet's `typography` block.
+   *
+   * Denser than the shared scale by 1–2px at every step. That is the
+   * point of the comps: they fit a nine-column consignment table on a
+   * laptop. The floor is still 12px for anything a person reads, and
+   * the 16px coarse-pointer input rule in tokens.css is untouched.
+   *
+   *   xs   12px  label-md / body-sm — captions, meta, timestamps
+   *   sm   13px  body-md — the DEFAULT for table bodies
+   *   base 15px  body-lg — prose
+   *   md   16px  headline-sm — a card title
+   *   lg   20px  headline-md — a section title
+   *   xl   22px  headline-lg-mobile
+   *   2xl  28px  headline-lg — the page title
+   */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+
+  /* The sheet's `rounded` scale — tighter than the shared one. A 7px
+     card corner reads as a consumer app; these read as an instrument. */
+  --radius-1: 2px;
+  --radius-2: 4px;
+  --radius-3: 6px;
+
+  /* Shadows carry the card away from the canvas rather than a border
+     doing all the work. `hud` is the comps' own name for the deep one. */
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 20px 45px -15px rgba(0, 0, 0, 0.7);
+
+  --color-credit: #34d399;
+  --color-debit: #f87171;
+
+  /*
+   * Console-only tokens. Read by the seller chrome (the nav rail, the
+   * section bands, the status strip) and by nothing in
+   * `@skydrop/ui/components` — a component that needed one would be a
+   * component apps/admin could not render.
+   */
+  --console-rail-bg: #0a0e17; /* canvas-subtle — below the cards */
+  --console-rail-border: #1c283d;
+  --console-rail-active-bg: rgba(37, 99, 235, 0.18);
+  --console-rail-active-fg: #dbe1ff;
+  --console-rail-active-bar: #2563eb;
+  --console-band-bg: #0f1623;
+  --console-strip-bg: #0a0e17;
+  --console-grid: rgba(148, 163, 184, 0.06);
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+ * LIGHT — "Precision Logistics" proper.
+ *
+ * A blue-tinted near-white ground (#f8f9ff) with WHITE cards on it, and
+ * — unlike the shared DAY DECK theme — a LIGHT nav rail. That is not a
+ * preference: the comps show a white rail with a pale-blue active pill,
+ * and DAY DECK's navy rail is a different design's answer to the same
+ * problem. The override is below, under "Light-only chrome".
+ * ═════════════════════════════════════════════════════════════════════ */
+[data-theme='light'] {
+  --color-bg: #f8f9ff; /* surface / background */
+  --color-surface: #ffffff; /* surface-container-lowest */
+  --color-surface-raised: #e5eeff; /* surface-container — table heads */
+  --color-surface-hover: #eff4ff; /* surface-container-low */
+  --color-border: #e2e8f0; /* border-subtle */
+  --color-border-strong: #cbd5e1; /* border-strong */
+
+  --color-text-faint: #5b6376;
+  --color-text-muted: #4d5064;
+  --color-text-body: #434655; /* on-surface-variant */
+  --color-text-strong: #1a2b3f;
+  --color-text-bright: #0b1c30; /* on-surface */
+
+  --color-accent: #004ac6; /* primary */
+  --color-accent-hover: #0053db; /* surface-tint */
+  --color-accent-fill: #2563eb; /* primary-container */
+  --color-accent-fill-hover: #1d4ed8; /* primary-hover */
+  --color-accent-fg: #ffffff;
+  --color-accent-tint: rgba(0, 74, 198, 0.07);
+  --color-accent-ring: rgba(37, 99, 235, 0.4);
+
+  --color-critical: #ba1a1a; /* error */
+  --color-critical-tint: #fef2f2; /* status-error-bg */
+  --color-critical-ring: #fecaca; /* status-error-border */
+
+  /* Chips: the comps' pale tint + its own hairline ring, with a
+     foreground deep enough to clear 4.5:1 on that tint. The reference's
+     own `status-*` foregrounds are a shade too light for their own
+     backgrounds (#059669 on #ecfdf5 is 3.1), so each is taken one step
+     down the same ramp. */
+  --status-draft-bg: #f1f5f9;
+  --status-draft-fg: #334155;
+  --status-draft-ring: #e2e8f0;
+
+  --status-pending-bg: #fffbeb; /* status-warn-bg */
+  --status-pending-fg: #b45309;
+  --status-pending-ring: #fde68a; /* status-warn-border */
+
+  --status-confirmed-bg: #f0f9ff; /* status-info-bg */
+  --status-confirmed-fg: #0369a1;
+  --status-confirmed-ring: #bae6fd; /* status-info-border */
+
+  --status-in-transit-bg: #f5f3ff;
+  --status-in-transit-fg: #6d28d9;
+  --status-in-transit-ring: #ddd6fe;
+
+  --status-delivered-bg: #ecfdf5; /* status-success-bg */
+  --status-delivered-fg: #15803d;
+  --status-delivered-ring: #a7f3d0; /* status-success-border */
+
+  --status-rto-bg: #fff7ed;
+  --status-rto-fg: #c2410c;
+  --status-rto-ring: #fed7aa;
+
+  --status-failed-bg: #fef2f2; /* status-error-bg */
+  --status-failed-fg: #b91c1c;
+  --status-failed-ring: #fecaca; /* status-error-border */
+
+  --status-cancelled-bg: #eef2f7;
+  --status-cancelled-fg: #475569;
+  --status-cancelled-ring: #dbe2ea;
+
+  --color-credit: #15803d;
+  --color-debit: #b91c1c;
+
+  /* The comps' own shadows: a wide, very soft blue-tinted drop plus a
+     1px ring drawn as a second shadow, which is what stops a white card
+     dissolving into a near-white page. */
+  --shadow-1: 0 1px 2px rgba(11, 28, 48, 0.05);
+  --shadow-2: 0 2px 10px -2px rgba(11, 28, 48, 0.05), 0 0 0 1px #e2e8f0;
+  --shadow-3: 0 20px 45px -15px rgba(0, 74, 198, 0.1), 0 0 0 1px #e2e8f0;
+
+  --console-rail-bg: #ffffff;
+  --console-rail-border: #e2e8f0;
+  --console-rail-active-bg: #dbe1ff; /* primary-fixed */
+  --console-rail-active-fg: #003ea8; /* on-primary-fixed-variant */
+  --console-rail-active-bar: #2563eb;
+  --console-band-bg: #ffffff;
+  --console-strip-bg: #ffffff;
+  --console-grid: rgba(195, 198, 215, 0.25);
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Light-only chrome.
+ *
+ * `tokens.css` paints the rail NAVY in light mode, by redefining
+ * `--color-surface` and the text ramp on the `<aside>` subtree. That is
+ * DAY DECK's answer and it is a good one — it just is not this design.
+ * Undone here by redefining the same variables on the same selectors,
+ * later in the cascade. Same technique, opposite conclusion, and it
+ * reaches nothing in apps/admin because apps/admin never loads this.
+ * ═════════════════════════════════════════════════════════════════════ */
+[data-theme='light'] aside,
+[data-theme='light'] [data-slot='nav-drawer'] {
+  --color-surface: var(--console-rail-bg);
+  --color-surface-hover: #eff4ff;
+  --color-border: var(--console-rail-border);
+  --color-border-strong: #cbd5e1;
+  --color-text-bright: #0b1c30;
+  --color-text-body: #434655;
+  --color-text-muted: #4d5064;
+  --color-text-faint: #5b6376;
+  --color-accent: #004ac6;
+}
+
+/* DAY DECK paints the current page's row with a flat blue fill and
+   white text. The rail is light here, so the pill is the comps' pale
+   `primary-fixed` with the primary as its text — see the shared rule
+   below, which sets the left bar for both themes. */
+[data-theme='light'] aside a[aria-current='page'],
+[data-theme='light'] [data-slot='nav-drawer'] a[aria-current='page'],
+[data-theme='light'] aside a[aria-current='page'] span,
+[data-theme='light'] [data-slot='nav-drawer'] a[aria-current='page'] span {
+  background: transparent;
+  color: inherit;
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+ * The rail, in BOTH themes.
+ *
+ * Attribute-driven off markup AppShell already renders — `<aside>`,
+ * `data-slot="nav-drawer"` and `aria-current="page"` — so the shared
+ * component keeps one set of classes and gains no seller-shaped branch.
+ * `aria-current` is the honest hook: it is what a screen reader is told
+ * too, so the visual state and the announced state cannot drift.
+ * ═════════════════════════════════════════════════════════════════════ */
+[data-slot='nav-rail'],
+[data-slot='nav-drawer'] {
+  background: var(--console-rail-bg);
+  border-color: var(--console-rail-border);
+}
+
+/* The bottom strip sits on the rail's ground rather than the page's, so
+   the console is bracketed top and bottom by the same surface. */
+[data-slot='status-strip'] {
+  background: var(--console-strip-bg);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+[data-slot='nav-rail'] a[aria-current='page'],
+[data-slot='nav-drawer'] a[aria-current='page'] {
+  position: relative;
+  background: var(--console-rail-active-bg);
+  color: var(--console-rail-active-fg);
+}
+
+/* The blue edge. A pseudo-element so no markup changes; inset to the
+   pill's own rounding rather than the rail's edge, which is where the
+   comps put it. */
+[data-slot='nav-rail'] a[aria-current='page']::before,
+[data-slot='nav-drawer'] a[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2.5px;
+  border-radius: 0 2px 2px 0;
+  background: var(--console-rail-active-bar);
+}
+
+[data-slot='nav-rail'] a[aria-current='page'] > span:first-of-type,
+[data-slot='nav-drawer'] a[aria-current='page'] > span:first-of-type {
+  color: var(--console-rail-active-bar);
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Micro-caps — the comps' column captions and section labels.
+ *
+ * A table head in this design is 11px, uppercase, widely tracked and
+ * in the MONO face. That is not styling for its own sake: it makes the
+ * caption row read as a ruler rather than as another row of data, which
+ * is what lets the body rows be as dense as they are.
+ *
+ * Scoped to `thead th` so it reaches every table through the `Table`
+ * primitive without a prop at 40 call sites (the FE-7 selector rule).
+ * ═════════════════════════════════════════════════════════════════════ */
+thead th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+/* Below `md` the table becomes a stack of cards and the caption is
+   stamped onto each cell by `tokens.css`. That stamped label is already
+   uppercase and tracked; giving it the mono face too keeps the two
+   layouts reading as one design. */
+@media (max-width: 767.98px) {
+  .sd-table-cards td[data-label]:not([data-label=''])::before {
+    font-family: var(--font-mono);
+  }
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Figures and identifiers.
+ *
+ * `.skydrop-tabular` is applied by the Money/Num primitives. In this
+ * design the mono face IS the tabular face, so the two collapse.
+ * ═════════════════════════════════════════════════════════════════════ */
+.skydrop-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+ * Stat tiles.
+ *
+ * `tokens.css` tints `[data-tone]` tiles in light only — in dark they
+ * are a bordered surface and the tone shows as a border colour. The
+ * comps tint in BOTH, faintly, so a row of four tiles reads as four
+ * different things at a glance rather than as one long strip.
+ * ═════════════════════════════════════════════════════════════════════ */
+[data-tone='neutral'] {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+[data-tone='good'] {
+  background: color-mix(in srgb, var(--status-delivered-bg) 55%, var(--color-surface));
+  border-color: var(--status-delivered-ring);
+}
+[data-tone='warn'] {
+  background: color-mix(in srgb, var(--status-pending-bg) 55%, var(--color-surface));
+  border-color: var(--status-pending-ring);
+}
+[data-tone='bad'] {
+  background: color-mix(in srgb, var(--status-failed-bg) 55%, var(--color-surface));
+  border-color: var(--status-failed-ring);
+}
+
+[data-tone='good'] [data-stat-value] {
+  color: var(--status-delivered-fg);
+}
+[data-tone='warn'] [data-stat-value] {
+  color: var(--status-pending-fg);
+}
+[data-tone='bad'] [data-stat-value] {
+  color: var(--status-failed-fg);
+}
+[data-tone='neutral'] [data-stat-value] {
+  color: var(--color-accent);
+}
+
+/* A figure is a figure. `data-stat-value` is the hook tokens.css
+   already put on every Stat, so this reaches them all. */
+[data-stat-value] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}

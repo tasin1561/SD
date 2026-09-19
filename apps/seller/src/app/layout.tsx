@@ -5,7 +5,7 @@ import localFont from 'next/font/local';
 import './globals.css';
 
 /**
- * Root layout — applies the design tokens + Geist typography to every
+ * Root layout — applies the design tokens + IBM Plex typography to every
  * page. Same shape as apps/admin (FE-6 token system shared from
  * @skydrop/ui; per-app shell deferred until the (authed) layout).
  * Dark is the default; the ThemeToggle in the app shell pins
@@ -28,28 +28,46 @@ import './globals.css';
  * what latin actually covers, which is what the CDN's own @font-face
  * carried and is otherwise lost when self-hosting.
  */
-const geistSans = localFont({
-  src: './fonts/geist-latin.woff2',
-  variable: '--font-geist-sans',
+/*
+ * PRECISION LOGISTICS uses IBM Plex Sans and JetBrains Mono (the comps'
+ * `typography.fontFamily`, every block). Both are the LATIN SUBSET of
+ * the same VARIABLE faces Google serves — one file each covering 400–700
+ * — fetched once and committed here, 77KB for the pair. Nothing is
+ * downloaded at build time and nothing is fetched at runtime.
+ *
+ * `unicode-range` is the CDN's own, for the reason above: self-hosting
+ * silently drops it, and without it the browser will pull a face down
+ * for text it cannot render. It differs from Geist's by one codepoint
+ * (no U+2074), which is what the latin subset actually covers.
+ *
+ * The MONO face is load-bearing here rather than incidental. In this
+ * design every identifier and every figure is set in it — waybills,
+ * order numbers, SKUs, amounts, timestamps, column captions — because a
+ * column of proportional digits does not line up and a waybill in a
+ * humanist sans is a waybill somebody misreads down a phone.
+ */
+const plexSans = localFont({
+  src: './fonts/ibm-plex-sans-latin.woff2',
+  variable: '--font-plex-sans',
   display: 'swap',
   declarations: [
     {
       prop: 'unicode-range',
       value:
-        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
     },
   ],
 });
 
-const geistMono = localFont({
-  src: './fonts/geist-mono-latin.woff2',
-  variable: '--font-geist-mono',
+const jetbrainsMono = localFont({
+  src: './fonts/jetbrains-mono-latin.woff2',
+  variable: '--font-jetbrains-mono',
   display: 'swap',
   declarations: [
     {
       prop: 'unicode-range',
       value:
-        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
     },
   ],
 });
@@ -82,7 +100,7 @@ export default async function RootLayout({
       lang="en"
       suppressHydrationWarning
       data-theme={theme}
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={`${plexSans.variable} ${jetbrainsMono.variable}`}
     >
       <head>
         {/* `suppressHydrationWarning` on the SCRIPT, not just on

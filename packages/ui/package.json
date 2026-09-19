@@ -10,7 +10,9 @@
     "./dist/tokens.css",
     "./src/tokens.css",
     "./dist/corridor.css",
-    "./src/corridor.css"
+    "./src/corridor.css",
+    "./dist/seller-theme.css",
+    "./src/seller-theme.css"
   ],
   "exports": {
     ".": {
@@ -30,14 +32,15 @@
       "default": "./dist/components/index.js"
     },
     "./tokens.css": "./dist/tokens.css",
-    "./corridor.css": "./dist/corridor.css"
+    "./corridor.css": "./dist/corridor.css",
+    "./seller-theme.css": "./dist/seller-theme.css"
   },
   "files": [
     "dist",
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp src/tokens.css dist/tokens.css && cp src/corridor.css dist/corridor.css",
+    "build": "tsc -p tsconfig.build.json && cp src/tokens.css dist/tokens.css && cp src/corridor.css dist/corridor.css && cp src/seller-theme.css dist/seller-theme.css",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },

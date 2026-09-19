@@ -11,6 +11,7 @@ import {
   Plus,
   Ship,
   Truck,
+  Wallet,
 } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -22,16 +23,21 @@ import {
   useWalletBalances,
 } from '@/lib/api-hooks';
 import {
+  BandBody,
   Card,
   CardBody,
+  Crumbs,
   EmptyState,
   ErrorState,
   LoadingState,
+  MetaChip,
   Money,
   OrderStatusBadge,
-  Section,
+  PageHeader,
+  SectionBand,
   Skeleton,
   SkeletonRows,
+  Stat,
   TBody,
   THead,
   Table,
@@ -42,21 +48,35 @@ import {
 import { can } from '@/lib/page-access';
 
 /**
- * Seller dashboard synthesis — Recent orders + nav pivot. The shell
- * topbar already shows companyName + email, so this page surfaces
- * activity-level synthesis rather than identity.
+ * The seller dashboard.
  *
- * Phase 1A keeps it intentionally lean: a single Recent Orders card
- * (latest 5) so the load-bearing case (sellers see their newest
- * orders at-a-glance) is covered without a dedicated stats endpoint.
- * Future panels (low stock, recent dispatches, NDR count) plug into
- * the same grid once catalog + tracking pages ship.
+ * ── THE 2026-09-19 REDESIGN (PRECISION LOGISTICS) ────────────────────
+ * Rebuilt against `SkY_DrOp_ThEme/Dashboard_{Light,Dark}`. What was
+ * taken from the comps: the breadcrumb + chip header, numbered section
+ * BANDS over each dense region, and stat tiles that carry their own
+ * breakdown under a hairline rather than one figure and a caption.
  *
- * `useSellerIdentity` returns SellerMe | null; the (authed) layout
- * guarantees non-null by SSR construction so we read .companyName
- * with a fallback for the typecheck (the fallback path is unreachable
- * in practice — the SSR gate redirects to /login on null identity).
+ * What was NOT taken, and why — a comp can draw a reading the system
+ * does not have, and a dashboard is exactly where an invented figure
+ * is believed:
+ *
+ *   - "Net Realized Month · +18.4% MoM". There is no month-over-month
+ *     revenue figure on any seller endpoint. The P&L is Skydrop's own
+ *     and is not the seller's money.
+ *   - The SLA strip — "Pre-Dispatch Call Verification 94.6%",
+ *     "Delivery Success SLA 86.4%", "RTO Ceiling Control 8.2%". No
+ *     seller-facing metrics endpoint computes any of the three.
+ *   - "FEMA Trade Rail: Synced", "Dhaka bonded pickup active", the
+ *     corridor telemetry and the gateway uptime. None of it is a fact
+ *     the system holds per account.
+ *   - The four "Operational launchpad" instrument panels (SAFTA
+ *     tariffs, linehaul vector, bonded gate, trade liaison desk). The
+ *     SHAPE survives as the shortcut row at the bottom, pointed at
+ *     pages that exist; the readings inside them do not.
+ *
+ * Everything that remains is read from an endpoint.
  */
+
 /**
  * Whether the setup checklist has anything TRUE to say yet.
  *
@@ -174,89 +194,86 @@ export function DashboardView(): ReactElement {
   const firstIncomplete = steps.findIndex((s) => !s.done);
 
   return (
-    <div className="space-y-1">
-      {/* ── the greeting, and what state the account is in ───────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1.5 flex flex-wrap items-center gap-2">
-            <span className="bg-status-delivered-bg text-status-delivered-fg flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">
-              <span
-                className="bg-status-delivered-fg h-1.5 w-1.5 rounded-full"
-                aria-hidden="true"
-              />
+    <div>
+      <PageHeader
+        breadcrumb={<Crumbs items={[{ label: 'Seller console' }, { label: 'Dashboard' }]} Link={Link} />}
+        title={`Hello, ${companyName}`}
+        subtitle="Your most recent orders, what you are owed, and where to go next."
+        meta={
+          <>
+            <MetaChip tone="good" dot>
               Account active
-            </span>
+            </MetaChip>
             {canWallet && canonicalCurrency !== null && (
-              <span className="bg-accent-tint text-accent rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">
-                {canonicalCurrency} wallet
-              </span>
+              <MetaChip tone="accent">{canonicalCurrency} wallet</MetaChip>
             )}
-          </div>
-          <h1 className="text-text-bright text-2xl font-bold tracking-tight">
-            Hello, {companyName}
-          </h1>
-          <p className="text-text-muted mt-1 text-sm">
-            Your most recent orders, what you are owed, and where to go next.
-          </p>
-        </div>
-        {canOrders && (
-          <Link
-            href="/orders/new"
-            className="bg-accent-fill text-accent-fg hover:bg-accent-fill-hover inline-flex items-center gap-1.5 rounded px-3 py-2 text-sm font-semibold transition-colors"
-          >
-            <Plus size={15} /> Create order
-          </Link>
-        )}
-      </div>
+            {canOrders && recent.data !== undefined && (
+              <MetaChip>
+                {recent.data.total} {recent.data.total === 1 ? 'order' : 'orders'} placed
+              </MetaChip>
+            )}
+          </>
+        }
+        action={
+          canOrders ? (
+            <Link
+              href="/orders/new"
+              className="bg-accent-fill text-accent-fg hover:bg-accent-fill-hover inline-flex items-center gap-1.5 rounded-[var(--radius-2)] px-3 py-2 text-sm font-semibold transition-colors"
+            >
+              <Plus size={15} aria-hidden /> Create order
+            </Link>
+          ) : undefined
+        }
+      />
 
       {canProfile && canCatalog && onboardingVisible(onboardingKnown, steps) && (
-        <Section title="Finish setting up">
-          <Card>
-            <CardBody>
-              <div className="text-text-muted mb-2 text-xs">
-                {completedSteps} of {STEPS_TOTAL} done
-              </div>
-              <ol className="space-y-1.5">
-                {steps.map((step, i) => (
-                  <li key={step.label} className="flex items-center gap-2 text-sm">
-                    {step.done ? (
-                      <Check size={14} className="text-status-delivered-fg shrink-0" />
-                    ) : (
-                      <Circle size={14} className="text-text-faint shrink-0" />
-                    )}
-                    {step.done ? (
-                      <span className="text-text-muted line-through">{step.label}</span>
-                    ) : (
-                      <Link
-                        href={step.href}
-                        className={i === firstIncomplete ? 'text-accent font-medium' : ''}
-                      >
-                        {step.label}
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </CardBody>
-          </Card>
-        </Section>
+        <div className="mb-5">
+          <SectionBand
+            index="00"
+            title="Finish setting up"
+            note={`${completedSteps} of ${STEPS_TOTAL} done`}
+          />
+          <BandBody>
+            <ol className="space-y-1.5">
+              {steps.map((step, i) => (
+                <li key={step.label} className="flex items-center gap-2 text-sm">
+                  {step.done ? (
+                    <Check size={14} className="text-[var(--status-delivered-fg)] shrink-0" />
+                  ) : (
+                    <Circle size={14} className="text-text-faint shrink-0" />
+                  )}
+                  {step.done ? (
+                    <span className="text-text-muted line-through">{step.label}</span>
+                  ) : (
+                    <Link
+                      href={step.href}
+                      className={i === firstIncomplete ? 'text-accent font-medium' : ''}
+                    >
+                      {step.label}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </BandBody>
+        </div>
       )}
 
       {/* ── 01 // money ───────────────────────────────────────────────── */}
       {(canWallet || canOrders) && (
-        <>
-          <SectionHead
+        <div className="mb-5">
+          <SectionBand
             index="01"
             title="Treasury & liquidity"
-            note={
+            action={
               canWallet ? (
-                <Link href="/wallet" className="text-accent font-medium">
+                <Link href="/wallet" className="text-accent text-xs font-medium">
                   Ledger and top-ups →
                 </Link>
               ) : undefined
             }
           />
-          <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-3">
+          <BandBody className="grid grid-cols-1 gap-3 lg:grid-cols-3">
             {canWallet && <WalletBalanceCard query={balances} />}
             {canOrders && (
               <>
@@ -267,69 +284,69 @@ export function DashboardView(): ReactElement {
                     leaving somebody to discover at settlement. */}
                 <MoneyTile
                   label="On its way"
-                  icon={<Truck size={13} />}
-                  iconTone="info"
+                  icon={<Truck size={13} aria-hidden />}
                   amount={inFlight.data?.inTransit.codInr}
                   count={inFlight.data?.inTransit.count}
-                  countLabel="orders"
+                  countLabel="orders dispatched"
                   hint="Confirmed and dispatched, not yet delivered. Before our charges."
                   loading={inFlight.isLoading}
                 />
                 <MoneyTile
                   label="Clearing"
-                  icon={<Hourglass size={13} />}
-                  iconTone="warn"
+                  icon={<Hourglass size={13} aria-hidden />}
+                  tone="warn"
                   amount={inFlight.data?.processing.codInr}
                   count={inFlight.data?.processing.count}
-                  countLabel="delivered"
+                  countLabel="delivered, unpaid"
                   hint="Delivered; waiting on the courier to remit the cash to us."
                   loading={inFlight.isLoading}
                 />
               </>
             )}
-          </div>
-        </>
+          </BandBody>
+        </div>
       )}
 
       {/* ── 02 // orders ──────────────────────────────────────────────── */}
       {canOrders && (
-        <>
-          <SectionHead
+        <div className="mb-5">
+          <SectionBand
             index="02"
             title="Recent orders"
-            note={
-              <Link href="/orders" className="text-accent font-medium">
+            action={
+              <Link href="/orders" className="text-accent text-xs font-medium">
                 See all orders →
               </Link>
             }
           />
-          <Card>
-            {recent.isLoading ? (
-              <CardBody>
-                <LoadingState label="Loading your orders…" />
-              </CardBody>
-            ) : recent.isError ? (
-              <CardBody>
-                <ErrorState
-                  message={recent.error?.message ?? 'Could not load your orders.'}
-                  retry={() => void recent.refetch()}
-                />
-              </CardBody>
-            ) : (recent.data?.items ?? []).length === 0 ? (
-              <CardBody>
-                <EmptyState
-                  title="No orders yet"
-                  description="Your most recent orders appear here once you create one."
-                />
-              </CardBody>
-            ) : (
+          {recent.isLoading ? (
+            <BandBody>
+              <LoadingState label="Loading your orders…" />
+            </BandBody>
+          ) : recent.isError ? (
+            <BandBody>
+              <ErrorState
+                message={recent.error?.message ?? 'Could not load your orders.'}
+                retry={() => void recent.refetch()}
+              />
+            </BandBody>
+          ) : (recent.data?.items ?? []).length === 0 ? (
+            <BandBody>
+              <EmptyState
+                title="No orders yet"
+                description="Your most recent orders appear here once you create one."
+                bare
+              />
+            </BandBody>
+          ) : (
+            <BandBody flush>
               <Table>
                 <THead>
                   <Tr>
                     <Th>Order</Th>
                     <Th>Recipient</Th>
                     <Th>Stage</Th>
-                    <Th>Payment</Th>
+                    <Th align="right">COD</Th>
                     <Th>Open</Th>
                   </Tr>
                 </THead>
@@ -337,13 +354,13 @@ export function DashboardView(): ReactElement {
                   {(recent.data?.items ?? []).map((o) => (
                     <Tr key={o.id}>
                       <Td>
-                        <Link href={`/orders/${o.id}`} className="font-mono text-xs font-medium">
+                        <Link href={`/orders/${o.id}`} className="text-accent font-mono text-xs">
                           {o.orderNumber}
                         </Link>
                       </Td>
                       <Td>
                         <div className="truncate">{o.recipientName}</div>
-                        <div className="text-text-faint truncate text-xs">
+                        <div className="text-text-faint truncate font-mono text-xs">
                           {o.recipientCity === ''
                             ? (o.recipientStateProvince ?? '—')
                             : o.recipientCity}
@@ -352,7 +369,7 @@ export function DashboardView(): ReactElement {
                       <Td>
                         <OrderStatusBadge status={o.status} />
                       </Td>
-                      <Td>
+                      <Td align="right">
                         {o.codAmountInr === null ? (
                           <span className="text-text-muted text-xs">Prepaid</span>
                         ) : (
@@ -368,133 +385,98 @@ export function DashboardView(): ReactElement {
                   ))}
                 </TBody>
               </Table>
-            )}
-          </Card>
-        </>
+            </BandBody>
+          )}
+        </div>
       )}
 
       {/* ── 03 // where to go next ────────────────────────────────────── */}
-      <SectionHead index="03" title="Next steps" />
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-        {canCatalog && (
+      <div>
+        <SectionBand index="03" title="Next steps" />
+        <BandBody className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {canCatalog && (
+            <ShortcutCard
+              href="/products"
+              icon={<Package size={16} aria-hidden />}
+              title="Manage catalogue"
+              body="Products, variants, images and SKU codes."
+              foot={
+                products.data === undefined
+                  ? undefined
+                  : `${products.data.total} active ${products.data.total === 1 ? 'product' : 'products'}`
+              }
+            />
+          )}
+          {canOrders && (
+            <ShortcutCard
+              href="/orders"
+              icon={<ListOrdered size={16} aria-hidden />}
+              title="View orders"
+              body="Full lifecycle, failed deliveries and the tracking timeline."
+              foot={recent.data === undefined ? undefined : `${recent.data.total} in total`}
+            />
+          )}
           <ShortcutCard
-            href="/catalog"
-            icon={<Package size={16} />}
-            title="Manage catalogue"
-            body="Products, variants, images and SKU codes."
-            foot={
-              products.data === undefined
-                ? undefined
-                : `${products.data.total} active ${products.data.total === 1 ? 'product' : 'products'}`
-            }
+            href="/inbound"
+            icon={<Ship size={16} aria-hidden />}
+            title="Inbound freight"
+            body="Send stock to the warehouse and track what is on the water."
           />
-        )}
-        {canOrders && (
           <ShortcutCard
-            href="/orders"
-            icon={<ListOrdered size={16} />}
-            title="View orders"
-            body="Full lifecycle, failed deliveries and the tracking timeline."
-            foot={recent.data === undefined ? undefined : `${recent.data.total} in total`}
+            href="/tickets"
+            icon={<LifeBuoy size={16} aria-hidden />}
+            title="Support tickets"
+            body="Damage claims, missing items and anything that needs a person."
           />
-        )}
-        <ShortcutCard
-          href="/inbound"
-          icon={<Ship size={16} />}
-          title="Inbound freight"
-          body="Send stock to the warehouse and track what is on the water."
-        />
-        <ShortcutCard
-          href="/tickets"
-          icon={<LifeBuoy size={16} />}
-          title="Support tickets"
-          body="Damage claims, missing items and anything that needs a person."
-        />
+        </BandBody>
       </div>
-    </div>
-  );
-}
-
-/** The numbered section rule, matching the admin console. */
-function SectionHead({
-  index,
-  title,
-  note,
-}: {
-  index: string;
-  title: string;
-  note?: ReactNode;
-}): ReactElement {
-  return (
-    <div className="mt-7 mb-3 flex flex-wrap items-center justify-between gap-2">
-      <h2 className="text-text-muted text-xs font-semibold tracking-[0.09em] uppercase">
-        <span className="text-accent" aria-hidden="true">
-          {`${index} / `}
-        </span>
-        {title}
-      </h2>
-      {note !== undefined && <div className="text-xs">{note}</div>}
     </div>
   );
 }
 
 /**
  * A figure that is MOVING — money out in the world rather than money in
- * the wallet. The icon carries the difference: on-its-way is blue,
- * waiting-on-somebody is amber.
+ * the wallet.
+ *
+ * Built on the shared `Stat` rather than a second tile component: the
+ * comps' tile is label + icon + figure + a hairline breakdown, which is
+ * exactly what `Stat` grew `icon`, `unit` and `foot` for. A parallel
+ * component here is how the two would come to disagree about padding.
  */
 function MoneyTile({
   label,
   icon,
-  iconTone,
+  tone = 'neutral',
   amount,
   count,
   countLabel,
   hint,
   loading,
 }: {
-  label: string;
-  icon: ReactNode;
-  iconTone: 'info' | 'warn';
-  amount: string | undefined;
-  count: number | undefined;
-  countLabel: string;
-  hint: string;
-  loading: boolean;
+  readonly label: string;
+  readonly icon: ReactNode;
+  readonly tone?: 'neutral' | 'warn';
+  readonly amount: string | undefined;
+  readonly count: number | undefined;
+  readonly countLabel: string;
+  readonly hint: string;
+  readonly loading: boolean;
 }): ReactElement {
-  const iconClass =
-    iconTone === 'info'
-      ? 'text-status-confirmed-fg bg-status-confirmed-bg'
-      : 'text-status-pending-fg bg-status-pending-bg';
-  const chipClass =
-    iconTone === 'info'
-      ? 'bg-status-confirmed-bg text-status-confirmed-fg'
-      : 'bg-status-pending-bg text-status-pending-fg';
-
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-start justify-between gap-2">
-          <div className="text-text-muted text-xs font-medium tracking-wide uppercase">{label}</div>
-          <span className={`grid h-6 w-6 place-items-center rounded ${iconClass}`}>{icon}</span>
-        </div>
-        <div className="text-text-bright mt-2 text-2xl font-bold">
-          {loading || amount === undefined ? (
-            <Skeleton className="h-7 w-28" />
-          ) : (
-            <Money amount={amount} size="md" />
-          )}
-        </div>
-        {count !== undefined && (
-          <div className="mt-1.5">
-            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${chipClass}`}>
-              {count} {countLabel}
-            </span>
-          </div>
-        )}
-        <p className="text-text-muted mt-2 text-xs leading-snug">{hint}</p>
-      </CardBody>
-    </Card>
+    <Stat
+      label={label}
+      icon={icon}
+      tone={tone}
+      value={
+        loading || amount === undefined ? (
+          <Skeleton className="h-6 w-28" />
+        ) : (
+          <Money amount={amount} size="md" />
+        )
+      }
+      hint={hint}
+      {...(count === undefined ? {} : { foot: [{ label: countLabel, value: count }] })}
+    />
   );
 }
 
@@ -514,15 +496,15 @@ function ShortcutCard({
   return (
     <Link
       href={href}
-      className="border-border bg-surface hover:border-border-strong block rounded-lg border p-3 transition-colors"
+      className="border-border bg-surface hover:border-accent block rounded-[var(--radius-3)] border p-3 transition-colors"
     >
-      <span className="bg-accent-tint text-accent grid h-8 w-8 place-items-center rounded">
+      <span className="bg-accent-tint text-accent grid h-8 w-8 place-items-center rounded-[var(--radius-2)]">
         {icon}
       </span>
       <div className="text-text-strong mt-2.5 text-sm font-semibold">{title}</div>
       <p className="text-text-muted mt-1 text-xs leading-snug">{body}</p>
       <div className="border-border mt-2.5 flex items-center justify-between gap-2 border-t pt-2 text-xs">
-        <span className="text-text-faint">{foot ?? ''}</span>
+        <span className="text-text-faint font-mono">{foot ?? ''}</span>
         <span className="text-accent font-medium">Go →</span>
       </div>
     </Link>
@@ -569,10 +551,15 @@ export function WalletBalanceCard({
   return (
     <Card>
       <CardBody>
-        <div className="text-text-faint mb-1 text-xs tracking-wide uppercase">
-          {canonical.currency}
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-text-muted text-xs font-medium tracking-wide uppercase">
+            {canonical.currency} balance
+          </div>
+          <span className="bg-surface-hover text-text-muted grid h-6 w-6 shrink-0 place-items-center rounded-[var(--radius-2)]">
+            <Wallet size={13} aria-hidden />
+          </span>
         </div>
-        <div className="text-text-bright">
+        <div className="text-text-bright mt-1.5">
           <Money
             amount={canonical.balance}
             currency={canonical.currency === 'BDT' ? 'BDT' : 'INR'}
@@ -582,7 +569,7 @@ export function WalletBalanceCard({
         </div>
         <div className="text-text-muted mt-1 text-xs">{caption}</div>
         {restated !== undefined && (
-          <div className="text-text-faint mt-1.5 flex flex-wrap items-center gap-x-1.5 text-xs">
+          <div className="text-text-faint border-border mt-2.5 flex flex-wrap items-center gap-x-1.5 border-t pt-2 text-xs">
             <span aria-hidden>≈</span>
             <Money
               amount={restated.balance}

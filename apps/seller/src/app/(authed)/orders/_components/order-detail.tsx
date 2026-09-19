@@ -32,8 +32,10 @@ import {
   Card,
   CardBody,
   CardHeader,
+  Crumbs,
   ErrorState,
   LoadingState,
+  MetaChip,
   OrderStatusBadge,
   Money,
   PageHeader,
@@ -174,11 +176,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
 
   return (
     <div>
+      {/* The BACK link stays beside the breadcrumb rather than being
+          replaced by it. They answer different questions — "where am
+          I" and "take me back one" — and a crumb trail is a poor
+          back button on a phone, where the tap target is a word in a
+          line of words. */}
       <Link
         href="/orders"
-        className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
+        className="text-text-muted hover:text-text-body mb-3 inline-flex items-center gap-1.5 text-xs transition-colors"
       >
-        <ArrowLeft size={12} /> Orders
+        <ArrowLeft size={12} aria-hidden /> Orders
       </Link>
 
       {detail.isLoading ? (
@@ -193,6 +200,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
       ) : (
         <>
           <PageHeader
+            breadcrumb={
+              <Crumbs
+                items={[
+                  { label: 'Seller console' },
+                  { label: 'Orders', href: '/orders' },
+                  { label: detail.data.orderNumber },
+                ]}
+                Link={Link}
+              />
+            }
             title={<span className="font-mono">{detail.data.orderNumber}</span>}
             subtitle={
               detail.data.sellerOrderRef ? (
@@ -200,6 +217,27 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   Your ref: <span className="font-mono">{detail.data.sellerOrderRef}</span>
                 </span>
               ) : undefined
+            }
+            /*
+              Standing facts about THIS parcel, under its number.
+
+              The comps carry a row of chips here — waybill, service
+              level, HS code, SAFTA duty, bonded status. Only the first
+              two exist: an AWB is real and the payment mode is real.
+              There is no service level on a shipment, HS codes were
+              removed from the catalogue in 2026-08-18, and nothing
+              records a duty rate per parcel. A chip that reads
+              "SAFTA 0%" on a screen is taken as a customs fact.
+            */
+            meta={
+              <>
+                <MetaChip tone="accent">
+                  {detail.data.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid'}
+                </MetaChip>
+                {detail.data.storeKind === 'RESELLER' && (
+                  <MetaChip>Sold by {detail.data.storeNameSnapshot ?? 'a reseller store'}</MetaChip>
+                )}
+              </>
             }
             action={
               <div className="flex items-center gap-2">

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
-import { AppShell, MenuButton, Toaster, type NavGroup } from '@skydrop/ui/components';
+import { AppShell, MenuButton, StripFact, Toaster, type NavGroup } from '@skydrop/ui/components';
 import { RestrictionBanner } from './restriction-banner';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { canSeePath } from '@/lib/page-access';
@@ -85,6 +85,12 @@ export function AuthedShell({
   const navGroups: NavGroup[] = [
     {
       heading: 'Selling',
+      // The ordinals are the comps' own, and they survive the permission
+      // filter below on purpose: they number the SECTIONS OF THE
+      // PRODUCT, not the rows this particular login can see. Renumbering
+      // per person would mean two people describing the same screen by
+      // different numbers, which is the one thing a fixed label is for.
+      index: '01',
       items: [
         { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
         { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
@@ -100,6 +106,7 @@ export function AuthedShell({
     },
     {
       heading: 'Stock',
+      index: '02',
       items: [
         { href: '/products', label: 'Products', icon: <Boxes size={15} /> },
         { href: '/inventory', label: 'Inventory', icon: <Warehouse size={15} /> },
@@ -109,6 +116,7 @@ export function AuthedShell({
     },
     {
       heading: 'Money',
+      index: '03',
       items: [
         { href: '/wallet', label: 'Wallet', icon: <Wallet size={15} /> },
         { href: '/freight', label: 'Inbound freight', icon: <Truck size={15} /> },
@@ -117,6 +125,7 @@ export function AuthedShell({
     {
       // RS-1 — separate businesses reselling this seller's stock.
       heading: 'Reselling',
+      index: '04',
       items: [
         { href: '/reseller-stores', label: 'Reseller stores', icon: <Store size={15} /> },
         // 2026-09-16 — what the stores are waiting on the seller to decide.
@@ -129,8 +138,14 @@ export function AuthedShell({
           icon: <Inbox size={15} />,
           ...(waitingCount > 0
             ? {
+                // `accent-fill` + `accent-fg`, a pair the token system
+                // actually defines and whose contrast is computed (5.17).
+                // It read `bg-accent text-text-inverse`, and
+                // `--color-text-inverse` is declared nowhere — so the
+                // count was painted in whatever it inherited, on a
+                // background chosen for TEXT.
                 badge: (
-                  <span className="bg-accent text-text-inverse rounded-full px-1.5 py-0.5 text-[11px] leading-none font-semibold tabular-nums">
+                  <span className="bg-accent-fill text-accent-fg rounded-full px-1.5 py-0.5 font-mono text-[11px] leading-none font-semibold tabular-nums">
                     {waitingCount}
                   </span>
                 ),
@@ -158,6 +173,7 @@ export function AuthedShell({
     },
     {
       heading: 'Account',
+      index: '05',
       items: [
         { href: '/team', label: 'Team', icon: <Users size={15} /> },
         { href: '/team/roles', label: 'Roles', icon: <KeyRound size={15} /> },
@@ -203,6 +219,47 @@ export function AuthedShell({
         headerAlways={<NotificationBellContainer />}
         drawerActions={
           <MenuButton label="Quick actions" items={quickActions} Link={Link} placement="above" />
+        }
+        /*
+          The bottom strip — STANDING FACTS about the ground this
+          console is standing on, and nothing else.
+
+          Every one of these is read from the identity the SSR gate
+          already resolved, or from a count the nav is already asking
+          for, so the strip costs no request of its own.
+
+          The comps put a corridor status, a courier API latency and a
+          customs-clearance line here. None of those exists as a fact a
+          SELLER can be told: there is no corridor telemetry, the
+          courier gateway's health is not exposed on any seller
+          endpoint, and "SAFTA zero-duty cleared" is not something the
+          system knows per account. They are LEFT OUT rather than
+          filled with a plausible number — a status strip is read as
+          instrumentation, and an invented reading there is worse than
+          an empty strip.
+        */
+        statusStrip={
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <StripFact
+              label="Account"
+              value={identity.status === 'APPROVED' ? 'Active' : identity.status}
+              tone={identity.status === 'APPROVED' ? 'good' : 'warn'}
+            />
+            <StripFact label="Figures in" value={identity.displayCurrency} />
+            {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
+              <StripFact
+                label="Rate"
+                value={`₹1 = ৳${Number(identity.displayFxRate).toFixed(4)}`}
+              />
+            )}
+            {canSeeRequests && waitingCount > 0 && (
+              <StripFact
+                label="Waiting on you"
+                value={`${waitingCount} store ${waitingCount === 1 ? 'request' : 'requests'}`}
+                tone="warn"
+              />
+            )}
+          </div>
         }
         pathname={pathname}
         Link={Link}

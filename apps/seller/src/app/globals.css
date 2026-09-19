@@ -15,6 +15,19 @@
  */
 
 @import '@skydrop/ui/tokens.css';
+/*
+ * PRECISION LOGISTICS — apps/seller's own skin, and the reason
+ * apps/admin can keep the palette it has.
+ *
+ * Loaded AFTER tokens.css on purpose: it redefines the same variables,
+ * at the same specificity, so the cascade resolves in its favour. That
+ * ordering IS the mechanism — see the header of the file itself.
+ *
+ * apps/admin's globals.css does NOT contain this line, which is what
+ * makes "admin is unchanged" a property of the build rather than a
+ * promise. `seller-theme-scope.test.ts` reads both files and pins it.
+ */
+@import '@skydrop/ui/seller-theme.css';
 @import 'tailwindcss';
 
 /*
