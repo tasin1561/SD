@@ -1,18 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  DeliveryActionKind,
-  NotificationCategory,
-  NotificationChannel,
-  NotificationRecipientType,
-} from '@skydrop/db';
-import { EnvService } from '../../../config/env.service';
-import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { DeliveryActionKind, NotificationCategory, NotificationChannel } from '@skydrop/db';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
-import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
+import { StoreNotificationSender } from '../../notification-audience/services/store-notification-sender.service';
 
 /** The store-user emails (NOTIF-14: the code without `.email`). */
 export const STORE_ACTION_APPROVED_TEMPLATE = 'store.action_approved.email';
 export const STORE_ACTION_REJECTED_TEMPLATE = 'store.action_rejected.email';
+/** The STORE-side in-app topics the same two messages carry (2026-09-19). */
+export const STORE_ACTION_APPROVED_TOPIC = 'store.action_approved';
+export const STORE_ACTION_REJECTED_TOPIC = 'store.action_rejected';
 /** Who at the seller is told a store is waiting: whoever runs their stores. */
 export const STORES_MANAGE_PERMISSION = 'stores.manage';
 export const STORE_ACTION_WAITING_TOPIC = 'seller.store_action_waiting';
@@ -27,12 +23,15 @@ const ACTION_LABEL: Readonly<Record<DeliveryActionKind, string>> = {
 /**
  * Telling each side what happened to a store's request (2026-09-16).
  *
- * ── THE STORE HEARS BY EMAIL, AND ONLY BY EMAIL ──────────────────────
- * A reseller store has no in-app inbox. An in-app leg here would be
- * written to a feed nobody at the store can open — the "a setting that
- * changes nothing" failure NOTIF-15 is about, in notification form. So
- * the store's half is email to the people who may act on orders, and the
- * portal shows the request's own status besides.
+ * ── THE STORE HEARS ON BOTH CHANNELS (amended 2026-09-19) ────────────
+ * This said "by email, and only by email", because a reseller store had
+ * no inbox and a row written to a feed nobody can open is the "setting
+ * that changes nothing" failure in notification form. The store HAS an
+ * inbox now, so the same message goes to both — one call through
+ * `StoreNotificationSender`, the email byte-identical to what it was.
+ * Both are silenced separately and neither at all: a decision on
+ * something the store asked for is one of the owner's three unsilenceable
+ * kinds (`IMMUTABLE_TOPICS`).
  *
  * ── THE SELLER HEARS IN-APP ──────────────────────────────────────────
  * They have an inbox, and what they need is a nudge that somebody is
@@ -49,10 +48,8 @@ export class StoreActionNotifier {
   private readonly logger = new Logger(StoreActionNotifier.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly dispatch: NotificationDispatchService,
-    private readonly ledger: NotificationLedgerService,
-    private readonly env: EnvService,
+    private readonly store: StoreNotificationSender,
   ) {}
 
   /** A store asked for something the seller must answer. */
@@ -108,56 +105,42 @@ export class StoreActionNotifier {
     reason: string;
     decisionNote: string | null;
   }): Promise<void> {
-    try {
-      const people = await this.prisma.client.storeUser.findMany({
-        where: {
-          storeId: input.storeId,
-          deletedAt: null,
-          role: {
-            deletedAt: null,
-            OR: [{ isOwner: true }, { permissions: { some: { permission: 'orders.actions' } } }],
-          },
-        },
-        select: { id: true, emailDisplay: true, fullName: true },
-      });
-      for (const person of people) {
-        try {
-          await this.ledger.enqueue({
-            // Per decision, not per request: a rejection and a later
-            // approval of the same ask are two things to say.
-            eventId: `store_action_decided:${input.requestId}:${
-              input.approved ? (input.carriedOut ? 'yes' : 'yes-failed') : 'no'
-            }`,
-            recipientType: NotificationRecipientType.STORE_USER,
-            recipientId: person.id,
-            channel: NotificationChannel.EMAIL,
-            templateCode: input.approved
-              ? STORE_ACTION_APPROVED_TEMPLATE
-              : STORE_ACTION_REJECTED_TEMPLATE,
-            locale: 'en',
-            toEmail: person.emailDisplay,
-            variables: {
-              full_name: person.fullName,
-              seller_name: input.sellerName,
-              order_number: input.orderNumber,
-              action_label: ACTION_LABEL[input.action],
-              reason: input.reason,
-              decision_note: input.decisionNote ?? '',
-              outcome: input.outcome,
-              order_url: `${this.env.resellerAppUrl}/orders/${input.orderId}`,
-              app_url: this.env.resellerAppUrl,
-            },
-            orderId: input.orderId,
-            shipmentId: null,
-            triggerEvent: 'reseller_store.action_decided',
-          });
-        } catch (err) {
-          this.warn('Decision email to a store user could not be queued', input.requestId, err);
-        }
-      }
-    } catch (err) {
-      this.warn('Could not tell the store what was decided', input.requestId, err);
-    }
+    const label = ACTION_LABEL[input.action];
+    const note = input.decisionNote === null ? '' : ` They said: “${input.decisionNote}”.`;
+
+    await this.store.tell({
+      storeId: input.storeId,
+      topic: input.approved ? STORE_ACTION_APPROVED_TOPIC : STORE_ACTION_REJECTED_TOPIC,
+      templateCode: input.approved
+        ? STORE_ACTION_APPROVED_TEMPLATE
+        : STORE_ACTION_REJECTED_TEMPLATE,
+      // Per decision, not per request: a rejection and a later approval
+      // of the same ask are two things to say. UNCHANGED from what the
+      // email was already keyed on.
+      eventId: `store_action_decided:${input.requestId}:${
+        input.approved ? (input.carriedOut ? 'yes' : 'yes-failed') : 'no'
+      }`,
+      title: input.approved
+        ? `${input.sellerName} agreed — ${input.orderNumber}`
+        : `${input.sellerName} said no — ${input.orderNumber}`,
+      body: input.approved
+        ? `You asked to ${label} on order ${input.orderNumber}. ${input.sellerName} agreed.` +
+          `${note}${input.outcome === '' ? '' : ` ${input.outcome}`}`
+        : `You asked to ${label} on order ${input.orderNumber}. ${input.sellerName} said no.${note}`,
+      variables: {
+        seller_name: input.sellerName,
+        order_number: input.orderNumber,
+        action_label: label,
+        reason: input.reason,
+        decision_note: input.decisionNote ?? '',
+        outcome: input.outcome,
+      },
+      orderId: input.orderId,
+      triggerEvent: 'reseller_store.action_decided',
+      // The audience this email has always had: the people who asked.
+      permissions: ['orders.actions'],
+      ref: input.requestId,
+    });
   }
 
   private warn(what: string, requestId: string, err: unknown): void {

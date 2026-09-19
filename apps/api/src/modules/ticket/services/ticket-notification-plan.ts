@@ -22,9 +22,15 @@ import {
  * RS-7 adds a THIRD side on a STORE_DISPUTE: a reseller store. Its
  * dispute is WITH the seller and refereed by us, so the store's words go
  * to BOTH — the seller (it is their ticket, `sellerId` is theirs) and
- * staff (we referee). The seller's reply still goes to staff. A store
- * has no inbox yet (RS-4), so nothing is sent TO the store; it reads
- * the ticket on its own portal.
+ * staff (we referee). The seller's reply still goes to staff.
+ *
+ * AMENDED 2026-09-19: the store now HAS an inbox, so the rule finally
+ * runs in every direction. This said "nothing is sent TO the store; it
+ * reads the ticket on its own portal" — which made the store the only
+ * party that had to go looking. A store could raise a dispute, have it
+ * answered and settled, have money move between its wallet and the
+ * seller's, and be told none of it. Our words and the SELLER's words now
+ * go to the store; its own words still do not come back to it.
  */
 
 /** The in-app topics a SELLER's people can silence (NOTIF-17). */
@@ -39,6 +45,17 @@ export const TICKET_SELLER_REPLIED_TOPIC = 'ticket.seller_replied';
 export const TICKET_OPENED_EMAIL_TEMPLATE = 'seller.ticket_opened.email';
 export const TICKET_REPLY_EMAIL_TEMPLATE = 'seller.ticket_reply.email';
 export const TICKET_RESOLVED_EMAIL_TEMPLATE = 'seller.ticket_resolved.email';
+
+/**
+ * The STORE's own two notices (2026-09-19) — topic and email, the
+ * NOTIF-14 pair. `store.ticket_resolved` is on `IMMUTABLE_TOPICS`: a
+ * settled dispute moves money between the store's wallet and the
+ * seller's, and the wallet is the only other place it shows.
+ */
+export const STORE_TICKET_REPLY_TOPIC = 'store.ticket_reply';
+export const STORE_TICKET_RESOLVED_TOPIC = 'store.ticket_resolved';
+export const STORE_TICKET_REPLY_EMAIL_TEMPLATE = 'store.ticket_reply.email';
+export const STORE_TICKET_RESOLVED_EMAIL_TEMPLATE = 'store.ticket_resolved.email';
 
 /** Both apps gate their ticket screens on this key — seller and staff alike. */
 export const TICKETS_VIEW_PERMISSION = 'tickets.view';
@@ -181,12 +198,31 @@ export interface StaffNotice {
   readonly body: string;
 }
 
+/**
+ * What a reseller STORE is told about its own ticket (2026-09-19).
+ *
+ * Carries an email template like the seller's, because the store gets
+ * both channels (owner decision (a)).
+ */
+export interface StoreNotice {
+  readonly topic: string;
+  readonly emailTemplate: string;
+  readonly title: string;
+  readonly body: string;
+}
+
 export interface TicketNotificationPlan {
   readonly seller: SellerNotice | null;
   readonly staff: StaffNotice | null;
+  readonly store: StoreNotice | null;
 }
 
-const NOTHING: TicketNotificationPlan = { seller: null, staff: null };
+const NOTHING: TicketNotificationPlan = { seller: null, staff: null, store: null };
+
+/** The two ticket types a reseller store is a party to. */
+function isStoreTicket(type: TicketType): boolean {
+  return type === TicketType.STORE_DISPUTE || type === TicketType.STORE_ISSUE;
+}
 
 /** An inbox line is a summary; the ticket holds the whole message. */
 const IN_APP_BODY_MAX = 600;
@@ -230,6 +266,8 @@ export function planTicketNotification(
             title: `${store} (a reseller store of ${ticket.companyName}) raised ${num} with us: ${ticket.subject}`,
             body: clip(body),
           },
+          // Nobody is told about their own act.
+          store: null,
         };
       }
       return {
@@ -248,6 +286,7 @@ export function planTicketNotification(
           title: `${store} (a reseller store of ${ticket.companyName}) opened dispute ${num}: ${ticket.subject}`,
           body: clip(body),
         },
+        store: null,
       };
     }
     if (side === 'US') {
@@ -260,6 +299,9 @@ export function planTicketNotification(
           body: said === '' ? ticket.subject : said,
         },
         staff: null,
+        // A ticket WE open is against the seller's goods; a store ticket
+        // is only ever opened by the store itself.
+        store: null,
       };
     }
     return {
@@ -269,6 +311,7 @@ export function planTicketNotification(
         title: `${ticket.companyName} opened ticket ${num}: ${ticket.subject}`,
         body: clip(said === '' ? ticket.subject : said),
       },
+      store: null,
     };
   }
 
@@ -295,6 +338,20 @@ export function planTicketNotification(
         body,
       },
       staff: null,
+      // Its own outcome, told to the store whoever did it — a settled
+      // dispute moves money between its wallet and the seller's, and
+      // this is the only place that says why.
+      store: isStoreTicket(ticket.ticketType)
+        ? {
+            topic: STORE_TICKET_RESOLVED_TOPIC,
+            emailTemplate: STORE_TICKET_RESOLVED_EMAIL_TEMPLATE,
+            title:
+              event.toStatus === TicketStatus.RESOLVED_REFUND
+                ? `Dispute ${num} settled`
+                : `Ticket ${num} is closed`,
+            body,
+          }
+        : null,
     };
   }
 
@@ -313,6 +370,7 @@ export function planTicketNotification(
           title: `${store} (a reseller store of ${ticket.companyName}) replied on ${num}`,
           body: clip(note),
         },
+        store: null,
       };
     }
     return {
@@ -328,6 +386,7 @@ export function planTicketNotification(
         title: `${store} (a reseller store of ${ticket.companyName}) replied on dispute ${num}`,
         body: clip(note),
       },
+      store: null,
     };
   }
   if (side === 'US') {
@@ -340,6 +399,16 @@ export function planTicketNotification(
         body: note,
       },
       staff: null,
+      // OUR words reach the store on its own ticket, exactly as they
+      // reach the seller on theirs.
+      store: isStoreTicket(ticket.ticketType)
+        ? {
+            topic: STORE_TICKET_REPLY_TOPIC,
+            emailTemplate: STORE_TICKET_REPLY_EMAIL_TEMPLATE,
+            title: `New reply on ${num}: ${ticket.subject}`,
+            body: note,
+          }
+        : null,
     };
   }
   return {
@@ -349,6 +418,18 @@ export function planTicketNotification(
       title: `${ticket.companyName} replied on ticket ${num}`,
       body: clip(note),
     },
+    // The SELLER answering a store's dispute is the other side speaking,
+    // so the store hears it. A STORE_ISSUE is between the store and us;
+    // the seller is not party to it and does not appear on it.
+    store:
+      ticket.ticketType === TicketType.STORE_DISPUTE
+        ? {
+            topic: STORE_TICKET_REPLY_TOPIC,
+            emailTemplate: STORE_TICKET_REPLY_EMAIL_TEMPLATE,
+            title: `${ticket.companyName} replied on dispute ${num}`,
+            body: `${ticket.companyName} wrote:\n\n${note}`,
+          }
+        : null,
   };
 }
 

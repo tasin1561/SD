@@ -1,6 +1,9 @@
 import {
   AlertTriangle,
   Bell,
+  ClipboardCheck,
+  FileSignature,
+  MessagesSquare,
   Package,
   PackageCheck,
   RotateCcw,
@@ -40,6 +43,12 @@ const GROUP_STYLE: Record<string, NotificationKindStyle> = {
   Money: { Icon: Wallet, tone: 'delivered' },
   Warehouse: { Icon: Warehouse, tone: 'pending' },
   System: { Icon: AlertTriangle, tone: 'failed' },
+  // Shared with the seller and staff catalogues, which both have a
+  // Tickets group; the other three are the reseller store's (2026-09-19).
+  Tickets: { Icon: MessagesSquare, tone: 'rto' },
+  'Your requests': { Icon: ClipboardCheck, tone: 'pending' },
+  'Your orders': { Icon: Package, tone: 'confirmed' },
+  Terms: { Icon: FileSignature, tone: 'draft' },
 };
 
 const FALLBACK: NotificationKindStyle = { Icon: Bell, tone: 'draft' };

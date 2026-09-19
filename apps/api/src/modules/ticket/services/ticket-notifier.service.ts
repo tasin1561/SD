@@ -10,6 +10,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { NotificationDispatchService } from '../../notification-audience/services/notification-dispatch.service';
 import { NotificationLedgerService } from '../../notifications/services/notification-ledger.service';
 import { SellerNotificationPreferenceResolver } from '../../seller-notification-preference/services/seller-notification-preference-resolver.service';
+import { StoreNotificationSender } from '../../notification-audience/services/store-notification-sender.service';
 import {
   inAppBody,
   planTicketNotification,
@@ -17,6 +18,7 @@ import {
   TICKETS_VIEW_PERMISSION,
   type SellerNotice,
   type StaffNotice,
+  type StoreNotice,
 } from './ticket-notification-plan';
 
 /**
@@ -47,6 +49,7 @@ const EVENT_SELECT = {
       orderId: true,
       seller: { select: { companyName: true, email: true } },
       // RS-7 — a store dispute names the store and, once settled, who paid.
+      storeId: true,
       store: { select: { name: true, displayName: true } },
       disputePayer: true,
     },
@@ -91,6 +94,8 @@ export class TicketNotifier implements OnModuleDestroy {
     private readonly ledger: NotificationLedgerService,
     private readonly preferences: SellerNotificationPreferenceResolver,
     private readonly env: EnvService,
+    // RS-7's third party finally hears about its own ticket (2026-09-19).
+    private readonly store: StoreNotificationSender,
   ) {}
 
   /** Queue the telling for one ticket event. Returns at once. */
@@ -147,6 +152,9 @@ export class TicketNotifier implements OnModuleDestroy {
     );
     if (plan.seller !== null) await this.tellSeller(ticketEventId, t, plan.seller);
     if (plan.staff !== null) await this.tellStaff(ticketEventId, t, plan.staff);
+    if (plan.store !== null && t.storeId !== null) {
+      await this.tellStore(ticketEventId, t, t.storeId, plan.store);
+    }
   }
 
   private async loadCommitted(ticketEventId: string): Promise<EventRow | null> {
@@ -248,6 +256,62 @@ export class TicketNotifier implements OnModuleDestroy {
       triggerEvent: notice.topic,
       orderId: t.orderId,
       eventId: `ticket:${ticketEventId}:staff`,
+    });
+  }
+
+  /**
+   * The reseller store's own copy of what happened on its ticket
+   * (2026-09-19).
+   *
+   * ── WHY THIS DID NOT EXIST ───────────────────────────────────────────
+   * RS-7 gave a store the right to raise a dispute with its seller and
+   * have Skydrop referee it, and the plan said so in as many words: "A
+   * store has no inbox yet, so nothing is sent TO the store; it reads the
+   * ticket on its own portal." That made the store the only party to a
+   * three-sided conversation who had to go looking — including when the
+   * settlement moved money between its wallet and the seller's.
+   *
+   * ── NOT GATED BY A COMPANY PREFERENCE ────────────────────────────────
+   * The seller's legs are gated by `SellerNotificationPreferenceResolver`
+   * because a ticket about their goods is filed under one of THEIR
+   * categories. A store's ticket is the store's own, and its category
+   * switch lives on its own preferences — applied inside the dispatcher
+   * (`StoreNotificationPreferenceService`), which is where every store
+   * message passes through it. Asking here as well would be a second
+   * reader of the same decision.
+   */
+  private async tellStore(
+    ticketEventId: string,
+    t: EventRow['ticket'],
+    storeId: string,
+    notice: StoreNotice,
+  ): Promise<void> {
+    await this.store.tell({
+      storeId,
+      topic: notice.topic,
+      templateCode: notice.emailTemplate,
+      eventId: `ticket:${ticketEventId}:store`,
+      title: notice.title,
+      body: inAppBody({
+        kind: 'REPLY',
+        topic: notice.topic,
+        emailTemplate: notice.emailTemplate,
+        title: notice.title,
+        body: notice.body,
+      }),
+      variables: {
+        store_name: t.store?.displayName ?? t.store?.name ?? '',
+        ticket_number: t.ticketNumber,
+        ticket_subject: t.subject,
+        message: notice.body,
+        ticket_url: `${this.env.resellerAppUrl}/tickets/${t.id}`,
+      },
+      orderId: t.orderId,
+      triggerEvent: notice.topic,
+      // Whoever at the store can see its tickets — the same permission
+      // that opens the queue, on the store's own catalogue.
+      permissions: [TICKETS_VIEW_PERMISSION],
+      ref: ticketEventId,
     });
   }
 }

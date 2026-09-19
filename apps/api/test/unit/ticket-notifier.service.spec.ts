@@ -12,6 +12,7 @@ import type { PrismaService } from '../../src/infrastructure/prisma/prisma.servi
 import type { NotificationDispatchService } from '../../src/modules/notification-audience/services/notification-dispatch.service';
 import type { NotificationLedgerService } from '../../src/modules/notifications/services/notification-ledger.service';
 import type { SellerNotificationPreferenceResolver } from '../../src/modules/seller-notification-preference/services/seller-notification-preference-resolver.service';
+import type { StoreNotificationSender } from '../../src/modules/notification-audience/services/store-notification-sender.service';
 import type { EnvService } from '../../src/config/env.service';
 
 type AnyArgs = Record<string, unknown>;
@@ -53,15 +54,23 @@ function make(opts: {
   });
   const enqueue = jest.fn(async () => ({ kind: 'ENQUEUED', notificationLogId: 'nl-1' }));
   const resolve = jest.fn(async () => opts.pref ?? { email: true, inApp: true, emailDelayMs: 0 });
+  const tell = jest.fn(async () => undefined);
   const svc = new TicketNotifier(
     prisma,
     { dispatch } as unknown as NotificationDispatchService,
     { enqueue } as unknown as NotificationLedgerService,
     { resolve } as unknown as SellerNotificationPreferenceResolver,
-    { sellerAppUrl: 'https://app.test' } as unknown as EnvService,
+    {
+      sellerAppUrl: 'https://app.test',
+      resellerAppUrl: 'https://store.test',
+    } as unknown as EnvService,
+    // RS-7's third party (2026-09-19). These cases are all seller/staff
+    // tickets, so it is never called; `tellStore` is covered by the
+    // store-inbox e2e, which runs the real sender against a database.
+    { tell } as unknown as StoreNotificationSender,
   );
   svc.commitWaitsMs = [0, 0, 0];
-  return { svc, findUnique, dispatch, enqueue, resolve };
+  return { svc, findUnique, dispatch, enqueue, resolve, tell };
 }
 
 describe('TicketNotifier', () => {

@@ -172,3 +172,7 @@ export {
 } from '@prisma/client';
 // RS-6 phase 3c — a reseller order's per-party credits.
 export { ResellerMoneyParty, ResellerCreditStatus } from '@prisma/client';
+// 2026-09-19 — what a reseller STORE, as a whole, is told about. The
+// first of the two layers a store message passes through; the second is
+// a person's own per-topic mute in `notification_subscriptions`.
+export { StoreNotificationCategory } from '@prisma/client';

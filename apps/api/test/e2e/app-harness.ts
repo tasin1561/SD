@@ -513,6 +513,15 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         // Store orders, their customers and store CSV uploads live in the
         // order reset's tables (orders / customers / bulk_order_uploads).
         'store_api_keys',
+        // 2026-09-19 — a store's own notification categories. FK
+        // seller_stores (CASCADE), so the cascade would take it; named
+        // explicitly (MUST #12) because a leftover row would SILENCE a
+        // category for a store id a later suite happens to reuse, and a
+        // notification test that fails because a previous file switched
+        // something off is the cross-suite ghost that takes a day to
+        // find. The subscriptions table (a PERSON's mutes) is already
+        // wiped below, for exactly the same reason.
+        'store_notification_preferences',
         'reseller_store_terms_acceptances',
         'reseller_store_terms_versions',
         // RS-3 reseller catalogue — FK seller_stores / sellers (CASCADE) and

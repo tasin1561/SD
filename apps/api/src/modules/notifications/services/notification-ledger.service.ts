@@ -46,6 +46,13 @@ export interface NotificationLedgerInput {
   readonly orderId: string | null;
   readonly shipmentId?: string | null;
   readonly triggerEvent: string;
+  /**
+   * The reseller store this row belongs to (2026-09-19), NULL for every
+   * seller and staff row. Carried on the EMAIL legs too, not only the
+   * in-app ones the store inbox reads, so "what have we sent this store"
+   * is one query rather than a join through `store_users`.
+   */
+  readonly toStoreId?: string | null;
   /** Optional sender display override (only used by tests today). */
   readonly fromOverride?: string;
   /**
@@ -145,6 +152,7 @@ export class NotificationLedgerService {
           variables: variablesPayload,
           orderId: input.orderId ?? null,
           shipmentId: input.shipmentId ?? null,
+          toStoreId: input.toStoreId ?? null,
           triggerEvent: input.triggerEvent,
           eventId: input.eventId,
           status: NotificationStatus.QUEUED,
@@ -239,6 +247,7 @@ export class NotificationLedgerService {
           variables: variablesPayload,
           orderId: input.orderId ?? null,
           shipmentId: input.shipmentId ?? null,
+          toStoreId: input.toStoreId ?? null,
           triggerEvent: input.triggerEvent,
           eventId: input.eventId,
           status: NotificationStatus.SKIPPED,

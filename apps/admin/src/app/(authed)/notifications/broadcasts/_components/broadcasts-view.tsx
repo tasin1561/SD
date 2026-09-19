@@ -112,6 +112,27 @@ const AUDIENCES: ReadonlyArray<{
     fields: ['Staff id'],
     build: (v) => ({ kind: 'STAFF_USER', staffId: v[0] ?? '' }),
   },
+  // RS-2's third identity (2026-09-19). Scoped to ONE store by
+  // construction — there is deliberately no "every reseller store",
+  // because such a message would cross seller boundaries.
+  {
+    label: 'Everyone at one reseller store',
+    hint: 'every login at that store',
+    fields: ['Store id'],
+    build: (v) => ({ kind: 'STORE_ORG', storeId: v[0] ?? '' }),
+  },
+  {
+    label: 'Everyone at a reseller store with a permission',
+    hint: 'preferred over a role: a store can rename its own roles, and what somebody may DO is the durable fact',
+    fields: ['Store id', 'Permission key, e.g. orders.actions'],
+    build: (v) => ({ kind: 'STORE_PERMISSION', storeId: v[0] ?? '', permission: v[1] ?? '' }),
+  },
+  {
+    label: 'One reseller store user',
+    hint: 'a single person at a store',
+    fields: ['Store user id'],
+    build: (v) => ({ kind: 'STORE_USER', storeUserId: v[0] ?? '' }),
+  },
   {
     label: 'Everyone subscribed to a topic',
     hint: 'people who opted IN to this topic on their own notifications page',

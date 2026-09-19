@@ -16,6 +16,7 @@ import {
   Package,
   PhoneOff,
   PlugZap,
+  Bell,
   Settings,
   ShoppingBag,
   UserRound,
@@ -23,6 +24,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { can, canSeePath } from '@/lib/page-access';
+import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { useStoreCallReviews } from '@/lib/review-hooks';
 import { TermsBanner } from './terms-banner';
 
@@ -107,7 +109,13 @@ export function AuthedShell({
     },
     {
       heading: 'You',
-      items: [{ href: '/account', label: 'My account', icon: <UserRound size={15} /> }],
+      items: [
+        // Ungated on purpose (NOTIF-11): a person's own inbox is
+        // self-service, so it is absent from PAGE_PERMISSIONS and
+        // `canSeePath` lets everybody through.
+        { href: '/notifications', label: 'Notifications', icon: <Bell size={15} /> },
+        { href: '/account', label: 'My account', icon: <UserRound size={15} /> },
+      ],
     },
   ];
 
@@ -127,6 +135,10 @@ export function AuthedShell({
         identitySecondary={identity.emailDisplay}
         pathname={pathname}
         Link={Link}
+        // The bell, at every width (FE-7's `headerAlways`): the one
+        // thing that says "something needs you" must not be the one
+        // thing a phone cannot see.
+        headerAlways={<NotificationBellContainer />}
         onSignOut={() => {
           void signOut();
         }}

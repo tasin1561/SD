@@ -60,13 +60,13 @@ export class SellerNotificationController {
   @Get()
   @ApiOperation({ summary: 'This user’s in-app notifications, newest first' })
   list(@CurrentSeller() seller: AuthenticatedSeller, @Query() q: FeedQueryDto): Promise<FeedPage> {
-    return this.feed.list(seller.userId, q.cursor);
+    return this.feed.list({ userId: seller.userId, storeId: null }, q.cursor);
   }
 
   @Get('unread-count')
   @ApiOperation({ summary: 'How many unread — for the bell' })
   async unread(@CurrentSeller() seller: AuthenticatedSeller): Promise<{ unread: number }> {
-    return { unread: await this.feed.unreadCount(seller.userId) };
+    return { unread: await this.feed.unreadCount({ userId: seller.userId, storeId: null }) };
   }
 
   @Post(':id/read')
@@ -76,7 +76,7 @@ export class SellerNotificationController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('id') id: string,
   ): Promise<{ readAt: Date }> {
-    return this.feed.markRead(seller.userId, id);
+    return this.feed.markRead({ userId: seller.userId, storeId: null }, id);
   }
 
   @Post(':id/unread')
@@ -89,7 +89,7 @@ export class SellerNotificationController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('id') id: string,
   ): Promise<{ readAt: null }> {
-    return this.feed.markUnread(seller.userId, id);
+    return this.feed.markUnread({ userId: seller.userId, storeId: null }, id);
   }
 
   @Delete(':id')
@@ -102,21 +102,21 @@ export class SellerNotificationController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('id') id: string,
   ): Promise<{ dismissedAt: Date }> {
-    return this.feed.dismiss(seller.userId, id);
+    return this.feed.dismiss({ userId: seller.userId, storeId: null }, id);
   }
 
   @Delete()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Clear everything currently in your inbox.' })
   dismissAll(@CurrentSeller() seller: AuthenticatedSeller): Promise<{ dismissed: number }> {
-    return this.feed.dismissAll(seller.userId);
+    return this.feed.dismissAll({ userId: seller.userId, storeId: null });
   }
 
   @Post('read-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark everything read' })
   readAll(@CurrentSeller() seller: AuthenticatedSeller): Promise<{ marked: number }> {
-    return this.feed.markAllRead(seller.userId);
+    return this.feed.markAllRead({ userId: seller.userId, storeId: null });
   }
 
   @Get('topics')

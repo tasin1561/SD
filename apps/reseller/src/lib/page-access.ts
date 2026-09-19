@@ -12,6 +12,15 @@ import type { StoreMe } from '@skydrop/api-client';
  * store user: the dashboard is where sign-in lands, and the account page
  * is about the caller themselves (their own email and sessions).
  *
+ * `/notifications` and `/notifications/settings` are absent for the same
+ * reason, and it is load-bearing (NOTIF-11, 2026-09-19): a person's own
+ * inbox is SELF-SERVICE and must never sit behind a grantable
+ * permission. A key added today reaches no role that already exists, so
+ * gating it would have bounced most of the estate off their own settings
+ * on the day it shipped. The settings page's STORE-WIDE half is gated
+ * INSIDE the page with `can(identity, 'store.profile.view' | '…manage')`
+ * — cosmetically, FE-2: the API refuses the PUT regardless.
+ *
  * Each entry names the permission of the endpoint its page calls; the
  * page-permission check (scripts/check-page-permissions.py) reads this
  * table against the store controllers.
