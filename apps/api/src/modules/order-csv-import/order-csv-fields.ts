@@ -23,9 +23,26 @@ export type OrderCsvField =
   | 'pinCode'
   | 'codAmount'
   | 'externalRef'
-  // RS-5 — what a reseller store sells one unit for. Required on a
-  // STORE's upload (ORDER_CSV_STORE_REQUIRED_FIELDS); a seller's own
-  // upload may carry the column and it is ignored there.
+  /*
+    RS-5 — what a reseller store SELLS ONE UNIT FOR: the selling price,
+    not the COD total on the row.
+
+    OPTIONAL on a store's upload since 2026-09-19 (owner). A row that
+    states it uses it; a row that does not falls back to the SUGGESTED
+    RETAIL the seller set for that store in its catalogue (RS-3), and is
+    refused by name only when there is no suggested retail either —
+    never derived from the COD amount, which is a total covering
+    quantity, delivery and any advance, and never a guess.
+
+    The PATCH half reads it the same way: a line kept on the order keeps
+    the retail it was PLACED at when the row states nothing (ORD-6), and
+    only a line whose SKU moved falls through to the catalogue's
+    suggestion. That is the same rule `ResellerOrderRetermService`
+    applies to the portal edit, deliberately — one meaning for the
+    column, whichever door the row came through.
+
+    A seller's own upload may carry the column and it is ignored there.
+  */
   | 'retailUnitPrice';
 
 export const ORDER_CSV_ALIAS_MAP: Record<OrderCsvField, string[]> = {
@@ -74,16 +91,23 @@ export const ORDER_CSV_REQUIRED_FIELDS: OrderCsvField[] = [
 ];
 
 /**
- * RS-5 — a RESELLER STORE's upload needs everything a seller's does plus
- * the retail price per unit: a store order states what the store sells at,
- * checked against the seller's range and snapshotted with the transfer
- * price. COD Amount stays optional — left out, the row collects the
- * retail total (`toCreateOrderDto`).
+ * RS-5 — what a RESELLER STORE's upload must carry.
+ *
+ * The same columns a seller's does. **`retailUnitPrice` is deliberately
+ * NOT here** (owner, 2026-09-19): a store that prices everything at the
+ * seller's suggested retail should not have to restate it on every row,
+ * and demanding the column made an otherwise-valid file unmappable. A
+ * row that omits it is priced from the store's catalogue (see the field
+ * comment above) and refused BY NAME when the catalogue has no
+ * suggestion, which is a refusal about one product rather than about
+ * the whole upload.
+ *
+ * Kept as its own named constant rather than collapsed into
+ * `ORDER_CSV_REQUIRED_FIELDS`: the store template and the store mapping
+ * check both read it, and the day the two uploads differ again there is
+ * one place to say so.
  */
-export const ORDER_CSV_STORE_REQUIRED_FIELDS: OrderCsvField[] = [
-  ...ORDER_CSV_REQUIRED_FIELDS,
-  'retailUnitPrice',
-];
+export const ORDER_CSV_STORE_REQUIRED_FIELDS: OrderCsvField[] = [...ORDER_CSV_REQUIRED_FIELDS];
 
 export const ORDER_CSV_TARGET_FIELDS = Object.keys(ORDER_CSV_ALIAS_MAP) as OrderCsvField[];
 

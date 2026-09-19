@@ -128,6 +128,7 @@ function makeService(
     { afterEvent } as unknown as TicketNotifier,
     // RS-7 — a channel order: no transfer-price cap.
     { transferCompensationCap: async () => null } as never,
+    { forOrder: jest.fn() } as never,
   );
   return {
     svc,
@@ -486,6 +487,7 @@ describe('TicketService.markRelayed', () => {
       new TicketStateMachineService(),
       { afterEvent: jest.fn() } as unknown as TicketNotifier,
       { transferCompensationCap: async () => null } as never,
+      { forOrder: jest.fn() } as never,
     );
     return { svc, relayCreate, relayFindUnique, auditLog };
   }

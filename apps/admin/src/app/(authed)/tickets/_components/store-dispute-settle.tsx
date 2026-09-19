@@ -29,14 +29,28 @@ type Payer = 'STORE' | 'SELLER';
 export function StoreDisputeSettle({
   ticketId,
   storeName,
+  claimAmountInr,
+  claimPayer,
 }: {
   readonly ticketId: string;
   readonly storeName: string | null;
+  /**
+   * RS-7 (2026-09-19) — the raiser's CLAIM on a figure correction, used
+   * to seed the two fields.
+   *
+   * A starting point, never an answer: it is what one party says is owed
+   * and staff decide what actually is, so both fields stay editable and
+   * nothing is submitted until somebody presses Settle. Seeding them is
+   * the difference between "type the figure from the thread above" and
+   * "check this figure", and re-typing is where a digit gets dropped.
+   */
+  readonly claimAmountInr?: string | null;
+  readonly claimPayer?: Payer | null;
 }): ReactElement {
   const toast = useToast();
   const settle = useSettleStoreDispute();
-  const [payer, setPayer] = useState<Payer | ''>('');
-  const [amount, setAmount] = useState('');
+  const [payer, setPayer] = useState<Payer | ''>(claimPayer ?? '');
+  const [amount, setAmount] = useState(claimAmountInr ?? '');
   const [notes, setNotes] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +83,14 @@ export function StoreDisputeSettle({
         <p className="text-text-muted mb-3 text-sm">
           The money moves between {store}&apos;s wallet and the seller&apos;s — never from ours.
           Both read your note.
+          {claimAmountInr != null && claimPayer != null ? (
+            <>
+              {' '}
+              Filled in from what was claimed (₹{claimAmountInr},{' '}
+              {claimPayer === 'STORE' ? `${store} owes the seller` : `the seller owes ${store}`}) —
+              change it if that is not what you have decided.
+            </>
+          ) : null}
         </p>
         <div className="flex flex-wrap items-end gap-2.5">
           <FormField label="Who pays" htmlFor="dispute-payer" className="w-[220px]">

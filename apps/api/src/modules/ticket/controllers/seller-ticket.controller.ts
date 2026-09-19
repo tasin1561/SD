@@ -18,6 +18,7 @@ import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { CreateSellerTicketDto } from '../dto/ticket.dto';
+import { CreateSellerStoreDisputeDto } from '../dto/store-ticket.dto';
 import { type TicketStage, TicketService, type TicketView } from '../services/ticket.service';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
@@ -81,6 +82,41 @@ export class SellerTicketController {
     });
 
     return ticket;
+  }
+
+  /**
+   * RS-7 (2026-09-19) — raise a dispute with one of YOUR OWN reseller
+   * stores, about one of that store's orders.
+   *
+   * A separate handler rather than a flag on `create`: a
+   * SELLER_RAISED_ISSUE is a conversation with SKYDROP about a parcel,
+   * and a STORE_DISPUTE is a conversation with a STORE that Skydrop
+   * referees and may settle between the two wallets. Mixing them would
+   * put the courier-escalation side-effect on a dispute that has no
+   * courier in it. A fixed segment, so it cannot collide with
+   * `:ticketId/notes`.
+   */
+  @Post('store-disputes')
+  @RequireSellerPermissions('tickets.create')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary:
+      'Raise a dispute with one of your reseller stores about one of its orders. Skydrop referees; a settlement moves money between your wallet and the store’s. Use FIGURE_CORRECTION when the money worked out on the order is wrong.',
+  })
+  createStoreDispute(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Body() body: CreateSellerStoreDisputeDto,
+  ): Promise<TicketView> {
+    return this.tickets.openForSellerAgainstStore({
+      sellerId: seller.id,
+      sellerUserId: seller.userId,
+      orderId: body.orderId,
+      subject: body.subject,
+      description: body.description ?? null,
+      ...(body.disputeKind === undefined ? {} : { disputeKind: body.disputeKind }),
+      ...(body.claimAmountInr === undefined ? {} : { claimAmountInr: body.claimAmountInr }),
+      ...(body.claimPayer === undefined ? {} : { claimPayer: body.claimPayer }),
+    });
   }
 
   @Post(':ticketId/notes')

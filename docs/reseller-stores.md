@@ -910,12 +910,32 @@ unreadable switch is an off switch, because it guards money.
 - The terms are read INSIDE the create transaction, after the store lock
   (`lockAndReadTerms`), so the version snapshotted is the one in force when
   the order committed; a version published unaccepted in between refuses it.
-- **A reseller order cannot be edited from the seller's side**
-  (`RESELLER_ORDER_NOT_EDITABLE` — an edit would re-price it outside the
-  store's terms, and the seller cannot read the recipient it would correct),
-  nor CSV-patched. **ORD-9 for a store's CSV: a reference already placed is an
-  error row, never a PATCH** — cancel and re-upload to change one. The store
-  may cancel its own order (`POST /store/orders/:id/cancel`, `orders.cancel`)
+- **A reseller order IS editable by both sides since 2026-09-18** (see "Store
+  actions"); what stays refused is `OrderService.applyBulkPatch`
+  (`RESELLER_ORDER_NOT_EDITABLE`), which re-snapshots the line from the LIVE
+  catalogue with no reseller terms on it.
+- **ORD-9 is whole for a store's CSV since 2026-09-19**: a new reference
+  PLACES the order, a reference already placed and still DRAFT /
+  PENDING_CONFIRMATION is PATCHED, and CONFIRMED-or-later is an error row.
+  The patch does NOT go through `applyBulkPatch` — the processor routes the
+  row to `OrderService.edit` with the STORE's scope, the same call the
+  store's portal makes, so the line is re-termed under the ORDER's own
+  snapshot (`ResellerOrderRetermService`), the money is re-planned under the
+  terms it was PLACED on, and the seller is told. A row that changes nothing
+  is `NOTHING_TO_UPDATE` and counts as skipped, not failed.
+- **The CSV's SELLING PRICE column** (`Retail Price` and its aliases) is what
+  the store sells ONE unit for — never the COD total on the row, which covers
+  every line plus delivery less any advance. It is OPTIONAL: a row that omits
+  it takes the SUGGESTED RETAIL the seller set for that store (RS-3) at
+  create, and on a PATCH keeps the retail the line was placed at (only a line
+  whose SKU moved falls through to the catalogue's suggestion — ORD-6). With
+  neither it is refused BY NAME (`RESELLER_RETAIL_REQUIRED`), never priced at
+  ₹0. The rule lives in `ResellerOrderService.create` and
+  `ResellerOrderRetermService`, so the portal, the API key and the CSV cannot
+  disagree about what an absent price means. Every stated price is still
+  range-checked (`RETAIL_OUT_OF_RANGE`) — and so is a suggestion the seller
+  has since put outside their own range.
+- The store may cancel its own order (`POST /store/orders/:id/cancel`, `orders.cancel`)
   through the SAME seller cancel (`OrderWriteService.cancelBySeller`: until it
   is packed, the open-box check, CC-6, the stock saga); the seller may still
   cancel it too (their stock).
@@ -1542,6 +1562,72 @@ Keep the global default FALSE until that run is clean.
   rules, refused refund, transfer-price cap, store-scoped open); the RS-7
   case in `tenant-isolation.e2e-spec.ts`.
 
+### Correcting a PAID order's figures (2026-09-19) — and who may raise a dispute
+
+**The owner's decision: extend the dispute, do not build a second money
+path.** Once a reseller order's credits are CREDITED the figures cannot be
+re-worked-out — `recalculateAfterEdit` refuses with
+`RESELLER_CREDIT_ALREADY_PAID`, and the ledger could not write the rewrite
+anyway (`seller_wallet_entries_once_per_order_uq` allows each direction once
+per order; that index is the guard against paying an order twice and **must
+not be weakened**). So a wrong figure on a paid order is settled BETWEEN the
+two wallets through the dispute Skydrop already referees.
+
+- **It is a KIND, not a new ticket type.** `tickets.dispute_kind`
+  (`StoreDisputeKind`: `GENERAL` | `FIGURE_CORRECTION`, null on every ticket
+  that is not a `STORE_DISPUTE`). A second type would have needed its own
+  settlement route past `TICKET_NOT_A_STORE_DISPUTE`; keeping it a kind means
+  `settleStoreDispute` stays the ONE place a dispute pays anybody, with the
+  claim-before-money guard and the wallet pair unchanged.
+- **A correction SAYS WHAT IT IS ASKING FOR.** `dispute_claim_amount_inr` +
+  `dispute_claim_payer` are REQUIRED on `FIGURE_CORRECTION`
+  (`DISPUTE_CLAIM_REQUIRED`; `DISPUTE_CLAIM_AMOUNT_INVALID` for ₹0 or a
+  malformed one) and REFUSED on an ordinary dispute
+  (`DISPUTE_CLAIM_NOT_FOR_KIND` — a claim stored on a ticket nobody costed
+  would pre-fill the settle form of a dispute that was never about money).
+  They are a CLAIM, never money: staff settle with their own figure and this
+  is what stops that form being typed from nothing.
+- **The FIGURES are stamped, from the ONE read service.**
+  `tickets.disputed_figures` holds the order's money as BOTH SIDES SAW IT
+  when the correction was raised — the per-party credit plan and the fee
+  split, read through `ResellerOrderMoneyReadService.forOrder(…, 'STAFF')`,
+  the same computation behind the store's, the seller's and staff's own money
+  panels. Re-deriving it inside `ticket` would be exactly the drift a single
+  reader exists to prevent, and the snapshot is shown rather than a live read
+  because the ledger keeps moving: "what were we arguing about" and "what does
+  it say now" are different questions. Individual wallet LINES are left out —
+  readable live, and they would bloat every ticket row.
+  `ResellerOrderMoneyViewModule` stopped being a leaf to export the read
+  service; it imports only `AuthCommonModule`, so no cycle.
+- **EITHER SIDE raises it.** The store already could; Seller staff now can
+  too — `POST /seller/tickets/store-disputes` (`tickets.create`), its own
+  handler rather than a flag on `POST /seller/tickets`, because that one is a
+  conversation with SKYDROP about a parcel and opens a courier escalation
+  behind it. The **STORE is read off the ORDER**, never taken from the
+  request, so a seller cannot file against a store that had nothing to do
+  with it; the order is scoped to the caller in the WHERE clause, so anything
+  else is the same `ORDER_NOT_FOUND`. `openStoreDispute` is the one opener
+  both paths go through.
+- **Screens:** apps/reseller `/tickets/new` gains "This is about the money
+  worked out on the order" (offered only for a dispute with the SELLER — an
+  issue with Skydrop is about a parcel in our hands) and `/tickets/[id]`
+  shows the claim and the snapshot; apps/seller raises it from the order's
+  own **Reseller store money** panel ("Raise with the store"), which is where
+  the numbers being disputed are on screen; admin ticket detail shows the
+  figures as at the raise and SEEDS the settle form from the claim — both
+  fields stay editable, because the claim is one party's position and staff
+  decide what is actually owed.
+- **Tests:** `store-dispute-figure-correction.spec.ts` (claim required /
+  refused by kind / invalid amounts, the snapshot taken from the read service
+  and reduced, the seller path's order scoping and store-off-the-order, the
+  actor on each path, and a source scan pinning that nothing but
+  `settleStoreDispute` settles); the two correction scenarios in
+  `settlement-bank-invariant.spec.ts` — a settlement after both credits were
+  paid moves the two wallets in opposite directions by exactly the amount,
+  leaves the book, capital and `held` untouched, and keeps
+  `held = max(0, seller + Σ stores)` true, including when the payer goes
+  negative.
+
 ## Store actions as built (2026-09-16, reworked 2026-09-17, widened to the whole order 2026-09-18)
 
 The owner: "give all of this access to the store directly but the seller can
@@ -1922,6 +2008,16 @@ would trade the double-credit guard for a case that cannot legitimately occur.
 The refusal is ANNOUNCED: a HIGH `reseller_order.money_recalculation_refused`
 audit row, written OUTSIDE the transaction — written inside it, it would be
 rolled back with it and a bypass would leave no trace.
+
+**And the case BEHIND the refusal now has an answer (2026-09-19): a
+FIGURE-CORRECTION dispute, settled between the two wallets.** A paid order
+whose figures are wrong is not re-priced — it is corrected through
+`TicketType.STORE_DISPUTE`'s existing settlement, which moves money BETWEEN
+the store and the seller as one pair with no bank entry. That is deliberately
+a KIND of dispute rather than a second money path or a second ticket type:
+`settleStoreDispute` stays the ONE place a dispute pays anybody, it already
+claims the ticket before any money moves (the TKT-1 double-refund lesson), and
+the once-per-order unique is left exactly as it is. See "RS-7 as built".
 
 A PREPAID order's up-front debit is refunded and retaken when the transfer
 total moved, and refused before anything is written when the store's wallet

@@ -11,6 +11,7 @@ import { ResellerOrderService } from '../../order/services/reseller-order.servic
 import { StagedOrderRowService } from './staged-order-row.service';
 import type { CreateOrderDto } from '../../order/dto/create-order.dto';
 import type { CreateStoreOrderDto } from '../../order/dto/create-store-order.dto';
+import type { UpdateOrderDto } from '../../order/dto/update-order.dto';
 import { OrderCsvParserService, type CoercedOrderRow } from './order-csv-parser.service';
 import type { OrderCsvField } from '../order-csv-fields';
 import { orderErrorReportKeyFor } from '../order-csv-key';
@@ -143,10 +144,18 @@ export class OrderCsvImportProcessorService {
       }
 
       if (storeId !== null) {
-        // ORD-9 for a STORE: a new reference places the order; a reference
-        // already placed is an error row, never a PATCH — a patch would
-        // re-price the order outside the store's terms. Cancel and
-        // re-upload to change one.
+        /*
+          ORD-9 for a STORE, in full since 2026-09-19 (owner): a new
+          reference PLACES the order, a reference already placed and
+          still editable is PATCHED, and anything past that is an error
+          row. It used to stop at the second step — a repeat reference
+          was always an error — because a patch re-snapshotted the line
+          from the live catalogue with no reseller terms on it, which
+          would have re-priced the store's deal. It now goes through the
+          same `OrderService.edit` the store's own portal uses, so the
+          line is re-termed under the order's OWN snapshot, the money is
+          re-planned and the seller is told; see `patchStoreOrder`.
+        */
         try {
           if (storeUserId === null) {
             throw new Error('This upload has no store user to place its orders as');
@@ -156,18 +165,24 @@ export class OrderCsvImportProcessorService {
             row.externalRef,
             storeId,
           );
-          if (existing) {
+          if (existing === null) {
+            await this.createStoreOrder(sellerId, storeId, storeUserId, uploadId, row, ctx);
+            counters.ordersCreated += 1;
+          } else if (
+            existing.status === OrderStatus.DRAFT ||
+            existing.status === OrderStatus.PENDING_CONFIRMATION
+          ) {
+            await this.patchStoreOrder(sellerId, storeId, storeUserId, existing.id, row, ctx);
+            counters.rowsSkipped += 1; // matched an existing order (patched/unchanged)
+          } else {
             errorRows.push({
               rowNumber,
               errorField: 'externalRef',
-              errorReason: `externalRef "${row.externalRef}" is already an order of this store (${existing.status}); cancel it and upload again to change it`,
+              errorReason: `externalRef "${row.externalRef}" matches an order of this store in ${existing.status}; a CSV cannot change a confirmed-or-later order`,
               original: raw,
             });
             counters.rowsFailed += 1;
-            continue;
           }
-          await this.createStoreOrder(sellerId, storeId, storeUserId, uploadId, row, ctx);
-          counters.ordersCreated += 1;
         } catch (err) {
           errorRows.push({
             rowNumber,
@@ -281,9 +296,6 @@ export class OrderCsvImportProcessorService {
     row: CoercedOrderRow,
     ctx: { ipAddress: null; userAgent: null; requestId: string },
   ): Promise<void> {
-    if (row.retailUnitPrice === undefined) {
-      throw new Error('Retail Price is required on a store’s order');
-    }
     const resolved = await this.catalog.getVariantBySku(sellerId, row.productSku);
     if (!resolved || resolved.sellerId !== sellerId) {
       throw new Error(`Variant SKU "${row.productSku}" is not in this store's catalogue`);
@@ -302,7 +314,12 @@ export class OrderCsvImportProcessorService {
         {
           variantId: resolved.variantId,
           quantity: row.quantity,
-          retailUnitPriceInr: row.retailUnitPrice,
+          // A row with no selling price falls back to the seller's
+          // SUGGESTED RETAIL for this store, inside `ResellerOrderService`
+          // — the one place that decides it for every door (2026-09-19).
+          // Passing 0 here would price the goods at nothing and pass
+          // every range check that has no minimum.
+          ...(row.retailUnitPrice === undefined ? {} : { retailUnitPriceInr: row.retailUnitPrice }),
         },
       ],
     } as CreateStoreOrderDto;
@@ -316,6 +333,100 @@ export class OrderCsvImportProcessorService {
       source: OrderSource.BULK_UPLOAD,
       bulkUploadId: uploadId,
     });
+  }
+
+  /**
+   * ORD-9's PATCH half for a RESELLER STORE's re-upload (owner,
+   * 2026-09-19).
+   *
+   * ── WHY IT GOES THROUGH `OrderService.edit` ──────────────────────────
+   * `applyBulkPatch` — the seller's CSV patch — still refuses a reseller
+   * order, and should: it re-snapshots the line from the LIVE catalogue
+   * with no reseller terms, so the patched line would carry
+   * `store_kind = RESELLER` with null term columns (which the table's own
+   * CHECK refuses) and the money would have nothing to re-plan from.
+   *
+   * `edit` with a store scope is the SAME call the store's own portal
+   * makes, so a CSV re-upload inherits every part of it rather than a
+   * second implementation that would drift: the lifecycle-stage gate, the
+   * address revalidation, `ResellerOrderRetermService` (a kept line keeps
+   * its snapshotted transfer price and range — ORD-6; a line whose SKU
+   * moved is priced from the store's catalogue and refused by name when
+   * it has no price there), the money recalculated under the order's OWN
+   * terms version through `ResellerOrderMoneyService`, and the notice to
+   * the seller.
+   *
+   * ── WHAT THE SELLING-PRICE COLUMN MEANS HERE ────────────────────────
+   * Exactly what it means at create: stated ⇒ used; absent ⇒ the line
+   * keeps the retail it was PLACED at, or — only when the SKU moved and
+   * there is nothing to keep — the seller's suggested retail for this
+   * store; with neither, refused by name. That is the reterm service's
+   * rule, not a second one written here.
+   *
+   * A row that changes nothing comes back as `NOTHING_TO_UPDATE`, which
+   * is not an error on a re-upload: the same file uploaded twice is the
+   * ordinary shape, and a counted failure there would make a clean import
+   * read as a broken one.
+   */
+  private async patchStoreOrder(
+    sellerId: string,
+    storeId: string,
+    storeUserId: string,
+    orderId: string,
+    row: CoercedOrderRow,
+    ctx: { ipAddress: null; userAgent: null; requestId: string },
+  ): Promise<void> {
+    const resolved = await this.catalog.getVariantBySku(sellerId, row.productSku);
+    if (!resolved || resolved.sellerId !== sellerId) {
+      throw new Error(`Variant SKU "${row.productSku}" is not in this store's catalogue`);
+    }
+    const dto: UpdateOrderDto = {
+      recipientName: row.customerName,
+      recipientPhoneE164: row.customerPhone,
+      recipientAddressLine1: row.addressLine1,
+      recipientAddressLine2: row.addressLine2,
+      recipientPostalCode: row.pinCode,
+      items: [
+        {
+          variantId: resolved.variantId,
+          quantity: row.quantity,
+          // The RETAIL on a reseller order. Omitted, the reterm service
+          // keeps what the line was placed at (or the catalogue's
+          // suggestion for a line that is new to the order).
+          ...(row.retailUnitPrice === undefined ? {} : { unitPriceInr: row.retailUnitPrice }),
+        },
+      ],
+    };
+    if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
+    if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
+    // A row that omits city/state leaves the stored value alone, exactly
+    // as the seller's own CSV patch does — `?? null` would blank a
+    // locality the first upload got right.
+    if (row.city !== undefined) dto.recipientCity = row.city;
+    if (row.state !== undefined) dto.recipientStateProvince = row.state;
+    if (row.codAmount !== undefined) dto.codAmountInr = row.codAmount;
+
+    try {
+      await this.orders.edit(
+        sellerId,
+        orderId,
+        dto,
+        { type: ActorType.STORE, id: storeUserId },
+        ctx,
+        { storeId },
+      );
+    } catch (err) {
+      if (this.isNothingToUpdate(err)) return;
+      throw err;
+    }
+  }
+
+  /** The 400 `edit` answers with when a row changes nothing. */
+  private isNothingToUpdate(err: unknown): boolean {
+    if (typeof err !== 'object' || err === null) return false;
+    const res = (err as { response?: unknown }).response;
+    if (typeof res !== 'object' || res === null) return false;
+    return (res as { code?: unknown }).code === 'NOTHING_TO_UPDATE';
   }
 
   private async createOrder(

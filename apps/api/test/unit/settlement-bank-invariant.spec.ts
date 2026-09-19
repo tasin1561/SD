@@ -6,6 +6,7 @@ import {
   PaymentMode,
   Prisma,
   ResellerCreditTrigger,
+  ResellerMoneyParty,
 } from '@skydrop/db';
 import {
   AdvisoryLock,
@@ -2283,6 +2284,106 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
     expect(w.balance('s')).toBe('605.00');
     expect(w.creditsOf('r1')).toEqual(['SELLER CREDITED', 'STORE CREDITED']);
     expect(w.storeEntriesOf('r1')).toEqual(entriesWere);
+    agrees(w);
+  });
+
+  /*
+    RS-7 (2026-09-19) — THE ANSWER TO THAT REFUSAL.
+
+    The test above pins that a PAID reseller order's figures cannot be
+    re-worked-out: the once-per-order wallet unique would refuse the
+    second `cod_collection` a rewrite needs, and that index is the guard
+    against paying an order twice. So the correction is settled BETWEEN
+    the two wallets through the dispute Skydrop already referees — no
+    second credit, no weakened index, one money path.
+
+    What this asserts is the property the whole RS-6 bank model rests on:
+    a settlement moves money WITHIN the seller's group, so the group's
+    total owed and therefore `held` are UNCHANGED, while the two wallets
+    inside it move by exactly the settled amount in opposite directions.
+    And `held = max(0, seller + Σ stores)` still holds after every step.
+  */
+  it('a correction SETTLES after the credits were paid — within the group, book unmoved', async () => {
+    const w = world([cod('r1', ON_PAYOUT, ON_PAYOUT)]);
+    await confirm(w, 'r1');
+    await deliver(w, 'r1');
+    await w.pay('1180', [['r1', '1180']]);
+    expect(w.storeBalance('st-a')).toBe('385.00');
+    expect(w.balance('s')).toBe('605.00');
+    const bookWas = w.accountTotal();
+    const capitalWas = w.capital();
+    const heldWas = w.held('s');
+    agrees(w);
+
+    // Re-pricing is refused — that is what the correction exists for.
+    await expect(
+      w.resellerMoney.recalculateAfterEdit('r1', { reason: 'Transfer price was wrong' }),
+    ).resolves.toMatchObject({ outcome: 'UNCHANGED' });
+
+    // The seller owes the store ₹120: the store was short-changed.
+    await w.resellerMoney.settleStoreDispute(w.tx as never, {
+      storeId: 'st-a',
+      sellerId: 's',
+      orderId: 'r1',
+      payer: ResellerMoneyParty.SELLER,
+      amount: new Prisma.Decimal('120.00'),
+      ticketNumber: 'TK-2026-000042',
+      staffId: 'staff-1',
+    });
+    expect(w.storeBalance('st-a')).toBe('505.00');
+    expect(w.balance('s')).toBe('485.00');
+    // NOT ours: no cash left, no capital moved, the group still holds
+    // exactly what it held before.
+    expect(w.accountTotal()).toBe(bookWas);
+    expect(w.capital()).toBe(capitalWas);
+    expect(w.held('s')).toBe(heldWas);
+    agrees(w);
+
+    // The other direction, on the same order: a store may owe too.
+    await w.resellerMoney.settleStoreDispute(w.tx as never, {
+      storeId: 'st-a',
+      sellerId: 's',
+      orderId: 'r1',
+      payer: ResellerMoneyParty.STORE,
+      amount: new Prisma.Decimal('45.50'),
+      ticketNumber: 'TK-2026-000043',
+      staffId: 'staff-1',
+    });
+    expect(w.storeBalance('st-a')).toBe('459.50');
+    expect(w.balance('s')).toBe('530.50');
+    expect(w.accountTotal()).toBe(bookWas);
+    expect(w.capital()).toBe(capitalWas);
+    expect(w.held('s')).toBe(heldWas);
+    agrees(w);
+
+    // And the CREDITS are untouched — a settlement corrects the figures
+    // beside the payment, it never rewrites it.
+    expect(w.creditsOf('r1')).toEqual(['SELLER CREDITED', 'STORE CREDITED']);
+  });
+
+  it('a correction that takes a wallet NEGATIVE is the group’s exposure, not our cash', async () => {
+    // RS-7: the payer may go below zero (TRE-8c). What must not happen is
+    // the bank book inventing an entry for money nobody holds — the
+    // receivable is the seller's, and `held` is clamped at zero.
+    const w = world([cod('r1', ON_PAYOUT, ON_PAYOUT)]);
+    await deliver(w, 'r1');
+    await w.pay('1180', [['r1', '1180']]);
+    const bookWas = w.accountTotal();
+    await w.resellerMoney.settleStoreDispute(w.tx as never, {
+      storeId: 'st-a',
+      sellerId: 's',
+      orderId: 'r1',
+      // More than the store holds: 385 − 500.
+      payer: ResellerMoneyParty.STORE,
+      amount: new Prisma.Decimal('500.00'),
+      ticketNumber: 'TK-2026-000044',
+      staffId: 'staff-1',
+    });
+    expect(w.storeBalance('st-a')).toBe('-115.00');
+    expect(w.balance('s')).toBe('1105.00');
+    // The group still owes 990 in total, so the book is unmoved.
+    expect(w.accountTotal()).toBe(bookWas);
+    expect(w.held('s')).toBe('990.00');
     agrees(w);
   });
 

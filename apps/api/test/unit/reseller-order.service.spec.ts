@@ -33,6 +33,8 @@ interface Opts {
   offered?: boolean;
   min?: string | null;
   max?: string | null;
+  /** RS-5 (2026-09-19) — the seller's suggested retail for this store. */
+  suggested?: string | null;
   visible?: number;
 }
 
@@ -104,7 +106,12 @@ function makeService(opts: Opts = {}) {
                     opts.min === undefined ? D('400.00') : opts.min === null ? null : D(opts.min),
                   maxRetailInr:
                     opts.max === undefined ? D('600.00') : opts.max === null ? null : D(opts.max),
-                  suggestedRetailInr: D('499.00'),
+                  suggestedRetailInr:
+                    opts.suggested === undefined
+                      ? D('499.00')
+                      : opts.suggested === null
+                        ? null
+                        : D(opts.suggested),
                 },
                 stockMode: ResellerStockMode.SET_ASIDE,
                 visibleQty: opts.visible ?? 5,
@@ -294,6 +301,85 @@ describe('ResellerOrderService.create — the refusals, IN ORDER (RS-5)', () => 
       ),
     ).toBe('RESELLER_QTY_EXCEEDS_VISIBLE');
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+/*
+  THE SELLING PRICE, AND THE FALLBACK (owner, 2026-09-19).
+
+  Asked for so a store's CSV row need not restate a price the seller
+  already set, but decided in `ResellerOrderService` so the portal, the
+  CSV worker and the API key cannot disagree about what an absent price
+  means. Three cases, and the third is the one that matters: with no
+  suggestion either, it is REFUSED rather than priced at nothing.
+*/
+describe('ResellerOrderService.create — a line with NO selling price stated (2026-09-19)', () => {
+  const noPrice = (): CreateStoreOrderDto =>
+    input({ items: [{ variantId: 'v1', quantity: 2 }] } as Partial<CreateStoreOrderDto>);
+
+  it('takes the seller’s SUGGESTED retail for this store, and snapshots it', async () => {
+    const { svc, create } = makeService({ suggested: '499.00' });
+    await svc.create(ACTOR, noPrice(), CTX);
+    const reseller = create.mock.calls[0]![4]['reseller'] as ResellerCreateContext;
+    expect(reseller.lines[0]!.retailUnitInr.toFixed(2)).toBe('499.00');
+    // And the unit price every existing reader shows is the RESOLVED one,
+    // not the (absent) requested one — a null there would disagree with
+    // the snapshot beside it.
+    expect((create.mock.calls[0]![1]['items'] as AnyArgs[])[0]!['unitPriceInr']).toBe(499);
+  });
+
+  it('the COD total is built from the resolved retail, not from nothing', async () => {
+    const { svc, create } = makeService({ suggested: '499.00' });
+    await svc.create(ACTOR, noPrice(), CTX);
+    // 2 × 499, no delivery fee, no discount, no advance.
+    expect(create.mock.calls[0]![1]['codAmountInr']).toBe(998);
+  });
+
+  it('with NO suggested retail either, it is refused BY NAME — never ₹0', async () => {
+    const { svc, create } = makeService({ suggested: null, min: null, max: null });
+    expect(await code(svc.create(ACTOR, noPrice(), CTX))).toBe('RESELLER_RETAIL_REQUIRED');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('a suggested retail OUTSIDE the seller’s own range is still refused', async () => {
+    // The seller set both, and they disagree. We do not quietly ship the
+    // one that breaks the agreement just because we chose it ourselves.
+    const { svc, create } = makeService({ suggested: '900.00', min: '400.00', max: '600.00' });
+    expect(await code(svc.create(ACTOR, noPrice(), CTX))).toBe('RETAIL_OUT_OF_RANGE');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('a STATED price still wins, and is still range-checked', async () => {
+    const { svc, create } = makeService({ suggested: '499.00' });
+    await svc.create(ACTOR, input({ items: [{ variantId: 'v1', quantity: 1 }] }), CTX);
+    expect(
+      (
+        create.mock.calls[0]![4]['reseller'] as ResellerCreateContext
+      ).lines[0]!.retailUnitInr.toFixed(2),
+    ).toBe('499.00');
+
+    const second = makeService({ suggested: '499.00' });
+    await second.svc.create(
+      ACTOR,
+      input({ items: [{ variantId: 'v1', quantity: 1, retailUnitPriceInr: 550 }] }),
+      CTX,
+    );
+    expect(
+      (
+        second.create.mock.calls[0]![4]['reseller'] as ResellerCreateContext
+      ).lines[0]!.retailUnitInr.toFixed(2),
+    ).toBe('550.00');
+
+    const third = makeService({ suggested: '499.00' });
+    expect(
+      await code(
+        third.svc.create(
+          ACTOR,
+          input({ items: [{ variantId: 'v1', quantity: 1, retailUnitPriceInr: 900 }] }),
+          CTX,
+        ),
+      ),
+    ).toBe('RETAIL_OUT_OF_RANGE');
   });
 });
 

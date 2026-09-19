@@ -172,3 +172,5 @@ export {
 } from '@prisma/client';
 // RS-6 phase 3c — a reseller order's per-party credits.
 export { ResellerMoneyParty, ResellerCreditStatus } from '@prisma/client';
+// RS-7 (2026-09-19) — what a store ↔ seller dispute is about.
+export { StoreDisputeKind } from '@prisma/client';

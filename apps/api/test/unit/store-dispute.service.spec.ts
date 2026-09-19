@@ -98,6 +98,8 @@ function makeSut(opts: {
     machine,
     { afterEvent: jest.fn() } as unknown as TicketNotifier,
     { settleStoreDispute: settle, transferCompensationCap: cap } as never,
+    // RS-7 (2026-09-19) — the figures a FIGURE_CORRECTION stamps.
+    { forOrder: jest.fn() } as never,
   );
   return { svc, settle, cap, updateMany, update, eventCreate, auditLog, orderFindFirst };
 }

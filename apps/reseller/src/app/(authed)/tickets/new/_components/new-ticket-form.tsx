@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { TicketType } from '@skydrop/db';
-import { Button, FormField, Input, Textarea } from '@skydrop/ui/components';
+import { Button, FormField, Input, Select, Textarea } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
 import { storeTicketKind } from '@/lib/ticket-kind';
 
@@ -21,6 +21,10 @@ export interface NewTicketInput {
   readonly orderId: string;
   readonly subject: string;
   readonly description?: string;
+  /** RS-7 (2026-09-19) — the "correct the figures" case, seller only. */
+  readonly disputeKind?: 'GENERAL' | 'FIGURE_CORRECTION';
+  readonly claimAmountInr?: string;
+  readonly claimPayer?: 'STORE' | 'SELLER';
 }
 
 /**
@@ -68,6 +72,14 @@ export function NewTicketForm({
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // RS-7 (2026-09-19) — the correction case. Only ever offered for a
+  // dispute with the SELLER: an issue with Skydrop is about a parcel in
+  // our hands, and money between you and your seller is not ours to move
+  // on that thread.
+  const [correction, setCorrection] = useState(false);
+  const [claimAmount, setClaimAmount] = useState('');
+  const [claimPayer, setClaimPayer] = useState<'STORE' | 'SELLER'>('SELLER');
+  const correcting = audience === 'seller' && correction;
 
   const withSeller = storeTicketKind(TicketType.STORE_DISPUTE);
   const withSkydrop = storeTicketKind(TicketType.STORE_ISSUE);
@@ -81,6 +93,13 @@ export function NewTicketForm({
         orderId: orderId.trim(),
         subject,
         ...(description.trim() === '' ? {} : { description }),
+        ...(correcting
+          ? {
+              disputeKind: 'FIGURE_CORRECTION' as const,
+              claimAmountInr: claimAmount.trim(),
+              claimPayer,
+            }
+          : {}),
       });
       onDone(result);
     } catch (err) {
@@ -138,6 +157,58 @@ export function NewTicketForm({
           required
         />
       </FormField>
+      {audience === 'seller' ? (
+        <div className="border-border space-y-3 rounded-[var(--radius-2)] border px-3 py-2.5">
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={correction}
+              onChange={(e) => setCorrection(e.target.checked)}
+            />
+            <span>
+              <span className="text-text-strong block text-sm">
+                This is about the money worked out on the order
+              </span>
+              <span className="text-text-muted block text-xs leading-relaxed">
+                Say what you think is owed and who owes it. Skydrop checks it against the figures
+                that were on the order when you raised this, and settles it between your wallet and
+                your seller&rsquo;s.
+              </span>
+            </span>
+          </label>
+          {correction ? (
+            <div className="flex flex-wrap items-end gap-2.5">
+              <FormField
+                label="How much"
+                htmlFor="ticket-claim-amount"
+                hint="₹, up to 2 decimals"
+                className="w-[160px]"
+              >
+                <Input
+                  id="ticket-claim-amount"
+                  inputMode="decimal"
+                  value={claimAmount}
+                  onChange={(e) => setClaimAmount(e.target.value)}
+                  placeholder="120.00"
+                  required
+                />
+              </FormField>
+              <FormField label="Who owes it" htmlFor="ticket-claim-payer" className="w-[180px]">
+                <Select
+                  id="ticket-claim-payer"
+                  value={claimPayer}
+                  onChange={(e) => setClaimPayer(e.target.value === 'STORE' ? 'STORE' : 'SELLER')}
+                >
+                  <option value="SELLER">The seller owes us</option>
+                  <option value="STORE">We owe the seller</option>
+                </Select>
+              </FormField>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <FormField label="What is wrong" htmlFor="ticket-subject">
         <Input
           id="ticket-subject"

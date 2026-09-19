@@ -11,6 +11,7 @@ import {
   ResellerMoneyParty,
   type RtoItemCondition,
   SellerStoreKind,
+  StoreDisputeKind,
   TicketHandling,
   TicketStatus,
   TicketType,
@@ -20,6 +21,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
+import { ResellerOrderMoneyReadService } from '../../reseller-order-money-view/services/reseller-order-money-read.service';
 import { TicketStateMachineService } from './ticket-state-machine.service';
 import { allocateTicketNumber } from './ticket-numbering';
 import { TicketNotifier } from './ticket-notifier.service';
@@ -193,6 +195,17 @@ export interface OpenTicketInput {
   /** RS-7 — STORE_DISPUTE: the reseller store raising it, and who there. */
   readonly storeId?: string | null;
   readonly openedByStoreUserId?: string | null;
+  /**
+   * RS-7 (2026-09-19) — a STORE_DISPUTE's kind, and, on a
+   * FIGURE_CORRECTION, the raiser's claim plus the money as both sides
+   * saw it. Set ONLY by `openStoreDispute`, which checks the combination
+   * (a claim without the kind, or the kind without a claim, is refused
+   * there rather than written half-formed).
+   */
+  readonly disputeKind?: StoreDisputeKind | null;
+  readonly disputeClaimAmountInr?: Prisma.Decimal | null;
+  readonly disputeClaimPayer?: ResellerMoneyParty | null;
+  readonly disputedFigures?: DisputedFiguresSnapshot;
 }
 
 interface OpenResult {
@@ -267,6 +280,48 @@ export interface TicketView {
   readonly storeName: string | null;
   /** RS-7 — on a settled STORE_DISPUTE, who paid the other. */
   readonly disputePayer: ResellerMoneyParty | null;
+  /** RS-7 (2026-09-19) — what KIND of dispute; null on every other type. */
+  readonly disputeKind: StoreDisputeKind | null;
+  /** A FIGURE_CORRECTION's claim: what the raiser says is owed, by whom. */
+  readonly disputeClaimAmountInr: string | null;
+  readonly disputeClaimPayer: ResellerMoneyParty | null;
+  /** The order's money as both sides saw it when the correction was raised. */
+  readonly disputedFigures: DisputedFiguresSnapshot | null;
+}
+
+/**
+ * RS-7 (2026-09-19) — the ORDER'S MONEY AS IT STOOD when a figure
+ * correction was raised, stamped onto the ticket.
+ *
+ * A REDUCED copy of `ResellerOrderMoneyReadService`'s view, not the whole
+ * thing: the per-party plan and the fee split are the figures the two
+ * sides are arguing about, while the individual wallet lines are readable
+ * live and would only bloat the row. Stored so that "what were we looking
+ * at" is answerable a month later, when the live ledger has moved.
+ */
+export interface DisputedFiguresSnapshot {
+  readonly capturedAt: string;
+  readonly orderNumber: string;
+  readonly paymentMode: string;
+  readonly codInr: string | null;
+  readonly transferTotalInr: string;
+  readonly retailTotalInr: string;
+  readonly parties: ReadonlyArray<{
+    readonly party: ResellerMoneyParty;
+    readonly status: string;
+    readonly grossInr: string;
+    readonly transferInr: string;
+    readonly taxShareInr: string;
+    readonly codFeeShareInr: string;
+    readonly instantFeeShareInr: string;
+    readonly netInr: string;
+  }>;
+  readonly fees: ReadonlyArray<{
+    readonly fee: string;
+    readonly storeInr: string;
+    readonly sellerInr: string;
+    readonly totalInr: string;
+  }>;
 }
 
 /**
@@ -292,6 +347,16 @@ export interface StoreTicketView {
   readonly resolutionNotes: string | null;
   readonly resolvedAt: Date | null;
   readonly createdAt: Date;
+  /**
+   * RS-7 (2026-09-19) — the store sees the correction's own fields. Both
+   * sides are shown the SAME claim and the SAME snapshot: the whole point
+   * of recording them is that the argument is about figures both parties
+   * can see, and a store shown less than the seller cannot check ours.
+   */
+  readonly disputeKind: StoreDisputeKind | null;
+  readonly disputeClaimAmountInr: string | null;
+  readonly disputeClaimPayer: ResellerMoneyParty | null;
+  readonly disputedFigures: DisputedFiguresSnapshot | null;
 }
 
 export interface SettleStoreDisputeInput {
@@ -331,6 +396,10 @@ export class TicketService {
     // RS-7 — the reseller-order money: the transfer-price cap on a
     // compensation, and the store ↔ seller settlement pair.
     private readonly resellerMoney: ResellerOrderMoneyService,
+    // RS-7 (2026-09-19) — READ-ONLY: the figures both sides see, stamped
+    // onto a figure-correction dispute so the settlement is argued from
+    // what was on the table rather than from today's ledger.
+    private readonly money: ResellerOrderMoneyReadService,
   ) {}
 
   /**
@@ -606,6 +675,23 @@ export class TicketService {
         openedBySellerUserId: actor.sellerUserId ?? null,
         storeId: input.storeId ?? null,
         openedByStoreUserId: input.openedByStoreUserId ?? null,
+        // RS-7 (2026-09-19): the dispute's kind and, on a figure
+        // correction, the raiser's claim and the figures both sides were
+        // looking at. Every one is null on every other ticket type; the
+        // callers that set them are the two store-dispute openers, which
+        // validate the combination before reaching here.
+        disputeKind: input.disputeKind ?? null,
+        disputeClaimAmountInr: input.disputeClaimAmountInr ?? null,
+        disputeClaimPayer: input.disputeClaimPayer ?? null,
+        ...(input.disputedFigures === undefined
+          ? {}
+          : {
+              // A plain readonly object with no index signature, which is
+              // what Prisma's InputJsonValue wants; `unknown` is the only
+              // way to say "this IS json" to a structural check that
+              // cannot see it.
+              disputedFigures: input.disputedFigures as unknown as Prisma.InputJsonValue,
+            }),
       },
     });
 
@@ -1108,35 +1194,200 @@ export class TicketService {
     orderId: string;
     subject: string;
     description?: string | null;
+    disputeKind?: StoreDisputeKind;
+    claimAmountInr?: string;
+    claimPayer?: ResellerMoneyParty;
   }): Promise<StoreTicketView> {
+    const { storeId, storeUserId, ...rest } = input;
+    const opened = await this.openStoreDispute({
+      ...rest,
+      raiser: { kind: 'STORE', storeId, storeUserId },
+    });
+    return this.getForStore(storeId, opened.id);
+  }
+
+  /**
+   * RS-7 (2026-09-19) — SELLER STAFF raise a dispute with one of their
+   * own reseller stores.
+   *
+   * The store could already argue with the seller; the seller had no way
+   * back, which made "we disagree about this order" a one-directional
+   * right. Both sides see the same figures on their own screens, so both
+   * can be wrong about them and both need somewhere to say so.
+   *
+   * The STORE is read off the ORDER, never taken from the request: a
+   * seller may only dispute an order that is already one of their
+   * stores', so there is no way to file a complaint against a store that
+   * had nothing to do with it. Everything else — the settlement, the
+   * conversation, the notifications — is the existing dispute machinery
+   * unchanged.
+   */
+  async openForSellerAgainstStore(input: {
+    sellerId: string;
+    sellerUserId: string;
+    orderId: string;
+    subject: string;
+    description?: string | null;
+    disputeKind?: StoreDisputeKind;
+    claimAmountInr?: string;
+    claimPayer?: ResellerMoneyParty;
+  }): Promise<TicketView> {
+    const { sellerId, sellerUserId, ...rest } = input;
+    const opened = await this.openStoreDispute({
+      ...rest,
+      raiser: { kind: 'SELLER', sellerId, sellerUserId },
+    });
+    return this.getForSeller(sellerId, opened.id);
+  }
+
+  /**
+   * The ONE place a store ↔ seller dispute is opened, whichever side
+   * raises it.
+   *
+   * ── THE CORRECTION CASE ──────────────────────────────────────────────
+   * `FIGURE_CORRECTION` is the answer to "the money on this order is
+   * wrong and it has already been paid" (RS-6 phase 3c's
+   * `RESELLER_CREDIT_ALREADY_PAID`). It is a KIND of dispute rather than
+   * a new ticket type or a second money path, and that is the whole
+   * point: the once-per-order wallet unique
+   * (`seller_wallet_entries_once_per_order_uq`) means a credit cannot be
+   * reversed and rewritten — it is the guard against paying an order
+   * twice and must not be weakened — so the correction is settled
+   * BETWEEN the two wallets through `settleStoreDispute`, which already
+   * exists, already claims the ticket before any money moves, and is
+   * already the only place a store dispute pays anybody.
+   *
+   * A correction must SAY WHAT IT IS ASKING FOR (`claimAmountInr` +
+   * `claimPayer`). That is a claim, never money: staff settle with their
+   * own figures, and this is what stops the settlement form being typed
+   * from nothing. And it carries a SNAPSHOT of the order's money as both
+   * sides could see it at the moment it was raised — taken from the same
+   * read service their own screens use, so nobody can be shown a
+   * different set of numbers from the ones being argued over, and so the
+   * argument is still legible after the live ledger has moved on.
+   */
+  private async openStoreDispute(input: {
+    raiser:
+      | { kind: 'STORE'; storeId: string; storeUserId: string }
+      | { kind: 'SELLER'; sellerId: string; sellerUserId: string };
+    orderId: string;
+    subject: string;
+    description?: string | null;
+    disputeKind?: StoreDisputeKind;
+    claimAmountInr?: string;
+    claimPayer?: ResellerMoneyParty;
+  }): Promise<TicketView> {
+    const raiser = input.raiser;
     const order = await this.prisma.client.order.findFirst({
       where: {
         id: input.orderId,
-        storeId: input.storeId,
         storeKind: SellerStoreKind.RESELLER,
         deletedAt: null,
+        ...(raiser.kind === 'STORE' ? { storeId: raiser.storeId } : { sellerId: raiser.sellerId }),
       },
-      select: { id: true, sellerId: true },
+      select: { id: true, sellerId: true, storeId: true },
     });
-    if (order === null) {
+    // Scoped in the WHERE clause, so another store's order — or another
+    // seller's — is indistinguishable from one that does not exist.
+    if (order === null || order.storeId === null) {
       throw new NotFoundException({
         code: 'ORDER_NOT_FOUND',
-        message: 'No such order in your store.',
+        message:
+          raiser.kind === 'STORE'
+            ? 'No such order in your store.'
+            : 'No such reseller-store order of yours.',
       });
     }
-    const opened = await this.open(
+
+    const kind = input.disputeKind ?? StoreDisputeKind.GENERAL;
+    const wantsClaim = input.claimAmountInr !== undefined || input.claimPayer !== undefined;
+    if (kind !== StoreDisputeKind.FIGURE_CORRECTION && wantsClaim) {
+      throw new BadRequestException({
+        code: 'DISPUTE_CLAIM_NOT_FOR_KIND',
+        message:
+          'A figure to correct belongs on a “correct the figures” dispute. Raise it as one, or leave the amount off.',
+      });
+    }
+    let claimAmount: Prisma.Decimal | null = null;
+    let figures: DisputedFiguresSnapshot | undefined;
+    if (kind === StoreDisputeKind.FIGURE_CORRECTION) {
+      if (input.claimAmountInr === undefined || input.claimPayer === undefined) {
+        throw new BadRequestException({
+          code: 'DISPUTE_CLAIM_REQUIRED',
+          message:
+            'Say what you think is owed and who owes it. “The figures are wrong” with no figure in it is not something anybody can settle.',
+        });
+      }
+      if (
+        !MONEY_2DP.test(input.claimAmountInr) ||
+        new Prisma.Decimal(input.claimAmountInr).lte(0)
+      ) {
+        throw new BadRequestException({
+          code: 'DISPUTE_CLAIM_AMOUNT_INVALID',
+          message: 'The amount must be more than ₹0, with at most two decimal places.',
+        });
+      }
+      claimAmount = new Prisma.Decimal(input.claimAmountInr);
+      figures = await this.captureDisputedFigures(order.id);
+    }
+
+    return this.open(
       {
         ticketType: TicketType.STORE_DISPUTE,
         sellerId: order.sellerId,
-        storeId: input.storeId,
-        openedByStoreUserId: input.storeUserId,
+        storeId: order.storeId,
+        ...(raiser.kind === 'STORE' ? { openedByStoreUserId: raiser.storeUserId } : {}),
         subject: input.subject.trim(),
         description: input.description?.trim() || null,
         orderId: order.id,
+        disputeKind: kind,
+        disputeClaimAmountInr: claimAmount,
+        disputeClaimPayer: input.claimPayer ?? null,
+        ...(figures === undefined ? {} : { disputedFigures: figures }),
       },
-      { type: ActorType.STORE, storeUserId: input.storeUserId },
+      raiser.kind === 'STORE'
+        ? { type: ActorType.STORE, storeUserId: raiser.storeUserId }
+        : { type: ActorType.SELLER, sellerUserId: raiser.sellerUserId },
     );
-    return this.getForStore(input.storeId, opened.id);
+  }
+
+  /**
+   * The order's money as both parties can see it, reduced to what a
+   * settlement is argued from.
+   *
+   * Read through `ResellerOrderMoneyReadService` — the same computation
+   * behind the store's, the seller's and staff's own money panels —
+   * rather than re-derived here, so the snapshot cannot disagree with
+   * what either side was looking at when they raised the dispute. Only
+   * the per-party plan and the fee split are kept: the individual wallet
+   * lines are readable live and would bloat every ticket row.
+   */
+  private async captureDisputedFigures(orderId: string): Promise<DisputedFiguresSnapshot> {
+    const view = await this.money.forOrder(orderId, { audience: 'STAFF' });
+    return {
+      capturedAt: new Date().toISOString(),
+      orderNumber: view.orderNumber,
+      paymentMode: view.paymentMode,
+      codInr: view.codInr,
+      transferTotalInr: view.transferTotalInr,
+      retailTotalInr: view.retailTotalInr,
+      parties: view.parties.map((p) => ({
+        party: p.party,
+        status: p.status,
+        grossInr: p.grossInr,
+        transferInr: p.transferInr,
+        taxShareInr: p.taxShareInr,
+        codFeeShareInr: p.codFeeShareInr,
+        instantFeeShareInr: p.instantFeeShareInr,
+        netInr: p.netInr,
+      })),
+      fees: view.fees.map((f) => ({
+        fee: f.fee,
+        storeInr: f.storeInr,
+        sellerInr: f.sellerInr,
+        totalInr: f.totalInr,
+      })),
+    };
   }
 
   /**
@@ -1441,6 +1692,10 @@ export class TicketService {
       resolutionNotes: v.resolutionNotes,
       resolvedAt: v.resolvedAt,
       createdAt: v.createdAt,
+      disputeKind: v.disputeKind,
+      disputeClaimAmountInr: v.disputeClaimAmountInr,
+      disputeClaimPayer: v.disputeClaimPayer,
+      disputedFigures: v.disputedFigures,
     };
   }
 
@@ -1480,6 +1735,10 @@ export class TicketService {
       storeId?: string | null;
       store?: { name: string; displayName: string | null } | null;
       disputePayer?: ResellerMoneyParty | null;
+      disputeKind?: StoreDisputeKind | null;
+      disputeClaimAmountInr?: Prisma.Decimal | null;
+      disputeClaimPayer?: ResellerMoneyParty | null;
+      disputedFigures?: Prisma.JsonValue | null;
     },
     /**
      * externalId → the courier's word for it. Absent on the WRITE paths
@@ -1526,6 +1785,17 @@ export class TicketService {
       storeId: row.storeId ?? null,
       storeName: row.store == null ? null : (row.store.displayName ?? row.store.name),
       disputePayer: row.disputePayer ?? null,
+      disputeKind: row.disputeKind ?? null,
+      disputeClaimAmountInr: row.disputeClaimAmountInr?.toFixed(2) ?? null,
+      disputeClaimPayer: row.disputeClaimPayer ?? null,
+      // Stored as JSON, read back as the shape the service stamped. It is
+      // OUR own snapshot, never anything a caller sent, so there is
+      // nothing here a cast is papering over.
+      disputedFigures:
+        row.disputedFigures == null
+          ? null
+          : // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- our own stamped JSON, written by `captureDisputedFigures` alone
+            (row.disputedFigures as unknown as DisputedFiguresSnapshot),
     };
   }
 }
