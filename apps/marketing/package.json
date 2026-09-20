@@ -4,8 +4,9 @@
   "private": true,
   "description": "Skydrop public marketing site — skydrop.online — Bangladeshi sellers shipping into India.",
   "scripts": {
-    "dev": "next dev -p 3006",
+    "dev": "MARKETING_DEV_ROUTES=1 next dev -p 3006",
     "build": "next build",
+    "build:preview": "MARKETING_DEV_ROUTES=1 next build",
     "start": "node ../../scripts/serve-static.mjs out 3006",
     "serve": "node ../../scripts/serve-static.mjs out 3006",
     "lint": "next lint",

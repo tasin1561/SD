@@ -4,6 +4,14 @@ const nextConfig = {
   // Caddy file_server, S3+CloudFront). No runtime server features.
   output: 'export',
   reactStrictMode: true,
+  // Dev-only routes (`page.dev.tsx` — the swatch page, later the motion
+  // gallery and the poster renderer) exist only when MARKETING_DEV_ROUTES=1
+  // is set at build/dev time. A static export renders EVERY route it can
+  // see, so "not in production" has to mean "not compiled": the plain
+  // `next build` that CI and deploy.sh run never lists `dev.tsx` here, and
+  // the route is simply not part of the app. `pnpm dev` sets the flag.
+  pageExtensions:
+    process.env.MARKETING_DEV_ROUTES === '1' ? ['dev.tsx', 'tsx', 'ts'] : ['tsx', 'ts'],
   images: {
     // next/image with the default loader needs a Next.js server for
     // on-the-fly optimization. With output: 'export' we serve

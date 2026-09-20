@@ -121,3 +121,6 @@ __pycache__/
 # commit while telling nobody anything.
 .playwright-mcp/
 .last-deployed-sha
+
+# Owner-supplied motion reference clips — ideas only, never shipped
+reference/
