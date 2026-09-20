@@ -52,7 +52,7 @@ export function SellerFreightIndex(): ReactElement {
     <div>
       <PageHeader
         title="Inbound freight"
-        subtitle="The shipping cost of getting your stock from Bangladesh into our Indian warehouse. Charged per unit as the stock sells, not all at once."
+        subtitle="The shipping cost of getting your stock from Bangladesh into our Indian warehouse. WHEN it is charged depends on the terms agreed for each consignment — see Terms on each row."
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
@@ -60,7 +60,7 @@ export function SellerFreightIndex(): ReactElement {
           label="Still owed"
           value={<Money amount={outstanding} decimals={false} />}
           tone={Number(outstanding) > 0 ? 'warn' : 'good'}
-          hint="Recovered from your wallet as the stock sells"
+          hint="What is still to be taken from your wallet"
         />
         <Stat
           label="Consignments billed"
@@ -116,7 +116,7 @@ export function SellerFreightIndex(): ReactElement {
               <Th align="right">Total</Th>
               <Th align="right">Charged so far</Th>
               <Th align="right">Still owed</Th>
-              <Th>Units sold</Th>
+              <Th>Units charged</Th>
               <Th>Status</Th>
             </Tr>
           </THead>
@@ -190,16 +190,18 @@ export function SellerFreightIndex(): ReactElement {
         </Table>
       )}
 
-      <Card className="mt-4">
-        <CardBody>
-          <p className="text-text-muted text-xs leading-relaxed">
-            On pay-as-it-sells terms, each unit carries its share of the consignment&apos;s freight,
-            and that share is deducted from your wallet when the unit is delivered. Stock still
-            sitting in the warehouse has not been charged for yet — which is why a bill can stay
-            partly owed for a long time without anything being wrong.
-          </p>
-        </CardBody>
-      </Card>
+      {rows.some((r) => r.mode === 'PAY_LATER') && (
+        <Card className="mt-4">
+          <CardBody>
+            <p className="text-text-muted text-xs leading-relaxed">
+              On pay-as-it-sells terms, each unit carries its share of the consignment&apos;s
+              freight, and that share is deducted from your wallet when the unit is delivered. Stock
+              still sitting in the warehouse has not been charged for yet — which is why a bill can
+              stay partly owed for a long time without anything being wrong.
+            </p>
+          </CardBody>
+        </Card>
+      )}
     </div>
   );
 }

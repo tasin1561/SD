@@ -390,11 +390,7 @@ function CostBreakdown({
                     </span>
                   </Td>
                   <Td align="right">
-                    <span className="tabular-nums">
-                      {agreed === null ? '₹' : ''}
-                      {l.rate}
-                      {agreed === null ? '' : ` ${agreed}`}
-                    </span>
+                    <Money amount={l.rate} currency={agreed ?? 'INR'} convert={false} />
                   </Td>
                   <Td align="right">
                     <Money amount={l.perUnitInr} />

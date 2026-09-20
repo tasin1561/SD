@@ -766,6 +766,12 @@ export function statusLabel(
     | EarlyReservationReviewStatus
     | StockUnitStatus,
 ): string {
+  // "Voided" is the enum's word; WITHDRAWN is the one every sentence
+  // beside the badge uses, and a badge that disagrees with its own
+  // caption reads as two different things having happened. Safe as a
+  // single override: `VOIDED` exists on exactly one of these seven
+  // enums (InboundFreightStatus).
+  if (status === 'VOIDED') return 'Withdrawn';
   return String(status)
     .toLowerCase()
     .split('_')

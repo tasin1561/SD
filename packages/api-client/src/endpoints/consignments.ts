@@ -97,12 +97,14 @@ export interface ConsignmentView {
     readonly status: string;
     readonly totalInr: string;
     readonly goodsReceiptId: string;
+    /** Set when the bill was WITHDRAWN as wrong. A reader summing or
+     *  listing these MUST exclude it — a voided bill gave its money back,
+     *  so counting it beside a live one shows a charge twice. */
+    readonly voidedAt: string | null;
   }[];
-  // NOTE: the four fields above are the whole of what the consignment
-  // endpoint selects — it carries no `voidedAt`, so a WITHDRAWN bill is
-  // still in this list and still in any sum taken over it. Anything that
-  // needs the bill itself (what was agreed, in which currency, whether it
-  // was withdrawn) reads the freight endpoint rather than widening this.
+  // Anything needing the bill ITSELF — what was agreed, in which
+  // currency, the per-line rates — reads the freight endpoint; this list
+  // stays a summary.
 }
 
 export interface ConsignmentEventView {
