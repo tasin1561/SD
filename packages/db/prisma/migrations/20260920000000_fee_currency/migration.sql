@@ -42,19 +42,25 @@ UPDATE "system_settings" SET "display_name" = 'Customer Return Fee'    WHERE "ke
 -- tier and the auto-pickup switches each needed a migration. These rows
 -- do not exist yet, so the INSERT is what creates them; ON CONFLICT
 -- keeps the migration re-runnable.
+-- `updated_at` is listed EXPLICITLY. Prisma's `@updatedAt` is applied by
+-- the CLIENT, not by a database default, so the column is NOT NULL with
+-- nothing to fall back on and a raw INSERT that omits it fails. That is
+-- what broke this migration on its first CI run: the statement threw,
+-- `migrate deploy` stopped, and all four e2e shards died in global setup
+-- — a failure that looks like "everything is broken" and is one column.
 INSERT INTO "system_settings"
-  ("key", "category", "value_type", "value_string", "display_name", "description", "seller_overridable", "is_editable_by_admin")
+  ("key", "category", "value_type", "value_string", "display_name", "description", "seller_overridable", "is_editable_by_admin", "updated_at")
 VALUES
   ('pricing.flat_delivery_fee_currency', 'pricing', 'string', 'BDT',
    'Delivery Fee — currency',
    'INR or BDT. Decides how pricing.flat_delivery_fee is read. A BDT fee is converted to rupees at the rate in force AT THE MOMENT THE CHARGE IS TAKEN, and the source amount, currency and rate are all recorded on the charge so the figure can be explained later. Seller-overridable alongside the amount.',
-   true, true),
+   true, true, CURRENT_TIMESTAMP),
   ('pricing.flat_rto_fee_currency', 'pricing', 'string', 'BDT',
    'RTO Return Fee — currency',
    'INR or BDT. Decides how pricing.flat_rto_fee is read. Converted at the rate in force when the return is physically received, which is when the fee is charged. Seller-overridable alongside the amount.',
-   true, true),
+   true, true, CURRENT_TIMESTAMP),
   ('pricing.customer_return_fee_currency', 'pricing', 'string', 'INR',
    'Customer Return Fee — currency',
    'INR or BDT. Decides how pricing.customer_return_fee is read. Converted at the rate in force when the customer return is charged. Seller-overridable alongside the amount.',
-   true, true)
+   true, true, CURRENT_TIMESTAMP)
 ON CONFLICT ("key") DO NOTHING;

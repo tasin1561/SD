@@ -273,9 +273,9 @@ function OverrideDialog({
               htmlFor="ov-value"
               hint="What this seller's fee is AGREED in. A BDT fee is converted to rupees at the rate in force when the charge is taken, so the seller owes what was agreed rather than a rupee figure that drifts."
             >
-              <select
+              <Select
                 id="ov-value"
-                className="sd-field font-mono"
+                className="font-mono"
                 value={raw}
                 onChange={(e) => setRaw(e.target.value)}
               >
@@ -284,7 +284,7 @@ function OverrideDialog({
                     {c}
                   </option>
                 ))}
-              </select>
+              </Select>
             </FormField>
           ) : (
             <FormField

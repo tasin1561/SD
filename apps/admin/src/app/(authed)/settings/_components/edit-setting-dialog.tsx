@@ -12,6 +12,7 @@ import {
   LoadingState,
   Modal,
   ModalFooter,
+  Select,
   Textarea,
 } from '@skydrop/ui/components';
 import { FEE_CURRENCY_OPTIONS, isFeeCurrencyKey } from '@/lib/fee-currency';
@@ -146,8 +147,8 @@ export function EditSettingDialog({
               label="Currency"
               hint="The currency this fee is AGREED in. A non-INR fee is converted to rupees at the rate in force when the charge is taken."
             >
-              <select
-                className="sd-field font-mono"
+              <Select
+                className="font-mono"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 disabled={update.isPending}
@@ -157,7 +158,7 @@ export function EditSettingDialog({
                     {c}
                   </option>
                 ))}
-              </select>
+              </Select>
             </FormField>
           ) : (
             <FormField label="Value" hint={typeHint(detail.data.valueType)} error={undefined}>

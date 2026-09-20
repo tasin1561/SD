@@ -1360,6 +1360,8 @@ started this was a single-occurrence replace anchored on
 It landed on the wrong model, and everything after was `prisma format` being
 helpful.
 
+**A raw INSERT in a migration must supply `updated_at`, and forgetting it looks like the whole system is broken (2026-09-20).** Prisma's `@updatedAt` is applied by the CLIENT, so the column is created `TIMESTAMPTZ NOT NULL` with **no database default** — every table in this schema is like this. A hand-written `INSERT` that omits it throws a not-null violation, `migrate deploy` stops, and because the e2e global setup runs migrations before anything else, **all four e2e shards fail at once** alongside anything else that touches a database. The signal reads as a catastrophic regression and is one missing column. `prisma migrate dev` never catches it because generated DDL never hand-writes an INSERT. **Before committing a migration that inserts a row, list the table's NOT NULL columns that have no DEFAULT** (`grep -A25 'CREATE TABLE "<table>"' …/migration.sql | grep 'NOT NULL' | grep -v DEFAULT`) and check every one is in the column list — for most tables that is `key`-like columns, a display name, and `updated_at`.
+
 **A Prisma enum with no `@@map` names a PascalCase Postgres type, and ONLY the
 drift gate ever finds out (2026-09-16).** Every enum in this schema is written
 `UPPER_SNAKE_CASE` values `@map`ped to snake_case inside a type `@@map`ped to
