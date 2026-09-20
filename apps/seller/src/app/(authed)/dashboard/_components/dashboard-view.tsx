@@ -2,18 +2,21 @@
 
 import Link from 'next/link';
 import {
+  AlertTriangle,
   Check,
   Circle,
   Hourglass,
   LifeBuoy,
   ListOrdered,
   Package,
+  PhoneOff,
   Plus,
   Ship,
   Truck,
   Wallet,
 } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
+import { OrderStatus } from '@skydrop/db';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
   useOrdersList,
@@ -22,10 +25,9 @@ import {
   useSellerProfile,
   useWalletBalances,
 } from '@/lib/api-hooks';
+import { useMyNsaOrders } from '@/lib/ops-hooks';
 import {
   BandBody,
-  Card,
-  CardBody,
   Crumbs,
   EmptyState,
   ErrorState,
@@ -126,6 +128,33 @@ export function DashboardView(): ReactElement {
   // figures shown in money, and a viewer who may read orders may know
   // what their own orders are worth.
   const inFlight = useMoneyInFlight({ enabled: canOrders });
+
+  /*
+    WHAT NEEDS A DECISION TODAY.
+
+    A dashboard opened every morning should lead with the handful of
+    things that stop unless somebody acts, not with totals — a total is
+    the same tomorrow whether you read it or not. Both figures are read
+    from endpoints `/needs-attention` already uses (nothing new is
+    computed here, and that page stays the authority); the row is the
+    signpost, and it is ABSENT on a clean morning rather than showing
+    two zeroes, which is how a dashboard becomes furniture.
+
+    Gated on `orders.view`, the same key `/needs-attention` is behind —
+    so a viewer who may not read orders never fires either request.
+  */
+  const awaiting = useOrdersList(
+    { status: OrderStatus.AWAITING_SELLER_DECISION, page: 1, pageSize: 1 },
+    { enabled: canOrders },
+  );
+  const stuck = useMyNsaOrders({ enabled: canOrders });
+  const awaitingCount = awaiting.data?.total ?? 0;
+  const stuckCount = (stuck.data ?? []).length;
+  // Only once BOTH have answered, and only when there is something to
+  // say. A row that appears a second after the page paints, or that
+  // claims "0 waiting" while the request is still out, is worse than
+  // one that waits.
+  const needsYou = awaiting.isSuccess && stuck.isSuccess && awaitingCount + stuckCount > 0;
   const companyName = identity?.companyName ?? 'there';
   // The header pill names the wallet's own currency, read from the same
   // place the card reads it — `isConverted` false is the real balance,
@@ -227,6 +256,54 @@ export function DashboardView(): ReactElement {
           ) : undefined
         }
       />
+
+      {/* ── What needs you, before anything that is merely true ──── */}
+      {canOrders && needsYou && (
+        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {awaitingCount > 0 && (
+            <Stat
+              label="Waiting on your decision"
+              icon={<PhoneOff size={13} aria-hidden />}
+              value={awaitingCount}
+              unit={awaitingCount === 1 ? 'order' : 'orders'}
+              tone="warn"
+              hint="We rang and nobody answered. Nothing happens to these until you say."
+              foot={[
+                {
+                  label: 'Open the list',
+                  value: (
+                    <Link href="/needs-attention" className="text-accent font-medium">
+                      Needs attention →
+                    </Link>
+                  ),
+                },
+              ]}
+            />
+          )}
+          {stuckCount > 0 && (
+            <Stat
+              label="Out for delivery, not arrived"
+              icon={<AlertTriangle size={13} aria-hidden />}
+              value={stuckCount}
+              unit={stuckCount === 1 ? 'parcel' : 'parcels'}
+              tone="bad"
+              // We chase these; the seller does not have to. Saying so
+              // is what stops the tile reading as a task list.
+              hint="We are chasing the courier on these."
+              foot={[
+                {
+                  label: 'See where each one is',
+                  value: (
+                    <Link href="/needs-attention" className="text-accent font-medium">
+                      Needs attention →
+                    </Link>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </div>
+      )}
 
       {canProfile && canCatalog && onboardingVisible(onboardingKnown, steps) && (
         <div className="mb-5">
@@ -418,6 +495,25 @@ export function DashboardView(): ReactElement {
               foot={recent.data === undefined ? undefined : `${recent.data.total} in total`}
             />
           )}
+          {/* The page that answers "is anything of mine stuck". It had
+              a nav row and no route in from here, so on a clean morning
+              — when the tiles above are correctly absent — nothing on
+              the dashboard pointed at it at all. */}
+          {canOrders && (
+            <ShortcutCard
+              href="/needs-attention"
+              icon={<AlertTriangle size={16} aria-hidden />}
+              title="Needs attention"
+              body="Orders we could not confirm, and parcels that never arrived."
+              foot={
+                awaiting.isSuccess && stuck.isSuccess
+                  ? awaitingCount + stuckCount === 0
+                    ? 'Nothing right now'
+                    : `${awaitingCount + stuckCount} to look at`
+                  : undefined
+              }
+            />
+          )}
           <ShortcutCard
             href="/inbound"
             icon={<Ship size={16} aria-hidden />}
@@ -550,39 +646,58 @@ export function WalletBalanceCard({
   // a figure whose rate nobody can see is the one to distrust.
   const restated = (query.data?.balances ?? []).find((b) => b.isConverted);
 
+  /*
+    The shared `Stat`, not a hand-built card.
+
+    It sits in a row beside two `Stat` tiles, and a `Card` there was a
+    different padding, a different radius and a different label weight
+    from its neighbours — three tiles that are one row of the same
+    thing, drawn three ways. Every piece survives the move: the rupee
+    figure leads, the caption is the hint, and the taka restatement is
+    the hairline foot, which is exactly the "what this figure is made
+    of" slot.
+  */
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-start justify-between gap-2">
-          <div className="text-text-muted text-xs font-medium tracking-wide uppercase">
-            {canonical.currency} balance
-          </div>
-          <span className="bg-surface-hover text-text-muted grid h-6 w-6 shrink-0 place-items-center rounded-[var(--radius-2)]">
-            <Wallet size={13} aria-hidden />
-          </span>
-        </div>
-        <div className="text-text-bright mt-1.5">
-          <Money
-            amount={canonical.balance}
-            currency={canonical.currency === 'BDT' ? 'BDT' : 'INR'}
-            convert={false}
-            size="lg"
-          />
-        </div>
-        <div className="text-text-muted mt-1 text-xs">{caption}</div>
-        {restated !== undefined && (
-          <div className="text-text-faint border-border mt-2.5 flex flex-wrap items-center gap-x-1.5 border-t pt-2 text-xs">
-            <span aria-hidden>≈</span>
-            <Money
-              amount={restated.balance}
-              currency={restated.currency === 'BDT' ? 'BDT' : 'INR'}
-              convert={false}
-            />
-            {restated.fxRate !== null && <span>· ₹1 = ৳{Number(restated.fxRate).toFixed(2)}</span>}
-            <span className="sr-only">the same balance in {restated.currency}</span>
-          </div>
-        )}
-      </CardBody>
-    </Card>
+    <Stat
+      label={`${canonical.currency} balance`}
+      icon={<Wallet size={13} aria-hidden />}
+      tone="neutral"
+      value={
+        <Money
+          amount={canonical.balance}
+          currency={canonical.currency === 'BDT' ? 'BDT' : 'INR'}
+          convert={false}
+          size="lg"
+        />
+      }
+      hint={caption}
+      {...(restated === undefined
+        ? {}
+        : {
+            foot: [
+              {
+                label: (
+                  <span className="inline-flex flex-wrap items-baseline gap-x-1">
+                    <span aria-hidden>≈</span>
+                    <Money
+                      amount={restated.balance}
+                      currency={restated.currency === 'BDT' ? 'BDT' : 'INR'}
+                      convert={false}
+                    />
+                    <span className="sr-only">the same balance in {restated.currency}</span>
+                  </span>
+                ),
+                value:
+                  restated.fxRate === null ? (
+                    <span className="text-text-faint">rate not recorded</span>
+                  ) : (
+                    <span className="text-text-faint font-normal">
+                      ₹1 = ৳{Number(restated.fxRate).toFixed(2)}
+                    </span>
+                  ),
+              },
+            ],
+          })}
+    />
   );
 }

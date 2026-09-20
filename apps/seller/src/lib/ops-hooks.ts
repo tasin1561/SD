@@ -724,9 +724,16 @@ export interface NsaOrderView {
  * The seller's own stuck parcels. No sellerId crosses the wire — the
  * guard supplies it, so this can only ever return their own.
  */
-export function useMyNsaOrders(): UseQueryResult<readonly NsaOrderView[]> {
+export function useMyNsaOrders(opts?: {
+  readonly enabled?: boolean;
+}): UseQueryResult<readonly NsaOrderView[]> {
   const client = useApiClient();
   return useQuery({
+    // Additive and defaulting to ON, so `/needs-attention`'s bare call
+    // is unchanged. The dashboard passes it because that page is open
+    // to every role, and a request nobody may make should never be
+    // sent rather than sent and its 403 hidden.
+    enabled: opts?.enabled ?? true,
     queryKey: ['seller-nsa', 'list'],
     queryFn: () => client.request<readonly NsaOrderView[]>('/api/seller/nsa'),
   });

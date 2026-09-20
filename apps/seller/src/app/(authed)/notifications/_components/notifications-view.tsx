@@ -5,14 +5,16 @@ import Link from 'next/link';
 import { ArrowRight, Search, Settings2, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
+  Crumbs,
   EmptyState,
+  FilterChip,
   Input,
   LoadingState,
+  MetaChip,
   PageHeader,
-  Section,
+  SectionBand,
   agoLabel,
   humaniseTopic,
   notificationKindStyle,
@@ -145,10 +147,28 @@ export function NotificationsView(): ReactElement {
   const hasMore = feed.data?.nextCursor != null;
 
   return (
-    <Section>
+    <div>
       <PageHeader
+        breadcrumb={
+          <Crumbs items={[{ label: 'Seller console' }, { label: 'Notifications' }]} Link={Link} />
+        }
         title="Notifications"
         subtitle="Everything sent to you — what a courier did, what the warehouse checked in, and what moved in your wallet."
+        meta={
+          feed.data === undefined ? undefined : (
+            <>
+              {unread > 0 ? (
+                <MetaChip tone="accent">{unread} unread</MetaChip>
+              ) : (
+                <MetaChip tone="good" dot>
+                  All read
+                </MetaChip>
+              )}
+              <MetaChip>{items.length} loaded</MetaChip>
+              {hasMore && <MetaChip dot>More further back</MetaChip>}
+            </>
+          )
+        }
         action={
           <div className="flex flex-wrap items-center gap-2">
             {unread > 0 && (
@@ -164,7 +184,7 @@ export function NotificationsView(): ReactElement {
             )}
             <Link
               href="/notifications/settings"
-              className="skydrop-hit border-border bg-surface text-text-body hover:border-border-strong hover:text-text-bright inline-flex h-9 items-center gap-1.5 rounded-[5px] border px-3.5 text-sm font-medium transition-colors"
+              className="skydrop-hit border-border bg-surface text-text-body hover:border-border-strong hover:text-text-bright inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-2)] border px-3.5 text-sm font-medium transition-colors"
             >
               <Settings2 size={14} aria-hidden />
               Settings
@@ -173,101 +193,131 @@ export function NotificationsView(): ReactElement {
         }
       />
 
-      {/* ── Filters ────────────────────────────────────────────── */}
-      <Card className="mb-4">
-        <CardBody className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1 basis-[16rem]">
-            <Search
-              size={15}
-              aria-hidden
-              className="text-text-faint pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2"
-            />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filter by order, AWB or wording…"
-              aria-label="Filter notifications"
-              className="pl-8"
-            />
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <Pill label="All" on={!unreadOnly} onClick={() => setUnreadOnly(false)} />
-            <Pill
-              label="Unread"
-              count={unread}
-              on={unreadOnly}
-              onClick={() => setUnreadOnly(true)}
-            />
-          </div>
-        </CardBody>
-
-        {tabs.length > 1 && (
-          <div
-            role="tablist"
-            aria-label="Filter by kind"
-            className="border-border-subtle flex gap-1 overflow-x-auto border-t px-3 py-2"
-          >
-            <Pill
-              label="Everything"
-              count={items.length}
-              on={tab === ''}
-              onClick={() => setTab('')}
-              tab
-            />
-            {tabs.map(([group, count]) => (
-              <Pill
-                key={group}
-                label={group}
-                count={count}
-                on={tab === group}
-                onClick={() => setTab(group)}
-                tab
+      <SectionBand
+        index="01"
+        title="Inbox"
+        note={
+          shown.length === items.length
+            ? `${items.length} ${items.length === 1 ? 'message' : 'messages'}`
+            : `${shown.length} of ${items.length} loaded`
+        }
+        action={
+          <>
+            <div className="relative min-w-0 basis-[14rem]">
+              <Search
+                size={15}
+                aria-hidden
+                className="text-text-faint pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2"
               />
-            ))}
-          </div>
-        )}
-      </Card>
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Order, AWB or wording…"
+                aria-label="Filter notifications"
+                className="pl-8"
+              />
+            </div>
+            {filtering && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setTab('');
+                  setUnreadOnly(false);
+                }}
+                className="text-text-faint hover:text-text-body px-1 text-xs transition-colors"
+              >
+                Reset
+              </button>
+            )}
+          </>
+        }
+      />
 
-      {/* ── Feed ───────────────────────────────────────────────── */}
-      {feed.isLoading && items.length === 0 ? (
-        <LoadingState label="Loading notifications…" rows={4} />
-      ) : shown.length === 0 ? (
-        <EmptyState
-          title={filtering ? 'Nothing matches' : 'Nothing yet'}
-          description={
-            filtering
-              ? hasMore
-                ? 'Nothing in what is loaded so far. Load earlier notifications to look further back.'
-                : 'Nothing here matches. Clear the filter to see everything again.'
-              : 'Anything needing you will appear here — a delivery that failed, a parcel coming back, money that moved.'
-          }
-          {...(filtering
-            ? {
-                action: (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setQuery('');
-                      setTab('');
-                      setUnreadOnly(false);
-                    }}
-                  >
-                    Clear filter
-                  </Button>
-                ),
+      <BandBody flush>
+        {/* Read/unread and the kind tabs in ONE chip row — they filter
+            the same list and splitting them over two bars made the
+            second read as a heading for what was below it. */}
+        <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-3 py-2.5">
+          <FilterChip label="All" active={!unreadOnly} onClick={() => setUnreadOnly(false)} />
+          <FilterChip
+            label="Unread"
+            count={unread}
+            active={unreadOnly}
+            onClick={() => setUnreadOnly(true)}
+          />
+          {tabs.length > 1 && (
+            <>
+              <span aria-hidden className="bg-border mx-1 h-4 w-px" />
+              <FilterChip
+                label="Everything"
+                count={items.length}
+                active={tab === ''}
+                onClick={() => setTab('')}
+              />
+              {tabs.map(([group, count]) => (
+                <FilterChip
+                  key={group}
+                  label={group}
+                  count={count}
+                  active={tab === group}
+                  onClick={() => setTab(group)}
+                />
+              ))}
+            </>
+          )}
+        </div>
+
+        {feed.isLoading && items.length === 0 ? (
+          <div className="p-3">
+            <LoadingState label="Loading notifications…" rows={4} />
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="p-3">
+            <EmptyState
+              title={filtering ? 'Nothing matches' : 'Nothing yet'}
+              description={
+                filtering
+                  ? hasMore
+                    ? 'Nothing in what is loaded so far. Load earlier notifications to look further back.'
+                    : 'Nothing here matches. Clear the filter to see everything again.'
+                  : 'Anything needing you will appear here — a delivery that failed, a parcel coming back, money that moved.'
               }
-            : {})}
-        />
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {shown.map((n) => {
-            const meta = byTopic.get(n.topic);
-            const { Icon, tone } = notificationKindStyle(meta?.group ?? null);
-            const open = expanded === n.id;
-            const isUnread = n.readAt === null;
-            return (
-              <li key={n.id} id={n.id}>
-                <Card className={clsx('relative overflow-hidden', isUnread && 'border-accent/40')}>
+              bare
+              {...(filtering
+                ? {
+                    action: (
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setQuery('');
+                          setTab('');
+                          setUnreadOnly(false);
+                        }}
+                      >
+                        Clear filter
+                      </Button>
+                    ),
+                  }
+                : {})}
+            />
+          </div>
+        ) : (
+          <ul className="divide-border divide-y">
+            {shown.map((n) => {
+              const meta = byTopic.get(n.topic);
+              const { Icon, tone } = notificationKindStyle(meta?.group ?? null);
+              const open = expanded === n.id;
+              const isUnread = n.readAt === null;
+              return (
+                <li
+                  key={n.id}
+                  id={n.id}
+                  className={clsx(
+                    'relative px-3 py-3 pl-5',
+                    isUnread && 'bg-[var(--color-accent-tint)]',
+                  )}
+                >
                   {/*
                     A coloured edge, keyed on the KIND rather than on
                     unread. It is what lets somebody find the returns in
@@ -279,183 +329,148 @@ export function NotificationsView(): ReactElement {
                     className="absolute inset-y-0 left-0 w-[3px]"
                     style={{ background: `var(--status-${tone}-fg)` }}
                   />
-                  <CardBody className="pl-5">
-                    <div className="flex items-start gap-3">
-                      <span
-                        aria-hidden
-                        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[7px]"
-                        style={{
-                          background: `var(--status-${tone}-bg)`,
-                          color: `var(--status-${tone}-fg)`,
+                  <div className="flex items-start gap-3">
+                    <span
+                      aria-hidden
+                      className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-2)]"
+                      style={{
+                        background: `var(--status-${tone}-bg)`,
+                        color: `var(--status-${tone}-fg)`,
+                      }}
+                    >
+                      <Icon size={16} />
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="truncate rounded-[var(--radius-1)] px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-[0.06em] uppercase"
+                            style={{
+                              background: `var(--status-${tone}-bg)`,
+                              color: `var(--status-${tone}-fg)`,
+                            }}
+                          >
+                            {meta?.label ?? humaniseTopic(n.topic)}
+                          </span>
+                          {isUnread && (
+                            <span className="bg-accent-fill text-accent-fg shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-[0.06em] uppercase">
+                              New
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-text-faint shrink-0 font-mono text-xs whitespace-nowrap">
+                          {agoLabel(n.createdAt, now)}
+                          <span className="max-sm:hidden">
+                            {' · '}
+                            {new Date(n.createdAt).toLocaleString('en-IN')}
+                          </span>
+                        </span>
+                      </div>
+
+                      {/*
+                        The whole block opens it. A notification is a
+                        paragraph, not a document — it does not earn a
+                        page of its own, and truncating it with no way
+                        to read the rest is the thing this fixes.
+                        Opening also marks it read, which is what
+                        reading something means.
+                      */}
+                      <button
+                        type="button"
+                        className="mt-1 block w-full text-left"
+                        aria-expanded={open}
+                        onClick={() => {
+                          setExpanded(open ? null : n.id);
+                          if (!open && isUnread) markRead.mutate(n.id);
                         }}
                       >
-                        <Icon size={16} />
-                      </span>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span
-                              className="truncate rounded-[3px] px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase"
-                              style={{
-                                background: `var(--status-${tone}-bg)`,
-                                color: `var(--status-${tone}-fg)`,
-                              }}
-                            >
-                              {meta?.label ?? humaniseTopic(n.topic)}
-                            </span>
-                            {isUnread && (
-                              <span className="bg-accent-fill text-accent-fg shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
-                                New
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-text-faint shrink-0 text-xs whitespace-nowrap">
-                            {agoLabel(n.createdAt, now)}
-                            <span className="max-sm:hidden">
-                              {' · '}
-                              {new Date(n.createdAt).toLocaleString()}
-                            </span>
-                          </span>
-                        </div>
-
-                        {/*
-                          The whole block opens it. A notification is a
-                          paragraph, not a document — it does not earn a
-                          page of its own, and truncating it with no way
-                          to read the rest is the thing this fixes.
-                          Opening also marks it read, which is what
-                          reading something means.
-                        */}
-                        <button
-                          type="button"
-                          className="mt-1 block w-full text-left"
-                          aria-expanded={open}
-                          onClick={() => {
-                            setExpanded(open ? null : n.id);
-                            if (!open && isUnread) markRead.mutate(n.id);
-                          }}
-                        >
-                          {n.title !== null && (
-                            <span
-                              className={clsx(
-                                'text-text-bright block text-sm leading-snug',
-                                isUnread ? 'font-semibold' : 'font-medium',
-                              )}
-                            >
-                              {n.title}
-                            </span>
-                          )}
+                        {n.title !== null && (
                           <span
                             className={clsx(
-                              'text-text-muted mt-1 block text-sm leading-relaxed whitespace-pre-line',
-                              !open && 'line-clamp-2',
+                              'text-text-bright block text-sm leading-snug',
+                              isUnread ? 'font-semibold' : 'font-medium',
                             )}
                           >
-                            {n.body}
+                            {n.title}
                           </span>
-                          {!open && (
-                            <span className="text-text-faint mt-1 block text-xs">
-                              Click to read it all
-                            </span>
+                        )}
+                        <span
+                          className={clsx(
+                            'text-text-muted mt-1 block text-sm leading-relaxed whitespace-pre-line',
+                            !open && 'line-clamp-2',
                           )}
-                        </button>
+                        >
+                          {n.body}
+                        </span>
+                        {!open && (
+                          <span className="text-text-faint mt-1 block text-xs">
+                            Click to read it all
+                          </span>
+                        )}
+                      </button>
 
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          {/* The one action a person actually wants
-                              next, and the only one we can honour from
-                              here: the order it is about. */}
-                          {n.orderId !== null && (
-                            <Link
-                              href={`/orders/${n.orderId}`}
-                              className="text-accent inline-flex items-center gap-1 text-xs font-medium"
-                            >
-                              View order <ArrowRight size={12} aria-hidden />
-                            </Link>
-                          )}
-                          <button
-                            type="button"
-                            className="text-text-muted hover:text-text-bright text-xs"
-                            onClick={() =>
-                              isUnread ? markRead.mutate(n.id) : markUnread.mutate(n.id)
-                            }
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {/* The one action a person actually wants
+                            next, and the only one we can honour from
+                            here: the order it is about. */}
+                        {n.orderId !== null && (
+                          <Link
+                            href={`/orders/${n.orderId}`}
+                            className="text-accent inline-flex items-center gap-1 text-xs font-medium"
                           >
-                            {isUnread ? 'Mark read' : 'Mark unread'}
-                          </button>
-                          <button
-                            type="button"
-                            className="text-text-faint hover:text-critical text-xs"
-                            onClick={() => dismiss.mutate(n.id)}
-                          >
-                            Dismiss
-                          </button>
-                          <span className="text-text-faint ml-auto font-mono text-[11px]">
-                            {n.topic}
-                          </span>
-                        </div>
+                            View order <ArrowRight size={12} aria-hidden />
+                          </Link>
+                        )}
+                        <button
+                          type="button"
+                          className="text-text-muted hover:text-text-bright text-xs"
+                          onClick={() =>
+                            isUnread ? markRead.mutate(n.id) : markUnread.mutate(n.id)
+                          }
+                        >
+                          {isUnread ? 'Mark read' : 'Mark unread'}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-text-faint hover:text-critical text-xs"
+                          onClick={() => dismiss.mutate(n.id)}
+                        >
+                          Dismiss
+                        </button>
+                        <span className="text-text-faint ml-auto font-mono text-[11px]">
+                          {n.topic}
+                        </span>
                       </div>
                     </div>
-                  </CardBody>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-      {hasMore && (
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <span className="text-text-faint text-xs">
-            Showing {shown.length} of {items.length} loaded
-          </span>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              // Keep what is already on screen. Replacing it would make
-              // "load earlier" behave like "go to page two", and the
-              // filter above would then be searching a window that
-              // moved under it.
-              setOlder(items);
-              setCursor(feed.data?.nextCursor ?? undefined);
-            }}
-          >
-            Load earlier notifications
-          </Button>
-        </div>
-      )}
-    </Section>
-  );
-}
-
-function Pill({
-  label,
-  count,
-  on,
-  onClick,
-  tab = false,
-}: {
-  readonly label: string;
-  readonly count?: number;
-  readonly on: boolean;
-  readonly onClick: () => void;
-  readonly tab?: boolean;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      {...(tab ? { role: 'tab' as const, 'aria-selected': on } : { 'aria-pressed': on })}
-      onClick={onClick}
-      className={clsx(
-        'skydrop-hit inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
-        on
-          ? 'bg-accent-fill text-accent-fg'
-          : 'text-text-muted hover:bg-surface-hover hover:text-text-bright',
-      )}
-    >
-      {label}
-      {count !== undefined && count > 0 && (
-        <span className={clsx('tabular-nums', on ? 'opacity-80' : 'text-text-faint')}>{count}</span>
-      )}
-    </button>
+        {hasMore && (
+          <div className="border-border flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2.5">
+            <span className="text-text-faint font-mono text-xs">
+              Showing {shown.length} of {items.length} loaded
+            </span>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                // Keep what is already on screen. Replacing it would make
+                // "load earlier" behave like "go to page two", and the
+                // filter above would then be searching a window that
+                // moved under it.
+                setOlder(items);
+                setCursor(feed.data?.nextCursor ?? undefined);
+              }}
+            >
+              Load earlier notifications
+            </Button>
+          </div>
+        )}
+      </BandBody>
+    </div>
   );
 }

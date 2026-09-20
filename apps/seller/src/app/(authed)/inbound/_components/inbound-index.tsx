@@ -2,23 +2,27 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import { Info } from 'lucide-react';
+import { Info, PackageOpen, Plane, Scale } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ConsignmentRoute, ConsignmentStatus } from '@skydrop/db';
 import {
+  BandBody,
   Button,
-  Card,
+  Crumbs,
   EmptyState,
   ErrorNote,
+  FilterChip,
   FormField,
   Input,
+  MetaChip,
   Modal,
   ModalFooter,
   Num,
   PageHeader,
+  SectionBand,
   Section,
-  Select,
   SkeletonRows,
+  Stat,
   StatusBadge,
   TBody,
   Table,
@@ -26,7 +30,6 @@ import {
   Td,
   THead,
   Th,
-  Toolbar,
   Tr,
 } from '@skydrop/ui/components';
 import { consignmentStatusKind } from '@skydrop/ui/status';
@@ -86,12 +89,33 @@ export function InboundIndex(): ReactElement {
     (c) => c.status !== ConsignmentStatus.COMPLETED && c.status !== ConsignmentStatus.CANCELLED,
   );
   const varied = items.filter((c) => c.receipts.some((r) => r.hasDiscrepancies));
+  const landed = items.filter((c) => c.status === ConsignmentStatus.COMPLETED);
+  const filtered = status !== '' || route !== '';
 
   return (
     <div>
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Add stock' }]}
+            Link={Link}
+          />
+        }
         title="Add stock"
         subtitle="Consignments on their way to the Indian warehouse — where each one is now, and what was counted when it got there."
+        meta={
+          list.data === undefined ? undefined : (
+            <>
+              <MetaChip tone="accent">
+                {total} {total === 1 ? 'consignment' : 'consignments'}
+              </MetaChip>
+              {moving.length > 0 && <MetaChip dot>{moving.length} still travelling</MetaChip>}
+              {varied.length > 0 && (
+                <MetaChip tone="warn">{varied.length} counted differently</MetaChip>
+              )}
+            </>
+          )
+        }
         action={
           canManage ? (
             // PRIMARY, and the larger size. `Button` defaults to
@@ -106,138 +130,237 @@ export function InboundIndex(): ReactElement {
       />
 
       {/*
-        One line, not three tiles. Three of them for three small numbers
-        was most of the screen above the fold, and the tallest hint forced
-        the other two to match its height — so a page showing nothing at
-        all opened with a wall of empty boxes.
-
-        "Shown" is gone entirely: the table underneath already says how
-        many rows there are, and a count of the thing directly below it is
-        not a statistic.
+        Three tiles, and every figure but one is summed from the page
+        BELOW them — there is no consignments-summary endpoint, and the
+        list endpoint answers one page at a time. `total` is the
+        server's, and it is the only one presented as a whole-account
+        figure; the rest say "on this page" in their own hint. A count
+        of rows dressed as a fleet statistic is the reading a seller
+        would plan a shipment around.
       */}
-      <p className="text-text-muted mb-3 text-sm">
-        <Num value={moving.length} /> still travelling
-        <span className="text-text-faint"> — announced, in Dhaka, or in the air</span>
-        {varied.length > 0 && (
-          <>
-            {' · '}
-            <span className="text-[var(--status-pending-fg)]">
-              <Num value={varied.length} /> counted differently
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Stat
+          label="Still travelling"
+          icon={<Plane size={13} aria-hidden />}
+          value={
+            list.data === undefined ? <span className="text-text-faint">—</span> : moving.length
+          }
+          unit={list.data === undefined ? undefined : 'on this page'}
+          tone="neutral"
+          hint="Announced, in Dhaka, or in the air."
+        />
+        <Stat
+          label="Landed and counted"
+          icon={<PackageOpen size={13} aria-hidden />}
+          value={
+            list.data === undefined ? <span className="text-text-faint">—</span> : landed.length
+          }
+          unit={list.data === undefined ? undefined : 'on this page'}
+          tone="neutral"
+          hint="Fully received in India. Their stock is on the shelf."
+        />
+        <Stat
+          label="Counted differently"
+          icon={<Scale size={13} aria-hidden />}
+          value={
+            list.data === undefined ? <span className="text-text-faint">—</span> : varied.length
+          }
+          unit={list.data === undefined ? undefined : 'on this page'}
+          tone={varied.length > 0 ? 'warn' : 'neutral'}
+          // CNS-3: a variance is a NUMBER, never a blocking state.
+          // Saying so on the tile is what stops somebody waiting for a
+          // release that is never coming.
+          hint={
+            varied.length > 0
+              ? 'Nothing is blocked by it — your stock is what was counted.'
+              : 'Every count so far matched what was declared.'
+          }
+        />
+      </div>
+
+      <SectionBand
+        index="01"
+        title="Consignment register"
+        note={
+          list.data === undefined
+            ? undefined
+            : `${total} ${total === 1 ? 'consignment' : 'consignments'}${filtered ? ' matching' : ''}`
+        }
+        action={
+          filtered && (
+            <button
+              type="button"
+              onClick={() => {
+                setStatus('');
+                setRoute('');
+                setPage(1);
+              }}
+              className="text-text-faint hover:text-text-body px-1 text-xs transition-colors"
+            >
+              Reset
+            </button>
+          )
+        }
+      />
+
+      <BandBody flush>
+        {/* Two chip rows — where it is, and which way it came. Both are
+            short vocabularies worth seeing at once, and the comps put
+            the triage row directly above the register it filters. */}
+        <div className="border-border space-y-1.5 border-b px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-text-faint mr-1 font-mono text-[11px] tracking-[0.08em] uppercase">
+              Where
             </span>
-            <span className="text-text-faint"> — nothing is blocked by it</span>
-          </>
-        )}
-      </p>
+            <FilterChip
+              label="Anywhere"
+              active={status === ''}
+              onClick={() => {
+                setStatus('');
+                setPage(1);
+              }}
+            />
+            {Object.values(ConsignmentStatus).map((s) => (
+              <FilterChip
+                key={s}
+                label={statusWords(s)}
+                active={status === s}
+                onClick={() => {
+                  setStatus(s);
+                  setPage(1);
+                }}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-text-faint mr-1 font-mono text-[11px] tracking-[0.08em] uppercase">
+              Route
+            </span>
+            <FilterChip
+              label="Either route"
+              active={route === ''}
+              onClick={() => {
+                setRoute('');
+                setPage(1);
+              }}
+            />
+            {Object.values(ConsignmentRoute).map((r) => (
+              <FilterChip
+                key={r}
+                label={routeWords(r).title}
+                active={route === r}
+                onClick={() => {
+                  setRoute(r);
+                  setPage(1);
+                }}
+              />
+            ))}
+          </div>
+        </div>
 
-      <Toolbar>
-        <label className="text-text-muted text-xs" htmlFor="cn-status">
-          Where it is
-        </label>
-        <Select
-          id="cn-status"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value as ConsignmentStatus | '');
-            setPage(1);
-          }}
-          className="w-56"
-        >
-          <option value="">Anywhere</option>
-          {Object.values(ConsignmentStatus).map((s) => (
-            <option key={s} value={s}>
-              {statusWords(s)}
-            </option>
-          ))}
-        </Select>
-        <label className="text-text-muted text-xs" htmlFor="cn-route">
-          Route
-        </label>
-        <Select
-          id="cn-route"
-          value={route}
-          onChange={(e) => {
-            setRoute(e.target.value as ConsignmentRoute | '');
-            setPage(1);
-          }}
-          className="w-56"
-        >
-          <option value="">Either route</option>
-          {Object.values(ConsignmentRoute).map((r) => (
-            <option key={r} value={r}>
-              {routeWords(r).title}
-            </option>
-          ))}
-        </Select>
-      </Toolbar>
-
-      <Card>
         {list.isLoading ? (
-          <SkeletonRows rows={5} />
+          <div className="p-3">
+            <SkeletonRows rows={5} />
+          </div>
         ) : list.isError ? (
-          <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <div className="p-3">
+            <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          </div>
         ) : items.length === 0 ? (
-          <EmptyState
-            title="No stock announced yet"
-            description="Announce a consignment before it ships so receiving knows to expect it — and so you can follow it."
-            action={
-              canManage ? (
-                <Button variant="primary" size="md" onClick={() => setAnnouncing(true)}>
-                  Announce a consignment
-                </Button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <>
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Consignment</Th>
-                  <Th>Route</Th>
-                  <Th align="right">Products</Th>
-                  <Th>Your reference</Th>
-                  <Th>Expected</Th>
-                  <Th>Where it is</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {items.map((c) => (
-                  <Tr
-                    key={c.id}
-                    // `onActivate`, not a raw onClick: it already skips a
-                    // click that landed on a link or button, and one that
-                    // ended a text selection. The <a> below stays — it is
-                    // the keyboard path, and a <tr> has no Enter key.
-                    onActivate={() => router.push(`/inbound/${c.id}`)}
+          <div className="p-3">
+            <EmptyState
+              title={filtered ? 'Nothing matches that' : 'No stock announced yet'}
+              description={
+                filtered
+                  ? 'Try another place or route, or reset the filters.'
+                  : 'Announce a consignment before it ships so receiving knows to expect it — and so you can follow it.'
+              }
+              action={
+                filtered ? (
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={() => {
+                      setStatus('');
+                      setRoute('');
+                      setPage(1);
+                    }}
                   >
-                    <Td>
-                      <Link
-                        href={`/inbound/${c.id}`}
-                        className="text-accent hover:underline font-mono text-xs"
-                      >
-                        {c.consignmentNumber}
-                      </Link>
-                    </Td>
-                    <Td>{routeWords(c.route).title}</Td>
-                    <Td align="right">
-                      <Num value={productCount(c)} />
-                    </Td>
-                    <Td>{c.sellerReference ?? '—'}</Td>
-                    <Td>{shortDate(c.expectedArrivalAt)}</Td>
-                    <Td>
-                      <StatusBadge
-                        kind={consignmentStatusKind(c.status)}
-                        label={statusWords(c.status)}
-                      />
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-            <TablePaginator page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
+                    Reset filters
+                  </Button>
+                ) : canManage ? (
+                  <Button variant="primary" size="md" onClick={() => setAnnouncing(true)}>
+                    Announce a consignment
+                  </Button>
+                ) : undefined
+              }
+              bare
+            />
+          </div>
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Consignment</Th>
+                <Th>Route</Th>
+                <Th align="right">Products</Th>
+                <Th>Your reference</Th>
+                <Th>Expected</Th>
+                <Th>Where it is</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {items.map((c) => (
+                <Tr
+                  key={c.id}
+                  // `onActivate`, not a raw onClick: it already skips a
+                  // click that landed on a link or button, and one that
+                  // ended a text selection. The <a> below stays — it is
+                  // the keyboard path, and a <tr> has no Enter key.
+                  onActivate={() => router.push(`/inbound/${c.id}`)}
+                >
+                  <Td>
+                    <Link
+                      href={`/inbound/${c.id}`}
+                      className="text-accent font-mono text-xs hover:underline"
+                    >
+                      {c.consignmentNumber}
+                    </Link>
+                  </Td>
+                  <Td>{routeWords(c.route).title}</Td>
+                  <Td align="right">
+                    <Num value={productCount(c)} />
+                  </Td>
+                  <Td className="text-text-muted text-xs">
+                    {c.sellerReference ?? <span className="text-text-faint">—</span>}
+                  </Td>
+                  <Td className="text-text-muted font-mono text-xs">
+                    {shortDate(c.expectedArrivalAt)}
+                  </Td>
+                  <Td>
+                    <StatusBadge
+                      kind={consignmentStatusKind(c.status)}
+                      label={statusWords(c.status)}
+                    />
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+            <tfoot>
+              <tr>
+                <td colSpan={6} className="p-0">
+                  <TablePaginator
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    total={total}
+                    onPageChange={setPage}
+                  />
+                </td>
+              </tr>
+            </tfoot>
+          </Table>
         )}
-      </Card>
+      </BandBody>
 
       <p className="text-text-muted mt-3 text-sm">
         Open a consignment to see its timeline, and what each warehouse counted against what you

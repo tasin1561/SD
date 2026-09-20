@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, XCircle } from 'lucide-react';
+import { ArrowLeft, Boxes, PackageCheck, Plane, Wallet, XCircle } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type {
   ConsignmentEventView,
@@ -9,21 +9,22 @@ import type {
   ConsignmentView,
 } from '@skydrop/api-client';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
+  Crumbs,
   DescriptionList,
   ErrorNote,
   ErrorState,
   FormField,
   LoadingState,
+  MetaChip,
   Modal,
   ModalFooter,
   Money,
   Num,
   PageHeader,
-  Section,
+  SectionBand,
+  Stat,
   StatusBadge,
   TBody,
   Table,
@@ -83,9 +84,9 @@ export function ConsignmentDetailView({ id }: { id: string }): ReactElement {
     <div>
       <Link
         href="/inbound"
-        className="text-text-muted hover:text-text-body mb-4 inline-flex items-center gap-1.5 text-xs transition-colors"
+        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs transition-colors"
       >
-        <ArrowLeft size={12} /> Add stock
+        <ArrowLeft size={13} /> Add stock
       </Link>
 
       {detail.isLoading ? (
@@ -121,8 +122,28 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
   return (
     <>
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Stock' },
+              { label: 'Add stock', href: '/inbound' },
+              { label: consignment.consignmentNumber },
+            ]}
+            Link={Link}
+          />
+        }
         title={<span className="font-mono">{consignment.consignmentNumber}</span>}
         subtitle={routeWords(consignment.route).blurb}
+        meta={
+          <>
+            <MetaChip tone="accent">{routeWords(consignment.route).title}</MetaChip>
+            <MetaChip dot>{statusWords(consignment.status)}</MetaChip>
+            {consignment.sellerReference !== null && (
+              <MetaChip>Your ref {consignment.sellerReference}</MetaChip>
+            )}
+          </>
+        }
         action={
           canManage && cancellable(consignment) ? (
             <Button variant="ghost" size="sm" onClick={() => setCancelOpen(true)}>
@@ -132,120 +153,175 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
         }
       />
 
-      <Section>
-        <Card>
-          <CardBody>
-            <DescriptionList
-              columns={3}
-              items={[
-                {
-                  label: 'Where it is',
-                  value: (
-                    <StatusBadge
-                      kind={consignmentStatusKind(consignment.status)}
-                      label={statusWords(consignment.status)}
-                    />
-                  ),
-                },
-                { label: 'Route', value: routeWords(consignment.route).title },
-                { label: 'Expected arrival', value: shortDate(consignment.expectedArrivalAt) },
-                { label: 'Your reference', value: consignment.sellerReference ?? '—' },
-                { label: 'Products', value: <Num value={productCount(consignment)} /> },
-                // Where the goods actually are, in units. The status
-                // badge above says "at our Dhaka warehouse", which is
-                // true and does not say how much — a consignment part
-                // flown and part waiting looks identical to one nobody
-                // has touched.
-                ...(progress === null
-                  ? []
-                  : [
-                      {
-                        label: 'Received in India',
-                        value: <Num value={progress.receivedInIndia} />,
-                      },
-                      {
-                        label: 'Still to come',
-                        value: (
-                          <span className="flex items-baseline gap-2">
-                            <Num value={progress.stillToCome} />
-                            <span className="text-text-muted text-xs">in Dhaka or in the air</span>
-                          </span>
-                        ),
-                      },
-                    ]),
-                {
-                  // Billed per arrival: a consignment that lands in two
-                  // shipments carries two forwarder invoices, so the
-                  // seller sees the sum rather than one of them.
-                  label: 'Inbound freight',
-                  value:
-                    consignment.freightCharges.length === 0 ? (
-                      <span className="text-text-muted">Not billed</span>
-                    ) : (
-                      <span className="flex items-center gap-2">
-                        <Money
-                          amount={consignment.freightCharges
-                            .reduce((sum, f) => sum + Number(f.totalInr), 0)
-                            .toFixed(2)}
-                        />
-                        <span className="text-text-muted text-xs">
-                          {consignment.freightCharges.length === 1
-                            ? consignment.freightCharges[0]?.status.toLowerCase()
-                            : `${consignment.freightCharges.length} bills`}
-                        </span>
-                      </span>
-                    ),
-                },
-              ]}
+      {/* Where the goods actually are, in units. The status chip above
+          says "at our Dhaka warehouse", which is true and does not say
+          how much — a consignment part flown and part waiting looks
+          identical to one nobody has touched. `progress` is null until
+          there is an India leg to measure against, and a tile is left
+          out rather than shown as zero. */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Products declared"
+          icon={<Boxes size={13} aria-hidden />}
+          value={productCount(consignment)}
+          unit="SKUs"
+          tone="neutral"
+          // `shortDate(null)` is an em dash, so the unguarded form read
+          // "Expected —." on every consignment declared without a date.
+          {...(consignment.expectedArrivalAt === null
+            ? {}
+            : { hint: `Expected ${shortDate(consignment.expectedArrivalAt)}.` })}
+        />
+        {progress !== null && (
+          <>
+            <Stat
+              label="Received in India"
+              icon={<PackageCheck size={13} aria-hidden />}
+              value={progress.receivedInIndia}
+              unit="units"
+              tone={progress.receivedInIndia > 0 && progress.stillToCome === 0 ? 'good' : 'neutral'}
+              // Nothing counted yet is NOT "all of it has landed", and
+              // it is not "on the shelf and sellable" either — a
+              // cancelled or still-announced consignment reads 0 here.
+              hint={
+                progress.receivedInIndia === 0
+                  ? 'Nothing has been counted in India yet.'
+                  : progress.stillToCome === 0
+                    ? 'All of it has landed and been counted.'
+                    : 'On the shelf and sellable.'
+              }
             />
-            {consignment.cancelReason !== null && (
-              <p className="text-text-muted mt-3 text-sm">
-                Cancelled {shortDate(consignment.cancelledAt)} — {consignment.cancelReason}
-              </p>
-            )}
-          </CardBody>
-        </Card>
-      </Section>
-
-      <Section
-        title="What has happened"
-        subtitle="Every step, oldest first. Added as it happens — you do not need to ask."
-      >
-        {events.isLoading ? (
-          <LoadingState label="Loading timeline…" rows={3} />
-        ) : events.isError ? (
-          <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />
-        ) : (
-          <Timeline events={events.data ?? []} />
+            <Stat
+              label="Still to come"
+              icon={<Plane size={13} aria-hidden />}
+              value={progress.stillToCome}
+              unit="units"
+              tone={progress.stillToCome > 0 ? 'warn' : 'neutral'}
+              hint="In Dhaka or in the air — not sellable yet."
+            />
+          </>
         )}
-      </Section>
-
-      <Section
-        title="Each stop"
-        subtitle="What was declared, and what the warehouse actually counted."
-      >
-        {consignment.receipts.length === 0 ? (
-          <Card>
-            <CardBody>
-              <p className="text-text-muted text-sm">
-                Nothing has been set up to receive this yet.
-              </p>
-            </CardBody>
-          </Card>
-        ) : (
-          <div className="grid gap-3">
-            {consignment.receipts.map((leg) => (
-              <LegCard
-                key={leg.id}
-                leg={leg}
-                consignment={consignment}
-                canManage={canManage}
-                onCorrect={() => setCorrecting(leg)}
+        <Stat
+          label="Inbound freight"
+          icon={<Wallet size={13} aria-hidden />}
+          value={
+            consignment.freightCharges.length === 0 ? (
+              <span className="text-text-faint text-base">Not billed</span>
+            ) : (
+              <Money
+                amount={consignment.freightCharges
+                  .reduce((sum, f) => sum + Number(f.totalInr), 0)
+                  .toFixed(2)}
               />
-            ))}
-          </div>
-        )}
-      </Section>
+            )
+          }
+          tone="neutral"
+          // Billed per ARRIVAL: a consignment that lands in two shipments
+          // carries two forwarder invoices, so the seller sees the sum
+          // rather than one of them.
+          hint={
+            consignment.freightCharges.length === 0
+              ? 'Nothing has been billed against this yet.'
+              : consignment.freightCharges.length === 1
+                ? `One bill · ${consignment.freightCharges[0]?.status.toLowerCase()}`
+                : `${consignment.freightCharges.length} bills, one per arrival`
+          }
+        />
+      </div>
+
+      <div className="mb-4">
+        <SectionBand index="01" title="Consignment" note="The facts we hold about it." />
+        <BandBody>
+          <DescriptionList
+            columns={3}
+            items={[
+              {
+                label: 'Where it is',
+                value: (
+                  <StatusBadge
+                    kind={consignmentStatusKind(consignment.status)}
+                    label={statusWords(consignment.status)}
+                  />
+                ),
+              },
+              { label: 'Route', value: routeWords(consignment.route).title },
+              { label: 'Expected arrival', value: shortDate(consignment.expectedArrivalAt) },
+              {
+                label: 'Your reference',
+                value: consignment.sellerReference ?? <span className="text-text-faint">—</span>,
+              },
+              { label: 'Products', value: <Num value={productCount(consignment)} /> },
+              ...(progress === null
+                ? []
+                : [
+                    {
+                      label: 'Received in India',
+                      value: <Num value={progress.receivedInIndia} />,
+                    },
+                    {
+                      label: 'Still to come',
+                      value: (
+                        <span className="flex items-baseline gap-2">
+                          <Num value={progress.stillToCome} />
+                          <span className="text-text-muted text-xs">in Dhaka or in the air</span>
+                        </span>
+                      ),
+                    },
+                  ]),
+            ]}
+          />
+          {consignment.cancelReason !== null && (
+            <p className="text-text-muted border-border mt-3 border-t pt-3 text-sm">
+              Cancelled {shortDate(consignment.cancelledAt)} — {consignment.cancelReason}
+            </p>
+          )}
+        </BandBody>
+      </div>
+
+      <div className="mb-4">
+        <SectionBand
+          index="02"
+          title="What has happened"
+          note="Oldest first. Added as it happens — you do not need to ask."
+        />
+        <BandBody flush={!events.isLoading && !events.isError && (events.data ?? []).length > 0}>
+          {events.isLoading ? (
+            <LoadingState label="Loading timeline…" rows={3} />
+          ) : events.isError ? (
+            <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />
+          ) : (
+            <Timeline events={events.data ?? []} />
+          )}
+        </BandBody>
+      </div>
+
+      {consignment.receipts.length === 0 ? (
+        <div>
+          <SectionBand
+            index="03"
+            title="Each stop"
+            note="What was declared, and what the warehouse counted."
+          />
+          <BandBody>
+            <p className="text-text-muted text-sm">Nothing has been set up to receive this yet.</p>
+          </BandBody>
+        </div>
+      ) : (
+        // Each stop is its own NUMBERED region rather than a card inside
+        // one — the stops are read in order and the numbers are what say
+        // so, and a bordered card nested inside a bordered band body
+        // draws two lines a hair apart.
+        consignment.receipts.map((leg, i) => (
+          <LegCard
+            key={leg.id}
+            index={String(i + 3).padStart(2, '0')}
+            leg={leg}
+            consignment={consignment}
+            canManage={canManage}
+            onCorrect={() => setCorrecting(leg)}
+          />
+        ))
+      )}
 
       <CancelConsignmentModal
         open={cancelOpen}
@@ -265,36 +341,31 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
 function Timeline({ events }: { events: readonly ConsignmentEventView[] }): ReactElement {
   if (events.length === 0) {
     return (
-      <Card>
-        <CardBody>
-          <p className="text-text-muted text-sm">
-            Nothing has happened yet beyond announcing it. Steps appear here as the warehouse
-            counts, labels, ships and receives.
-          </p>
-        </CardBody>
-      </Card>
+      <p className="text-text-muted text-sm">
+        Nothing has happened yet beyond announcing it. Steps appear here as the warehouse counts,
+        labels, ships and receives.
+      </p>
     );
   }
   return (
-    <Card>
-      <CardBody className="p-0">
-        <ol className="divide-border divide-y">
-          {events.map((evt) => (
-            <li key={evt.id} className="flex items-start gap-4 px-4 py-3">
-              <div className="text-text-faint w-40 shrink-0 pt-0.5 text-xs">
-                {stamp(evt.createdAt)}
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div className="text-text-strong text-sm font-medium">{eventWords(evt.type)}</div>
-                {evt.description !== null && (
-                  <div className="text-text-muted text-sm">{evt.description}</div>
-                )}
-              </div>
-            </li>
-          ))}
-        </ol>
-      </CardBody>
-    </Card>
+    <ol className="divide-border divide-y">
+      {events.map((evt) => (
+        // The stamp stacks ABOVE the wording on a phone rather than
+        // taking a fixed 10rem column out of a 360px screen, which left
+        // the description a word wide.
+        <li key={evt.id} className="flex flex-col gap-0.5 px-3 py-3 sm:flex-row sm:gap-4">
+          <div className="text-text-faint shrink-0 font-mono text-xs sm:w-40 sm:pt-0.5">
+            {stamp(evt.createdAt)}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="text-text-strong text-sm font-medium">{eventWords(evt.type)}</div>
+            {evt.description !== null && (
+              <div className="text-text-muted text-sm">{evt.description}</div>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -306,11 +377,14 @@ function Timeline({ events }: { events: readonly ConsignmentEventView[] }): Reac
  * moment cancelling stops being possible.
  */
 function LegCard({
+  index,
   leg,
   consignment,
   canManage,
   onCorrect,
 }: {
+  /** Its place in the journey — "03", "04". The stops are read in order. */
+  readonly index: string;
   readonly leg: ConsignmentLegView;
   readonly consignment: ConsignmentView;
   readonly canManage: boolean;
@@ -332,24 +406,24 @@ function LegCard({
   const anyVariance = isCounted && leg.lines.some((l) => (l.receivedQty ?? 0) !== l.expectedQty);
 
   return (
-    <Card>
-      <CardHeader
+    <div className="mb-4">
+      <SectionBand
+        index={index}
         title={
           <span className="flex flex-wrap items-center gap-2">
             {legTitle(leg, consignment.route, indiaLegs(consignment))}
-            <span className="text-text-muted font-mono text-xs">{leg.receiptNumber}</span>
+            <span className="text-text-muted font-mono text-[11px] normal-case">
+              {leg.receiptNumber}
+            </span>
           </span>
         }
         // What is happening here, said plainly. `ARRIVING` means "we
         // have it" and nobody outside a warehouse reads it that way.
-        subtitle={
-          <span className="flex flex-col gap-0.5">
-            <span>
-              {leg.warehouse.name} · {leg.warehouse.countryCode} —{' '}
-              <span className="text-text-body">{legProgress(leg).headline}</span>
-            </span>
-            <span className="text-text-faint text-xs">{legProgress(leg).detail}</span>
-          </span>
+        note={
+          <>
+            {leg.warehouse.name} · {leg.warehouse.countryCode} —{' '}
+            <span className="text-text-body">{legProgress(leg).headline}</span>
+          </>
         }
         action={
           canManage && leg.status === 'PENDING' ? (
@@ -359,7 +433,8 @@ function LegCard({
           ) : undefined
         }
       />
-      <CardBody>
+      <BandBody>
+        <p className="text-text-faint mb-3 text-xs">{legProgress(leg).detail}</p>
         <DescriptionList
           columns={3}
           items={[
@@ -460,8 +535,8 @@ function LegCard({
             </TBody>
           )}
         </Table>
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
 

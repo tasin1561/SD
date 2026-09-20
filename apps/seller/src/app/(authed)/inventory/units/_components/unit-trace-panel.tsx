@@ -2,13 +2,12 @@
 
 import { useState, type ReactElement } from 'react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
   ErrorNote,
   FormField,
   Input,
+  SectionBand,
   SkeletonRows,
   StockUnitStatusBadge,
   Table,
@@ -43,12 +42,13 @@ export function UnitTracePanel(): ReactElement {
   const events = trace.data?.events ?? [];
 
   return (
-    <Card className="mt-4">
-      <CardHeader
+    <div>
+      <SectionBand
+        index="05"
         title="Trace a serial"
-        subtitle="The number printed on a single unit. Its whole history, in the order it happened."
+        note="The number printed on a single unit. Its whole history, in the order it happened."
       />
-      <CardBody>
+      <BandBody>
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <FormField label="Serial" className="min-w-[220px] flex-1">
             <Input
@@ -89,8 +89,8 @@ export function UnitTracePanel(): ReactElement {
 
         {unit !== null && (
           <>
-            <div className="border-border mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border px-3 py-2 text-sm">
-              <span className="font-mono text-xs">{unit.serialBarcode}</span>
+            <div className="border-border bg-surface-raised mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-[var(--radius-2)] border px-3 py-2 text-sm">
+              <span className="text-text-bright font-mono text-xs">{unit.serialBarcode}</span>
               <span className="text-text-muted">{unit.skuCode ?? unit.variantId}</span>
               <StockUnitStatusBadge status={unit.status} />
             </div>
@@ -107,7 +107,9 @@ export function UnitTracePanel(): ReactElement {
               <TBody>
                 {events.map((e, i) => (
                   <Tr key={`${e.at}-${i}`}>
-                    <Td>{new Date(e.at).toLocaleString()}</Td>
+                    <Td className="text-text-muted font-mono text-xs whitespace-nowrap">
+                      {new Date(e.at).toLocaleString('en-IN')}
+                    </Td>
                     <Td>
                       {/* The transition, not just the destination — a unit
                           that went picked → in stock came back off a
@@ -127,7 +129,7 @@ export function UnitTracePanel(): ReactElement {
             </Table>
           </>
         )}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
