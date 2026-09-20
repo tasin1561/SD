@@ -128,6 +128,24 @@ describe('reseller store terms (e2e)', () => {
       .expect(200);
     staffAuth = { Authorization: `Bearer ${login.body.accessToken}` };
     seller = await makeSeller('terms');
+
+    // PRC-8: the global fees are agreed in TAKA, so the worked example a
+    // store sees is a CONVERTED figure. This spec is about publishing,
+    // accepting and superseding terms — not about conversion — so the
+    // seller is pinned to INR and the example stays the round ₹200 the
+    // split assertions are written against. The taka path is covered in
+    // warehouse-rto-flow.
+    for (const key of [
+      'pricing.flat_delivery_fee_currency',
+      'pricing.flat_rto_fee_currency',
+      'pricing.customer_return_fee_currency',
+    ]) {
+      await request(h.baseUrl)
+        .patch(`/admin/sellers/${seller.sellerId}/settings/${key}`)
+        .set(staffAuth)
+        .send({ valueType: 'STRING', value: 'INR', note: 'Spec pins the fee currency' })
+        .expect(200);
+    }
   });
 
   it('publish → accept → a new version supersedes the acceptance', async () => {

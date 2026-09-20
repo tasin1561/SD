@@ -2,6 +2,7 @@ import request from 'supertest';
 import {
   ActorType,
   OrderStatus,
+  Prisma,
   ReservationStatus,
   RtoDisposition,
   RtoItemCondition,
@@ -85,6 +86,19 @@ describe('Warehouse RTO flow (e2e)', () => {
       .expect(201);
     sellerAuth = { Authorization: `Bearer ${reg.body.accessToken}` };
     sellerId = reg.body.seller.id as string;
+
+    // PRC-8: the global fees are agreed in TAKA now, so a rupee figure
+    // here would depend on the seeded FX rate. This spec is about the
+    // RTO charge mechanism, not about conversion, so the seller is
+    // pinned to INR and every amount below stays the number it names.
+    // The taka path has its own test at the end of this file.
+    for (const key of ['pricing.flat_delivery_fee_currency', 'pricing.flat_rto_fee_currency']) {
+      await request(h.baseUrl)
+        .patch(`/admin/sellers/${sellerId}/settings/${key}`)
+        .set(staffAuth)
+        .send({ valueType: 'STRING', value: 'INR', note: 'Spec pins the fee currency' })
+        .expect(200);
+    }
 
     const whs = await request(h.baseUrl).get('/admin/warehouses').set(staffAuth).expect(200);
     warehouseId = (whs.body as Array<{ id: string; code: string }>).find(
@@ -753,5 +767,61 @@ describe('Warehouse RTO flow (e2e)', () => {
       .set(staffAuth)
       .expect(409);
     expect(r.body.code).toBe('RTO_INSPECTION_INCOMPLETE');
+  });
+  it('PRC-8: a fee agreed in TAKA is charged as its rupee value, and the charge says so', async () => {
+    // The seller is pinned to INR in beforeEach; put this one back on
+    // taka so the conversion is what is under test rather than a
+    // side-effect of whatever the global default happens to be.
+    await request(h.baseUrl)
+      .patch(`/admin/sellers/${sellerId}/settings/pricing.flat_delivery_fee_currency`)
+      .set(staffAuth)
+      .send({ valueType: 'STRING', value: 'BDT', note: 'Agreed in taka' })
+      .expect(200);
+    await request(h.baseUrl)
+      .patch(`/admin/sellers/${sellerId}/settings/pricing.flat_delivery_fee`)
+      .set(staffAuth)
+      .send({ valueType: 'DECIMAL', value: '200.00', note: 'Agreed in taka' })
+      .expect(200);
+
+    // The rate the system will actually use, read the same way the
+    // engine reads it — asserting a hard-coded ₹162.60 would pin this
+    // test to the seeded rate rather than to the behaviour.
+    const fx = await h.prisma.fxRate.findFirst({
+      where: {
+        OR: [
+          { fromCurrency: 'BDT', toCurrency: 'INR' },
+          { fromCurrency: 'INR', toCurrency: 'BDT' },
+        ],
+      },
+    });
+    expect(fx).not.toBeNull();
+    const perTaka =
+      fx!.fromCurrency === 'BDT'
+        ? new Prisma.Decimal(fx!.rate)
+        : new Prisma.Decimal(1).div(fx!.rate);
+    const expectedInr = new Prisma.Decimal('200.00').mul(perTaka).toDecimalPlaces(2);
+
+    await receiveStock(10);
+    const { orderId } = await makeRtoInitiatedShipment(2);
+
+    const charges = await h.prisma.orderCharge.findMany({
+      where: { orderId, deletedAt: null },
+    });
+    const shipping = charges.find((c) => c.type === 'BASE_SHIPPING');
+    // NOT ₹200 — that is the whole point. Reading a taka amount as
+    // rupees is the failure the `agreedAmount` rename exists to stop.
+    expect(shipping?.amountInr.toFixed(2)).toBe(expectedInr.toFixed(2));
+    expect(shipping?.amountInr.toFixed(2)).not.toBe('200.00');
+
+    // And the charge explains itself: what was agreed, in what, at what
+    // rate. Without this "why was I charged this?" is unanswerable once
+    // the rate moves.
+    const ctx = shipping?.computationContext as { flatFee?: Record<string, unknown> } | null;
+    expect(ctx?.flatFee).toMatchObject({
+      agreedAmount: '200.00',
+      agreedCurrency: 'BDT',
+      fxRatePair: expect.stringContaining('INR'),
+    });
+    expect(String(ctx?.flatFee?.fxRate ?? '')).not.toBe('');
   });
 });
