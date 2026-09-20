@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Banknote,
   BellOff,
+  BellRing,
   Clock,
   Landmark,
   Package,
@@ -16,14 +17,15 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
-  Card,
-  CardBody,
-  CardHeader,
+  BandBody,
+  Crumbs,
   ErrorState,
   Input,
   LoadingState,
+  MetaChip,
   PageHeader,
-  Section,
+  SectionBand,
+  Stat,
   Switch,
   Table,
   TBody,
@@ -125,51 +127,83 @@ export function NotificationSettingsView(): ReactElement {
   const quiet = useMemo(() => summariseQuietHours(rows), [rows]);
 
   return (
-    <Section>
+    <div>
       <Link
         href="/notifications"
-        className="text-text-muted hover:text-text-body mb-4 inline-flex items-center gap-1.5 text-xs transition-colors"
+        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs transition-colors"
       >
-        <ArrowLeft size={12} /> Back to notifications
+        <ArrowLeft size={13} /> Back to notifications
       </Link>
 
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Notifications', href: '/notifications' },
+              { label: 'Settings' },
+            ]}
+            Link={Link}
+          />
+        }
         title="Notification settings"
         subtitle={
           mayManageCompany
             ? 'Two separate choices: what reaches YOU, and what this COMPANY is emailed about. Both only ever remove a message — neither can turn one on that the other switched off. Messages about your account and credentials are in neither list: they always go to your email and cannot be silenced.'
             : 'What reaches YOUR inbox. Messages about your account and credentials are not listed — they only ever go to your email, and cannot be silenced.'
         }
+        // WHOSE decision each half is, said in the chip row rather than
+        // only in the prose — it is the distinction the merge of these
+        // two screens exists to keep visible.
+        meta={
+          <>
+            <MetaChip tone="accent">Yours</MetaChip>
+            {mayManageCompany && <MetaChip>The company&apos;s</MetaChip>}
+          </>
+        }
       />
 
       {/* ── The four figures. Every one is read from real state; the
              comp's telemetry tiles are not here for that reason. ─── */}
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
           label="Your alerts"
-          value={topics.isLoading ? '—' : `${onCount} of ${allTopics.length}`}
-          note="topics reaching your inbox"
-          tone="confirmed"
+          icon={<BellRing size={13} aria-hidden />}
+          value={
+            topics.isLoading ? (
+              <span className="text-text-faint">—</span>
+            ) : (
+              <span className="text-base">
+                {onCount} of {allTopics.length}
+              </span>
+            )
+          }
+          tone="neutral"
+          hint="Topics reaching your inbox."
         />
         {mayManageCompany && (
           <Stat
             label="Company categories"
-            value={prefs.isLoading ? '—' : String(rows.length)}
-            note="email + in-app, set for everyone"
-            tone="in-transit"
+            icon={<Landmark size={13} aria-hidden />}
+            value={prefs.isLoading ? <span className="text-text-faint">—</span> : rows.length}
+            unit={prefs.isLoading ? undefined : 'categories'}
+            tone="neutral"
+            hint="Email + in-app, set for everyone here."
           />
         )}
         <Stat
           label="Quiet hours"
-          value={quiet.label}
-          note={quiet.note}
-          tone={quiet.set ? 'pending' : 'draft'}
+          icon={<Clock size={13} aria-hidden />}
+          value={<span className="text-base">{quiet.label}</span>}
+          tone={quiet.set ? 'warn' : 'neutral'}
+          hint={quiet.note}
         />
         <Stat
           label="Never silenced"
-          value="Account & security"
-          note="sign-in, password, invites"
-          tone="failed"
+          icon={<ShieldCheck size={13} aria-hidden />}
+          value={<span className="text-base">Account &amp; security</span>}
+          tone="neutral"
+          hint="Sign-in, password, invites."
         />
       </div>
 
@@ -189,42 +223,6 @@ export function NotificationSettingsView(): ReactElement {
           {quiet.timezone !== null && <TimezoneCard timezone={quiet.timezone} quiet={quiet} />}
         </div>
       </div>
-    </Section>
-  );
-}
-
-/* ── The strip ──────────────────────────────────────────────────── */
-
-function Stat({
-  label,
-  value,
-  note,
-  tone,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly note: string;
-  readonly tone: string;
-}): ReactElement {
-  return (
-    <div
-      className="rounded-[8px] border px-3 py-2.5"
-      style={{
-        borderColor: `var(--status-${tone}-bg)`,
-        background: `color-mix(in srgb, var(--status-${tone}-bg), transparent 55%)`,
-      }}
-    >
-      <div className="text-text-muted text-[11px] font-semibold tracking-wide uppercase">
-        {label}
-      </div>
-      <div
-        className="mt-1 truncate text-lg font-semibold"
-        style={{ color: `var(--status-${tone}-fg)` }}
-        title={value}
-      >
-        {value}
-      </div>
-      <div className="text-text-faint mt-0.5 text-xs">{note}</div>
     </div>
   );
 }
@@ -261,13 +259,17 @@ function YourTopics({
   }, {});
 
   return (
-    <Card>
-      <CardHeader
-        tone="accent"
+    <div>
+      <SectionBand
+        index="01"
         title="What reaches you"
-        subtitle="Your own choices, for your own inbox. Nobody else at this company sees them, and changing one here does not change what anybody else receives."
+        note="Your own choices, for your own inbox."
       />
-      <CardBody>
+      <BandBody>
+        <p className="text-text-muted mb-3 text-xs leading-relaxed">
+          Nobody else at this company sees them, and changing one here does not change what anybody
+          else receives.
+        </p>
         {error !== null && <p className="text-critical mb-3 text-sm">{error}</p>}
         {loading ? (
           <LoadingState label="Loading topics…" rows={3} />
@@ -338,8 +340,8 @@ function YourTopics({
             );
           })
         )}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
 
@@ -375,29 +377,35 @@ function CompanyCategories(): ReactElement {
   const toast = useToast();
 
   return (
-    <Card>
-      <CardHeader
-        tone="accent"
-        title="What this company is emailed about"
-        subtitle="Applies to EVERYONE here, not only you — switching a category off stops that email reaching your colleagues too. Changes save instantly."
+    <div>
+      {/* Short enough to survive 360px, where a band title truncates
+          against its own index. The sentence lives in the note. */}
+      <SectionBand
+        index="02"
+        title="The company's email"
+        note="What this company is emailed about — applies to everyone here, not only you."
       />
       {list.isLoading ? (
-        <CardBody>
+        <BandBody>
           <LoadingState label="Loading preferences…" rows={3} />
-        </CardBody>
+        </BandBody>
       ) : list.isError ? (
-        <CardBody>
+        <BandBody>
           <ErrorState
             message={list.error?.message ?? 'Failed.'}
             retry={() => void list.refetch()}
           />
-        </CardBody>
+        </BandBody>
       ) : list.data === undefined || list.data.length === 0 ? (
-        <CardBody>
+        <BandBody>
           <p className="text-text-muted text-sm">No preferences yet.</p>
-        </CardBody>
+        </BandBody>
       ) : (
-        <>
+        <BandBody flush>
+          <p className="border-border text-text-muted border-b px-3 py-2.5 text-xs leading-relaxed">
+            Switching a category off stops that email reaching your colleagues too. Changes save
+            instantly.
+          </p>
           {/* A TABLE, not seven stacked cards. Seven categories × four
               controls is a grid of the same question asked seven times,
               and a column is how you compare them. The `Table` primitive
@@ -423,8 +431,8 @@ function CompanyCategories(): ReactElement {
               ))}
             </TBody>
           </Table>
-          <CardBody className="border-border-subtle border-t">
-            <p className="text-text-faint text-xs">
+          <div className="border-border border-t px-3 py-2.5">
+            <p className="text-text-faint text-xs leading-relaxed">
               {/*
                 Two switches, not six. SMS, Webhook and Frequency were on
                 this screen and could not be honoured by anything: there
@@ -437,10 +445,10 @@ function CompanyCategories(): ReactElement {
               the window waits until it ends rather than being dropped — and an inbox line is never
               held, because nothing pings and the row itself is the delivery.
             </p>
-          </CardBody>
-        </>
+          </div>
+        </BandBody>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -565,18 +573,21 @@ function AlwaysOn(): ReactElement {
     },
   ];
   return (
-    <Card>
-      <CardHeader
-        tone="accent"
+    <div>
+      <SectionBand
+        index="03"
         title={
           <span className="inline-flex items-center gap-2">
-            <BellOff size={14} aria-hidden />
+            <BellOff size={13} aria-hidden />
             Cannot be switched off
           </span>
         }
-        subtitle="These go to your email whatever is set above. A warning you can silence is one you find out about too late."
       />
-      <CardBody className="flex flex-col gap-3">
+      <BandBody className="flex flex-col gap-3">
+        <p className="text-text-muted text-xs leading-relaxed">
+          These go to your email whatever is set above. A warning you can silence is one you find
+          out about too late.
+        </p>
         {items.map(({ Icon, title, body }) => (
           <div key={title} className="flex items-start gap-2.5">
             <span className="text-text-muted mt-0.5 shrink-0">
@@ -588,8 +599,8 @@ function AlwaysOn(): ReactElement {
             </div>
           </div>
         ))}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
 
@@ -671,24 +682,27 @@ function TimezoneCard({
   const inside = quiet.window !== null && isInsideWindow(local, quiet.window);
 
   return (
-    <Card>
-      <CardHeader
-        tone="accent"
+    <div>
+      <SectionBand
+        index="04"
         title={
           <span className="inline-flex items-center gap-2">
-            <Clock size={14} aria-hidden />
+            <Clock size={13} aria-hidden />
             Your timezone
           </span>
         }
-        subtitle="Quiet hours are read in this zone, from the company profile — never a stored offset, which drifts an hour twice a year."
       />
-      <CardBody>
+      <BandBody>
         <div className="text-text-bright font-mono text-lg tabular-nums">{local}</div>
-        <div className="text-text-muted mt-0.5 text-xs">{timezone}</div>
+        <div className="text-text-muted mt-0.5 font-mono text-xs">{timezone}</div>
+        <p className="text-text-muted mt-2 text-xs leading-relaxed">
+          Quiet hours are read in this zone, from the company profile — never a stored offset, which
+          drifts an hour twice a year.
+        </p>
         {quiet.window !== null && (
           <div
             className={clsx(
-              'mt-3 rounded-[5px] px-2 py-1.5 text-xs font-medium',
+              'mt-3 rounded-[var(--radius-2)] px-2 py-1.5 text-xs font-medium',
               inside ? 'text-[var(--status-pending-fg)]' : 'text-[var(--status-delivered-fg)]',
             )}
             style={{
@@ -700,8 +714,8 @@ function TimezoneCard({
               : 'Outside quiet hours — email is going out now'}
           </div>
         )}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
 
