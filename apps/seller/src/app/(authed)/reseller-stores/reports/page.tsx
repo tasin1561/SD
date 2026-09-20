@@ -2,20 +2,27 @@
 
 import Link from 'next/link';
 import { useMemo, useState, type ReactElement } from 'react';
+import { Package, PercentCircle, TrendingUp, Undo2 } from 'lucide-react';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
+  BandBody,
   Button,
+  Crumbs,
   EmptyState,
   ErrorState,
   FormField,
   Input,
   LoadingState,
+  MetaChip,
   Modal,
   ModalFooter,
   Money,
+  Num,
   PageHeader,
   ResellerStoreStatusBadge,
-  Section,
+  SectionBand,
+  Stat,
+  StripFact,
   Switch,
   TBody,
   THead,
@@ -42,6 +49,17 @@ const pct = (v: string | null): string => (v === null ? '—' : `${v}%`);
  * balance, the stores ranked by the profit they made you, and the transfer
  * revenue each brought onto your wallet. Never a store's own expenses or
  * P&L — those are the store's books.
+ *
+ * ── WHAT THE CONSOLE COMPS SHOW THAT IS NOT HERE ────────────────────
+ *   A TREND LINE / SPARKLINE per store   the endpoint answers ONE window
+ *       at a time, not a series. Drawing a curve would mean either
+ *       inventing points or firing a request per bucket per store.
+ *   A STORE'S OWN P&L                    deliberately out of reach: a
+ *       store's expenses are its books, not the seller's (RS-8).
+ *   MARGIN WITH NO COVERAGE FIGURE       margin needs a unit cost, and
+ *       the cost is not known for every line. Every margin figure here
+ *       carries how many lines it could price — a bare rupee number
+ *       would read as complete when it is not (TRE-6's rule).
  */
 export default function ResellerReportsPage(): ReactElement {
   const identity = useSellerIdentity();
@@ -54,42 +72,143 @@ export default function ResellerReportsPage(): ReactElement {
   const revenue = useResellerTransferRevenue(window);
   const [editing, setEditing] = useState<StoreScoreRow | null>(null);
 
+  const stores = useMemo(() => cards.data?.stores ?? [], [cards.data]);
+  const placed = stores.reduce((sum, s) => sum + s.scorecard.placed, 0);
+  const units = stores.reduce((sum, s) => sum + s.scorecard.unitsDelivered, 0);
+  const margin = stores.reduce((sum, s) => sum + Number(s.scorecard.marginInr), 0);
+  const marginLines = stores.reduce((sum, s) => sum + s.scorecard.marginCoverage.lines, 0);
+  const marginPriced = stores.reduce((sum, s) => sum + s.scorecard.marginCoverage.linesWithCost, 0);
+  const autoPaused = stores.filter((s) => s.autoPause !== null && s.autoPause.enabled).length;
+  const loaded = cards.data !== undefined;
+
   return (
-    <div className="space-y-6">
+    <div>
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[{ label: 'Seller console' }, { label: 'Reselling' }, { label: 'Reports' }]}
+            Link={Link}
+          />
+        }
         title="Reseller store reports"
         subtitle="How each of your reseller stores is doing, what it earned you, and when one pauses itself for too many returns."
+        meta={
+          !loaded ? undefined : (
+            <>
+              <MetaChip tone="accent">
+                {stores.length} {stores.length === 1 ? 'store' : 'stores'}
+              </MetaChip>
+              <MetaChip>
+                {istDateLabel(window.from)} – {istDateLabel(window.to)}
+              </MetaChip>
+              {autoPaused > 0 && <MetaChip tone="warn">{autoPaused} auto-pause on</MetaChip>}
+            </>
+          )
+        }
         action={
-          <Link href="/reseller-stores/stock-forecast" className="text-sm underline">
-            Stock forecast
+          <Link
+            href="/reseller-stores/stock-forecast"
+            className="text-accent text-sm hover:underline"
+          >
+            Stock forecast →
           </Link>
         }
       />
-      <div className="flex flex-wrap gap-3">
-        <FormField label="From" htmlFor="from">
-          <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </FormField>
-        <FormField label="To" htmlFor="to">
-          <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </FormField>
+
+      {/* ── The window, across every store ──────────────────────────
+             Four tiles summed from the scorecards below. The margin
+             tile carries its COVERAGE in the footer rather than
+             standing alone: a cost is not recorded for every line, and
+             a bare figure would read as the whole picture. */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Orders placed"
+          icon={<Package size={13} aria-hidden />}
+          value={loaded ? <Num value={placed} /> : <span className="text-text-faint">—</span>}
+          unit={loaded ? (placed === 1 ? 'order' : 'orders') : undefined}
+          tone="neutral"
+          hint="By your reseller stores, in this window."
+        />
+        <Stat
+          label="Units delivered"
+          icon={<TrendingUp size={13} aria-hidden />}
+          value={loaded ? <Num value={units} /> : <span className="text-text-faint">—</span>}
+          unit={loaded ? 'units' : undefined}
+          tone="neutral"
+          hint="Reached a customer and stayed there."
+        />
+        <Stat
+          label="Margin on what shipped"
+          icon={<PercentCircle size={13} aria-hidden />}
+          value={
+            loaded ? (
+              <Money amount={margin} decimals={false} />
+            ) : (
+              <span className="text-text-faint">—</span>
+            )
+          }
+          tone="neutral"
+          {...(loaded && marginLines > 0
+            ? {
+                foot: [
+                  {
+                    label: 'Lines we could price',
+                    value: `${marginPriced} / ${marginLines}`,
+                  },
+                ],
+              }
+            : {})}
+          hint="Transfer price less your unit cost, where the cost is recorded."
+        />
+        <Stat
+          label="Auto-pause armed"
+          icon={<Undo2 size={13} aria-hidden />}
+          value={loaded ? autoPaused : <span className="text-text-faint">—</span>}
+          unit={loaded ? `of ${stores.length}` : undefined}
+          tone={loaded && autoPaused > 0 ? 'warn' : 'neutral'}
+          hint="Stores that stop themselves when too many parcels come back."
+        />
       </div>
+
+      <SectionBand
+        index="01"
+        title="The window"
+        note="Days are counted in IST, the same as everything else on your account."
+      />
+      <BandBody className="mb-4">
+        <div className="flex flex-wrap gap-3">
+          <FormField label="From" htmlFor="from">
+            <Input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </FormField>
+          <FormField label="To" htmlFor="to">
+            <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </FormField>
+        </div>
+      </BandBody>
 
       {cards.isPending && <LoadingState label="Loading the scorecards" rows={5} />}
       {cards.isError && (
         <ErrorState message={serverVerdict(cards.error)} retry={() => void cards.refetch()} />
       )}
       {cards.data !== undefined &&
-        (cards.data.stores.length === 0 ? (
+        (stores.length === 0 ? (
           <EmptyState
             title="No reseller stores yet"
-            action={<Link href="/reseller-stores">Open a reseller store</Link>}
+            description="Open one for a business that will resell your stock, and its numbers appear here."
+            action={
+              <Link href="/reseller-stores" className="text-accent text-sm hover:underline">
+                Open a reseller store
+              </Link>
+            }
           />
         ) : (
-          <div className="space-y-6">
-            <Section
+          <>
+            <SectionBand
+              index="02"
               title="Scorecards"
-              subtitle="Orders the store placed in the window. Rates leave out orders whose outcome is not known yet. Margin is transfer price − your unit cost, where the cost is known."
-            >
+              note="Rates leave out orders whose outcome is not known yet."
+            />
+            <BandBody flush className="mb-4">
               <Table>
                 <THead>
                   <Tr>
@@ -111,7 +230,7 @@ export default function ResellerReportsPage(): ReactElement {
                       <Td>
                         <Link
                           href={`/reseller-stores/${s.storeId}`}
-                          className="text-accent hover:underline"
+                          className="text-text-bright font-medium hover:underline"
                         >
                           {s.name}
                         </Link>
@@ -121,15 +240,30 @@ export default function ResellerReportsPage(): ReactElement {
                           </div>
                         ) : null}
                       </Td>
-                      <Td align="right">{s.scorecard.placed}</Td>
-                      <Td align="right">{pct(s.scorecard.confirmationRatePct)}</Td>
-                      <Td align="right">{pct(s.scorecard.cancelRatePct)}</Td>
-                      <Td align="right">{pct(s.scorecard.deliveryRatePct)}</Td>
-                      <Td align="right">{pct(s.scorecard.returnRatePct)}</Td>
-                      <Td align="right">{s.scorecard.unitsDelivered}</Td>
+                      <Td align="right" className="font-mono text-xs">
+                        {s.scorecard.placed}
+                      </Td>
+                      <Td align="right" className="font-mono text-xs">
+                        {pct(s.scorecard.confirmationRatePct)}
+                      </Td>
+                      <Td align="right" className="font-mono text-xs">
+                        {pct(s.scorecard.cancelRatePct)}
+                      </Td>
+                      <Td align="right" className="font-mono text-xs">
+                        {pct(s.scorecard.deliveryRatePct)}
+                      </Td>
+                      <Td align="right" className="font-mono text-xs">
+                        {pct(s.scorecard.returnRatePct)}
+                      </Td>
+                      <Td align="right" className="font-mono text-xs">
+                        {s.scorecard.unitsDelivered}
+                      </Td>
                       <Td align="right">
                         <Money amount={s.scorecard.marginInr} />
-                        <span className="text-text-muted block text-xs">
+                        {/* The coverage travels WITH the figure: a margin
+                            priced from half the lines is not the same
+                            claim as one priced from all of them. */}
+                        <span className="text-text-faint mt-0.5 block text-xs">
                           cost known {s.scorecard.marginCoverage.linesWithCost}/
                           {s.scorecard.marginCoverage.lines}
                         </span>
@@ -138,9 +272,11 @@ export default function ResellerReportsPage(): ReactElement {
                         <Money amount={s.balanceInr} />
                       </Td>
                       <Td>
-                        {s.autoPause !== null && s.autoPause.enabled
-                          ? `> ${s.autoPause.returnRatePercent}% over ${s.autoPause.windowDays}d`
-                          : 'Off'}
+                        <span className="text-text-muted block text-xs">
+                          {s.autoPause !== null && s.autoPause.enabled
+                            ? `> ${s.autoPause.returnRatePercent}% over ${s.autoPause.windowDays}d`
+                            : 'Off'}
+                        </span>
                         {mayManage && (
                           <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
                             Change
@@ -151,16 +287,18 @@ export default function ResellerReportsPage(): ReactElement {
                   ))}
                 </TBody>
               </Table>
-            </Section>
+            </BandBody>
 
-            <Section
+            <SectionBand
+              index="03"
               title="Stores ranked by what they made you"
-              subtitle="What this window's orders put on your wallet (credits − charges), less the cost of the goods delivered where you recorded a cost."
-            >
+              note="Wallet credits less charges, less the cost of the goods delivered where a cost is recorded."
+            />
+            <BandBody flush className="mb-4">
               <Table>
                 <THead>
                   <Tr>
-                    <Th>#</Th>
+                    <Th className="w-10">#</Th>
                     <Th>Store</Th>
                     <Th align="right">Profit</Th>
                     <Th align="right">Cost known</Th>
@@ -169,11 +307,11 @@ export default function ResellerReportsPage(): ReactElement {
                 <TBody>
                   {cards.data.ranking.map((r) => (
                     <Tr key={r.storeId}>
-                      <Td>{r.rank}</Td>
+                      <Td className="text-text-faint font-mono text-xs">{r.rank}</Td>
                       <Td>
                         <Link
                           href={`/reseller-stores/${r.storeId}`}
-                          className="text-accent hover:underline"
+                          className="text-text-bright font-medium hover:underline"
                         >
                           {r.name}
                         </Link>
@@ -181,75 +319,108 @@ export default function ResellerReportsPage(): ReactElement {
                       <Td align="right">
                         <Money amount={r.profitInr} />
                       </Td>
-                      <Td align="right">
+                      <Td align="right" className="text-text-muted font-mono text-xs">
                         {r.costCoverage.linesWithCost}/{r.costCoverage.lines} lines
                       </Td>
                     </Tr>
                   ))}
                 </TBody>
               </Table>
-            </Section>
-          </div>
+            </BandBody>
+          </>
         ))}
 
-      <Section
+      <SectionBand
+        index={stores.length === 0 ? '02' : '04'}
         title="Transfer revenue by store"
-        subtitle="Every entry on your wallet in the window that names one of the store's orders — credits add, charges subtract. Beside it, the transfer value of orders delivered in the window."
-      >
-        {revenue.isPending && <LoadingState label="Loading transfer revenue" rows={3} />}
+        note="Every wallet entry in the window naming one of that store's orders."
+      />
+      <BandBody flush>
+        {revenue.isPending && (
+          <div className="p-3">
+            <LoadingState label="Loading transfer revenue" rows={3} />
+          </div>
+        )}
         {revenue.isError && (
-          <ErrorState message={serverVerdict(revenue.error)} retry={() => void revenue.refetch()} />
+          <div className="p-3">
+            <ErrorState
+              message={serverVerdict(revenue.error)}
+              retry={() => void revenue.refetch()}
+            />
+          </div>
         )}
-        {revenue.data !== undefined && (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Store</Th>
-                <Th align="right">Credited</Th>
-                <Th align="right">Charged</Th>
-                <Th align="right">Net</Th>
-                <Th align="right">Delivered (transfer value)</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {revenue.data.stores.map((s) => {
-                const d = revenue.data.deliveredTransfer.find((x) => x.storeId === s.storeId);
-                return (
-                  <Tr key={s.storeId}>
-                    <Td>
-                      <Link
-                        href={`/reseller-stores/${s.storeId}`}
-                        className="text-accent hover:underline"
-                      >
-                        {s.name}
-                      </Link>
-                      <span className="text-text-muted block text-xs">
-                        {s.rows.length} entries
-                        {s.rows[0] === undefined
-                          ? ''
-                          : `, latest ${istDateLabel(s.rows[s.rows.length - 1]?.at ?? s.rows[0].at)}`}
-                      </span>
-                    </Td>
-                    <Td align="right">
-                      <Money amount={s.creditsInr} direction="credit" />
-                    </Td>
-                    <Td align="right">
-                      <Money amount={s.debitsInr} direction="debit" />
-                    </Td>
-                    <Td align="right">
-                      <Money amount={s.netInr} />
-                    </Td>
-                    <Td align="right">
-                      <Money amount={d?.transferInr ?? '0.00'} />
-                      <span className="text-text-muted block text-xs">{d?.orders ?? 0} orders</span>
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        )}
-      </Section>
+        {revenue.data !== undefined &&
+          (revenue.data.stores.length === 0 ? (
+            <EmptyState
+              bare
+              title="Nothing on your wallet from a store in this window"
+              description="Credits and charges appear here once a store's orders reach the point they are paid."
+            />
+          ) : (
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Store</Th>
+                  <Th align="right">Credited</Th>
+                  <Th align="right">Charged</Th>
+                  <Th align="right">Net</Th>
+                  <Th align="right">Delivered (transfer value)</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {revenue.data.stores.map((s) => {
+                  const d = revenue.data.deliveredTransfer.find((x) => x.storeId === s.storeId);
+                  return (
+                    <Tr key={s.storeId}>
+                      <Td>
+                        <Link
+                          href={`/reseller-stores/${s.storeId}`}
+                          className="text-text-bright font-medium hover:underline"
+                        >
+                          {s.name}
+                        </Link>
+                        <span className="text-text-faint mt-0.5 block text-xs">
+                          {s.rows.length} entries
+                          {s.rows[0] === undefined
+                            ? ''
+                            : `, latest ${istDateLabel(s.rows[s.rows.length - 1]?.at ?? s.rows[0].at)}`}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <Money amount={s.creditsInr} direction="credit" />
+                      </Td>
+                      <Td align="right">
+                        <Money amount={s.debitsInr} direction="debit" />
+                      </Td>
+                      <Td align="right">
+                        <Money amount={s.netInr} />
+                      </Td>
+                      <Td align="right">
+                        <Money amount={d?.transferInr ?? '0.00'} />
+                        <span className="text-text-faint mt-0.5 block text-xs">
+                          {d?.orders ?? 0} orders
+                        </span>
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          ))}
+      </BandBody>
+
+      {loaded && stores.length > 0 && (
+        <div className="text-text-faint border-border mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3 font-mono text-[11px]">
+          <StripFact label="Orders placed" value={<Num value={placed} />} />
+          <StripFact label="Units delivered" value={<Num value={units} />} />
+          <StripFact
+            label="Margin"
+            value={<Money amount={margin} decimals={false} />}
+            tone={margin > 0 ? 'good' : 'neutral'}
+          />
+          <StripFact label="Cost known" value={`${marginPriced} / ${marginLines} lines`} />
+        </div>
+      )}
 
       {editing !== null && <AutoPauseModal store={editing} onClose={() => setEditing(null)} />}
     </div>

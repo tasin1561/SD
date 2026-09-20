@@ -3,14 +3,12 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
   ErrorState,
   FormField,
   LoadingState,
-  Section,
+  SectionBand,
   Select,
   useToast,
 } from '@skydrop/ui/components';
@@ -172,20 +170,24 @@ export function StoreActionsSection({
   }
 
   return (
-    <Section
-      title="What they can do"
-      subtitle="For each task: can the Reseller store do it, and if so, does it happen directly or does it need Seller staff's approval first?"
-    >
-      <Card>
-        <CardHeader
-          title={
-            policy.data.set
-              ? 'Your settings for this store'
-              : 'Running on the defaults — you have not set this store yet'
-          }
-          subtitle="Whatever you choose, the store is emailed what happened: when Seller staff approve something it is told whether it was carried out, and when they turn it down it is sent the reason."
-        />
-        <CardBody>
+    <div>
+      <SectionBand
+        index="01"
+        title="What they can do"
+        note={
+          policy.data.set
+            ? 'Your settings for this store.'
+            : 'Running on the defaults — you have not set this store yet.'
+        }
+      />
+      <BandBody>
+        <p className="text-text-muted mb-4 text-xs leading-relaxed">
+          For each task: can the Reseller store do it, and if so, does it happen directly or does it
+          need Seller staff&apos;s approval first? Whatever you choose, the store is emailed what
+          happened — when Seller staff approve something it is told whether it was carried out, and
+          when they turn it down it is sent the reason.
+        </p>
+        <div>
           <div className="space-y-4">
             {CAPABILITIES.map((c) => {
               const mode = draft[c.key];
@@ -270,8 +272,8 @@ export function StoreActionsSection({
               ) : null}
             </div>
           ) : null}
-        </CardBody>
-      </Card>
-    </Section>
+        </div>
+      </BandBody>
+    </div>
   );
 }

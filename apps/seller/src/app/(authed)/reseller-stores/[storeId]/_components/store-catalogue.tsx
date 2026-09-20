@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactElement } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
+  BandBody,
   Button,
   ConfirmDialog,
   EmptyState,
@@ -16,7 +17,7 @@ import {
   Money,
   Num,
   ProductThumb,
-  Section,
+  SectionBand,
   Select,
   Switch,
   TBody,
@@ -97,35 +98,39 @@ export function StoreCatalogue({
       : (terms.data.rows.find((r) => r.variantId === editing.variantId) ?? editing);
 
   return (
-    <div className="space-y-6">
-      <Section
+    <div>
+      <SectionBand
+        index="01"
         title="What this store sells"
-        subtitle="Turn products on for this store, give it its own price, and decide how much stock it is shown. Prices without an override come from your price list."
+        note="A price with no override comes from your price list."
         action={
           <Link
             href="/reseller-stores/price-list"
-            className="text-accent hover:text-accent-hover text-sm"
+            className="text-accent hover:text-text-bright text-xs transition-colors"
           >
             Your price list →
           </Link>
         }
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-3">
+      />
+      <BandBody flush className="mb-4">
+        <div className="border-border flex flex-wrap items-center gap-3 border-b px-3 py-2.5">
           <Input
             aria-label="Search by product or SKU"
-            placeholder="Search product or SKU"
+            placeholder="Product or SKU…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            className="w-full sm:w-64"
           />
           <Switch checked={onlySold} onChange={setOnlySold} label="Only products sold here" />
         </div>
         {rows.length === 0 ? (
           <EmptyState
+            bare
             title={terms.data.rows.length === 0 ? 'No active products yet' : 'Nothing matches'}
             description={
               terms.data.rows.length === 0
                 ? 'Add products to your catalogue first; they appear here to turn on for the store.'
-                : undefined
+                : 'Try a different name or SKU code.'
             }
           />
         ) : (
@@ -193,38 +198,44 @@ export function StoreCatalogue({
             </TBody>
           </Table>
         )}
-      </Section>
+      </BandBody>
 
       {terms.data.recentShrinks.length > 0 ? (
-        <Section
-          title="Set-asides we reduced"
-          subtitle="When stock fell below what you had set aside for your stores, the newest set-asides were reduced first."
-        >
-          <Table>
-            <THead>
-              <Tr>
-                <Th>When</Th>
-                <Th>SKU</Th>
-                <Th>Set aside</Th>
-                <Th>On hand then</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {terms.data.recentShrinks.map((s) => (
-                <Tr key={s.id}>
-                  <Td>{when(s.createdAt)}</Td>
-                  <Td>{s.skuCode ?? '—'}</Td>
-                  <Td>
-                    {s.fromQty} → {s.toQty}
-                  </Td>
-                  <Td>
-                    <Num value={s.onHand} />
-                  </Td>
+        <>
+          <SectionBand
+            index="02"
+            title="Set-asides we reduced"
+            note="When stock fell below what you had set aside, the newest went first."
+          />
+          <BandBody flush>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>When</Th>
+                  <Th>SKU</Th>
+                  <Th>Set aside</Th>
+                  <Th align="right">On hand then</Th>
                 </Tr>
-              ))}
-            </TBody>
-          </Table>
-        </Section>
+              </THead>
+              <TBody>
+                {terms.data.recentShrinks.map((s) => (
+                  <Tr key={s.id}>
+                    <Td className="text-text-muted font-mono text-xs whitespace-nowrap">
+                      {when(s.createdAt)}
+                    </Td>
+                    <Td className="font-mono text-xs">{s.skuCode ?? '—'}</Td>
+                    <Td className="font-mono text-xs">
+                      {s.fromQty} → {s.toQty}
+                    </Td>
+                    <Td align="right">
+                      <Num value={s.onHand} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </BandBody>
+        </>
       ) : null}
 
       {current !== null ? (

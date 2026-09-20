@@ -2,21 +2,26 @@
 
 import type { ReactElement } from 'react';
 import {
-  Card,
-  CardBody,
   Money,
   TBody,
   THead,
   Table,
   Td,
   Th,
+  TopupStatusBadge,
   Tr,
   openExternalWhenReady,
 } from '@skydrop/ui/components';
+import { TopupRequestStatus } from '@skydrop/db';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { useTopupBankAccounts, useTopupProofUrl, useTopupRequests } from '@/lib/api-hooks';
 import { TopupWizard } from './topup-wizard';
+
+/** The view type says `string`; this is what makes it safe to badge. */
+function isTopupStatus(value: string): value is TopupRequestStatus {
+  return (Object.values(TopupRequestStatus) as string[]).includes(value);
+}
 
 /**
  * Every top-up the seller has claimed, whatever became of it.
@@ -45,110 +50,129 @@ export function TopupCard({
 
   const rows = requests.data ?? [];
 
+  /*
+    No `<Card>` of its own: this is the body of the wallet page's
+    "Top-ups" band, and `BandBody` IS the bordered surface the band
+    caps. Nesting one drew a second border a hair inside the first.
+  */
   return (
-    <Card>
-      <CardBody>
-        {rows.length === 0 ? (
-          <p className="text-text-muted py-2 text-sm">
-            No top-ups yet. Send money to one of our accounts, then record it here — we credit it
-            once it shows on our statement, so it is not instant.
-          </p>
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Sent</Th>
-                <Th>To</Th>
-                <Th align="right">Amount</Th>
-                <Th>Reference</Th>
-                <Th>Status</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((r) => (
-                <Tr key={r.id}>
-                  <Td className="text-text-muted text-xs whitespace-nowrap">
-                    {/* Local, not `toISOString().slice(0,10)`, which is
+    <div>
+      {rows.length === 0 ? (
+        <p className="text-text-muted py-2 text-sm">
+          No top-ups yet. Send money to one of our accounts, then record it here — we credit it once
+          it shows on our statement, so it is not instant.
+        </p>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Sent</Th>
+              <Th>To</Th>
+              <Th align="right">Amount</Th>
+              <Th>Reference</Th>
+              <Th>Status</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {rows.map((r) => (
+              <Tr key={r.id}>
+                <Td className="text-text-muted text-xs whitespace-nowrap">
+                  {/* Local, not `toISOString().slice(0,10)`, which is
                         UTC: a transfer sent at 1am in Dhaka was shown
                         as the previous day. And with the time, because
                         the Status column beside it already carries one
                         — a row that dates two of its own events
                         differently reads as two different events. */}
-                    {new Date(r.createdAt).toLocaleDateString()}
-                    <div className="text-text-faint">
-                      {new Date(r.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </div>
-                  </Td>
-                  <Td className="text-text-body">
-                    {/* The account, not our filing name for it. A seller
+                  {new Date(r.createdAt).toLocaleDateString()}
+                  <div className="text-text-faint">
+                    {new Date(r.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                </Td>
+                <Td className="text-text-body">
+                  {/* The account, not our filing name for it. A seller
                         checking this against their bank statement needs
                         the bank and the number they typed; "Tasin City"
                         is nothing they can compare. */}
-                    <div>{r.bankName}</div>
-                    <div className="text-text-faint font-mono text-xs">{r.bankAccountNumber}</div>
-                    {r.bankBranchName !== null && (
-                      <div className="text-text-faint text-xs">{r.bankBranchName}</div>
-                    )}
-                  </Td>
-                  <Td align="right">
-                    {/* In the currency they SENT, and never converted:
+                  <div>{r.bankName}</div>
+                  <div className="text-text-faint font-mono text-xs">{r.bankAccountNumber}</div>
+                  {r.bankBranchName !== null && (
+                    <div className="text-text-faint text-xs">{r.bankBranchName}</div>
+                  )}
+                </Td>
+                <Td align="right">
+                  {/* In the currency they SENT, and never converted:
                         this is a record of a bank transfer that already
                         happened, so restating it in another currency
                         would stop it matching their statement. A bare
                         1000.00 does not say whether that was taka or
                         rupees, which is the one thing they need to
                         recognise the payment. */}
-                    <Money
-                      amount={r.amount}
-                      currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
-                      convert={false}
-                    />
-                  </Td>
-                  <Td className="text-xs">
-                    {r.transactionRef !== null && (
-                      <div className="text-text-faint font-mono">{r.transactionRef}</div>
-                    )}
-                    {r.hasProof ? (
-                      <ProofLink topupId={r.id} />
-                    ) : (
-                      r.transactionRef === null && <span className="text-text-faint">—</span>
-                    )}
-                  </Td>
-                  <Td>
+                  <Money
+                    amount={r.amount}
+                    currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
+                    convert={false}
+                  />
+                </Td>
+                <Td className="text-xs">
+                  {r.transactionRef !== null && (
+                    <div className="text-text-faint font-mono">{r.transactionRef}</div>
+                  )}
+                  {r.hasProof ? (
+                    <ProofLink topupId={r.id} />
+                  ) : (
+                    r.transactionRef === null && <span className="text-text-faint">—</span>
+                  )}
+                </Td>
+                <Td>
+                  {/* The BADGE, not the raw enum. Spelling `PENDING`
+                        here while every other list in the app renders a
+                        chip is a second vocabulary for one status, which
+                        is the drift FE-6 exists to stop. `audience`
+                        matters: the payer's words for these differ from
+                        an operator's.
+
+                        NARROWED, never cast — the view type says
+                        `string`, and a cast would render an unstyled
+                        badge for a value the mapper does not know. An
+                        unrecognised status falls back to its own text,
+                        which is what the column said before. */}
+                  {isTopupStatus(r.status) ? (
+                    <TopupStatusBadge status={r.status} audience="payer" />
+                  ) : (
                     <span className="text-text-body text-xs">{r.status}</span>
-                    {/* When it was decided. "REJECTED" with no date leaves
+                  )}
+                  {/* When it was decided. "REJECTED" with no date leaves
                         a seller unsure whether anyone has looked yet. */}
-                    {r.reviewedAt !== null && (
-                      <div className="text-text-faint mt-0.5 text-xs">
-                        {new Date(r.reviewedAt).toLocaleString()}
-                      </div>
-                    )}
-                    {/* A rejection is only useful if the reason travels
+                  {r.reviewedAt !== null && (
+                    <div className="text-text-faint mt-0.5 text-xs">
+                      {new Date(r.reviewedAt).toLocaleString()}
+                    </div>
+                  )}
+                  {/* A rejection is only useful if the reason travels
                         with it — otherwise the seller resubmits the same
                         thing. */}
-                    {r.reviewNote !== null && r.reviewNote !== '' && (
-                      <div className="text-text-faint mt-0.5 text-xs">{r.reviewNote}</div>
-                    )}
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        )}
+                  {r.reviewNote !== null && r.reviewNote !== '' && (
+                    <div className="text-text-faint mt-0.5 text-xs">{r.reviewNote}</div>
+                  )}
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      )}
 
-        <TopupWizard
-          open={open}
-          onDone={() => onOpenChange(false)}
-          banks={banks}
-          onSubmitted={() => {
-            void requests.refetch();
-          }}
-        />
-      </CardBody>
-    </Card>
+      <TopupWizard
+        open={open}
+        onDone={() => onOpenChange(false)}
+        banks={banks}
+        onSubmitted={() => {
+          void requests.refetch();
+        }}
+      />
+    </div>
   );
 }
 

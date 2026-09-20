@@ -1,32 +1,36 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useMemo, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import {
+  BandBody,
   Button,
-  Card,
+  Crumbs,
   EarlyReviewStatusBadge,
   EmptyState,
   ErrorNote,
+  FilterChip,
   FormField,
   Ident,
+  MetaChip,
   Modal,
   ModalFooter,
   Num,
   PageHeader,
-  Select,
+  SectionBand,
   SkeletonRows,
   Stat,
+  StripFact,
   TBody,
   Table,
   Td,
   Textarea,
   THead,
   Th,
-  Toolbar,
   Tr,
   useToast,
 } from '@skydrop/ui/components';
+import { Lock, PhoneCall, PackageCheck } from 'lucide-react';
 import { EarlyReservationReviewStatus } from '@skydrop/db';
 import { useDecideHoldReview, useHoldReviews, type ReviewView } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -42,6 +46,19 @@ import { useRouter } from 'next/navigation';
  * keep holding it.
  *
  * Doing nothing has a cost, so the screen leads with how much is held.
+ *
+ * ── WHAT THE CONSOLE COMPS SHOW THAT IS NOT HERE ────────────────────
+ *   VALUE OF HELD STOCK   the review carries a held QUANTITY and the
+ *                         order it belongs to; it carries no cost, and
+ *                         a per-unit cost is not on this endpoint. A
+ *                         rupee figure would have to be invented, on a
+ *                         screen whose whole job is to make the cost of
+ *                         doing nothing legible.
+ *   HOW LONG IT HAS SAT   there is a TTL sweep behind this (72h by
+ *                         default), but the deadline is not returned,
+ *                         and `updatedAt` is not when the hold started
+ *                         (rule 4b). The date the review was raised is
+ *                         what IS true, so that is the column.
  */
 export function HoldReviewsIndex(): ReactElement {
   const router = useRouter();
@@ -49,63 +66,108 @@ export function HoldReviewsIndex(): ReactElement {
   const [selected, setSelected] = useState<ReviewView | null>(null);
   const list = useHoldReviews(status === '' ? {} : { status });
 
-  const rows = list.data ?? [];
-  const openRows = rows.filter((r) => r.status === EarlyReservationReviewStatus.OPEN);
+  const rows = useMemo(() => list.data ?? [], [list.data]);
+  const openRows = useMemo(
+    () => rows.filter((r) => r.status === EarlyReservationReviewStatus.OPEN),
+    [rows],
+  );
   const heldUnits = openRows.reduce((sum, r) => sum + r.heldQty, 0);
+  const callsMade = rows.reduce((sum, r) => sum + r.attemptCount, 0);
+  const loaded = !list.isLoading && !list.isError;
+  const filtered = status !== '';
 
   return (
     <div>
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Held stock' }]}
+            Link={Link}
+          />
+        }
         title="Held stock"
         subtitle="Orders where we held your stock at placement but could not reach the customer. Release it, or ask us to keep trying."
+        meta={
+          !loaded ? undefined : openRows.length > 0 ? (
+            <>
+              <MetaChip tone="warn" dot>
+                {openRows.length} waiting on you
+              </MetaChip>
+              <MetaChip>
+                {heldUnits} {heldUnits === 1 ? 'unit' : 'units'} held
+              </MetaChip>
+            </>
+          ) : (
+            <MetaChip tone="good">Nothing waiting on you</MetaChip>
+          )
+        }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+      {/* ── What is actually being held ─────────────────────────────
+             Three tiles, each counted off the rows below. The units
+             figure counts OPEN reviews only, because a decided one is
+             no longer holding anything — totalling every row would
+             report stock back on the shelf as still locked away. */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Stat
           label="Units held pending your decision"
-          value={list.isLoading ? '—' : <Num value={heldUnits} />}
-          tone={heldUnits > 0 ? 'warn' : 'good'}
-          hint="Unavailable to other orders until you decide"
+          icon={<Lock size={13} aria-hidden />}
+          value={loaded ? <Num value={heldUnits} /> : <span className="text-text-faint">—</span>}
+          unit={loaded ? (heldUnits === 1 ? 'unit' : 'units') : undefined}
+          tone={loaded && heldUnits > 0 ? 'warn' : 'neutral'}
+          hint="Unavailable to your other orders until you decide."
         />
         <Stat
           label="Awaiting you"
-          value={list.isLoading ? '—' : openRows.length}
-          hint="Orders needing a call"
+          icon={<PackageCheck size={13} aria-hidden />}
+          value={loaded ? openRows.length : <span className="text-text-faint">—</span>}
+          unit={loaded ? (openRows.length === 1 ? 'order' : 'orders') : undefined}
+          tone={loaded && openRows.length > 0 ? 'warn' : 'neutral'}
+          hint="Each one needs release, or another round of calls."
+        />
+        <Stat
+          label="Calls already made"
+          icon={<PhoneCall size={13} aria-hidden />}
+          value={loaded ? <Num value={callsMade} /> : <span className="text-text-faint">—</span>}
+          unit={loaded ? 'attempts' : undefined}
+          tone="neutral"
+          hint={
+            filtered
+              ? `Across the ${humanise(status).toLowerCase()} reviews shown.`
+              : 'Across every review shown.'
+          }
         />
       </div>
 
-      <Toolbar>
-        <label className="text-text-muted text-xs" htmlFor="hold-status">
-          Status
-        </label>
-        <Select
-          id="hold-status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="w-64"
-        >
-          <option value="">All</option>
-          {Object.values(EarlyReservationReviewStatus).map((s) => (
-            <option key={s} value={s}>
-              {humanise(s)}
-            </option>
-          ))}
-        </Select>
-      </Toolbar>
+      <SectionBand
+        index="01"
+        title="Held stock register"
+        note={loaded ? `${rows.length} ${rows.length === 1 ? 'review' : 'reviews'}` : undefined}
+      />
 
-      {list.isError ? (
-        <Card className="rounded-t-none border-t-0 p-3">
-          <ErrorNote
-            message={list.error?.message ?? 'Failed to load held stock.'}
-            retry={() => void list.refetch()}
-          />
-        </Card>
-      ) : list.isLoading ? (
-        <Card className="rounded-t-none border-t-0">
+      <BandBody flush>
+        <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-3 py-2.5">
+          <FilterChip label="All" active={status === ''} onClick={() => setStatus('')} />
+          {Object.values(EarlyReservationReviewStatus).map((s) => (
+            <FilterChip
+              key={s}
+              label={humanise(s)}
+              active={status === s}
+              onClick={() => setStatus(s)}
+            />
+          ))}
+        </div>
+
+        {list.isError ? (
+          <div className="p-3">
+            <ErrorNote
+              message={list.error?.message ?? 'Failed to load held stock.'}
+              retry={() => void list.refetch()}
+            />
+          </div>
+        ) : list.isLoading ? (
           <SkeletonRows rows={3} cols={5} />
-        </Card>
-      ) : rows.length === 0 ? (
-        <Card className="rounded-t-none border-t-0">
+        ) : rows.length === 0 ? (
           <EmptyState
             bare
             title={
@@ -119,53 +181,65 @@ export function HoldReviewsIndex(): ReactElement {
                 : 'Try a different status.'
             }
           />
-        </Card>
-      ) : (
-        <Table wrapperClassName="rounded-t-none border-t-0">
-          <THead>
-            <Tr>
-              <Th>Order</Th>
-              <Th align="right">Units held</Th>
-              <Th align="right">Calls made</Th>
-              <Th>Status</Th>
-              <Th align="right">Decision</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {rows.map((r) => (
-              <Tr key={r.id} onActivate={() => router.push(`/orders/${r.orderId}`)}>
-                <Td>
-                  <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
-                    <Ident value={`${r.orderId.slice(0, 8)}…`} />
-                  </Link>
-                  <div className="text-text-faint mt-0.5 text-xs">
-                    {new Date(r.createdAt).toLocaleDateString()}
-                  </div>
-                </Td>
-                <Td align="right">
-                  <Num value={r.heldQty} />
-                </Td>
-                <Td align="right">
-                  <Num value={r.attemptCount} />
-                </Td>
-                <Td>
-                  <EarlyReviewStatusBadge status={r.status} />
-                </Td>
-                <Td align="right">
-                  {r.status === EarlyReservationReviewStatus.OPEN ? (
-                    <Button variant="secondary" size="sm" onClick={() => setSelected(r)}>
-                      Decide
-                    </Button>
-                  ) : (
-                    <span className="text-text-faint text-xs">
-                      {r.resolvedAt === null ? '—' : new Date(r.resolvedAt).toLocaleDateString()}
-                    </span>
-                  )}
-                </Td>
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Order</Th>
+                <Th align="right">Units held</Th>
+                <Th align="right">Calls made</Th>
+                <Th>Status</Th>
+                <Th align="right">Decision</Th>
               </Tr>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {rows.map((r) => (
+                <Tr key={r.id} onActivate={() => router.push(`/orders/${r.orderId}`)}>
+                  <Td>
+                    <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
+                      <Ident value={`${r.orderId.slice(0, 8)}…`} />
+                    </Link>
+                    <div className="text-text-faint mt-0.5 text-xs">
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </div>
+                  </Td>
+                  <Td align="right">
+                    <Num value={r.heldQty} />
+                  </Td>
+                  <Td align="right">
+                    <Num value={r.attemptCount} />
+                  </Td>
+                  <Td>
+                    <EarlyReviewStatusBadge status={r.status} />
+                  </Td>
+                  <Td align="right">
+                    {r.status === EarlyReservationReviewStatus.OPEN ? (
+                      <Button variant="secondary" size="sm" onClick={() => setSelected(r)}>
+                        Decide
+                      </Button>
+                    ) : (
+                      <span className="text-text-faint text-xs">
+                        {r.resolvedAt === null ? '—' : new Date(r.resolvedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </BandBody>
+
+      {loaded && rows.length > 0 && (
+        <div className="text-text-faint border-border mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3 font-mono text-[11px]">
+          <StripFact
+            label="Units held"
+            value={<Num value={heldUnits} />}
+            tone={heldUnits > 0 ? 'warn' : 'good'}
+          />
+          <StripFact label="Awaiting you" value={openRows.length} />
+          <StripFact label="Shown" value={`${rows.length} reviews`} />
+        </div>
       )}
 
       <DecideModal review={selected} onClose={() => setSelected(null)} />
