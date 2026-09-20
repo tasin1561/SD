@@ -2,17 +2,23 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
+import { MapPin, MessageSquareWarning, Truck } from 'lucide-react';
 import {
+  BandBody,
   Button,
+  Crumbs,
   EmptyState,
   ErrorState,
   FormField,
   LoadingState,
+  MetaChip,
   Modal,
   ModalFooter,
   OrderStatusBadge,
   PageHeader,
-  Section,
+  SectionBand,
+  Stat,
+  StripFact,
   TBody,
   THead,
   Table,
@@ -57,6 +63,16 @@ const ASKED_FOR: Record<StoreActionRequestRow['action'], string> = {
  * you answer, and the store has a customer waiting for that answer —
  * which is why a rejection needs a reason and the store is told either
  * way.
+ *
+ * ── WHAT THE CONSOLE COMPS SHOW THAT IS NOT HERE ────────────────────
+ *   TIME LEFT BEFORE IT EXPIRES   a request does close itself after
+ *       `reseller.store_request_expire_hours`, but that setting is not
+ *       on any of these three payloads, so a countdown would be counting
+ *       down to a deadline this page has guessed. The time it was ASKED
+ *       is what the rows carry, and that is the column.
+ *   SLA / RESPONSE TIME           nothing measures how long these take
+ *       to answer, and putting a clock on it would be a promise we make
+ *       nowhere else.
  */
 export default function StoreRequestsPage(): ReactElement {
   // Asked here only to decide whether BOTH queues are empty; the two
@@ -66,10 +82,30 @@ export default function StoreRequestsPage(): ReactElement {
   const addresses = useStoreAddressChanges();
   const orderRequests = useStoreOrderRequests();
 
+  const orderCount = orderRequests.data?.length;
+  const actionCount = requests.data?.length;
+  const addressCount = addresses.data?.length;
+  const total = (orderCount ?? 0) + (actionCount ?? 0) + (addressCount ?? 0);
+  const counted =
+    orderCount !== undefined && actionCount !== undefined && addressCount !== undefined;
+
   const header = (
     <PageHeader
+      breadcrumb={
+        <Crumbs
+          items={[{ label: 'Seller console' }, { label: 'Reselling' }, { label: 'Waiting on you' }]}
+          Link={Link}
+        />
+      }
       title="Waiting on you"
       subtitle="What your Reseller stores have asked Seller staff to approve. Until you answer, nothing happens — and a request nobody answers closes after a few days and the store is told."
+      meta={
+        !counted ? undefined : (
+          <MetaChip tone={total > 0 ? 'warn' : 'good'} dot={total > 0}>
+            {total === 0 ? 'Nothing waiting' : `${total} waiting`}
+          </MetaChip>
+        )
+      }
       action={
         <Link href="/reseller-stores" className="text-accent text-sm hover:underline">
           All reseller stores →
@@ -78,10 +114,45 @@ export default function StoreRequestsPage(): ReactElement {
     />
   );
 
+  /*
+    One tile per QUEUE, each counting the rows its own section renders.
+    A single "waiting" number would not say which desk the work is on,
+    and the three want different answers: a cancel is a decision, an
+    order change is a comparison, a delivery ask spends money.
+  */
+  const tiles = counted ? (
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <Stat
+        label="Cancels, call questions, issues"
+        icon={<MessageSquareWarning size={13} aria-hidden />}
+        value={orderCount ?? 0}
+        unit={orderCount === 1 ? 'request' : 'requests'}
+        tone={(orderCount ?? 0) > 0 ? 'warn' : 'neutral'}
+        hint="Approving runs it exactly as if the store had done it itself."
+      />
+      <Stat
+        label="Delivery asks"
+        icon={<Truck size={13} aria-hidden />}
+        value={actionCount ?? 0}
+        unit={actionCount === 1 ? 'ask' : 'asks'}
+        tone={(actionCount ?? 0) > 0 ? 'warn' : 'neutral'}
+        hint="Call again, deliver again, or send the parcel back."
+      />
+      <Stat
+        label="Order and address changes"
+        icon={<MapPin size={13} aria-hidden />}
+        value={addressCount ?? 0}
+        unit={addressCount === 1 ? 'change' : 'changes'}
+        tone={(addressCount ?? 0) > 0 ? 'warn' : 'neutral'}
+        hint="Until you answer, the parcel keeps the details it has."
+      />
+    </div>
+  ) : null;
+
   // Both still loading: one skeleton rather than two stacked.
   if (requests.isPending && addresses.isPending && orderRequests.isPending) {
     return (
-      <div className="space-y-6">
+      <div>
         {header}
         <LoadingState label="Loading what your stores are waiting on" rows={4} />
       </div>
@@ -99,8 +170,9 @@ export default function StoreRequestsPage(): ReactElement {
     orderRequests.data.length === 0;
 
   return (
-    <div className="space-y-6">
+    <div>
       {header}
+      {tiles}
       {allEmpty ? (
         <EmptyState
           title="Nothing is waiting"
@@ -116,6 +188,14 @@ export default function StoreRequestsPage(): ReactElement {
           <OrderRequestsSection />
           <ActionRequestsSection />
           <AddressChangesSection />
+          {counted && (
+            <div className="text-text-faint border-border mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3 font-mono text-[11px]">
+              <StripFact label="Waiting" value={total} tone={total > 0 ? 'warn' : 'good'} />
+              <StripFact label="Cancels & issues" value={orderCount ?? 0} />
+              <StripFact label="Delivery asks" value={actionCount ?? 0} />
+              <StripFact label="Changes" value={addressCount ?? 0} />
+            </div>
+          )}
         </>
       )}
     </div>
@@ -133,37 +213,45 @@ function OrderRequestsSection(): ReactElement {
   const [rejecting, setRejecting] = useState<StoreOrderRequestRow | null>(null);
 
   return (
-    <Section
-      title="Cancels, call questions and issues"
-      subtitle="A store wants to call an order off, answer whether to keep calling a customer, or raise an issue with Skydrop."
-    >
-      {rows.isPending ? (
-        <LoadingState label="Loading requests" rows={2} />
-      ) : rows.isError ? (
-        <ErrorState message={serverVerdict(rows.error)} retry={() => void rows.refetch()} />
-      ) : rows.data.length === 0 ? (
-        <p className="text-text-muted text-sm">Nothing to answer here.</p>
-      ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Store</Th>
-              <Th>Order</Th>
-              <Th>They asked to</Th>
-              <Th>What they said</Th>
-              <Th>Asked</Th>
-              <Th>Your answer</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {rows.data.map((r) => (
-              <OrderRequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
-            ))}
-          </TBody>
-        </Table>
-      )}
+    <>
+      <SectionBand
+        index="01"
+        title="Cancels, call questions and issues"
+        note="Call an order off, answer whether to keep calling, or raise an issue with Skydrop."
+      />
+      <BandBody flush className="mb-4">
+        {rows.isPending ? (
+          <div className="p-3">
+            <LoadingState label="Loading requests" rows={2} />
+          </div>
+        ) : rows.isError ? (
+          <div className="p-3">
+            <ErrorState message={serverVerdict(rows.error)} retry={() => void rows.refetch()} />
+          </div>
+        ) : rows.data.length === 0 ? (
+          <EmptyState bare title="Nothing to answer here" />
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Store</Th>
+                <Th>Order</Th>
+                <Th>They asked to</Th>
+                <Th>What they said</Th>
+                <Th>Asked</Th>
+                <Th>Your answer</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {rows.data.map((r) => (
+                <OrderRequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </BandBody>
       <RejectOrderRequestModal request={rejecting} onClose={() => setRejecting(null)} />
-    </Section>
+    </>
   );
 }
 
@@ -324,34 +412,48 @@ function ActionRequestsSection(): ReactElement {
   const [rejecting, setRejecting] = useState<StoreActionRequestRow | null>(null);
 
   return (
-    <Section title="Asks from your stores">
-      {requests.isPending ? (
-        <LoadingState label="Loading asks" rows={2} />
-      ) : requests.isError ? (
-        <ErrorState message={serverVerdict(requests.error)} retry={() => void requests.refetch()} />
-      ) : requests.data.length === 0 ? (
-        <p className="text-text-muted text-sm">Nothing to answer here.</p>
-      ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Store</Th>
-              <Th>Order</Th>
-              <Th>They asked for</Th>
-              <Th>Why</Th>
-              <Th>Asked</Th>
-              <Th>Your answer</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {requests.data.map((r) => (
-              <RequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
-            ))}
-          </TBody>
-        </Table>
-      )}
+    <>
+      <SectionBand
+        index="02"
+        title="Delivery asks"
+        note="Call the customer again, try delivering again, or send the parcel back."
+      />
+      <BandBody flush className="mb-4">
+        {requests.isPending ? (
+          <div className="p-3">
+            <LoadingState label="Loading asks" rows={2} />
+          </div>
+        ) : requests.isError ? (
+          <div className="p-3">
+            <ErrorState
+              message={serverVerdict(requests.error)}
+              retry={() => void requests.refetch()}
+            />
+          </div>
+        ) : requests.data.length === 0 ? (
+          <EmptyState bare title="Nothing to answer here" />
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Store</Th>
+                <Th>Order</Th>
+                <Th>They asked for</Th>
+                <Th>Why</Th>
+                <Th>Asked</Th>
+                <Th>Your answer</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {requests.data.map((r) => (
+                <RequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </BandBody>
       <RejectModal request={rejecting} onClose={() => setRejecting(null)} />
-    </Section>
+    </>
   );
 }
 
@@ -561,40 +663,48 @@ function AddressChangesSection(): ReactElement {
   const [rejecting, setRejecting] = useState<StoreAddressChangeRow | null>(null);
 
   return (
-    <Section
-      title="Address corrections"
-      subtitle="A store says a parcel is going to the wrong place. Until you answer, it keeps going to the address on the left."
-    >
-      {addresses.isPending ? (
-        <LoadingState label="Loading corrections" rows={2} />
-      ) : addresses.isError ? (
-        <ErrorState
-          message={serverVerdict(addresses.error)}
-          retry={() => void addresses.refetch()}
-        />
-      ) : addresses.data.length === 0 ? (
-        <p className="text-text-muted text-sm">No corrections are waiting.</p>
-      ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Store</Th>
-              <Th>Order</Th>
-              <Th>What is changing</Th>
-              <Th>Why they say it is wrong</Th>
-              <Th>Asked</Th>
-              <Th>Your answer</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {addresses.data.map((r) => (
-              <AddressRow key={r.id} request={r} onReject={() => setRejecting(r)} />
-            ))}
-          </TBody>
-        </Table>
-      )}
+    <>
+      <SectionBand
+        index="03"
+        title="Order and address changes"
+        note="Until you answer, the parcel keeps the details it has."
+      />
+      <BandBody flush>
+        {addresses.isPending ? (
+          <div className="p-3">
+            <LoadingState label="Loading corrections" rows={2} />
+          </div>
+        ) : addresses.isError ? (
+          <div className="p-3">
+            <ErrorState
+              message={serverVerdict(addresses.error)}
+              retry={() => void addresses.refetch()}
+            />
+          </div>
+        ) : addresses.data.length === 0 ? (
+          <EmptyState bare title="No corrections are waiting" />
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Store</Th>
+                <Th>Order</Th>
+                <Th>What is changing</Th>
+                <Th>Why they say it is wrong</Th>
+                <Th>Asked</Th>
+                <Th>Your answer</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {addresses.data.map((r) => (
+                <AddressRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </BandBody>
       <RejectAddressModal request={rejecting} onClose={() => setRejecting(null)} />
-    </Section>
+    </>
   );
 }
 

@@ -2,18 +2,27 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import { ArrowRight, Download } from 'lucide-react';
+import { ArrowRight, Coins, Download, Landmark } from 'lucide-react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
+  Crumbs,
   ErrorState,
+  FilterChip,
+  MetaChip,
   Money,
   PageHeader,
+  SectionBand,
   Skeleton,
   SkeletonRows,
+  Stat,
+  StripFact,
+  TBody,
   Table,
+  Td,
+  THead,
+  Th,
+  Tr,
 } from '@skydrop/ui/components';
 import { isWalletCredit } from '@skydrop/ui/status';
 import { LedgerEntryLabel } from './_components/ledger-entry-label';
@@ -26,12 +35,29 @@ import { can } from '@/lib/page-access';
 import { CreditStandingCard } from './_components/credit-standing-card';
 
 /**
- * Phase 1B M24 — seller wallet. Top: balance cards (INR + BDT).
- * Below: the paginated ledger. Each entry's
- * linkedOrder column is a click-through to the order detail.
+ * Phase 1B M24 — seller wallet. Top: the balance as stat tiles (INR +
+ * the BDT view of the same money). Below: the paginated ledger. Each
+ * entry's linked order is a click-through to the order detail.
  *
- * No mutation surface here — sellers can't initiate remits (admin
- * does it). They just see the books.
+ * No mutation surface here beyond the two requests — a top-up is a
+ * CLAIM and a withdrawal is a REQUEST; only an operator moves money
+ * (WAL-2 / WAL-3).
+ *
+ * ── WHAT THE CONSOLE COMPS SHOW THAT WE DO NOT HAVE ─────────────────
+ * Every tile on a wallet screen is read as a statement about somebody's
+ * money, so these are absent rather than approximated:
+ *
+ *   MONEY IN / OUT THIS MONTH   the ledger is fetched a page at a time
+ *       and totals would be of the LOADED WINDOW, not of the month — a
+ *       figure that grows as you scroll is worse than no figure. There
+ *       is no period-summary endpoint.
+ *   AVAILABLE TO WITHDRAW       real (`…/withdrawal-requests/eligibility`)
+ *       but it needs `wallet.withdraw`, which this page does not, so
+ *       firing it here would 403 on load for everyone else. It is on
+ *       the withdrawal form, where the permission is already held.
+ *   NEXT PAYOUT DATE            withdrawals are requested and paid by
+ *       hand; nothing schedules one, so there is no date to show. The
+ *       schedule rules live on /wallet/limits.
  */
 export default function WalletPage(): ReactElement {
   const [exporting, setExporting] = useState(false);
@@ -54,6 +80,13 @@ export default function WalletPage(): ReactElement {
   const entries = useInfiniteWalletEntries();
   const accumulated = entries.data?.pages.flatMap((p) => p.items) ?? [];
 
+  const rows = balances.data?.balances ?? [];
+  // The canonical figure. Everything the system stores is rupees; a BDT
+  // row is the SAME money converted for reading, which is why it is a
+  // second tile rather than a second balance.
+  const inr = rows.find((b) => b.currency === 'INR') ?? rows.find((b) => !b.isConverted);
+  const owed = inr === undefined ? null : Number(inr.balance);
+
   async function exportAll(): Promise<void> {
     // Fetch any remaining pages BEFORE rendering the CSV so the
     // download contains the entire ledger, not just the visible
@@ -72,116 +105,124 @@ export default function WalletPage(): ReactElement {
   }
 
   return (
-    <div className="space-y-4">
+    <div>
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[{ label: 'Seller console' }, { label: 'Money' }, { label: 'Wallet' }]}
+            Link={Link}
+          />
+        }
         title="Wallet"
         subtitle="What's owed to you. COD net of charges per delivered order; remittances debit as we pay you out."
+        meta={
+          owed === null ? undefined : (
+            <>
+              <MetaChip tone={owed > 0 ? 'good' : owed < 0 ? 'bad' : 'neutral'} dot>
+                {owed > 0 ? 'Owed to you' : owed < 0 ? 'You owe' : 'Settled'}
+              </MetaChip>
+              {rows.some((b) => b.isConverted) && <MetaChip>Also shown in taka</MetaChip>}
+            </>
+          )
+        }
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            {mayTopup && (
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  // Switch to the tab as well as opening the modal, so the
+                  // seller lands where the request they are about to make
+                  // will appear.
+                  setTab('topups');
+                  setTopupOpen(true);
+                }}
+              >
+                Top-up wallet
+              </Button>
+            )}
+            {mayWithdraw && (
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => {
+                  setTab('withdrawals');
+                  setWithdrawalOpen(true);
+                }}
+              >
+                Request a withdrawal
+              </Button>
+            )}
+          </div>
+        }
       />
 
       {/* Above everything, and only when it applies. A seller who is
           about to be refused should learn it here rather than at the
           moment they try to place an order. */}
-      <CreditStandingCard />
-
-      {/* The two ways money moves, beside the number they move. They
-          used to sit at the bottom of the page, each heading its own
-          card of history — so the button a seller came for was below the
-          record of what they had already done. */}
-      <div className="flex flex-wrap items-center gap-2">
-        {mayTopup && (
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => {
-              // Switch to the tab as well as opening the modal, so the
-              // seller lands where the request they are about to make
-              // will appear.
-              setTab('topups');
-              setTopupOpen(true);
-            }}
-          >
-            Top-up wallet
-          </Button>
-        )}
-        {mayWithdraw && (
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => {
-              setTab('withdrawals');
-              setWithdrawalOpen(true);
-            }}
-          >
-            Request a withdrawal
-          </Button>
-        )}
-
-        {/* On the right of the same row, because the question these
-              answer — "why was that refused", "when does COD land" —
-              arrives while looking at the buttons, not at the bottom of
-              the ledger where they used to live. */}
-        {/* Given weight, but deliberately NOT a third button: the two on
-            the left move money and this one explains the rules, so
-            matching their shape would invite the same click. An
-            accent-tinted pill reads as "worth noticing" without reading
-            as "press me to do something". */}
-        <Link
-          href="/wallet/limits"
-          className="text-accent ml-auto inline-flex min-h-[38px] items-center gap-1.5 rounded-[5px] border border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)] px-3 py-1.5 text-sm font-medium transition-colors hover:border-accent"
-        >
-          Wallet limits and settings
-          <ArrowRight size={14} aria-hidden />
-        </Link>
+      <div className="mb-4 empty:mb-0">
+        <CreditStandingCard />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      {/* ── The balance ─────────────────────────────────────────────
+             The two balance cards became tiles: same figures, same
+             `convert={false}` (each names its own currency, and letting
+             the display conversion run turned the INR tile into the
+             taka one beside it). A third tile is deliberately absent —
+             see the header comment. */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {balances.isLoading ? (
           <>
             <Skeleton className="h-[104px]" />
             <Skeleton className="h-[104px]" />
           </>
         ) : balances.isError ? (
-          <ErrorState
-            message={balances.error?.message ?? 'Failed.'}
-            retry={() => void balances.refetch()}
-          />
+          <div className="sm:col-span-2">
+            <ErrorState
+              message={balances.error?.message ?? 'Failed.'}
+              retry={() => void balances.refetch()}
+            />
+          </div>
         ) : (
-          (balances.data?.balances ?? []).map((b) => (
-            <Card key={b.currency}>
-              <CardBody>
-                <div className="text-text-faint text-xs uppercase tracking-wide mb-1">
-                  {b.currency}
-                </div>
-                <div className="text-text-bright">
-                  {/* convert={false} because THIS card names its own
-                      currency in the heading above. Left to convert, the
-                      INR card rendered the taka figure under an "INR"
-                      label — the same number as the BDT card beside it,
-                      so the page showed one balance twice and neither
-                      of them in rupees. The API already returns both
-                      currencies; converting here did it a second time. */}
-                  <Money
-                    amount={b.balance}
-                    currency={b.currency === 'BDT' ? 'BDT' : 'INR'}
-                    convert={false}
-                    size="lg"
-                  />
-                </div>
-                <div className="text-text-muted text-xs mt-1">
-                  {/* A converted figure is the SAME money counted in
-                      another currency, not a second balance — saying
-                      "owed to you" on both would read as twice as much
-                      money. */}
-                  {b.isConverted
-                    ? `Your rupee balance in taka${b.fxRate === null ? '' : ` · ₹1 = ৳${Number(b.fxRate).toFixed(2)}`}`
-                    : Number(b.balance) === 0
-                      ? 'No activity yet'
-                      : Number(b.balance) > 0
-                        ? 'Owed to you'
-                        : 'You owe'}
-                </div>
-              </CardBody>
-            </Card>
+          rows.map((b) => (
+            <Stat
+              key={b.currency}
+              label={b.isConverted ? `Your balance in ${b.currency}` : `Balance · ${b.currency}`}
+              icon={
+                b.isConverted ? <Coins size={13} aria-hidden /> : <Landmark size={13} aria-hidden />
+              }
+              value={
+                <Money
+                  amount={b.balance}
+                  currency={b.currency === 'BDT' ? 'BDT' : 'INR'}
+                  convert={false}
+                  size="lg"
+                />
+              }
+              tone={
+                b.isConverted
+                  ? 'neutral'
+                  : Number(b.balance) > 0
+                    ? 'good'
+                    : Number(b.balance) < 0
+                      ? 'warn'
+                      : 'neutral'
+              }
+              hint={
+                // A converted figure is the SAME money counted in
+                // another currency, not a second balance — saying
+                // "owed to you" on both would read as twice as much
+                // money.
+                b.isConverted
+                  ? `Your rupee balance in taka${b.fxRate === null ? '' : ` · ₹1 = ৳${Number(b.fxRate).toFixed(2)}`}`
+                  : Number(b.balance) === 0
+                    ? 'No activity yet.'
+                    : Number(b.balance) > 0
+                      ? 'Owed to you, and goes out with your next withdrawal.'
+                      : 'You owe this much; it clears as your stock sells.'
+              }
+            />
           ))
         )}
       </div>
@@ -189,128 +230,155 @@ export default function WalletPage(): ReactElement {
       {/* One switcher, three views of the same money. Building these as
           separate pages would make "did my transfer go through?" a
           navigation problem. */}
-      <div className="border-border flex flex-wrap gap-1 border-b">
-        {(
-          [
-            ['ledger', 'Ledger'],
-            // Money in before money out: a seller whose balance is short
-            // needs the top-up, not the withdrawal form.
-            ['topups', 'Top-ups'],
-            ['withdrawals', 'Withdrawal requests'],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            aria-current={tab === key ? 'true' : undefined}
-            className={
-              'inline-flex min-h-[36px] items-center rounded-t-[4px] px-3 text-sm transition-colors ' +
-              (tab === key
-                ? 'border-accent text-text-bright border-b-2 font-medium'
-                : 'text-text-muted hover:text-text-body border-b-2 border-transparent')
-            }
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SectionBand
+        index="01"
+        title={tab === 'ledger' ? 'Ledger' : tab === 'topups' ? 'Top-ups' : 'Withdrawal requests'}
+        note={
+          tab === 'ledger'
+            ? 'Every movement, oldest last.'
+            : tab === 'topups'
+              ? 'Money you have told us you sent.'
+              : 'Money you have asked us to pay out.'
+        }
+        action={
+          <>
+            <Link
+              href="/wallet/limits"
+              className="text-accent hover:text-text-bright inline-flex items-center gap-1 text-xs transition-colors"
+            >
+              Limits and settings
+              <ArrowRight size={12} aria-hidden />
+            </Link>
+            {tab === 'ledger' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={accumulated.length === 0 || exporting}
+                onClick={() => void exportAll()}
+              >
+                <Download size={12} /> {exporting ? 'Loading all…' : 'Export CSV'}
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      {tab === 'ledger' && (
-        <Card>
-          <CardHeader
-            title="Ledger"
-            action={
-              <div className="flex items-center gap-2">
-                {/* The all/INR/BDT segmented filter is gone. Every entry the
-                  system writes is INR — BDT is a conversion of the
-                  balance, not a pot with its own entries — so 'BDT'
-                  selected an always-empty ledger while 'all' and 'INR'
-                  were the same list. A control with one real setting is
-                  not a control. */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={accumulated.length === 0 || exporting}
-                  onClick={() => void exportAll()}
-                >
-                  <Download size={12} /> {exporting ? 'Loading all…' : 'Export CSV'}
-                </Button>
-              </div>
-            }
-          />
-          <CardBody>
+      <BandBody flush>
+        <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-3 py-2.5">
+          {(
+            [
+              ['ledger', 'Ledger'],
+              // Money in before money out: a seller whose balance is
+              // short needs the top-up, not the withdrawal form.
+              ['topups', 'Top-ups'],
+              ['withdrawals', 'Withdrawal requests'],
+            ] as const
+          ).map(([key, label]) => (
+            <FilterChip key={key} label={label} active={tab === key} onClick={() => setTab(key)} />
+          ))}
+        </div>
+
+        {tab === 'ledger' && (
+          <>
             {entries.isLoading ? (
               <SkeletonRows rows={6} cols={5} />
             ) : entries.isError ? (
-              <ErrorState
-                message={entries.error?.message ?? 'Failed.'}
-                retry={() => void entries.refetch()}
-              />
+              <div className="p-3">
+                <ErrorState
+                  message={entries.error?.message ?? 'Failed.'}
+                  retry={() => void entries.refetch()}
+                />
+              </div>
             ) : accumulated.length === 0 ? (
-              <div className="text-text-muted text-sm py-4">
+              <p className="text-text-muted px-3 py-6 text-sm">
                 No ledger entries yet. Once an order delivers (COD), your wallet will accrue (COD
                 amount − shipping + GST).
-              </div>
+              </p>
             ) : (
-              <Table wrapperClassName="rounded-none border-0 bg-transparent">
-                <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-medium">When</th>
-                    <th className="text-left px-3 py-2 font-medium">Type</th>
-                    <th className="text-left px-3 py-2 font-medium">Linked</th>
-                    <th className="text-right px-3 py-2 font-medium">Amount</th>
-                    <th className="text-right px-3 py-2 font-medium">Balance after</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {accumulated.map((e) => (
-                    <LedgerRow key={e.id} entry={e} />
-                  ))}
-                </tbody>
-              </Table>
+              <>
+                {/* The `Table` primitive, not a hand-rolled `<thead>`: a
+                    raw table here kept its desktop shape on a phone and
+                    scrolled the page sideways, while every other list in
+                    the app folded into cards (FE-7). */}
+                <Table wrapperClassName="rounded-none border-0 bg-transparent">
+                  <THead>
+                    <Tr>
+                      <Th>When</Th>
+                      <Th>Type</Th>
+                      <Th>Linked</Th>
+                      <Th align="right">Amount</Th>
+                      <Th align="right">Balance after</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {accumulated.map((e) => (
+                      <LedgerRow key={e.id} entry={e} />
+                    ))}
+                  </TBody>
+                </Table>
+                {entries.hasNextPage && (
+                  <div className="border-border flex justify-center border-t px-3 py-2.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="md"
+                      disabled={entries.isFetchingNextPage}
+                      onClick={() => void entries.fetchNextPage()}
+                    >
+                      {entries.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
-            {entries.hasNextPage && (
-              <div className="flex justify-center mt-3">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="md"
-                  disabled={entries.isFetchingNextPage}
-                  onClick={() => void entries.fetchNextPage()}
-                >
-                  {entries.isFetchingNextPage ? 'Loading…' : 'Load more'}
-                </Button>
-              </div>
+          </>
+        )}
+
+        {tab === 'topups' && (
+          <div className="p-3">
+            {mayTopup ? (
+              <TopupCard open={topupOpen} onOpenChange={setTopupOpen} />
+            ) : (
+              <p className="text-text-muted py-3 text-sm">
+                Top-ups are recorded by an owner or finance account.
+              </p>
             )}
-          </CardBody>
-        </Card>
-      )}
+          </div>
+        )}
 
-      {tab === 'topups' &&
-        (mayTopup ? (
-          <TopupCard open={topupOpen} onOpenChange={setTopupOpen} />
-        ) : (
-          <p className="text-text-muted text-sm">
-            Top-ups are recorded by an owner or finance account.
-          </p>
-        ))}
-      {tab === 'withdrawals' &&
-        (mayWithdraw ? (
-          <WithdrawalsCard requesting={withdrawalOpen} onRequestingChange={setWithdrawalOpen} />
-        ) : (
-          <p className="text-text-muted text-sm">
-            Withdrawal requests are handled by an owner or finance account.
-          </p>
-        ))}
+        {tab === 'withdrawals' && (
+          <div className="p-3">
+            {mayWithdraw ? (
+              <WithdrawalsCard requesting={withdrawalOpen} onRequestingChange={setWithdrawalOpen} />
+            ) : (
+              <p className="text-text-muted py-3 text-sm">
+                Withdrawal requests are handled by an owner or finance account.
+              </p>
+            )}
+          </div>
+        )}
+      </BandBody>
 
-      <div className="text-text-faint text-xs">
-        Remittances are paid to the bank account on your profile. Update your bank details on{' '}
-        <Link href="/profile" className="text-accent hover:underline">
-          /profile
-        </Link>{' '}
-        before requesting your first withdrawal.
+      <div className="text-text-faint border-border mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3 font-mono text-[11px]">
+        {owed !== null && (
+          <StripFact
+            label="Balance"
+            value={<Money amount={inr?.balance ?? '0'} convert={false} />}
+            tone={owed < 0 ? 'warn' : 'good'}
+          />
+        )}
+        <StripFact
+          label="Entries loaded"
+          value={entries.isLoading ? '—' : `${accumulated.length}${entries.hasNextPage ? '+' : ''}`}
+        />
+        <span className="text-text-faint min-w-0">
+          Remittances are paid to the bank account on your profile —{' '}
+          <Link href="/profile" className="text-accent hover:underline">
+            update it
+          </Link>{' '}
+          before your first withdrawal.
+        </span>
       </div>
     </div>
   );
@@ -333,25 +401,25 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
   const isCredit = isWalletCredit(entry.direction);
   const currency = entry.currency === 'BDT' ? 'BDT' : 'INR';
   return (
-    <tr>
-      <td className="px-3 py-2 text-text-muted font-mono text-xs">
+    <Tr>
+      <Td className="text-text-muted font-mono text-xs whitespace-nowrap">
         {new Date(entry.createdAt).toLocaleString()}
-      </td>
-      <td className="px-3 py-2 text-text-body text-xs">
+      </Td>
+      <Td className="text-text-body text-xs">
         <LedgerEntryLabel direction={entry.direction} note={entry.note} />
-      </td>
-      <td className="px-3 py-2 text-text-body text-xs">
+      </Td>
+      <Td className="text-text-body text-xs">
         {entry.linkedOrderId ? (
           <Link
             href={`/orders/${entry.linkedOrderId}`}
-            className="text-accent hover:underline font-mono text-xs"
+            className="text-accent font-mono text-xs hover:underline"
           >
             {entry.linkedOrderNumber ?? 'Order'} →
           </Link>
         ) : entry.linkedConsignmentId ? (
           <Link
             href={`/inbound/${entry.linkedConsignmentId}`}
-            className="text-accent hover:underline font-mono text-xs"
+            className="text-accent font-mono text-xs hover:underline"
           >
             {entry.linkedConsignmentNumber ?? 'Consignment'} →
           </Link>
@@ -360,18 +428,18 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
         ) : (
           <span className="text-text-faint">—</span>
         )}
-      </td>
-      <td className="px-3 py-2 text-right">
+      </Td>
+      <Td align="right">
         <Money
           amount={entry.amount}
           currency={currency}
           direction={isCredit ? 'credit' : 'debit'}
         />
-      </td>
-      <td className="px-3 py-2 text-right text-text-body">
+      </Td>
+      <Td align="right">
         <Money amount={entry.runningBalanceAfter} currency={currency} />
-      </td>
-    </tr>
+      </Td>
+    </Tr>
   );
 }
 

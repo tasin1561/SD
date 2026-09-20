@@ -3,10 +3,8 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
   ConfirmDialog,
   EmptyState,
   ErrorState,
@@ -14,7 +12,7 @@ import {
   Input,
   LoadingState,
   Money,
-  Section,
+  SectionBand,
   Select,
   TBody,
   THead,
@@ -97,40 +95,54 @@ export function TermsSection({
   }
   const t = terms.data;
   return (
-    <div className="space-y-6">
+    <div>
       <CurrentTermsCard terms={t} />
       {canPublish ? <PublishCard storeId={storeId} terms={t} /> : null}
-      <HistorySection terms={t} />
+      <HistorySection terms={t} canPublish={canPublish} />
     </div>
   );
 }
 
 function CurrentTermsCard({ terms }: { terms: StoreTerms }): ReactElement {
   const c = terms.current;
-  if (c === null) {
+  /*
+    `== null`, not `=== null`.
+
+    The type says `TermsVersion | null`, and the guard read `=== null`
+    for as long as this component has existed — but the server OMITS the
+    key on a store with no terms rather than sending null, so `c` is
+    `undefined`, the guard lets it through and `c.version` throws. The
+    whole Terms tab was an error boundary on every such store (found on
+    a CLOSED QA store while converting this page). A loose check covers
+    both spellings of "there are none", which is the only thing this
+    branch is asking.
+  */
+  if (c == null) {
     return (
-      <Card>
-        <CardHeader title="No terms yet" />
-        <CardBody>
+      <div>
+        <SectionBand index="01" title="Terms in force" note="None published yet." />
+        <BandBody flush className="mb-4">
           <EmptyState
+            bare
             title="Publish the store’s first terms"
             description="Say who pays which Skydrop fee and when each of you is credited. The store cannot place orders until it has accepted a version."
           />
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
     );
   }
   return (
-    <Card>
-      <CardHeader
+    <div>
+      <SectionBand
+        index="01"
         title={`Version ${c.version} — in force`}
-        subtitle={
+        note={
           c.acceptance === null
-            ? `Published ${when(c.publishedAt)}. Waiting for ${terms.storeName} to accept it — it cannot place new orders until then.`
+            ? `Published ${when(c.publishedAt)}. Waiting for ${terms.storeName} to accept it.`
             : `Published ${when(c.publishedAt)}. Accepted by ${c.acceptance.acceptedByName} on ${when(c.acceptance.acceptedAt)}.`
         }
       />
-      <CardBody>
+      <BandBody className="mb-4">
         <div className="space-y-4">
           {terms.needsRevision !== null ? (
             <p
@@ -148,8 +160,8 @@ function CurrentTermsCard({ terms }: { terms: StoreTerms }): ReactElement {
           {c.note !== null ? <p className="text-text-muted text-sm">Note: {c.note}</p> : null}
           <p className="text-text-muted text-xs">{terms.rounding}</p>
         </div>
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
 
@@ -234,14 +246,15 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
   }
 
   return (
-    <Card>
-      <CardHeader
+    <div>
+      <SectionBand
+        index="02"
         title={
           terms.current === null ? 'Publish the first terms' : `Publish version ${nextVersion}`
         }
-        subtitle="For each Skydrop fee, the percentage the STORE pays — you pay the rest. Inbound freight is always yours."
+        note="For each Skydrop fee, the percentage the STORE pays — you pay the rest. Inbound freight is always yours."
       />
-      <CardBody>
+      <BandBody className="mb-4">
         <div className="space-y-5">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {FEE_FIELDS.map((f) => (
@@ -347,7 +360,7 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
             </Button>
           </div>
         </div>
-      </CardBody>
+      </BandBody>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -357,51 +370,69 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
         disabled={publish.isPending}
         onConfirm={() => void doPublish()}
       />
-    </Card>
+    </div>
   );
 }
 
-function HistorySection({ terms }: { terms: StoreTerms }): ReactElement {
+/**
+ * The ordinal shifts with whether the publish form is on the page: a
+ * reader who cannot publish sees "01 // in force" then "02 // every
+ * version", and numbering the history 03 with no 02 above it reads as
+ * a section that failed to render.
+ */
+function HistorySection({
+  terms,
+  canPublish,
+}: {
+  terms: StoreTerms;
+  canPublish: boolean;
+}): ReactElement {
   return (
-    <Section
-      title="Every version"
-      subtitle="Newest first. A version is never edited once published."
-    >
-      {terms.history.length === 0 ? (
-        <EmptyState title="No versions yet" />
-      ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Version</Th>
-              <Th>Published</Th>
-              <Th>Store pays</Th>
-              <Th>Credit</Th>
-              <Th>Accepted</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {terms.history.map((v) => (
-              <Tr key={v.id}>
-                <Td>{v.version}</Td>
-                <Td>{when(v.publishedAt)}</Td>
-                <Td>{v.shares.map((s) => `${s.label} ${Number(s.storePercent)}%`).join(' · ')}</Td>
-                <Td>
-                  Store: {v.storeCredit.label}
-                  {v.storeCredit.days > 0 ? ` (${v.storeCredit.days}d)` : ''} · You:{' '}
-                  {v.sellerCredit.label}
-                  {v.sellerCredit.days > 0 ? ` (${v.sellerCredit.days}d)` : ''}
-                </Td>
-                <Td>
-                  {v.acceptance === null
-                    ? '—'
-                    : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt)}`}
-                </Td>
+    <div>
+      <SectionBand
+        index={canPublish ? '03' : '02'}
+        title="Every version"
+        note="Newest first. A version is never edited once published."
+      />
+      <BandBody flush>
+        {terms.history.length === 0 ? (
+          <EmptyState bare title="No versions yet" />
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Version</Th>
+                <Th>Published</Th>
+                <Th>Store pays</Th>
+                <Th>Credit</Th>
+                <Th>Accepted</Th>
               </Tr>
-            ))}
-          </TBody>
-        </Table>
-      )}
-    </Section>
+            </THead>
+            <TBody>
+              {terms.history.map((v) => (
+                <Tr key={v.id}>
+                  <Td>{v.version}</Td>
+                  <Td>{when(v.publishedAt)}</Td>
+                  <Td>
+                    {v.shares.map((s) => `${s.label} ${Number(s.storePercent)}%`).join(' · ')}
+                  </Td>
+                  <Td>
+                    Store: {v.storeCredit.label}
+                    {v.storeCredit.days > 0 ? ` (${v.storeCredit.days}d)` : ''} · You:{' '}
+                    {v.sellerCredit.label}
+                    {v.sellerCredit.days > 0 ? ` (${v.sellerCredit.days}d)` : ''}
+                  </Td>
+                  <Td>
+                    {v.acceptance === null
+                      ? '—'
+                      : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt)}`}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </BandBody>
+    </div>
   );
 }

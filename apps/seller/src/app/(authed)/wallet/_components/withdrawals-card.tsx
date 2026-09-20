@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import {
   Button,
-  Card,
-  CardBody,
   ErrorNote,
   FormField,
   Input,
@@ -61,70 +59,73 @@ export function WithdrawalsCard({
   const list = useSellerWithdrawals();
   const rows = list.data ?? [];
 
+  /*
+    No `<Card>` of its own: this is the body of the wallet page's
+    "Withdrawal requests" band, and `BandBody` IS the bordered surface
+    that band caps. A card inside it drew a second border.
+  */
   return (
-    <Card>
-      <CardBody>
-        {list.isError ? (
-          <ErrorNote
-            message={list.error?.message ?? 'Failed to load withdrawal requests.'}
-            retry={() => void list.refetch()}
-          />
-        ) : list.isLoading ? (
-          <SkeletonRows rows={3} cols={4} />
-        ) : rows.length === 0 ? (
-          <p className="text-text-muted py-2 text-sm">
-            No withdrawal requests yet. Request one when you want your balance transferred; we will
-            pay it to the bank account on your profile.
-          </p>
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Requested</Th>
-                <Th align="right">Amount</Th>
-                <Th>Status</Th>
-                <Th>Outcome</Th>
+    <div>
+      {list.isError ? (
+        <ErrorNote
+          message={list.error?.message ?? 'Failed to load withdrawal requests.'}
+          retry={() => void list.refetch()}
+        />
+      ) : list.isLoading ? (
+        <SkeletonRows rows={3} cols={4} />
+      ) : rows.length === 0 ? (
+        <p className="text-text-muted py-2 text-sm">
+          No withdrawal requests yet. Request one when you want your balance transferred; we will
+          pay it to the bank account on your profile.
+        </p>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Requested</Th>
+              <Th align="right">Amount</Th>
+              <Th>Status</Th>
+              <Th>Outcome</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {rows.map((w) => (
+              <Tr key={w.id}>
+                <Td className="text-text-muted whitespace-nowrap">
+                  {new Date(w.createdAt).toLocaleDateString()}
+                  <div className="text-text-faint text-xs">
+                    {new Date(w.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                  {w.requestedBy === 'SYSTEM' && (
+                    <span className="text-text-faint ml-1.5 text-xs">auto</span>
+                  )}
+                </Td>
+                <Td align="right">
+                  <Money amount={w.amountRequested} currency={w.currency} />
+                </Td>
+                <Td>
+                  <WithdrawalStatusBadge status={w.status} audience="seller" />
+                </Td>
+                <Td className="text-text-muted text-xs">
+                  {w.rejectionReason ??
+                    (w.resolvedAt === null
+                      ? 'Awaiting review'
+                      : `Paid ${new Date(w.resolvedAt).toLocaleString([], {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}`)}
+                </Td>
               </Tr>
-            </THead>
-            <TBody>
-              {rows.map((w) => (
-                <Tr key={w.id}>
-                  <Td className="text-text-muted whitespace-nowrap">
-                    {new Date(w.createdAt).toLocaleDateString()}
-                    <div className="text-text-faint text-xs">
-                      {new Date(w.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </div>
-                    {w.requestedBy === 'SYSTEM' && (
-                      <span className="text-text-faint ml-1.5 text-xs">auto</span>
-                    )}
-                  </Td>
-                  <Td align="right">
-                    <Money amount={w.amountRequested} currency={w.currency} />
-                  </Td>
-                  <Td>
-                    <WithdrawalStatusBadge status={w.status} audience="seller" />
-                  </Td>
-                  <Td className="text-text-muted text-xs">
-                    {w.rejectionReason ??
-                      (w.resolvedAt === null
-                        ? 'Awaiting review'
-                        : `Paid ${new Date(w.resolvedAt).toLocaleString([], {
-                            dateStyle: 'short',
-                            timeStyle: 'short',
-                          })}`)}
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </CardBody>
+            ))}
+          </TBody>
+        </Table>
+      )}
 
       <RequestWithdrawalModal open={requesting} onOpenChange={onRequestingChange} />
-    </Card>
+    </div>
   );
 }
 

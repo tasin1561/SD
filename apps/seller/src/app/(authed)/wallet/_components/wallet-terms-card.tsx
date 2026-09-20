@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { Card, CardBody, CardHeader, Money } from '@skydrop/ui/components';
+import { BandBody, Money, SectionBand } from '@skydrop/ui/components';
 import { useWalletTerms, type WalletTerm } from '@/lib/ops-hooks';
 
 /**
@@ -33,12 +33,13 @@ export function WalletTermsCard(): ReactElement | null {
   if (items.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader
+    <div className="mt-4">
+      <SectionBand
+        index="02"
         title="Your limits"
-        subtitle="Set by Skydrop and not editable here — shown so a limit is never a surprise. Ask us if one looks wrong for your account."
+        note="Set by Skydrop — shown so a limit is never a surprise."
       />
-      <CardBody>
+      <BandBody>
         <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
           {items.map((t) => (
             <div key={t.key} className="flex items-baseline justify-between gap-3 text-sm">
@@ -50,8 +51,11 @@ export function WalletTermsCard(): ReactElement | null {
             </div>
           ))}
         </dl>
-      </CardBody>
-    </Card>
+        <p className="text-text-faint mt-3 text-xs">
+          Ask us if one of these looks wrong for your account.
+        </p>
+      </BandBody>
+    </div>
   );
 }
 

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
+  BandBody,
   Button,
   ConfirmDialog,
   EmptyState,
@@ -14,7 +15,7 @@ import {
   Modal,
   ModalFooter,
   Money,
-  Section,
+  SectionBand,
   Stat,
   TBody,
   THead,
@@ -67,151 +68,165 @@ export function StoreWalletSection({
   if (!allowed) return null;
   const open = store.status === 'ACTIVE' || store.status === 'PAUSED';
 
+  /*
+    The band's ordinal is fixed at 03 because this section only ever
+    renders in the store overview, between "Who manages the wallet" (02)
+    and "The store's team" (04). Threading an index through a prop for
+    one call site buys nothing — the same call the profile page's
+    sections make.
+  */
   return (
-    <Section
-      title="The store’s wallet"
-      subtitle={
-        store.walletManagedBy === 'SELLER'
-          ? 'You manage it: top it up from your own wallet, and record paying the store when you do.'
-          : 'Skydrop manages it: the store tops up to Skydrop’s bank and withdraws through Skydrop.'
-      }
-      action={
-        open && store.walletManagedBy === 'SELLER' ? (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="md" onClick={() => setTopUp(true)}>
-              Top up
-            </Button>
-            <Button variant="secondary" size="md" onClick={() => setPayout(true)}>
-              Record a payout
-            </Button>
+    <div>
+      <SectionBand
+        index="03"
+        title="The store’s wallet"
+        note={
+          store.walletManagedBy === 'SELLER'
+            ? 'You manage it: top it up from your own wallet, and record paying the store.'
+            : 'Skydrop manages it: the store tops up to us and withdraws through us.'
+        }
+        action={
+          open && store.walletManagedBy === 'SELLER' ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setTopUp(true)}>
+                Top up
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setPayout(true)}>
+                Record a payout
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
+      <BandBody className="mb-4">
+        {summary.isPending ? (
+          <LoadingState label="Loading the wallet" rows={2} />
+        ) : summary.isError ? (
+          <ErrorState message={serverVerdict(summary.error)} retry={() => void summary.refetch()} />
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Stat
+                label="Balance"
+                value={<Money amount={summary.data.balanceInr} size="lg" />}
+                tone={Number(summary.data.balanceInr) < 0 ? 'bad' : 'neutral'}
+                hint={
+                  Number(summary.data.balanceInr) < 0
+                    ? 'Below zero: the store owes you this, and it comes off what you can withdraw.'
+                    : undefined
+                }
+              />
+              <Stat
+                label="May go below zero by"
+                value={<Money amount={summary.data.negativeLimit.effectiveInr} size="lg" />}
+                hint={
+                  <>
+                    Skydrop allows up to <Money amount={summary.data.negativeLimit.capInr} /> for
+                    your account.
+                  </>
+                }
+              />
+              <Stat
+                label="Waiting on Skydrop"
+                value={`${summary.data.pendingTopups.count + summary.data.pendingWithdrawals.count}`}
+                hint="The store’s top-ups and withdrawals Skydrop has not settled yet."
+              />
+            </div>
+            {open ? (
+              <NegativeLimitForm
+                storeId={store.id}
+                current={summary.data.negativeLimit.ownInr}
+                cap={summary.data.negativeLimit.capInr}
+              />
+            ) : null}
           </div>
-        ) : undefined
-      }
-    >
-      {summary.isPending ? (
-        <LoadingState label="Loading the wallet" rows={2} />
-      ) : summary.isError ? (
-        <ErrorState message={serverVerdict(summary.error)} retry={() => void summary.refetch()} />
-      ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Stat
-              label="Balance"
-              value={<Money amount={summary.data.balanceInr} size="lg" />}
-              tone={Number(summary.data.balanceInr) < 0 ? 'bad' : 'neutral'}
-              hint={
-                Number(summary.data.balanceInr) < 0
-                  ? 'Below zero: the store owes you this, and it comes off what you can withdraw.'
+        )}
+
+        <div className="mt-4">
+          {entries.isPending ? (
+            <LoadingState label="Loading the ledger" rows={3} />
+          ) : entries.isError ? (
+            <ErrorState
+              message={serverVerdict(entries.error)}
+              retry={() => void entries.refetch()}
+            />
+          ) : ledger.length === 0 ? (
+            <EmptyState
+              title="Nothing has moved yet"
+              description={
+                store.walletManagedBy === 'SELLER' && open
+                  ? 'Top it up to give the store money to work with.'
                   : undefined
               }
             />
-            <Stat
-              label="May go below zero by"
-              value={<Money amount={summary.data.negativeLimit.effectiveInr} size="lg" />}
-              hint={
-                <>
-                  Skydrop allows up to <Money amount={summary.data.negativeLimit.capInr} /> for your
-                  account.
-                </>
-              }
-            />
-            <Stat
-              label="Waiting on Skydrop"
-              value={`${summary.data.pendingTopups.count + summary.data.pendingWithdrawals.count}`}
-              hint="The store’s top-ups and withdrawals Skydrop has not settled yet."
-            />
-          </div>
-          {open ? (
-            <NegativeLimitForm
-              storeId={store.id}
-              current={summary.data.negativeLimit.ownInr}
-              cap={summary.data.negativeLimit.capInr}
-            />
-          ) : null}
-        </div>
-      )}
-
-      <div className="mt-4">
-        {entries.isPending ? (
-          <LoadingState label="Loading the ledger" rows={3} />
-        ) : entries.isError ? (
-          <ErrorState message={serverVerdict(entries.error)} retry={() => void entries.refetch()} />
-        ) : ledger.length === 0 ? (
-          <EmptyState
-            title="Nothing has moved yet"
-            description={
-              store.walletManagedBy === 'SELLER' && open
-                ? 'Top it up to give the store money to work with.'
-                : undefined
-            }
-          />
-        ) : (
-          <>
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>When</Th>
-                  <Th>What</Th>
-                  <Th align="right">Amount</Th>
-                  <Th align="right">Balance after</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {ledger.map((e) => (
-                  <Tr key={e.id}>
-                    <Td className="text-text-muted text-xs">{when(e.createdAt)}</Td>
-                    <Td>
-                      <div>{storeWalletDirectionLabel(e.direction, 'you')}</div>
-                      {e.linkedOrderId !== null ? (
-                        <Link
-                          href={`/orders/${e.linkedOrderId}`}
-                          className="text-accent text-xs hover:underline"
-                        >
-                          See the order
-                        </Link>
-                      ) : null}
-                      {e.note !== null ? (
-                        <div className="text-text-faint text-xs">{e.note}</div>
-                      ) : null}
-                    </Td>
-                    <Td align="right">
-                      <Money
-                        amount={e.amountInr}
-                        direction={isStoreWalletCredit(e.direction) ? 'credit' : 'debit'}
-                      />
-                    </Td>
-                    <Td align="right">
-                      <Money amount={e.runningBalanceAfterInr} />
-                    </Td>
+          ) : (
+            <>
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>When</Th>
+                    <Th>What</Th>
+                    <Th align="right">Amount</Th>
+                    <Th align="right">Balance after</Th>
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-text-muted text-xs">
-                {entries.hasNextPage
-                  ? `Showing the latest ${ledger.length} movements.`
-                  : `Showing all ${ledger.length} movements.`}
-              </p>
-              {entries.hasNextPage ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={entries.isFetchingNextPage}
-                  onClick={() => void entries.fetchNextPage()}
-                >
-                  {entries.isFetchingNextPage ? 'Loading…' : 'Show older'}
-                </Button>
+                </THead>
+                <TBody>
+                  {ledger.map((e) => (
+                    <Tr key={e.id}>
+                      <Td className="text-text-muted text-xs">{when(e.createdAt)}</Td>
+                      <Td>
+                        <div>{storeWalletDirectionLabel(e.direction, 'you')}</div>
+                        {e.linkedOrderId !== null ? (
+                          <Link
+                            href={`/orders/${e.linkedOrderId}`}
+                            className="text-accent text-xs hover:underline"
+                          >
+                            See the order
+                          </Link>
+                        ) : null}
+                        {e.note !== null ? (
+                          <div className="text-text-faint text-xs">{e.note}</div>
+                        ) : null}
+                      </Td>
+                      <Td align="right">
+                        <Money
+                          amount={e.amountInr}
+                          direction={isStoreWalletCredit(e.direction) ? 'credit' : 'debit'}
+                        />
+                      </Td>
+                      <Td align="right">
+                        <Money amount={e.runningBalanceAfterInr} />
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-text-muted text-xs">
+                  {entries.hasNextPage
+                    ? `Showing the latest ${ledger.length} movements.`
+                    : `Showing all ${ledger.length} movements.`}
+                </p>
+                {entries.hasNextPage ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={entries.isFetchingNextPage}
+                    onClick={() => void entries.fetchNextPage()}
+                  >
+                    {entries.isFetchingNextPage ? 'Loading…' : 'Show older'}
+                  </Button>
+                ) : null}
+              </div>
+              {olderFailed !== null ? (
+                <p role="alert" className="text-critical mt-2 text-sm">
+                  {serverVerdict(olderFailed)}
+                </p>
               ) : null}
-            </div>
-            {olderFailed !== null ? (
-              <p role="alert" className="text-critical mt-2 text-sm">
-                {serverVerdict(olderFailed)}
-              </p>
-            ) : null}
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </div>
+      </BandBody>
 
       <MoveModal
         kind="TOPUP"
@@ -227,7 +242,7 @@ export function StoreWalletSection({
         storeId={store.id}
         storeName={store.displayName ?? store.name}
       />
-    </Section>
+    </div>
   );
 }
 

@@ -2,12 +2,11 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
   Input,
   Money,
+  SectionBand,
   Select,
   useToast,
 } from '@skydrop/ui/components';
@@ -67,13 +66,20 @@ export function WithdrawalScheduleCard(): ReactElement | null {
     }
   }
 
+  /*
+    The band's ordinal is fixed here rather than passed in, exactly as
+    the profile page's sections do it: this component is only ever the
+    FIRST region of /wallet/limits, and threading an index through a
+    prop for one call site buys nothing.
+  */
   return (
-    <Card>
-      <CardHeader
+    <div>
+      <SectionBand
+        index="01"
         title="Withdrawal settings"
-        subtitle="Yours to change. Everything below is set by Skydrop."
+        note="Yours to change. Everything below is set by Skydrop."
       />
-      <CardBody>
+      <BandBody>
         <div className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -176,7 +182,7 @@ export function WithdrawalScheduleCard(): ReactElement | null {
             </p>
           )}
         </div>
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
