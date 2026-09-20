@@ -88,6 +88,34 @@ export default async function LoginPage(): Promise<ReactElement> {
           reset
         </a>
       </div>
+
+      {/*
+       * The way OUT to the store portal.
+       *
+       * The two portals look near-identical now that both wear the
+       * corridor console, and the only thing telling them apart is the
+       * hostname — so somebody who bookmarked the wrong one, or was
+       * forwarded a colleague's link, meets a form that will never
+       * accept them and says "invalid credentials", which is true and
+       * useless. A store user is not a seller and never will be here.
+       *
+       * SAME TAB, no `target="_blank"`: they are going there to sign
+       * in, not to consult something, and a new tab would leave a dead
+       * login behind them. (`rel="noopener"` does nothing without a
+       * target, so it is not cargo-culted in.) Both /login pages bounce
+       * an already-authenticated visitor to their own dashboard, so
+       * this is safe in either direction and needs no query string.
+       */}
+      <div className="boot-rise boot-rise-3 telemetry text-text-faint mt-2 text-center">
+        run a store?{' '}
+        <a
+          href="https://reseller.skydrop.online/login"
+          className="hover:text-text-bright transition-colors"
+          style={{ color: 'var(--sky)' }}
+        >
+          store sign-in
+        </a>
+      </div>
     </>
   );
 }

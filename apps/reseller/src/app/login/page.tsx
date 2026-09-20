@@ -32,6 +32,31 @@ export default async function LoginPage(): Promise<ReactElement> {
           <a href="/password-reset" className="text-accent hover:text-accent-hover">
             Reset it
           </a>
+          {/*
+           * The way OUT to the seller portal.
+           *
+           * The two portals look near-identical now that this one wears
+           * the corridor console, and only the hostname tells them
+           * apart — so a seller who bookmarked this, or was forwarded a
+           * store colleague's link, meets a form that will never accept
+           * them and says "invalid credentials", which is true and
+           * useless. A Skydrop seller signs in somewhere else entirely.
+           *
+           * SAME TAB, no `target="_blank"`: they are going there to sign
+           * in, not to consult something, and a new tab would leave a
+           * dead login behind them. Both /login pages bounce an
+           * already-authenticated visitor to their own dashboard, so
+           * this is safe in either direction and needs no query string.
+           */}
+          <span className="text-text-faint mt-2 block">
+            Looking for the seller portal?{' '}
+            <a
+              href="https://app.skydrop.online/login"
+              className="text-accent hover:text-accent-hover"
+            >
+              Sign in there
+            </a>
+          </span>
         </>
       }
     >
