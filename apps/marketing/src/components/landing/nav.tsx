@@ -137,7 +137,7 @@ export function Nav(): ReactElement {
           <div className="hidden items-center gap-2 lg:flex">
             <ThemeToggle />
             <a
-              href="https://app.skydrop.online"
+              href="https://app.skydrop.online/login"
               target="_blank"
               rel="noopener"
               className="rounded-sm border border-line-strong px-3 py-2 text-[13px] font-medium text-fg-strong transition-colors hover:bg-surface-3"
@@ -233,7 +233,7 @@ export function Nav(): ReactElement {
               Request an invite
             </Link>
             <a
-              href="https://app.skydrop.online"
+              href="https://app.skydrop.online/login"
               target="_blank"
               rel="noopener"
               onClick={() => setOpen(false)}

@@ -31,7 +31,7 @@ const COLUMNS: { title: string; links: { href: string; label: string; external?:
     title: 'access',
     links: [
       { href: '/request-invite', label: 'Request an invite' },
-      { href: 'https://app.skydrop.online', label: 'Seller sign-in', external: true },
+      { href: 'https://app.skydrop.online/login', label: 'Seller sign-in', external: true },
       { href: 'https://track.skydrop.online', label: 'Track a parcel', external: true },
     ],
   },
