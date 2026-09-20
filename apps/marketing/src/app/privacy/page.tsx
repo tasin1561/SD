@@ -21,13 +21,24 @@ export default function PrivacyPage(): ReactElement {
   return (
     <>
       <Nav />
-      <main id="main" className="bg-surface min-h-screen pt-12 pb-24">
-        <article className="mx-auto max-w-3xl px-5 sm:px-8">
-          <p className="telemetry text-fg-muted">Last updated {UPDATED}</p>
-          <h1 className="font-display mt-3 text-4xl font-semibold text-balance text-fg-strong sm:text-5xl">
-            Privacy policy
-          </h1>
-          <p className="mt-6 text-lg leading-relaxed text-fg-muted">
+      <main id="main" className="min-h-screen bg-surface pb-24 pt-10">
+        <article className="mx-auto max-w-3xl px-5 sm:px-6">
+          <div className="border-b border-line pb-7">
+            <span className="mono-caps inline-flex items-center gap-2 rounded-sm border border-line bg-surface-band px-2.5 py-1.5 text-fg-muted">
+              <span className="text-fg-strong">policy</span>
+              <span aria-hidden className="text-fg-faint">
+                {'//'}
+              </span>
+              <span>last updated {UPDATED}</span>
+            </span>
+            <h1
+              className="mt-4 text-balance text-fg-strong"
+              style={{ fontSize: 'clamp(1.9rem, 4vw, 2.6rem)', letterSpacing: '-0.03em' }}
+            >
+              Privacy policy
+            </h1>
+          </div>
+          <p className="mt-6 text-[16px] leading-relaxed text-fg-body">
             Skydrop runs warehousing, order confirmation calls and courier dispatch for online
             sellers in Bangladesh who ship to customers in India. This page says what information we
             handle to do that, why, who we share it with, and how to reach us about it.
@@ -146,9 +157,9 @@ export default function PrivacyPage(): ReactElement {
 
 function Section({ title, children }: { title: string; children: ReactNode }): ReactElement {
   return (
-    <section className="mt-12 border-t border-line pt-8">
-      <h2 className="font-display text-2xl font-semibold text-fg-strong">{title}</h2>
-      <div className="mt-4 space-y-4 leading-relaxed text-fg-muted [&_li]:mt-3 [&_strong]:text-fg-strong [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
+    <section className="mt-10 border-t border-line pt-7">
+      <h2 className="text-[20px] font-bold text-fg-strong sm:text-[22px]">{title}</h2>
+      <div className="mt-3 space-y-4 text-[15px] leading-relaxed text-fg-body [&_a]:text-sky [&_li]:mt-2.5 [&_strong]:font-semibold [&_strong]:text-fg-strong [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
         {children}
       </div>
     </section>

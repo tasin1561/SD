@@ -37,17 +37,17 @@ export function TelemetryTicker(): ReactElement {
       className="relative overflow-hidden border-y border-line bg-surface-2"
       aria-label="System event vocabulary"
     >
-      <div className="ticker-track flex whitespace-nowrap py-3 will-change-transform">
+      <div className="ticker-track whitespace-nowrap py-2.5">
         {[...EVENTS, ...EVENTS].map((e, i) => (
-          <div key={i} className="flex items-center gap-3 pr-10 telemetry">
+          <div key={i} className="mono-caps flex items-center gap-2.5 pr-9">
             <span
               aria-hidden
-              className={`inline-block h-1.5 w-1.5 rounded-full ${
-                e.tone === 'green' ? 'bg-green' : e.tone === 'saffron' ? 'bg-saffron' : 'bg-sky/60'
+              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                e.tone === 'green' ? 'bg-green' : e.tone === 'saffron' ? 'bg-saffron' : 'bg-sky'
               }`}
             />
             <span className="text-fg-strong">{e.code}</span>
-            <span className="text-fg-muted normal-case tracking-normal font-sans text-xs">
+            <span className="font-sans text-[12px] font-normal normal-case tracking-normal text-fg-muted">
               {e.detail}
             </span>
           </div>

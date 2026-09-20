@@ -115,35 +115,50 @@ export function CorridorConsole(): ReactElement {
     let raf = 0;
     let running = false;
 
+    /*
+     * The map reads its palette from the THEME, not from a light/dark
+     * pair written out here.
+     *
+     * It used to carry its own: a `light` branch choosing between two
+     * hardcoded sets of cyan and amber. That is two palettes in two
+     * places, which is the drift CNS-2 and BIN-1 exist to prevent — and
+     * it bit exactly that way, because when the page moved to Precision
+     * Logistics the map stayed cyan and nothing pointed at why.
+     *
+     * The fallbacks below are the dark theme's own values, used only if
+     * a property comes back empty (a browser that cannot resolve a
+     * custom property at all). They are never the ordinary path.
+     */
     const colors = {
-      saffron: '#F59E0B',
-      muted: '#8296AE',
-      grid: 'rgba(56,189,248,0.06)',
-      land: 'rgba(56,189,248,0.04)',
-      coast: 'rgba(116,166,220,0.35)',
-      bdFill: 'rgba(245,158,11,0.08)',
-      bdCoast: 'rgba(245,158,11,0.45)',
-      route: 'rgba(56,189,248,0.16)',
-      halo: 'rgba(56,189,248,0.35)',
-      trail: 'rgba(56,189,248,0.5)',
-      sweepTint: '56,189,248',
-      blip: '#38BDF8',
+      saffron: '#fbbf24',
+      muted: '#8296b0',
+      grid: 'rgba(148,163,184,0.07)',
+      land: 'rgba(180,197,255,0.05)',
+      coast: 'rgba(180,197,255,0.30)',
+      bdFill: 'rgba(251,191,36,0.10)',
+      bdCoast: 'rgba(251,191,36,0.50)',
+      route: 'rgba(180,197,255,0.18)',
+      halo: 'rgba(180,197,255,0.34)',
+      trail: 'rgba(180,197,255,0.58)',
+      sweepTint: '180,197,255',
+      blip: '#b4c5ff',
     };
     const readColors = (): void => {
       const cs = getComputedStyle(document.documentElement);
-      colors.saffron = cs.getPropertyValue('--saffron').trim() || colors.saffron;
-      colors.muted = cs.getPropertyValue('--fg-muted').trim() || colors.muted;
-      colors.grid = cs.getPropertyValue('--grid').trim() || colors.grid;
-      const light = cs.colorScheme.includes('light');
-      colors.land = light ? 'rgba(2,132,199,0.05)' : 'rgba(56,189,248,0.04)';
-      colors.coast = light ? 'rgba(2,110,170,0.45)' : 'rgba(116,166,220,0.35)';
-      colors.bdFill = light ? 'rgba(217,119,6,0.10)' : 'rgba(245,158,11,0.08)';
-      colors.bdCoast = light ? 'rgba(217,119,6,0.55)' : 'rgba(245,158,11,0.45)';
-      colors.route = light ? 'rgba(2,132,199,0.30)' : 'rgba(56,189,248,0.16)';
-      colors.halo = light ? 'rgba(2,132,199,0.45)' : 'rgba(56,189,248,0.35)';
-      colors.trail = light ? 'rgba(2,132,199,0.60)' : 'rgba(56,189,248,0.5)';
-      colors.sweepTint = light ? '2,132,199' : '56,189,248';
-      colors.blip = light ? '#0284C7' : '#38BDF8';
+      const read = (name: string, fallback: string): string =>
+        cs.getPropertyValue(name).trim() || fallback;
+      colors.saffron = read('--saffron', colors.saffron);
+      colors.muted = read('--fg-muted', colors.muted);
+      colors.grid = read('--grid', colors.grid);
+      colors.land = read('--map-land', colors.land);
+      colors.coast = read('--map-coast', colors.coast);
+      colors.bdFill = read('--map-bd-fill', colors.bdFill);
+      colors.bdCoast = read('--map-bd-coast', colors.bdCoast);
+      colors.route = read('--map-route', colors.route);
+      colors.halo = read('--map-halo', colors.halo);
+      colors.trail = read('--map-trail', colors.trail);
+      colors.sweepTint = read('--map-sweep-rgb', colors.sweepTint);
+      colors.blip = read('--map-blip', colors.blip);
     };
     readColors();
 

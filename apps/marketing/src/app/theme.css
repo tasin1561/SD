@@ -1,0 +1,348 @@
+/*
+ * PRECISION LOGISTICS — the apps/marketing token set.
+ * ═════════════════════════════════════════════════════════════════════
+ *
+ * ── WHY THIS FILE IS HERE AND NOT IN `packages/ui` ──────────────────
+ * `@skydrop/ui/corridor.css` WAS imported by apps/marketing and
+ * apps/track together, and every value in it is read by whoever imports
+ * it — so a palette edit there restyles the public tracking page, which
+ * is not in this brief. Three options were on the table, the same three
+ * `seller-theme.css` weighed:
+ *
+ *   (a) New token NAMES consumed only by marketing. Rejected: every
+ *       component here reads the existing names, so each of the ~20
+ *       would need editing for no gain in safety.
+ *   (b) Import corridor.css and REDEFINE the names after it. Rejected
+ *       *here* (though it is what seller-theme.css does) because
+ *       marketing is moving to a different palette WHOLESALE, not
+ *       layering over a shared one: a token this file forgot would
+ *       silently keep a corridor value and read as a stray cyan
+ *       hairline nobody could find.
+ *   (c) THIS — marketing OWNS its tokens outright and does not import
+ *       corridor.css at all.
+ *
+ * (c) makes the boundary provable by construction rather than by
+ * discipline: `globals.css` contains no reference to corridor.css, so
+ * not one declaration here can reach apps/track, and equally nothing
+ * in corridor.css can reach this page. apps/track renders exactly as
+ * it did. The cost is that this file must define EVERY variable the
+ * app consumes — an undefined one resolves to nothing rather than to a
+ * fallback, which is the failure mode (b) was rejected for and is why
+ * the list below is exhaustive rather than only the interesting half.
+ *
+ * ── THE SAME SYSTEM AS THE CONSOLE ──────────────────────────────────
+ * This is the palette apps/seller adopted in `seller-theme.css`: IBM
+ * Plex Sans + JetBrains Mono, the #004ac6 / #2563eb split accent, the
+ * tight 2/4/6px radii. A seller who signs in should not feel handed to
+ * a different company. What is NOT shared is density and chrome —
+ * marketing is read once, on a phone, by somebody deciding whether to
+ * trust us, so it keeps its own surfaces, its own bands and its own
+ * type scale on top of the shared vocabulary.
+ *
+ * ── FOUR BLOCKS, AND WHY ────────────────────────────────────────────
+ * DARK is the default (FE-7). Light is declared TWICE — once under the
+ * OS preference for a visitor who has never touched the toggle, once
+ * under the pinned attribute — because a selector list cannot contain
+ * an @media. The two copies MUST stay byte-identical: FE-6 records
+ * that drift between them means the theme changes when you touch the
+ * toggle, which reads as a broken site. Same for the two dark copies.
+ * Edit all four together or none.
+ *
+ * ── CONTRAST ────────────────────────────────────────────────────────
+ * Computed, not eyeballed (the FE-6 rule). Every text pairing that
+ * ships clears 4.5:1:
+ *
+ *   light  bright 16.3 on the page · body 8.9 · muted 7.6 · faint 5.7;
+ *          accent as a link 7.2; white on the accent fill 5.2; every
+ *          status colour ≥ 4.8 on the page and on its own tint.
+ *   dark   bright 18.6 · body 13.1 · muted 7.6 · faint 6.4; accent as
+ *          a link 11.5; white on the accent fill 5.2; status ≥ 6.2.
+ *
+ * Borders that are the SOLE identifier of a control (a field's bounds,
+ * the focus ring) carry 3:1 — `--border-control` is 4.5 light / 4.2
+ * dark. Hairlines BETWEEN surfaces deliberately do not: WCAG 1.4.11
+ * exempts them, and forcing 3:1 on every divider is what makes a dense
+ * page look like a spreadsheet with the gridlines turned up.
+ *
+ * The reference sheet's own amber (#d97706) is 3.03 on this page —
+ * below the floor for the 11px mono it carries — so the text amber is
+ * one step down the same ramp at #b45309 (4.78). The tint keeps the
+ * lighter value.
+ */
+
+/* ═════════════════════════════════════════════════════════════════════
+ * DARK — the default.
+ * A near-black navy canvas under navy cards, so a panel reads as a
+ * raised object rather than a lighter grey rectangle. That separation
+ * is what carries the density; it is the same "contrast of surface"
+ * argument the light theme makes with a white card on near-white.
+ * ═════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces: page < band < card < raised. A field is recessed below
+     the card it sits on, which is what makes an input read as an input
+     without a heavy border doing the work. */
+  --page: #090d16;
+  --surface: #090d16;
+  --surface-2: #0f1623;
+  --surface-3: #1c2940;
+  --surface-band: #0c121d;
+  --surface-input: #070a11;
+  --page-top: #101a2b;
+  --page-bottom: #070a11;
+
+  --line: #1c283d;
+  --line-strong: #2e405e;
+  --border-control: #667c92;
+  --focus-ring: #7bafea;
+
+  --fg-strong: #f8fafc;
+  --fg-body: #cbd5e1;
+  --fg-muted: #94a3b8;
+  --fg-faint: #8296b0;
+
+  /* The accent is SPLIT, and it has to be: #b4c5ff reads as a link at
+     11.5 but carries white at 1.9, while #2563eb carries white at 5.2
+     but reads as body text at 3.6. No single value does both jobs. */
+  --sky: #b4c5ff;
+  --sky-deep: #dbe1ff;
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
+  --accent-fg: #ffffff;
+  --accent-tint: rgba(37, 99, 235, 0.16);
+  --accent-line: rgba(37, 99, 235, 0.42);
+
+  --green: #34d399;
+  --green-tint: #0c2620;
+  --green-line: #14503f;
+  --saffron: #fbbf24;
+  --saffron-tint: #2a2112;
+  --saffron-line: #4a3a16;
+  --red: #f87171;
+  --red-tint: #2b1517;
+  --red-line: #55262a;
+
+  --grid: rgba(148, 163, 184, 0.07);
+  --dots: rgba(148, 163, 184, 0.16);
+  --glow: rgba(37, 99, 235, 0.22);
+  --scrim: rgba(4, 7, 13, 0.88);
+
+  /* Shadows carry a card off the canvas; the second shadow is the
+     1px ring that stops a panel dissolving into the page. */
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-hud: 0 20px 45px -15px rgba(0, 0, 0, 0.7);
+
+  /* ── Map ───────────────────────────────────────────────────────────
+   * The corridor canvas reads these rather than carrying its own
+   * hardcoded light/dark pair, which is what it did before: two
+   * palettes in two places is the drift CNS-2 and BIN-1 exist to
+   * prevent, and it is why the map stayed cyan when the page did not.
+   * `--map-sweep-rgb` is a bare triplet because the canvas composes it
+   * into `rgba(<triplet>, <alpha>)` per frame. */
+  --map-land: rgba(180, 197, 255, 0.05);
+  --map-coast: rgba(180, 197, 255, 0.3);
+  --map-bd-fill: rgba(251, 191, 36, 0.1);
+  --map-bd-coast: rgba(251, 191, 36, 0.5);
+  --map-route: rgba(180, 197, 255, 0.18);
+  --map-halo: rgba(180, 197, 255, 0.34);
+  --map-trail: rgba(180, 197, 255, 0.58);
+  --map-blip: #b4c5ff;
+  --map-sweep-rgb: 180, 197, 255;
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+ * LIGHT — "Precision Logistics" proper.
+ * A blue-tinted near-white ground with WHITE panels on it. The page is
+ * never pure white: a white card needs something to be a card against.
+ *
+ * COPY 1 of 2 — the OS preference, for a visitor who has not pinned a
+ * theme. Byte-identical to copy 2 below.
+ * ═════════════════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+
+    --page: #f8f9ff;
+    --surface: #f8f9ff;
+    --surface-2: #ffffff;
+    --surface-3: #e5eeff;
+    --surface-band: #eff4ff;
+    --surface-input: #ffffff;
+    --page-top: #e5eeff;
+    --page-bottom: #f8f9ff;
+
+    --line: #e2e8f0;
+    --line-strong: #c3c6d7;
+    --border-control: #737686;
+    --focus-ring: #004ac6;
+
+    --fg-strong: #0b1c30;
+    --fg-body: #434655;
+    --fg-muted: #4d5064;
+    --fg-faint: #5b6376;
+
+    --sky: #004ac6;
+    --sky-deep: #002870;
+    --accent-fill: #2563eb;
+    --accent-fill-hover: #1d4ed8;
+    --accent-fg: #ffffff;
+    --accent-tint: rgba(0, 74, 198, 0.07);
+    --accent-line: rgba(0, 74, 198, 0.3);
+
+    --green: #047857;
+    --green-tint: #ecfdf5;
+    --green-line: #a7f3d0;
+    --saffron: #b45309;
+    --saffron-tint: #fffbeb;
+    --saffron-line: #fde68a;
+    --red: #ba1a1a;
+    --red-tint: #fef2f2;
+    --red-line: #fecaca;
+
+    --grid: rgba(195, 198, 215, 0.34);
+    --dots: rgba(115, 118, 134, 0.3);
+    --glow: rgba(0, 74, 198, 0.1);
+    --scrim: rgba(11, 28, 48, 0.55);
+
+    --shadow-1: 0 1px 2px rgba(11, 28, 48, 0.05);
+    --shadow-2: 0 4px 20px -2px rgba(11, 28, 48, 0.05), 0 0 0 1px #e2e8f0;
+    --shadow-hud: 0 20px 45px -15px rgba(0, 53, 148, 0.12), 0 0 0 1px #e2e8f0;
+
+    --map-land: rgba(0, 74, 198, 0.06);
+    --map-coast: rgba(0, 74, 198, 0.4);
+    --map-bd-fill: rgba(180, 83, 9, 0.1);
+    --map-bd-coast: rgba(180, 83, 9, 0.55);
+    --map-route: rgba(0, 74, 198, 0.24);
+    --map-halo: rgba(0, 74, 198, 0.4);
+    --map-trail: rgba(0, 74, 198, 0.6);
+    --map-blip: #004ac6;
+    --map-sweep-rgb: 0, 74, 198;
+  }
+}
+
+/* COPY 2 of 2 — the pinned toggle. Byte-identical to copy 1 above. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --page: #f8f9ff;
+  --surface: #f8f9ff;
+  --surface-2: #ffffff;
+  --surface-3: #e5eeff;
+  --surface-band: #eff4ff;
+  --surface-input: #ffffff;
+  --page-top: #e5eeff;
+  --page-bottom: #f8f9ff;
+
+  --line: #e2e8f0;
+  --line-strong: #c3c6d7;
+  --border-control: #737686;
+  --focus-ring: #004ac6;
+
+  --fg-strong: #0b1c30;
+  --fg-body: #434655;
+  --fg-muted: #4d5064;
+  --fg-faint: #5b6376;
+
+  --sky: #004ac6;
+  --sky-deep: #002870;
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
+  --accent-fg: #ffffff;
+  --accent-tint: rgba(0, 74, 198, 0.07);
+  --accent-line: rgba(0, 74, 198, 0.3);
+
+  --green: #047857;
+  --green-tint: #ecfdf5;
+  --green-line: #a7f3d0;
+  --saffron: #b45309;
+  --saffron-tint: #fffbeb;
+  --saffron-line: #fde68a;
+  --red: #ba1a1a;
+  --red-tint: #fef2f2;
+  --red-line: #fecaca;
+
+  --grid: rgba(195, 198, 215, 0.34);
+  --dots: rgba(115, 118, 134, 0.3);
+  --glow: rgba(0, 74, 198, 0.1);
+  --scrim: rgba(11, 28, 48, 0.55);
+
+  --shadow-1: 0 1px 2px rgba(11, 28, 48, 0.05);
+  --shadow-2: 0 4px 20px -2px rgba(11, 28, 48, 0.05), 0 0 0 1px #e2e8f0;
+  --shadow-hud: 0 20px 45px -15px rgba(0, 53, 148, 0.12), 0 0 0 1px #e2e8f0;
+
+  --map-land: rgba(0, 74, 198, 0.06);
+  --map-coast: rgba(0, 74, 198, 0.4);
+  --map-bd-fill: rgba(180, 83, 9, 0.1);
+  --map-bd-coast: rgba(180, 83, 9, 0.55);
+  --map-route: rgba(0, 74, 198, 0.24);
+  --map-halo: rgba(0, 74, 198, 0.4);
+  --map-trail: rgba(0, 74, 198, 0.6);
+  --map-blip: #004ac6;
+  --map-sweep-rgb: 0, 74, 198;
+}
+
+/* COPY 2 of 2 for DARK — the pinned toggle, byte-identical to `:root`.
+ * Written out rather than folded into the `:root` selector list so the
+ * two light copies and the two dark copies sit in the same shape and a
+ * diff between them is a diff anybody can see. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --page: #090d16;
+  --surface: #090d16;
+  --surface-2: #0f1623;
+  --surface-3: #1c2940;
+  --surface-band: #0c121d;
+  --surface-input: #070a11;
+  --page-top: #101a2b;
+  --page-bottom: #070a11;
+
+  --line: #1c283d;
+  --line-strong: #2e405e;
+  --border-control: #667c92;
+  --focus-ring: #7bafea;
+
+  --fg-strong: #f8fafc;
+  --fg-body: #cbd5e1;
+  --fg-muted: #94a3b8;
+  --fg-faint: #8296b0;
+
+  --sky: #b4c5ff;
+  --sky-deep: #dbe1ff;
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
+  --accent-fg: #ffffff;
+  --accent-tint: rgba(37, 99, 235, 0.16);
+  --accent-line: rgba(37, 99, 235, 0.42);
+
+  --green: #34d399;
+  --green-tint: #0c2620;
+  --green-line: #14503f;
+  --saffron: #fbbf24;
+  --saffron-tint: #2a2112;
+  --saffron-line: #4a3a16;
+  --red: #f87171;
+  --red-tint: #2b1517;
+  --red-line: #55262a;
+
+  --grid: rgba(148, 163, 184, 0.07);
+  --dots: rgba(148, 163, 184, 0.16);
+  --glow: rgba(37, 99, 235, 0.22);
+  --scrim: rgba(4, 7, 13, 0.88);
+
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-hud: 0 20px 45px -15px rgba(0, 0, 0, 0.7);
+
+  --map-land: rgba(180, 197, 255, 0.05);
+  --map-coast: rgba(180, 197, 255, 0.3);
+  --map-bd-fill: rgba(251, 191, 36, 0.1);
+  --map-bd-coast: rgba(251, 191, 36, 0.5);
+  --map-route: rgba(180, 197, 255, 0.18);
+  --map-halo: rgba(180, 197, 255, 0.34);
+  --map-trail: rgba(180, 197, 255, 0.58);
+  --map-blip: #b4c5ff;
+  --map-sweep-rgb: 180, 197, 255;
+}
