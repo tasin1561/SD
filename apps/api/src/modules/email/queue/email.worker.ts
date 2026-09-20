@@ -3,20 +3,25 @@ import { Worker, type Job } from 'bullmq';
 import { RedisService } from '../../../infrastructure/redis/redis.service';
 import { WorkerRoleService } from '../../../common/queue/worker-role.service';
 import { EmailDispatchService } from '../services/email-dispatch.service';
+import { EmailProviderRouter } from '../services/email-provider-router.service';
 import type { EmailDispatchInput, EmailSendResult } from '../email.types';
 import { EMAIL_QUEUE_NAME } from './email.queue';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 /**
- * Resend's default account limit is 2 requests/second. Sending faster earns
- * a 429, which this pipeline would record as a FAILED notification rather
- * than the pacing hiccup it actually is. Budgeted AT the documented limit
- * rather than under it because the limiter is exact, not statistical.
+ * THE QUEUE'S LIMITER IS NO LONGER A PROVIDER'S LIMIT.
  *
- * If the account is moved to a higher tier, raise this — it is the throttle,
- * not the concurrency, that governs provider load.
+ * It was pinned at Resend's 2/s, which was right while Resend was the only
+ * provider and wrong the moment SES — which starts at 14/s — joined it:
+ * left at 2 a busy day drains at a quarter speed, and a single number
+ * cannot express two providers anyway.
+ *
+ * So the queue limiter is the ceiling of the FASTEST live provider (the
+ * queue stops being the bottleneck) and `EmailProviderRouter` paces each
+ * provider to its OWN documented rate underneath it. With SES
+ * unconfigured that ceiling is Resend's 2/s — byte-identical to the
+ * constant this replaced.
  */
-const EMAIL_MAX_PER_SECOND = 2;
 
 /** Parallel in-flight sends. Above the per-second cap on purpose: the limiter
  *  paces the provider, concurrency just keeps the pipe full while it does. */
@@ -53,12 +58,14 @@ export class EmailWorker implements OnModuleInit, OnModuleDestroy {
     private readonly dispatch: EmailDispatchService,
     private readonly workerRole: WorkerRoleService,
     private readonly issues: SystemIssueService,
+    private readonly router: EmailProviderRouter,
   ) {}
 
   onModuleInit(): void {
     // Only the queue-owning instance starts workers; every other
     // API instance serves HTTP only. See WorkerRoleService.
     if (!this.workerRole.shouldStart(EmailWorker.name)) return;
+    const maxPerSecond = this.router.queueRateLimitPerSecond;
     this.worker = new Worker<EmailDispatchInput, EmailSendResult>(
       EMAIL_QUEUE_NAME,
       async (job: Job<EmailDispatchInput>): Promise<EmailSendResult> => {
@@ -71,7 +78,7 @@ export class EmailWorker implements OnModuleInit, OnModuleDestroy {
       {
         connection: this.redis.createConnection(),
         concurrency: EMAIL_CONCURRENCY,
-        limiter: { max: EMAIL_MAX_PER_SECOND, duration: 1_000 },
+        limiter: { max: maxPerSecond, duration: 1_000 },
       },
     );
 
@@ -92,7 +99,7 @@ export class EmailWorker implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log(
-      `Email worker ready (queue=${EMAIL_QUEUE_NAME}, concurrency=${EMAIL_CONCURRENCY}, max=${EMAIL_MAX_PER_SECOND}/s)`,
+      `Email worker ready (queue=${EMAIL_QUEUE_NAME}, concurrency=${EMAIL_CONCURRENCY}, max=${maxPerSecond}/s)`,
     );
   }
 

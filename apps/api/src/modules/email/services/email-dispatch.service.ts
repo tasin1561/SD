@@ -2,7 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NotificationChannel, NotificationStatus, Prisma } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { TemplateRenderService } from './template-render.service';
-import { ResendService } from './resend.service';
+import { EmailProviderRouter } from './email-provider-router.service';
+import type { EmailRouteResult } from './email-provider-router.service';
 import { resolveSender } from '../sender-resolver';
 import type { EmailDispatchInput, EmailSendResult } from '../email.types';
 
@@ -43,7 +44,10 @@ export class EmailDispatchService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly render: TemplateRenderService,
-    private readonly resend: ResendService,
+    // The ONE send call in this service, and the only one anywhere: the
+    // router decides which provider carries the message (CUR-12). This
+    // service does not know Resend or SES exist.
+    private readonly router: EmailProviderRouter,
   ) {}
 
   async send(input: EmailDispatchInput): Promise<EmailSendResult> {
@@ -65,14 +69,18 @@ export class EmailDispatchService {
 
     const subject = rendered.subject ?? '(no subject)';
 
-    const sendResult = await this.resend.send({
-      from: sender.from,
-      to: input.recipient.email,
-      subject,
-      text: rendered.body,
-      ...(rendered.htmlBody ? { html: rendered.htmlBody } : {}),
-      replyTo: sender.replyTo,
-    });
+    const route = await this.router.send(
+      {
+        from: sender.from,
+        to: input.recipient.email,
+        subject,
+        text: rendered.body,
+        ...(rendered.htmlBody ? { html: rendered.htmlBody } : {}),
+        replyTo: sender.replyTo,
+      },
+      rendered.category,
+    );
+    const sendResult = route.outcome;
 
     const status: NotificationStatus = sendResult.ok
       ? NotificationStatus.SENT
@@ -86,11 +94,17 @@ export class EmailDispatchService {
     // seller-mgmt, inventory) leave
     // existingNotificationLogId unset and get the original create
     // path unchanged.
-    const log = await this.persistLog(input, rendered, sender, subject, sendResult, status);
+    const log = await this.persistLog(input, rendered, sender, subject, route, status);
 
     if (!sendResult.ok) {
       this.logger.warn(
-        { templateCode: input.templateCode, to: input.recipient.email, code: sendResult.code },
+        {
+          templateCode: input.templateCode,
+          to: input.recipient.email,
+          code: sendResult.code,
+          provider: route.provider,
+          failedOverFrom: route.failedOverFrom,
+        },
         'Email send failed',
       );
     }
@@ -155,11 +169,12 @@ export class EmailDispatchService {
     rendered: Awaited<ReturnType<TemplateRenderService['render']>>,
     sender: { from: string; replyTo: string },
     subject: string,
-    sendResult: Awaited<ReturnType<ResendService['send']>>,
+    route: EmailRouteResult,
     status: NotificationStatus,
   ): Promise<{ id: string } | null> {
+    const sendResult = route.outcome;
     try {
-      return await this.writeLog(input, rendered, sender, subject, sendResult, status);
+      return await this.writeLog(input, rendered, sender, subject, route, status);
     } catch (err) {
       if (!sendResult.ok) {
         // Nothing left the building — a retry is safe and correct.
@@ -186,9 +201,10 @@ export class EmailDispatchService {
     rendered: Awaited<ReturnType<TemplateRenderService['render']>>,
     _sender: { from: string; replyTo: string },
     subject: string,
-    sendResult: Awaited<ReturnType<ResendService['send']>>,
+    route: EmailRouteResult,
     status: NotificationStatus,
   ): Promise<{ id: string }> {
+    const sendResult = route.outcome;
     return input.existingNotificationLogId
       ? await this.prisma.client.notificationLog.update({
           where: { id: input.existingNotificationLogId },
@@ -199,7 +215,7 @@ export class EmailDispatchService {
             subject,
             body: rendered.body,
             htmlBody: rendered.htmlBody,
-            provider: 'resend',
+            provider: route.provider,
             providerMessageId: sendResult.ok ? sendResult.providerMessageId : null,
             status,
             sentAt: sendResult.ok ? new Date() : null,
@@ -226,7 +242,7 @@ export class EmailDispatchService {
             shipmentId: input.shipmentId ?? null,
             callAttemptId: input.callAttemptId ?? null,
             triggerEvent: input.triggerEvent ?? null,
-            provider: 'resend',
+            provider: route.provider,
             providerMessageId: sendResult.ok ? sendResult.providerMessageId : null,
             status,
             sentAt: sendResult.ok ? new Date() : null,

@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { NotificationCategory } from '@skydrop/db';
 import { Environment } from 'nunjucks';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import type { EmailVariables } from '../email.types';
@@ -8,6 +9,8 @@ export interface LoadedTemplate {
   code: string;
   language: string;
   version: number;
+  /** NOTIF-9's kind, read from the row rather than re-derived. */
+  category: NotificationCategory;
   subject: string | null;
   bodyTemplate: string;
   htmlBodyTemplate: string | null;
@@ -17,6 +20,17 @@ export interface RenderedTemplate {
   templateId: string;
   templateCode: string;
   templateVersion: number;
+  /**
+   * What KIND of notification this is. Carried through because it is
+   * what `EmailProviderRouter` routes on — CREDENTIAL keeps its own
+   * provider — and because `notification_templates.category` is where
+   * that fact already lives (NOTIF-9). Re-deriving it from the template
+   * code at the router would be a second source of truth for a rule
+   * whose whole point is that a new credential template inherits it by
+   * naming; the two would disagree the first time one of them was
+   * edited alone.
+   */
+  category: NotificationCategory;
   subject: string | null;
   body: string;
   htmlBody: string | null;
@@ -45,6 +59,7 @@ export class TemplateRenderService {
         code: true,
         language: true,
         version: true,
+        category: true,
         subject: true,
         bodyTemplate: true,
         htmlBodyTemplate: true,
@@ -72,6 +87,7 @@ export class TemplateRenderService {
       code: row.code,
       language: row.language,
       version: row.version,
+      category: row.category,
       subject: row.subject,
       bodyTemplate: row.bodyTemplate,
       htmlBodyTemplate: row.htmlBodyTemplate,
@@ -89,6 +105,7 @@ export class TemplateRenderService {
       templateId: tpl.id,
       templateCode: tpl.code,
       templateVersion: tpl.version,
+      category: tpl.category,
       subject: tpl.subject ? this.renderText(tpl.subject, ctx) : null,
       body: this.renderText(tpl.bodyTemplate, ctx),
       htmlBody: tpl.htmlBodyTemplate ? this.renderHtml(tpl.htmlBodyTemplate, ctx) : null,
