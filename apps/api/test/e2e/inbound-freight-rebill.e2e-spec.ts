@@ -86,7 +86,7 @@ describe('Inbound freight — void and re-bill (e2e)', () => {
       .expect(201);
     bdWarehouseId = bd.body.id as string;
     await request(h.baseUrl)
-      .patch('/admin/settings/ops.bd_intake_warehouse_id')
+      .patch('/admin/system-settings/ops.bd_intake_warehouse_id')
       .set(staffAuth)
       .send({ valueType: 'STRING', value: bdWarehouseId })
       .expect(200);
