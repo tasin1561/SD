@@ -425,6 +425,51 @@ if unused_hooks:
 else:
     print("every data hook is used by a screen")
 
+# ── e2e specs name routes too, and for months nothing checked them ───
+#
+# `inbound-freight-rebill.e2e-spec.ts` wrote `PATCH /admin/settings/:key`
+# where the controller is `@Controller('admin/system-settings')`. Four
+# tests died in `beforeEach` on a 404, and the only signal was a red e2e
+# shard fifteen minutes into CI — on a money change whose proof those
+# tests WERE. A supertest path is a literal string checkable in
+# milliseconds, and this file was already checking exactly that for the
+# frontends; it simply scanned the app directories and not the tests.
+#
+# Same discipline as the frontend half: only call -> route GATES, because
+# a literal path either names a route or it does not. Anything carrying
+# a `${...}` is skipped rather than guessed at — a gate that fails on a
+# path it could not resolve is a gate people learn to route around, and
+# that judgement is already written down above for the other direction.
+SUPERTEST_CALL = re.compile(
+    r"""\.(get|post|patch|put|delete)\(\s*['"`](/[^'"`${]*)['"`]""",
+    re.I,
+)
+E2E_ROOT = REPO / 'apps/api/test'
+e2e_missing = []
+e2e_checked = 0
+if E2E_ROOT.exists():
+    for f in sorted(E2E_ROOT.rglob('*.ts')):
+        for m in SUPERTEST_CALL.finditer(f.read_text()):
+            verb, raw = m.group(1).upper(), m.group(2)
+            path = raw.split('?')[0]
+            if len(path) > 1:
+                path = path.rstrip('/')
+            e2e_checked += 1
+            if not any(v == verb and pat.match(path) for v, pat, _ in routes):
+                e2e_missing.append((str(f).split('apps/api/test/')[-1], verb, raw))
+
+print()
+if e2e_missing:
+    print(f"E2E CALLS A ROUTE THAT DOES NOT EXIST ({len(e2e_missing)}):")
+    for file, verb, raw in sorted(e2e_missing):
+        print(f"  {verb:<6} {raw:<58} {file}")
+    print()
+    print("  The spec would 404 in CI. Check the controller's @Controller")
+    print("  prefix and its method decorator for the real path.")
+else:
+    print(f"every literal e2e route exists ({e2e_checked} calls checked)")
+
 # Only the call -> route direction gates. It is exact: every call it finds
-# is a real call, so a miss is a real bug.
-sys.exit(1 if missing else 0)
+# is a real call, so a miss is a real bug. The e2e half is the same claim
+# about the same kind of evidence, so it gates too.
+sys.exit(1 if (missing or e2e_missing) else 0)
