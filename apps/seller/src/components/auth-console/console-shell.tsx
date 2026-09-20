@@ -1,4 +1,5 @@
 import type { ReactNode, ReactElement } from 'react';
+import { ThemeToggle } from '@skydrop/ui/components';
 import { CorridorConsole } from './corridor-console';
 import './console.css';
 
@@ -37,6 +38,23 @@ export function AuthConsoleShell({
     // longer being login-specific — renaming it means touching every
     // selector in the stylesheet for no behavioural gain.
     <div className="mc-login bg-bg text-text-body relative grid min-h-screen place-items-center overflow-hidden p-6">
+      {/* THE TOGGLE LIVES IN `AppShell`, WHICH IS THE AUTHENTICATED
+          CHROME — so before this, no signed-out page had one. A visitor
+          got whatever their OS said, or a cookie pinned during some
+          earlier signed-in session, and on the sign-in screen that is
+          exactly the moment somebody has neither. Nothing failed: the
+          page rendered perfectly and simply could not be changed.
+
+          It belongs HERE rather than on each page because every
+          unauthenticated route funnels through this shell (admin and
+          seller via their /auth, /login and /password-reset layouts;
+          reseller via AuthFrame), so one mount covers all of them and a
+          new auth page inherits it without anybody remembering.
+
+          Above the backdrop: the corridor, the grid and the glows are
+          `absolute inset-0`, so the toggle needs its own stacking
+          context to stay clickable. */}
+      <ThemeToggle className="absolute top-4 right-4 z-20" />
       <div aria-hidden className="console-grid absolute inset-0" />
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-55">
         <CorridorConsole />
