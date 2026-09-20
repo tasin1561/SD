@@ -23,6 +23,7 @@ import {
   BulkUploadStatus,
   ConsignmentStatus,
   EarlyReservationReviewStatus,
+  InboundFreightMode,
   InboundFreightStatus,
   OrderStatus,
   ShipmentStatus,
@@ -1125,3 +1126,85 @@ export function courierLabel(
   if (manual !== '') return manual;
   return courierCode ?? '—';
 }
+
+/**
+ * Who is reading. The two halves of the estate describe the SAME freight
+ * mode differently and correctly: staff are choosing and operating it
+ * ("pay now" is an instruction), a seller is being told what already
+ * happened to their money ("paid on arrival" is a fact about the past).
+ * One shared string would have to pick a side, and would be wrong for
+ * the other one on every screen.
+ */
+export type FreightAudience = 'STAFF' | 'SELLER';
+
+/**
+ * The SHORT form — a chip, a table cell, a column that must not wrap.
+ *
+ * Five hand-kept `Record<InboundFreightMode, string>` maps used to carry
+ * this, and two of the five (apps/admin's freight index and its
+ * record-freight modal) were byte-identical copies of each other, which
+ * is the pair that can silently drift apart. The map form is already
+ * exhaustive by TYPE — a fourth mode fails to compile in all five
+ * places — so the risk was never an omission, it was WORDING: the same
+ * mode reading two different ways on two screens of the same app.
+ */
+export function freightModeWords(mode: InboundFreightMode, audience: FreightAudience): string {
+  switch (mode) {
+    case InboundFreightMode.PAY_ADVANCE:
+      return audience === 'STAFF' ? 'Pay in advance' : 'Paid before it flew';
+    case InboundFreightMode.PAY_NOW:
+      return audience === 'STAFF' ? 'Pay now' : 'Paid on arrival';
+    case InboundFreightMode.PAY_LATER:
+      return audience === 'STAFF' ? 'Pay later' : 'Pay as it sells';
+    default: {
+      const never: never = mode;
+      return never;
+    }
+  }
+}
+
+/**
+ * One line saying WHEN the bill lands — for a detail panel, or beside a
+ * control where the choice needs explaining rather than naming.
+ *
+ * PAY_ADVANCE is the one worth spelling out in both voices: it is billed
+ * in Dhaka BEFORE the goods fly, which is a different moment from the
+ * other two and the one a seller most needs to recognise on a wallet
+ * they have already been debited from.
+ */
+export function freightModeExplainer(mode: InboundFreightMode, audience: FreightAudience): string {
+  switch (mode) {
+    case InboundFreightMode.PAY_ADVANCE:
+      return audience === 'STAFF'
+        ? 'Pay in advance — billed at the Bangladesh intake, before it flies'
+        : 'Agreed before it flew, and charged against the Dhaka count';
+    case InboundFreightMode.PAY_NOW:
+      return audience === 'STAFF'
+        ? 'Pay now — billed at the India arrival, debited on record'
+        : 'Charged in full when the shipment landed';
+    case InboundFreightMode.PAY_LATER:
+      return audience === 'STAFF'
+        ? 'Pay later — billed at the India arrival, recovered as the stock sells'
+        : 'Charged per unit as the stock sells';
+    default: {
+      const never: never = mode;
+      return never;
+    }
+  }
+}
+
+/**
+ * Every mode, in the order a person should be offered them: the two that
+ * bill at the India arrival after the one that bills before the goods
+ * fly, because that is the order the consignment actually moves in.
+ *
+ * Exists because a picker used to enumerate `Object.keys` of a label
+ * map, which made the map load-bearing for something other than words
+ * and put the option ORDER at the mercy of however the object literal
+ * happened to be typed.
+ */
+export const FREIGHT_MODES: readonly InboundFreightMode[] = [
+  InboundFreightMode.PAY_ADVANCE,
+  InboundFreightMode.PAY_NOW,
+  InboundFreightMode.PAY_LATER,
+];

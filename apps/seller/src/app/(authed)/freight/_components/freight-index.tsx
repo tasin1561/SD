@@ -27,7 +27,8 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { Boxes, PlaneTakeoff, ReceiptText, Wallet } from 'lucide-react';
-import { InboundFreightStatus, type InboundFreightMode } from '@skydrop/db';
+import { InboundFreightStatus } from '@skydrop/db';
+import { freightModeWords } from '@skydrop/ui/status';
 import { useSellerFreight } from '@/lib/ops-hooks';
 
 /**
@@ -287,7 +288,7 @@ export function SellerFreightIndex(): ReactElement {
                     )}
                   </Td>
                   <Td className="text-text-muted whitespace-nowrap text-xs">
-                    {TERMS_WORDS[r.mode]}
+                    {freightModeWords(r.mode, 'SELLER')}
                     {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
                       <div className="text-text-faint">
                         includes <Money amount={r.serviceChargeInr} decimals={false} /> service
@@ -373,18 +374,6 @@ export function SellerFreightIndex(): ReactElement {
     </div>
   );
 }
-
-/**
- * What each mode means TO THE SELLER — where the bill lands, not what
- * we call it internally. Pay-in-advance is billed in Dhaka before the
- * goods fly, which is a different moment from the other two and the
- * one a seller most needs to recognise.
- */
-const TERMS_WORDS: Record<InboundFreightMode, string> = {
-  PAY_ADVANCE: 'Paid before it flew',
-  PAY_NOW: 'Paid on arrival',
-  PAY_LATER: 'Pay as it sells',
-};
 
 function humanise(value: string): string {
   const lower = value.replaceAll('_', ' ').toLowerCase();

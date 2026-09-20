@@ -26,7 +26,8 @@ import {
   Toolbar,
   Tr,
 } from '@skydrop/ui/components';
-import { InboundFreightStatus, type InboundFreightMode } from '@skydrop/db';
+import { InboundFreightStatus } from '@skydrop/db';
+import { freightModeWords } from '@skydrop/ui/status';
 import { useFreightCostBreakdown, useFreightList, type FreightChargeView } from '@/lib/ops-hooks';
 import { RecordFreightModal } from './record-freight-modal';
 import { FreightActions } from './freight-actions';
@@ -240,7 +241,7 @@ function FreightRow({
           )}
         </Td>
         <Td className="text-text-muted whitespace-nowrap text-xs">
-          {MODE_WORDS[row.mode]}
+          {freightModeWords(row.mode, 'STAFF')}
           {row.serviceChargeInr !== null && Number(row.serviceChargeInr) > 0 && (
             <div className="text-text-faint">
               +<Money amount={row.serviceChargeInr} decimals={false} /> service
@@ -491,12 +492,6 @@ function CostBreakdown({
     </div>
   );
 }
-
-const MODE_WORDS: Record<InboundFreightMode, string> = {
-  PAY_ADVANCE: 'Pay in advance',
-  PAY_NOW: 'Pay now',
-  PAY_LATER: 'Pay later',
-};
 
 function humanise(value: string): string {
   const lower = value.replaceAll('_', ' ').toLowerCase();

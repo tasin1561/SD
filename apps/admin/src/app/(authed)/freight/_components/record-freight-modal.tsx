@@ -14,6 +14,7 @@ import {
   useToast,
 } from '@skydrop/ui/components';
 import { Currency, InboundFreightMode } from '@skydrop/db';
+import { freightModeWords } from '@skydrop/ui/status';
 import { useRecordFreight } from '@/lib/ops-hooks';
 import { useConsignmentFreightMode, useConsignmentsList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -49,12 +50,6 @@ const MODE_OPTIONS = [
   { value: InboundFreightMode.PAY_NOW, label: 'Pay now — debit the wallet on record' },
   { value: InboundFreightMode.PAY_LATER, label: 'Pay later — leave a receivable' },
 ] as const;
-
-const MODE_WORDS: Record<InboundFreightMode, string> = {
-  PAY_ADVANCE: 'Pay in advance',
-  PAY_NOW: 'Pay now',
-  PAY_LATER: 'Pay later',
-};
 
 const LEG_WORDS = { BD_INTAKE: 'Bangladesh intake', IN_FINAL: 'India arrival' } as const;
 
@@ -321,7 +316,8 @@ export function RecordFreightModal({
             and that verdict is shown as-is (FE-2). */}
         {selectedLeg !== null && freightMode.data !== undefined && (
           <p className={legDisagrees ? 'text-warning text-xs' : 'text-text-muted text-xs'}>
-            {MODE_WORDS[freightMode.data.mode]} — {SOURCE_WORDS[freightMode.data.source]}
+            {freightModeWords(freightMode.data.mode, 'STAFF')} —{' '}
+            {SOURCE_WORDS[freightMode.data.source]}
             {freightMode.data.locked ? ', and fixed now a bill exists' : ''}.{' '}
             {legDisagrees
               ? `That bills the ${legWords(expectedLeg).toLowerCase()}, and this is the ${legWords(selectedLeg).toLowerCase()}. Pin the mode below if this stop is the one you mean.`
@@ -485,7 +481,7 @@ export function RecordFreightModal({
             <option value="">
               {freightMode.data === undefined
                 ? 'Use whatever is already in force'
-                : `Use whatever is already in force (${MODE_WORDS[freightMode.data.mode]}, ${SOURCE_WORDS[freightMode.data.source]})`}
+                : `Use whatever is already in force (${freightModeWords(freightMode.data.mode, 'STAFF')}, ${SOURCE_WORDS[freightMode.data.source]})`}
             </option>
             {MODE_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>

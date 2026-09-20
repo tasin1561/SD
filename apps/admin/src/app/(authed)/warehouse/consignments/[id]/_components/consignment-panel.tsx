@@ -22,7 +22,12 @@ import {
   StatusBadge,
   useToast,
 } from '@skydrop/ui/components';
-import { consignmentStatusKind } from '@skydrop/ui/status';
+import {
+  consignmentStatusKind,
+  freightModeExplainer,
+  freightModeWords,
+  FREIGHT_MODES,
+} from '@skydrop/ui/status';
 import type { ConsignmentLegView, LabelSheet } from '@skydrop/api-client';
 import {
   useCancelConsignment,
@@ -727,21 +732,22 @@ function LegLines({
   );
 }
 
-const FREIGHT_MODE_LABEL: Record<InboundFreightMode, string> = {
-  PAY_ADVANCE: 'Pay in advance — billed at the Bangladesh intake, before it flies',
-  PAY_NOW: 'Pay now — billed at the India arrival, debited on record',
-  PAY_LATER: 'Pay later — billed at the India arrival, recovered as the stock sells',
-};
-
 const FREIGHT_SOURCE_LABEL: Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> = {
   CONSIGNMENT: 'pinned on this consignment',
   SELLER: "from the seller's settings",
   SYSTEM_DEFAULT: 'the platform default',
 };
 
-/** The mode's name without the sentence explaining it — for a toast. */
+/**
+ * The mode's NAME, for a toast.
+ *
+ * Was the explaining sentence cut on its first em-dash, which made the
+ * long label load-bearing for the short one: reword the explainer and
+ * the toast silently changes with it, or loses its text entirely if the
+ * dash ever goes.
+ */
 function shortMode(mode: InboundFreightMode): string {
-  return FREIGHT_MODE_LABEL[mode].split(' — ')[0] ?? mode;
+  return freightModeWords(mode, 'STAFF');
 }
 
 /**
@@ -794,7 +800,7 @@ function FreightModeControl({ id }: { readonly id: string }): ReactElement {
       <div>
         <div className="text-text-secondary text-sm font-medium">Freight</div>
         <p className="text-text-muted text-xs">
-          {FREIGHT_MODE_LABEL[mode]} — {FREIGHT_SOURCE_LABEL[source]}.
+          {freightModeExplainer(mode, 'STAFF')} — {FREIGHT_SOURCE_LABEL[source]}.
           {locked
             ? ' A bill already exists, so this is settled: it is what that bill was raised on.'
             : ''}
@@ -809,9 +815,9 @@ function FreightModeControl({ id }: { readonly id: string }): ReactElement {
           onChange={(e) => void onChange(e.target.value)}
         >
           <option value="">Follow the seller&apos;s setting</option>
-          {(Object.keys(FREIGHT_MODE_LABEL) as InboundFreightMode[]).map((m) => (
+          {FREIGHT_MODES.map((m) => (
             <option key={m} value={m}>
-              {FREIGHT_MODE_LABEL[m]}
+              {freightModeExplainer(m, 'STAFF')}
             </option>
           ))}
         </Select>

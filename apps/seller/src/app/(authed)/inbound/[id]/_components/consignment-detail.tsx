@@ -46,9 +46,9 @@ import {
   Tr,
   useToast,
 } from '@skydrop/ui/components';
-import { consignmentStatusKind } from '@skydrop/ui/status';
+import { consignmentStatusKind, freightModeExplainer } from '@skydrop/ui/status';
 import { useCancelConsignment, useConsignment, useConsignmentEvents } from '@/lib/account-hooks';
-import { useSellerFreight, type FreightChargeView } from '@/lib/ops-hooks';
+import { useSellerFreight } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -650,13 +650,6 @@ function CancelConsignmentModal({
   );
 }
 
-/** What each mode means to the seller — WHERE the bill lands. */
-const TERMS_WORDS: Record<FreightChargeView['mode'], string> = {
-  PAY_ADVANCE: 'Agreed before it flew, and charged against the Dhaka count',
-  PAY_NOW: 'Charged in full when the shipment landed',
-  PAY_LATER: 'Charged per unit as the stock sells',
-};
-
 /**
  * The freight bill(s) for ONE consignment, in the seller's own words.
  *
@@ -739,7 +732,7 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
                       <Money amount={f.outstandingInr} direction="debit" />
                     ),
                 },
-                { label: 'Terms', value: TERMS_WORDS[f.mode] },
+                { label: 'Terms', value: freightModeExplainer(f.mode, 'SELLER') },
                 {
                   label: 'Units charged',
                   value: (
