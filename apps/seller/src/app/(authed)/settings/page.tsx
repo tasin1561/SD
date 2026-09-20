@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
-import { PageHeader } from '@skydrop/ui/components';
+import Link from 'next/link';
+import { Crumbs, PageHeader } from '@skydrop/ui/components';
 import {
   Webhook,
   Bell,
@@ -93,8 +94,14 @@ export default function SettingsPage(): ReactElement {
     },
   ];
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Settings' }]}
+            Link={Link}
+          />
+        }
         title="Settings"
         subtitle="Sign-in and sessions, order and stock defaults, wallet limits, webhooks, notifications, API keys."
       />

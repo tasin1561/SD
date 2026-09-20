@@ -87,8 +87,10 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
   }
 
   const fieldClass =
-    'w-full px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50';
-  const labelClass = 'block text-text-muted text-xs mb-1';
+    'w-full px-3 py-1.5 rounded-[var(--radius-2)] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50';
+  // The console's micro-cap: mono, uppercase, widely tracked — the
+  // same face the app's column captions and section bands wear.
+  const labelClass = 'telemetry block text-text-muted mb-1.5';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
@@ -215,14 +217,14 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
         </div>
       </div>
       {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
+        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[var(--radius-2)]">
           {error}
         </div>
       )}
       <button
         type="submit"
         disabled={submitting}
-        className="w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
+        className="w-full mt-2 px-3 py-1.5 rounded-[var(--radius-2)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
       >
         {submitting ? 'Creating account…' : 'Create account'}
       </button>

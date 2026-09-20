@@ -46,7 +46,7 @@ export function PasswordResetRequestForm(): ReactElement {
 
   if (done) {
     return (
-      <div className="rounded-[5px] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
+      <div className="rounded-[var(--radius-2)] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
         If <span className="font-mono">{email}</span> matches a seller account, a reset link is on
         its way. The link expires in 30 minutes.
       </div>
@@ -56,7 +56,7 @@ export function PasswordResetRequestForm(): ReactElement {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div>
-        <label htmlFor="email" className="block text-text-muted text-xs mb-1">
+        <label htmlFor="email" className="telemetry block text-text-muted mb-1.5">
           Email
         </label>
         <input
@@ -67,18 +67,18 @@ export function PasswordResetRequestForm(): ReactElement {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={submitting}
-          className="w-full px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50"
+          className="w-full px-3 py-1.5 rounded-[var(--radius-2)] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50"
         />
       </div>
       {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
+        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[var(--radius-2)]">
           {error}
         </div>
       )}
       <button
         type="submit"
         disabled={submitting}
-        className="w-full mt-2 px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
+        className="w-full mt-2 px-3 py-1.5 rounded-[var(--radius-2)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
       >
         {submitting ? 'Sending…' : 'Send reset link'}
       </button>

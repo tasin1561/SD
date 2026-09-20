@@ -2,22 +2,70 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Copy } from 'lucide-react';
+import { Copy, KeyRound } from 'lucide-react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
+  Crumbs,
   ErrorState,
   FormField,
   Input,
   LoadingState,
+  MetaChip,
   PageHeader,
+  SectionBand,
+  StatusBadge,
+  TBody,
+  THead,
   Table,
+  TableEmpty,
+  Td,
+  Th,
+  Tr,
   useToast,
 } from '@skydrop/ui/components';
 import type { CreatedSellerApiKey } from '@skydrop/api-client';
 import { useApiKeysList, useCreateApiKey, useRevokeApiKey } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+
+const CRUMBS = [
+  { label: 'Seller console' },
+  { label: 'Account' },
+  { label: 'Settings', href: '/settings' },
+  { label: 'API keys' },
+];
+
+/** ACTIVE / EXPIRED / REVOKED, decided the same way in both places it is read. */
+type KeyState = 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+
+function keyState(key: {
+  readonly revokedAt: string | null;
+  readonly expiresAt: string | null;
+}): KeyState {
+  if (key.revokedAt !== null) return 'REVOKED';
+  if (key.expiresAt !== null && new Date(key.expiresAt).getTime() < Date.now()) return 'EXPIRED';
+  return 'ACTIVE';
+}
+
+/**
+ * A revoked key and an expired one are both dead, and they are NOT the
+ * same fact: one was taken away, the other ran out. `cancelled` and
+ * `pending` are the two kinds that say so without inventing a colour.
+ */
+function stateKind(state: KeyState): 'delivered' | 'pending' | 'cancelled' {
+  switch (state) {
+    case 'ACTIVE':
+      return 'delivered';
+    case 'EXPIRED':
+      return 'pending';
+    case 'REVOKED':
+      return 'cancelled';
+    default: {
+      const exhaustive: never = state;
+      return exhaustive;
+    }
+  }
+}
 
 export function ApiKeysIndex(): ReactElement {
   const list = useApiKeysList();
@@ -62,32 +110,48 @@ export function ApiKeysIndex(): ReactElement {
     }
   }
 
+  const rows = list.data ?? [];
+  const active = rows.filter((k) => keyState(k) === 'ACTIVE');
+
   return (
     <div className="space-y-4">
-      <Link
-        href="/settings"
-        className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
-      >
-        <ArrowLeft size={12} /> Settings
-      </Link>
       <PageHeader
+        breadcrumb={<Crumbs items={CRUMBS} Link={Link} />}
         title="API keys"
         subtitle="Programmatic access. Plaintext is shown ONCE on create — copy it immediately."
+        /*
+          The comps put a request count and a rate-limit headroom bar
+          here. Neither is stored per key — `lastUsedAt` is the whole
+          usage record — so these chips say what the register knows.
+        */
+        meta={
+          list.data === undefined ? undefined : (
+            <>
+              <MetaChip tone="accent">
+                {rows.length} {rows.length === 1 ? 'key' : 'keys'}
+              </MetaChip>
+              <MetaChip tone={active.length === 0 ? 'neutral' : 'good'} dot>
+                {active.length} active
+              </MetaChip>
+            </>
+          )
+        }
       />
 
-      {revealed && <KeyRevealCard created={revealed} onDismiss={() => setRevealed(null)} />}
+      {revealed && <KeyRevealPanel created={revealed} onDismiss={() => setRevealed(null)} />}
 
       {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+        <div className="text-critical border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] rounded-[var(--radius-2)] border px-3 py-2 text-xs">
           {error}
         </div>
       )}
 
-      <Card>
-        <CardBody>
+      <div>
+        <SectionBand index="01" title="Issue a key" note="The plaintext is shown once." />
+        <BandBody>
           <form
             onSubmit={(e) => void onCreate(e)}
-            className="grid grid-cols-1 sm:grid-cols-[1fr_120px_auto] gap-3 items-end"
+            className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_140px_auto]"
           >
             <FormField label="Key name" required>
               <Input
@@ -111,99 +175,107 @@ export function ApiKeysIndex(): ReactElement {
               {create.isPending ? 'Creating…' : 'Create key'}
             </Button>
           </form>
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
-      {list.isLoading ? (
-        <LoadingState label="Loading keys…" />
-      ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
-      ) : !list.data || list.data.length === 0 ? (
-        <Card>
-          <CardBody>
-            <p className="text-text-muted text-sm">No API keys yet.</p>
-          </CardBody>
-        </Card>
-      ) : (
-        <Card>
-          <Table wrapperClassName="rounded-none border-0 bg-transparent">
-            <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Name</th>
-                <th className="text-left px-3 py-2 font-medium">Prefix</th>
-                <th className="text-left px-3 py-2 font-medium">Last used</th>
-                <th className="text-left px-3 py-2 font-medium">Expires</th>
-                <th className="text-left px-3 py-2 font-medium">Status</th>
-                <th className="text-right px-3 py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {list.data.map((k) => {
-                const expired =
-                  k.expiresAt !== null && new Date(k.expiresAt).getTime() < Date.now();
-                const revoked = k.revokedAt !== null;
-                const status = revoked ? 'REVOKED' : expired ? 'EXPIRED' : 'ACTIVE';
-                return (
-                  <tr key={k.id} className={revoked || expired ? 'opacity-50' : undefined}>
-                    <td className="px-3 py-2 text-text-body">{k.name}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-text-muted">{k.keyPrefix}…</td>
-                    <td className="px-3 py-2 text-text-muted font-mono text-xs">
-                      {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-text-muted font-mono text-xs">
-                      {k.expiresAt ? new Date(k.expiresAt).toLocaleDateString() : 'No expiry'}
-                    </td>
-                    <td className="px-3 py-2 text-xs uppercase tracking-wide">
-                      <span
-                        className={
-                          status === 'ACTIVE'
-                            ? 'text-accent'
-                            : status === 'EXPIRED'
-                              ? 'text-pending'
-                              : 'text-critical'
-                        }
-                      >
-                        {status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {!revoked &&
-                        !expired &&
-                        (pendingRevoke === k.id ? (
-                          <>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => void onRevoke(k.id)}
-                            >
-                              Confirm
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setPendingRevoke(null)}
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <Button variant="ghost" size="sm" onClick={() => setPendingRevoke(k.id)}>
-                            Revoke
-                          </Button>
-                        ))}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        </Card>
-      )}
+      <div>
+        <SectionBand
+          index="02"
+          title="Key register"
+          note={rows.length === 0 ? undefined : `${rows.length} issued`}
+        />
+        <BandBody flush>
+          {list.isLoading ? (
+            <div className="p-3">
+              <LoadingState label="Loading keys…" />
+            </div>
+          ) : list.isError ? (
+            <div className="p-3">
+              <ErrorState
+                message={list.error?.message ?? 'Failed.'}
+                retry={() => void list.refetch()}
+              />
+            </div>
+          ) : (
+            <Table wrapperClassName="rounded-none border-0 bg-transparent">
+              <THead>
+                <Tr>
+                  <Th>Name</Th>
+                  <Th>Prefix</Th>
+                  <Th>Last used</Th>
+                  <Th>Expires</Th>
+                  <Th>State</Th>
+                  <Th align="right">Actions</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {rows.length === 0 ? (
+                  <TableEmpty colSpan={6}>No API keys yet.</TableEmpty>
+                ) : (
+                  rows.map((k) => {
+                    const state = keyState(k);
+                    const dead = state !== 'ACTIVE';
+                    return (
+                      <Tr key={k.id} className={dead ? 'opacity-60' : undefined}>
+                        <Td className="text-text-bright">{k.name}</Td>
+                        <Td className="text-text-muted font-mono text-xs">{k.keyPrefix}…</Td>
+                        <Td className="text-text-muted font-mono text-xs">
+                          {k.lastUsedAt !== null ? new Date(k.lastUsedAt).toLocaleString() : '—'}
+                        </Td>
+                        <Td className="text-text-muted font-mono text-xs">
+                          {k.expiresAt !== null
+                            ? new Date(k.expiresAt).toLocaleDateString()
+                            : 'No expiry'}
+                        </Td>
+                        <Td>
+                          <StatusBadge
+                            kind={stateKind(state)}
+                            label={state.charAt(0) + state.slice(1).toLowerCase()}
+                          />
+                        </Td>
+                        <Td align="right">
+                          {!dead &&
+                            (pendingRevoke === k.id ? (
+                              <div className="flex justify-end gap-1.5">
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => void onRevoke(k.id)}
+                                >
+                                  Confirm
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setPendingRevoke(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setPendingRevoke(k.id)}
+                              >
+                                Revoke
+                              </Button>
+                            ))}
+                        </Td>
+                      </Tr>
+                    );
+                  })
+                )}
+              </TBody>
+            </Table>
+          )}
+        </BandBody>
+      </div>
     </div>
   );
 }
 
-function KeyRevealCard({
+function KeyRevealPanel({
   created,
   onDismiss,
 }: {
@@ -223,37 +295,40 @@ function KeyRevealCard({
   }
 
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div>
-            <div className="text-accent text-xs uppercase tracking-wide mb-1">
-              New API key — copy it now
-            </div>
-            <div className="text-text-bright text-sm font-medium">{created.name}</div>
-            <p className="text-text-muted text-xs mt-1">
-              This is the only time we&apos;ll show the plaintext.{' '}
-              {created.expiresAt
-                ? `Expires ${new Date(created.expiresAt).toLocaleDateString()}.`
-                : 'No expiry set.'}
-            </p>
-          </div>
+    <div>
+      <SectionBand
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            <KeyRound size={12} aria-hidden /> New API key — copy it now
+          </span>
+        }
+        note={created.name}
+        action={
           <Button variant="ghost" size="sm" onClick={onDismiss}>
             I&apos;ve copied it
           </Button>
-        </div>
+        }
+      />
+      <BandBody>
+        <p className="text-text-muted text-xs leading-relaxed">
+          This is the only time we&apos;ll show the plaintext.{' '}
+          {created.expiresAt !== null
+            ? `Expires ${new Date(created.expiresAt).toLocaleDateString()}.`
+            : 'No expiry set.'}
+        </p>
         <div className="mt-3 flex items-stretch gap-2">
-          <input
+          <Input
             readOnly
+            aria-label="API key plaintext"
             value={created.plaintext}
             onFocus={(e) => e.currentTarget.select()}
-            className="flex-1 px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm font-mono focus:border-accent focus:outline-none"
+            className="min-w-0 flex-1 font-mono"
           />
           <Button type="button" variant="primary" size="md" onClick={() => void copy()}>
-            <Copy size={12} /> {copied ? 'Copied!' : 'Copy'}
+            <Copy size={12} aria-hidden /> {copied ? 'Copied!' : 'Copy'}
           </Button>
         </div>
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }

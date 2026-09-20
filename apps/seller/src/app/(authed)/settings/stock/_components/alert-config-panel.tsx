@@ -2,13 +2,12 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
   ErrorNote,
   FormField,
   Input,
+  SectionBand,
   Skeleton,
   useToast,
 } from '@skydrop/ui/components';
@@ -93,12 +92,24 @@ export function AlertConfigPanel(): ReactElement | null {
   }
 
   return (
-    <Card className="mb-4">
-      <CardHeader
+    <div>
+      <SectionBand
+        index="01"
         title="Low-stock alerts"
-        subtitle="Warn me when a SKU's available quantity falls below this."
+        /*
+          "Off" is a real setting here and it is the one worth saying in
+          the band: a blank field and a field still loading look the
+          same, and only one of them means no SKU will ever alert.
+        */
+        note={
+          config.data === undefined
+            ? undefined
+            : config.data.defaultLowStockThreshold === null
+              ? 'Off — nothing alerts by default'
+              : `Warning below ${config.data.defaultLowStockThreshold.toLocaleString('en-IN')} units`
+        }
       />
-      <CardBody>
+      <BandBody>
         {config.isLoading ? (
           <Skeleton className="h-9 w-56" />
         ) : config.isError ? (
@@ -158,14 +169,14 @@ export function AlertConfigPanel(): ReactElement | null {
                 )}
               </div>
             </div>
-            <p className="text-text-muted text-xs">
+            <p className="text-text-muted text-xs leading-relaxed">
               A SKU with its own threshold ignores this one — set that on the variant page. Leaving
               this empty turns alerts off for everything else; zero still alerts, but only once the
               SKU is completely out.
             </p>
           </form>
         )}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }

@@ -2,13 +2,13 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
   ErrorNote,
   FormField,
   Input,
   LoadingState,
+  SectionBand,
   useToast,
 } from '@skydrop/ui/components';
 import { useCustomerDeliveryFee, useSetCustomerDeliveryFee } from '@/lib/api-hooks';
@@ -47,50 +47,71 @@ export function OrderDefaultsPanel(): ReactElement {
     }
   }
 
-  if (current.isLoading) return <LoadingState rows={2} />;
-
   return (
-    <Card>
-      <CardBody>
-        {error !== null && (
-          <div className="mb-3">
-            <ErrorNote message={error} />
-          </div>
+    <div>
+      <SectionBand
+        index="01"
+        title="Delivery fee"
+        /*
+          The band's note says WHOSE figure this currently is. It is the
+          one thing about the field that a glance cannot tell you: an
+          inherited default and a number somebody chose look identical
+          in the box.
+        */
+        note={
+          current.data === undefined
+            ? undefined
+            : current.data.isOwnValue
+              ? 'Your own figure'
+              : 'Skydrop default'
+        }
+      />
+      <BandBody>
+        {current.isLoading ? (
+          <LoadingState rows={2} />
+        ) : (
+          <>
+            {error !== null && (
+              <div className="mb-3">
+                <ErrorNote message={error} />
+              </div>
+            )}
+            <div className="max-w-sm">
+              <FormField
+                label="Delivery fee charged to your customer (₹)"
+                hint={
+                  current.data?.isOwnValue === true
+                    ? 'Your own figure. Pre-filled on every new order, and editable there.'
+                    : 'Currently the Skydrop default. Set your own and new orders will start with it.'
+                }
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  disabled={!mayEdit}
+                />
+              </FormField>
+              <p className="text-text-muted mt-2 text-xs leading-relaxed">
+                This is what you add to the customer&apos;s collectable amount. It is not what
+                Skydrop charges you to deliver — that is separate and unaffected by this.
+              </p>
+              {mayEdit && (
+                <Button
+                  variant="primary"
+                  className="mt-3"
+                  onClick={() => void onSave()}
+                  disabled={save.isPending || value.trim() === ''}
+                >
+                  {save.isPending ? 'Saving…' : 'Save'}
+                </Button>
+              )}
+            </div>
+          </>
         )}
-        <div className="max-w-sm">
-          <FormField
-            label="Delivery fee charged to your customer (₹)"
-            hint={
-              current.data?.isOwnValue === true
-                ? 'Your own figure. Pre-filled on every new order, and editable there.'
-                : 'Currently the Skydrop default. Set your own and new orders will start with it.'
-            }
-          >
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              disabled={!mayEdit}
-            />
-          </FormField>
-          <p className="text-text-muted mt-2 text-xs">
-            This is what you add to the customer&apos;s collectable amount. It is not what Skydrop
-            charges you to deliver — that is separate and unaffected by this.
-          </p>
-          {mayEdit && (
-            <Button
-              variant="primary"
-              className="mt-3"
-              onClick={() => void onSave()}
-              disabled={save.isPending || value.trim() === ''}
-            >
-              {save.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          )}
-        </div>
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }

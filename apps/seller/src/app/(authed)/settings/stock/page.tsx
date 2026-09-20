@@ -1,7 +1,6 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import { PageHeader } from '@skydrop/ui/components';
+import { Crumbs, PageHeader } from '@skydrop/ui/components';
 import { AlertConfigPanel } from './_components/alert-config-panel';
 
 /**
@@ -19,14 +18,19 @@ import { AlertConfigPanel } from './_components/alert-config-panel';
  */
 export default function StockSettingsPage(): ReactElement {
   return (
-    <div>
-      <Link
-        href="/settings"
-        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1 text-xs"
-      >
-        <ArrowLeft size={12} /> Settings
-      </Link>
+    <div className="space-y-4">
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Account' },
+              { label: 'Settings', href: '/settings' },
+              { label: 'Stock alerts' },
+            ]}
+            Link={Link}
+          />
+        }
         title="Stock alerts"
         subtitle="When we warn you that a SKU is running out. A SKU with its own threshold ignores this one."
       />
