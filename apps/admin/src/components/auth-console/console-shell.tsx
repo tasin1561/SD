@@ -43,7 +43,13 @@ export function AuthConsoleShell({ children }: { children: ReactNode }): ReactEl
           opacity: 0.45,
         }}
       />
-      <div className="relative w-full max-w-sm">{children}</div>
+      {/* A LANDMARK, not a div. Every auth page renders bare content
+          into this slot, so without a <main> here a screen-reader user
+          has no way to skip the decorative corridor, the grid and the
+          two glow layers above — all of which are aria-hidden and
+          therefore silent, leaving them to arrow through nothing.
+          apps/reseller's AuthFrame already had one; these two did not. */}
+      <main className="relative w-full max-w-sm">{children}</main>
     </div>
   );
 }

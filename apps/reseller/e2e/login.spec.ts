@@ -9,7 +9,7 @@ test.describe('reseller login', () => {
   test('the login page renders the reseller portal chrome', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByText('Skydrop', { exact: true })).toBeVisible();
-    await expect(page.getByText('reseller portal', { exact: true })).toBeVisible();
+    await expect(page.getByText('store portal', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     await expect(page.locator('#email')).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();

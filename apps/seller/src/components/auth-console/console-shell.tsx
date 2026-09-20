@@ -61,7 +61,10 @@ export function AuthConsoleShell({
           opacity: 0.45,
         }}
       />
-      <div className={`relative ${contentClassName}`}>{children}</div>
+      {/* A LANDMARK, not a div — see the note in apps/admin's copy.
+          The width still comes from the page, which knows better than
+          the shell does. */}
+      <main className={`relative ${contentClassName}`}>{children}</main>
     </div>
   );
 }
