@@ -34,6 +34,20 @@ export const envSchema = z.object({
 
   RESEND_API_KEY: z.string().optional().default(''),
 
+  // --- Amazon SES (the second email provider) ---------------------------
+  // OPTIONAL, all three, and empty is a VALID configuration rather than a
+  // boot failure: with no credentials `SesService.isLive()` is false and
+  // `EmailProviderRouter` sends everything through Resend exactly as it
+  // did before SES existed. That is the whole shipping posture — the
+  // behaviour does not change until somebody fills these in.
+  //
+  // All three or none. A half-configured provider boots clean and then
+  // 403s on the first real message, which is the worst moment to learn
+  // that a key was missing.
+  AWS_SES_REGION: z.string().optional().default(''),
+  AWS_SES_ACCESS_KEY_ID: z.string().optional().default(''),
+  AWS_SES_SECRET_ACCESS_KEY: z.string().optional().default(''),
+
   SELLER_APP_URL: z.string().url(),
   ADMIN_APP_URL: z.string().url(),
   // RS-2 (2026-09-14): the reseller store portal — where a store user's

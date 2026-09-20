@@ -59,6 +59,20 @@ export class EnvService {
     return this.env.RESEND_API_KEY.length > 0;
   }
 
+  // Amazon SES — the second email provider. Empty is a valid
+  // configuration: SesService is inert and every message routes to
+  // Resend. Read only by SesService, which decides liveness from all
+  // three together.
+  get awsSesRegion(): string {
+    return this.env.AWS_SES_REGION;
+  }
+  get awsSesAccessKeyId(): string {
+    return this.env.AWS_SES_ACCESS_KEY_ID;
+  }
+  get awsSesSecretAccessKey(): string {
+    return this.env.AWS_SES_SECRET_ACCESS_KEY;
+  }
+
   // Module 18 — ChatWoot live chat. Stub mode when token is empty OR
   // the chat.chatwoot_base_url system setting is empty.
   get chatwootApiToken(): string {

@@ -12,6 +12,12 @@ const BASE_ENV: Env = {
   REDIS_URL: 'redis://localhost:6379',
   JWT_SIGNING_KEY: 'a'.repeat(64),
   RESEND_API_KEY: '',
+  // Amazon SES unconfigured by default: SesService is inert and every
+  // message routes to Resend, exactly as before SES existed. Specs that
+  // exercise SES override all three.
+  AWS_SES_REGION: '',
+  AWS_SES_ACCESS_KEY_ID: '',
+  AWS_SES_SECRET_ACCESS_KEY: '',
   SELLER_APP_URL: 'http://localhost:3001',
   ADMIN_APP_URL: 'http://localhost:3002',
   RESELLER_APP_URL: 'http://localhost:3005',

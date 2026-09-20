@@ -1,17 +1,23 @@
 import { NotFoundException } from '@nestjs/common';
-import { NotificationChannel, NotificationRecipientType, NotificationStatus } from '@skydrop/db';
+import {
+  NotificationCategory,
+  NotificationChannel,
+  NotificationRecipientType,
+  NotificationStatus,
+} from '@skydrop/db';
 import {
   EMAIL_RENDER_FAILED,
   EMAIL_TEMPLATE_NOT_FOUND,
   EmailDispatchService,
 } from '../../src/modules/email/services/email-dispatch.service';
 import type { TemplateRenderService } from '../../src/modules/email/services/template-render.service';
+import type { EmailProviderRouter } from '../../src/modules/email/services/email-provider-router.service';
 import type {
-  ResendService,
   SendEmailFailure,
   SendEmailInput,
+  SendEmailOutcome,
   SendEmailResult,
-} from '../../src/modules/email/services/resend.service';
+} from '../../src/modules/email/email-provider';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 
 interface CapturedCreate {
@@ -20,7 +26,7 @@ interface CapturedCreate {
 }
 
 function makeSut(opts: {
-  resendResponse: SendEmailResult | SendEmailFailure;
+  providerResponse: SendEmailResult | SendEmailFailure;
   templateHasHtml?: boolean;
   /** Pass null to explicitly produce a template with no subject. Omit to use
    *  the default "Reset your password". */
@@ -58,32 +64,44 @@ function makeSut(opts: {
       templateId: 'tpl-1',
       templateCode: code,
       templateVersion: 7,
+      // The router routes on this (CREDENTIAL keeps its own provider);
+      // nothing in this suite depends on which value it is.
+      category: NotificationCategory.OPERATIONAL,
       subject,
       body: 'Hi Alex, click https://example.com to reset.',
       htmlBody: opts.templateHasHtml ? '<p>Hi Alex</p>' : null,
     })),
   } as unknown as TemplateRenderService;
 
-  const resendSendMock: jest.Mock<
-    Promise<SendEmailResult | SendEmailFailure>,
-    [SendEmailInput]
-  > = jest.fn(async (_input: SendEmailInput) => opts.resendResponse);
-  const resend = { send: resendSendMock } as unknown as ResendService;
+  // The dispatch service no longer knows Resend or SES exist — it hands
+  // the message to `EmailProviderRouter`, which decides (CUR-12). This
+  // mock stands in for the router and reports 'resend' as the provider
+  // that carried it, which is what the unconfigured-SES default does.
+  const providerSendMock: jest.Mock<Promise<SendEmailOutcome>, [SendEmailInput]> = jest.fn(
+    async (_input: SendEmailInput) => opts.providerResponse,
+  );
+  const router = {
+    send: async (input: SendEmailInput) => ({
+      provider: 'resend',
+      outcome: await providerSendMock(input),
+      failedOverFrom: null,
+    }),
+  } as unknown as EmailProviderRouter;
 
   return {
-    svc: new EmailDispatchService(prisma, render, resend),
+    svc: new EmailDispatchService(prisma, render, router),
     captured,
     capturedUpdates,
     prisma,
-    resendSendMock,
+    providerSendMock,
     renderMock: render.render as jest.Mock,
   };
 }
 
 describe('EmailDispatchService', () => {
   it('happy path: renders, sends, writes a SENT notification_log row', async () => {
-    const { svc, captured, resendSendMock } = makeSut({
-      resendResponse: { ok: true, providerMessageId: 'msg-abc' },
+    const { svc, captured, providerSendMock } = makeSut({
+      providerResponse: { ok: true, providerMessageId: 'msg-abc' },
       templateHasHtml: true,
     });
 
@@ -98,9 +116,9 @@ describe('EmailDispatchService', () => {
     expect(result.notificationLogId).toBe('log-1');
     expect(result.providerMessageId).toBe('msg-abc');
 
-    // Resend was called with the security@ sender and the rendered body+html.
-    expect(resendSendMock).toHaveBeenCalledTimes(1);
-    const send = resendSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
+    // The provider was handed the security@ sender and the rendered body+html.
+    expect(providerSendMock).toHaveBeenCalledTimes(1);
+    const send = providerSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
     expect(send['from']).toContain('security@skydrop.online');
     expect(send['replyTo']).toContain('support@skydrop.online');
     expect(send['to']).toBe('alex@x.io');
@@ -126,20 +144,20 @@ describe('EmailDispatchService', () => {
   });
 
   it('non-security templates resolve to hello@ sender', async () => {
-    const { svc, resendSendMock } = makeSut({
-      resendResponse: { ok: true, providerMessageId: 'msg-xyz' },
+    const { svc, providerSendMock } = makeSut({
+      providerResponse: { ok: true, providerMessageId: 'msg-xyz' },
     });
     await svc.send({
       templateCode: 'seller.invitation.email',
       recipient: { type: NotificationRecipientType.SELLER, email: 'newseller@x.io' },
     });
-    const send = resendSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
+    const send = providerSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
     expect(send['from']).toContain('hello@skydrop.online');
   });
 
   it('failure path: returns FAILED + records failure code/message in log', async () => {
     const { svc, captured } = makeSut({
-      resendResponse: { ok: false, code: 'RESEND_ERROR', message: 'rate limited' },
+      providerResponse: { ok: false, code: 'RESEND_ERROR', message: 'rate limited' },
     });
 
     const result = await svc.send({
@@ -162,21 +180,21 @@ describe('EmailDispatchService', () => {
   });
 
   it('falls back to "(no subject)" when template has no subject', async () => {
-    const { svc, resendSendMock } = makeSut({
-      resendResponse: { ok: true, providerMessageId: 'm' },
+    const { svc, providerSendMock } = makeSut({
+      providerResponse: { ok: true, providerMessageId: 'm' },
       templateSubject: null,
     });
     await svc.send({
       templateCode: 'order.confirmed.customer.sms',
       recipient: { type: NotificationRecipientType.CUSTOMER, email: 'c@x.io' },
     });
-    const send = resendSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
+    const send = providerSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
     expect(send['subject']).toBe('(no subject)');
   });
 
   it('passes language through to the renderer', async () => {
     const { svc, renderMock } = makeSut({
-      resendResponse: { ok: true, providerMessageId: 'm' },
+      providerResponse: { ok: true, providerMessageId: 'm' },
     });
     await svc.send({
       templateCode: 'shipment.dispatched.customer.sms',
@@ -195,7 +213,7 @@ describe('EmailDispatchService', () => {
   describe('existingNotificationLogId — M11 store-then-send UPDATE path', () => {
     it('UPDATEs the pre-created row instead of CREATing a fresh one on SENT', async () => {
       const { svc, captured, capturedUpdates, prisma } = makeSut({
-        resendResponse: { ok: true, providerMessageId: 'msg-existing' },
+        providerResponse: { ok: true, providerMessageId: 'msg-existing' },
         templateHasHtml: true,
       });
 
@@ -225,7 +243,7 @@ describe('EmailDispatchService', () => {
 
     it('UPDATEs the pre-created row to FAILED on send failure', async () => {
       const { svc, capturedUpdates } = makeSut({
-        resendResponse: { ok: false, code: 'RESEND_ERROR', message: 'down' },
+        providerResponse: { ok: false, code: 'RESEND_ERROR', message: 'down' },
       });
       const res = await svc.send({
         templateCode: 'seller.order_dispatched.email',
@@ -247,7 +265,7 @@ describe('EmailDispatchService', () => {
 
     it('legacy call path (no existingNotificationLogId) still CREATEs', async () => {
       const { svc, captured, capturedUpdates } = makeSut({
-        resendResponse: { ok: true, providerMessageId: 'msg' },
+        providerResponse: { ok: true, providerMessageId: 'msg' },
       });
       await svc.send({
         templateCode: 'staff.password_reset.email',
@@ -266,7 +284,7 @@ describe('EmailDispatchService', () => {
    */
   describe('a render failure is recorded on the row, not lost', () => {
     function withRenderFailure(err: Error) {
-      const sut = makeSut({ resendResponse: { ok: true, providerMessageId: 'never' } });
+      const sut = makeSut({ providerResponse: { ok: true, providerMessageId: 'never' } });
       const updateMany = jest.fn(async () => ({ count: 1 }));
       (sut.prisma.client.notificationLog as unknown as { updateMany: jest.Mock }).updateMany =
         updateMany;
@@ -275,7 +293,7 @@ describe('EmailDispatchService', () => {
     }
 
     it('writes TEMPLATE_NOT_FOUND onto the QUEUED row, keeps it QUEUED, and rethrows', async () => {
-      const { svc, updateMany, resendSendMock } = withRenderFailure(
+      const { svc, updateMany, providerSendMock } = withRenderFailure(
         new NotFoundException({ message: 'Email template not found: system_issue.money/en' }),
       );
 
@@ -287,7 +305,7 @@ describe('EmailDispatchService', () => {
         }),
       ).rejects.toThrow('Email template not found');
 
-      expect(resendSendMock).not.toHaveBeenCalled();
+      expect(providerSendMock).not.toHaveBeenCalled();
       expect(updateMany).toHaveBeenCalledTimes(1);
       const args = (
         updateMany.mock.calls[0] as unknown as [
@@ -351,7 +369,7 @@ describe('EmailDispatchService', () => {
   describe('a ledger failure must never cause a re-send', () => {
     it('reports SENT when the row write fails AFTER the provider accepted', async () => {
       const { svc } = makeSut({
-        resendResponse: { ok: true, providerMessageId: 'msg-sent-for-real' },
+        providerResponse: { ok: true, providerMessageId: 'msg-sent-for-real' },
         ledgerWriteFails: true,
       });
 
@@ -370,7 +388,7 @@ describe('EmailDispatchService', () => {
 
     it('does the same on the M11 update path', async () => {
       const { svc } = makeSut({
-        resendResponse: { ok: true, providerMessageId: 'msg-2' },
+        providerResponse: { ok: true, providerMessageId: 'msg-2' },
         ledgerWriteFails: true,
       });
       const result = await svc.send({
@@ -386,7 +404,7 @@ describe('EmailDispatchService', () => {
       // The inverse case matters as much: if no email went out, a retry is
       // correct and swallowing the error would lose the message entirely.
       const { svc } = makeSut({
-        resendResponse: { ok: false, code: 'RESEND_ERROR', message: 'rate limited' },
+        providerResponse: { ok: false, code: 'RESEND_ERROR', message: 'rate limited' },
         ledgerWriteFails: true,
       });
 
