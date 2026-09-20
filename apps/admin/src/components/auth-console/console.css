@@ -1,15 +1,30 @@
 /*
- * MISSION CONTROL skin — SCOPED TO THE LOGIN ROUTE ONLY.
+ * MISSION CONTROL skin — SCOPED TO THE AUTH ROUTES ONLY.
  *
  * The authed shell runs on @skydrop/ui tokens and must not change, so
  * this file re-declares those same token variables inside `.mc-login`.
  * Every existing Tailwind utility (bg-bg, text-text-bright, bg-accent…)
- * therefore renders in the marketing palette without touching a single
- * component class outside this route.
+ * therefore renders in the console palette without touching a single
+ * component class outside these routes.
  *
  * Palette source: docs/design-direction.md
- * Shared verbatim with apps/seller/src/app/login/login-console.css —
- * keep the two in sync.
+ *
+ * ── THREE COPIES EXIST, AND ONLY TWO OF THEM AGREE ──────────────────
+ * apps/admin and apps/reseller both render on `@skydrop/ui/tokens.css`,
+ * so their copies of this file are BYTE-IDENTICAL and must stay that
+ * way. A sign-in screen has to match the app behind it, and those two
+ * apps are behind the same palette.
+ *
+ * apps/seller is NOT a third copy of this. It moved to PRECISION
+ * LOGISTICS (`@skydrop/ui/seller-theme.css`) on 2026-09-19 and its
+ * console.css moved with it, deliberately; its own header says so. Do
+ * not "re-sync" it with these two.
+ *
+ * This header used to point at `apps/seller/src/app/login/login-console.css`
+ * and say "keep the two in sync". That path had not existed for months
+ * and the instruction had become the opposite of correct — which is
+ * exactly the FE-6 trap this file is the usual victim of. The rule now
+ * names which copies agree and which one does not.
  */
 
 .mc-login {

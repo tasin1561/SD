@@ -5,7 +5,7 @@ import { VerifyPanel } from './_components/verify-panel';
 /** Confirm an email address from the emailed link. */
 export default function VerifyEmailPage(): ReactElement {
   return (
-    <AuthFrame title="Confirm your email">
+    <AuthFrame section="verification" note="confirming" title="Confirm your email">
       <Suspense fallback={null}>
         <VerifyPanel />
       </Suspense>
