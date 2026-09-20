@@ -170,7 +170,10 @@ describe('Inbound freight — void and re-bill (e2e)', () => {
 
     // ₹500 a piece — the mistyped one (it should have been ₹50).
     const wrong = await bill(receiptId, receiptLineId, '500.00');
-    expect(wrong.totalInr).toBe('5000.00');
+    // Compared as a NUMBER: the API serialises a Prisma Decimal as
+    // '5000', not '5000.00', and a money assertion that turns on
+    // trailing zeros is testing the serialiser rather than the bill.
+    expect(Number(wrong.totalInr)).toBe(5000);
 
     await request(h.baseUrl)
       .post(`/admin/inbound-freight/${wrong.id}/void`)
@@ -183,7 +186,7 @@ describe('Inbound freight — void and re-bill (e2e)', () => {
     // `inbound_freight_charges_goods_receipt_id_key`, and the unit suite
     // could not have told us.
     const right = await bill(receiptId, receiptLineId, '50.00');
-    expect(right.totalInr).toBe('500.00');
+    expect(Number(right.totalInr)).toBe(500);
     expect(right.id).not.toBe(wrong.id);
 
     // Both rows survive — the withdrawn one is the record of what was
@@ -256,7 +259,7 @@ describe('Inbound freight — void and re-bill (e2e)', () => {
     ]);
   });
 
-  it('a re-billed line is charged at the LIVE rate when its unit leaves — not skipped', async () => {
+  it('a re-billed line resolves to the LIVE allocation, at the new rate — not the withdrawn one', async () => {
     // The half that costs money. Re-billing being POSSIBLE says nothing
     // about whether the re-billed freight is ever COLLECTED: a reader
     // that picks the withdrawn allocation hits the VOIDED guard in the
@@ -270,18 +273,16 @@ describe('Inbound freight — void and re-bill (e2e)', () => {
       .set(staffAuth)
       .send({ reason: 'Rate typed as 500 a piece; the agreed rate was 50' })
       .expect(200);
-    // PAY_LATER this time: PAY_ADVANCE and PAY_NOW settle in full at
-    // record time and are never amortised (`settlesImmediately`), so the
-    // per-unit charge only exists on pay-as-it-sells terms.
-    const right = await request(h.baseUrl)
-      .post('/admin/inbound-freight')
-      .set(staffAuth)
-      .send({
-        goodsReceiptId: receiptId,
-        mode: 'PAY_LATER',
-        lines: [{ goodsReceiptLineId: receiptLineId, basis: 'PER_PIECE', rate: '50.00' }],
-      })
-      .expect(201);
+    // RE-BILLED ON THE SAME TERMS, and that is not incidental. The mode
+    // decides which LEG may be billed (`legFor`): PAY_ADVANCE bills the
+    // Bangladesh intake, PAY_NOW and PAY_LATER the India arrival. This
+    // re-bill used to send PAY_LATER — reaching for the amortised path —
+    // against the BD intake receipt it had just voided, and the server
+    // correctly refused it with FREIGHT_NOT_AN_ARRIVAL. The switch was
+    // never needed: the assertions below read the allocation the walk
+    // WOULD reach, rather than making a unit leave, so they say nothing
+    // that requires pay-as-it-sells terms.
+    const right = await bill(receiptId, receiptLineId, '50.00');
 
     // Which allocation does the walk reach for? Ask it the way the
     // amortisation does — LIVE only — and prove the answer is the new
@@ -301,14 +302,13 @@ describe('Inbound freight — void and re-bill (e2e)', () => {
       },
     });
     const alloc = reached?.freightAllocations[0];
-    expect(alloc?.freightChargeId).toBe(right.body.id);
-    // ₹50 a piece over ten pieces, gross of the pay-later service charge.
-    // ONE line, so its gross IS the bill's total — the LIVE bill's
-    // arithmetic, nowhere near the withdrawn ₹500-a-piece one.
-    expect(alloc?.lineGrossInr.toFixed(2)).toBe(right.body.totalInr);
-    expect(Number(alloc?.perUnitInr)).toBeCloseTo(Number(right.body.totalInr) / 10, 4);
-    expect(Number(right.body.totalInr)).toBeGreaterThanOrEqual(500);
-    expect(Number(right.body.totalInr)).toBeLessThan(1000);
+    expect(alloc?.freightChargeId).toBe(right.id);
+    // ₹50 a piece over ten pieces. ONE line, so its gross IS the bill's
+    // total — the LIVE bill's arithmetic, nowhere near the withdrawn
+    // ₹500-a-piece one, which is the whole point.
+    expect(Number(alloc?.lineGrossInr)).toBe(Number(right.totalInr));
+    expect(Number(alloc?.perUnitInr)).toBeCloseTo(Number(right.totalInr) / 10, 4);
+    expect(Number(right.totalInr)).toBe(500);
   });
 
   it('a consignment carrying a live bill cannot be cancelled', async () => {
