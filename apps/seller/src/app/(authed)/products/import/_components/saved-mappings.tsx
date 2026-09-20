@@ -2,15 +2,15 @@
 
 import { useState, type ReactElement } from 'react';
 import {
+  BandBody,
   Button,
-  Card,
   EmptyState,
   ErrorNote,
   FormField,
   Input,
   Modal,
   ModalFooter,
-  Section,
+  SectionBand,
   SkeletonRows,
   StatusBadge,
   TBody,
@@ -54,26 +54,34 @@ export function SavedMappings(): ReactElement {
   const items = list.data ?? [];
 
   return (
-    <Section
-      title="Saved column mappings"
-      subtitle="Reusable translations from your spreadsheet's headers to ours."
-      action={
-        <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
-          Save a mapping
-        </Button>
-      }
-    >
-      <Card>
+    <div className="mt-4">
+      <SectionBand
+        index="04"
+        title="Saved column mappings"
+        note="Your spreadsheet's headers, translated to ours."
+        action={
+          <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
+            Save a mapping
+          </Button>
+        }
+      />
+      <BandBody flush>
         {list.isLoading ? (
-          <SkeletonRows rows={2} />
+          <div className="p-3">
+            <SkeletonRows rows={2} />
+          </div>
         ) : list.isError ? (
-          <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <div className="p-3">
+            <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          </div>
         ) : items.length === 0 ? (
-          <EmptyState
-            bare
-            title="No saved mappings"
-            description="Only worth it if your export headers differ from the template. If you use our template as-is, you do not need one."
-          />
+          <div className="p-3">
+            <EmptyState
+              bare
+              title="No saved mappings"
+              description="Only worth it if your export headers differ from the template. If you use our template as-is, you do not need one."
+            />
+          </div>
         ) : (
           <Table>
             <THead>
@@ -134,7 +142,7 @@ export function SavedMappings(): ReactElement {
             </TBody>
           </Table>
         )}
-      </Card>
+      </BandBody>
 
       {(remove.error !== null || update.error !== null) && (
         <ErrorNote message={serverVerdict(remove.error ?? update.error)} />
@@ -148,7 +156,7 @@ export function SavedMappings(): ReactElement {
           setCreating(false);
         }}
       />
-    </Section>
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
-import { PageHeader } from '@skydrop/ui/components';
+import Link from 'next/link';
+import { Crumbs, PageHeader } from '@skydrop/ui/components';
 import { EditOrderForm } from './_components/edit-order-form';
 
 /**
@@ -18,8 +19,20 @@ export default async function EditOrderPage({
   return (
     <div>
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Fulfilment' },
+              { label: 'Orders', href: '/orders' },
+              { label: 'Order', href: `/orders/${id}` },
+              { label: 'Edit' },
+            ]}
+            Link={Link}
+          />
+        }
         title="Edit order"
-        subtitle="DRAFT orders are fully editable. PENDING_CONFIRMATION orders allow recipient + notes corrections only."
+        subtitle="A draft can be changed in full. Once it is waiting on the call centre, the recipient and the notes are still yours to correct."
       />
       <EditOrderForm orderId={id} />
     </div>

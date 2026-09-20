@@ -2,15 +2,24 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import { ArrowLeft, Download } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  FileSpreadsheet,
+  PackagePlus,
+  SkipForward,
+  XCircle,
+} from 'lucide-react';
 import type { BulkUploadStatus } from '@skydrop/db';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
+  Crumbs,
   DescriptionList,
   ErrorNote,
-  Section,
+  MetaChip,
+  PageHeader,
+  SectionBand,
   Skeleton,
   Stat,
 } from '@skydrop/ui/components';
@@ -136,61 +145,92 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
         <ErrorNote message="This import could not be found." />
       ) : (
         <>
-          <div className="mb-5">
-            <h1 className="text-text-bright truncate font-mono text-lg font-semibold tracking-tight sm:text-xl">
-              {job.fileName}
-            </h1>
-            <p className="text-text-muted mt-1 text-sm">{outcomeProse(job.status)}</p>
-          </div>
+          <PageHeader
+            breadcrumb={
+              <Crumbs
+                items={[
+                  { label: 'Seller console' },
+                  { label: 'Fulfilment' },
+                  { label: 'Orders', href: '/orders' },
+                  { label: 'CSV import', href: '/orders/import' },
+                  { label: job.fileName },
+                ]}
+                Link={Link}
+              />
+            }
+            title={<span className="font-mono">{job.fileName}</span>}
+            subtitle={outcomeProse(job.status)}
+            meta={
+              <>
+                <MetaChip tone="accent">
+                  {job.rowCount} {job.rowCount === 1 ? 'row' : 'rows'}
+                </MetaChip>
+                {running && <MetaChip dot>Running now</MetaChip>}
+                {job.rowsFailed > 0 && <MetaChip tone="bad">{job.rowsFailed} refused</MetaChip>}
+              </>
+            }
+          />
 
-          <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat label="Rows in file" value={job.rowCount} />
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat
+              label="Rows in file"
+              icon={<FileSpreadsheet size={13} aria-hidden />}
+              value={job.rowCount}
+              unit={job.rowCount === 1 ? 'row' : 'rows'}
+              tone="neutral"
+            />
             <Stat
               label="Orders created"
+              icon={<PackagePlus size={13} aria-hidden />}
               value={job.ordersCreated}
+              unit={job.ordersCreated === 1 ? 'order' : 'orders'}
               tone={job.ordersCreated > 0 ? 'good' : 'neutral'}
               hint={running ? 'Still counting.' : undefined}
             />
             <Stat
-              label="Rows failed"
+              label="Rows refused"
+              icon={<XCircle size={13} aria-hidden />}
               value={job.rowsFailed}
+              unit={job.rowsFailed === 1 ? 'row' : 'rows'}
               tone={job.rowsFailed > 0 ? 'bad' : 'neutral'}
               hint={job.rowsFailed > 0 ? 'Listed in the error report.' : undefined}
             />
             <Stat
               label="Rows skipped"
+              icon={<SkipForward size={13} aria-hidden />}
               value={job.rowsSkipped}
+              unit={job.rowsSkipped === 1 ? 'row' : 'rows'}
+              tone="neutral"
               hint={
                 job.rowsSkipped > 0
-                  ? 'Already imported under the same reference — not duplicated.'
+                  ? 'Already sent under the same reference — not duplicated.'
                   : undefined
               }
             />
           </div>
 
-          <Section title="This run">
-            <Card>
-              <CardBody>
-                <DescriptionList
-                  columns={3}
-                  items={[
-                    { label: 'Status', value: <span className="uppercase">{job.status}</span> },
-                    { label: 'Uploaded', value: stamp(job.createdAt) },
-                    { label: 'Started', value: stamp(job.startedAt) },
-                    { label: 'Finished', value: stamp(job.completedAt) },
-                    {
-                      label: running ? 'Running for' : 'Took',
-                      value: duration(job.startedAt, job.completedAt),
-                    },
-                    {
-                      label: 'Import ID',
-                      value: <span className="font-mono text-xs">{job.id}</span>,
-                    },
-                  ]}
-                />
-              </CardBody>
-            </Card>
-          </Section>
+          <div className="mb-4">
+            <SectionBand index="01" title="This run" note="When it ran, and for how long." />
+            <BandBody>
+              <DescriptionList
+                columns={3}
+                items={[
+                  { label: 'Status', value: <span className="uppercase">{job.status}</span> },
+                  { label: 'Uploaded', value: stamp(job.createdAt) },
+                  { label: 'Started', value: stamp(job.startedAt) },
+                  { label: 'Finished', value: stamp(job.completedAt) },
+                  {
+                    label: running ? 'Running for' : 'Took',
+                    value: duration(job.startedAt, job.completedAt),
+                  },
+                  {
+                    label: 'Import ID',
+                    value: <span className="font-mono text-xs break-all">{job.id}</span>,
+                  },
+                ]}
+              />
+            </BandBody>
+          </div>
 
           {downloadError !== null && (
             <ErrorNote

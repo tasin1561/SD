@@ -6,14 +6,14 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { OrderedProducts, ProductCatalogue, type PickedLine } from '@/components/product-picker';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
+  Crumbs,
   FormField,
   Input,
   Money,
   PageHeader,
+  SectionBand,
   Select,
   Textarea,
   useToast,
@@ -506,13 +506,6 @@ export function NewOrderForm(): ReactElement {
    * is what makes a section start read as a section start in BOTH
    * themes rather than only in light.
    */
-  const sectionTitle = (label: string): ReactElement => (
-    <span className="inline-flex items-center gap-2">
-      <span aria-hidden className="bg-accent inline-block h-3.5 w-[3px] rounded-full" />
-      {label}
-    </span>
-  );
-
   /** The three actions, rendered twice — at the top and on the sticky
    *  bar. A long form whose only submit is 1,400px below the fold makes
    *  a seller scroll past everything they have just checked. */
@@ -584,8 +577,19 @@ export function NewOrderForm(): ReactElement {
       </Link>
 
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Fulfilment' },
+              { label: 'Orders', href: '/orders' },
+              { label: 'New' },
+            ]}
+            Link={Link}
+          />
+        }
         title="New order"
-        subtitle="Enter recipient + line details. Stock is reserved when the call centre confirms the order."
+        subtitle="Who it goes to and what is in it. Stock is held when the call centre confirms the order, not now."
         // Desktop only. The sticky bar carries the same three actions and
         // is always on screen; on a phone the pair together cost about a
         // fifth of the viewport before a single field is visible.
@@ -610,13 +614,14 @@ export function NewOrderForm(): ReactElement {
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         {/* ── Left: what the customer told them ─────────────────── */}
         <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader
-              tone="accent"
-              title={sectionTitle('Recipient')}
+          <div>
+            <SectionBand
+              index="01"
+              title="Recipient"
+              note="Where the parcel is going."
               action={serviceabilityChip}
             />
-            <CardBody>
+            <BandBody>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <FormField
                   label="Full name"
@@ -748,16 +753,16 @@ export function NewOrderForm(): ReactElement {
                   />
                 </FormField>
               </div>
-            </CardBody>
-          </Card>
+            </BandBody>
+          </div>
 
-          <Card>
-            <CardHeader
-              tone="accent"
-              title={sectionTitle('Reference & notes')}
-              subtitle="Yours and the call agent's — none of it reaches the customer."
+          <div>
+            <SectionBand
+              index="02"
+              title="Reference &amp; notes"
+              note="Yours and the call agent's — none of it reaches the customer."
             />
-            <CardBody>
+            <BandBody>
               <div className="grid grid-cols-1 gap-3">
                 {/*
                   Always SHOWN, only sometimes a CHOICE.
@@ -827,31 +832,32 @@ export function NewOrderForm(): ReactElement {
                   />
                 </FormField>
               </div>
-            </CardBody>
-          </Card>
+            </BandBody>
+          </div>
         </div>
 
         {/* ── Right: what they are sending, and what it comes to ─── */}
         <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader
-              tone="accent"
-              title={sectionTitle('Click to add products')}
-              subtitle="Price and stock are on the row, before you choose."
+          <div>
+            <SectionBand
+              index="03"
+              title="Click to add products"
+              note="Price and stock are on the row, before you choose."
             />
-            <ProductCatalogue
-              lines={items}
-              stockByVariant={stockByVariant}
-              onAdd={addFromCatalogue}
-            />
-          </Card>
+            <BandBody flush>
+              <ProductCatalogue
+                lines={items}
+                stockByVariant={stockByVariant}
+                onAdd={addFromCatalogue}
+              />
+            </BandBody>
+          </div>
 
-          <Card>
-            <CardHeader
-              tone="accent"
-              title={sectionTitle(
-                `Ordered products (${items.length} ${items.length === 1 ? 'item' : 'items'})`,
-              )}
+          <div>
+            <SectionBand
+              index="04"
+              title="Ordered products"
+              note={`${items.length} ${items.length === 1 ? 'item' : 'items'}`}
               action={
                 items.length === 0 ? null : (
                   <span className="text-text-bright font-mono text-sm tabular-nums">
@@ -860,13 +866,15 @@ export function NewOrderForm(): ReactElement {
                 )
               }
             />
-            <OrderedProducts
-              lines={items}
-              stockByVariant={stockByVariant}
-              onPatch={patchItem}
-              onRemove={removeItem}
-            />
-          </Card>
+            <BandBody flush>
+              <OrderedProducts
+                lines={items}
+                stockByVariant={stockByVariant}
+                onPatch={patchItem}
+                onRemove={removeItem}
+              />
+            </BandBody>
+          </div>
 
           {shortLines.length > 0 && (
             <div className="rounded-[7px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-4 py-3">
@@ -899,9 +907,13 @@ export function NewOrderForm(): ReactElement {
             </div>
           )}
 
-          <Card>
-            <CardHeader tone="accent" title={sectionTitle('Payment & physical')} />
-            <CardBody>
+          <div>
+            <SectionBand
+              index="05"
+              title="Payment &amp; parcel"
+              note="What the customer pays, and what it weighs."
+            />
+            <BandBody>
               {/*
                 A segmented pair, not a dropdown. There are exactly two
                 answers, one of them is nearly always the right one, and
@@ -1126,8 +1138,8 @@ export function NewOrderForm(): ReactElement {
                   </p>
                 </div>
               )}
-            </CardBody>
-          </Card>
+            </BandBody>
+          </div>
         </div>
       </div>
 

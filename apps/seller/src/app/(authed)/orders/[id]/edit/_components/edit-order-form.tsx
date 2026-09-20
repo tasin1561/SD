@@ -6,7 +6,9 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 
 import {
   Button,
   Card,
+  BandBody,
   CardBody,
+  SectionBand,
   ErrorState,
   FormField,
   Input,
@@ -444,14 +446,19 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       {/* The lines — editable, because a wrong product on an order
           nobody has confirmed yet is a correction, not a reason to
           cancel and start again. */}
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright mb-2 text-sm font-medium">
-            Items
-            {linesChanged && (
-              <span className="text-pending ml-2 text-xs">changed — save to apply</span>
-            )}
-          </h2>
+      <div>
+        <SectionBand
+          index="01"
+          title="Items"
+          note={
+            linesChanged ? (
+              <span className="text-pending">changed — save to apply</span>
+            ) : (
+              'What is in the parcel.'
+            )
+          }
+        />
+        <BandBody>
           {lines === null ? (
             <LoadingState label="Loading the items…" />
           ) : (
@@ -502,14 +509,14 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               />
             </div>
           )}
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
       {/* Recipient */}
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">Recipient</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <SectionBand index="02" title="Recipient" note="Where it is going." />
+        <BandBody>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField label="Full name" required hint={prefixHint(sellerInitials)}>
               {/* Chrome, like the +91 below — the seller cannot edit
                   their own code, so it is not part of the input. */}
@@ -635,14 +642,18 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               />
             </FormField>
           </div>
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
       {/* Payment + physical */}
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">Payment &amp; physical</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <SectionBand
+          index="03"
+          title="Payment &amp; parcel"
+          note="What the customer pays, and what it weighs."
+        />
+        <BandBody>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField label="Payment mode" required>
               <Select
                 value={form.paymentMode}
@@ -782,13 +793,13 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               </label>
             </FormField>
           </div>
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
       {/* Notes — always editable */}
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">Notes</h2>
+      <div>
+        <SectionBand index="04" title="Notes" note="For us, never the customer." />
+        <BandBody>
           <FormField label="Seller notes">
             <Textarea
               rows={3}
@@ -798,8 +809,8 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               placeholder="Anything the call agent should know"
             />
           </FormField>
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
       {error && (
         <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">

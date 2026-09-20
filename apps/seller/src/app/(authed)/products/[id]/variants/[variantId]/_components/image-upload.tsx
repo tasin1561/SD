@@ -9,16 +9,7 @@ import {
   useRegisterImage,
   useVariantImages,
 } from '@/lib/api-hooks';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  StatusBadge,
-} from '@skydrop/ui/components';
+import { Button, EmptyState, ErrorState, LoadingState, StatusBadge } from '@skydrop/ui/components';
 
 /**
  * Variant image upload — drag-drop multi (up to MAX concurrent,
@@ -163,119 +154,117 @@ export function VariantImageUpload({ variantId }: { variantId: string }): ReactE
     [acceptFiles],
   );
 
+  // No <Card> and no head of its own: the caller caps this with a
+  // SectionBand, and `BandBody` is the bordered surface. The drag hint
+  // that used to be the card subtitle now leads the dropzone, where
+  // the person about to drop something is looking.
   return (
-    <Card>
-      <CardHeader
-        title="Images"
-        subtitle={`Drag up to ${MAX_UPLOAD_BATCH} files at once. JPG / PNG / WEBP.`}
-      />
-      <CardBody className="space-y-3">
-        {/* Dropzone */}
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragActive(true);
+    <div className="space-y-3">
+      <p className="text-text-faint text-xs">
+        Drag up to {MAX_UPLOAD_BATCH} files at once. JPG / PNG / WEBP.
+      </p>
+      {/* Dropzone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragActive(true);
+        }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={onDrop}
+        className={
+          'rounded-[7px] border-2 border-dashed px-4 py-8 text-center transition-colors cursor-pointer ' +
+          (dragActive
+            ? 'border-accent bg-[var(--color-accent-tint)]'
+            : 'border-border hover:border-border-strong')
+        }
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <Upload size={20} className="mx-auto text-text-muted mb-2" />
+        <div className="text-text-body text-sm">Drop images here or click to browse</div>
+        <div className="text-text-faint text-xs mt-1">
+          JPG / PNG / WEBP · up to {MAX_UPLOAD_BATCH} at once
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ACCEPTED_TYPES.join(',')}
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) acceptFiles(e.target.files);
+            if (fileInputRef.current) fileInputRef.current.value = '';
           }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={onDrop}
-          className={
-            'rounded-[7px] border-2 border-dashed px-4 py-8 text-center transition-colors cursor-pointer ' +
-            (dragActive
-              ? 'border-accent bg-[var(--color-accent-tint)]'
-              : 'border-border hover:border-border-strong')
-          }
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <Upload size={20} className="mx-auto text-text-muted mb-2" />
-          <div className="text-text-body text-sm">Drop images here or click to browse</div>
-          <div className="text-text-faint text-xs mt-1">
-            JPG / PNG / WEBP · up to {MAX_UPLOAD_BATCH} at once
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={ACCEPTED_TYPES.join(',')}
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files) acceptFiles(e.target.files);
-              if (fileInputRef.current) fileInputRef.current.value = '';
-            }}
-          />
-        </div>
+        />
+      </div>
 
-        {/* Upload queue */}
-        {queue.length > 0 && (
-          <ul className="space-y-1.5">
-            {queue.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center gap-3 px-2 py-1.5 rounded-[5px] bg-surface-raised border border-border"
-              >
-                <span className="text-text-body text-sm flex-1 min-w-0 truncate font-mono text-xs">
-                  {item.file.name}
+      {/* Upload queue */}
+      {queue.length > 0 && (
+        <ul className="space-y-1.5">
+          {queue.map((item) => (
+            <li
+              key={item.id}
+              className="flex items-center gap-3 px-2 py-1.5 rounded-[5px] bg-surface-raised border border-border"
+            >
+              <span className="text-text-body text-sm flex-1 min-w-0 truncate font-mono text-xs">
+                {item.file.name}
+              </span>
+              <UploadStatusBadge status={item.status} />
+              {item.status === 'error' && item.errorCode && (
+                <span className="text-critical text-xs font-mono">
+                  [{item.errorCode}] {item.errorMessage}
                 </span>
-                <UploadStatusBadge status={item.status} />
-                {item.status === 'error' && item.errorCode && (
-                  <span className="text-critical text-xs font-mono">
-                    [{item.errorCode}] {item.errorMessage}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
-        {/* Persisted images */}
-        <div className="pt-3 border-t border-border">
-          {images.isLoading ? (
-            <LoadingState label="Loading images…" />
-          ) : images.isError ? (
-            <ErrorState
-              message={images.error?.message ?? 'Failed to load images.'}
-              retry={() => void images.refetch()}
-            />
-          ) : !images.data || images.data.length === 0 ? (
-            <EmptyState
-              title="No images yet"
-              description="Drop a file above to upload your first."
-            />
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {images.data.map((img) => (
-                <div
-                  key={img.id}
-                  className="rounded-[5px] border border-border bg-surface-raised overflow-hidden"
-                >
-                  {/* Plain img — Next/Image would need a remotePatterns
+      {/* Persisted images */}
+      <div className="pt-3 border-t border-border">
+        {images.isLoading ? (
+          <LoadingState label="Loading images…" />
+        ) : images.isError ? (
+          <ErrorState
+            message={images.error?.message ?? 'Failed to load images.'}
+            retry={() => void images.refetch()}
+          />
+        ) : !images.data || images.data.length === 0 ? (
+          <EmptyState title="No images yet" description="Drop a file above to upload your first." />
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {images.data.map((img) => (
+              <div
+                key={img.id}
+                className="rounded-[5px] border border-border bg-surface-raised overflow-hidden"
+              >
+                {/* Plain img — Next/Image would need a remotePatterns
                        allowlist; deferred for Phase 2 optimizations. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={img.thumbnailUrl ?? img.displayUrl}
-                    alt={img.altText ?? 'Variant image'}
-                    className="w-full aspect-square object-cover"
-                  />
-                  <div className="flex items-center justify-between px-2 py-1.5 text-xs">
-                    <span className="text-text-faint font-mono truncate">
-                      {Math.round(img.sizeBytes / 1024)} KB
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void deleteImg.mutateAsync({ variantId, imageId: img.id })}
-                      disabled={deleteImg.isPending}
-                      title="Delete image"
-                    >
-                      <Trash2 size={12} />
-                    </Button>
-                  </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.thumbnailUrl ?? img.displayUrl}
+                  alt={img.altText ?? 'Variant image'}
+                  className="w-full aspect-square object-cover"
+                />
+                <div className="flex items-center justify-between px-2 py-1.5 text-xs">
+                  <span className="text-text-faint font-mono truncate">
+                    {Math.round(img.sizeBytes / 1024)} KB
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void deleteImg.mutateAsync({ variantId, imageId: img.id })}
+                    disabled={deleteImg.isPending}
+                    title="Delete image"
+                  >
+                    <Trash2 size={12} />
+                  </Button>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </CardBody>
-    </Card>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

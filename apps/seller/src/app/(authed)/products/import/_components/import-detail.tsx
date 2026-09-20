@@ -2,16 +2,19 @@
 
 import Link from 'next/link';
 import type { ReactElement } from 'react';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Boxes, Download, FileSpreadsheet, Layers, XCircle } from 'lucide-react';
 import {
+  BandBody,
   Button,
   Card,
   CardBody,
+  Crumbs,
   DescriptionList,
   ErrorNote,
   Ident,
+  MetaChip,
   PageHeader,
-  Section,
+  SectionBand,
   Skeleton,
   Stat,
 } from '@skydrop/ui/components';
@@ -76,75 +79,120 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
       <BackLink />
 
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Stock & WMS' },
+              { label: 'Products', href: '/products' },
+              { label: 'History', href: '/products/import/jobs' },
+              { label: job.fileName },
+            ]}
+            Link={Link}
+          />
+        }
         title={<span className="font-mono">{job.fileName}</span>}
         subtitle={`Uploaded ${formatDateTime(job.createdAt)}`}
+        meta={
+          <>
+            <MetaChip tone="accent">
+              {job.rowCount ?? '—'} {job.rowCount === 1 ? 'row' : 'rows'}
+            </MetaChip>
+            {inFlight && <MetaChip dot>Running now</MetaChip>}
+            {job.rowsFailed > 0 && <MetaChip tone="bad">{job.rowsFailed} refused</MetaChip>}
+          </>
+        }
         action={<ImportStatusBadge status={job.status} />}
       />
 
-      <Card className="mb-6">
-        <CardBody>
+      {/* ── What it wrote ────────────────────────────────────────────
+             OBJECTS, not rows: one row can create a product AND its
+             first variant, so these deliberately do not add up to the
+             row count — each tile's footer says which half is new. */}
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Rows in file"
+          icon={<FileSpreadsheet size={13} aria-hidden />}
+          value={job.rowCount ?? <span className="text-text-faint">—</span>}
+          unit={job.rowCount === null ? undefined : job.rowCount === 1 ? 'row' : 'rows'}
+          tone="neutral"
+        />
+        <Stat
+          label="Products"
+          icon={<Boxes size={13} aria-hidden />}
+          value={job.productsCreated + job.productsUpdated}
+          tone="neutral"
+          foot={[
+            { label: 'New', value: job.productsCreated },
+            { label: 'Updated', value: job.productsUpdated },
+          ]}
+        />
+        <Stat
+          label="Variants"
+          icon={<Layers size={13} aria-hidden />}
+          value={job.variantsCreated + job.variantsUpdated}
+          unit="SKUs"
+          tone="neutral"
+          foot={[
+            { label: 'New', value: job.variantsCreated },
+            { label: 'Updated', value: job.variantsUpdated },
+          ]}
+        />
+        <Stat
+          label="Refused"
+          icon={<XCircle size={13} aria-hidden />}
+          value={job.rowsFailed}
+          unit={job.rowsFailed === 1 ? 'row' : 'rows'}
+          tone={job.rowsFailed > 0 ? 'bad' : 'neutral'}
+          hint={
+            job.rowsSkipped > 0
+              ? `${job.rowsSkipped} row${job.rowsSkipped === 1 ? '' : 's'} also skipped as unchanged.`
+              : 'Rows we could not write.'
+          }
+        />
+      </div>
+
+      <div className="mb-4">
+        <SectionBand index="01" title="Outcome" note="What this upload did to your catalogue." />
+        <BandBody>
           <p className="text-text-body text-sm leading-relaxed">{OUTCOME_COPY[job.status]}</p>
           {inFlight && (
             <p className="text-text-faint mt-1 text-xs">
               This page refreshes itself while it runs — nothing to reload.
             </p>
           )}
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
-      <Section
-        title="What it wrote"
-        subtitle="Objects, not rows: a single row can create a product AND its first variant, so these will not add up to the row count."
-      >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Rows in file" value={job.rowCount ?? '—'} />
-          <Stat
-            label="Products"
-            value={job.productsCreated + job.productsUpdated}
-            hint={`${job.productsCreated} new · ${job.productsUpdated} updated`}
-          />
-          <Stat
-            label="Variants"
-            value={job.variantsCreated + job.variantsUpdated}
-            hint={`${job.variantsCreated} new · ${job.variantsUpdated} updated`}
-          />
-          <Stat
-            label="Refused"
-            value={job.rowsFailed}
-            tone={job.rowsFailed > 0 ? 'bad' : 'neutral'}
-            hint={
-              job.rowsSkipped > 0
-                ? `${job.rowsSkipped} row${job.rowsSkipped === 1 ? '' : 's'} also skipped as unchanged`
-                : 'Rows we could not write'
-            }
-          />
-        </div>
-      </Section>
+      {job.errorReportKey !== null && <ErrorReport job={job} index="02" />}
 
-      {job.errorReportKey !== null && <ErrorReport job={job} />}
-
-      <Section title="Timing">
-        <Card>
-          <CardBody>
-            <DescriptionList
-              columns={3}
-              items={[
-                { label: 'Uploaded', value: formatDateTime(job.createdAt) },
-                {
-                  label: 'Started',
-                  value: job.startedAt === null ? <Waiting /> : formatDateTime(job.startedAt),
-                },
-                {
-                  label: 'Finished',
-                  value: job.completedAt === null ? <Waiting /> : formatDateTime(job.completedAt),
-                },
-                { label: 'Took', value: duration(job) },
-                { label: 'Import id', value: <Ident value={job.id} /> },
-              ]}
-            />
-          </CardBody>
-        </Card>
-      </Section>
+      <div>
+        {/* 02 when nothing was refused, 03 when the band above it
+            exists — a gap in the numbers reads as a missing section. */}
+        <SectionBand
+          index={job.errorReportKey === null ? '02' : '03'}
+          title="Timing"
+          note="When it ran."
+        />
+        <BandBody>
+          <DescriptionList
+            columns={3}
+            items={[
+              { label: 'Uploaded', value: formatDateTime(job.createdAt) },
+              {
+                label: 'Started',
+                value: job.startedAt === null ? <Waiting /> : formatDateTime(job.startedAt),
+              },
+              {
+                label: 'Finished',
+                value: job.completedAt === null ? <Waiting /> : formatDateTime(job.completedAt),
+              },
+              { label: 'Took', value: duration(job) },
+              { label: 'Import id', value: <Ident value={job.id} /> },
+            ]}
+          />
+        </BandBody>
+      </div>
     </div>
   );
 }
@@ -157,35 +205,40 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
  * `(sellerId, externalRef)` for products and `(sellerId, skuCode)` for
  * variants, so sending the corrected rows again touches only them.
  */
-function ErrorReport({ job }: { readonly job: CsvImportView }): ReactElement {
+function ErrorReport({
+  job,
+  index,
+}: {
+  readonly job: CsvImportView;
+  readonly index: string;
+}): ReactElement {
   const download = useErrorReportDownload();
 
   return (
-    <Section title="Refused rows">
-      <Card>
-        <CardBody>
-          <p className="text-text-body text-sm leading-relaxed">
-            {job.rowsFailed} row{job.rowsFailed === 1 ? '' : 's'} could not be written. The report
-            below carries each one with the reason it was refused — fix those rows and upload the
-            file again; re-importing updates what already exists rather than duplicating it.
-          </p>
-          <div className="mt-3">
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={download.isPending}
-              onClick={() => download.mutate({ id: job.id, fileName: job.fileName })}
-            >
-              <Download size={14} />
-              {download.isPending ? 'Preparing…' : 'Download the report'}
-            </Button>
-          </div>
-          {download.error !== null && (
-            <ErrorNote className="mt-3" message={serverVerdict(download.error)} />
-          )}
-        </CardBody>
-      </Card>
-    </Section>
+    <div className="mb-4">
+      <SectionBand index={index} title="Refused rows" note={`${job.rowsFailed} to fix`} />
+      <BandBody>
+        <p className="text-text-body text-sm leading-relaxed">
+          {job.rowsFailed} row{job.rowsFailed === 1 ? '' : 's'} could not be written. The report
+          below carries each one with the reason it was refused — fix those rows and upload the file
+          again; re-importing updates what already exists rather than duplicating it.
+        </p>
+        <div className="mt-3">
+          <Button
+            variant="secondary"
+            size="md"
+            disabled={download.isPending}
+            onClick={() => download.mutate({ id: job.id, fileName: job.fileName })}
+          >
+            <Download size={14} />
+            {download.isPending ? 'Preparing…' : 'Download the report'}
+          </Button>
+        </div>
+        {download.error !== null && (
+          <ErrorNote className="mt-3" message={serverVerdict(download.error)} />
+        )}
+      </BandBody>
+    </div>
   );
 }
 

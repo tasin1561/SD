@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Barcode, Boxes, Percent, Wallet } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { ApiError, type SellerVariantView } from '@skydrop/api-client';
 import type { SellerProductView } from '@skydrop/api-client';
@@ -15,19 +15,22 @@ import {
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
+  Crumbs,
+  DescriptionList,
   ErrorState,
   FormActions,
   FormField,
   Input,
   LoadingState,
+  MetaChip,
   Modal,
   ModalFooter,
+  Money,
   PageHeader,
-  Section,
+  SectionBand,
+  Stat,
   StatusBadge,
   useToast,
 } from '@skydrop/ui/components';
@@ -82,8 +85,31 @@ export function VariantDetailView({
       ) : (
         <>
           <PageHeader
+            breadcrumb={
+              <Crumbs
+                items={[
+                  { label: 'Seller console' },
+                  { label: 'Products', href: '/products' },
+                  { label: product.data?.name ?? 'Product', href: `/products/${productId}` },
+                  { label: detail.data.skuCode },
+                ]}
+                Link={Link}
+              />
+            }
             title={<span className="font-mono">{detail.data.skuCode}</span>}
             subtitle={detail.data.variantLabel ?? undefined}
+            /*
+              The comps show a "scans to" chip beside the SKU. What a
+              scan resolves to is `barcode ?? skuCode` (LBL-2) and that
+              IS shown — as its own tile, where the fallback can be
+              stated rather than implied by a chip that reads as a
+              second, different code.
+            */
+            meta={
+              product.data === undefined ? undefined : (
+                <MetaChip tone="accent">{product.data.name}</MetaChip>
+              )
+            }
             action={
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge
@@ -106,27 +132,134 @@ export function VariantDetailView({
             }
           />
 
-          <Section
-            title="Details"
-            action={!editing && <Button onClick={() => setEditing(true)}>Edit variant</Button>}
-          >
-            {editing ? (
-              <VariantEditForm
-                productId={productId}
-                variant={detail.data}
-                onCancel={() => setEditing(false)}
-                onSaved={() => setEditing(false)}
-              />
-            ) : (
-              <VariantReadCard variant={detail.data} product={product.data} />
-            )}
-          </Section>
+          {/* ── What this SKU ships as ───────────────────────────
+                 The EFFECTIVE values, product default included, because
+                 that is what the courier is billed on — a variant with
+                 no weight of its own is not weightless. Where a figure
+                 is inherited the tile says so rather than printing the
+                 product's number as the variant's own.
+
+                 No "units in stock" tile: this screen has no stock
+                 read, and the number that does exist is per warehouse.
+                 The stock SETTINGS below are a different question. */}
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat
+              label="Ships at"
+              icon={<Boxes size={13} aria-hidden />}
+              value={
+                effective(detail.data.weightGrams, product.data?.defaultWeightGrams) ?? (
+                  <span className="text-text-faint text-base">Not set</span>
+                )
+              }
+              unit={
+                effective(detail.data.weightGrams, product.data?.defaultWeightGrams) === null
+                  ? undefined
+                  : 'g'
+              }
+              tone={
+                effective(detail.data.weightGrams, product.data?.defaultWeightGrams) === null
+                  ? 'warn'
+                  : 'neutral'
+              }
+              hint={inheritHint(detail.data.weightGrams, product.data?.defaultWeightGrams)}
+            />
+            <Stat
+              label="Declared value"
+              icon={<Wallet size={13} aria-hidden />}
+              value={
+                effective(detail.data.declaredValueInr, product.data?.defaultDeclaredValueInr) ===
+                null ? (
+                  <span className="text-text-faint text-base">Not set</span>
+                ) : (
+                  <Money
+                    amount={
+                      detail.data.declaredValueInr ?? product.data?.defaultDeclaredValueInr ?? '0'
+                    }
+                  />
+                )
+              }
+              tone="neutral"
+              hint={inheritHint(
+                detail.data.declaredValueInr,
+                product.data?.defaultDeclaredValueInr,
+              )}
+            />
+            <Stat
+              label="GST rate"
+              icon={<Percent size={13} aria-hidden />}
+              value={
+                detail.data.gstRate === null ? (
+                  <span className="text-text-faint text-base">Not set</span>
+                ) : (
+                  detail.data.gstRate
+                )
+              }
+              unit={detail.data.gstRate === null ? undefined : '%'}
+              tone="neutral"
+              hint={detail.data.gstRate === null ? 'Falls back to the system rate.' : undefined}
+            />
+            <Stat
+              label="Scans as"
+              icon={<Barcode size={13} aria-hidden />}
+              /*
+                LBL-2: the pack bench resolves a scan to
+                `variant.barcode ?? skuCode`, and accepts BOTH. So the
+                SKU code is not a placeholder here — it is the code on
+                the sticker until the seller fills in a real EAN.
+              */
+              value={
+                <span className="font-mono text-base break-all">
+                  {detail.data.barcode ?? detail.data.skuCode}
+                </span>
+              }
+              tone="neutral"
+              hint={
+                detail.data.barcode === null
+                  ? 'Your SKU code — add a barcode and both keep working.'
+                  : 'Your own barcode.'
+              }
+            />
+          </div>
+
+          <div>
+            <SectionBand
+              index="01"
+              title="Details"
+              note="What this SKU is, and what it inherits."
+              action={
+                !editing && (
+                  <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                    Edit variant
+                  </Button>
+                )
+              }
+            />
+            <BandBody className="mb-4">
+              {editing ? (
+                <VariantEditForm
+                  productId={productId}
+                  variant={detail.data}
+                  onCancel={() => setEditing(false)}
+                  onSaved={() => setEditing(false)}
+                />
+              ) : (
+                <VariantReadCard variant={detail.data} product={product.data} />
+              )}
+            </BandBody>
+          </div>
 
           <StockConfigPanel productId={productId} variantId={variantId} />
 
-          <Section title="Images">
-            <VariantImageUpload variantId={variantId} />
-          </Section>
+          <div>
+            <SectionBand
+              index="03"
+              title="Pictures"
+              note="What the customer sees beside this SKU."
+            />
+            <BandBody>
+              <VariantImageUpload variantId={variantId} />
+            </BandBody>
+          </div>
         </>
       )}
     </div>
@@ -265,47 +398,101 @@ function VariantReadCard({
   variant: SellerVariantView;
   product: SellerProductView | undefined;
 }): ReactElement {
+  // No <Card>: the band's own `BandBody` is the bordered surface.
   return (
-    <Card>
-      <CardBody>
-        <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
-          <dt className="text-text-muted">SKU</dt>
-          <dd className="text-text-body font-mono text-xs">{variant.skuCode}</dd>
-          <dt className="text-text-muted">Label</dt>
-          <dd className="text-text-body">{variant.variantLabel ?? '—'}</dd>
-          <dt className="text-text-muted">Weight</dt>
-          <dd className="text-text-body font-mono">
-            <Inherited
-              own={variant.weightGrams}
-              fallback={product?.defaultWeightGrams}
-              suffix=" g"
-            />
-          </dd>
-          <dt className="text-text-muted">Dims (LxWxH cm)</dt>
-          <dd className="text-text-body font-mono text-xs">
-            {variant.lengthCm !== null ? (
-              `${variant.lengthCm} × ${variant.widthCm ?? '—'} × ${variant.heightCm ?? '—'}`
-            ) : product?.defaultLengthCm != null ? (
-              <span title="From the product default">
-                {product.defaultLengthCm} × {product.defaultWidthCm ?? '—'} ×{' '}
-                {product.defaultHeightCm ?? '—'}
-              </span>
+    <DescriptionList
+      columns={2}
+      items={[
+        { label: 'SKU', value: <span className="font-mono text-xs">{variant.skuCode}</span> },
+        { label: 'Label', value: variant.variantLabel ?? <Dash /> },
+        {
+          label: 'Weight',
+          value: (
+            <span className="font-mono">
+              <Inherited
+                own={variant.weightGrams}
+                fallback={product?.defaultWeightGrams}
+                suffix=" g"
+              />
+            </span>
+          ),
+        },
+        {
+          label: 'Box (L × W × H)',
+          value: (
+            <span className="font-mono text-xs">
+              {variant.lengthCm !== null ? (
+                `${variant.lengthCm} × ${variant.widthCm ?? '—'} × ${variant.heightCm ?? '—'} cm`
+              ) : product?.defaultLengthCm != null ? (
+                <span title="From the product default">
+                  {product.defaultLengthCm} × {product.defaultWidthCm ?? '—'} ×{' '}
+                  {product.defaultHeightCm ?? '—'} cm
+                </span>
+              ) : (
+                <Dash />
+              )}
+            </span>
+          ),
+        },
+        {
+          label: 'Declared value',
+          value: (
+            <span className="font-mono">
+              <Inherited
+                own={variant.declaredValueInr}
+                fallback={product?.defaultDeclaredValueInr}
+              />
+            </span>
+          ),
+        },
+        {
+          label: 'GST rate',
+          value:
+            variant.gstRate === null ? (
+              <Dash />
             ) : (
-              '—'
-            )}
-          </dd>
-          <dt className="text-text-muted">Declared (INR)</dt>
-          <dd className="text-text-body font-mono">
-            <Inherited own={variant.declaredValueInr} fallback={product?.defaultDeclaredValueInr} />
-          </dd>
-          <dt className="text-text-muted">GST rate (%)</dt>
-          <dd className="text-text-body font-mono">{variant.gstRate ?? '—'}</dd>
-          <dt className="text-text-muted">Barcode</dt>
-          <dd className="text-text-body font-mono text-xs">{variant.barcode ?? '—'}</dd>
-        </dl>
-      </CardBody>
-    </Card>
+              <span className="font-mono">{variant.gstRate} %</span>
+            ),
+        },
+        {
+          label: 'Barcode',
+          value:
+            variant.barcode === null ? (
+              <Dash />
+            ) : (
+              <span className="font-mono text-xs break-all">{variant.barcode}</span>
+            ),
+        },
+      ]}
+    />
   );
+}
+
+function Dash(): ReactElement {
+  return <span className="text-text-faint">—</span>;
+}
+
+/**
+ * The value that actually applies — the variant's own, else the
+ * product default (M4's inheritance). Returns null when neither is
+ * set, which is a real state and not a zero.
+ */
+function effective(
+  own: string | number | null,
+  fallback: string | number | null | undefined,
+): string | number | null {
+  if (own !== null) return own;
+  return fallback ?? null;
+}
+
+/** Says WHERE the figure came from, because inheriting is not nothing. */
+function inheritHint(
+  own: string | number | null,
+  fallback: string | number | null | undefined,
+): string | undefined {
+  if (own !== null) return undefined;
+  if (fallback === null || fallback === undefined) return 'Set it here or on the product.';
+  return 'From the product default.';
 }
 
 function VariantEditForm({
@@ -362,109 +549,106 @@ function VariantEditForm({
   }
 
   return (
-    <Card>
-      <CardHeader title="Edit variant" />
-      <CardBody>
-        <form onSubmit={handleSave} className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <FormField label="SKU" htmlFor="sku" hint="Immutable">
-              <Input id="sku" value={variant.skuCode} disabled className="font-mono text-xs" />
-            </FormField>
-            <FormField label="Label" htmlFor="variantLabel">
-              <Input
-                id="variantLabel"
-                value={variantLabel}
-                onChange={(e) => setVariantLabel(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="Weight (g)" htmlFor="weightGrams">
-              <Input
-                id="weightGrams"
-                type="number"
-                min="0"
-                value={weightGrams}
-                onChange={(e) => setWeightGrams(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="Length (cm)" htmlFor="lengthCm">
-              <Input
-                id="lengthCm"
-                type="number"
-                min="0"
-                step="0.1"
-                value={lengthCm}
-                onChange={(e) => setLengthCm(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="Width (cm)" htmlFor="widthCm">
-              <Input
-                id="widthCm"
-                type="number"
-                min="0"
-                step="0.1"
-                value={widthCm}
-                onChange={(e) => setWidthCm(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="Height (cm)" htmlFor="heightCm">
-              <Input
-                id="heightCm"
-                type="number"
-                min="0"
-                step="0.1"
-                value={heightCm}
-                onChange={(e) => setHeightCm(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="Declared (INR)" htmlFor="declaredValueInr">
-              <Input
-                id="declaredValueInr"
-                type="number"
-                step="0.01"
-                value={declaredValueInr}
-                onChange={(e) => setDeclaredValueInr(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="GST rate (%)" htmlFor="gstRate">
-              <Input
-                id="gstRate"
-                type="number"
-                step="0.01"
-                value={gstRate}
-                onChange={(e) => setGstRate(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
-            <FormField label="Barcode" htmlFor="barcode">
-              <Input
-                id="barcode"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                disabled={update.isPending}
-              />
-            </FormField>
+    <>
+      <form onSubmit={handleSave} className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FormField label="SKU" htmlFor="sku" hint="Immutable">
+            <Input id="sku" value={variant.skuCode} disabled className="font-mono text-xs" />
+          </FormField>
+          <FormField label="Label" htmlFor="variantLabel">
+            <Input
+              id="variantLabel"
+              value={variantLabel}
+              onChange={(e) => setVariantLabel(e.target.value)}
+              disabled={update.isPending}
+            />
+          </FormField>
+          <FormField label="Weight (g)" htmlFor="weightGrams">
+            <Input
+              id="weightGrams"
+              type="number"
+              min="0"
+              value={weightGrams}
+              onChange={(e) => setWeightGrams(e.target.value)}
+              disabled={update.isPending}
+            />
+          </FormField>
+          <FormField label="Length (cm)" htmlFor="lengthCm">
+            <Input
+              id="lengthCm"
+              type="number"
+              min="0"
+              step="0.1"
+              value={lengthCm}
+              onChange={(e) => setLengthCm(e.target.value)}
+              disabled={update.isPending}
+            />
+          </FormField>
+          <FormField label="Width (cm)" htmlFor="widthCm">
+            <Input
+              id="widthCm"
+              type="number"
+              min="0"
+              step="0.1"
+              value={widthCm}
+              onChange={(e) => setWidthCm(e.target.value)}
+              disabled={update.isPending}
+            />
+          </FormField>
+          <FormField label="Height (cm)" htmlFor="heightCm">
+            <Input
+              id="heightCm"
+              type="number"
+              min="0"
+              step="0.1"
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value)}
+              disabled={update.isPending}
+            />
+          </FormField>
+          <FormField label="Declared (INR)" htmlFor="declaredValueInr">
+            <Input
+              id="declaredValueInr"
+              type="number"
+              step="0.01"
+              value={declaredValueInr}
+              onChange={(e) => setDeclaredValueInr(e.target.value)}
+              disabled={update.isPending}
+            />
+          </FormField>
+          <FormField label="GST rate (%)" htmlFor="gstRate">
+            <Input
+              id="gstRate"
+              type="number"
+              step="0.01"
+              value={gstRate}
+              onChange={(e) => setGstRate(e.target.value)}
+              disabled={update.isPending}
+            />
+          </FormField>
+          <FormField label="Barcode" htmlFor="barcode">
+            <Input
+              id="barcode"
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              disabled={update.isPending}
+            />
+          </FormField>
+        </div>
+        {serverError && (
+          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
+            {serverError}
           </div>
-          {serverError && (
-            <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
-              {serverError}
-            </div>
-          )}
-          <FormActions>
-            <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" disabled={update.isPending}>
-              {update.isPending ? 'Saving…' : 'Save changes'}
-            </Button>
-          </FormActions>
-        </form>
-      </CardBody>
-    </Card>
+        )}
+        <FormActions>
+          <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={update.isPending}>
+            {update.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+        </FormActions>
+      </form>
+    </>
   );
 }

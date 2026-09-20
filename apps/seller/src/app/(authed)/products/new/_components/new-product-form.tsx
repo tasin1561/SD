@@ -4,13 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { ImagePlus, Plus, X } from 'lucide-react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
   FormField,
   Input,
   Label,
+  SectionBand,
   TBody,
   Table,
   Td,
@@ -744,9 +743,9 @@ export function NewProductForm(): ReactElement {
         </div>
       )}
 
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright mb-3 text-sm font-medium">Product</h2>
+      <div>
+        <SectionBand index="01" title="Product" note="What the thing is called." />
+        <BandBody>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField
               label="Product name"
@@ -796,13 +795,17 @@ export function NewProductForm(): ReactElement {
               />
             </FormField>
           </div>
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium">Applies to every variant</h2>
-          <p className="text-text-muted mt-1 mb-3 text-xs">
+      <div>
+        <SectionBand
+          index="02"
+          title="Applies to every variant"
+          note="Asked once, inherited by each SKU."
+        />
+        <BandBody>
+          <p className="text-text-muted mb-3 text-xs">
             {inherited === null
               ? 'Asked once. A variant that differs — a size that weighs more, say — can override its own value on the variant page.'
               : `Already set on ${inherited.name}, and shown here so you can see what these variants inherit. Change them on the product itself — editing one product from two screens is how the two come to disagree.`}
@@ -853,16 +856,17 @@ export function NewProductForm(): ReactElement {
               />
             </FormField>
           </div>
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
       {/* ── STEP 1 — Options ───────────────────────────────────────── */}
-      <Card>
-        <CardHeader
+      <div>
+        <SectionBand
+          index="03"
           title="Options"
-          subtitle="What this product varies by. Names and values only — nothing here is a quantity."
+          note="What it varies by — names and values, never a quantity."
         />
-        <CardBody className="space-y-3">
+        <BandBody className="space-y-3">
           {options.length === 0 && (
             <p className="text-text-muted text-sm">
               A single item needs no options — it gets one SKU below. Add one for a product that
@@ -995,21 +999,22 @@ export function NewProductForm(): ReactElement {
               can hold a list per value of the first, so a third has no unambiguous place to sit.
             </p>
           )}
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
       {/* ── STEP 2 — the variants those options produce ─────────────── */}
-      <Card>
-        <CardHeader
+      <div>
+        <SectionBand
+          index="04"
           title="Variants"
-          subtitle="One row per orderable item. Stock and orders are counted against these, never against the product."
+          note="One row per orderable item — stock is counted against these, never the product."
           action={
-            <span className="border-border text-text-muted rounded-full border px-2 py-0.5 text-xs">
+            <span className="border-border text-text-muted rounded-[var(--radius-2)] border px-2 py-0.5 font-mono text-xs">
               {rows.length === 1 ? '1 variant' : `${rows.length} variants`}
             </span>
           }
         />
-        <CardBody>
+        <BandBody>
           {options.length > 0 && rows.length === 1 && rows[0]?.label === '' && (
             <p className="text-text-muted mb-3 text-xs">
               No option is complete yet, so nothing is being multiplied — this is the single variant
@@ -1074,8 +1079,8 @@ export function NewProductForm(): ReactElement {
             SKUs are suggested from the product name — edit any of them. A SKU is permanent once
             saved, because every order, pick and stock count refers to it.
           </p>
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
       {/*
         The save action is the point of the page, and it was rendering as

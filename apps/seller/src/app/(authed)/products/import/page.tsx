@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { History } from 'lucide-react';
-import { Button, PageHeader } from '@skydrop/ui/components';
+import { Button, Crumbs, PageHeader } from '@skydrop/ui/components';
 import { CsvImportPanel } from '../../orders/_components/csv-import-panel';
 import { SavedMappings } from './_components/saved-mappings';
 
@@ -17,8 +17,19 @@ export default function CatalogImportPage(): ReactElement {
   return (
     <div>
       <PageHeader
-        title="Bulk catalog import"
-        subtitle="Upload a CSV of products + variants. Re-uploading updates existing rows (dedup by (sellerId, externalRef) for products and (sellerId, skuCode) for variants)."
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Stock & WMS' },
+              { label: 'Products', href: '/products' },
+              { label: 'CSV import' },
+            ]}
+            Link={Link}
+          />
+        }
+        title="Bulk catalogue import"
+        subtitle="Upload a CSV of products and variants. Re-uploading updates what is already there — products are matched on your own reference and variants on their SKU code."
         action={
           <Link href="/products/import/jobs">
             <Button variant="ghost" size="md">

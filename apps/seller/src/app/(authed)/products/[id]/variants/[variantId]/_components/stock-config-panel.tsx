@@ -2,13 +2,12 @@
 
 import { useState, type ReactElement } from 'react';
 import {
+  BandBody,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
   ErrorNote,
   FormField,
   Input,
+  SectionBand,
   SkeletonRows,
   useToast,
 } from '@skydrop/ui/components';
@@ -94,13 +93,13 @@ export function StockConfigPanel({
   const thresholdValid =
     trimmed === '' || (Number.isInteger(parsed) && parsed >= 0 && parsed <= 1_000_000);
 
+  // A band and its body, not a card: this sits between two other
+  // banded sections on the variant page and a card in the middle of
+  // them reads as a panel that belongs somewhere else.
   return (
-    <Card className="mt-4">
-      <CardHeader
-        title="Stock handling"
-        subtitle="How this SKU is counted on the warehouse floor, and when we warn you it is running out."
-      />
-      <CardBody>
+    <div className="mb-4">
+      <SectionBand index="02" title="Stock handling" note="When we warn you it is running out." />
+      <BandBody>
         {error !== null && <ErrorNote message={error} />}
 
         {mode.isLoading ? (
@@ -140,7 +139,7 @@ export function StockConfigPanel({
             consignment arrives. We set this — talk to us if it looks wrong for this SKU.
           </p>
         )}
-      </CardBody>
-    </Card>
+      </BandBody>
+    </div>
   );
 }
