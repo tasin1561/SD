@@ -50,12 +50,12 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
   if (state === 'done') {
     return (
       <div className="space-y-3">
-        <div className="rounded-[5px] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
+        <div className="rounded-[var(--radius-2)] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
           Email verified. Nothing else to do here.
         </div>
         <a
           href="/dashboard"
-          className="block text-center w-full px-3 py-1.5 rounded-[5px] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors"
+          className="block text-center w-full px-3 py-1.5 rounded-[var(--radius-2)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors"
         >
           Go to your dashboard
         </a>
@@ -65,7 +65,7 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
 
   return (
     <div className="space-y-3">
-      <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
+      <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[var(--radius-2)]">
         {error}
       </div>
       <p className="text-text-muted text-xs">
@@ -74,7 +74,7 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
       </p>
       <a
         href="/login"
-        className="block text-center w-full px-3 py-1.5 rounded-[5px] border border-border text-text-body text-sm hover:border-border-strong transition-colors"
+        className="block text-center w-full px-3 py-1.5 rounded-[var(--radius-2)] border border-border text-text-body text-sm hover:border-border-strong transition-colors"
       >
         Sign in
       </a>

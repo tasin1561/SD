@@ -10,6 +10,14 @@ import { LoginForm } from './_components/login-form';
  * Login entry. If the visitor already has a valid __Host-sellerRefresh
  * cookie, skip the form and redirect to the dashboard — saves a
  * roundtrip for already-authed sellers who bookmarked /login.
+ *
+ * ── The panel head is the console's SECTION BAND, in the login idiom ──
+ * Inside the app a region is capped by `NN // NAME` with a quiet note
+ * to its right. Here there is one region and no reading order to
+ * number, so it is the accent dot, the name, and the note — the same
+ * three parts, the same mono caps, no invented ordinal. Every page
+ * under /auth wears it, which is what stops the front door reading as
+ * a different product from the console behind it.
  */
 export default async function LoginPage(): Promise<ReactElement> {
   const jar = await cookies();
@@ -39,8 +47,8 @@ export default async function LoginPage(): Promise<ReactElement> {
             className="h-9 w-auto shrink-0 select-none"
             draggable={false}
           />
-          <span className="text-text-bright font-semibold text-2xl tracking-tight">Skydrop</span>
-          <span className="telemetry inline-flex items-center gap-1.5 text-text-muted">
+          <span className="text-text-bright text-2xl font-semibold tracking-tight">Skydrop</span>
+          <span className="telemetry text-text-muted inline-flex items-center gap-1.5">
             <span
               aria-hidden
               className="status-dot inline-block h-1 w-1 rounded-full"
@@ -53,15 +61,16 @@ export default async function LoginPage(): Promise<ReactElement> {
       </div>
 
       <TiltPanel max={3} className="boot-rise boot-rise-2">
-        <div className="relative overflow-hidden rounded-xl border border-border bg-surface ticks p-6 sm:p-7">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="telemetry" style={{ color: 'var(--sky)' }}>
+        <div className="border-border bg-surface ticks relative overflow-hidden rounded-[var(--radius-3)] border p-6 sm:p-7">
+          <div className="border-border mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b pb-3">
+            <span className="telemetry text-text-strong inline-flex items-center gap-2">
+              <span aria-hidden className="bg-accent h-1.5 w-1.5 shrink-0 rounded-full" />
               access
             </span>
-            <span className="telemetry text-text-muted">invite-only</span>
+            <span className="telemetry text-text-faint">invite-only</span>
           </div>
-          <h1 className="text-text-bright text-lg font-semibold mb-1">Sign in</h1>
-          <p className="text-text-muted text-sm mb-6">
+          <h1 className="text-text-bright mb-1 text-lg font-semibold">Sign in</h1>
+          <p className="text-text-muted mb-6 text-sm">
             Use the credentials from your Skydrop invitation.
           </p>
           <LoginForm />
@@ -69,7 +78,7 @@ export default async function LoginPage(): Promise<ReactElement> {
         </div>
       </TiltPanel>
 
-      <div className="boot-rise boot-rise-3 telemetry text-text-muted text-center mt-5">
+      <div className="boot-rise boot-rise-3 telemetry text-text-muted mt-5 text-center">
         forgot password?{' '}
         <a
           href="/password-reset"

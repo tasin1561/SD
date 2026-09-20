@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { TiltPanel } from '@/lib/tilt';
 import { PasswordResetRequestForm } from './_components/request-form';
 
 /**
@@ -10,42 +11,60 @@ import { PasswordResetRequestForm } from './_components/request-form';
  *
  * Step 2 — the actual reset-with-token page — lives at
  * /auth/reset-password and is what the password-reset email links to.
+ *
+ * Chrome: the console's instrument panel, same as /login. These pages
+ * had plain cards on the same backdrop, which read as two products —
+ * see the note in `auth-console/console.css`.
  */
 export default function PasswordResetPage(): ReactElement {
   return (
-    <>
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="flex items-center justify-center gap-2.5">
-            {/* Decorative — the wordmark beside it already names the brand. */}
-            <img
-              src="/brand/skydrop-icon.svg"
-              alt=""
-              aria-hidden="true"
-              width={53}
-              height={26}
-              className="h-[26px] w-auto shrink-0 select-none"
-              draggable={false}
-            />
-            <span className="text-text-bright font-semibold text-lg tracking-tight">Skydrop</span>
-          </div>
-          <div className="text-text-faint text-xs mt-0.5">Seller</div>
+    <div className="w-full max-w-sm">
+      <div className="boot-rise mb-6 text-center">
+        <div className="flex items-center justify-center gap-2.5">
+          {/* Decorative — the wordmark beside it already names the brand. */}
+          <img
+            src="/brand/skydrop-icon.svg"
+            alt=""
+            aria-hidden="true"
+            width={53}
+            height={26}
+            className="h-[26px] w-auto shrink-0 select-none"
+            draggable={false}
+          />
+          <span className="text-text-bright text-lg font-semibold tracking-tight">Skydrop</span>
         </div>
-        <div className="rounded-[7px] border border-border bg-surface p-6">
-          <h1 className="text-text-bright text-base font-semibold mb-1">Reset your password</h1>
-          <p className="text-text-muted text-xs mb-5">
+        <div className="telemetry text-text-muted mt-1.5">seller portal</div>
+      </div>
+
+      <TiltPanel max={3} className="boot-rise boot-rise-2">
+        <div className="border-border bg-surface ticks relative overflow-hidden rounded-[var(--radius-3)] border p-6 sm:p-7">
+          <div className="border-border mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b pb-3">
+            <span className="telemetry text-text-strong inline-flex items-center gap-2">
+              <span aria-hidden className="bg-accent h-1.5 w-1.5 shrink-0 rounded-full" />
+              recovery
+            </span>
+            <span className="telemetry text-text-faint">step 1 of 2</span>
+          </div>
+          <h1 className="text-text-bright mb-1 text-base font-semibold">Reset your password</h1>
+          <p className="text-text-muted mb-5 text-xs leading-relaxed">
             Enter your seller account email. If we recognize it, you&apos;ll get a reset link by
             email within a few minutes.
           </p>
           <PasswordResetRequestForm />
+          <div aria-hidden className="glow-follow" />
         </div>
-        <div className="text-text-faint text-xs text-center mt-4">
-          Remembered it?{' '}
-          <a href="/login" className="text-text-muted hover:text-text-body">
-            Back to sign in
-          </a>
-        </div>
+      </TiltPanel>
+
+      <div className="boot-rise boot-rise-3 telemetry text-text-muted mt-5 text-center">
+        remembered it?{' '}
+        <a
+          href="/login"
+          className="hover:text-text-bright transition-colors"
+          style={{ color: 'var(--sky)' }}
+        >
+          sign in
+        </a>
       </div>
-    </>
+    </div>
   );
 }

@@ -2,8 +2,9 @@
 
 import type { ReactElement, ReactNode } from 'react';
 import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import { Card, CardBody, EmptyState } from '@skydrop/ui/components';
+import { BandBody, EmptyState, SectionBand } from '@skydrop/ui/components';
 import { canSeePath } from '@/lib/page-access';
 
 /**
@@ -14,6 +15,15 @@ import { canSeePath } from '@/lib/page-access';
  * is checked with the SAME `canSeePath` the route boundary uses, so a
  * tile can never lead to a page that refuses — the two cannot disagree
  * because they read one table.
+ *
+ * ── The tiles are NUMBERED, and the numbers are computed here ────────
+ * The console design indexes a page's regions (`01 //`), and the nav
+ * rail indexes its groups the same way. A settings tile is the third
+ * thing of that shape: a list of destinations read in order. The index
+ * is stamped on the VISIBLE list rather than on the declared one, so a
+ * person who cannot open webhooks sees 01–05 rather than 01, 02, 04,
+ * 06 — a gap in a sequence reads as something missing, which is
+ * exactly the wrong thing to say about a permission working correctly.
  */
 export type SettingsTile = {
   readonly href: string;
@@ -36,22 +46,49 @@ export function SettingsHub({ items }: { readonly items: readonly SettingsTile[]
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      {visible.map((it) => (
-        <Link key={it.href} href={it.href} className="block">
-          <Card className="hover:border-border-strong transition-colors">
-            <CardBody>
-              <div className="flex items-start gap-3">
-                <div className="text-accent">{it.icon}</div>
-                <div>
-                  <div className="text-text-bright text-sm font-medium">{it.title}</div>
-                  <div className="text-text-muted mt-0.5 text-xs">{it.description}</div>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-        </Link>
-      ))}
+    <div>
+      <SectionBand
+        index="01"
+        title="Configuration"
+        note={`${visible.length} ${visible.length === 1 ? 'area' : 'areas'} open to you`}
+      />
+      <BandBody flush>
+        {/*
+         * ONE COLUMN, hairline-divided — a register, not a wall of
+         * cards. Two columns would halve the width a description gets
+         * and buy nothing: eight rows fit on a laptop either way, and
+         * at 360px the second column collapses anyway, so the two-up
+         * layout only ever existed for the widest case.
+         */}
+        <div className="divide-border divide-y">
+          {visible.map((it, i) => (
+            <Link
+              key={it.href}
+              href={it.href}
+              className="group hover:bg-surface-hover flex items-start gap-3 px-3 py-3 transition-colors"
+            >
+              <span
+                aria-hidden
+                className="text-accent w-5 shrink-0 pt-0.5 font-mono text-[11px] tracking-[0.08em]"
+              >
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <span className="text-accent mt-0.5 shrink-0">{it.icon}</span>
+              <span className="min-w-0 flex-1">
+                <span className="text-text-bright block text-sm font-medium">{it.title}</span>
+                <span className="text-text-muted mt-0.5 block text-xs leading-relaxed">
+                  {it.description}
+                </span>
+              </span>
+              <ChevronRight
+                aria-hidden
+                size={14}
+                className="text-text-faint group-hover:text-accent mt-0.5 shrink-0 transition-colors"
+              />
+            </Link>
+          ))}
+        </div>
+      </BandBody>
     </div>
   );
 }
