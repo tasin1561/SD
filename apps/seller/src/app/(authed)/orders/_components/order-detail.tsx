@@ -4,20 +4,16 @@ import Link from 'next/link';
 
 import {
   ArrowLeft,
+  CircleDot,
   Clock,
   CreditCard,
-  FileText,
   Package,
   Pencil,
   PhoneCall,
-  Receipt,
-  Ruler,
-  StickyNote,
   Undo2,
-  User,
   XCircle,
 } from 'lucide-react';
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useState, type ReactElement } from 'react';
 import { useDeliveryActions } from '@/lib/ops-hooks';
 import type { OrderStatus } from '@skydrop/db';
 import {
@@ -28,25 +24,33 @@ import {
   useOrderJourney,
 } from '@/lib/api-hooks';
 import {
+  BandBody,
   Button,
   Card,
   CardBody,
-  CardHeader,
   Crumbs,
+  DescriptionList,
   ErrorState,
   LoadingState,
   MetaChip,
   OrderStatusBadge,
   Money,
   PageHeader,
-  Section,
+  SectionBand,
+  Stat,
   Table,
+  TBody,
+  Td,
+  Th,
+  THead,
+  Tr,
   useToast,
   ProductThumb,
   OrderJourneyPanels,
   SkeletonRows,
   ErrorNote,
 } from '@skydrop/ui/components';
+import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { DeliveryTroublePanel } from '../[id]/_components/delivery-trouble-panel';
 import { CancelOrderDialog } from './cancel-order-dialog';
 import { RequestReturnDialog } from './request-return-dialog';
@@ -120,28 +124,43 @@ const CANCELLABLE: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A section heading with its own accent icon.
+ * How the STATUS tile should read.
  *
- * The comps put a small coloured glyph on every card head, and it does
- * more than decorate: a column of eight grey headings is scanned by
- * reading all eight, while a column of eight distinct glyphs is scanned
- * by shape. The icon carries the accent colour — the one place on these
- * cards where the palette shows — and it is `aria-hidden`, because the
- * heading text already says what this is.
+ * Derived from the shared `orderStatusKind` (FE-6) rather than a second
+ * list of statuses kept here — a local copy is exactly the drift that
+ * mapper exists to prevent, and this file has already been wrong about
+ * a status vocabulary once (`CANCELLABLE` is cosmetic and says so).
+ * Mapping the eight kinds onto the four tile tones is the only decision
+ * being made, and it is exhaustive.
  */
-function Titled({
-  icon: Icon,
-  children,
-}: {
-  readonly icon: typeof User;
-  readonly children: ReactNode;
-}): ReactElement {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <Icon size={14} className="text-accent shrink-0" aria-hidden />
-      {children}
-    </span>
-  );
+function statusTone(status: OrderStatus): 'neutral' | 'warn' | 'bad' | 'good' {
+  switch (orderStatusKind(status)) {
+    case 'delivered':
+      return 'good';
+    case 'failed':
+    case 'rto':
+      return 'bad';
+    case 'pending':
+      return 'warn';
+    case 'draft':
+    case 'confirmed':
+    case 'in-transit':
+    case 'cancelled':
+      return 'neutral';
+  }
+}
+
+function Dash(): ReactElement {
+  return <span className="text-text-faint">—</span>;
+}
+
+/** `21 Aug 2026` — a tile is a glance, not a timestamp. */
+function tileDate(value: string): string {
+  return new Date(value).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
@@ -173,6 +192,20 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const [raiseOpen, setRaiseOpen] = useState(false);
   const deliveryActions = useDeliveryActions(orderId);
   const canAsk = deliveryActions.data?.canRequest === true;
+
+  /*
+    The band numbers, allocated in render order.
+
+    Two of the bands are conditional — the notes only exist when the
+    seller wrote some, the charges only when they may see them — so
+    fixed numbers left a jump from 03 to 05 on the commonest order,
+    which reads as a section that failed to load rather than one this
+    parcel does not have. JSX children evaluate top to bottom, so
+    calling this inline gives 01, 02, 03… down whatever actually
+    renders.
+  */
+  let bandsAllocated = 0;
+  const band = (): string => String(++bandsAllocated).padStart(2, '0');
 
   return (
     <div>
@@ -305,6 +338,88 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             }
           />
 
+          {/* ── The four standing facts about this parcel ────────────
+                 Every one is a COLUMN on the order, not a derivation —
+                 a tile that needed arithmetic to exist would be a
+                 claim rather than a record. The exceptions are the two
+                 sums in the items tile's footer, which add up lines
+                 that are all on the page directly below it.
+
+                 What the comps put here and we do not have: a service
+                 level, an SLA clock and a "customs cleared" seal.
+                 There is no service level on a shipment, nothing
+                 measures a per-parcel SLA, and no customs state is
+                 recorded — a cleared/held badge is precisely the sort
+                 of thing a seller would ring us about. */}
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat
+              label="Status"
+              icon={<CircleDot size={13} aria-hidden />}
+              /* `statusLabel` from `@skydrop/ui/status`, never the raw
+                 enum: the badge in the header beside this tile reads
+                 the same vocabulary, and two words for one status on
+                 one screen reads as two things having happened. */
+              value={
+                <span className="text-base">{statusLabel(detail.data.status as OrderStatus)}</span>
+              }
+              tone={statusTone(detail.data.status as OrderStatus)}
+            />
+            <Stat
+              label={detail.data.paymentMode === 'COD' ? 'To collect' : 'Paid up front'}
+              icon={<CreditCard size={13} aria-hidden />}
+              /* A PREPAID order reads "Prepaid", never ₹0 — nothing
+                 being owed and nothing having been recorded look the
+                 same at a glance otherwise. */
+              value={
+                detail.data.codAmountInr === null ? (
+                  <span className="text-text-faint text-base">Prepaid</span>
+                ) : (
+                  <Money amount={detail.data.codAmountInr} />
+                )
+              }
+              tone="neutral"
+              {...(detail.data.declaredValueInr === null
+                ? {}
+                : {
+                    foot: [
+                      {
+                        label: 'Declared value',
+                        value: <Money amount={detail.data.declaredValueInr} />,
+                      },
+                    ],
+                  })}
+            />
+            <Stat
+              label="What is in it"
+              icon={<Package size={13} aria-hidden />}
+              value={detail.data.items.length}
+              unit={detail.data.items.length === 1 ? 'line' : 'lines'}
+              tone="neutral"
+              foot={[
+                {
+                  label: 'Units',
+                  value: detail.data.items.reduce((t, i) => t + i.quantity, 0),
+                },
+                {
+                  label: 'Weight',
+                  value:
+                    detail.data.totalWeightGrams === null ? (
+                      <span className="text-text-faint">Not recorded</span>
+                    ) : (
+                      `${detail.data.totalWeightGrams} g`
+                    ),
+                },
+              ]}
+            />
+            <Stat
+              label="Placed"
+              icon={<Clock size={13} aria-hidden />}
+              value={<span className="text-base">{tileDate(detail.data.placedAt)}</span>}
+              tone="neutral"
+              hint={`Last moved ${tileDate(detail.data.updatedAt)}.`}
+            />
+          </div>
+
           {/*
             ── THE 2026-09-05 REDESIGN ────────────────────────────────
             Built from two reference comps, one light and one dark. The
@@ -404,234 +519,266 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             {/* The facts, in the order a seller checks them: who it is
                 going to, what is in it, what it costs, the paperwork. */}
             <div className="min-w-0 space-y-4">
-              <Section
-                title={<Titled icon={User}>Recipient</Titled>}
-                action={
-                  // `orders.create` is what the SERVER requires to save
-                  // a consignee change ("whoever may commit the company
-                  // to a delivery is who may change where it goes").
-                  // Gating on anything else shows an Edit whose save
-                  // comes back 403 — cosmetic RBAC that disagrees with
-                  // the boundary is worse than none.
-                  // A Reseller store's order uses the SAME editor
-                  // (2026-09-18, owner): Seller staff may change anything
-                  // on it, and the store is told what moved. A separate
-                  // narrow editor for reseller orders was the old rule
-                  // wearing a component.
-                  identity !== null && can(identity, 'orders.create') ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setEditingCustomer(true);
-                        // Opened, then scrolled to. The editor is full
-                        // width at the top — it needs the room — so
-                        // revealing it without moving there would look
-                        // like the button did nothing.
-                        window.setTimeout(
-                          () =>
-                            document
-                              .getElementById('customer-details')
-                              ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
-                          50,
-                        );
-                      }}
-                    >
-                      <Pencil size={12} /> Edit
-                    </Button>
-                  ) : undefined
-                }
-              >
-                <Card>
-                  <CardBody>
-                    {detail.data.storeKind === 'RESELLER' && (
-                      // The order is yours and so are its details; the
-                      // note says who sold to this person, because they
-                      // are who the customer will ring first.
-                      <p className="text-text-muted mb-3 text-sm">
-                        Sold by your reseller store{' '}
-                        {detail.data.storeId !== null ? (
-                          <Link
-                            href={`/reseller-stores/${detail.data.storeId}`}
-                            className="text-accent font-medium hover:underline"
-                          >
-                            {detail.data.storeNameSnapshot ?? 'a reseller store'}
-                          </Link>
-                        ) : (
-                          <span className="font-medium">
-                            {detail.data.storeNameSnapshot ?? 'a reseller store'}
-                          </span>
-                        )}
-                        .
-                      </p>
-                    )}
-                    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
-                      <dt className="text-text-muted">Name</dt>
-                      <dd className="text-text-body">{detail.data.recipientName}</dd>
-                      <dt className="text-text-muted">Phone</dt>
-                      <dd className="text-text-body font-mono text-xs">
-                        {detail.data.recipientPhoneE164}
-                        {detail.data.recipientAltPhoneE164 && (
-                          <span className="text-text-faint ml-2">
-                            / {detail.data.recipientAltPhoneE164}
-                          </span>
-                        )}
-                      </dd>
-                      {detail.data.recipientEmail && (
-                        <>
-                          <dt className="text-text-muted">Email</dt>
-                          <dd className="text-text-body font-mono text-xs">
-                            {detail.data.recipientEmail}
-                          </dd>
-                        </>
+              {/* ── The facts, each under its own numbered band ──────
+                     The bands are numbered down the FACTS column only.
+                     The journey beside them brings its own panels and
+                     their own heads (it is shared with apps/admin), so
+                     capping it with a band would have drawn a second
+                     border a hair outside the first — the same mistake
+                     the profile conversion had to undo. */}
+              <div>
+                <SectionBand
+                  index={band()}
+                  title="Recipient"
+                  note="Snapshotted when the order was placed."
+                  action={
+                    // `orders.create` is what the SERVER requires to save
+                    // a consignee change ("whoever may commit the company
+                    // to a delivery is who may change where it goes").
+                    // Gating on anything else shows an Edit whose save
+                    // comes back 403 — cosmetic RBAC that disagrees with
+                    // the boundary is worse than none.
+                    // A Reseller store's order uses the SAME editor
+                    // (2026-09-18, owner): Seller staff may change anything
+                    // on it, and the store is told what moved. A separate
+                    // narrow editor for reseller orders was the old rule
+                    // wearing a component.
+                    identity !== null && can(identity, 'orders.create') ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingCustomer(true);
+                          // Opened, then scrolled to. The editor is full
+                          // width at the top — it needs the room — so
+                          // revealing it without moving there would look
+                          // like the button did nothing.
+                          window.setTimeout(
+                            () =>
+                              document
+                                .getElementById('customer-details')
+                                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+                            50,
+                          );
+                        }}
+                      >
+                        <Pencil size={12} /> Edit
+                      </Button>
+                    ) : undefined
+                  }
+                />
+                {/* No <Card> inside: `BandBody` IS the bordered surface
+                  the band caps. */}
+                <BandBody>
+                  {detail.data.storeKind === 'RESELLER' && (
+                    // The order is yours and so are its details; the
+                    // note says who sold to this person, because they
+                    // are who the customer will ring first.
+                    <p className="text-text-muted mb-3 text-sm">
+                      Sold by your reseller store{' '}
+                      {detail.data.storeId !== null ? (
+                        <Link
+                          href={`/reseller-stores/${detail.data.storeId}`}
+                          className="text-accent font-medium hover:underline"
+                        >
+                          {detail.data.storeNameSnapshot ?? 'a reseller store'}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">
+                          {detail.data.storeNameSnapshot ?? 'a reseller store'}
+                        </span>
                       )}
-                      <dt className="text-text-muted">Address</dt>
-                      <dd className="text-text-body">
-                        <div>{detail.data.recipientAddressLine1}</div>
-                        {detail.data.recipientAddressLine2 && (
-                          <div>{detail.data.recipientAddressLine2}</div>
-                        )}
-                        {detail.data.recipientLandmark && (
-                          <div className="text-text-muted text-xs">
-                            Landmark: {detail.data.recipientLandmark}
-                          </div>
-                        )}
-                        <div className="mt-0.5">
-                          {[detail.data.recipientCity, detail.data.recipientStateProvince]
-                            .filter(Boolean)
-                            .join(', ')}{' '}
-                          <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
-                          <span className="text-text-muted">
-                            {detail.data.recipientCountryCode}
-                          </span>
+                      .
+                    </p>
+                  )}
+                  <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
+                    <dt className="text-text-muted">Name</dt>
+                    <dd className="text-text-body">{detail.data.recipientName}</dd>
+                    <dt className="text-text-muted">Phone</dt>
+                    <dd className="text-text-body font-mono text-xs">
+                      {detail.data.recipientPhoneE164}
+                      {detail.data.recipientAltPhoneE164 && (
+                        <span className="text-text-faint ml-2">
+                          / {detail.data.recipientAltPhoneE164}
+                        </span>
+                      )}
+                    </dd>
+                    {detail.data.recipientEmail && (
+                      <>
+                        <dt className="text-text-muted">Email</dt>
+                        <dd className="text-text-body font-mono text-xs">
+                          {detail.data.recipientEmail}
+                        </dd>
+                      </>
+                    )}
+                    <dt className="text-text-muted">Address</dt>
+                    <dd className="text-text-body">
+                      <div>{detail.data.recipientAddressLine1}</div>
+                      {detail.data.recipientAddressLine2 && (
+                        <div>{detail.data.recipientAddressLine2}</div>
+                      )}
+                      {detail.data.recipientLandmark && (
+                        <div className="text-text-muted text-xs">
+                          Landmark: {detail.data.recipientLandmark}
                         </div>
-                      </dd>
-                    </dl>
-                  </CardBody>
-                </Card>
-              </Section>
+                      )}
+                      <div className="mt-0.5">
+                        {[detail.data.recipientCity, detail.data.recipientStateProvince]
+                          .filter(Boolean)
+                          .join(', ')}{' '}
+                        <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
+                        <span className="text-text-muted">{detail.data.recipientCountryCode}</span>
+                      </div>
+                    </dd>
+                  </dl>
+                </BandBody>
+              </div>
 
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <Card>
-                  <CardHeader tone="accent" title={<Titled icon={CreditCard}>Payment</Titled>} />
-                  <CardBody>
-                    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
-                      <dt className="text-text-muted">Mode</dt>
-                      <dd className="text-text-body uppercase">{detail.data.paymentMode}</dd>
-                      <dt className="text-text-muted">COD (INR)</dt>
-                      {/* The one figure on this card that decides
-                          whether the parcel is worth chasing, rendered
-                          through Money so it groups the Indian way and
-                          sits on tabular figures — and given the accent
-                          so the eye lands on it rather than on the word
-                          "Mode" above it. */}
-                      <dd className="text-accent font-semibold">
-                        {detail.data.codAmountInr === null ? (
-                          <span className="text-text-faint font-normal">Prepaid</span>
-                        ) : (
-                          <Money amount={detail.data.codAmountInr} />
-                        )}
-                      </dd>
-                      <dt className="text-text-muted">Declared (INR)</dt>
-                      <dd className="text-text-body">
-                        {detail.data.declaredValueInr === null ? (
-                          '—'
-                        ) : (
-                          <Money amount={detail.data.declaredValueInr} />
-                        )}
-                      </dd>
-                    </dl>
-                  </CardBody>
-                </Card>
-                <Card>
-                  <CardHeader tone="accent" title={<Titled icon={Ruler}>Physical</Titled>} />
-                  <CardBody>
-                    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
-                      <dt className="text-text-muted">Weight (g)</dt>
-                      <dd className="text-text-body font-mono">
-                        {detail.data.totalWeightGrams ?? '—'}
-                      </dd>
-                      <dt className="text-text-muted">Package</dt>
-                      <dd className="text-text-body uppercase">{detail.data.packageType}</dd>
-                      <dt className="text-text-muted">Flags</dt>
-                      <dd className="text-text-body">
-                        {detail.data.isUrgent ? (
-                          <span className="text-pending text-xs uppercase tracking-wide">
+              {/* Payment and Physical were two cards side by side in a
+                  column that is barely wide enough for one. Six facts
+                  do not need two bordered boxes and two heads, so they
+                  are one band and one list that reflows to a single
+                  column on a phone. */}
+              <div>
+                <SectionBand
+                  index={band()}
+                  title="Payment &amp; parcel"
+                  note="What it is worth and what it weighs."
+                />
+                <BandBody>
+                  <DescriptionList
+                    columns={2}
+                    items={[
+                      {
+                        label: 'Payment mode',
+                        value: <span className="uppercase">{detail.data.paymentMode}</span>,
+                      },
+                      {
+                        // The one figure here that decides whether the
+                        // parcel is worth chasing, through `Money` so it
+                        // groups the Indian way and sits on tabular
+                        // figures, and given the accent so the eye lands
+                        // on it rather than on the word above it.
+                        label: 'To collect',
+                        value:
+                          detail.data.codAmountInr === null ? (
+                            <span className="text-text-faint">Prepaid</span>
+                          ) : (
+                            <span className="text-accent font-semibold">
+                              <Money amount={detail.data.codAmountInr} />
+                            </span>
+                          ),
+                      },
+                      {
+                        label: 'Declared value',
+                        value:
+                          detail.data.declaredValueInr === null ? (
+                            <Dash />
+                          ) : (
+                            <Money amount={detail.data.declaredValueInr} />
+                          ),
+                      },
+                      {
+                        label: 'Weight',
+                        value:
+                          detail.data.totalWeightGrams === null ? (
+                            <Dash />
+                          ) : (
+                            <span className="font-mono">{detail.data.totalWeightGrams} g</span>
+                          ),
+                      },
+                      {
+                        label: 'Package',
+                        value: <span className="uppercase">{detail.data.packageType}</span>,
+                      },
+                      {
+                        label: 'Flags',
+                        value: detail.data.isUrgent ? (
+                          <span className="text-pending text-xs tracking-wide uppercase">
                             Urgent
                           </span>
                         ) : (
-                          <span className="text-text-muted">—</span>
-                        )}
-                      </dd>
-                    </dl>
-                  </CardBody>
-                </Card>
+                          <Dash />
+                        ),
+                      },
+                    ]}
+                  />
+                </BandBody>
               </div>
 
-              <Section title={<Titled icon={Package}>Items ({detail.data.items.length})</Titled>}>
-                <Card>
-                  <Table wrapperClassName="rounded-none border-0 bg-transparent">
-                    <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-                      <tr>
-                        <th className="px-3 py-2 font-medium w-px">
-                          <span className="sr-only">Image</span>
-                        </th>
-                        <th className="text-left px-3 py-2 font-medium">SKU</th>
-                        <th className="text-left px-3 py-2 font-medium">Product</th>
-                        <th className="text-right px-3 py-2 font-medium">Qty</th>
-                        <th className="text-right px-3 py-2 font-medium">Weight (g)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
+              <div>
+                <SectionBand
+                  index={band()}
+                  title="Items"
+                  note={`${detail.data.items.length} ${detail.data.items.length === 1 ? 'line' : 'lines'}`}
+                />
+                {/* The `Table` primitive, not a hand-rolled `<thead>`.
+                  It was the latter, which meant this table alone did
+                  NOT inherit the below-`md` card layout every other
+                  table on the estate gets (FE-7) — five columns on a
+                  360px phone pushed the page sideways. */}
+                <BandBody flush>
+                  <Table>
+                    <THead>
+                      <Tr>
+                        <Th className="w-14" aria-label="Picture" />
+                        <Th>SKU</Th>
+                        <Th>Product</Th>
+                        <Th align="right">Qty</Th>
+                        <Th align="right">Unit weight</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
                       {detail.data.items.length === 0 && (
                         // A header row over nothing says less than a
                         // sentence does.
-                        <tr>
-                          <td colSpan={5} className="text-text-muted px-3 py-4 text-center text-sm">
+                        <Tr>
+                          <Td colSpan={5} className="text-text-muted py-4 text-center">
                             No items recorded on this order.
-                          </td>
-                        </tr>
+                          </Td>
+                        </Tr>
                       )}
                       {detail.data.items.map((item) => (
-                        <tr key={item.id}>
-                          <td className="px-3 py-2 w-px">
+                        <Tr key={item.id}>
+                          <Td>
                             {/* Live presigned thumbnail, NOT the snapshot's
-                            stored url — that one has resolved for nobody
-                            since the bucket went private. */}
+                              stored url — that one has resolved for
+                              nobody since the bucket went private. */}
                             <ProductThumb src={item.imageUrl} size={36} />
-                          </td>
-                          <td className="px-3 py-2 font-mono text-xs text-text-body">
-                            {item.skuCode}
-                          </td>
-                          <td className="px-3 py-2 text-text-body">
+                          </Td>
+                          <Td className="text-text-body font-mono text-xs">{item.skuCode}</Td>
+                          <Td className="text-text-body">
                             {item.productName}
                             {item.variantLabel && (
                               <span className="text-text-muted ml-1">· {item.variantLabel}</span>
                             )}
-                          </td>
-                          <td className="px-3 py-2 text-right text-text-body font-mono">
+                          </Td>
+                          <Td align="right" className="text-text-body font-mono">
                             {item.quantity}
-                          </td>
-                          <td className="px-3 py-2 text-right text-text-muted font-mono text-xs">
-                            {item.unitWeightGrams ?? '—'}
-                          </td>
-                        </tr>
+                          </Td>
+                          <Td align="right" className="text-text-muted font-mono text-xs">
+                            {item.unitWeightGrams === null ? <Dash /> : `${item.unitWeightGrams} g`}
+                          </Td>
+                        </Tr>
                       ))}
-                    </tbody>
+                    </TBody>
                   </Table>
-                </Card>
-              </Section>
+                </BandBody>
+              </div>
 
               {detail.data.sellerNotes && (
-                <Section title={<Titled icon={StickyNote}>Notes</Titled>}>
-                  <Card>
-                    <CardBody>
-                      <p className="text-text-body text-sm whitespace-pre-wrap">
-                        {detail.data.sellerNotes}
-                      </p>
-                    </CardBody>
-                  </Card>
-                </Section>
+                <div>
+                  <SectionBand
+                    index={band()}
+                    title="Your notes"
+                    note="What you told us at order time."
+                  />
+                  <BandBody>
+                    <p className="text-text-body text-sm whitespace-pre-wrap">
+                      {detail.data.sellerNotes}
+                    </p>
+                  </BandBody>
+                </div>
               )}
 
               {/* Hidden rather than shown-and-refused for a VIEWER: the
@@ -639,9 +786,14 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               403 in a red box reads as a broken page rather than as
               policy. Cosmetic — the server is still the boundary. */}
               {identity !== null && can(identity, 'charges.view') && (
-                <Section title={<Titled icon={Receipt}>Charges</Titled>}>
-                  <OrderChargesSection orderId={orderId} />
-                </Section>
+                <div>
+                  <SectionBand index={band()} title="Charges" note="What this parcel costs you." />
+                  {/* The section brings its own card, so the band caps it
+                      with `flush` rather than a second padded surface. */}
+                  <BandBody flush>
+                    <OrderChargesSection orderId={orderId} />
+                  </BandBody>
+                </div>
               )}
 
               {/* RS-6 phase 3c — a reseller store's order: your transfer
@@ -657,9 +809,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 }
               />
 
-              <Section title={<Titled icon={FileText}>Invoice</Titled>}>
-                <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
-              </Section>
+              <div>
+                <SectionBand
+                  index={band()}
+                  title="Invoice"
+                  note="The tax document for this sale."
+                />
+                <BandBody flush>
+                  <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
+                </BandBody>
+              </div>
 
               {/*
                 Directly UNDER the invoice, in the facts column.
@@ -737,9 +896,12 @@ function OrderJourneySection({ orderId }: { readonly orderId: string }): ReactEl
   if (journey.isPending) return <SkeletonRows rows={4} />;
   if (journey.isError || journey.data === undefined) {
     return (
-      <Section title="Order tracker">
-        <ErrorNote message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
-      </Section>
+      <div>
+        <SectionBand title="Order tracker" />
+        <BandBody>
+          <ErrorNote message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
+        </BandBody>
+      </div>
     );
   }
   return (
@@ -774,25 +936,17 @@ function OrderInvoiceSection({
   // promise that never comes true for this order.
   if (invoice.data !== undefined && invoice.data !== null && 'refused' in invoice.data) {
     return (
-      <Card>
-        <CardBody>
-          <p className="text-text-muted text-sm" data-testid="invoice-refused">
-            {invoice.data.refused}
-          </p>
-        </CardBody>
-      </Card>
+      <p className="text-text-muted p-3 text-sm" data-testid="invoice-refused">
+        {invoice.data.refused}
+      </p>
     );
   }
 
   if (status !== 'DELIVERED') {
     return (
-      <Card>
-        <CardBody>
-          <p className="text-text-muted text-sm">
-            Invoices are auto-generated when the order is delivered.
-          </p>
-        </CardBody>
-      </Card>
+      <p className="text-text-muted p-3 text-sm">
+        Invoices are auto-generated when the order is delivered.
+      </p>
     );
   }
 
@@ -806,59 +960,61 @@ function OrderInvoiceSection({
     }
   }
 
-  if (invoice.isLoading) return <LoadingState label="Loading invoice…" />;
+  if (invoice.isLoading) {
+    return (
+      <div className="p-3">
+        <LoadingState label="Loading invoice…" />
+      </div>
+    );
+  }
 
   if (!invoice.data) {
     return (
-      <Card>
-        <CardBody>
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-text-muted text-sm">
-              No invoice yet — usually generated within seconds of delivery.
-            </p>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={generate.isPending}
-              onClick={() => void onGenerate()}
-            >
-              {generate.isPending ? 'Generating…' : 'Generate now'}
-            </Button>
-          </div>
-          {error && <div className="text-critical text-xs mt-2">{error}</div>}
-        </CardBody>
-      </Card>
+      <div className="p-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <p className="text-text-muted text-sm">
+            No invoice yet — usually generated within seconds of delivery.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={generate.isPending}
+            onClick={() => void onGenerate()}
+          >
+            {generate.isPending ? 'Generating…' : 'Generate now'}
+          </Button>
+        </div>
+        {error && <div className="text-critical mt-2 text-xs">{error}</div>}
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-baseline justify-between gap-3">
-          <div>
-            <div className="text-text-bright text-sm font-mono">{invoice.data.invoiceNumber}</div>
-            <div className="text-text-muted text-xs mt-0.5">
-              Issued {new Date(invoice.data.invoiceDate).toLocaleString()} · Total ₹{' '}
-              {invoice.data.totalInr}
-            </div>
+    <div className="p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-text-bright font-mono text-sm">{invoice.data.invoiceNumber}</div>
+          <div className="text-text-muted mt-0.5 text-xs">
+            Issued {new Date(invoice.data.invoiceDate).toLocaleString()} · Total ₹{' '}
+            {invoice.data.totalInr}
           </div>
-          {invoice.data.pdfUrl !== null && (
-            // A PLAIN, PERMANENT href. The endpoint signs at the moment
-            // it is followed, so there is no expiring URL in the page —
-            // this survives a bookmark, a refresh and a slow reader,
-            // and needs no popup-blocker dance.
-            <a
-              href={`/api/seller/orders/${orderId}/invoice/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent inline-flex items-center gap-1 text-sm hover:underline"
-            >
-              Download PDF →
-            </a>
-          )}
         </div>
-      </CardBody>
-    </Card>
+        {invoice.data.pdfUrl !== null && (
+          // A PLAIN, PERMANENT href. The endpoint signs at the moment
+          // it is followed, so there is no expiring URL in the page —
+          // this survives a bookmark, a refresh and a slow reader,
+          // and needs no popup-blocker dance.
+          <a
+            href={`/api/seller/orders/${orderId}/invoice/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent inline-flex items-center gap-1 text-sm hover:underline"
+          >
+            Download PDF →
+          </a>
+        )}
+      </div>
+    </div>
   );
 }

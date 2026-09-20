@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
-import { PageHeader } from '@skydrop/ui/components';
+import Link from 'next/link';
+import { Crumbs, PageHeader } from '@skydrop/ui/components';
 import { CsvImportPanel } from '../_components/csv-import-panel';
 
 /**
@@ -16,8 +17,19 @@ export default function OrderImportPage(): ReactElement {
   return (
     <div>
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Fulfilment' },
+              { label: 'Orders', href: '/orders' },
+              { label: 'CSV import' },
+            ]}
+            Link={Link}
+          />
+        }
         title="Bulk order import"
-        subtitle="Upload a CSV of orders. Each row becomes a draft order; ORD-9 idempotency keys on (sellerOrderRef)."
+        subtitle="Upload a CSV of orders. One row is one order, and re-uploading a row you have already sent updates it rather than placing it twice."
       />
       <CsvImportPanel
         kind="orders"
@@ -28,7 +40,11 @@ export default function OrderImportPage(): ReactElement {
         // numbers; the per-run screen has the rest and, more to the
         // point, a URL — so a job somebody is watching can be sent to
         // whoever is asking about it, and run eleven is still reachable.
-        detailHref={(id) => `/orders/import/${id}`}
+        //
+        // A PREFIX, not a function: this page is a server component and
+        // React refuses to pass a function into a client one, which was
+        // 500ing the whole screen (see the prop's own note).
+        detailHrefBase="/orders/import"
       />
     </div>
   );

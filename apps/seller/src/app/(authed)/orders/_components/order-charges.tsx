@@ -5,13 +5,16 @@ import type { OrderChargeView } from '@skydrop/api-client';
 import { useOrderCharges } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
-  Card,
-  CardBody,
   EmptyState,
   ErrorState,
   Money,
   SkeletonRows,
+  TBody,
   Table,
+  Td,
+  Th,
+  THead,
+  Tr,
 } from '@skydrop/ui/components';
 
 /**
@@ -24,76 +27,88 @@ import {
  * not landed at the order-create hook), shows the standard empty
  * state with the explanatory copy — the admin compute action can
  * populate them retroactively.
+ *
+ * ── CONSOLE PASS (2026-09-20) ───────────────────────────────────────
+ * It renders NO `Card` of its own any more. The caller caps it with a
+ * `SectionBand`, and `BandBody` IS the bordered surface — a card
+ * inside that draws a second border a hair inside the first, which is
+ * the mistake the profile conversion had to undo.
+ *
+ * The table was a hand-rolled `<thead>`/`<tbody>` inside the `Table`
+ * WRAPPER, which meant it alone did not inherit the below-`md` card
+ * layout every other table on the estate gets (FE-7) — two columns of
+ * money on a 360px phone. It is the primitives now, so the mobile
+ * stack and the stamped column labels come for free.
  */
 export function OrderChargesSection({ orderId }: { orderId: string }): ReactElement {
   const charges = useOrderCharges(orderId);
 
   if (charges.isLoading) {
     return (
-      <Card>
+      <div className="p-3">
         <SkeletonRows rows={4} cols={2} />
-      </Card>
+      </div>
     );
   }
   if (charges.isError) {
     return (
-      <ErrorState
-        message={serverVerdict(charges.error, 'Failed to load charges.')}
-        retry={() => void charges.refetch()}
-      />
+      <div className="p-3">
+        <ErrorState
+          message={serverVerdict(charges.error, 'Failed to load charges.')}
+          retry={() => void charges.refetch()}
+        />
+      </div>
     );
   }
   if (!charges.data || charges.data.length === 0) {
     return (
-      <EmptyState
-        title="No charges persisted yet"
-        description="Pricing breakdowns appear here once charges are computed for the order."
-      />
+      <div className="p-3">
+        <EmptyState
+          title="No charges persisted yet"
+          description="Pricing breakdowns appear here once charges are computed for the order."
+        />
+      </div>
     );
   }
 
   const total = charges.data.reduce((sum, c) => sum + Number(c.totalAmountInr), 0);
 
   return (
-    <Card>
-      <CardBody className="p-0">
-        <Table wrapperClassName="rounded-none border-0 bg-transparent">
-          <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-            <tr>
-              <th className="text-left px-4 py-2 font-medium">Charge</th>
-              <th className="text-right px-4 py-2 font-medium">Amount (INR)</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {charges.data.map((c) => (
-              <ChargeRow key={c.id} charge={c} />
-            ))}
-            <tr className="bg-surface-raised">
-              <td className="px-4 py-2 text-text-bright font-medium">Total</td>
-              <td className="px-4 py-2 text-right text-text-bright font-medium">
-                <Money amount={total} />
-              </td>
-            </tr>
-          </tbody>
-        </Table>
-      </CardBody>
-    </Card>
+    <Table>
+      <THead>
+        <Tr>
+          <Th>Charge</Th>
+          <Th align="right">Amount</Th>
+        </Tr>
+      </THead>
+      <TBody>
+        {charges.data.map((c) => (
+          <ChargeRow key={c.id} charge={c} />
+        ))}
+        <Tr className="bg-surface-raised">
+          <Td className="text-text-bright font-medium">Total</Td>
+          <Td align="right" className="text-text-bright font-medium">
+            <Money amount={total} />
+          </Td>
+        </Tr>
+      </TBody>
+    </Table>
   );
 }
 
 function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
   return (
-    <tr>
-      <td className="px-4 py-2 text-text-body">
+    <Tr>
+      <Td className="text-text-body">
         <div className="text-sm">{charge.description ?? humanizeType(charge.type)}</div>
-        <div className="text-text-faint text-xs uppercase tracking-wide mt-0.5">
+        <div className="text-text-faint mt-0.5 font-mono text-[11px] tracking-wide uppercase">
           {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
         </div>
-      </td>
-      <td className="px-4 py-2 text-right">
+      </Td>
+      <Td align="right">
         <Money amount={charge.totalAmountInr} />
-      </td>
-    </tr>
+      </Td>
+    </Tr>
   );
 }
 

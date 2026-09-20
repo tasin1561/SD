@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { Button, Card, CardBody, FormField, Input, useToast } from '@skydrop/ui/components';
+import { Button, FormField, Input, useToast } from '@skydrop/ui/components';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useCreateVariant } from '@/lib/api-hooks';
 
@@ -62,46 +62,44 @@ export function AddVariantPanel({
     }
   }
 
+  // No <Card>: it opens INSIDE the variants band, which is already a
+  // bordered surface. A card here drew a box inside a box.
   return (
-    <Card className="mb-3">
-      <CardBody>
-        <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
-          {error !== null && (
-            <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical rounded-md border px-3 py-2 text-sm">
-              {error}
-            </div>
-          )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label="SKU" required hint="Unique across your catalogue, and permanent.">
-              <Input
-                value={skuCode}
-                onChange={(e) => setSkuCode(e.target.value)}
-                maxLength={120}
-                required
-              />
-            </FormField>
-            <FormField label="Variant label" hint="e.g. Blue / L">
-              <Input
-                value={variantLabel}
-                onChange={(e) => setVariantLabel(e.target.value)}
-                maxLength={120}
-              />
-            </FormField>
-          </div>
-          <p className="text-text-muted text-xs">
-            Weight, dimensions and value are set on the variant once it exists — a second size
-            usually shares the first one&rsquo;s.
-          </p>
-          <div className="flex items-center gap-2">
-            <Button type="submit" variant="primary" size="md" disabled={busy}>
-              {busy ? 'Adding…' : 'Add variant'}
-            </Button>
-            <Button type="button" variant="secondary" size="md" disabled={busy} onClick={onDone}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </CardBody>
-    </Card>
+    <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
+      {error !== null && (
+        <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical rounded-md border px-3 py-2 text-sm">
+          {error}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormField label="SKU" required hint="Unique across your catalogue, and permanent.">
+          <Input
+            value={skuCode}
+            onChange={(e) => setSkuCode(e.target.value)}
+            maxLength={120}
+            required
+          />
+        </FormField>
+        <FormField label="Variant label" hint="e.g. Blue / L">
+          <Input
+            value={variantLabel}
+            onChange={(e) => setVariantLabel(e.target.value)}
+            maxLength={120}
+          />
+        </FormField>
+      </div>
+      <p className="text-text-muted text-xs">
+        Weight, dimensions and value are set on the variant once it exists — a second size usually
+        shares the first one&rsquo;s.
+      </p>
+      <div className="flex items-center gap-2">
+        <Button type="submit" variant="primary" size="md" disabled={busy}>
+          {busy ? 'Adding…' : 'Add variant'}
+        </Button>
+        <Button type="button" variant="secondary" size="md" disabled={busy} onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }

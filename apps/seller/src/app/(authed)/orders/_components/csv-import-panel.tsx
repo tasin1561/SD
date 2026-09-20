@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useRef, useState, type ChangeEvent, type ReactElement } from 'react';
 import {
   Button,
-  Card,
-  CardBody,
+  BandBody,
+  SectionBand,
   EmptyState,
   ErrorState,
   SkeletonRows,
@@ -79,19 +79,29 @@ export function CsvImportPanel({
   kind,
   endpointBase,
   templateFileName,
-  detailHref,
+  detailHrefBase,
 }: {
   readonly kind: Kind;
   readonly endpointBase: string;
   readonly templateFileName: string;
   readonly previewSampleSize?: number;
   /**
-   * Where a row goes when clicked. Optional because only the orders
-   * importer has a per-run detail screen (GET endpointBase/:id) —
-   * passing nothing leaves the table exactly as it was rather than
-   * linking somewhere that 404s.
+   * Where a row goes when clicked — the PREFIX, `<base>/<id>`.
+   * Optional because only the orders importer has a per-run detail
+   * screen (GET endpointBase/:id); passing nothing leaves the table
+   * exactly as it was rather than linking somewhere that 404s.
+   *
+   * ── WHY A STRING AND NOT A FUNCTION (2026-09-20) ──────────────────
+   * It was `(uploadId: string) => string`, and `/orders/import` is a
+   * SERVER component, so React refused the render outright:
+   * "Functions cannot be passed directly to Client Components". The
+   * page returned a 500 and an error boundary — the whole bulk order
+   * import was unreachable, in production, and nothing caught it
+   * because a server-component boundary error is invisible to
+   * typecheck, to lint and to a jsdom test. It surfaced the first time
+   * the page was opened in a real browser.
    */
-  readonly detailHref?: (uploadId: string) => string;
+  readonly detailHrefBase?: string;
 }): ReactElement {
   const toast = useToast();
   const client = useApiClient();
@@ -254,18 +264,22 @@ export function CsvImportPanel({
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardBody>
-          <h2 className="text-text-bright text-sm font-medium mb-3">Upload</h2>
-          <p className="text-text-muted text-xs mb-3">
-            Download the template, fill it in, then upload here. Each row is a separate{' '}
-            {kind === 'orders' ? 'order' : 'product / variant'}.
-          </p>
-          <div className="flex items-center gap-2 mb-3">
-            <Button variant="ghost" size="md" onClick={() => void downloadTemplate()}>
+      <div>
+        <SectionBand
+          index="01"
+          title="Upload"
+          note={`One row is one ${kind === 'orders' ? 'order' : 'product or variant'}.`}
+          action={
+            <Button variant="ghost" size="sm" onClick={() => void downloadTemplate()}>
               Download template
             </Button>
-          </div>
+          }
+        />
+        <BandBody>
+          <p className="text-text-muted mb-3 text-xs">
+            Download the template, fill it in, then upload here. Nothing is imported until you have
+            seen what we matched.
+          </p>
 
           <div className="flex flex-wrap items-end gap-2">
             <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-[5px] border border-border bg-surface hover:border-border-strong text-text-body text-sm">
@@ -290,26 +304,32 @@ export function CsvImportPanel({
           </div>
 
           {error && (
-            <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px] mt-3">
+            <div className="text-critical mt-3 rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-2 text-xs">
               {error}
             </div>
           )}
-        </CardBody>
-      </Card>
+        </BandBody>
+      </div>
 
       {/* Nothing has been imported yet. This is the step that was
           missing: the file went straight to process, so a column we
           could not map became rows that failed one at a time into an
           error report read afterwards. */}
       {pending !== null && (
-        <Card>
-          <CardBody>
-            <h2 className="text-text-bright mb-1 text-sm font-medium">
-              Before we import {pending.fileName}
-            </h2>
+        <div>
+          <SectionBand
+            index="02"
+            title="Check before importing"
+            note={
+              <span className="font-mono">
+                {pending.fileName} · {pending.preview.rowCount} row
+                {pending.preview.rowCount === 1 ? '' : 's'}
+              </span>
+            }
+          />
+          <BandBody>
             <p className="text-text-muted mb-3 text-xs">
-              {pending.preview.rowCount} row{pending.preview.rowCount === 1 ? '' : 's'} found.
-              Nothing has been imported yet.
+              Nothing has been imported yet. Check what we matched, then import.
             </p>
 
             {pending.preview.missingRequired.length > 0 && (
@@ -379,81 +399,101 @@ export function CsvImportPanel({
                 Discard
               </Button>
             </div>
-          </CardBody>
-        </Card>
+          </BandBody>
+        </div>
       )}
 
-      <h2 className="text-text-bright text-sm font-medium mt-5">Recent imports</h2>
-      {list.isLoading ? (
-        <Card>
-          <SkeletonRows rows={3} cols={4} />
-        </Card>
-      ) : list.isError ? (
-        <ErrorState
-          message={serverVerdict(list.error, 'Failed to load uploads.')}
-          retry={() => void list.refetch()}
+      <div>
+        <SectionBand
+          index={pending === null ? '02' : '03'}
+          title="Recent imports"
+          note={
+            list.data === undefined ? undefined : `${list.data.items.length} shown, newest first`
+          }
         />
-      ) : !list.data || list.data.items.length === 0 ? (
-        <EmptyState
-          title="No imports yet"
-          description="Upload a CSV above to start your first import."
-        />
-      ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>File</Th>
-              <Th>Status</Th>
-              <Th className="text-right">Rows</Th>
-              <Th className="text-right">Created</Th>
-              <Th className="text-right">Failed</Th>
-              <Th>When</Th>
-              <Th></Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {list.data.items.map((u) => {
-              const created =
-                u.ordersCreated ?? (u.productsCreated ?? 0) + (u.variantsCreated ?? 0);
-              return (
-                <Tr key={u.id}>
-                  <Td className="text-text-bright text-xs font-mono truncate max-w-[160px]">
-                    {detailHref === undefined ? (
-                      u.fileName
-                    ) : (
-                      <Link
-                        href={detailHref(u.id)}
-                        className="text-accent hover:text-accent-hover"
-                        title={u.fileName}
-                      >
-                        {u.fileName}
-                      </Link>
-                    )}
-                  </Td>
-                  <Td className="text-text-muted text-xs uppercase">{u.status}</Td>
-                  <Td className="text-right font-mono">{u.rowCount}</Td>
-                  <Td className="text-right font-mono">{created}</Td>
-                  <Td className="text-right font-mono text-text-muted">{u.rowsFailed ?? 0}</Td>
-                  <Td className="text-text-faint text-xs font-mono">
-                    {new Date(u.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
-                  </Td>
-                  <Td>
-                    {u.errorReportKey && (
-                      <button
-                        type="button"
-                        onClick={() => void downloadErrorReport(u.id)}
-                        className="text-accent hover:text-accent-hover text-xs"
-                      >
-                        Errors CSV
-                      </button>
-                    )}
-                  </Td>
+        <BandBody flush>
+          {list.isLoading ? (
+            <div className="p-3">
+              <SkeletonRows rows={3} cols={4} />
+            </div>
+          ) : list.isError ? (
+            <div className="p-3">
+              <ErrorState
+                message={serverVerdict(list.error, 'Failed to load uploads.')}
+                retry={() => void list.refetch()}
+              />
+            </div>
+          ) : !list.data || list.data.items.length === 0 ? (
+            <div className="p-3">
+              <EmptyState
+                title="No imports yet"
+                description="Upload a CSV above to start your first import."
+              />
+            </div>
+          ) : (
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>File</Th>
+                  <Th>Status</Th>
+                  <Th align="right">Rows</Th>
+                  <Th align="right">Created</Th>
+                  <Th align="right">Failed</Th>
+                  <Th>When</Th>
+                  <Th aria-label="Error report" />
                 </Tr>
-              );
-            })}
-          </TBody>
-        </Table>
-      )}
+              </THead>
+              <TBody>
+                {list.data.items.map((u) => {
+                  const created =
+                    u.ordersCreated ?? (u.productsCreated ?? 0) + (u.variantsCreated ?? 0);
+                  return (
+                    <Tr key={u.id}>
+                      <Td className="text-text-bright text-xs font-mono truncate max-w-[160px]">
+                        {detailHrefBase === undefined ? (
+                          u.fileName
+                        ) : (
+                          <Link
+                            href={`${detailHrefBase}/${u.id}`}
+                            className="text-accent hover:text-accent-hover"
+                            title={u.fileName}
+                          >
+                            {u.fileName}
+                          </Link>
+                        )}
+                      </Td>
+                      <Td className="text-text-muted font-mono text-xs uppercase">{u.status}</Td>
+                      <Td align="right" className="font-mono">
+                        {u.rowCount}
+                      </Td>
+                      <Td align="right" className="font-mono">
+                        {created}
+                      </Td>
+                      <Td align="right" className="text-text-muted font-mono">
+                        {u.rowsFailed ?? 0}
+                      </Td>
+                      <Td className="text-text-faint text-xs font-mono">
+                        {new Date(u.createdAt).toISOString().slice(0, 16).replace('T', ' ')}
+                      </Td>
+                      <Td>
+                        {u.errorReportKey && (
+                          <button
+                            type="button"
+                            onClick={() => void downloadErrorReport(u.id)}
+                            className="text-accent hover:text-accent-hover text-xs"
+                          >
+                            Errors CSV
+                          </button>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </BandBody>
+      </div>
     </div>
   );
 }

@@ -5,11 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, type ReactElement } from 'react';
 import { ArrowLeft, Upload } from 'lucide-react';
 import {
+  BandBody,
   Button,
+  Crumbs,
   EmptyState,
   ErrorNote,
   LoadingState,
+  MetaChip,
   PageHeader,
+  SectionBand,
   TBody,
   THead,
   Table,
@@ -60,8 +64,27 @@ export function ImportJobsIndex(): ReactElement {
       </Link>
 
       <PageHeader
+        breadcrumb={
+          <Crumbs
+            items={[
+              { label: 'Seller console' },
+              { label: 'Stock & WMS' },
+              { label: 'Products', href: '/products' },
+              { label: 'CSV import', href: '/products/import' },
+              { label: 'History' },
+            ]}
+            Link={Link}
+          />
+        }
         title="Import history"
         subtitle="Every CSV you have sent, newest first. Open one to see what it wrote and what it refused."
+        meta={
+          list.data === undefined ? undefined : (
+            <MetaChip tone="accent">
+              {list.data.total} {list.data.total === 1 ? 'import' : 'imports'}
+            </MetaChip>
+          )
+        }
         action={
           <Link href="/products/import">
             <Button variant="ghost" size="md">
@@ -71,93 +94,106 @@ export function ImportJobsIndex(): ReactElement {
         }
       />
 
-      {list.isLoading ? (
-        <LoadingState label="Loading imports…" />
-      ) : list.isError ? (
-        <ErrorNote
-          message={serverVerdict(list.error, 'Could not load your imports.')}
-          retry={() => void list.refetch()}
-        />
-      ) : list.data === undefined || list.data.items.length === 0 ? (
-        <EmptyState
-          title="No imports yet"
-          description="Nothing has been uploaded from this account. The import screen has the template to start from."
-          action={
-            <Link href="/products/import">
-              <Button variant="primary" size="md">
-                <Upload size={14} /> Import a CSV
-              </Button>
-            </Link>
-          }
-        />
-      ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>File</Th>
-              <Th>Status</Th>
-              <Th align="right">Rows</Th>
-              <Th align="right">Products</Th>
-              <Th align="right">Variants</Th>
-              <Th align="right">Refused</Th>
-              <Th>Uploaded</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {list.data.items.map((job) => (
-              <Tr key={job.id} onActivate={() => router.push(`/products/import/jobs/${job.id}`)}>
-                <Td>
-                  <Link
-                    href={`/products/import/jobs/${job.id}`}
-                    className="text-text-bright font-mono text-xs hover:underline"
-                  >
-                    {job.fileName}
-                  </Link>
-                </Td>
-                <Td>
-                  <ImportStatusBadge status={job.status} />
-                </Td>
-                <Td align="right" className="text-text-muted font-mono text-xs">
-                  {job.rowCount ?? '—'}
-                </Td>
-                {/* Created and updated are shown together because a
+      <SectionBand
+        index="01"
+        title="Uploads"
+        note={list.data === undefined ? undefined : `${list.data.total} in total, newest first`}
+      />
+      <BandBody flush>
+        {list.isLoading ? (
+          <div className="p-3">
+            <LoadingState label="Loading imports…" />
+          </div>
+        ) : list.isError ? (
+          <div className="p-3">
+            <ErrorNote
+              message={serverVerdict(list.error, 'Could not load your imports.')}
+              retry={() => void list.refetch()}
+            />
+          </div>
+        ) : list.data === undefined || list.data.items.length === 0 ? (
+          <div className="p-3">
+            <EmptyState
+              title="No imports yet"
+              description="Nothing has been uploaded from this account. The import screen has the template to start from."
+              action={
+                <Link href="/products/import">
+                  <Button variant="primary" size="md">
+                    <Upload size={14} /> Import a CSV
+                  </Button>
+                </Link>
+              }
+            />
+          </div>
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>File</Th>
+                <Th>Status</Th>
+                <Th align="right">Rows</Th>
+                <Th align="right">Products</Th>
+                <Th align="right">Variants</Th>
+                <Th align="right">Refused</Th>
+                <Th>Uploaded</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {list.data.items.map((job) => (
+                <Tr key={job.id} onActivate={() => router.push(`/products/import/jobs/${job.id}`)}>
+                  <Td>
+                    <Link
+                      href={`/products/import/jobs/${job.id}`}
+                      className="text-text-bright font-mono text-xs hover:underline"
+                    >
+                      {job.fileName}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <ImportStatusBadge status={job.status} />
+                  </Td>
+                  <Td align="right" className="text-text-muted font-mono text-xs">
+                    {job.rowCount ?? '—'}
+                  </Td>
+                  {/* Created and updated are shown together because a
                     re-upload is the normal way to edit a catalogue —
                     "0 created" on a correct import reads as a failure
                     unless the updates are next to it. */}
-                <Td align="right" className="text-text-muted font-mono text-xs">
-                  {written(job.productsCreated, job.productsUpdated)}
-                </Td>
-                <Td align="right" className="text-text-muted font-mono text-xs">
-                  {written(job.variantsCreated, job.variantsUpdated)}
-                </Td>
-                <Td
-                  align="right"
-                  className={
-                    job.rowsFailed > 0
-                      ? 'text-[var(--color-critical)] font-mono text-xs'
-                      : 'text-text-faint font-mono text-xs'
-                  }
-                >
-                  {job.rowsFailed}
-                </Td>
-                <Td className="text-text-faint font-mono text-xs">{formatDate(job.createdAt)}</Td>
-              </Tr>
-            ))}
-          </TBody>
-          <tfoot>
-            <tr>
-              <td colSpan={7} className="p-0">
-                <TablePaginator
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={list.data.total}
-                  onPageChange={goToPage}
-                />
-              </td>
-            </tr>
-          </tfoot>
-        </Table>
-      )}
+                  <Td align="right" className="text-text-muted font-mono text-xs">
+                    {written(job.productsCreated, job.productsUpdated)}
+                  </Td>
+                  <Td align="right" className="text-text-muted font-mono text-xs">
+                    {written(job.variantsCreated, job.variantsUpdated)}
+                  </Td>
+                  <Td
+                    align="right"
+                    className={
+                      job.rowsFailed > 0
+                        ? 'text-[var(--color-critical)] font-mono text-xs'
+                        : 'text-text-faint font-mono text-xs'
+                    }
+                  >
+                    {job.rowsFailed}
+                  </Td>
+                  <Td className="text-text-faint font-mono text-xs">{formatDate(job.createdAt)}</Td>
+                </Tr>
+              ))}
+            </TBody>
+            <tfoot>
+              <tr>
+                <td colSpan={7} className="p-0">
+                  <TablePaginator
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    total={list.data.total}
+                    onPageChange={goToPage}
+                  />
+                </td>
+              </tr>
+            </tfoot>
+          </Table>
+        )}
+      </BandBody>
     </div>
   );
 }
