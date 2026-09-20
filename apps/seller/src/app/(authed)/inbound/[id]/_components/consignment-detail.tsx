@@ -11,11 +11,21 @@ import type {
 import {
   BandBody,
   Button,
+  // The page's own sections are bands now, but `ConsignmentFreight`
+  // renders inside a <Section> and lists one Card per bill — a repeated
+  // item, not a page section, so the two idioms are not in conflict.
+  // The redesign dropped these imports because the sections IT converted
+  // stopped needing them; this consumer still does, and the merge of the
+  // two changes compiled nowhere until they came back.
+  Card,
+  CardBody,
+  CardHeader,
   Crumbs,
   DescriptionList,
   ErrorNote,
   ErrorState,
   FormField,
+  FreightStatusBadge,
   LoadingState,
   MetaChip,
   Modal,
@@ -38,6 +48,7 @@ import {
 } from '@skydrop/ui/components';
 import { consignmentStatusKind } from '@skydrop/ui/status';
 import { useCancelConsignment, useConsignment, useConsignmentEvents } from '@/lib/account-hooks';
+import { useSellerFreight, type FreightChargeView } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -322,6 +333,24 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
           />
         ))
       )}
+
+      {/* PAY_ADVANCE added this as a <Section>, which is how every
+          section on this page looked before the console redesign. The
+          redesign converted the other three to bands and dropped the
+          import, so the two changes met in a file that compiled on
+          neither side alone. A band, to match: 01-03 above all render
+          unconditionally (03 appears in both arms of its ternary), so a
+          fourth leaves no gap in the numbering. */}
+      <div className="mb-4">
+        <SectionBand
+          index="04"
+          title="Inbound freight"
+          note="What it cost to move this consignment, and how much of that has been charged so far."
+        />
+        <BandBody>
+          <ConsignmentFreight consignmentId={consignment.id} />
+        </BandBody>
+      </div>
 
       <CancelConsignmentModal
         open={cancelOpen}
@@ -618,5 +647,122 @@ function CancelConsignmentModal({
         </Button>
       </ModalFooter>
     </Modal>
+  );
+}
+
+/** What each mode means to the seller — WHERE the bill lands. */
+const TERMS_WORDS: Record<FreightChargeView['mode'], string> = {
+  PAY_ADVANCE: 'Agreed before it flew, and charged against the Dhaka count',
+  PAY_NOW: 'Charged in full when the shipment landed',
+  PAY_LATER: 'Charged per unit as the stock sells',
+};
+
+/**
+ * The freight bill(s) for ONE consignment, in the seller's own words.
+ *
+ * The consignment view carries four fields per bill (id, status, total,
+ * receipt) and no `voidedAt`, so a withdrawn bill would still be summed
+ * into the header figure. This reads the freight endpoint instead,
+ * which already hides a withdrawn bill and carries what the rate was
+ * agreed in — the figure the seller actually negotiated on the phone,
+ * and the only thing that makes a rupee total checkable.
+ *
+ * Per-LINE detail (basis, rate, chargeable weight per product) lives
+ * only on the admin cost-breakdown endpoint today, so it is not shown;
+ * a seller endpoint for it is the next step.
+ */
+function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string }): ReactElement {
+  const q = useSellerFreight({});
+
+  if (q.isLoading) return <LoadingState label="Loading freight…" rows={2} />;
+  if (q.isError) {
+    return <ErrorState message={serverVerdict(q.error)} retry={() => void q.refetch()} />;
+  }
+
+  const bills = (q.data?.items ?? []).filter((f) => f.consignmentId === consignmentId);
+
+  if (bills.length === 0) {
+    return (
+      <Card>
+        <CardBody>
+          <p className="text-text-muted text-sm">
+            Nothing billed yet. A freight bill appears here once we have the forwarder&apos;s figure
+            for this consignment — on pay-in-advance terms that is after the Dhaka count, otherwise
+            after it lands in India.
+          </p>
+        </CardBody>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-3">
+      {bills.map((f) => (
+        <Card key={f.id}>
+          <CardHeader
+            title={f.receiptNumber ?? 'Freight bill'}
+            action={<FreightStatusBadge status={f.status} />}
+          />
+          <CardBody>
+            <DescriptionList
+              columns={3}
+              items={[
+                {
+                  label: 'Total',
+                  value: (
+                    <span className="flex flex-col">
+                      <Money amount={f.totalInr} />
+                      {/* The figure agreed with us, when that was not in
+                          rupees. The rupees are what leaves the wallet;
+                          this is what the conversation was about, and
+                          without it the total cannot be checked. */}
+                      {f.agreedCurrency !== 'INR' && (
+                        <span className="text-text-muted text-xs">
+                          <Money
+                            amount={f.agreedAmount}
+                            currency={f.agreedCurrency}
+                            convert={false}
+                          />{' '}
+                          agreed, converted at the rate when it was billed
+                        </span>
+                      )}
+                    </span>
+                  ),
+                },
+                { label: 'Charged so far', value: <Money amount={f.amountSettledInr} /> },
+                {
+                  label: 'Still to come',
+                  value:
+                    Number(f.outstandingInr) === 0 ? (
+                      <span className="text-text-muted">Nothing</span>
+                    ) : (
+                      <Money amount={f.outstandingInr} direction="debit" />
+                    ),
+                },
+                { label: 'Terms', value: TERMS_WORDS[f.mode] },
+                {
+                  label: 'Units charged',
+                  value: (
+                    <span className="flex items-baseline gap-1">
+                      <Num value={f.unitsSettled} /> <span>of</span> <Num value={f.totalUnits} />
+                    </span>
+                  ),
+                },
+                {
+                  label: 'Service charge',
+                  value:
+                    f.serviceChargeInr === null || Number(f.serviceChargeInr) === 0 ? (
+                      <span className="text-text-muted">None</span>
+                    ) : (
+                      <Money amount={f.serviceChargeInr} />
+                    ),
+                },
+              ]}
+            />
+            {f.note !== null && <p className="text-text-muted mt-3 text-sm">{f.note}</p>}
+          </CardBody>
+        </Card>
+      ))}
+    </div>
   );
 }

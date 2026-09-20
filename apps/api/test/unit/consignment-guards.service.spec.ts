@@ -57,6 +57,9 @@ const consignment = (over: Any = {}) => ({
   labelsPrintedAt: null,
   cancelledAt: null,
   receipts: [leg()],
+  // LIVE bills only — `CONSIGNMENT_INCLUDE` filters withdrawn ones out,
+  // so an empty list means "nothing is owed on this", not "never billed".
+  freightCharges: [],
   ...over,
 });
 
@@ -98,6 +101,32 @@ describe('the cancel window CLOSES at dispatch', () => {
     await expect(
       svc.assertCancellable(consignment({ status: 'CANCELLED' }) as Any),
     ).rejects.toMatchObject({ response: { code: 'CONSIGNMENT_ALREADY_CANCELLED' } });
+  });
+
+  it('refuses while a freight bill is LIVE on it', async () => {
+    // PAY_ADVANCE (FRT-5) makes a state CNS-6 predates reachable: a
+    // fully-PAID bill on a consignment that has not flown. Cancelling
+    // touched no freight row, so the seller got their goods back and
+    // simply kept the debit — no screen, no issue, nobody told.
+    const { svc } = svcWith(consignment());
+    await expect(
+      svc.assertCancellable(
+        consignment({
+          freightCharges: [{ id: 'fc1', status: 'SETTLED', totalInr: '3658.54' }],
+        }) as Any,
+      ),
+    ).rejects.toMatchObject({ response: { code: 'CONSIGNMENT_FREIGHT_BILLED' } });
+  });
+
+  it('allows it once the bill is WITHDRAWN', async () => {
+    // The payload carries live bills only, so a withdrawn one simply is
+    // not here — the refund has already gone back and there is nothing
+    // left to strand. Withdraw, then cancel: the order the message asks
+    // for is the order that works.
+    const { svc } = svcWith(consignment());
+    await expect(
+      svc.assertCancellable(consignment({ freightCharges: [] }) as Any),
+    ).resolves.toBeUndefined();
   });
 });
 

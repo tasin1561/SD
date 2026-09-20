@@ -89,6 +89,18 @@ export interface FreightChargeView {
   readonly consignmentId: string;
   readonly consignmentNumber: string | null;
   readonly amountInr: string;
+  /**
+   * What was AGREED with us, before conversion — equal to `amountInr` on
+   * a rupee bill. The rate is settled by phone, sometimes in taka, and
+   * this is the figure that conversation produced.
+   */
+  readonly agreedAmount: string;
+  readonly agreedCurrency: Currency;
+  /** How the agreed figure became rupees. Null on a rupee bill. */
+  readonly fxRate: string | null;
+  readonly fxRatePair: string | null;
+  readonly fxRateSource: string | null;
+  readonly fxRateRecordedAt: string | null;
   readonly mode: InboundFreightMode;
   readonly serviceChargePercent: string | null;
   readonly serviceChargeInr: string | null;
@@ -99,6 +111,14 @@ export interface FreightChargeView {
   readonly outstandingInr: string;
   readonly status: InboundFreightStatus;
   readonly settledAt: string | null;
+  /**
+   * Set when we WITHDREW the bill as wrong, `voidReason` saying why.
+   * `outstandingInr` above is still total minus settled on one of
+   * these, so anything showing what is still owed must check this
+   * first or it shows money nobody owes.
+   */
+  readonly voidedAt: string | null;
+  readonly voidReason: string | null;
   readonly note: string | null;
   readonly createdAt: string;
 }

@@ -3,6 +3,7 @@ import { InboundFreightAmortisationService } from '../../src/modules/inbound-fre
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
+import type { ConsignmentFreightModeService } from '../../src/modules/consignment-core/services/consignment-freight-mode.service';
 
 /**
  * A pay-later bill must collect EXACTLY its total over its life.
@@ -73,17 +74,20 @@ function world(bill: Bill, lines: Line[]) {
         const l = lines.find((x) => x.batchId === (a['where'] as Args)['batchId']);
         if (l === undefined) return null;
         return {
-          freightAllocation: {
-            id: l.id,
-            freightChargeId: bill.id,
-            perUnitInr: l.lineGrossInr.div(l.units),
-            units: l.units,
-            unitsSettled: l.unitsSettled,
-            lineTotalInr: l.lineTotalInr,
-            lineGrossInr: l.lineGrossInr,
-            amountSettledInr: l.amountSettledInr,
-            freightCharge: { mode: bill.mode, status: bill.status },
-          },
+          // A LIST since void-and-re-bill made the per-line unique partial.
+          freightAllocations: [
+            {
+              id: l.id,
+              freightChargeId: bill.id,
+              perUnitInr: l.lineGrossInr.div(l.units),
+              units: l.units,
+              unitsSettled: l.unitsSettled,
+              lineTotalInr: l.lineTotalInr,
+              lineGrossInr: l.lineGrossInr,
+              amountSettledInr: l.amountSettledInr,
+              freightCharge: { mode: bill.mode, status: bill.status },
+            },
+          ],
         };
       }),
     },
@@ -118,6 +122,10 @@ function world(bill: Bill, lines: Line[]) {
     },
   };
 
+  // The ONE reader of which modes settle up front (PAY_NOW, PAY_ADVANCE).
+  const freightMode = {
+    settlesImmediately: (m: string) => m === 'PAY_NOW' || m === 'PAY_ADVANCE',
+  } as unknown as ConsignmentFreightModeService;
   const wallet = {
     applyEntry: jest.fn(async (_tx: unknown, e: Args) => {
       debits.push({ orderId: e['linkedOrderId'] as string, amount: e['amount'] as Prisma.Decimal });
@@ -129,6 +137,7 @@ function world(bill: Bill, lines: Line[]) {
     { client } as unknown as PrismaService,
     {} as CatalogReadService,
     wallet,
+    freightMode,
   );
 
   return {

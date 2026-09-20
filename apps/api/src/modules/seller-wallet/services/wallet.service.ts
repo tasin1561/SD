@@ -113,6 +113,10 @@ const CREDIT_DIRECTIONS: ReadonlySet<WalletEntryDirection> = new Set([
   WalletEntryDirection.PREPAID_TRANSFER_CREDIT,
   // RS-7 — a dispute with a reseller store settled in the seller's favour.
   WalletEntryDirection.STORE_DISPUTE_IN,
+  // A voided inbound freight bill giving back exactly what it charged.
+  // Omitting it here would charge the seller the freight a SECOND time
+  // while withdrawing the bill.
+  WalletEntryDirection.INBOUND_FREIGHT_REFUND,
 ]);
 
 /** Exported for readers that sign a ledger line (the reseller order money view). */

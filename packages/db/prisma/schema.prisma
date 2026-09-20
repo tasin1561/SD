@@ -100,6 +100,7 @@ model StaffUser {
   courierSettlementsRecorded CourierSettlement[]           @relation("CourierSettlementRecordedBy")
   stockUnitsScanned          StockUnit[]                   @relation("StockUnitLastScanBy")
   inboundFreightSettled      InboundFreightCharge[]        @relation("InboundFreightSettledBy")
+  inboundFreightVoided       InboundFreightCharge[]        @relation("InboundFreightVoidedBy")
   binLayoutSnapshotsTaken    BinLayoutSnapshot[]           @relation("BinSnapshotTakenBy")
   topupsReviewed             WalletTopupRequest[]          @relation("TopupReviewedBy")
   binCollapseChallenges      BinCollapseChallenge[]        @relation("BinCollapseChallengeStaff")
@@ -1424,22 +1425,48 @@ model CycleCountItem {
 /// ordinary goods receipts and reuse the receiving station unchanged.
 /// See docs/consignment-two-leg.md.
 model Consignment {
-  id                String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId          String            @map("seller_id") @db.Uuid
-  consignmentNumber String            @unique @map("consignment_number")
-  route             ConsignmentRoute
-  status            ConsignmentStatus @default(PENDING)
-  labellingSite     LabellingSite     @default(NONE) @map("labelling_site")
+  id                 String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId           String              @map("seller_id") @db.Uuid
+  consignmentNumber  String              @unique @map("consignment_number")
+  route              ConsignmentRoute
+  status             ConsignmentStatus   @default(PENDING)
+  labellingSite      LabellingSite       @default(NONE) @map("labelling_site")
   /// Set by the first print. While null the site may be changed freely;
   /// after it, never.
-  labelsPrintedAt   DateTime?         @map("labels_printed_at") @db.Timestamptz
-  expectedArrivalAt DateTime?         @map("expected_arrival_at") @db.Timestamptz
-  sellerReference   String?           @map("seller_reference")
-  cancelledAt       DateTime?         @map("cancelled_at") @db.Timestamptz
-  cancelReason      String?           @map("cancel_reason") @db.Text
-  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt         DateTime?         @map("deleted_at") @db.Timestamptz
+  labelsPrintedAt    DateTime?           @map("labels_printed_at") @db.Timestamptz
+  /// The THIRD level of the freight-mode chain:
+  ///
+  ///     consignment override ?? seller override ?? global default
+  ///
+  /// The last two are SET-1's `wallet.inbound_freight_mode`, untouched.
+  /// This is the per-shipment pin, set at BD receiving — the moment the
+  /// three modes diverge, since PAY_ADVANCE bills at the Dhaka receipt
+  /// while PAY_NOW and PAY_LATER both defer to the India arrival.
+  ///
+  /// NULL means FALL THROUGH, and is the ordinary state; it is not a
+  /// default, and a consignment nobody made a per-shipment decision
+  /// about follows whatever the seller's terms are today.
+  ///
+  /// It becomes a SNAPSHOT the moment the bill is raised: the billing
+  /// transaction writes the effective mode in, and `setOverride` refuses
+  /// thereafter (`FREIGHT_MODE_LOCKED`). That is ORD-6 / RS-5 — a later
+  /// change to the seller's setting or the global default can never
+  /// re-characterise a consignment already billed or in the air, and
+  /// PAY_ADVANCE in particular decides whether the goods may leave Dhaka
+  /// unbilled at all.
+  ///
+  /// `ConsignmentFreightModeService` is the ONE reader and the one
+  /// writer (the CNS-2 / BIN-1 discipline: five call sites each deciding
+  /// what the mode means is how they come to disagree — and here the
+  /// disagreement is a seller billed twice or not at all).
+  inboundFreightMode InboundFreightMode? @map("inbound_freight_mode")
+  expectedArrivalAt  DateTime?           @map("expected_arrival_at") @db.Timestamptz
+  sellerReference    String?             @map("seller_reference")
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz
+  cancelReason       String?             @map("cancel_reason") @db.Text
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?           @map("deleted_at") @db.Timestamptz
 
   seller               Seller                 @relation(fields: [sellerId], references: [id])
   receipts             GoodsReceipt[]
@@ -1505,13 +1532,13 @@ model GoodsReceipt {
   updatedAt             DateTime           @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt             DateTime?          @map("deleted_at") @db.Timestamptz
 
-  seller        Seller                @relation(fields: [sellerId], references: [id])
-  warehouse     Warehouse             @relation(fields: [warehouseId], references: [id])
-  consignment   Consignment?          @relation(fields: [consignmentId], references: [id])
-  receivedBy    StaffUser?            @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
-  dispatchedBy  StaffUser?            @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
-  lines         GoodsReceiptLine[]
-  stockBatches  StockBatch[]
+  seller         Seller                 @relation(fields: [sellerId], references: [id])
+  warehouse      Warehouse              @relation(fields: [warehouseId], references: [id])
+  consignment    Consignment?           @relation(fields: [consignmentId], references: [id])
+  receivedBy     StaffUser?             @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
+  dispatchedBy   StaffUser?             @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
+  lines          GoodsReceiptLine[]
+  stockBatches   StockBatch[]
   // The freight bill for THIS arrival. One forwarder invoice per
   // shipment; a consignment accumulates as many as it has arrivals.
   //
@@ -1520,10 +1547,15 @@ model GoodsReceipt {
   // dangling relation legal the only way it can, by inventing the
   // missing scalar, so `validate` passes on a schema no migration ever
   // created and every insert 500s at runtime.
-  freightCharge InboundFreightCharge?
+  // A LIST, not one bill: a withdrawn bill is kept as the record of what
+  // was billed, and the correction sits beside it. Exactly one may be
+  // live at a time — enforced by the partial unique
+  // `inbound_freight_one_live_bill_per_receipt`, which Prisma cannot
+  // express, so it is hand-written in the migration.
+  freightCharges InboundFreightCharge[]
   // The RECEIPT_SHORTFALL ticket opened when this count came up short
   // (TKT-3). Declared on both sides for the reason given above.
-  tickets       Ticket[]
+  tickets        Ticket[]
 
   @@index([sellerId])
   @@index([warehouseId])
@@ -1557,12 +1589,16 @@ model GoodsReceiptLine {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  receipt           GoodsReceipt              @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  freightAllocation InboundFreightAllocation?
-  variant           ProductVariant            @relation(fields: [variantId], references: [id])
-  batch             StockBatch?               @relation(fields: [batchId], references: [id])
-  putawayBin        WarehouseBin?             @relation(fields: [putawayBinId], references: [id])
-  stockUnits        StockUnit[]
+  receipt            GoodsReceipt               @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  /// A LIST for the same reason as `GoodsReceipt.freightCharges`: a
+  /// voided bill's lines are kept, so a re-billed line carries the old
+  /// allocation and the new one. Readers want the LIVE one and must
+  /// filter `voidedAt: null` — the attribution walk does.
+  freightAllocations InboundFreightAllocation[]
+  variant            ProductVariant             @relation(fields: [variantId], references: [id])
+  batch              StockBatch?                @relation(fields: [batchId], references: [id])
+  putawayBin         WarehouseBin?              @relation(fields: [putawayBinId], references: [id])
+  stockUnits         StockUnit[]
 
   @@index([receiptId])
   @@index([variantId])
@@ -1608,8 +1644,46 @@ model InboundFreightCharge {
   ///
   /// Per-arrival also matches the paperwork: a forwarder invoices a
   /// shipment, not a commercial arrangement spanning months.
-  goodsReceiptId       String               @unique @map("goods_receipt_id") @db.Uuid
-  /// The freight invoice as recorded by ops, INR canonical.
+  ///
+  /// WHICH receipt depends on the MODE (2026-09-20). PAY_NOW and
+  /// PAY_LATER hang on the India arrival, as above. PAY_ADVANCE hangs on
+  /// the BANGLADESH INTAKE, because that is where the count and the
+  /// weight that price it are taken and the bill is raised before the
+  /// goods fly. A consignment has ONE intake, so an advance bill is also
+  /// one per consignment by construction.
+  /// The arrival this bill is for. NOT unconditionally unique: the
+  /// unique is PARTIAL (`WHERE voided_at IS NULL`,
+  /// `inbound_freight_one_live_bill_per_receipt`), because a bill
+  /// withdrawn as wrong must leave the receipt billable again — an
+  /// absolute unique made "void and re-bill" impossible and stranded
+  /// the freight permanently uncollectable.
+  goodsReceiptId       String               @map("goods_receipt_id") @db.Uuid
+  /// The bill as RECORDED, in the currency it was agreed in — the sum of
+  /// the priced lines before anything is converted.
+  ///
+  /// The rate is agreed by PHONE, per kg or per piece, and ops types it
+  /// at billing time; "৳300 a kilo" is a fact about the deal and must
+  /// survive the exchange rate moving. `amountInr` is what the seller is
+  /// actually charged; this is what they agreed to, and the two together
+  /// are what answers "why was I billed ₹4,065?" a month later.
+  agreedAmount         Decimal              @map("agreed_amount") @db.Decimal(12, 2)
+  agreedCurrency       Currency             @default(INR) @map("agreed_currency")
+  /// The rate used to turn `agreedAmount` into `amountInr`, AT THE MOMENT
+  /// THE BILL WAS RAISED — the PRC-8 stamp, produced by the same
+  /// `inrRateAt` / `toInr` helpers the P&L and the flat fees use, so the
+  /// rupees the seller is charged and the figure the report derives
+  /// cannot diverge. All four are NULL for an INR bill.
+  fxRate               Decimal?             @map("fx_rate") @db.Decimal(18, 8)
+  /// The pair as STORED (`BDT→INR` or `INR→BDT`), so the conversion can be
+  /// restated exactly rather than re-derived through a reciprocal.
+  fxRatePair           String?              @map("fx_rate_pair")
+  /// HISTORY (a rate recorded at or before the billing instant) or
+  /// CURRENT (none was, so today's stood in) — the difference matters when
+  /// somebody asks how firm the figure is.
+  fxRateSource         String?              @map("fx_rate_source")
+  fxRateRecordedAt     DateTime?            @map("fx_rate_recorded_at") @db.Timestamptz
+  /// The freight invoice in RUPEES — what the seller is charged, and what
+  /// every other money column on this row is denominated in.
   amountInr            Decimal              @map("amount_inr") @db.Decimal(12, 2)
   /// What the FORWARDER charged US for the same shipment. `amountInr`
   /// is what we charge the seller; the gap between them is the margin
@@ -1644,25 +1718,69 @@ model InboundFreightCharge {
   /// also the idempotency evidence that the seller was charged exactly
   /// once.
   walletEntryId        String?              @unique @map("wallet_entry_id") @db.Uuid
+  /// The bill was WRONG and has been withdrawn (a mistyped rate, a
+  /// recount) so a fresh one can be raised. Nullable rather than a
+  /// boolean because WHEN is the question asked afterwards, and because
+  /// `voided_at IS NULL` is the predicate the one-advance-bill-per-
+  /// consignment partial unique index is written on.
+  voidedAt             DateTime?            @map("voided_at") @db.Timestamptz
+  voidedByStaffId      String?              @map("voided_by_staff_id") @db.Uuid
+  voidReason           String?              @map("void_reason") @db.Text
+  /// The compensating `INBOUND_FREIGHT_REFUND` credit the void wrote,
+  /// returning exactly what this bill had charged. UNIQUE, so it is also
+  /// the evidence that a void gave the money back exactly once — the
+  /// same discipline `walletEntryId` carries for the charge.
+  ///
+  /// NULL on a bill that had charged nothing when it was voided (a
+  /// PENDING pay-later bill whose units had not left yet).
+  voidReversalEntryId  String?              @unique @map("void_reversal_entry_id") @db.Uuid
   note                 String?              @db.Text
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller       Seller                     @relation(fields: [sellerId], references: [id])
-  consignment  Consignment                @relation(fields: [consignmentId], references: [id])
-  goodsReceipt GoodsReceipt               @relation(fields: [goodsReceiptId], references: [id])
-  allocations  InboundFreightAllocation[]
+  seller            Seller                     @relation(fields: [sellerId], references: [id])
+  consignment       Consignment                @relation(fields: [consignmentId], references: [id])
+  goodsReceipt      GoodsReceipt               @relation(fields: [goodsReceiptId], references: [id])
+  allocations       InboundFreightAllocation[]
   /// What we have actually PAID the forwarder against this bill, as
   /// bank entries. Plural: an invoice may be settled in instalments, and
   /// a single link would make the second payment look unattributed.
-  bankEntries  BankEntry[]
-  settledBy    StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
-  walletEntry  SellerWalletEntry?         @relation(fields: [walletEntryId], references: [id])
+  bankEntries       BankEntry[]
+  settledBy         StaffUser?                 @relation("InboundFreightSettledBy", fields: [settledByStaffId], references: [id])
+  voidedBy          StaffUser?                 @relation("InboundFreightVoidedBy", fields: [voidedByStaffId], references: [id])
+  walletEntry       SellerWalletEntry?         @relation("InboundFreightSettlementEntry", fields: [walletEntryId], references: [id])
+  voidReversalEntry SellerWalletEntry?         @relation("InboundFreightVoidReversal", fields: [voidReversalEntryId], references: [id])
 
   @@index([consignmentId])
   @@index([sellerId, status])
   @@index([status])
   @@index([settledByStaffId])
+  @@index([voidedByStaffId])
+  @@index([goodsReceiptId])
+  /// TWO PARTIAL UNIQUES the migration writes by hand — Prisma cannot
+  /// express a `WHERE` on an index:
+  ///
+  ///   inbound_freight_one_advance_per_consignment
+  ///     ON (consignment_id) WHERE mode = 'pay_advance' AND voided_at IS NULL
+  ///   inbound_freight_one_live_bill_per_receipt
+  ///     ON (goods_receipt_id) WHERE voided_at IS NULL
+  ///
+  /// They are the database's half of the double-billing guard, and the
+  /// two halves answer different questions. The CONSIGNMENT one exists
+  /// because a plain key on the receipt cannot see advance billing at
+  /// all: the Dhaka intake and the India arrival are DIFFERENT receipts,
+  /// so both bills would be accepted and the seller charged twice for
+  /// one consignment. The RECEIPT one is what used to be
+  /// `goods_receipt_id @unique`, narrowed to live rows — absolute, it
+  /// made void-and-re-bill impossible, so a mistyped bill left that
+  /// shipment's freight permanently uncollectable and a mistyped
+  /// ADVANCE bill left the goods unable to leave Bangladesh at all.
+  ///
+  /// The application's half is `InboundFreightService.record`, which
+  /// re-reads both under `AdvisoryLock.INBOUND_FREIGHT_BILL` inside the
+  /// writing transaction — read-then-write is not a guard under READ
+  /// COMMITTED, and an index cannot produce the message an operator
+  /// needs.
   @@map("inbound_freight_charges")
 }
 
@@ -1682,9 +1800,13 @@ model InboundFreightCharge {
 model InboundFreightAllocation {
   id                 String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
   freightChargeId    String              @map("freight_charge_id") @db.Uuid
-  /// The consignment line. UNIQUE — one allocation per line, which is
-  /// also what makes re-recording idempotent.
-  goodsReceiptLineId String              @unique @map("goods_receipt_line_id") @db.Uuid
+  /// The consignment line. Unique per line only while LIVE
+  /// (`inbound_freight_one_live_allocation_per_line`, partial on
+  /// `voided_at IS NULL`). An absolute unique here was the second half
+  /// of the same trap as `InboundFreightCharge.goodsReceiptId`: the
+  /// void keeps these rows as the record of what was billed, so a
+  /// re-bill could not create its own.
+  goodsReceiptLineId String              @map("goods_receipt_line_id") @db.Uuid
   variantId          String              @map("variant_id") @db.Uuid
   units              Int
   /// Effective per-unit weight, informational only since the bill stopped
@@ -1695,17 +1817,31 @@ model InboundFreightAllocation {
   /// record: a rate of 300 means nothing without knowing whether it was
   /// per kilo or per sunglass.
   basis              InboundFreightBasis
-  /// The rate as invoiced — per kg, or per piece. 4dp because a
-  /// per-piece rate on a cheap item is often fractions of a rupee.
-  rateInr            Decimal             @map("rate_inr") @db.Decimal(12, 4)
+  /// The rate as AGREED — per kg, or per piece — IN THE BILL'S
+  /// `agreedCurrency`, not necessarily rupees. 4dp because a per-piece
+  /// rate on a cheap item is often fractions of a rupee.
+  ///
+  /// RENAMED from `rateInr` on 2026-09-20, and the rename is the
+  /// load-bearing part: the column was rupees for the whole life of this
+  /// table, so a reader that kept treating it as rupees would show ৳300
+  /// as ₹300 and typecheck clean. The rename makes every such site fail
+  /// to compile until somebody has looked at it — exactly what PRC-8's
+  /// `ResolvedFee.amount` → `agreedAmount` rename did for the flat fees.
+  rate               Decimal             @map("rate") @db.Decimal(12, 4)
   /// Only for PER_KG: the chargeable weight the forwarder billed for
   /// this line. Their figure, not ours — volumetric weight and rounding
   /// up to the next half-kilo are both normal, so a weight computed from
   /// the catalogue would disagree with the invoice.
   chargeableWeightKg Decimal?            @map("chargeable_weight_kg") @db.Decimal(12, 3)
-  /// rate x weight, or rate x units. Stored rather than recomputed: it
-  /// is what the invoice says, and a later rounding change must not
+  /// rate × weight, or rate × units, IN THE BILL'S `agreedCurrency` —
+  /// the invoice line as it was typed. Stored rather than left to be
+  /// re-derived from `rate`: the product is rounded to the minor unit
+  /// BEFORE the lines are summed, and a later rounding change must not
   /// restate a bill the seller has already been charged for.
+  lineTotalAgreed    Decimal             @map("line_total_agreed") @db.Decimal(12, 2)
+  /// This line in RUPEES — its share of the bill's converted total,
+  /// apportioned by `grossLineTotals` so the lines sum to `amountInr`
+  /// exactly. Identical to `lineTotalAgreed` for an INR bill.
   lineTotalInr       Decimal             @map("line_total_inr") @db.Decimal(12, 2)
   /// 4dp: a bill divided across many units needs more precision than the
   /// 2dp money columns, or the rounding drift becomes visible.
@@ -1720,6 +1856,12 @@ model InboundFreightAllocation {
   lineGrossInr       Decimal             @map("line_gross_inr") @db.Decimal(12, 2)
   unitsSettled       Int                 @default(0) @map("units_settled")
   amountSettledInr   Decimal             @default(0) @map("amount_settled_inr") @db.Decimal(12, 2)
+  /// Stamped by the void, in the SAME transaction that voids the bill.
+  /// It exists so the partial unique above has a predicate to test —
+  /// the charge's own `voidedAt` is a join away and an index cannot
+  /// reach it — and so every reader of a line's allocation has one
+  /// local field to filter on.
+  voidedAt           DateTime?           @map("voided_at") @db.Timestamptz
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1729,6 +1871,7 @@ model InboundFreightAllocation {
 
   @@index([freightChargeId])
   @@index([variantId])
+  @@index([goodsReceiptLineId])
   @@map("inbound_freight_allocations")
 }
 
@@ -6514,10 +6657,25 @@ enum InboundFreightBasis {
 
 enum InboundFreightMode {
   /// Settled against the wallet the moment ops records the bill.
-  PAY_NOW   @map("pay_now")
+  PAY_NOW     @map("pay_now")
   /// Carried as a receivable the seller settles later, optionally with a
   /// service charge.
-  PAY_LATER @map("pay_later")
+  PAY_LATER   @map("pay_later")
+  /// Billed at the BANGLADESH INTAKE, before the goods fly.
+  ///
+  /// The owner's model: we tell the seller the rate — per kg or per
+  /// piece — before they ship to Dhaka; Dhaka counts and weighs; we
+  /// raise the final bill against THAT count and the wallet is debited
+  /// there and then. What the forwarder later charges us is a separate
+  /// fact and the gap between the two is our margin on the leg, not a
+  /// correction to be reconciled with the seller.
+  ///
+  /// It is not a new billing MECHANISM — the invoice is priced line by
+  /// line exactly as the other two modes are. What differs is WHICH
+  /// goods receipt the bill hangs on (the BD_INTAKE leg rather than the
+  /// India arrival) and therefore WHEN it is raised. Like PAY_NOW it is
+  /// debited in full at record time and is never amortised.
+  PAY_ADVANCE @map("pay_advance")
 
   @@map("inbound_freight_mode")
 }
@@ -6531,6 +6689,17 @@ enum InboundFreightStatus {
   /// Ops forgave the bill (goodwill, our own error, a consignment we
   /// mis-handled). Distinct from SETTLED so waivers stay countable.
   WAIVED            @map("waived")
+  /// The bill was WRONG — a mistyped rate, a recount — and has been
+  /// withdrawn so a fresh one can be raised in its place.
+  ///
+  /// Distinct from WAIVED, which means "correct, and forgiven": a
+  /// waiver is money we chose not to collect and stays countable as
+  /// such, while a void is a statement that this bill never should have
+  /// existed. Whatever it had charged is given back as a compensating
+  /// `INBOUND_FREIGHT_REFUND` credit — the wallet ledger is append-only,
+  /// so a void is never a deletion — and the P&L reads a voided bill as
+  /// earning NOTHING, or a withdrawn bill would read as pure profit.
+  VOIDED            @map("voided")
 
   @@map("inbound_freight_status")
 }
@@ -6695,6 +6864,32 @@ enum WalletEntryDirection {
   /// RS-7 — a dispute settled in the STORE's favour: the seller pays the
   /// store (twin: the store's DISPUTE_SETTLEMENT_IN). DEBIT. No cash moves.
   STORE_DISPUTE_OUT          @map("store_dispute_out")
+  /// An inbound freight bill was VOIDED — it was wrong (a mistyped rate,
+  /// a recount) and has been withdrawn so a fresh one can be raised. This
+  /// gives back exactly what that bill had charged.
+  ///
+  /// A CREDIT: REGISTERED in `WalletService.CREDIT_DIRECTIONS` and in
+  /// `isWalletCredit` (WAL-1). Omitting it from either would charge the
+  /// seller the freight a SECOND time while withdrawing the bill — the
+  /// exact inversion WAL-1 exists to make impossible.
+  ///
+  /// Deliberately NOT `ADJUSTMENT_CREDIT`: that one means "we made a
+  /// ledger mistake" and requires a reasonCode, so overloading it would
+  /// make every mistyped freight rate read as a ledger error in every
+  /// report. Not `SCRAP_REFUND` either — nothing was damaged.
+  ///
+  /// Cash rule TO_SELLER, the same as `ORDER_CHARGES_REFUND`: the charge
+  /// made the seller's cash ours, and withdrawing it makes it theirs
+  /// again — clamped to `max(0, after) − max(0, before)`, since the part
+  /// that repaid a receivable was never cash of theirs to give back
+  /// (TRE-8).
+  ///
+  /// BILL-level, not per order: a freight bill belongs to a consignment,
+  /// so it carries `linkedEntryId` (the settlement debit it returns, when
+  /// there was one) and NO `linkedOrderId`. That also keeps it clear of
+  /// the once-per-order partial unique, which an amortised bill's many
+  /// per-order debits would otherwise collide with.
+  INBOUND_FREIGHT_REFUND     @map("inbound_freight_refund")
 
   @@map("wallet_entry_direction")
 }
@@ -6898,14 +7093,21 @@ model SellerWalletEntry {
   idempotencyKey      String?              @unique @map("idempotency_key") @db.Uuid
   createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz
 
-  seller         Seller                @relation(fields: [sellerId], references: [id])
-  linkedOrder    Order?                @relation("WalletEntryOrder", fields: [linkedOrderId], references: [id])
-  linkedEntry    SellerWalletEntry?    @relation("WalletEntryAdjustment", fields: [linkedEntryId], references: [id])
-  adjustments    SellerWalletEntry[]   @relation("WalletEntryAdjustment")
-  remittance     Remittance?           @relation(fields: [linkedRemittanceId], references: [id])
+  seller             Seller                @relation(fields: [sellerId], references: [id])
+  linkedOrder        Order?                @relation("WalletEntryOrder", fields: [linkedOrderId], references: [id])
+  linkedEntry        SellerWalletEntry?    @relation("WalletEntryAdjustment", fields: [linkedEntryId], references: [id])
+  adjustments        SellerWalletEntry[]   @relation("WalletEntryAdjustment")
+  remittance         Remittance?           @relation(fields: [linkedRemittanceId], references: [id])
   // R3 — set when this entry is the settlement debit for an inbound
   // freight bill (the FK lives on inbound_freight_charges).
-  inboundFreight InboundFreightCharge?
+  //
+  // Both relations are NAMED: a second link to the same model (the void
+  // reversal below) makes an unnamed one ambiguous, and Prisma would
+  // otherwise resolve them by invention.
+  inboundFreight     InboundFreightCharge? @relation("InboundFreightSettlementEntry")
+  /// Set when this entry is the compensating credit a VOIDED inbound
+  /// freight bill wrote (the FK lives on inbound_freight_charges).
+  inboundFreightVoid InboundFreightCharge? @relation("InboundFreightVoidReversal")
 
   topupRequest WalletTopupRequest? @relation("TopupWalletEntry")
 

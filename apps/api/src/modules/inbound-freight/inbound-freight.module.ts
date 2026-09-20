@@ -4,6 +4,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { SellerWalletModule } from '../seller-wallet/seller-wallet.module';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { TreasuryModule } from '../treasury/treasury.module';
+import { ConsignmentCoreModule } from '../consignment-core/consignment-core.module';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { InboundFreightService } from './services/inbound-freight.service';
@@ -20,12 +21,17 @@ import { SellerInboundFreightController } from './controllers/seller-inbound-fre
   // TreasuryModule for `BankLedgerService` (TRE-1: the sole writer of
   // bank_entries). No cycle — treasury imports only Prisma and
   // auth-common, and knows nothing about freight.
+  // ConsignmentCoreModule for the freight-mode resolver (the ONE reader
+  // of how a consignment's freight is paid for) and the append-only
+  // timeline writer. No cycle: consignment-core depends on neither
+  // freight nor the consignment module.
   imports: [
     AuthCommonModule,
     SettingsModule,
     SellerWalletModule,
     CatalogReadModule,
     TreasuryModule,
+    ConsignmentCoreModule,
   ],
   controllers: [AdminInboundFreightController, SellerInboundFreightController],
   providers: [

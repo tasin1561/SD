@@ -781,6 +781,35 @@ describe('the P&L counts what it used to miss', () => {
     expect((await drill(svc, 'inbound_freight')).revenue).toBe('1300.00');
   });
 
+  it('a VOIDED freight bill earns NOTHING — a withdrawn bill is not profit', async () => {
+    // It was withdrawn because it was wrong, and whatever it had charged
+    // went straight back as an INBOUND_FREIGHT_REFUND credit. Counting
+    // its total — or even what it had collected — would report money
+    // nobody kept (TRE-6).
+    //
+    // Zeroed at the BILL rather than by subtracting the refund entries,
+    // because this line is built from `inbound_freight_charges` and
+    // reads no wallet entries at all: a refund would be invisible to it.
+    const w = new World();
+    w.freight('1000', '600', IN);
+    w.freight('800', '500', IN, {
+      status: 'VOIDED',
+      amountSettledInr: D('800'),
+      voidedAt: IN,
+    });
+    const svc = w.svc();
+    const r = await svc.report(FROM, TO);
+    expect(line(r, 'inbound_freight')?.revenueInr).toBe('1000.00');
+    // The row survives with its stable id and a zero, so a month that
+    // closed before the void carries the change forward (PNL-CF-1)
+    // rather than losing the record of it.
+    expect((await drill(svc, 'inbound_freight')).revenue).toBe('1000.00');
+    expect((await drill(svc, 'inbound_freight')).items).toHaveLength(2);
+    // Our own cost STAYS: we really did pay the forwarder, and
+    // withdrawing the seller's bill does not unpay them.
+    expect(line(r, 'inbound_freight')?.costInr).toBe('1100.00');
+  });
+
   it('counts Instant Pay and COD collection fees as revenue', async () => {
     const w = new World();
     w.wallet('INSTANT_PAY_FEE', '82.60', IN);

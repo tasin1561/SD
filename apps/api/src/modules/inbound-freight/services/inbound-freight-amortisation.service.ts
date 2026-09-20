@@ -3,7 +3,6 @@ import {
   ActorType,
   Currency,
   InboundFreightBasis,
-  InboundFreightMode,
   InboundFreightStatus,
   Prisma,
   WalletEntryDirection,
@@ -12,12 +11,18 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import { ConsignmentFreightModeService } from '../../consignment-core/services/consignment-freight-mode.service';
 
 export interface PricedLineInput {
   readonly goodsReceiptLineId: string;
   readonly basis: InboundFreightBasis;
-  /** Per kg, or per piece — whichever the basis says. */
-  readonly rateInr: Prisma.Decimal;
+  /**
+   * Per kg, or per piece — whichever the basis says — IN THE BILL'S
+   * AGREED CURRENCY. Renamed from `rateInr` when a bill could first be
+   * agreed in taka: the old name would have read ৳300 as ₹300 and
+   * typechecked clean.
+   */
+  readonly rate: Prisma.Decimal;
   /** Required for PER_KG, refused for PER_PIECE. */
   readonly chargeableWeightKg: Prisma.Decimal | null;
 }
@@ -28,10 +33,15 @@ export interface AllocationPlanLine {
   readonly units: number;
   readonly unitWeightGrams: number | null;
   readonly basis: InboundFreightBasis;
-  readonly rateInr: Prisma.Decimal;
+  /** In the bill's agreed currency, not necessarily rupees. */
+  readonly rate: Prisma.Decimal;
   readonly chargeableWeightKg: Prisma.Decimal | null;
-  readonly lineTotalInr: Prisma.Decimal;
-  readonly perUnitInr: Prisma.Decimal;
+  /**
+   * rate × weight, or rate × units — the invoice line as typed, in the
+   * agreed currency. The CALLER converts, because the conversion belongs
+   * to the bill (one rate, one instant) and not to each line.
+   */
+  readonly lineTotalAgreed: Prisma.Decimal;
 }
 
 export interface DebitResult {
@@ -116,6 +126,7 @@ export class InboundFreightAmortisationService {
     private readonly prisma: PrismaService,
     private readonly catalog: CatalogReadService,
     private readonly wallet: WalletService,
+    private readonly freightMode: ConsignmentFreightModeService,
   ) {}
 
   /**
@@ -141,7 +152,8 @@ export class InboundFreightAmortisationService {
   ): Promise<{
     lines: readonly AllocationPlanLine[];
     totalUnits: number;
-    totalInr: Prisma.Decimal;
+    /** The sum of the priced lines, in the AGREED currency. */
+    totalAgreed: Prisma.Decimal;
   }> {
     const lines = await this.prisma.client.goodsReceiptLine.findMany({
       where: { receiptId: goodsReceiptId },
@@ -178,14 +190,14 @@ export class InboundFreightAmortisationService {
     const variants = await this.catalog.getVariantsByIds(stocked.map((l) => l.variantId));
 
     const out: AllocationPlanLine[] = [];
-    let totalInr = ZERO;
+    let totalAgreed = ZERO;
     let totalUnits = 0;
     for (const line of stocked) {
       const p = byId.get(line.id);
       /* istanbul ignore next — the missing check above already proved it */
       if (p === undefined) continue;
 
-      if (p.rateInr.lt(0)) {
+      if (p.rate.lt(0)) {
         throw new BadRequestException({
           code: 'FREIGHT_RATE_INVALID',
           message: 'A freight rate cannot be negative.',
@@ -203,9 +215,9 @@ export class InboundFreightAmortisationService {
               'weight worked out from the catalogue would not match the invoice.',
           });
         }
-        lineTotal = p.rateInr.mul(p.chargeableWeightKg).toDecimalPlaces(2);
+        lineTotal = p.rate.mul(p.chargeableWeightKg).toDecimalPlaces(2);
       } else {
-        lineTotal = p.rateInr.mul(line.receivedQty).toDecimalPlaces(2);
+        lineTotal = p.rate.mul(line.receivedQty).toDecimalPlaces(2);
       }
 
       out.push({
@@ -214,19 +226,15 @@ export class InboundFreightAmortisationService {
         units: line.receivedQty,
         unitWeightGrams: variants.get(line.variantId)?.weightGrams ?? null,
         basis: p.basis,
-        rateInr: p.rateInr,
+        rate: p.rate,
         chargeableWeightKg: p.basis === InboundFreightBasis.PER_KG ? p.chargeableWeightKg : null,
-        lineTotalInr: lineTotal,
-        // The per-unit share is what the charge path actually reads as a
-        // unit leaves. 4dp so a line spread over many units does not
-        // drift visibly.
-        perUnitInr: lineTotal.div(line.receivedQty).toDecimalPlaces(4),
+        lineTotalAgreed: lineTotal,
       });
-      totalInr = totalInr.add(lineTotal);
+      totalAgreed = totalAgreed.add(lineTotal);
       totalUnits += line.receivedQty;
     }
 
-    if (totalInr.lte(0)) {
+    if (totalAgreed.lte(0)) {
       throw new BadRequestException({
         code: 'FREIGHT_AMOUNT_INVALID',
         message:
@@ -235,7 +243,7 @@ export class InboundFreightAmortisationService {
       });
     }
 
-    return { lines: out, totalUnits, totalInr };
+    return { lines: out, totalUnits, totalAgreed };
   }
 
   /**
@@ -511,7 +519,17 @@ export class InboundFreightAmortisationService {
       const line = await tx.goodsReceiptLine.findFirst({
         where: { batchId: candidate },
         select: {
-          freightAllocation: {
+          // LIVE allocations only, and the filter is in the WHERE rather
+          // than a pick in JavaScript afterwards. A re-billed line carries
+          // the withdrawn allocation beside the new one, and reading the
+          // dead one would send this straight into the VOIDED check below
+          // and return null — so the unit would ship freight-free FOREVER
+          // with a perfectly good live bill sitting next to it. Narrowing
+          // at the database makes that unreachable rather than dependent
+          // on a line somebody could later "simplify".
+          freightAllocations: {
+            where: { voidedAt: null },
+            take: 1,
             select: {
               id: true,
               freightChargeId: true,
@@ -526,13 +544,24 @@ export class InboundFreightAmortisationService {
           },
         },
       });
-      const alloc = line?.freightAllocation;
+      const alloc = line?.freightAllocations[0];
       if (!alloc) continue;
-      // PAY_NOW was settled in full at record time — amortising it too
-      // would charge the seller twice for the same freight.
-      if (alloc.freightCharge.mode === InboundFreightMode.PAY_NOW) return null;
+      // PAY_NOW and PAY_ADVANCE were both settled in full at record
+      // time — amortising either would charge the seller twice for the
+      // same freight. Asked through the ONE place that knows which modes
+      // pay up front, so this cannot come to disagree with the service
+      // that records them.
+      if (this.freightMode.settlesImmediately(alloc.freightCharge.mode)) return null;
       if (alloc.freightCharge.status === InboundFreightStatus.WAIVED) return null;
       if (alloc.freightCharge.status === InboundFreightStatus.SETTLED) return null;
+      // A VOIDED bill has given its money back. Charging a unit against
+      // it would take freight for a bill that was withdrawn as wrong,
+      // and there would be nothing left to reverse it with.
+      //
+      // Unreachable through the query above, which already excludes a
+      // voided allocation — KEPT because the two facts live in different
+      // rows: if a void ever fails to stamp the line, this still refuses.
+      if (alloc.freightCharge.status === InboundFreightStatus.VOIDED) return null;
       return {
         id: alloc.id,
         freightChargeId: alloc.freightChargeId,

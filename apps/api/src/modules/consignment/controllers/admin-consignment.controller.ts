@@ -23,6 +23,10 @@ import { RequirePermissions } from '../../../common/auth/require-permissions.dec
 import type { AuthenticatedStaff } from '../../../common/types/request';
 import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
 import {
+  ConsignmentFreightModeService,
+  type ResolvedFreightMode,
+} from '../../consignment-core/services/consignment-freight-mode.service';
+import {
   ApproveLabelReprintDto,
   CancelConsignmentDto,
   DispatchToIndiaDto,
@@ -31,6 +35,7 @@ import {
   ReprintLabelsDto,
   SetLabellingSiteDto,
 } from '../dto/consignment.dto';
+import { SetConsignmentFreightModeDto } from '../../inbound-freight/dto/inbound-freight.dto';
 import {
   LabelReprintRequestService,
   type LabelReprintRequestView,
@@ -71,6 +76,7 @@ export class AdminConsignmentController {
     private readonly reprints: LabelReprintRequestService,
     private readonly cancels: ConsignmentCancelService,
     private readonly events: ConsignmentEventService,
+    private readonly freightMode: ConsignmentFreightModeService,
   ) {}
 
   @Get()
@@ -95,6 +101,35 @@ export class AdminConsignmentController {
     Array<{ id: string; type: string; description: string | null; createdAt: Date; data: unknown }>
   > {
     return this.events.listForConsignment(id);
+  }
+
+  @Get(':id/freight-mode')
+  @ApiOperation({
+    summary: "How this consignment's freight is paid for, and whose decision that is",
+    description:
+      "The three-level chain: this consignment's own pin, else the seller override of " +
+      '`wallet.inbound_freight_mode`, else the global default. `locked` is true once a bill ' +
+      'exists — from then the mode is what the bill was raised on and cannot be changed.',
+  })
+  freightModeFor(@Param('id', uuid()) id: string): Promise<ResolvedFreightMode> {
+    return this.freightMode.resolveForConsignment(id);
+  }
+
+  @Patch(':id/freight-mode')
+  @RequirePermissions('money.freight.manage')
+  @ApiOperation({
+    summary: "Pin how THIS consignment's freight is paid for — set at BD receiving",
+    description:
+      'PAY_ADVANCE bills at the Bangladesh intake, before the goods fly; PAY_NOW and ' +
+      'PAY_LATER both defer to the India arrival. Send no mode to clear the pin and fall ' +
+      "through to the seller's terms again. Refused once a bill exists (FREIGHT_MODE_LOCKED).",
+  })
+  setFreightMode(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('id', uuid()) id: string,
+    @Body() body: SetConsignmentFreightModeDto,
+  ): Promise<ResolvedFreightMode> {
+    return this.freightMode.setOverride(staff.id, id, body.mode ?? null);
   }
 
   @Patch(':id/labelling-site')

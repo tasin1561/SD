@@ -27,7 +27,7 @@ import {
   Tr,
 } from '@skydrop/ui/components';
 import { Boxes, PlaneTakeoff, ReceiptText, Wallet } from 'lucide-react';
-import { InboundFreightStatus } from '@skydrop/db';
+import { InboundFreightStatus, type InboundFreightMode } from '@skydrop/db';
 import { useSellerFreight } from '@/lib/ops-hooks';
 
 /**
@@ -62,7 +62,11 @@ export function SellerFreightIndex(): ReactElement {
   const list = useSellerFreight(status === '' ? {} : { status });
 
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
-  const outstanding = list.data?.outstandingInr ?? '0';
+  // The API's own figure covers live bills; on the withdrawn filter the
+  // rows carry an arithmetic outstanding that is not a debt, so the
+  // total is taken from the rows that are actually owed.
+  const outstanding =
+    status === InboundFreightStatus.VOIDED ? '0' : (list.data?.outstandingInr ?? '0');
 
   /**
    * The totals of what is ON SCREEN, which is what the filter chips
@@ -97,7 +101,7 @@ export function SellerFreightIndex(): ReactElement {
           />
         }
         title="Inbound freight"
-        subtitle="The shipping cost of getting your stock from Bangladesh into our Indian warehouse. Charged per unit as the stock sells, not all at once."
+        subtitle="The shipping cost of getting your stock from Bangladesh into our Indian warehouse. WHEN it is charged depends on the terms agreed for each consignment — see Terms on each row."
         meta={
           !loaded ? undefined : (
             <>
@@ -138,7 +142,7 @@ export function SellerFreightIndex(): ReactElement {
             )
           }
           tone={loaded && Number(outstanding) > 0 ? 'warn' : 'neutral'}
-          hint="Recovered from your wallet as the stock sells."
+          hint="What is still to be taken from your wallet"
         />
         <Stat
           label="Billed to you"
@@ -256,7 +260,7 @@ export function SellerFreightIndex(): ReactElement {
                 <Th align="right">Total</Th>
                 <Th align="right">Charged so far</Th>
                 <Th align="right">Still owed</Th>
-                <Th>Units sold</Th>
+                <Th>Units charged</Th>
                 <Th>Status</Th>
               </Tr>
             </THead>
@@ -265,18 +269,25 @@ export function SellerFreightIndex(): ReactElement {
                 <Tr key={r.id}>
                   <Td>
                     {/* The bill is for one ARRIVAL, but the details a seller
-                        wants — what was declared, what was counted, where it
-                        is — live on the consignment, so that is where this
-                        goes. */}
+                      wants — what was declared, what was counted, where it
+                      is — live on the consignment, so that is where this
+                      goes. */}
                     <Link href={`/inbound/${r.consignmentId}`} className="hover:underline">
                       <Ident value={r.receiptNumber ?? `${r.goodsReceiptId.slice(0, 8)}…`} />
                     </Link>
                     <div className="text-text-faint mt-0.5 text-xs">
                       {new Date(r.createdAt).toLocaleDateString()}
                     </div>
+                    {r.voidedAt !== null && (
+                      <div className="text-text-muted mt-1 text-xs">
+                        Withdrawn {new Date(r.voidedAt).toLocaleDateString()} — this bill was wrong
+                        and anything it charged has gone back to your wallet.
+                        {r.voidReason === null ? '' : ` ${r.voidReason}`}
+                      </div>
+                    )}
                   </Td>
-                  <Td className="text-text-muted text-xs whitespace-nowrap">
-                    {r.mode === 'PAY_NOW' ? 'Paid on arrival' : 'Pay as it sells'}
+                  <Td className="text-text-muted whitespace-nowrap text-xs">
+                    {TERMS_WORDS[r.mode]}
                     {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
                       <div className="text-text-faint">
                         includes <Money amount={r.serviceChargeInr} decimals={false} /> service
@@ -286,18 +297,37 @@ export function SellerFreightIndex(): ReactElement {
                   </Td>
                   <Td align="right">
                     <Money amount={r.totalInr} />
+                    {/* The figure agreed on the phone, when that was not
+                      rupees. Without it "why ₹162.60?" has no answer,
+                      and the rate is the thing the seller actually
+                      negotiated. */}
+                    {r.agreedCurrency !== 'INR' && (
+                      <div className="text-text-faint text-xs">
+                        <Money
+                          amount={r.agreedAmount}
+                          currency={r.agreedCurrency}
+                          convert={false}
+                        />{' '}
+                        agreed
+                      </div>
+                    )}
                   </Td>
                   <Td align="right">
                     <Money amount={r.amountSettledInr} />
                   </Td>
                   <Td align="right">
-                    {Number(r.outstandingInr) === 0 ? (
+                    {/* A withdrawn bill still computes total minus
+                      settled; it is not a debt. Showing the arithmetic
+                      would tell a seller they owe money we took back. */}
+                    {r.voidedAt !== null ? (
+                      <span className="text-text-faint text-xs">Nothing — withdrawn</span>
+                    ) : Number(r.outstandingInr) === 0 ? (
                       <span className="text-text-faint">—</span>
                     ) : (
                       <Money amount={r.outstandingInr} direction="debit" />
                     )}
                   </Td>
-                  <Td className="text-text-muted text-xs whitespace-nowrap">
+                  <Td className="text-text-muted whitespace-nowrap text-xs">
                     <Num value={r.unitsSettled} /> / <Num value={r.totalUnits} />
                   </Td>
                   <Td>
@@ -310,15 +340,19 @@ export function SellerFreightIndex(): ReactElement {
         )}
       </BandBody>
 
-      <SectionBand index="02" title="How a bill is charged" className="mt-4" />
-      <BandBody>
-        <p className="text-text-muted text-xs leading-relaxed">
-          On pay-as-it-sells terms, each unit carries its share of the consignment&apos;s freight,
-          and that share is deducted from your wallet when the unit is delivered. Stock still
-          sitting in the warehouse has not been charged for yet — which is why a bill can stay
-          partly owed for a long time without anything being wrong.
-        </p>
-      </BandBody>
+      {rows.some((r) => r.mode === 'PAY_LATER') && (
+        <>
+          <SectionBand index="02" title="How a bill is charged" className="mt-4" />
+          <BandBody>
+            <p className="text-text-muted text-xs leading-relaxed">
+              On pay-as-it-sells terms, each unit carries its share of the consignment&apos;s
+              freight, and that share is deducted from your wallet when the unit is delivered. Stock
+              still sitting in the warehouse has not been charged for yet — which is why a bill can
+              stay partly owed for a long time without anything being wrong.
+            </p>
+          </BandBody>
+        </>
+      )}
 
       {/* The bottom strip: the figures somebody came to this page for,
           still readable after scrolling past the table. */}
@@ -339,6 +373,18 @@ export function SellerFreightIndex(): ReactElement {
     </div>
   );
 }
+
+/**
+ * What each mode means TO THE SELLER — where the bill lands, not what
+ * we call it internally. Pay-in-advance is billed in Dhaka before the
+ * goods fly, which is a different moment from the other two and the
+ * one a seller most needs to recognise.
+ */
+const TERMS_WORDS: Record<InboundFreightMode, string> = {
+  PAY_ADVANCE: 'Paid before it flew',
+  PAY_NOW: 'Paid on arrival',
+  PAY_LATER: 'Pay as it sells',
+};
 
 function humanise(value: string): string {
   const lower = value.replaceAll('_', ' ').toLowerCase();

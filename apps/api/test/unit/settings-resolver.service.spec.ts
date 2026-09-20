@@ -204,6 +204,49 @@ describe('SettingsResolverService.setOverride', () => {
       expect(overrideUpsert).not.toHaveBeenCalled();
     });
 
+    /**
+     * SET-1 clamps INT and DECIMAL overrides at write time and says
+     * nothing about STRINGS, so nothing stopped a seller override of
+     * `wallet.inbound_freight_mode` holding `PAY_ADVANCED` or `pay now`.
+     * It would save cleanly, read back as unrecognised, and fail closed
+     * somewhere far away — the reader defaults to PAY_NOW — so the
+     * symptom would be a seller quietly billed on the wrong leg with
+     * nothing pointing back at the override.
+     */
+    const freightModeRow = makeSystemRow({
+      key: 'wallet.inbound_freight_mode',
+      valueType: SettingValueType.STRING,
+      valueString: 'PAY_NOW',
+      valueInt: null,
+      overrideMinInt: null,
+      overrideMaxInt: null,
+    });
+
+    it('accepts a valid freight mode, trimmed and upper-cased', async () => {
+      const { svc, overrideUpsert } = makeService({ systemRow: freightModeRow });
+      const r = await svc.setOverride(
+        'seller-qa',
+        'wallet.inbound_freight_mode',
+        { valueType: SettingValueType.STRING, value: ' pay_advance ' },
+        'staff-1',
+      );
+      expect((overrideUpsert.mock.calls[0]![0].create as AnyArgs).valueString).toBe('PAY_ADVANCE');
+      expect(r.value).toBe('PAY_ADVANCE');
+    });
+
+    it('refuses a value that is not a mode, and writes nothing', async () => {
+      const { svc, overrideUpsert } = makeService({ systemRow: freightModeRow });
+      await expect(
+        svc.setOverride(
+          'seller-qa',
+          'wallet.inbound_freight_mode',
+          { valueType: SettingValueType.STRING, value: 'PAY_ADVANCED' },
+          'staff-1',
+        ),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_SETTING_VALUE' } });
+      expect(overrideUpsert).not.toHaveBeenCalled();
+    });
+
     it('resolve: the seller override beats the global default', async () => {
       const { svc } = makeService({
         systemRow: courierRow,

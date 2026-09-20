@@ -1005,12 +1005,26 @@ export class PnlService {
    * What a freight bill EARNS: a WAIVED bill only what was charged before
    * it was forgiven — counting its full total would book income nobody
    * will ever pay. One place, so the total and its rows cannot disagree.
+   *
+   * A VOIDED bill earns NOTHING (2026-09-20). It was withdrawn because it
+   * was wrong, and whatever it had charged was given straight back as an
+   * `INBOUND_FREIGHT_REFUND` credit — so counting its total, or even what
+   * it had collected, would report a withdrawn bill as profit (TRE-6).
+   *
+   * Handled HERE rather than by subtracting the refund entries, because
+   * this line is built from `inbound_freight_charges` and reads no wallet
+   * entries at all: a refund would have been invisible to it. Zeroing the
+   * bill keeps the total and its drill-down row computed the same way,
+   * which is what PNL-CF-1's close requires (`PNL_ROWS_DISAGREE`), and
+   * leaves the row present with its stable id so a month that closed
+   * before the void carries the change forward rather than losing it.
    */
   private freightBilled(c: {
     status: InboundFreightStatus;
     totalInr: Prisma.Decimal;
     amountSettledInr: Prisma.Decimal;
   }): Prisma.Decimal {
+    if (c.status === InboundFreightStatus.VOIDED) return ZERO;
     return c.status === InboundFreightStatus.WAIVED ? c.amountSettledInr : c.totalInr;
   }
 

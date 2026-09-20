@@ -10,6 +10,7 @@ import type {
   ConsignmentLeg,
   ConsignmentRoute,
   ConsignmentStatus,
+  InboundFreightMode,
   LabelReprintRequestStatus,
   GoodsReceiptStatus,
   LabellingSite,
@@ -68,6 +69,18 @@ export interface ConsignmentView {
   readonly sellerReference: string | null;
   readonly cancelledAt: string | null;
   readonly cancelReason: string | null;
+  /**
+   * This consignment's own PIN for how its freight is paid for, or null
+   * when nobody has made a per-shipment decision about it — which is
+   * most of them.
+   *
+   * NOT the answer on its own: a null falls through to the seller's
+   * override and then the global default, and only
+   * `GET /admin/consignments/:id/freight-mode` walks that chain. Read
+   * this for "has somebody pinned this one", never for "how is it
+   * billed".
+   */
+  readonly inboundFreightMode: InboundFreightMode | null;
   readonly createdAt: string;
   readonly seller: {
     readonly id: string;
@@ -76,8 +89,16 @@ export interface ConsignmentView {
   };
   readonly receipts: readonly ConsignmentLegView[];
   /**
-   * One freight bill per ARRIVAL — a consignment that lands in two
+   * LIVE freight bills, one per ARRIVAL — a consignment that lands in two
    * shipments is invoiced twice, because that is how a forwarder bills.
+   *
+   * A WITHDRAWN bill is NOT here: it gave its money back, so summing or
+   * listing it beside a live one shows a charge that nobody owes. The
+   * server filters it (`CONSIGNMENT_INCLUDE`) rather than leaving each
+   * reader to remember, and the withdrawal is on the consignment TIMELINE
+   * where the history belongs. The full record — what was agreed, in which
+   * currency, the per-line rates, withdrawn bills — is the freight
+   * endpoint; this list stays a summary.
    */
   readonly freightCharges: readonly {
     readonly id: string;

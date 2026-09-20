@@ -15,6 +15,7 @@ import type { CatalogReadService } from '../../src/modules/catalog-read/services
 /** WAL-7's advisory lock, as the fake sees it. */
 const lockTaken = jest.fn(async () => 1);
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
+import type { ConsignmentFreightModeService } from '../../src/modules/consignment-core/services/consignment-freight-mode.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -48,6 +49,8 @@ function makeSut(
         /** Defaults to the line total — a bill with no service charge. */
         lineGrossInr?: string;
         amountSettledInr?: string;
+        /** Set when the bill that owns this line was WITHDRAWN. */
+        voidedAt?: Date;
       }
     >;
     existingEntry?: boolean;
@@ -78,24 +81,36 @@ function makeSut(
     const targetLine = entry?.[1].lineId ?? null;
     if (targetLine === null) return null;
     const alloc = opts.allocations?.[targetLine];
-    if (!alloc) return { freightAllocation: null };
+    if (!alloc) return { freightAllocations: [] };
+    // A LIST now, because the per-line unique is PARTIAL on `voided_at`
+    // (void-and-re-bill). The fake APPLIES the select's `where` rather
+    // than answering alike: a withdrawn allocation sits beside the live
+    // one after a re-bill, and reading the dead one would return null
+    // from the VOIDED guard below — the unit shipping freight-free with a
+    // good bill right next to it.
+    const select = (args['select'] ?? {}) as AnyArgs;
+    const allocSelect = (select['freightAllocations'] ?? {}) as AnyArgs;
+    const wantsLive = ((allocSelect['where'] ?? {}) as AnyArgs)['voidedAt'] === null;
+    if (wantsLive && alloc.voidedAt != null) return { freightAllocations: [] };
     return {
-      freightAllocation: {
-        id: `alloc-${targetLine}`,
-        freightChargeId: 'fc-1',
-        perUnitInr: D(alloc.perUnitInr),
-        // The running-total charge reads the line total and what has
-        // been settled so far, not the per-unit rate.
-        units: alloc.units ?? 100,
-        unitsSettled: alloc.unitsSettled ?? 0,
-        lineTotalInr: D(alloc.lineTotalInr ?? '4500.00'),
-        lineGrossInr: D(alloc.lineGrossInr ?? alloc.lineTotalInr ?? '4500.00'),
-        amountSettledInr: D(alloc.amountSettledInr ?? '0'),
-        freightCharge: {
-          mode: alloc.mode ?? InboundFreightMode.PAY_LATER,
-          status: alloc.status ?? InboundFreightStatus.PENDING,
+      freightAllocations: [
+        {
+          id: `alloc-${targetLine}`,
+          freightChargeId: 'fc-1',
+          perUnitInr: D(alloc.perUnitInr),
+          // The running-total charge reads the line total and what has
+          // been settled so far, not the per-unit rate.
+          units: alloc.units ?? 100,
+          unitsSettled: alloc.unitsSettled ?? 0,
+          lineTotalInr: D(alloc.lineTotalInr ?? '4500.00'),
+          lineGrossInr: D(alloc.lineGrossInr ?? alloc.lineTotalInr ?? '4500.00'),
+          amountSettledInr: D(alloc.amountSettledInr ?? '0'),
+          freightCharge: {
+            mode: alloc.mode ?? InboundFreightMode.PAY_LATER,
+            status: alloc.status ?? InboundFreightStatus.PENDING,
+          },
         },
-      },
+      ],
     };
   });
   const lineIdToBatch = (b: string): string => b;
@@ -161,9 +176,16 @@ function makeSut(
     runningBalanceAfter: D('0'),
   }));
   const wallet = { applyEntry } as unknown as WalletService;
+  // The ONE reader of which modes pay up front. Amortisation asks it
+  // rather than testing the enum itself, so PAY_NOW and PAY_ADVANCE
+  // cannot come to be treated differently here than where they are
+  // recorded.
+  const freightMode = {
+    settlesImmediately: (m: string) => m === 'PAY_NOW' || m === 'PAY_ADVANCE',
+  } as unknown as ConsignmentFreightModeService;
 
   return {
-    svc: new InboundFreightAmortisationService(prisma, catalog, wallet),
+    svc: new InboundFreightAmortisationService(prisma, catalog, wallet, freightMode),
     tx: client as unknown as Prisma.TransactionClient,
     applyEntry,
     allocUpdate,
@@ -175,13 +197,13 @@ describe('InboundFreightAmortisationService.planFromPricedLines', () => {
   const perKg = (id: string, rate: string, kg: string) => ({
     goodsReceiptLineId: id,
     basis: InboundFreightBasis.PER_KG,
-    rateInr: D(rate),
+    rate: D(rate),
     chargeableWeightKg: D(kg),
   });
   const perPiece = (id: string, rate: string) => ({
     goodsReceiptLineId: id,
     basis: InboundFreightBasis.PER_PIECE,
-    rateInr: D(rate),
+    rate: D(rate),
     chargeableWeightKg: null,
   });
 
@@ -201,13 +223,15 @@ describe('InboundFreightAmortisationService.planFromPricedLines', () => {
     ]);
 
     expect(plan.totalUnits).toBe(110);
-    expect(plan.totalInr.toString()).toBe('6900');
+    expect(plan.totalAgreed.toString()).toBe('6900');
     const kettle = plan.lines.find((l) => l.goodsReceiptLineId === 'l-kettle');
     const kase = plan.lines.find((l) => l.goodsReceiptLineId === 'l-case');
-    expect(kettle?.lineTotalInr.toString()).toBe('6000');
-    expect(kettle?.perUnitInr.toString()).toBe('600');
-    expect(kase?.lineTotalInr.toString()).toBe('900');
-    expect(kase?.perUnitInr.toString()).toBe('9');
+    // `perUnitInr` is no longer the plan's to compute: the per-unit
+    // share is derived from the line's RUPEE total, and the plan works
+    // in the currency the invoice was agreed in. The caller converts
+    // once, for the bill, and divides after.
+    expect(kettle?.lineTotalAgreed.toString()).toBe('6000');
+    expect(kase?.lineTotalAgreed.toString()).toBe('900');
   });
 
   it('the bill total is the SUM of its lines — never a figure typed separately', async () => {
@@ -222,9 +246,9 @@ describe('InboundFreightAmortisationService.planFromPricedLines', () => {
       perPiece('l-1', '12.50'),
       perKg('l-2', '200', '1.5'),
     ]);
-    const summed = plan.lines.reduce((sum, l) => sum.add(l.lineTotalInr), D('0'));
-    expect(plan.totalInr.toString()).toBe(summed.toString());
-    expect(plan.totalInr.toString()).toBe('362.5');
+    const summed = plan.lines.reduce((sum, l) => sum.add(l.lineTotalAgreed), D('0'));
+    expect(plan.totalAgreed.toString()).toBe(summed.toString());
+    expect(plan.totalAgreed.toString()).toBe('362.5');
   });
 
   it('REFUSES an unpriced product — the failure mode the per-line model exists to prevent', async () => {
@@ -253,7 +277,7 @@ describe('InboundFreightAmortisationService.planFromPricedLines', () => {
         {
           goodsReceiptLineId: 'l-1',
           basis: InboundFreightBasis.PER_KG,
-          rateInr: D('300'),
+          rate: D('300'),
           chargeableWeightKg: null,
         },
       ]),
@@ -285,7 +309,7 @@ describe('InboundFreightAmortisationService.planFromPricedLines', () => {
       perPiece('l-1', '0'),
       perPiece('l-2', '10'),
     ]);
-    expect(ok.totalInr.toString()).toBe('100');
+    expect(ok.totalAgreed.toString()).toBe('100');
 
     await expect(
       sut.svc.planFromPricedLines('gr-1', [perPiece('l-1', '0'), perPiece('l-2', '0')]),

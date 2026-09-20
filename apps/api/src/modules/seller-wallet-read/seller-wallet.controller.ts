@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, HttpStatus, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Currency, WalletEntryDirection } from '@skydrop/db';
+import { freightRefsForEntries } from '../../common/wallet/freight-ledger-refs';
 import { CurrentSeller } from '../../common/decorators/current-seller.decorator';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { SellerAuthAllowSuspended } from '../../common/decorators/seller-auth-allow-suspended.decorator';
@@ -338,36 +339,11 @@ export class SellerWalletController {
     const hasMore = rows.length > lim;
     const page = hasMore ? rows.slice(0, lim) : rows;
 
-    // An INBOUND_FREIGHT debit has no linkedOrderId — it belongs to a
-    // consignment, not an order — so the Linked column had nothing to
-    // show and the seller could read "you were charged ₹3,000" with no
-    // way to reach what they were charged FOR.
-    //
-    // Resolved by REVERSE LOOKUP rather than a new column:
-    // `inbound_freight_charges.wallet_entry_id` is already UNIQUE (it is
-    // the charged-exactly-once evidence), so it answers this without
-    // widening the ledger. The ledger stays append-only and unchanged.
-    const freightEntryIds = page
-      .filter((r) => r.direction === WalletEntryDirection.INBOUND_FREIGHT)
-      .map((r) => r.id);
-    const freightByEntry = new Map<string, { id: string; number: string }>();
-    if (freightEntryIds.length > 0) {
-      const charges = await this.prisma.client.inboundFreightCharge.findMany({
-        where: { walletEntryId: { in: freightEntryIds } },
-        select: {
-          walletEntryId: true,
-          consignmentId: true,
-          consignment: { select: { consignmentNumber: true } },
-        },
-      });
-      for (const c of charges) {
-        if (c.walletEntryId === null) continue;
-        freightByEntry.set(c.walletEntryId, {
-          id: c.consignmentId,
-          number: c.consignment.consignmentNumber,
-        });
-      }
-    }
+    // Which consignment each inbound-freight line belongs to — the
+    // charge and, since 2026-09-20, the credit that withdrew a voided
+    // bill. Shared with the admin ledger so a new freight direction is
+    // remembered once (`common/wallet/freight-ledger-refs.ts`).
+    const freightByEntry = await freightRefsForEntries(this.prisma.client, page);
 
     const items = page.map((r) => {
       const freight = freightByEntry.get(r.id) ?? null;

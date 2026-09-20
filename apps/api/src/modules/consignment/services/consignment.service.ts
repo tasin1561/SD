@@ -58,8 +58,68 @@ const CONSIGNMENT_INCLUDE = {
   // A consignment carries one freight bill PER ARRIVAL, not one overall
   // — a shipment that lands in September is invoiced separately from one
   // that landed in August.
+  //
+  // LIVE bills only. A WITHDRAWN bill is not money anybody owes: it was
+  // taken back to the wallet in full, and the seller's header summed every
+  // row it was handed, so a refunded bill read as an outstanding charge
+  // beside a panel saying "Nothing billed yet". Filtering in the SELECT
+  // rather than at each reader is the point — a new caller cannot forget
+  // it, which is exactly how that one arrived. It also matches
+  // `listForSeller` / `listForAdmin`, where a withdrawn bill is shown only
+  // when somebody asks for it by status. The withdrawal itself is on the
+  // consignment TIMELINE, which is where the history belongs.
   freightCharges: {
-    select: { id: true, status: true, totalInr: true, goodsReceiptId: true },
+    where: { voidedAt: null },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      status: true,
+      goodsReceiptId: true,
+      // WHAT THE SELLER AGREED, beside what they were charged. The rate
+      // is negotiated by phone — "৳300 a kilo" — so the taka figure is
+      // the one they will recognise and the rupee one is what left
+      // their wallet. Four scalars was all this used to carry, which
+      // meant the first sign of a bill was an unexplained wallet debit.
+      mode: true,
+      agreedAmount: true,
+      agreedCurrency: true,
+      amountInr: true,
+      serviceChargeInr: true,
+      totalInr: true,
+      totalUnits: true,
+      unitsSettled: true,
+      amountSettledInr: true,
+      createdAt: true,
+      // The bill LINE BY LINE: the basis, the rate as agreed, and the
+      // quantity it was measured on. Without these a bill is a figure
+      // with nothing behind it, and "why is it that much?" has to be
+      // asked on the phone.
+      //
+      // `ourCostInr` is deliberately NOT here and must never be: what
+      // the forwarder charged US is our margin on the leg, and this
+      // payload is read by the seller.
+      allocations: {
+        orderBy: { lineTotalInr: 'desc' },
+        select: {
+          id: true,
+          units: true,
+          basis: true,
+          rate: true,
+          chargeableWeightKg: true,
+          lineTotalAgreed: true,
+          lineTotalInr: true,
+          unitsSettled: true,
+          amountSettledInr: true,
+          variant: {
+            select: {
+              skuCode: true,
+              variantLabel: true,
+              product: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
   },
 } satisfies Prisma.ConsignmentInclude;
 
@@ -361,6 +421,31 @@ export class ConsignmentService {
       throw new ConflictException({
         code: 'CONSIGNMENT_ALREADY_ARRIVED',
         message: `${row.consignmentNumber} has already arrived in India and cannot be cancelled.`,
+      });
+    }
+    // PAY_ADVANCE (FRT-5) creates a state CNS-6 predates: a fully-PAID
+    // freight bill on a consignment that has not flown. Cancelling used to
+    // touch no freight row at all, so a seller could call the shipment off,
+    // have their goods returned, and simply keep the debit — no screen, no
+    // issue, nobody told.
+    //
+    // Refusing BY NAME rather than voiding inside the cancel is the CNS-6
+    // philosophy: make the unanswerable state unreachable rather than
+    // decide afterwards what to do about it. Withdrawing a bill is a
+    // deliberate act with a reason, an audit row and a refund; doing it
+    // silently as a side-effect of a different button is how a refund
+    // lands that nobody can explain. `row.freightCharges` is LIVE bills
+    // only (the payload filters them), so a consignment whose bill was
+    // already withdrawn cancels freely — which is the right answer.
+    const billed = row.freightCharges[0];
+    if (billed !== undefined) {
+      throw new ConflictException({
+        code: 'CONSIGNMENT_FREIGHT_BILLED',
+        message:
+          `${row.consignmentNumber} carries a freight bill, so cancelling it would leave the ` +
+          'seller charged for a shipment that never happened. Withdraw the freight bill first, ' +
+          'then cancel.',
+        cause: { freightChargeId: billed.id, status: billed.status },
       });
     }
   }
