@@ -129,7 +129,6 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
   // A WITHDRAWN bill gave its money back, so it is not a charge against
   // this consignment and must not sit beside a live one as though it
   // were. Voided bills stay reachable on /freight by asking for them.
-  const liveFreight = c.freightCharges.filter((f) => f.voidedAt === null);
   const declaredUnits = (bdLeg ?? finalLegs[0])?.lines.reduce((n, l) => n + l.expectedQty, 0) ?? 0;
 
   async function onSetSite(site: LabellingSite): Promise<void> {
@@ -289,13 +288,15 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                 // many shipments have landed — a consignment arriving in
                 // two parts carries two forwarder invoices.
                 label:
-                  liveFreight.length > 1 ? `Freight bills (${liveFreight.length})` : 'Freight bill',
+                  c.freightCharges.length > 1
+                    ? `Freight bills (${c.freightCharges.length})`
+                    : 'Freight bill',
                 value:
-                  liveFreight.length === 0
+                  c.freightCharges.length === 0
                     ? viaBd
                       ? 'Not recorded yet'
                       : 'Not billable — they shipped it themselves'
-                    : liveFreight.map((f, i) => (
+                    : c.freightCharges.map((f, i) => (
                         <span key={f.id}>
                           {i > 0 ? '  ·  ' : ''}
                           <Money amount={f.totalInr} currency="INR" convert={false} /> ·{' '}

@@ -119,6 +119,20 @@ function makeSut(
         }
       : opts.receipt,
   );
+  // The per-receipt duplicate check. It is a `findFirst` scoped to LIVE
+  // bills, and this fake APPLIES that predicate rather than answering
+  // every lookup alike — the whole point of the partial unique is that a
+  // WITHDRAWN bill must not block its own replacement, and a fake that
+  // ignores `where` cannot tell the two apart (it is the `pack_boxes` /
+  // `courier_pickup_requests` lesson: a mocked Prisma has no index to
+  // violate, so the predicate has to be asserted directly).
+  const chargeFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
+    const row = opts.existing;
+    if (row === undefined || row === null) return null;
+    const where = (args['where'] ?? {}) as AnyArgs;
+    if (where['voidedAt'] === null && row['voidedAt'] != null) return null;
+    return row;
+  });
   const chargeFindUnique = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(
     async () => opts.existing ?? null,
   );
@@ -224,6 +238,8 @@ function makeSut(
       findUnique: jest.fn(async () =>
         opts.loaded === undefined ? (opts.existing ?? null) : opts.loaded,
       ),
+      // `record`'s per-receipt check, pre-flight and under the lock.
+      findFirst: chargeFindFirst,
       findUniqueOrThrow: chargeFindUniqueOrThrow,
       // The consignment's LIVE bills — what the double-billing guard
       // reads under its advisory lock.
@@ -235,8 +251,8 @@ function makeSut(
     },
     consignment: { update: jest.fn(async () => ({})) },
   };
-  // `record`'s pre-flight duplicate check goes through findUnique too, so
-  // keep the two lookups distinguishable for the tests that need it.
+  // `void` and the read paths go through findUnique; keep the two lookups
+  // distinguishable for the tests that need it.
   if (opts.existing !== undefined && opts.loaded === undefined) {
     (client['inboundFreightCharge'] as AnyArgs)['findUnique'] = chargeFindUnique;
   }
@@ -370,6 +386,7 @@ function makeSut(
     snapshotAtBilling,
     appendEvent,
     allocUpdateMany,
+    chargeFindFirst,
   };
 }
 
@@ -1275,10 +1292,10 @@ describe('InboundFreightService.record — the consignment is billed ONCE', () =
     expect(sut.applyEntry).not.toHaveBeenCalled();
   });
 
-  it('a VOIDED advance bill does NOT block — that is what re-billing means', async () => {
-    // The guard reads only LIVE bills (`voidedAt: null`), so a bill
-    // withdrawn as wrong leaves the consignment billable again. Without
-    // that, void-and-re-bill would be void-and-stuck.
+  it('a VOIDED advance bill does NOT block the CONSIGNMENT — that is what re-billing means', async () => {
+    // The consignment-level guard reads only LIVE bills (`voidedAt: null`),
+    // so a bill withdrawn as wrong leaves the consignment billable again.
+    // Without that, void-and-re-bill would be void-and-stuck.
     const sut = makeSut({
       consignmentMode: 'PAY_ADVANCE',
       leg: 'BD_INTAKE',
@@ -1286,6 +1303,48 @@ describe('InboundFreightService.record — the consignment is billed ONCE', () =
     });
     const view = await sut.svc.record(STAFF, input);
     expect(view.status).toBe(InboundFreightStatus.SETTLED);
+  });
+
+  it('a VOIDED bill on the SAME RECEIPT does not block either', async () => {
+    // The OTHER half, and the one that was wrong: the per-receipt key.
+    // `goods_receipt_id` was UNCONDITIONALLY unique and both lookups were
+    // `findUnique` with no predicate, so a withdrawn bill kept its receipt
+    // — and a mistyped PAY_NOW bill left that shipment's freight
+    // permanently uncollectable. The fake applies `voidedAt: null`, so
+    // this fails if either lookup stops filtering.
+    const sut = makeSut({
+      existing: {
+        id: 'fc-withdrawn',
+        status: InboundFreightStatus.VOIDED,
+        voidedAt: new Date('2026-09-20T00:00:00Z'),
+      },
+    });
+    const view = await sut.svc.record(STAFF, input);
+    expect(view.status).toBe(InboundFreightStatus.SETTLED);
+  });
+
+  it('a LIVE bill on the same receipt still blocks', async () => {
+    const sut = makeSut({
+      existing: { id: 'fc-live', status: InboundFreightStatus.PENDING, voidedAt: null },
+    });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_ALREADY_RECORDED' },
+    });
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('BOTH per-receipt lookups are scoped to live bills', async () => {
+    // Structural, because the two are easy to fix one at a time: the
+    // pre-flight runs outside the lock and the re-check runs inside it,
+    // and a predicate on only one of them still lets a concurrent void
+    // through. Reads the `where` each lookup was actually handed.
+    const sut = makeSut({});
+    await sut.svc.record(STAFF, input);
+    const calls = sut.chargeFindFirst.mock.calls;
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    for (const [args] of calls) {
+      expect((args as Record<string, unknown>)['where']).toMatchObject({ voidedAt: null });
+    }
   });
 
   it('two arrivals on ONE consignment are still billed separately', async () => {
@@ -1460,6 +1519,30 @@ describe('InboundFreightService.void', () => {
         data: expect.objectContaining({ unitsSettled: 0 }),
       }),
     );
+  });
+
+  it('marks the allocations DEAD, or the line can never be re-billed', async () => {
+    // `inbound_freight_one_live_allocation_per_line` is partial on
+    // `voided_at`, so zeroing alone would leave the withdrawn allocation
+    // holding the receipt line and the replacement bill unable to write
+    // its own. And the attribution walk filters on the same column, so an
+    // unstamped allocation would be picked ahead of the live one and the
+    // unit would ship freight-free.
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.PARTIALLY_SETTLED,
+        amountSettledInr: new Prisma.Decimal('1200.00'),
+      }),
+    });
+    await sut.svc.void(STAFF, CHARGE, 'Wrong consignment — this is not their shipment');
+    const [args] = sut.allocUpdateMany.mock.calls[0] ?? [];
+    const data = (args as Record<string, Record<string, unknown>>)['data'];
+    expect(data?.['voidedAt']).toBeInstanceOf(Date);
+    // The SAME instant the bill carries — asked of either row, "when was
+    // this withdrawn" must give one answer.
+    const [chargeArgs] = sut.chargeUpdateMany.mock.calls[0] ?? [];
+    const chargeData = (chargeArgs as Record<string, Record<string, unknown>>)['data'];
+    expect(data?.['voidedAt']).toEqual(chargeData?.['voidedAt']);
   });
 
   it('refuses a bill already withdrawn — the money is not given back twice', async () => {

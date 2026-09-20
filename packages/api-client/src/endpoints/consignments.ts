@@ -89,22 +89,23 @@ export interface ConsignmentView {
   };
   readonly receipts: readonly ConsignmentLegView[];
   /**
-   * One freight bill per ARRIVAL — a consignment that lands in two
+   * LIVE freight bills, one per ARRIVAL — a consignment that lands in two
    * shipments is invoiced twice, because that is how a forwarder bills.
+   *
+   * A WITHDRAWN bill is NOT here: it gave its money back, so summing or
+   * listing it beside a live one shows a charge that nobody owes. The
+   * server filters it (`CONSIGNMENT_INCLUDE`) rather than leaving each
+   * reader to remember, and the withdrawal is on the consignment TIMELINE
+   * where the history belongs. The full record — what was agreed, in which
+   * currency, the per-line rates, withdrawn bills — is the freight
+   * endpoint; this list stays a summary.
    */
   readonly freightCharges: readonly {
     readonly id: string;
     readonly status: string;
     readonly totalInr: string;
     readonly goodsReceiptId: string;
-    /** Set when the bill was WITHDRAWN as wrong. A reader summing or
-     *  listing these MUST exclude it — a voided bill gave its money back,
-     *  so counting it beside a live one shows a charge twice. */
-    readonly voidedAt: string | null;
   }[];
-  // Anything needing the bill ITSELF — what was agreed, in which
-  // currency, the per-line rates — reads the freight endpoint; this list
-  // stays a summary.
 }
 
 export interface ConsignmentEventView {

@@ -12,6 +12,7 @@ import {
   StockUnitStatus,
 } from '@skydrop/db';
 import { randomUUID } from 'node:crypto';
+import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
@@ -117,11 +118,34 @@ export class ConsignmentDispatchService {
   private async assertAdvanceFreightBilled(
     consignmentId: string,
     consignmentNumber: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<void> {
     const mode = await this.freightMode.modeFor(consignmentId);
     if (mode !== InboundFreightMode.PAY_ADVANCE) return;
 
-    const billed = await this.prisma.client.inboundFreightCharge.findFirst({
+    // TWO STAGES, the same shape `InboundFreightService.record` uses for
+    // its own duplicate key.
+    //
+    // WITHOUT a tx this is the PRE-FLIGHT: it runs before the branch
+    // below so a forward-without-count is refused by THIS rule (there is
+    // no Dhaka count to price a bill from) rather than by a second one
+    // saying the same thing, and it takes no lock because the common case
+    // should not pay for one.
+    //
+    // WITH a tx it is the authoritative check, inside the transaction
+    // that actually dispatches and under the SAME lock the billing
+    // service and the void take. Read only outside, a void committing
+    // between the check and the write ships an unbilled advance
+    // consignment — read-then-write is not a guard under READ COMMITTED,
+    // and this one decides whether goods leave the country. Lock order is
+    // INBOUND_FREIGHT_BILL < WALLET everywhere (`record` takes the bill
+    // lock then credits; the void does the same), so no cycle.
+    const db = tx ?? this.prisma.client;
+    if (tx !== undefined) {
+      await takeAdvisoryLock(tx, AdvisoryLock.INBOUND_FREIGHT_BILL, consignmentId);
+    }
+
+    const billed = await db.inboundFreightCharge.findFirst({
       where: { consignmentId, voidedAt: null },
       select: { id: true },
     });
@@ -163,6 +187,7 @@ export class ConsignmentDispatchService {
     const destWarehouseId = await this.warehouses.getDefaultWarehouseId();
 
     const result = await this.prisma.client.$transaction(async (tx: Prisma.TransactionClient) => {
+      await this.assertAdvanceFreightBilled(consignment.id, consignment.consignmentNumber, tx);
       const legNumber = await this.numbering.nextShipmentNumber(tx);
       const receiptNumber = `${consignment.consignmentNumber}-${legNumber.slice(-6)}`;
       const legReceipt = await tx.goodsReceipt.create({
@@ -309,6 +334,10 @@ export class ConsignmentDispatchService {
     // Same shape as CNS-6's refusal to cancel after dispatch: a rule that
     // makes an unanswerable state unreachable, rather than one that
     // decides what to do once it has happened.
+    //
+    // This is the PRE-FLIGHT; the binding check runs as the first act of
+    // whichever transaction actually dispatches, under the freight-bill
+    // lock. See `assertAdvanceFreightBilled`.
     await this.assertAdvanceFreightBilled(consignment.id, consignment.consignmentNumber);
 
     // Sending it on WITHOUT opening it. A sealed carton going straight to
@@ -360,6 +389,7 @@ export class ConsignmentDispatchService {
     }
 
     const result = await this.mutation.runWithRetry(async (tx) => {
+      await this.assertAdvanceFreightBilled(consignment.id, consignment.consignmentNumber, tx);
       const transitBinId = await this.binPolicy.transitBinId(destWarehouseId, tx);
       const legNumber = await this.numbering.nextShipmentNumber(tx);
       const receiptNumber = `${consignment.consignmentNumber}-${legNumber.slice(-6)}`;

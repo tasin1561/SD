@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ConflictException } from '@nestjs/common';
 import { ConsignmentLeg, InboundFreightMode } from '@skydrop/db';
 import { ConsignmentFreightModeService } from '../../src/modules/consignment-core/services/consignment-freight-mode.service';
@@ -271,6 +273,30 @@ function makeDispatchSut(
   );
   return { svc, findFirst };
 }
+
+describe('the dispatch guard is TWO stages, and the binding one is inside the tx', () => {
+  // The pre-flight alone would pass every behavioural case above, and a
+  // void committing between it and the write would still ship an
+  // unbilled advance consignment. That second read lives inside a
+  // transaction the mocked suite does not run, so it is asserted
+  // structurally — the same reason `worker-role.spec.ts` reads sources.
+  const src = readFileSync(
+    join(__dirname, '../../src/modules/consignment/services/consignment-dispatch.service.ts'),
+    'utf8',
+  );
+
+  it('takes the freight-bill lock, and only when handed a transaction', () => {
+    expect(src).toContain('AdvisoryLock.INBOUND_FREIGHT_BILL');
+    expect(src).toMatch(/if \(tx !== undefined\) \{\s*await takeAdvisoryLock\(/);
+  });
+
+  it('BOTH dispatch transactions run it before they write', () => {
+    const inTx = src.match(
+      /assertAdvanceFreightBilled\(consignment\.id, consignment\.consignmentNumber, tx\)/g,
+    );
+    expect(inTx).toHaveLength(2);
+  });
+});
 
 describe('ConsignmentDispatchService — a PAY_ADVANCE consignment may not leave unbilled', () => {
   const ctx = { ipAddress: null, userAgent: null, requestId: null };

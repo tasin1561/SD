@@ -164,6 +164,17 @@ A bill is also AGREED in a currency now (the rate is negotiated by phone, often
 in taka) and CHARGED in rupees at the billing instant, and a wrong bill is
 VOIDED and re-raised rather than edited. See CLAUDE.md FRT-5 and FRT-6.
 
+**Re-raising it had to be made possible** (FRT-7). The per-receipt and
+per-line keys were absolute uniques, and the void keeps its rows on purpose, so
+a withdrawn bill held its receipt forever: a mistyped PAY_NOW bill left that
+shipment's freight uncollectable, and a mistyped PAY_ADVANCE bill left the
+goods stuck in Bangladesh. Both keys are partial on `voided_at IS NULL` now,
+the allocation carries its own `voided_at`, and the attribution walk asks for
+LIVE allocations in its `where` — read the dead one and the unit ships
+freight-free with a good bill beside it. A consignment carrying a live bill
+also cannot be CANCELLED (`CONSIGNMENT_FREIGHT_BILLED`): withdraw the bill
+first, or the seller keeps a debit for a shipment that never happened.
+
 ### 8. Cancel touches stock, and CLOSES at dispatch
 
 Abandoned goods go BACK TO THE SELLER and the consignment ends `CANCELLED`.

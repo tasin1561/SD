@@ -519,7 +519,17 @@ export class InboundFreightAmortisationService {
       const line = await tx.goodsReceiptLine.findFirst({
         where: { batchId: candidate },
         select: {
-          freightAllocation: {
+          // LIVE allocations only, and the filter is in the WHERE rather
+          // than a pick in JavaScript afterwards. A re-billed line carries
+          // the withdrawn allocation beside the new one, and reading the
+          // dead one would send this straight into the VOIDED check below
+          // and return null — so the unit would ship freight-free FOREVER
+          // with a perfectly good live bill sitting next to it. Narrowing
+          // at the database makes that unreachable rather than dependent
+          // on a line somebody could later "simplify".
+          freightAllocations: {
+            where: { voidedAt: null },
+            take: 1,
             select: {
               id: true,
               freightChargeId: true,
@@ -534,7 +544,7 @@ export class InboundFreightAmortisationService {
           },
         },
       });
-      const alloc = line?.freightAllocation;
+      const alloc = line?.freightAllocations[0];
       if (!alloc) continue;
       // PAY_NOW and PAY_ADVANCE were both settled in full at record
       // time — amortising either would charge the seller twice for the
@@ -547,6 +557,10 @@ export class InboundFreightAmortisationService {
       // A VOIDED bill has given its money back. Charging a unit against
       // it would take freight for a bill that was withdrawn as wrong,
       // and there would be nothing left to reverse it with.
+      //
+      // Unreachable through the query above, which already excludes a
+      // voided allocation — KEPT because the two facts live in different
+      // rows: if a void ever fails to stamp the line, this still refuses.
       if (alloc.freightCharge.status === InboundFreightStatus.VOIDED) return null;
       return {
         id: alloc.id,

@@ -49,6 +49,8 @@ function makeSut(
         /** Defaults to the line total — a bill with no service charge. */
         lineGrossInr?: string;
         amountSettledInr?: string;
+        /** Set when the bill that owns this line was WITHDRAWN. */
+        voidedAt?: Date;
       }
     >;
     existingEntry?: boolean;
@@ -79,24 +81,36 @@ function makeSut(
     const targetLine = entry?.[1].lineId ?? null;
     if (targetLine === null) return null;
     const alloc = opts.allocations?.[targetLine];
-    if (!alloc) return { freightAllocation: null };
+    if (!alloc) return { freightAllocations: [] };
+    // A LIST now, because the per-line unique is PARTIAL on `voided_at`
+    // (void-and-re-bill). The fake APPLIES the select's `where` rather
+    // than answering alike: a withdrawn allocation sits beside the live
+    // one after a re-bill, and reading the dead one would return null
+    // from the VOIDED guard below — the unit shipping freight-free with a
+    // good bill right next to it.
+    const select = (args['select'] ?? {}) as AnyArgs;
+    const allocSelect = (select['freightAllocations'] ?? {}) as AnyArgs;
+    const wantsLive = ((allocSelect['where'] ?? {}) as AnyArgs)['voidedAt'] === null;
+    if (wantsLive && alloc.voidedAt != null) return { freightAllocations: [] };
     return {
-      freightAllocation: {
-        id: `alloc-${targetLine}`,
-        freightChargeId: 'fc-1',
-        perUnitInr: D(alloc.perUnitInr),
-        // The running-total charge reads the line total and what has
-        // been settled so far, not the per-unit rate.
-        units: alloc.units ?? 100,
-        unitsSettled: alloc.unitsSettled ?? 0,
-        lineTotalInr: D(alloc.lineTotalInr ?? '4500.00'),
-        lineGrossInr: D(alloc.lineGrossInr ?? alloc.lineTotalInr ?? '4500.00'),
-        amountSettledInr: D(alloc.amountSettledInr ?? '0'),
-        freightCharge: {
-          mode: alloc.mode ?? InboundFreightMode.PAY_LATER,
-          status: alloc.status ?? InboundFreightStatus.PENDING,
+      freightAllocations: [
+        {
+          id: `alloc-${targetLine}`,
+          freightChargeId: 'fc-1',
+          perUnitInr: D(alloc.perUnitInr),
+          // The running-total charge reads the line total and what has
+          // been settled so far, not the per-unit rate.
+          units: alloc.units ?? 100,
+          unitsSettled: alloc.unitsSettled ?? 0,
+          lineTotalInr: D(alloc.lineTotalInr ?? '4500.00'),
+          lineGrossInr: D(alloc.lineGrossInr ?? alloc.lineTotalInr ?? '4500.00'),
+          amountSettledInr: D(alloc.amountSettledInr ?? '0'),
+          freightCharge: {
+            mode: alloc.mode ?? InboundFreightMode.PAY_LATER,
+            status: alloc.status ?? InboundFreightStatus.PENDING,
+          },
         },
-      },
+      ],
     };
   });
   const lineIdToBatch = (b: string): string => b;

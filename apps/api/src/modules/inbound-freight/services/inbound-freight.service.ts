@@ -384,14 +384,19 @@ export class InboundFreightService {
       });
     }
 
-    // Idempotency: one bill per RECEIPT. A re-submit is refused rather
-    // than billing the seller twice for the same shipment; a DIFFERENT
-    // arrival on the same consignment is a different invoice and is
-    // allowed, which is the whole point of the key. Re-checked inside
-    // the transaction below — this read is only so the common case says
-    // so without taking a lock.
-    const existing = await this.prisma.client.inboundFreightCharge.findUnique({
-      where: { goodsReceiptId: receipt.id },
+    // Idempotency: one LIVE bill per RECEIPT. A re-submit is refused
+    // rather than billing the seller twice for the same shipment; a
+    // DIFFERENT arrival on the same consignment is a different invoice and
+    // is allowed, which is the whole point of the key. Re-checked inside
+    // the transaction below — this read is only so the common case says so
+    // without taking a lock.
+    //
+    // `voidedAt: null` is LOAD-BEARING, not tidiness: a withdrawn bill is
+    // kept as the record of what was billed, and counting it here would
+    // make void-and-re-bill impossible — which is the whole reason the
+    // database's own key is now partial on the same predicate.
+    const existing = await this.prisma.client.inboundFreightCharge.findFirst({
+      where: { goodsReceiptId: receipt.id, voidedAt: null },
       select: { id: true, status: true },
     });
     if (existing) {
@@ -516,9 +521,10 @@ export class InboundFreightService {
         });
       }
       // Re-read the per-receipt key under the lock too: the pre-flight
-      // above ran outside it.
-      const dupe = await tx.inboundFreightCharge.findUnique({
-        where: { goodsReceiptId: receipt.id },
+      // above ran outside it. LIVE bills only, exactly as above and as the
+      // partial unique `inbound_freight_one_live_bill_per_receipt` does.
+      const dupe = await tx.inboundFreightCharge.findFirst({
+        where: { goodsReceiptId: receipt.id, voidedAt: null },
         select: { id: true, status: true },
       });
       if (dupe !== null) {
@@ -1380,6 +1386,13 @@ export class InboundFreightService {
       // before the read so a delivery charging a unit at the same moment
       // is either already inside `amountSettledInr` or runs after this
       // commits — and then finds the bill VOIDED and charges nothing.
+      // The BILL lock FIRST, then the wallet — the order `record` already
+      // uses (bill lock, then `applyEntry`'s wallet lock), so there is no
+      // cycle. It is what makes the dispatch guard's "is this consignment
+      // billed?" and this withdrawal serialise: without it a void
+      // committing just after that read ships an advance consignment whose
+      // freight has been given back.
+      await takeAdvisoryLock(tx, AdvisoryLock.INBOUND_FREIGHT_BILL, charge.consignmentId);
       await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${charge.sellerId}|${Currency.INR}`);
       const fresh = await tx.inboundFreightCharge.findUnique({
         where: { id: freightChargeId },
@@ -1392,6 +1405,11 @@ export class InboundFreightService {
         });
       }
 
+      // ONE instant for the bill and every line it owns — read back later,
+      // "when was this withdrawn" must give the same answer whichever row
+      // is asked.
+      const voidedAt = new Date();
+
       // Claimed on the very figure the refund is worked out from, so a
       // unit charged between the read and the write cannot be silently
       // left uncredited.
@@ -1403,7 +1421,7 @@ export class InboundFreightService {
         },
         data: {
           status: InboundFreightStatus.VOIDED,
-          voidedAt: new Date(),
+          voidedAt,
           voidedByStaffId: staffId,
           voidReason: reason.trim(),
         },
@@ -1440,10 +1458,20 @@ export class InboundFreightService {
         });
       }
 
-      // Zero every line, in the SAME transaction.
+      // Zero every line AND mark it dead, in the SAME transaction. The
+      // zeroing is what stops a withdrawn bill reading as part-paid on the
+      // breakdown; `voidedAt` is what lets the receipt line carry a NEW
+      // allocation — the partial unique
+      // `inbound_freight_one_live_allocation_per_line` tests exactly this
+      // column, and the attribution walk filters on it so a re-billed unit
+      // is charged at the LIVE rate rather than skipped as voided.
       await tx.inboundFreightAllocation.updateMany({
         where: { freightChargeId },
-        data: { unitsSettled: 0, amountSettledInr: new Prisma.Decimal(0) },
+        data: {
+          unitsSettled: 0,
+          amountSettledInr: new Prisma.Decimal(0),
+          voidedAt,
+        },
       });
 
       // The seller watches the timeline, and a bill appearing and then a

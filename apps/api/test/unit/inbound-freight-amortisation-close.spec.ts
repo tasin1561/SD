@@ -74,17 +74,20 @@ function world(bill: Bill, lines: Line[]) {
         const l = lines.find((x) => x.batchId === (a['where'] as Args)['batchId']);
         if (l === undefined) return null;
         return {
-          freightAllocation: {
-            id: l.id,
-            freightChargeId: bill.id,
-            perUnitInr: l.lineGrossInr.div(l.units),
-            units: l.units,
-            unitsSettled: l.unitsSettled,
-            lineTotalInr: l.lineTotalInr,
-            lineGrossInr: l.lineGrossInr,
-            amountSettledInr: l.amountSettledInr,
-            freightCharge: { mode: bill.mode, status: bill.status },
-          },
+          // A LIST since void-and-re-bill made the per-line unique partial.
+          freightAllocations: [
+            {
+              id: l.id,
+              freightChargeId: bill.id,
+              perUnitInr: l.lineGrossInr.div(l.units),
+              units: l.units,
+              unitsSettled: l.unitsSettled,
+              lineTotalInr: l.lineTotalInr,
+              lineGrossInr: l.lineGrossInr,
+              amountSettledInr: l.amountSettledInr,
+              freightCharge: { mode: bill.mode, status: bill.status },
+            },
+          ],
         };
       }),
     },

@@ -1532,13 +1532,13 @@ model GoodsReceipt {
   updatedAt             DateTime           @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt             DateTime?          @map("deleted_at") @db.Timestamptz
 
-  seller        Seller                @relation(fields: [sellerId], references: [id])
-  warehouse     Warehouse             @relation(fields: [warehouseId], references: [id])
-  consignment   Consignment?          @relation(fields: [consignmentId], references: [id])
-  receivedBy    StaffUser?            @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
-  dispatchedBy  StaffUser?            @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
-  lines         GoodsReceiptLine[]
-  stockBatches  StockBatch[]
+  seller         Seller                 @relation(fields: [sellerId], references: [id])
+  warehouse      Warehouse              @relation(fields: [warehouseId], references: [id])
+  consignment    Consignment?           @relation(fields: [consignmentId], references: [id])
+  receivedBy     StaffUser?             @relation("GoodsReceiptReceivedBy", fields: [receivedById], references: [id])
+  dispatchedBy   StaffUser?             @relation("GoodsReceiptDispatchedBy", fields: [dispatchedById], references: [id])
+  lines          GoodsReceiptLine[]
+  stockBatches   StockBatch[]
   // The freight bill for THIS arrival. One forwarder invoice per
   // shipment; a consignment accumulates as many as it has arrivals.
   //
@@ -1547,10 +1547,15 @@ model GoodsReceipt {
   // dangling relation legal the only way it can, by inventing the
   // missing scalar, so `validate` passes on a schema no migration ever
   // created and every insert 500s at runtime.
-  freightCharge InboundFreightCharge?
+  // A LIST, not one bill: a withdrawn bill is kept as the record of what
+  // was billed, and the correction sits beside it. Exactly one may be
+  // live at a time — enforced by the partial unique
+  // `inbound_freight_one_live_bill_per_receipt`, which Prisma cannot
+  // express, so it is hand-written in the migration.
+  freightCharges InboundFreightCharge[]
   // The RECEIPT_SHORTFALL ticket opened when this count came up short
   // (TKT-3). Declared on both sides for the reason given above.
-  tickets       Ticket[]
+  tickets        Ticket[]
 
   @@index([sellerId])
   @@index([warehouseId])
@@ -1584,12 +1589,16 @@ model GoodsReceiptLine {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  receipt           GoodsReceipt              @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  freightAllocation InboundFreightAllocation?
-  variant           ProductVariant            @relation(fields: [variantId], references: [id])
-  batch             StockBatch?               @relation(fields: [batchId], references: [id])
-  putawayBin        WarehouseBin?             @relation(fields: [putawayBinId], references: [id])
-  stockUnits        StockUnit[]
+  receipt            GoodsReceipt               @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  /// A LIST for the same reason as `GoodsReceipt.freightCharges`: a
+  /// voided bill's lines are kept, so a re-billed line carries the old
+  /// allocation and the new one. Readers want the LIVE one and must
+  /// filter `voidedAt: null` — the attribution walk does.
+  freightAllocations InboundFreightAllocation[]
+  variant            ProductVariant             @relation(fields: [variantId], references: [id])
+  batch              StockBatch?                @relation(fields: [batchId], references: [id])
+  putawayBin         WarehouseBin?              @relation(fields: [putawayBinId], references: [id])
+  stockUnits         StockUnit[]
 
   @@index([receiptId])
   @@index([variantId])
@@ -1642,7 +1651,13 @@ model InboundFreightCharge {
   /// weight that price it are taken and the bill is raised before the
   /// goods fly. A consignment has ONE intake, so an advance bill is also
   /// one per consignment by construction.
-  goodsReceiptId       String               @unique @map("goods_receipt_id") @db.Uuid
+  /// The arrival this bill is for. NOT unconditionally unique: the
+  /// unique is PARTIAL (`WHERE voided_at IS NULL`,
+  /// `inbound_freight_one_live_bill_per_receipt`), because a bill
+  /// withdrawn as wrong must leave the receipt billable again — an
+  /// absolute unique made "void and re-bill" impossible and stranded
+  /// the freight permanently uncollectable.
+  goodsReceiptId       String               @map("goods_receipt_id") @db.Uuid
   /// The bill as RECORDED, in the currency it was agreed in — the sum of
   /// the priced lines before anything is converted.
   ///
@@ -1741,19 +1756,31 @@ model InboundFreightCharge {
   @@index([status])
   @@index([settledByStaffId])
   @@index([voidedByStaffId])
-  /// A PARTIAL UNIQUE the migration writes by hand — Prisma cannot
+  @@index([goodsReceiptId])
+  /// TWO PARTIAL UNIQUES the migration writes by hand — Prisma cannot
   /// express a `WHERE` on an index:
   ///
   ///   inbound_freight_one_advance_per_consignment
   ///     ON (consignment_id) WHERE mode = 'pay_advance' AND voided_at IS NULL
+  ///   inbound_freight_one_live_bill_per_receipt
+  ///     ON (goods_receipt_id) WHERE voided_at IS NULL
   ///
-  /// It is the database's half of the double-billing guard. The
-  /// application's half is `InboundFreightService.record`, which refuses
-  /// any second bill on a consignment already billed in advance, under
-  /// `AdvisoryLock.INBOUND_FREIGHT_BILL` inside the writing transaction —
-  /// because `goods_receipt_id @unique` cannot see it: the Dhaka intake
-  /// and the India arrival are DIFFERENT receipts, so both bills would be
-  /// accepted and the seller charged twice for one consignment.
+  /// They are the database's half of the double-billing guard, and the
+  /// two halves answer different questions. The CONSIGNMENT one exists
+  /// because a plain key on the receipt cannot see advance billing at
+  /// all: the Dhaka intake and the India arrival are DIFFERENT receipts,
+  /// so both bills would be accepted and the seller charged twice for
+  /// one consignment. The RECEIPT one is what used to be
+  /// `goods_receipt_id @unique`, narrowed to live rows — absolute, it
+  /// made void-and-re-bill impossible, so a mistyped bill left that
+  /// shipment's freight permanently uncollectable and a mistyped
+  /// ADVANCE bill left the goods unable to leave Bangladesh at all.
+  ///
+  /// The application's half is `InboundFreightService.record`, which
+  /// re-reads both under `AdvisoryLock.INBOUND_FREIGHT_BILL` inside the
+  /// writing transaction — read-then-write is not a guard under READ
+  /// COMMITTED, and an index cannot produce the message an operator
+  /// needs.
   @@map("inbound_freight_charges")
 }
 
@@ -1773,9 +1800,13 @@ model InboundFreightCharge {
 model InboundFreightAllocation {
   id                 String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
   freightChargeId    String              @map("freight_charge_id") @db.Uuid
-  /// The consignment line. UNIQUE — one allocation per line, which is
-  /// also what makes re-recording idempotent.
-  goodsReceiptLineId String              @unique @map("goods_receipt_line_id") @db.Uuid
+  /// The consignment line. Unique per line only while LIVE
+  /// (`inbound_freight_one_live_allocation_per_line`, partial on
+  /// `voided_at IS NULL`). An absolute unique here was the second half
+  /// of the same trap as `InboundFreightCharge.goodsReceiptId`: the
+  /// void keeps these rows as the record of what was billed, so a
+  /// re-bill could not create its own.
+  goodsReceiptLineId String              @map("goods_receipt_line_id") @db.Uuid
   variantId          String              @map("variant_id") @db.Uuid
   units              Int
   /// Effective per-unit weight, informational only since the bill stopped
@@ -1825,6 +1856,12 @@ model InboundFreightAllocation {
   lineGrossInr       Decimal             @map("line_gross_inr") @db.Decimal(12, 2)
   unitsSettled       Int                 @default(0) @map("units_settled")
   amountSettledInr   Decimal             @default(0) @map("amount_settled_inr") @db.Decimal(12, 2)
+  /// Stamped by the void, in the SAME transaction that voids the bill.
+  /// It exists so the partial unique above has a predicate to test —
+  /// the charge's own `voidedAt` is a join away and an index cannot
+  /// reach it — and so every reader of a line's allocation has one
+  /// local field to filter on.
+  voidedAt           DateTime?           @map("voided_at") @db.Timestamptz
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1834,6 +1871,7 @@ model InboundFreightAllocation {
 
   @@index([freightChargeId])
   @@index([variantId])
+  @@index([goodsReceiptLineId])
   @@map("inbound_freight_allocations")
 }
 
