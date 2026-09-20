@@ -49,18 +49,24 @@ export function CallLog(): ReactElement {
         return LINES[idx] as Line;
       });
 
-  // The log is a terminal — deliberately dark in BOTH themes, so its
-  // colors are pinned to the NIGHT OPS palette rather than tokens.
+  // The log is a TERMINAL, and it stays dark in both themes on purpose:
+  // it is showing you a machine's own output rather than a piece of the
+  // page, and the reference makes the same move with its console panel
+  // on a white ground. That means its colours cannot be tokens — a
+  // token resolves to the LIGHT ramp under a light theme and the panel
+  // would turn into pale grey text on near-black. They are pinned to
+  // the dark theme's own values instead, which is the one place in this
+  // app a literal is the correct answer.
   return (
     <div
-      className="rounded-xl p-4 font-mono text-xs leading-7"
-      style={{ background: '#060B16', border: '1px solid rgba(148,178,255,0.14)' }}
+      className="rounded-md p-4 font-mono text-[12px] leading-7"
+      style={{ background: '#070a11', border: '1px solid rgba(180,197,255,0.16)' }}
       role="log"
       aria-label="Example call-confirmation outcomes"
     >
       {rows.map((l, i) => (
         <div key={`${head}-${i}`} className="flex items-center justify-between gap-3">
-          <span className="truncate" style={{ color: '#8296AE' }}>
+          <span className="truncate" style={{ color: '#8296b0' }}>
             &gt; {l.label}
           </span>
           {/* The outcome is the point of the row, so it never wraps and
@@ -71,7 +77,7 @@ export function CallLog(): ReactElement {
           <span
             className="shrink-0 whitespace-nowrap"
             style={{
-              color: l.tone === 'green' ? '#34D399' : l.tone === 'saffron' ? '#F59E0B' : '#38BDF8',
+              color: l.tone === 'green' ? '#34d399' : l.tone === 'saffron' ? '#fbbf24' : '#b4c5ff',
             }}
           >
             {l.outcome}

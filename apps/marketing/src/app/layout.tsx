@@ -4,11 +4,17 @@ import localFont from 'next/font/local';
 import './globals.css';
 import { themeInitScript } from '@/lib/theme-init';
 
-// MISSION CONTROL type stack (docs/design-direction.md):
-// Space Grotesk — display, geometric/technical voice
-// Inter — body workhorse
-// JetBrains Mono — telemetry, event codes, data
 /**
+ * PRECISION LOGISTICS type stack — the same two faces apps/seller runs,
+ * so a seller who signs in is not handed to a different company.
+ *
+ *   IBM Plex Sans  — prose AND headings, separated by weight and size
+ *                    rather than by a second display family.
+ *   JetBrains Mono — anything that is an IDENTIFIER or a FIGURE: a
+ *                    waybill, a rupee amount, a duration, a column
+ *                    caption. It is doing work, not decorating — a
+ *                    column of proportional digits does not line up.
+ *
  * Fonts are COMMITTED, not fetched at build time.
  *
  * `next/font/google` self-hosts at RUNTIME, which is the part everyone
@@ -23,22 +29,19 @@ import { themeInitScript } from '@/lib/theme-init';
  * what latin actually covers, which is what the CDN's own @font-face
  * carried and is otherwise lost when self-hosting.
  */
-const grotesk = localFont({
-  src: './fonts/space-grotesk-latin.woff2',
-  variable: '--font-grotesk',
-  display: 'swap',
-  declarations: [
-    {
-      prop: 'unicode-range',
-      value:
-        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    },
-  ],
-});
-
-const inter = localFont({
-  src: './fonts/inter-latin.woff2',
-  variable: '--font-inter',
+/*
+ * The unicode-range is written out TWICE, and it has to be.
+ *
+ * `next/font` is a compiler transform, not a runtime call: it reads the
+ * options out of the AST at build time, so every value must be a literal
+ * it can see. Lifting the range into a shared `LATIN_RANGE` const — the
+ * obvious de-duplication — fails the BUILD with "Font loader values must
+ * be explicitly written literals", which is a thing typecheck and lint
+ * both pass over happily.
+ */
+const plexSans = localFont({
+  src: './fonts/ibm-plex-sans-latin.woff2',
+  variable: '--font-plex-sans',
   display: 'swap',
   declarations: [
     {
@@ -116,7 +119,7 @@ export default function RootLayout({ children }: { children: ReactNode }): React
   return (
     <html
       lang="en"
-      className={`${grotesk.variable} ${inter.variable} ${jetbrains.variable}`}
+      className={`${plexSans.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
       <head>

@@ -1,56 +1,66 @@
 /*
- * Skydrop marketing — MISSION CONTROL direction.
- * Token authority: docs/design-direction.md
+ * Skydrop marketing — PRECISION LOGISTICS.
+ * Token authority: ./theme.css (marketing-owned — see the header there
+ * for why this app no longer imports `@skydrop/ui/corridor.css`, and
+ * what that buys).
  *
- * Two themes:
- *   NIGHT OPS (default) — near-black blue console, phosphor sky accents
- *   DAY OPS  (light)    — blueprint on paper, same instrument chrome
+ * Two themes, dark by default:
+ *   NIGHT  — near-black navy canvas, navy panels, pale-blue accent
+ *   DAY    — blue-tinted near-white ground, white panels, deep-blue accent
+ *
+ * The grammar below is the whole design in six utilities. A section on
+ * this page is not a floating card with a big gap; it is a PANEL with a
+ * header bar and hairline-divided cells, the way our own admin screens
+ * present a manifest. Density comes from structure, not from font size.
  */
 
-/* Shared public-site tokens. Both this app and the other public
- * site read every colour from here; neither declares them itself.
- * Imported BEFORE tailwind so @theme inline can map them. */
-@import '@skydrop/ui/corridor.css';
+@import './theme.css';
 @import 'tailwindcss';
 
-:root {
-  --scrim: rgba(4, 8, 16, 0.88);
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) {
-    --scrim: rgba(11, 21, 35, 0.55);
-  }
-}
-
-:root[data-theme='dark'] {
-  --scrim: rgba(4, 8, 16, 0.88);
-}
-
-:root[data-theme='light'] {
-  --scrim: rgba(11, 21, 35, 0.55);
-}
-
-/* Tailwind v4 utilities from tokens */
+/* Tailwind v4 utilities from tokens. Everything the components colour
+   with goes through here — there is no hex in a component (FE-6). */
 @theme inline {
   --color-sky: var(--sky);
   --color-sky-deep: var(--sky-deep);
-  --color-saffron: var(--saffron);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-fill-hover: var(--accent-fill-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-line: var(--accent-line);
+
   --color-green: var(--green);
+  --color-green-tint: var(--green-tint);
+  --color-green-line: var(--green-line);
+  --color-saffron: var(--saffron);
+  --color-saffron-tint: var(--saffron-tint);
+  --color-saffron-line: var(--saffron-line);
   --color-red: var(--red);
+  --color-red-tint: var(--red-tint);
+  --color-red-line: var(--red-line);
 
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
+  --color-surface-band: var(--surface-band);
+  --color-surface-input: var(--surface-input);
+
   --color-fg-strong: var(--fg-strong);
   --color-fg-body: var(--fg-body);
   --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
-  --color-accent-fg: var(--accent-fg);
+  --color-border-control: var(--border-control);
 
-  --font-sans: var(--font-inter);
-  --font-display: var(--font-grotesk);
+  /* Radii — the reference's scale. A 12px corner reads as a consumer
+     app; these read as an instrument. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --font-sans: var(--font-plex-sans);
   --font-mono: var(--font-jetbrains);
 }
 
@@ -61,14 +71,11 @@ body {
 }
 
 body {
-  background: var(--surface);
+  background: var(--page);
   color: var(--fg-body);
-  font-family: var(--font-inter), system-ui, sans-serif;
-  font-size: 1rem;
+  font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
   line-height: 1.6;
-  transition:
-    background-color 200ms ease,
-    color 200ms ease;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -79,10 +86,33 @@ body {
   box-sizing: border-box;
 }
 
+/* One face for prose and headings — the reference sets headings in the
+   same IBM Plex Sans as the body and separates them by WEIGHT and size
+   rather than by family. The second family (mono) is reserved for
+   things that are IDENTIFIERS or FIGURES, where it is doing work: a
+   column of proportional digits does not line up, and a waybill in a
+   humanist sans is a waybill you misread. */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--fg-strong);
+  margin: 0;
+}
+
 :focus-visible {
-  outline: 2px solid var(--sky);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--accent-fill);
+  color: #ffffff;
 }
 
 .skip-to-content {
@@ -93,7 +123,7 @@ body {
   background: var(--surface-2);
   color: var(--fg-strong);
   border: 1px solid var(--line-strong);
-  border-radius: 0.5rem;
+  border-radius: 4px;
   z-index: 100;
 }
 .skip-to-content:focus {
@@ -101,72 +131,71 @@ body {
   top: 1rem;
 }
 
-h1,
-h2,
-h3 {
-  font-family: var(--font-grotesk), system-ui, sans-serif;
+/* ═════════════════════════════════════════════════════════════════════
+ * THE GRAMMAR — six utilities the whole page is built from.
+ * ═════════════════════════════════════════════════════════════════════ */
+
+/* A micro-caps label. Mono, 11px, uppercase, widely tracked. This is
+   the single most load-bearing mark in the design: it makes a caption
+   read as a RULER rather than as another line of prose, which is what
+   lets the rows beneath it be as dense as they are. */
+@utility mono-caps {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.08;
-  color: var(--fg-strong);
-}
-
-::selection {
-  background: var(--sky);
-  color: #051018;
-}
-
-/* ── Instrument chrome utilities ─────────────────────────────── */
-
-/* Telemetry label — mono, uppercase, tracked */
-@utility telemetry {
-  font-family: var(--font-jetbrains), monospace;
-  font-size: 0.6875rem;
+  line-height: 1.3;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-/* Panel — the standard instrument surface */
+/* A figure or an identifier — a waybill, a rupee amount, a duration. */
+@utility figure-mono {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.01em;
+}
+
+/* The standard instrument surface: a panel is a card that has given up
+   its rounded corners and its drop shadow in exchange for a hairline
+   and a header bar it can hold cells inside. */
 @utility panel {
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
-/* Corner ticks — cartographic '+' marks on key panels */
-.ticks {
-  position: relative;
-}
-.ticks::before,
-.ticks::after {
-  content: '+';
-  position: absolute;
-  font-family: var(--font-jetbrains), monospace;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--fg-muted);
-  opacity: 0.6;
-  pointer-events: none;
-}
-.ticks::before {
-  top: 6px;
-  left: 8px;
-}
-.ticks::after {
-  bottom: 6px;
-  right: 8px;
+/* A panel's header bar — one step up in surface, hairline beneath. */
+@utility panel-head {
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--line);
 }
 
-/* Graph-grid background for hero/section backdrops */
-.console-grid {
+/* Backdrops. The grid is the drafting-paper ground under a hero or a
+   band; the dot field is the quieter one for a full section. */
+.grid-bg {
   background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 48px 48px;
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.dots-bg {
+  background-image: radial-gradient(var(--dots) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
-/* Telemetry ticker track */
-@keyframes tickerScroll {
+/* ═════════════════════════════════════════════════════════════════════
+ * MOTION
+ *
+ * Every animation below has a `prefers-reduced-motion` answer, and the
+ * answer is the finished state rather than a faster version of the
+ * move. The blanket rule at the end is the backstop; each named rule
+ * is switched off explicitly so a future addition that forgets is the
+ * only thing left moving, and therefore obvious.
+ * ═════════════════════════════════════════════════════════════════════ */
+
+/* Live ticker */
+@keyframes tickerSlide {
   from {
     transform: translateX(0);
   }
@@ -175,7 +204,9 @@ h3 {
   }
 }
 .ticker-track {
-  animation: tickerScroll 60s linear infinite;
+  display: flex;
+  width: max-content;
+  animation: tickerSlide 60s linear infinite;
   will-change: transform;
 }
 .ticker-track:hover,
@@ -183,7 +214,7 @@ h3 {
   animation-play-state: paused;
 }
 
-/* Status dot pulse */
+/* Status dot — a slow breath, not a blink. */
 @keyframes statusPulse {
   0%,
   100% {
@@ -197,24 +228,26 @@ h3 {
   animation: statusPulse 2.4s ease-in-out infinite;
 }
 
-/* Reduced motion — everything static */
-@media (prefers-reduced-motion: reduce) {
-  .ticker-track,
-  .status-dot {
-    animation: none;
+/* Ping ring behind a status dot. */
+@keyframes statusPing {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
   }
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
   }
 }
+.status-ping {
+  animation: statusPing 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
 
-/* ── Reveal system (lib/reveal.tsx) ──────────────────────────── */
-/* Transform-only: SSR HTML is always fully visible. */
+/* Reveal — TRANSFORM ONLY. The SSR HTML is fully visible from the
+   first paint, so a reveal that never fires (no JS, an observer that
+   did not resolve) costs a small offset and never a blank page, and
+   LCP is never gated on an opacity transition. */
 .reveal {
   transform: translateY(10px);
   transition: transform 220ms cubic-bezier(0.22, 0.68, 0.34, 1);
@@ -223,201 +256,44 @@ h3 {
   transform: none;
 }
 
-/* Rail draw-in (how-it-works) */
-.rail-draw {
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 1.2s cubic-bezier(0.22, 0.68, 0.34, 1);
-}
-.rail-draw[data-shown],
-[data-shown] .rail-draw {
-  transform: scaleX(1);
-}
-
-/* FAQ panel expand — grid-rows trick, no JS measurement */
-.faq-panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 240ms cubic-bezier(0.22, 0.68, 0.34, 1);
-}
-.faq-panel[data-open] {
-  grid-template-rows: 1fr;
-}
-.faq-panel > div {
-  overflow: hidden;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reveal,
-  .rail-draw,
-  .faq-panel {
-    transform: none !important;
-    transition: none !important;
-  }
-}
-
-/* ── 3D + entrance motion (lib/tilt.tsx + hero boot) ─────────── */
-
-/* Hero boot-rise: transform-only entrance on page load. Opacity stays
-   ≥1 so LCP is never delayed and SSR HTML is always readable. */
+/* Boot-rise — the hero's entrance, same transform-only rule. */
 @keyframes bootRise {
   from {
-    transform: translateY(14px);
+    transform: translateY(12px);
   }
   to {
     transform: none;
   }
 }
 .boot-rise {
-  animation: bootRise 480ms cubic-bezier(0.22, 0.68, 0.34, 1) backwards;
+  animation: bootRise 460ms cubic-bezier(0.22, 0.68, 0.34, 1) backwards;
 }
 .boot-rise-2 {
-  animation-delay: 90ms;
+  animation-delay: 80ms;
 }
 .boot-rise-3 {
-  animation-delay: 180ms;
+  animation-delay: 160ms;
 }
 .boot-rise-4 {
-  animation-delay: 270ms;
+  animation-delay: 240ms;
 }
 
-/* Pointer-tracking glow overlay — reads --px/--py set by TiltPanel. */
-.glow-follow {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 300ms ease;
-  border-radius: inherit;
-  background: radial-gradient(
-    340px circle at var(--px, 50%) var(--py, 50%),
-    color-mix(in oklab, var(--sky) 9%, transparent),
-    transparent 70%
-  );
+/* The phase rail draws itself in under FLIGHT PLAN. */
+.rail-draw {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.1s cubic-bezier(0.22, 0.68, 0.34, 1);
 }
-*:hover > .glow-follow {
-  opacity: 1;
+.rail-draw[data-shown],
+[data-shown] .rail-draw {
+  transform: scaleX(1);
 }
 
-/* 3D context for tilting card grids */
-.persp {
-  perspective: 1100px;
-}
-.tilt-card {
-  transform-style: preserve-3d;
-  transition:
-    transform 200ms cubic-bezier(0.22, 0.68, 0.34, 1),
-    border-color 150ms ease;
-}
-@media (hover: hover) and (pointer: fine) {
-  .tilt-card:hover {
-    transform: translateY(-3px) rotateX(1.6deg);
-  }
-  .tilt-card:hover .tilt-pop {
-    transform: translateZ(22px);
-  }
-}
-.tilt-pop {
-  transition: transform 200ms cubic-bezier(0.22, 0.68, 0.34, 1);
-  transform-style: preserve-3d;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .boot-rise {
-    animation: none;
-  }
-  .tilt-card,
-  .tilt-card:hover,
-  .tilt-pop {
-    transform: none !important;
-  }
-  .glow-follow {
-    display: none;
-  }
-}
-
-/* ── Section-level motion (post-hero sections) ───────────────── */
-
-/* FLIGHT PLAN — phase nodes light up in sequence once revealed */
-@keyframes phaseOn {
-  0% {
-    border-color: var(--line-strong);
-    color: var(--fg-muted);
-  }
-  55% {
-    border-color: var(--sky);
-    color: var(--sky);
-    box-shadow: 0 0 18px var(--glow);
-  }
-  100% {
-    border-color: var(--line-strong);
-    color: var(--sky);
-    box-shadow: 0 0 0 transparent;
-  }
-}
-[data-shown] .phase-node {
-  animation: phaseOn 700ms ease-out backwards;
-}
-[data-shown] .phase-node-1 {
-  animation-delay: 200ms;
-}
-[data-shown] .phase-node-2 {
-  animation-delay: 500ms;
-}
-[data-shown] .phase-node-3 {
-  animation-delay: 800ms;
-}
-[data-shown] .phase-node-4 {
-  animation-delay: 1100ms;
-}
-
-/* MANIFEST — table rows rise in sequence under the section reveal */
-.stagger-row {
-  transform: translateY(8px);
-  transition: transform 300ms cubic-bezier(0.22, 0.68, 0.34, 1);
-}
-[data-shown] .stagger-row {
-  transform: none;
-}
-[data-shown] .stagger-row-1 {
-  transition-delay: 60ms;
-}
-[data-shown] .stagger-row-2 {
-  transition-delay: 120ms;
-}
-[data-shown] .stagger-row-3 {
-  transition-delay: 180ms;
-}
-[data-shown] .stagger-row-4 {
-  transition-delay: 240ms;
-}
-[data-shown] .stagger-row-5 {
-  transition-delay: 300ms;
-}
-[data-shown] .stagger-row-6 {
-  transition-delay: 360ms;
-}
-
-/* LOOKUP — blinking console cursor on the prompt */
-@keyframes promptBlink {
-  0%,
-  55% {
-    opacity: 1;
-  }
-  56%,
-  100% {
-    opacity: 0.15;
-  }
-}
-.prompt-blink {
-  animation: promptBlink 1.1s steps(1) infinite;
-}
-
-/* CLEARANCE — runway approach lights under the CTA */
+/* Runway approach lights under the closing CTA. */
 @keyframes runwayLight {
   0%,
   100% {
-    opacity: 0.15;
+    opacity: 0.18;
   }
   12% {
     opacity: 1;
@@ -430,8 +306,8 @@ h3 {
   width: 5px;
   height: 5px;
   border-radius: 9999px;
-  background: var(--sky);
-  opacity: 0.15;
+  background: var(--accent-fill);
+  opacity: 0.18;
   animation: runwayLight 2.8s ease-in-out infinite;
 }
 .runway span:nth-child(2) {
@@ -453,41 +329,47 @@ h3 {
   animation-delay: 960ms;
 }
 
-/* DIAGNOSTICS — the critical fault card carries an amber signature */
-.fault-critical {
-  border-color: color-mix(in oklab, var(--saffron) 35%, transparent) !important;
+/* FAQ panel — grid-template-rows 0fr→1fr, so no JS measures a height
+   and nothing jumps when the text reflows at a different width. */
+.faq-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms cubic-bezier(0.22, 0.68, 0.34, 1);
 }
-.fault-critical:hover {
-  border-color: color-mix(in oklab, var(--saffron) 55%, transparent) !important;
+.faq-panel[data-open] {
+  grid-template-rows: 1fr;
 }
-.fault-critical::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: radial-gradient(
-    240px circle at 85% 0%,
-    color-mix(in oklab, var(--saffron) 7%, transparent),
-    transparent 70%
-  );
+.faq-panel > div {
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-shown] .phase-node {
-    animation: none;
-    color: var(--sky);
-  }
-  .stagger-row {
-    transform: none;
-    transition: none;
-  }
-  .prompt-blink {
-    animation: none;
-  }
+  .ticker-track,
+  .status-dot,
+  .status-ping,
+  .boot-rise,
   .runway span {
     animation: none;
+  }
+  .status-ping {
+    opacity: 0;
+  }
+  .runway span {
     opacity: 0.5;
+  }
+  .reveal,
+  .rail-draw,
+  .faq-panel {
+    transform: none !important;
+    transition: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

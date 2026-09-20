@@ -40,39 +40,30 @@ export default function RequestInvitePage(): ReactElement {
           normal flow, so main already starts below it and every pixel
           of that padding was surplus. It pushed the wordmark 177px down
           a page whose whole job is the form underneath it. */}
-      <main id="main" className="bg-surface relative min-h-screen overflow-hidden pt-12 pb-24">
-        <div aria-hidden className="console-grid absolute inset-0" />
+      <main id="main" className="relative min-h-screen overflow-hidden bg-surface pb-20 pt-10">
+        <div aria-hidden className="grid-bg absolute inset-0" />
 
         {/* The live corridor, well back. Decorative only — it carries no
             information the form needs, so it is hidden from assistive
             tech and never intercepts a pointer. */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.28]">
+        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.22]">
           <CorridorConsole />
         </div>
 
-        {/* Darkens the centre so the panel reads first. */}
+        {/* Settles the centre so the panel reads first. A form is the one
+            thing on this page; atmosphere competing with the fields
+            would be atmosphere working against its only job. */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'radial-gradient(closest-side at 50% 42%, var(--surface) 30%, transparent 100%)',
-            opacity: 0.88,
-          }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-32 left-1/2 h-[460px] w-[720px] -translate-x-1/2 rounded-full"
-          style={{
-            // Phosphor bloom removed — a saturated halo is the neon-on-dark
-            // treatment this pass drops. The surface step and the
-            // border carry the emphasis instead.
-            background: 'none',
-            opacity: 0.5,
+              'radial-gradient(closest-side at 50% 40%, var(--surface) 34%, transparent 100%)',
+            opacity: 0.9,
           }}
         />
 
-        <div className="relative mx-auto max-w-3xl px-5 sm:px-8">
+        <div className="relative mx-auto max-w-3xl px-5 sm:px-6">
           <InviteForm />
         </div>
       </main>

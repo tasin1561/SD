@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { ArrowUpRight, Check } from 'lucide-react';
-import { TiltPanel } from '@/lib/tilt';
+import { ArrowRight, Check } from 'lucide-react';
+import { Chip, LiveDot } from './chrome';
 
 /**
  * Asking to be let in.
@@ -70,20 +70,30 @@ interface FieldProps {
 
 function Field({ id, label, required, children, hint }: FieldProps): ReactElement {
   return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="telemetry text-fg-muted">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="mono-caps text-fg-muted">
         {label}
-        {required ? <span className="text-sky"> *</span> : null}
+        {required ? (
+          <span className="text-sky" aria-hidden="true">
+            {' '}
+            *
+          </span>
+        ) : null}
       </label>
       {children}
-      {hint ? <span className="text-xs text-fg-muted">{hint}</span> : null}
+      {hint ? <span className="text-[12px] leading-snug text-fg-muted">{hint}</span> : null}
     </div>
   );
 }
 
+/* `border-border-control`, not `border-line`: a field's border is the
+   ONLY thing marking where it begins, so it carries 3:1 (WCAG 1.4.11)
+   where a divider between two surfaces does not. The 16px floor and
+   44px height on coarse pointers come from globals.css as SELECTORS —
+   deliberately not restated here, or the two would drift. */
 const inputClass =
-  'w-full h-12 px-4 rounded-xl bg-surface border border-line text-fg-strong ' +
-  'placeholder:text-fg-muted text-sm focus:outline-none focus:border-sky transition-colors';
+  'w-full h-11 px-3 rounded-sm bg-surface-input border border-border-control text-fg-strong ' +
+  'text-[14px] placeholder:text-fg-faint focus:outline-none focus:border-sky transition-colors';
 
 export function InviteForm(): ReactElement {
   const [sent, setSent] = useState(false);
@@ -143,38 +153,44 @@ export function InviteForm(): ReactElement {
 
   if (sent) {
     return (
-      <div className="panel ticks p-8 sm:p-10 text-center">
-        <div
-          className="mx-auto flex h-12 w-12 items-center justify-center rounded-full"
-          style={{ background: 'var(--glow)' }}
-        >
-          <Check size={22} className="text-sky" />
+      <div className="overflow-hidden rounded-lg border border-line bg-surface-2 shadow-[var(--shadow-2)]">
+        <div className="panel-head flex items-center justify-between gap-2 px-4 py-2.5 sm:px-5">
+          <span className="mono-caps flex items-center gap-2 text-fg-muted">
+            <LiveDot />
+            <span className="text-fg-strong">invite request</span>
+          </span>
+          <Chip tone="good">received</Chip>
         </div>
-        <h2
-          className="mt-5 font-display font-semibold text-fg-strong"
-          style={{ fontSize: 'clamp(1.5rem, 2.6vw, 2rem)', letterSpacing: '-0.02em' }}
-        >
-          Request received
-        </h2>
-        <p className="mt-4 text-fg-body mx-auto max-w-[46ch]">
-          Someone will read this properly and get back to you within one working day. If it is
-          urgent, write to{' '}
-          <a href="mailto:hello@skydrop.online" className="text-sky hover:underline">
-            hello@skydrop.online
-          </a>
-          .
-        </p>
-        {/* Was a dim mono line reading "back to the flight plan" — which
-            names a SECTION of the home page, not the home page, and was
-            styled so quietly it read as a caption rather than the only
-            way onward from a page with nothing else on it. */}
-        <Link
-          href="/"
-          className="mt-8 inline-flex items-center gap-2 rounded-xl border border-line px-5 py-3 text-sm font-medium text-fg-strong transition-colors hover:border-sky hover:text-sky"
-        >
-          Back to the main site
-          <ArrowUpRight size={15} />
-        </Link>
+        <div className="p-7 text-center sm:p-10">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md border border-green-line bg-green-tint">
+            <Check size={22} className="text-green" aria-hidden="true" />
+          </div>
+          <h2
+            className="mt-5 text-fg-strong"
+            style={{ fontSize: 'clamp(1.4rem, 2.6vw, 1.9rem)', letterSpacing: '-0.025em' }}
+          >
+            Request received
+          </h2>
+          <p className="mx-auto mt-3 max-w-[46ch] text-[15px] leading-relaxed text-fg-body">
+            Someone will read this properly and get back to you within one working day. If it is
+            urgent, write to{' '}
+            <a href="mailto:hello@skydrop.online" className="text-sky hover:underline">
+              hello@skydrop.online
+            </a>
+            .
+          </p>
+          {/* Was a dim mono line reading "back to the flight plan" — which
+              names a SECTION of the home page, not the home page, and was
+              styled so quietly it read as a caption rather than the only
+              way onward from a page with nothing else on it. */}
+          <Link
+            href="/"
+            className="mt-7 inline-flex items-center gap-2 rounded-sm border border-line-strong px-5 py-3 text-[14px] font-medium text-fg-strong transition-colors hover:bg-surface-3"
+          >
+            Back to the main site
+            <ArrowRight size={15} aria-hidden="true" />
+          </Link>
+        </div>
       </div>
     );
   }
@@ -187,24 +203,31 @@ export function InviteForm(): ReactElement {
           — so repeating them here read as a mistake once the surplus
           padding above was removed. What the nav does NOT say is the
           terms of entry, and that is the line worth keeping. */}
-      <div className="boot-rise mb-7 text-center">
-        <div className="telemetry text-fg-muted">invite-only beta · bd → in</div>
+      <div className="boot-rise mb-5 flex justify-center">
+        <Chip tone="accent">
+          <LiveDot tone="sky" />
+          invite-only beta · bd &rarr; in
+        </Chip>
       </div>
 
-      <TiltPanel max={2.5} className="boot-rise boot-rise-2">
-        <form
-          onSubmit={(e) => void handleSubmit(e)}
-          className="panel ticks relative overflow-hidden p-6 sm:p-9"
-          noValidate
-        >
-          <div className="telemetry text-fg-muted">invite request</div>
+      <form
+        onSubmit={(e) => void handleSubmit(e)}
+        className="boot-rise boot-rise-2 overflow-hidden rounded-lg border border-line bg-surface-2 shadow-[var(--shadow-hud)]"
+        noValidate
+      >
+        <div className="panel-head flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:px-5">
+          <span className="mono-caps text-fg-strong">invite request</span>
+          <span className="mono-caps text-fg-faint">4 required · 5 optional</span>
+        </div>
+
+        <div className="p-5 sm:p-8">
           <h1
-            className="mt-3 font-display font-semibold text-fg-strong"
-            style={{ fontSize: 'clamp(1.8rem, 3.4vw, 2.6rem)', letterSpacing: '-0.025em' }}
+            className="text-fg-strong"
+            style={{ fontSize: 'clamp(1.6rem, 3.4vw, 2.2rem)', letterSpacing: '-0.03em' }}
           >
             Tell us about your store
           </h1>
-          <p className="mt-4 text-fg-body max-w-[52ch]">
+          <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-fg-body">
             Skydrop is invite-only while we scale the warehouse. Four fields is all we need to start
             — the rest helps us come to the call prepared.
           </p>
@@ -212,7 +235,7 @@ export function InviteForm(): ReactElement {
           {/* First, because it frames everything after it — and because
               a lead in the wrong direction is worth knowing about before
               reading their volume. */}
-          <div className="mt-8">
+          <div className="mt-7">
             <Field
               id="shippingDirection"
               label="Where do you want to deliver parcels?"
@@ -350,8 +373,7 @@ export function InviteForm(): ReactElement {
           {error !== null ? (
             <p
               role="alert"
-              className="mt-6 rounded-xl border px-4 py-3 text-sm"
-              style={{ borderColor: 'var(--red, #EF4444)', color: 'var(--red, #EF4444)' }}
+              className="mt-6 rounded-sm border border-red-line bg-red-tint px-4 py-3 text-[13px] text-red"
             >
               {error}
             </p>
@@ -360,27 +382,23 @@ export function InviteForm(): ReactElement {
           <button
             type="submit"
             disabled={busy}
-            className="group mt-8 inline-flex items-center gap-2 rounded-xl bg-sky px-6 py-4 text-sm font-medium text-accent-fg transition-colors hover:bg-sky-deep disabled:opacity-60"
-            style={{ boxShadow: '0 0 42px var(--glow)' }}
+            className="group mt-7 inline-flex items-center gap-2 rounded-sm bg-accent-fill px-6 py-3.5 text-[14px] font-semibold text-accent-fg transition-colors hover:bg-accent-fill-hover disabled:opacity-60"
           >
             {busy ? 'Sending…' : 'Request an invite'}
             {busy ? null : (
-              <ArrowUpRight
+              <ArrowRight
                 size={16}
-                className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                aria-hidden="true"
+                className="transition-transform group-hover:translate-x-0.5"
               />
             )}
           </button>
 
-          <p className="text-fg-muted mt-5 max-w-[52ch] text-xs">
+          <p className="mt-5 max-w-[52ch] text-[12px] leading-relaxed text-fg-muted">
             We use this only to get in touch about Skydrop. No newsletter, and we do not pass it on.
           </p>
-
-          {/* Reads --px/--py from TiltPanel. Decorative, and last in the DOM
-          so it cannot sit above a focus ring. */}
-          <div aria-hidden className="glow-follow" />
-        </form>
-      </TiltPanel>
+        </div>
+      </form>
     </>
   );
 }
