@@ -35,6 +35,8 @@ export default function PasswordResetRequestPage(): ReactElement {
 
   return (
     <AuthFrame
+      section="recovery"
+      note="step 1 of 2"
       title="Reset your password"
       subtitle="We will email you a link that works for 30 minutes."
       footer={
