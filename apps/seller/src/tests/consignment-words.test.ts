@@ -78,6 +78,9 @@ function consignment(over: Partial<ConsignmentView> = {}): ConsignmentView {
     sellerReference: null,
     cancelledAt: null,
     cancelReason: null,
+    // Null is the ordinary case: most consignments carry no per-shipment
+    // pin and fall through to the seller's setting.
+    inboundFreightMode: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     seller: { id: 's-1', companyName: 'Acme', emailDisplay: 'a@b.c' },
     receipts: [],

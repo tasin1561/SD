@@ -303,6 +303,12 @@ export function inboundFreightStatusKind(status: InboundFreightStatus): StatusKi
       return 'delivered';
     case InboundFreightStatus.WAIVED:
       return 'cancelled';
+    // A bill that was WRONG and has been withdrawn, its money handed
+    // back. `cancelled` alongside WAIVED on purpose: both are "this is
+    // not money anybody owes", and the kind is a visual bucket, not the
+    // status — the badge's own label is what tells the two apart.
+    case InboundFreightStatus.VOIDED:
+      return 'cancelled';
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled InboundFreightStatus: ${String(exhaustive)}`);
@@ -876,6 +882,9 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
     case WalletEntryDirection.PREPAID_TRANSFER_CREDIT:
     // RS-7 — a dispute with a reseller store settled in the seller's favour.
     case WalletEntryDirection.STORE_DISPUTE_IN:
+    // A voided inbound freight bill — a wrong rate, or a recount —
+    // giving back exactly what it had charged.
+    case WalletEntryDirection.INBOUND_FREIGHT_REFUND:
       return true;
     // Everything we charge for. REMITTANCE_OUT is money leaving to the
     // seller's bank, so it is a debit against the wallet even though
@@ -994,6 +1003,10 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
       return 'Dispute settled — paid by a reseller store';
     case WalletEntryDirection.STORE_DISPUTE_OUT:
       return 'Dispute settled — paid to a reseller store';
+    // The bill itself is labelled "Inbound freight"; this is that bill
+    // being withdrawn, so the label says which way the money went.
+    case WalletEntryDirection.INBOUND_FREIGHT_REFUND:
+      return 'Inbound freight bill withdrawn';
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled WalletEntryDirection: ${String(exhaustive)}`);

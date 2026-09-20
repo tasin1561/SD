@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState, type ReactElement } from 'react';
-import { ConsignmentLeg, ConsignmentRoute, LabellingSite } from '@skydrop/db';
+import { ConsignmentLeg, ConsignmentRoute, InboundFreightMode, LabellingSite } from '@skydrop/db';
 import {
   Button,
   Card,
@@ -27,10 +27,12 @@ import {
   useCancelConsignment,
   useConsignmentDetail,
   useConsignmentEvents,
+  useConsignmentFreightMode,
   useConsignmentLabelPreview,
   useDispatchConsignment,
   usePrintConsignmentLabels,
   useRequestLabelReprint,
+  useSetConsignmentFreightMode,
   useSetLabellingSite,
 } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -338,6 +340,11 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       Count it on the receive station →
                     </Link>
                   )}
+                  {/* The freight decision sits HERE because this is when
+                      it is made: the Dhaka count and weight are what a
+                      pay-in-advance bill is priced from, so whoever is
+                      standing at this leg is the person who knows. */}
+                  <FreightModeControl id={id} />
                 </div>
               )}
             </Step>
@@ -706,6 +713,100 @@ function LegLines({
       {leg.discrepancyNotes !== null && (
         <p className="text-text-muted mt-1 text-xs">{leg.discrepancyNotes}</p>
       )}
+    </div>
+  );
+}
+
+const FREIGHT_MODE_LABEL: Record<InboundFreightMode, string> = {
+  PAY_ADVANCE: 'Pay in advance — billed at the Bangladesh intake, before it flies',
+  PAY_NOW: 'Pay now — billed at the India arrival, debited on record',
+  PAY_LATER: 'Pay later — billed at the India arrival, recovered as the stock sells',
+};
+
+const FREIGHT_SOURCE_LABEL: Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> = {
+  CONSIGNMENT: 'pinned on this consignment',
+  SELLER: "from the seller's settings",
+  SYSTEM_DEFAULT: 'the platform default',
+};
+
+/** The mode's name without the sentence explaining it — for a toast. */
+function shortMode(mode: InboundFreightMode): string {
+  return FREIGHT_MODE_LABEL[mode].split(' — ')[0] ?? mode;
+}
+
+/**
+ * How THIS consignment's inbound freight is paid for.
+ *
+ * Three levels resolve it — this consignment's own pin, else the
+ * seller's setting, else the platform default — and only the server
+ * walks that chain, so the control READS the answer rather than
+ * reconstructing it from `inboundFreightMode`, which is null on most
+ * consignments and would then read as "pay now" for all of them.
+ *
+ * The choice belongs here rather than on the freight screen because it
+ * decides WHICH STOP carries the bill, and on pay-in-advance that stop
+ * is the count happening on this page.
+ *
+ * FE-2: gated cosmetically on `money.freight.manage` and disabled once
+ * a bill exists; the server refuses both regardless
+ * (`FREIGHT_MODE_LOCKED`) and its verdict is shown verbatim.
+ */
+function FreightModeControl({ id }: { readonly id: string }): ReactElement {
+  const toast = useToast();
+  const mayManage = usePermission('money.freight.manage');
+  const q = useConsignmentFreightMode(id);
+  const setMode = useSetConsignmentFreightMode();
+  const [error, setError] = useState<string | null>(null);
+
+  async function onChange(value: string): Promise<void> {
+    setError(null);
+    try {
+      // The empty option CLEARS the pin — it does not mean "no mode".
+      // Whatever is in force then comes from the seller or the default
+      // again, which is the point of being able to un-pin at all.
+      const next = value === '' ? null : (value as InboundFreightMode);
+      const result = await setMode.mutateAsync({ id, mode: next });
+      toast.success(
+        next === null
+          ? `Pin cleared — ${shortMode(result.mode)} applies, ${FREIGHT_SOURCE_LABEL[result.source]}`
+          : `Freight pinned to ${shortMode(result.mode)}`,
+      );
+    } catch (e) {
+      setError(serverVerdict(e));
+    }
+  }
+
+  if (q.data === undefined) return <></>;
+  const { mode, source, locked } = q.data;
+
+  return (
+    <div className="border-border-subtle mt-3 flex flex-col gap-2 border-t pt-3">
+      <div>
+        <div className="text-text-secondary text-sm font-medium">Freight</div>
+        <p className="text-text-muted text-xs">
+          {FREIGHT_MODE_LABEL[mode]} — {FREIGHT_SOURCE_LABEL[source]}.
+          {locked
+            ? ' A bill already exists, so this is settled: it is what that bill was raised on.'
+            : ''}
+        </p>
+      </div>
+      {mayManage && (
+        <Select
+          aria-label="How this consignment's freight is paid for"
+          className="w-full max-w-md"
+          value={source === 'CONSIGNMENT' ? mode : ''}
+          disabled={locked || setMode.isPending}
+          onChange={(e) => void onChange(e.target.value)}
+        >
+          <option value="">Follow the seller&apos;s setting</option>
+          {(Object.keys(FREIGHT_MODE_LABEL) as InboundFreightMode[]).map((m) => (
+            <option key={m} value={m}>
+              {FREIGHT_MODE_LABEL[m]}
+            </option>
+          ))}
+        </Select>
+      )}
+      {error !== null && <ErrorNote message={error} />}
     </div>
   );
 }

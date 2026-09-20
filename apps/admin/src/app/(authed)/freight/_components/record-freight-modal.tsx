@@ -13,11 +13,64 @@ import {
   Textarea,
   useToast,
 } from '@skydrop/ui/components';
-import { InboundFreightMode } from '@skydrop/db';
+import { Currency, InboundFreightMode } from '@skydrop/db';
 import { useRecordFreight } from '@/lib/ops-hooks';
-import { useConsignmentsList } from '@/lib/api-hooks';
+import { useConsignmentFreightMode, useConsignmentsList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+
+/**
+ * What a freight rate may be AGREED in.
+ *
+ * The rate is settled on the phone, and half those calls happen in taka
+ * — so the figure typed here is the figure on the invoice, and the bill
+ * is converted to rupees once, at the moment it is recorded. Left as a
+ * text box, "TAKA" or "bdt " saves cleanly and surfaces far later as a
+ * bill that could not be priced; the same reasoning as the fee-currency
+ * picker in `@/lib/fee-currency`, which is the precedent here. A
+ * separate list because a freight bill is not a fee and the two have no
+ * reason to move together.
+ *
+ * FE-2: convenience, not enforcement. The server validates regardless.
+ */
+const BILL_CURRENCIES = [
+  { value: Currency.INR, label: 'INR — rupees (₹)' },
+  { value: Currency.BDT, label: 'BDT — taka (৳)' },
+] as const;
+
+const SYMBOL: Record<Currency, string> = { INR: '₹', BDT: '৳' };
+
+/** What each mode means for WHICH stop carries the bill. */
+const MODE_OPTIONS = [
+  {
+    value: InboundFreightMode.PAY_ADVANCE,
+    label: 'Pay in advance — bill the Bangladesh intake, before it flies',
+  },
+  { value: InboundFreightMode.PAY_NOW, label: 'Pay now — debit the wallet on record' },
+  { value: InboundFreightMode.PAY_LATER, label: 'Pay later — leave a receivable' },
+] as const;
+
+const MODE_WORDS: Record<InboundFreightMode, string> = {
+  PAY_ADVANCE: 'Pay in advance',
+  PAY_NOW: 'Pay now',
+  PAY_LATER: 'Pay later',
+};
+
+const LEG_WORDS = { BD_INTAKE: 'Bangladesh intake', IN_FINAL: 'India arrival' } as const;
+
+/** `null` is a goods receipt that belongs to no consignment leg — the
+ *  picker never offers one, so this only guards the type. */
+function legWords(leg: string | null): string {
+  if (leg === 'BD_INTAKE') return LEG_WORDS.BD_INTAKE;
+  if (leg === 'IN_FINAL') return LEG_WORDS.IN_FINAL;
+  return 'stop';
+}
+
+const SOURCE_WORDS: Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> = {
+  CONSIGNMENT: 'pinned on this consignment',
+  SELLER: "from the seller's settings",
+  SYSTEM_DEFAULT: 'the platform default',
+};
 
 /**
  * Record the freight invoice for one ARRIVAL.
@@ -27,15 +80,24 @@ import { serverVerdict } from '@/lib/server-verdict';
  * the shipment that actually flew, and the bill is split over the units
  * that landed on it.
  *
- * Only counted India arrivals are offered — an uncounted one would be
- * split over numbers that are still guesses, and the Bangladesh intake
- * never flew at all. Arrivals already carrying a bill are shown as such
- * rather than hidden, so an operator can see the invoice exists instead
- * of wondering where their shipment went.
+ * WHICH stop is billed is the consignment's freight mode: PAY_ADVANCE
+ * bills the BANGLADESH INTAKE — the count and weight the rate is applied
+ * to, raised before the goods fly — while PAY_NOW and PAY_LATER both
+ * bill the INDIA ARRIVAL, which is what a forwarder invoices. So both
+ * legs are offered, each labelled with which it is, and the mode in
+ * force for the chosen consignment is read back and stated once
+ * something is picked. The picker is CONVENIENCE: the server refuses the
+ * wrong leg by name (FREIGHT_NOT_THE_BD_INTAKE / FREIGHT_NOT_AN_ARRIVAL)
+ * and that verdict is shown as-is, so this does not try to predict it.
  *
- * Mode is left blank by default so the seller's own configured mode
- * applies — overriding it here is a per-arrival exception, not the
- * normal path, and the copy says so.
+ * Only counted stops are offered — an uncounted one would be split over
+ * numbers that are still guesses. Stops already carrying a bill are shown
+ * as such rather than hidden, so an operator can see the invoice exists
+ * instead of wondering where their shipment went.
+ *
+ * Mode is left blank by default so whatever is already in force applies
+ * — overriding it here PINS the consignment, which is a per-shipment
+ * exception rather than the normal path, and the copy says so.
  *
  * FE-2: one bill per arrival is enforced server-side (409
  * FREIGHT_ALREADY_RECORDED); the UI does not attempt to predict it.
@@ -68,15 +130,22 @@ export function RecordFreightModal({
     { enabled: maySeeConsignments },
   );
   /**
-   * Every counted India arrival across the billable consignments, newest
-   * first. `IN_FINAL` is the shipment that flew; `BD_INTAKE` is goods
-   * being handed to us and is never billed.
+   * Every COUNTED stop across the billable consignments — both legs.
+   *
+   * `IN_FINAL` is the shipment that flew, billed on PAY_NOW and
+   * PAY_LATER; `BD_INTAKE` is the Dhaka count, billed on PAY_ADVANCE.
+   * Which one is right depends on the consignment's mode, so both are
+   * offered with the leg spelled out and the server decides — the two
+   * refusals it gives (FREIGHT_NOT_THE_BD_INTAKE /
+   * FREIGHT_NOT_AN_ARRIVAL) each name the leg it wanted.
    */
   const arrivals = (consignments.data?.items ?? []).flatMap((c) =>
     c.receipts
-      .filter((r) => r.leg === 'IN_FINAL' && r.status === 'COMPLETED')
+      .filter((r) => (r.leg === 'IN_FINAL' || r.leg === 'BD_INTAKE') && r.status === 'COMPLETED')
       .map((r) => ({
         id: r.id,
+        leg: r.leg,
+        legWords: legWords(r.leg),
         receiptNumber: r.receiptNumber,
         consignmentNumber: c.consignmentNumber,
         company: c.seller.companyName,
@@ -133,13 +202,35 @@ export function RecordFreightModal({
     });
 
   const [mode, setMode] = useState('');
+  /** What the rates below are AGREED in. The bill is charged in rupees
+   *  whatever this says — the conversion happens once, on record. */
+  const [currency, setCurrency] = useState<Currency>(Currency.INR);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const symbol = SYMBOL[currency];
+
+  /**
+   * What mode is in force for the chosen consignment, and where it came
+   * from — read only once something is picked, because the chain is per
+   * consignment and fetching it for a whole list would be a request per
+   * row to answer a question nobody has asked yet.
+   *
+   * Convenience only. It does not gate the submit (FE-2).
+   */
+  const freightMode = useConsignmentFreightMode(selected?.c.id ?? null, {
+    enabled: maySeeConsignments,
+  });
+  const resolvedMode =
+    mode === '' ? (freightMode.data?.mode ?? null) : (mode as InboundFreightMode);
+  const expectedLeg = resolvedMode === InboundFreightMode.PAY_ADVANCE ? 'BD_INTAKE' : 'IN_FINAL';
+  const selectedLeg = selected?.r.leg ?? null;
+  const legDisagrees = selectedLeg !== null && resolvedMode !== null && selectedLeg !== expectedLeg;
 
   function reset(): void {
     setGoodsReceiptId('');
     setPriced({});
     setMode('');
+    setCurrency(Currency.INR);
     setNote('');
     setError(null);
   }
@@ -154,10 +245,13 @@ export function RecordFreightModal({
           return {
             goodsReceiptLineId: l.id,
             basis: p.basis,
-            rateInr: p.rate.trim(),
+            rate: p.rate.trim(),
             ...(p.basis === 'PER_KG' ? { chargeableWeightKg: p.weightKg.trim() } : {}),
           };
         }),
+        // Omitted when INR: the server defaults to it, and sending the
+        // default is one more thing that can disagree with it.
+        ...(currency === Currency.INR ? {} : { currency }),
         ...(mode === '' ? {} : { mode }),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
@@ -182,9 +276,9 @@ export function RecordFreightModal({
     >
       <div className="space-y-3">
         <FormField
-          label="Arrival"
+          label="Which stop is being billed"
           htmlFor="freight-arrival"
-          hint="Pick the shipment that flew. A consignment arriving in more than one shipment gets one bill each — the forwarder invoices per shipment, and the cost is split over the units on it. Only Bangladesh-routed consignments appear."
+          hint="On pay-in-advance terms that is the BANGLADESH INTAKE — the count and weight the rate is applied to, billed before the goods fly. On pay-now and pay-later it is the INDIA ARRIVAL, which is what a forwarder invoices; a consignment landing in two shipments gets one bill each. Only counted stops on Bangladesh-routed consignments appear."
           required
         >
           {maySeeConsignments ? (
@@ -205,7 +299,7 @@ export function RecordFreightModal({
               </option>
               {arrivals.map((a) => (
                 <option key={a.id} value={a.id} disabled={a.billed}>
-                  {a.consignmentNumber} · {a.units} units — {a.company}
+                  {a.consignmentNumber} · {a.legWords} · {a.units} units — {a.company}
                   {a.billed ? ' (already billed)' : ''}
                 </option>
               ))}
@@ -221,6 +315,19 @@ export function RecordFreightModal({
             />
           )}
         </FormField>
+
+        {/* What is actually in force for this consignment, once one is
+            picked. Convenience: the server refuses the wrong leg by name
+            and that verdict is shown as-is (FE-2). */}
+        {selectedLeg !== null && freightMode.data !== undefined && (
+          <p className={legDisagrees ? 'text-warning text-xs' : 'text-text-muted text-xs'}>
+            {MODE_WORDS[freightMode.data.mode]} — {SOURCE_WORDS[freightMode.data.source]}
+            {freightMode.data.locked ? ', and fixed now a bill exists' : ''}.{' '}
+            {legDisagrees
+              ? `That bills the ${legWords(expectedLeg).toLowerCase()}, and this is the ${legWords(selectedLeg).toLowerCase()}. Pin the mode below if this stop is the one you mean.`
+              : `This is the ${legWords(selectedLeg).toLowerCase()}, which is the stop that mode bills.`}
+          </p>
+        )}
 
         {goodsReceiptId !== '' && (
           <div>
@@ -238,6 +345,27 @@ export function RecordFreightModal({
               catalogue: volumetric weight and rounding up to the next half-kilo are both normal.
               Every product must be priced.
             </p>
+
+            <div className="mb-2">
+              <FormField
+                label="Agreed in"
+                htmlFor="freight-currency"
+                hint="The currency the rate was agreed in on the phone — type the figures exactly as they are on the invoice. The bill is converted to rupees at the rate in force when it is recorded, and the seller is charged rupees either way."
+              >
+                <Select
+                  id="freight-currency"
+                  className="w-56"
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as Currency)}
+                >
+                  {BILL_CURRENCIES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            </div>
 
             {products.length === 0 ? (
               <p className="text-text-muted text-sm">This arrival has no counted products.</p>
@@ -261,9 +389,9 @@ export function RecordFreightModal({
                       <th className="px-2 py-1.5 font-medium">Product</th>
                       <th className="px-2 py-1.5 text-right font-medium">Units</th>
                       <th className="px-2 py-1.5 font-medium">Priced</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Rate ₹</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Rate {symbol}</th>
                       <th className="px-2 py-1.5 text-right font-medium">Kg</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Line ₹</th>
+                      <th className="px-2 py-1.5 text-right font-medium">Line {symbol}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -318,7 +446,7 @@ export function RecordFreightModal({
                             )}
                           </td>
                           <td className="px-2 py-1.5 text-right tabular-nums">
-                            <Money amount={lineTotal(l)} currency="INR" convert={false} />
+                            <Money amount={lineTotal(l)} currency={currency} convert={false} />
                           </td>
                         </tr>
                       );
@@ -328,9 +456,12 @@ export function RecordFreightModal({
                     <tr className="border-border border-t">
                       <td className="text-text-muted px-2 py-1.5 text-xs" colSpan={5}>
                         Freight total, before any pay-later service charge
+                        {currency === Currency.INR
+                          ? ''
+                          : ' — converted to rupees at the rate in force when this is recorded'}
                       </td>
                       <td className="text-text-primary px-2 py-1.5 text-right font-medium tabular-nums">
-                        <Money amount={grandTotal} currency="INR" convert={false} />
+                        <Money amount={grandTotal} currency={currency} convert={false} />
                       </td>
                     </tr>
                   </tfoot>
@@ -343,7 +474,7 @@ export function RecordFreightModal({
         <FormField
           label="Mode"
           htmlFor="freight-mode"
-          hint="Leave on the seller's default unless this consignment is an exception."
+          hint="Leave it alone unless this consignment is an exception — whatever is already in force applies. Choosing one here PINS the consignment to it, and it decides which stop the bill hangs on."
         >
           <Select
             id="freight-mode"
@@ -351,9 +482,16 @@ export function RecordFreightModal({
             value={mode}
             onChange={(e) => setMode(e.target.value)}
           >
-            <option value="">Use the seller&apos;s configured mode</option>
-            <option value={InboundFreightMode.PAY_NOW}>Pay now — debit the wallet on record</option>
-            <option value={InboundFreightMode.PAY_LATER}>Pay later — leave a receivable</option>
+            <option value="">
+              {freightMode.data === undefined
+                ? 'Use whatever is already in force'
+                : `Use whatever is already in force (${MODE_WORDS[freightMode.data.mode]}, ${SOURCE_WORDS[freightMode.data.source]})`}
+            </option>
+            {MODE_OPTIONS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
           </Select>
         </FormField>
 

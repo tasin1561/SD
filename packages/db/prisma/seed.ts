@@ -1765,7 +1765,8 @@ const systemSettings: SystemSettingSeed[] = [
   // money flow simple (settled the moment ops records the bill); a
   // seller who negotiates credit terms gets PAY_LATER, and the service
   // charge defaults to 0 so nobody is charged for credit they were never
-  // quoted.
+  // quoted. PAY_ADVANCE (2026-09-20) bills at the Bangladesh intake
+  // instead, before the goods fly.
   {
     key: 'wallet.inbound_freight_mode',
     category: 'wallet',
@@ -1773,7 +1774,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'PAY_NOW',
     displayName: 'Inbound Freight Payment Mode',
     description:
-      "Who fronts the BD→India freight bill: 'PAY_NOW' (default — debited from the wallet when ops records it) or 'PAY_LATER' (carried as a receivable the seller settles later, optionally with a service charge). Per-seller override.",
+      "Who fronts the BD→India freight bill, and WHEN it is raised. 'PAY_ADVANCE' — billed at the Bangladesh intake once Dhaka has counted and weighed, debited in full there and then, before the goods fly. 'PAY_NOW' (default) — billed at the India arrival and debited in full. 'PAY_LATER' — billed at the India arrival and carried as a receivable, charged per unit as stock sells, optionally with a service charge. Per-seller override; whatever applies is SNAPSHOTTED onto each consignment when it is declared, so changing this never re-bills a consignment already in the air.",
     sellerOverridable: true,
   },
   {

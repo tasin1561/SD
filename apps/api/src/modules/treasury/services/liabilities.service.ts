@@ -59,6 +59,10 @@ const DEBT_PAYMENTS = [
   WalletEntryDirection.RESELLER_TRANSFER_CREDIT,
   WalletEntryDirection.PREPAID_TRANSFER_CREDIT,
   WalletEntryDirection.STORE_DISPUTE_IN,
+  // A voided inbound freight bill giving back what it charged. It sits
+  // beside INBOUND_FREIGHT in DEBT_CAUSES above, so leaving it out here
+  // would leave a withdrawn bill showing as a standing cause of debt.
+  WalletEntryDirection.INBOUND_FREIGHT_REFUND,
 ] as const;
 
 export interface LedgerLine {

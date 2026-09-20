@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, Prisma, SettingValueType } from '@skydrop/db';
+import { ActorType, InboundFreightMode, Prisma, SettingValueType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 
@@ -15,6 +15,30 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
  * `CodCreditService` caps the second fee regardless; this refuses the
  * setting that would need the cap.
  */
+/**
+ * STRING settings whose value is one of a FIXED, code-owned list.
+ *
+ * SET-1 clamps INT and DECIMAL overrides at write time and says nothing
+ * about strings, so before this nothing stopped a seller override of
+ * `wallet.inbound_freight_mode` holding `PAY_ADVANCED` or `pay now`. It
+ * would save cleanly, read back as an unrecognised value, and fail closed
+ * somewhere far away — the reader defaults to PAY_NOW — so the symptom
+ * would be a seller quietly billed on the wrong leg with nothing pointing
+ * back at the override.
+ *
+ * Same argument as `UNKNOWN_COURIER_CODE` below, with the valid set being
+ * a code enum rather than a table. Kept as a map, so a key with no list
+ * is a compile-time absence rather than a silent runtime miss (the shape
+ * `FEE_CURRENCY_KEY` uses for the flat fees).
+ */
+export const ENUM_VALUED_STRING_KEYS: Readonly<Record<string, readonly string[]>> = {
+  'wallet.inbound_freight_mode': [
+    InboundFreightMode.PAY_ADVANCE,
+    InboundFreightMode.PAY_NOW,
+    InboundFreightMode.PAY_LATER,
+  ],
+};
+
 export const COD_FEE_KEYS = [
   'wallet.cod_collection_fee_percent',
   'wallet.instant_pay_fee_percent',
@@ -506,6 +530,26 @@ export class SettingsResolverService {
     key: string,
     parsed: string | number | boolean | Date | object,
   ): Promise<string | number | boolean | Date | object> {
+    // A fixed-list STRING is checked against its list and stored trimmed
+    // and upper-cased, so `pay now` and ` PAY_NOW ` cannot become values
+    // no reader recognises.
+    const allowed = ENUM_VALUED_STRING_KEYS[key];
+    if (allowed !== undefined) {
+      if (typeof parsed !== 'string') {
+        throw new BadRequestException({
+          code: 'INVALID_SETTING_VALUE',
+          message: `Setting '${key}' expects one of: ${allowed.join(', ')}`,
+        });
+      }
+      const value = parsed.trim().toUpperCase();
+      if (!allowed.includes(value)) {
+        throw new BadRequestException({
+          code: 'INVALID_SETTING_VALUE',
+          message: `Setting '${key}': '${parsed.trim()}' is not valid. Allowed: ${allowed.join(', ')}`,
+        });
+      }
+      return value;
+    }
     if (key !== 'ops.default_courier_code' || typeof parsed !== 'string') return parsed;
     const code = parsed.trim();
     const known = await tx.courier.findMany({

@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
+import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { SettingsModule } from '../settings/settings.module';
 import { ConsignmentEventService } from './services/consignment-event.service';
+import { ConsignmentFreightModeService } from './services/consignment-freight-mode.service';
 import { ConsignmentNumberingService } from './services/consignment-numbering.service';
 import { ConsignmentStatusService } from './services/consignment-status.service';
 
@@ -19,8 +22,21 @@ import { ConsignmentStatusService } from './services/consignment-status.service'
  * call-queue / shipment-provision / lifecycle-events precedents.
  */
 @Module({
-  imports: [PrismaModule],
-  providers: [ConsignmentNumberingService, ConsignmentEventService, ConsignmentStatusService],
-  exports: [ConsignmentNumberingService, ConsignmentEventService, ConsignmentStatusService],
+  // SettingsModule and AuthCommonModule are themselves dependency-free
+  // (Prisma + audit), so importing them here keeps this module's
+  // no-cycle property: neither knows what a consignment is.
+  imports: [PrismaModule, SettingsModule, AuthCommonModule],
+  providers: [
+    ConsignmentNumberingService,
+    ConsignmentEventService,
+    ConsignmentStatusService,
+    ConsignmentFreightModeService,
+  ],
+  exports: [
+    ConsignmentNumberingService,
+    ConsignmentEventService,
+    ConsignmentStatusService,
+    ConsignmentFreightModeService,
+  ],
 })
 export class ConsignmentCoreModule {}

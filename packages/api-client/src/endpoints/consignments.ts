@@ -10,6 +10,7 @@ import type {
   ConsignmentLeg,
   ConsignmentRoute,
   ConsignmentStatus,
+  InboundFreightMode,
   LabelReprintRequestStatus,
   GoodsReceiptStatus,
   LabellingSite,
@@ -68,6 +69,18 @@ export interface ConsignmentView {
   readonly sellerReference: string | null;
   readonly cancelledAt: string | null;
   readonly cancelReason: string | null;
+  /**
+   * This consignment's own PIN for how its freight is paid for, or null
+   * when nobody has made a per-shipment decision about it — which is
+   * most of them.
+   *
+   * NOT the answer on its own: a null falls through to the seller's
+   * override and then the global default, and only
+   * `GET /admin/consignments/:id/freight-mode` walks that chain. Read
+   * this for "has somebody pinned this one", never for "how is it
+   * billed".
+   */
+  readonly inboundFreightMode: InboundFreightMode | null;
   readonly createdAt: string;
   readonly seller: {
     readonly id: string;
@@ -85,6 +98,11 @@ export interface ConsignmentView {
     readonly totalInr: string;
     readonly goodsReceiptId: string;
   }[];
+  // NOTE: the four fields above are the whole of what the consignment
+  // endpoint selects — it carries no `voidedAt`, so a WITHDRAWN bill is
+  // still in this list and still in any sum taken over it. Anything that
+  // needs the bill itself (what was agreed, in which currency, whether it
+  // was withdrawn) reads the freight endpoint rather than widening this.
 }
 
 export interface ConsignmentEventView {

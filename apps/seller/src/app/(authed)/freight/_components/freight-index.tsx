@@ -24,7 +24,7 @@ import {
   Toolbar,
   Tr,
 } from '@skydrop/ui/components';
-import { InboundFreightStatus } from '@skydrop/db';
+import { InboundFreightStatus, type InboundFreightMode } from '@skydrop/db';
 import { useSellerFreight } from '@/lib/ops-hooks';
 
 /**
@@ -42,7 +42,11 @@ export function SellerFreightIndex(): ReactElement {
   const list = useSellerFreight(status === '' ? {} : { status });
 
   const rows = list.data?.items ?? [];
-  const outstanding = list.data?.outstandingInr ?? '0';
+  // The API's own figure covers live bills; on the withdrawn filter the
+  // rows carry an arithmetic outstanding that is not a debt, so the
+  // total is taken from the rows that are actually owed.
+  const outstanding =
+    status === InboundFreightStatus.VOIDED ? '0' : (list.data?.outstandingInr ?? '0');
 
   return (
     <div>
@@ -130,9 +134,16 @@ export function SellerFreightIndex(): ReactElement {
                   <div className="text-text-faint mt-0.5 text-xs">
                     {new Date(r.createdAt).toLocaleDateString()}
                   </div>
+                  {r.voidedAt !== null && (
+                    <div className="text-text-muted mt-1 text-xs">
+                      Withdrawn {new Date(r.voidedAt).toLocaleDateString()} — this bill was wrong
+                      and anything it charged has gone back to your wallet.
+                      {r.voidReason === null ? '' : ` ${r.voidReason}`}
+                    </div>
+                  )}
                 </Td>
                 <Td className="text-text-muted whitespace-nowrap text-xs">
-                  {r.mode === 'PAY_NOW' ? 'Paid on arrival' : 'Pay as it sells'}
+                  {TERMS_WORDS[r.mode]}
                   {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
                     <div className="text-text-faint">
                       includes <Money amount={r.serviceChargeInr} decimals={false} /> service charge
@@ -141,12 +152,27 @@ export function SellerFreightIndex(): ReactElement {
                 </Td>
                 <Td align="right">
                   <Money amount={r.totalInr} />
+                  {/* The figure agreed on the phone, when that was not
+                      rupees. Without it "why ₹162.60?" has no answer,
+                      and the rate is the thing the seller actually
+                      negotiated. */}
+                  {r.agreedCurrency !== 'INR' && (
+                    <div className="text-text-faint text-xs">
+                      <Money amount={r.agreedAmount} currency={r.agreedCurrency} convert={false} />{' '}
+                      agreed
+                    </div>
+                  )}
                 </Td>
                 <Td align="right">
                   <Money amount={r.amountSettledInr} />
                 </Td>
                 <Td align="right">
-                  {Number(r.outstandingInr) === 0 ? (
+                  {/* A withdrawn bill still computes total minus
+                      settled; it is not a debt. Showing the arithmetic
+                      would tell a seller they owe money we took back. */}
+                  {r.voidedAt !== null ? (
+                    <span className="text-text-faint text-xs">Nothing — withdrawn</span>
+                  ) : Number(r.outstandingInr) === 0 ? (
                     <span className="text-text-faint">—</span>
                   ) : (
                     <Money amount={r.outstandingInr} direction="debit" />
@@ -177,6 +203,18 @@ export function SellerFreightIndex(): ReactElement {
     </div>
   );
 }
+
+/**
+ * What each mode means TO THE SELLER — where the bill lands, not what
+ * we call it internally. Pay-in-advance is billed in Dhaka before the
+ * goods fly, which is a different moment from the other two and the
+ * one a seller most needs to recognise.
+ */
+const TERMS_WORDS: Record<InboundFreightMode, string> = {
+  PAY_ADVANCE: 'Paid before it flew',
+  PAY_NOW: 'Paid on arrival',
+  PAY_LATER: 'Pay as it sells',
+};
 
 function humanise(value: string): string {
   const lower = value.replaceAll('_', ' ').toLowerCase();

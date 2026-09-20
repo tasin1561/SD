@@ -8,6 +8,7 @@ import {
   ActorType,
   BankEntryType,
   BankOwnerKind,
+  ConsignmentEventType,
   ConsignmentLeg,
   ConsignmentRoute,
   Currency,
@@ -21,6 +22,8 @@ import {
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
+import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
+import { ConsignmentFreightModeService } from '../../consignment-core/services/consignment-freight-mode.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import {
@@ -39,13 +42,54 @@ import {
 import { inrRateAt, toInr, type InrRateAt } from '../../../common/fx/inr-rate-at';
 import { isUniqueViolation } from '../../../common/db/unique-violation';
 
+/**
+ * What every load of a bill includes. Five call sites had this literal
+ * copied out, and `toView` restates it as a type — one of them drifting
+ * would be a field silently missing from a screen rather than an error.
+ */
+export const CHARGE_REFS = {
+  consignment: { select: { consignmentNumber: true } },
+  goodsReceipt: { select: { receiptNumber: true } },
+  seller: { select: { companyName: true } },
+} satisfies Prisma.InboundFreightChargeInclude;
+
 type ChargeWithRefs = Prisma.InboundFreightChargeGetPayload<{
-  include: {
-    consignment: { select: { consignmentNumber: true } };
-    goodsReceipt: { select: { receiptNumber: true } };
-    seller: { select: { companyName: true } };
-  };
+  include: typeof CHARGE_REFS;
 }>;
+
+/**
+ * What the seller reads on their consignment timeline when a bill is
+ * raised (`FREIGHT_RECORDED`).
+ *
+ * It says the rupees CHARGED and, when they differ, what was AGREED and
+ * in which currency — the rate was negotiated by phone, so "৳4,500" is
+ * the number they will recognise and "₹3,658.54" is the one that left
+ * their wallet. Never a rate or a per-line breakdown: those are on the
+ * bill itself, and a timeline entry that tries to be an invoice is read
+ * by nobody.
+ */
+export function freightRecordedDescription(input: {
+  readonly totalInr: Prisma.Decimal;
+  readonly agreedAmount: Prisma.Decimal;
+  readonly agreedCurrency: Currency;
+  readonly mode: InboundFreightMode;
+  readonly lineCount: number;
+  readonly units: number;
+}): string {
+  const inr = `₹${input.totalInr.toFixed(2)}`;
+  const agreed =
+    input.agreedCurrency === Currency.INR
+      ? ''
+      : ` (${input.agreedAmount.toFixed(2)} ${input.agreedCurrency} as agreed)`;
+  const when =
+    input.mode === InboundFreightMode.PAY_ADVANCE
+      ? 'billed before it leaves Bangladesh'
+      : input.mode === InboundFreightMode.PAY_NOW
+        ? 'charged now'
+        : 'charged as the stock sells';
+  const what = `${input.units} unit(s) across ${input.lineCount} product(s)`;
+  return `Freight billed — ${inr}${agreed} for ${what}, ${when}`;
+}
 
 /** One forwarder payment, in rupees at the rate in force when it moved. */
 export interface ForwarderPaymentInr {
@@ -122,6 +166,14 @@ export interface FreightChargeView {
   readonly goodsReceiptId: string;
   readonly receiptNumber: string | null;
   readonly amountInr: string;
+  /** What was AGREED, before conversion — equal to `amountInr` for an INR bill. */
+  readonly agreedAmount: string;
+  readonly agreedCurrency: Currency;
+  /** How the agreed figure became rupees. Null on an INR bill. */
+  readonly fxRate: string | null;
+  readonly fxRatePair: string | null;
+  readonly fxRateSource: string | null;
+  readonly fxRateRecordedAt: Date | null;
   readonly ourCostInr: string | null;
   readonly mode: InboundFreightMode;
   readonly serviceChargePercent: string | null;
@@ -134,6 +186,11 @@ export interface FreightChargeView {
   readonly status: InboundFreightStatus;
   readonly settledAt: Date | null;
   readonly walletEntryId: string | null;
+  /** Set when the bill was withdrawn as wrong; `voidReason` says why. */
+  readonly voidedAt: Date | null;
+  readonly voidReason: string | null;
+  /** The compensating credit the void wrote, or null if it had charged nothing. */
+  readonly voidReversalEntryId: string | null;
   readonly note: string | null;
   readonly createdAt: Date;
 }
@@ -159,15 +216,27 @@ export interface RecordFreightInput {
   readonly lines: readonly {
     readonly goodsReceiptLineId: string;
     readonly basis: InboundFreightBasis;
-    readonly rateInr: string;
+    /** Per kg or per piece, in `currency` — NOT necessarily rupees. */
+    readonly rate: string;
     readonly chargeableWeightKg?: string | null;
   }[];
-  /** Overrides the seller's resolved mode for this one arrival. */
+  /**
+   * What the rates are agreed in. Defaults to INR, which is what every
+   * bill raised before 2026-09-20 was. A non-INR bill is converted to
+   * rupees at the billing instant and the rate is recorded on it.
+   */
+  readonly currency?: Currency;
+  /**
+   * PINS the consignment to this mode as part of raising the bill.
+   *
+   * Not a fourth level of its own: the bill freezes whatever mode it was
+   * raised on onto the consignment, so a per-bill mode that did not also
+   * pin it would disagree with the consignment the moment anybody looked.
+   */
   readonly mode?: InboundFreightMode;
   readonly note?: string | null;
 }
 
-const SETTING_MODE = 'wallet.inbound_freight_mode';
 const SETTING_SERVICE_CHARGE = 'wallet.inbound_freight_service_charge_percent';
 
 /**
@@ -210,6 +279,8 @@ export class InboundFreightService {
     private readonly wallet: WalletService,
     private readonly amortisation: InboundFreightAmortisationService,
     private readonly bank: BankLedgerService,
+    private readonly freightMode: ConsignmentFreightModeService,
+    private readonly events: ConsignmentEventService,
   ) {}
 
   /**
@@ -247,38 +318,19 @@ export class InboundFreightService {
     if (!receipt || receipt.consignment === null || receipt.consignment.deletedAt !== null) {
       throw new NotFoundException({
         code: 'ARRIVAL_NOT_FOUND',
-        message: `Arrival ${input.goodsReceiptId} not found, or not part of a consignment`,
+        message: `Goods receipt ${input.goodsReceiptId} not found, or not part of a consignment`,
       });
     }
     const consignment = receipt.consignment;
-
-    // The BD intake is not an arrival — it is the goods being handed to
-    // us. Amortising over it would charge freight to units that never
-    // flew, leaving a remainder nothing settles and a bill stuck at
-    // PARTIALLY_SETTLED forever.
-    if (receipt.leg !== ConsignmentLeg.IN_FINAL) {
-      throw new ConflictException({
-        code: 'FREIGHT_NOT_AN_ARRIVAL',
-        message:
-          `${receipt.receiptNumber} is the Bangladesh intake, not an arrival in India. ` +
-          `Freight is billed against the shipment that actually flew.`,
-      });
-    }
-
-    // Counted, or the split runs over numbers that are still guesses.
-    if (receipt.status !== GoodsReceiptStatus.COMPLETED) {
-      throw new ConflictException({
-        code: 'FREIGHT_ARRIVAL_NOT_COUNTED',
-        message:
-          `${receipt.receiptNumber} is ${receipt.status}. Count the arrival first, so the bill ` +
-          `is split over units that are known to exist.`,
-      });
-    }
 
     // Only a VIA_BD consignment is billed by us. A seller who shipped
     // straight to India paid their own freight, and this is enforced
     // rather than merely practised: a rule that lives in whoever is on
     // shift eventually bills somebody twice.
+    //
+    // Checked FIRST now, because everything below depends on the mode
+    // and a DIRECT_IN consignment has no Bangladesh intake for a
+    // PAY_ADVANCE bill to hang on at all.
     if (consignment.route !== ConsignmentRoute.VIA_BD) {
       throw new ConflictException({
         code: 'FREIGHT_NOT_BILLABLE',
@@ -288,10 +340,56 @@ export class InboundFreightService {
       });
     }
 
-    // Idempotency: one bill per ARRIVAL. A re-submit is refused rather
+    // The three-level chain, through its ONE reader. A `mode` on the
+    // request PINS the consignment as part of raising the bill rather
+    // than forming a fourth level of its own — the snapshot below writes
+    // whatever is used, so a per-bill mode that did not also pin the
+    // consignment would disagree with it the moment anybody looked.
+    const mode = input.mode ?? (await this.freightMode.resolveForConsignment(consignment.id)).mode;
+
+    // WHICH leg may be billed is the mode's decision, and it is the one
+    // thing PAY_ADVANCE actually changes: the Bangladesh intake, where
+    // the count and the weight that price the bill are taken, rather
+    // than the arrival a forwarder invoices.
+    const expectedLeg = this.freightMode.legFor(mode);
+    if (receipt.leg !== expectedLeg) {
+      throw new ConflictException(
+        expectedLeg === ConsignmentLeg.BD_INTAKE
+          ? {
+              code: 'FREIGHT_NOT_THE_BD_INTAKE',
+              message:
+                `${consignment.consignmentNumber} is billed in ADVANCE, so its freight bill is ` +
+                `raised against the Bangladesh intake — the count and weight it is priced from. ` +
+                `${receipt.receiptNumber} is the India arrival.`,
+            }
+          : {
+              code: 'FREIGHT_NOT_AN_ARRIVAL',
+              message:
+                `${receipt.receiptNumber} is the Bangladesh intake, not an arrival in India. ` +
+                `Freight is billed against the shipment that actually flew. Pin this consignment ` +
+                `to PAY_ADVANCE if it is meant to be billed before it leaves.`,
+            },
+      );
+    }
+
+    // Counted, or the split runs over numbers that are still guesses.
+    // True of both legs: the Dhaka count is exactly what an advance bill
+    // is priced from.
+    if (receipt.status !== GoodsReceiptStatus.COMPLETED) {
+      throw new ConflictException({
+        code: 'FREIGHT_ARRIVAL_NOT_COUNTED',
+        message:
+          `${receipt.receiptNumber} is ${receipt.status}. Count it first, so the bill ` +
+          `is split over units that are known to exist.`,
+      });
+    }
+
+    // Idempotency: one bill per RECEIPT. A re-submit is refused rather
     // than billing the seller twice for the same shipment; a DIFFERENT
     // arrival on the same consignment is a different invoice and is
-    // allowed, which is the whole point of the key.
+    // allowed, which is the whole point of the key. Re-checked inside
+    // the transaction below — this read is only so the common case says
+    // so without taking a lock.
     const existing = await this.prisma.client.inboundFreightCharge.findUnique({
       where: { goodsReceiptId: receipt.id },
       select: { id: true, status: true },
@@ -306,7 +404,7 @@ export class InboundFreightService {
 
     // The forwarder's invoice, priced line by line — the bill total is
     // the SUM of its lines rather than a figure typed once and split by
-    // guesswork. Scoping to the one arrival is what lets a consignment be
+    // guesswork. Scoping to the one receipt is what lets a consignment be
     // billed as it lands: the September shipment gets its own invoice
     // over its own units.
     const plan = await this.amortisation.planFromPricedLines(
@@ -314,20 +412,57 @@ export class InboundFreightService {
       input.lines.map((l) => ({
         goodsReceiptLineId: l.goodsReceiptLineId,
         basis: l.basis,
-        rateInr: this.parseRate(l.rateInr),
+        rate: this.parseRate(l.rate),
         chargeableWeightKg:
           l.chargeableWeightKg === undefined || l.chargeableWeightKg === null
             ? null
             : this.parseRate(l.chargeableWeightKg),
       })),
     );
-    const amount = plan.totalInr;
 
-    const mode = input.mode ?? (await this.resolveMode(consignment.sellerId));
+    // The bill is AGREED in a currency and CHARGED in rupees (PRC-8).
+    // The rate is agreed by phone — "৳300 a kilo" — so it is typed in
+    // whatever it was negotiated in and converted HERE, at the billing
+    // instant, through the same `inrRateAt` / `toInr` helpers the P&L
+    // and the flat fees use. That is what stops the rupees a seller is
+    // charged and the figure the report derives from diverging.
+    const at = new Date();
+    const agreedCurrency = input.currency ?? Currency.INR;
+    const fx = await inrRateAt(this.prisma.client, agreedCurrency, at);
+    if (fx === null) {
+      // REFUSED, never billed at zero and never billed as if the figure
+      // were rupees. A missing rate sends whoever reads this to the FX
+      // screen rather than to the freight screen, where they would find
+      // nothing wrong.
+      throw new BadRequestException({
+        code: 'NO_FX_RATE_FOR_FREIGHT',
+        message:
+          `There is no ${agreedCurrency} → INR rate recorded, so this bill cannot be priced in ` +
+          `rupees. Record the rate first — a freight bill is charged in rupees whatever it was ` +
+          `agreed in.`,
+      });
+    }
+    const agreedAmount = plan.totalAgreed;
+    const amount = toInr(agreedAmount, fx);
+    if (amount.lte(0)) {
+      throw new BadRequestException({
+        code: 'FREIGHT_AMOUNT_INVALID',
+        message: `${agreedAmount.toFixed(2)} ${agreedCurrency} comes to nothing in rupees.`,
+      });
+    }
+    // Each line in rupees, apportioned so the lines sum to `amount`
+    // EXACTLY — converting each line on its own and summing would drift
+    // a paisa away from the bill the seller is charged. Identity for an
+    // INR bill, so nothing about an existing bill's arithmetic moves.
+    const lineInr = grossLineTotals(
+      plan.lines.map((l) => l.lineTotalAgreed),
+      amount,
+    );
+
     // The service charge is snapshotted at record time and never
     // re-resolved at settlement: the seller owes the rate that applied
     // when their consignment landed, not whatever the setting says weeks
-    // later.
+    // later. PAY_ADVANCE pays in full up front, so it carries none.
     const percent =
       mode === InboundFreightMode.PAY_LATER
         ? await this.resolveServiceChargePercent(consignment.sellerId)
@@ -339,13 +474,62 @@ export class InboundFreightService {
     // sum to `total` exactly, and amortisation charges against them — so
     // a pay-later bill collects its service charge as its units leave
     // rather than closing short of it.
-    const gross = grossLineTotals(
-      plan.lines.map((l) => l.lineTotalInr),
-      total,
-    );
+    const gross = grossLineTotals(lineInr, total);
 
     const created = await this.prisma.client.$transaction(async (tx) => {
-      const settleNow = mode === InboundFreightMode.PAY_NOW;
+      // THE DOUBLE-BILLING GUARD.
+      //
+      // `goods_receipt_id @unique` cannot see this: a PAY_ADVANCE bill
+      // hangs on the Dhaka intake and a PAY_NOW / PAY_LATER one on the
+      // India arrival, which are DIFFERENT receipts — so both would be
+      // accepted and the seller charged twice for one consignment.
+      //
+      // Read-then-write is not a guard under READ COMMITTED, so the read
+      // and the write happen under this lock inside one transaction. The
+      // partial unique `inbound_freight_one_advance_per_consignment` is
+      // the backstop for the half an index can express.
+      await takeAdvisoryLock(tx, AdvisoryLock.INBOUND_FREIGHT_BILL, consignment.id);
+
+      const live = await tx.inboundFreightCharge.findMany({
+        where: { consignmentId: consignment.id, voidedAt: null },
+        select: { id: true, mode: true, status: true, goodsReceiptId: true },
+      });
+      const advance = live.find((c) => c.mode === InboundFreightMode.PAY_ADVANCE);
+      if (advance !== undefined) {
+        throw new ConflictException({
+          code: 'FREIGHT_CONSIGNMENT_BILLED_IN_ADVANCE',
+          message:
+            `${consignment.consignmentNumber} was billed in advance before it left Bangladesh, ` +
+            `so its freight is already paid for. Void that bill if it was wrong, then raise a ` +
+            `new one.`,
+          cause: { freightChargeId: advance.id, status: advance.status },
+        });
+      }
+      if (mode === InboundFreightMode.PAY_ADVANCE && live.length > 0) {
+        const other = live[0];
+        throw new ConflictException({
+          code: 'FREIGHT_CONSIGNMENT_ALREADY_BILLED',
+          message:
+            `${consignment.consignmentNumber} already carries a freight bill, so it cannot also ` +
+            `be billed in advance — the goods would be charged for twice.`,
+          ...(other === undefined ? {} : { cause: { freightChargeId: other.id } }),
+        });
+      }
+      // Re-read the per-receipt key under the lock too: the pre-flight
+      // above ran outside it.
+      const dupe = await tx.inboundFreightCharge.findUnique({
+        where: { goodsReceiptId: receipt.id },
+        select: { id: true, status: true },
+      });
+      if (dupe !== null) {
+        throw new ConflictException({
+          code: 'FREIGHT_ALREADY_RECORDED',
+          message: `${receipt.receiptNumber} already carries a freight bill (${dupe.status})`,
+          cause: { freightChargeId: dupe.id, status: dupe.status },
+        });
+      }
+
+      const settleNow = this.freightMode.settlesImmediately(mode);
       let walletEntryId: string | null = null;
       if (settleNow) {
         const entry = await this.wallet.applyEntry(tx, {
@@ -365,6 +549,16 @@ export class InboundFreightService {
           sellerId: consignment.sellerId,
           consignmentId: consignment.id,
           goodsReceiptId: receipt.id,
+          agreedAmount,
+          agreedCurrency,
+          ...(fx.source === 'IDENTITY'
+            ? {}
+            : {
+                fxRate: new Prisma.Decimal(fx.storedRate),
+                fxRatePair: fx.storedPair,
+                fxRateSource: fx.source,
+                fxRateRecordedAt: fx.recordedAt,
+              }),
           amountInr: amount,
           ...(input.ourCostInr !== undefined && input.ourCostInr !== null
             ? { ourCostInr: new Prisma.Decimal(input.ourCostInr) }
@@ -379,15 +573,12 @@ export class InboundFreightService {
           ...(settleNow ? { settledAt: new Date(), settledByStaffId: staffId, walletEntryId } : {}),
           note: input.note ?? null,
         },
-        include: {
-          consignment: { select: { consignmentNumber: true } },
-          goodsReceipt: { select: { receiptNumber: true } },
-          seller: { select: { companyName: true } },
-        },
+        include: CHARGE_REFS,
       });
 
       for (const [i, line] of plan.lines.entries()) {
-        const lineGross = gross[i] ?? line.lineTotalInr;
+        const inInr = lineInr[i] ?? line.lineTotalAgreed;
+        const lineGross = gross[i] ?? inInr;
         await tx.inboundFreightAllocation.create({
           data: {
             freightChargeId: row.id,
@@ -396,15 +587,60 @@ export class InboundFreightService {
             units: line.units,
             unitWeightGrams: line.unitWeightGrams,
             basis: line.basis,
-            rateInr: line.rateInr,
+            rate: line.rate,
             chargeableWeightKg: line.chargeableWeightKg,
-            lineTotalInr: line.lineTotalInr,
+            lineTotalAgreed: line.lineTotalAgreed,
+            lineTotalInr: inInr,
             lineGrossInr: lineGross,
-            perUnitInr: line.perUnitInr,
+            perUnitInr: inInr.div(line.units).toDecimalPlaces(4),
             ...(settleNow ? { unitsSettled: line.units, amountSettledInr: lineGross } : {}),
           },
         });
       }
+
+      // FREEZE the mode onto the consignment. From here it says what it
+      // was billed on, and no later settings change can restate it
+      // (ORD-6 / RS-5) — `setOverride` refuses once a live bill exists.
+      await this.freightMode.snapshotAtBilling(tx, consignment.id, mode);
+
+      // The seller watches this timeline, and until now a freight bill
+      // appeared on it nowhere — the first sign of one was an
+      // unexplained wallet debit. `FREIGHT_RECORDED` has been in the
+      // event vocabulary (and in the seller UI's word list) since the
+      // two-leg work and nothing had ever written it.
+      await this.events.append(
+        {
+          consignmentId: consignment.id,
+          type: ConsignmentEventType.FREIGHT_RECORDED,
+          description: freightRecordedDescription({
+            totalInr: total,
+            agreedAmount,
+            agreedCurrency,
+            mode,
+            lineCount: plan.lines.length,
+            units: plan.totalUnits,
+          }),
+          data: {
+            freightChargeId: row.id,
+            goodsReceiptId: receipt.id,
+            receiptNumber: receipt.receiptNumber,
+            leg: receipt.leg,
+            mode,
+            agreedAmount: agreedAmount.toString(),
+            agreedCurrency,
+            fxRate: fx.source === 'IDENTITY' ? null : fx.storedRate,
+            fxRatePair: fx.source === 'IDENTITY' ? null : fx.storedPair,
+            amountInr: amount.toString(),
+            serviceChargeInr: serviceCharge?.toString() ?? null,
+            totalInr: total.toString(),
+            totalUnits: plan.totalUnits,
+            settledImmediately: settleNow,
+          },
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+        },
+        tx,
+      );
 
       await this.audit.log(
         {
@@ -420,6 +656,11 @@ export class InboundFreightService {
             consignmentNumber: consignment.consignmentNumber,
             goodsReceiptId: receipt.id,
             receiptNumber: receipt.receiptNumber,
+            leg: receipt.leg,
+            agreedAmount: agreedAmount.toString(),
+            agreedCurrency,
+            fxRate: fx.source === 'IDENTITY' ? null : fx.storedRate,
+            fxRateSource: fx.source,
             amountInr: amount.toString(),
             mode,
             serviceChargeInr: serviceCharge?.toString() ?? null,
@@ -551,11 +792,7 @@ export class InboundFreightService {
       const row = await tx.inboundFreightCharge.update({
         where: { id: freightChargeId },
         data: { walletEntryId: entry.id },
-        include: {
-          consignment: { select: { consignmentNumber: true } },
-          goodsReceipt: { select: { receiptNumber: true } },
-          seller: { select: { companyName: true } },
-        },
+        include: CHARGE_REFS,
       });
 
       await this.audit.log(
@@ -646,11 +883,7 @@ export class InboundFreightService {
       return tx.inboundFreightCharge.update({
         where: { id: freightChargeId },
         data: { ourCostInr: cost },
-        include: {
-          consignment: { select: { consignmentNumber: true } },
-          goodsReceipt: { select: { receiptNumber: true } },
-          seller: { select: { companyName: true } },
-        },
+        include: CHARGE_REFS,
       });
     });
 
@@ -1075,11 +1308,197 @@ export class InboundFreightService {
       );
       return tx.inboundFreightCharge.findUniqueOrThrow({
         where: { id: freightChargeId },
-        include: {
-          consignment: { select: { consignmentNumber: true } },
-          goodsReceipt: { select: { receiptNumber: true } },
-          seller: { select: { companyName: true } },
+        include: CHARGE_REFS,
+      });
+    });
+
+    return this.toView(updated);
+  }
+
+  /**
+   * WITHDRAW a bill that was wrong — a mistyped rate, a recount — so a
+   * fresh one can be raised against the same receipt.
+   *
+   * ── WHY A VOID RATHER THAN AN EDIT ────────────────────────────────
+   * The owner's call: the freight record and the money must always
+   * agree, and margin must stay true. Editing a bill in place would
+   * leave the wallet holding a figure the bill no longer claims, and
+   * the P&L reading a total nobody was charged. Withdrawing the whole
+   * thing and raising a new one keeps both sides of every row.
+   *
+   * ── THE GIVE-BACK IS A CREDIT, NEVER A DELETION ───────────────────
+   * `seller_wallet_entries` is append-only, so whatever the bill had
+   * charged comes back as one `INBOUND_FREIGHT_REFUND` credit. Exactly
+   * `amountSettledInr` — what was actually taken, which for a PAY_NOW or
+   * PAY_ADVANCE bill is its whole total and for a part-amortised
+   * PAY_LATER bill is only the units that have left. A bill that had
+   * charged nothing writes no entry at all, rather than a ₹0 line
+   * nobody can read a meaning into.
+   *
+   * TRE-8 does the rest: the credit is TO_SELLER, so only
+   * `max(0, after) − max(0, before)` of it becomes the seller's cash
+   * again — the part that repaid a receivable was never theirs to have
+   * back.
+   *
+   * ── AND THE ALLOCATIONS ───────────────────────────────────────────
+   * Their counters are zeroed in the same transaction. The status alone
+   * already stops amortisation reading the bill, but the lines are what
+   * the cost breakdown shows and what any later reader of "how much of
+   * this line is paid" will trust — leaving them charged is how a
+   * withdrawn bill comes to look part-paid forever. The rows themselves
+   * are KEPT: they are the record of what was billed and are the only
+   * evidence of the mistake.
+   *
+   * Saga / ordering: everything is one transaction — the wallet writer
+   * takes a tx, so unlike the M5 stock services this genuinely composes.
+   * The guarded `updateMany` on "not already voided" is what stops two
+   * operators giving the money back twice, and the UNIQUE
+   * `void_reversal_entry_id` is the second gate.
+   */
+  async void(
+    staffId: string,
+    freightChargeId: string,
+    reason: string,
+    ctx?: ClientContext,
+  ): Promise<FreightChargeView> {
+    if (reason.trim().length < 10) {
+      throw new BadRequestException({
+        code: 'FREIGHT_VOID_REASON_TOO_SHORT',
+        message: 'Say why the bill was wrong — at least 10 characters.',
+      });
+    }
+    const charge = await this.load(freightChargeId);
+    if (charge.voidedAt !== null) {
+      throw new ConflictException({
+        code: 'FREIGHT_ALREADY_VOIDED',
+        message: `This bill was already withdrawn on ${charge.voidedAt.toISOString().slice(0, 10)}.`,
+      });
+    }
+
+    const updated = await this.prisma.client.$transaction(async (tx) => {
+      // WAL-7: the refund reads what was charged and then writes. Taken
+      // before the read so a delivery charging a unit at the same moment
+      // is either already inside `amountSettledInr` or runs after this
+      // commits — and then finds the bill VOIDED and charges nothing.
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${charge.sellerId}|${Currency.INR}`);
+      const fresh = await tx.inboundFreightCharge.findUnique({
+        where: { id: freightChargeId },
+        select: { amountSettledInr: true, voidedAt: true },
+      });
+      if (fresh === null || fresh.voidedAt !== null) {
+        throw new ConflictException({
+          code: 'FREIGHT_ALREADY_VOIDED',
+          message: 'This bill was withdrawn by another operator.',
+        });
+      }
+
+      // Claimed on the very figure the refund is worked out from, so a
+      // unit charged between the read and the write cannot be silently
+      // left uncredited.
+      const claimed = await tx.inboundFreightCharge.updateMany({
+        where: {
+          id: freightChargeId,
+          voidedAt: null,
+          amountSettledInr: fresh.amountSettledInr,
         },
+        data: {
+          status: InboundFreightStatus.VOIDED,
+          voidedAt: new Date(),
+          voidedByStaffId: staffId,
+          voidReason: reason.trim(),
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException({
+          code: 'FREIGHT_ALREADY_VOIDED',
+          message: 'This bill changed while you were withdrawing it — look at it again.',
+        });
+      }
+
+      const refund = fresh.amountSettledInr;
+      let reversalEntryId: string | null = null;
+      if (refund.gt(0)) {
+        const entry = await this.wallet.applyEntry(tx, {
+          sellerId: charge.sellerId,
+          currency: Currency.INR,
+          direction: WalletEntryDirection.INBOUND_FREIGHT_REFUND,
+          amount: refund,
+          // Points at the settlement debit this returns, where there was
+          // one, so the pair reads as one round trip in the ledger
+          // rather than two unrelated lines. A part-amortised PAY_LATER
+          // bill has many per-order debits and no single one to name, so
+          // the link is the bill's own `voidReversalEntryId` instead.
+          ...(charge.walletEntryId === null ? {} : { linkedEntryId: charge.walletEntryId }),
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+          note: `Inbound freight bill withdrawn for ${charge.consignment.consignmentNumber}: ${reason.trim()}`,
+        });
+        reversalEntryId = entry.id;
+        await tx.inboundFreightCharge.update({
+          where: { id: freightChargeId },
+          data: { voidReversalEntryId: entry.id },
+        });
+      }
+
+      // Zero every line, in the SAME transaction.
+      await tx.inboundFreightAllocation.updateMany({
+        where: { freightChargeId },
+        data: { unitsSettled: 0, amountSettledInr: new Prisma.Decimal(0) },
+      });
+
+      // The seller watches the timeline, and a bill appearing and then a
+      // credit arriving with nothing between them reads as a mistake of
+      // ours that nobody explained.
+      await this.events.append(
+        {
+          consignmentId: charge.consignmentId,
+          type: ConsignmentEventType.FREIGHT_RECORDED,
+          description:
+            `Freight bill withdrawn — ₹${charge.totalInr.toFixed(2)}` +
+            (refund.gt(0) ? `, ₹${refund.toFixed(2)} returned to your wallet` : '') +
+            `. ${reason.trim()}`,
+          data: {
+            freightChargeId,
+            voided: true,
+            totalInr: charge.totalInr.toString(),
+            refundedInr: refund.toString(),
+            reason: reason.trim(),
+          },
+          actorType: ActorType.STAFF,
+          actorId: staffId,
+        },
+        tx,
+      );
+
+      await this.audit.log(
+        {
+          actorType: ActorType.STAFF,
+          staffUserId: staffId,
+          sellerId: charge.sellerId,
+          action: 'wallet.inbound_freight.voided',
+          entityType: 'inbound_freight_charge',
+          entityId: freightChargeId,
+          // HIGH: money handed back, and the bill it was taken for
+          // struck out. Same weight as a waiver.
+          severity: 'HIGH',
+          metadata: {
+            consignmentId: charge.consignmentId,
+            consignmentNumber: charge.consignment.consignmentNumber,
+            goodsReceiptId: charge.goodsReceiptId,
+            mode: charge.mode,
+            totalInr: charge.totalInr.toString(),
+            refundedInr: refund.toString(),
+            reversalEntryId,
+            reason: reason.trim(),
+            ...this.ctxMeta(ctx),
+          },
+        },
+        tx,
+      );
+
+      return tx.inboundFreightCharge.findUniqueOrThrow({
+        where: { id: freightChargeId },
+        include: CHARGE_REFS,
       });
     });
 
@@ -1091,12 +1510,15 @@ export class InboundFreightService {
     status?: InboundFreightStatus,
   ): Promise<readonly FreightChargeView[]> {
     const rows = await this.prisma.client.inboundFreightCharge.findMany({
-      where: { sellerId, ...(status === undefined ? {} : { status }) },
-      include: {
-        consignment: { select: { consignmentNumber: true } },
-        goodsReceipt: { select: { receiptNumber: true } },
-        seller: { select: { companyName: true } },
+      // A VOIDED bill is hidden unless it is asked for by name. It was
+      // withdrawn as wrong and its money given back, so listing it
+      // beside live bills is how a seller comes to believe they were
+      // charged twice.
+      where: {
+        sellerId,
+        ...(status === undefined ? { voidedAt: null } : { status }),
       },
+      include: CHARGE_REFS,
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((r) => this.toView(r));
@@ -1118,7 +1540,9 @@ export class InboundFreightService {
     const rows = await this.prisma.client.inboundFreightCharge.findMany({
       where: {
         ...(query.sellerId === undefined ? {} : { sellerId: query.sellerId }),
-        ...(query.status === undefined ? {} : { status: query.status }),
+        // Same rule as the seller's list: withdrawn bills are reachable
+        // by asking for them, not mixed in with live ones.
+        ...(query.status === undefined ? { voidedAt: null } : { status: query.status }),
         ...(term === ''
           ? {}
           : {
@@ -1129,11 +1553,7 @@ export class InboundFreightService {
               ],
             }),
       },
-      include: {
-        consignment: { select: { consignmentNumber: true } },
-        goodsReceipt: { select: { receiptNumber: true } },
-        seller: { select: { companyName: true } },
-      },
+      include: CHARGE_REFS,
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
@@ -1162,22 +1582,10 @@ export class InboundFreightService {
 
   // ── internal ──────────────────────────────────────────────────────
 
-  private async load(id: string): Promise<
-    Prisma.InboundFreightChargeGetPayload<{
-      include: {
-        consignment: { select: { consignmentNumber: true } };
-        goodsReceipt: { select: { receiptNumber: true } };
-        seller: { select: { companyName: true } };
-      };
-    }>
-  > {
+  private async load(id: string): Promise<ChargeWithRefs> {
     const row = await this.prisma.client.inboundFreightCharge.findUnique({
       where: { id },
-      include: {
-        consignment: { select: { consignmentNumber: true } },
-        goodsReceipt: { select: { receiptNumber: true } },
-        seller: { select: { companyName: true } },
-      },
+      include: CHARGE_REFS,
     });
     if (!row) {
       throw new NotFoundException({
@@ -1217,17 +1625,11 @@ export class InboundFreightService {
     return value.toDecimalPlaces(4);
   }
 
-  /** Defaults to PAY_NOW — the simpler money flow — on any doubt. */
-  private async resolveMode(sellerId: string): Promise<InboundFreightMode> {
-    try {
-      const resolved = await this.settings.resolve(sellerId, SETTING_MODE);
-      return String(resolved.value).toUpperCase() === 'PAY_LATER'
-        ? InboundFreightMode.PAY_LATER
-        : InboundFreightMode.PAY_NOW;
-    } catch {
-      return InboundFreightMode.PAY_NOW;
-    }
-  }
+  // `resolveMode` lived here and is GONE: the mode is now a three-level
+  // chain (consignment pin, seller override, global default) with ONE
+  // reader, `ConsignmentFreightModeService`. A second resolver here is
+  // exactly the drift CNS-2 and BIN-1 exist to prevent, and the
+  // disagreement it would produce is a seller billed on the wrong leg.
 
   /**
    * Defaults to ZERO on any doubt: a seller must never be charged for
@@ -1340,11 +1742,7 @@ export class InboundFreightService {
       const row = await tx.inboundFreightCharge.update({
         where: { id: freightChargeId },
         data: stampOurCost(recomputed.total, recomputed.payments),
-        include: {
-          consignment: { select: { consignmentNumber: true } },
-          goodsReceipt: { select: { receiptNumber: true } },
-          seller: { select: { companyName: true } },
-        },
+        include: CHARGE_REFS,
       });
       return { updated: row, payments: recomputed.payments };
     });
@@ -1398,13 +1796,19 @@ export class InboundFreightService {
    * from the rows it is built out of.
    */
   async costBreakdown(freightChargeId: string): Promise<{
+    /** What the rates below are quoted in. */
+    agreedCurrency: Currency;
     lines: ReadonlyArray<{
       skuCode: string | null;
       productName: string | null;
       units: number;
       unitWeightGrams: number | null;
       chargeableWeightKg: string | null;
-      rateInr: string;
+      /** Per kg or per piece, in the bill's AGREED currency. */
+      rate: string;
+      /** The invoice line as typed, in the agreed currency. */
+      lineTotalAgreed: string;
+      /** That line in rupees — what it actually costs the seller. */
       lineTotalInr: string;
       perUnitInr: string;
       unitsSettled: number;
@@ -1433,13 +1837,15 @@ export class InboundFreightService {
       select: {
         ourCostInr: true,
         ourCostPayments: true,
+        agreedCurrency: true,
         allocations: {
           orderBy: { lineTotalInr: 'desc' },
           select: {
             units: true,
             unitWeightGrams: true,
             chargeableWeightKg: true,
-            rateInr: true,
+            rate: true,
+            lineTotalAgreed: true,
             lineTotalInr: true,
             perUnitInr: true,
             unitsSettled: true,
@@ -1479,6 +1885,7 @@ export class InboundFreightService {
     }
 
     return {
+      agreedCurrency: charge.agreedCurrency,
       ourCostInr: charge.ourCostInr?.toFixed(2) ?? null,
       lines: charge.allocations.map((a) => ({
         skuCode: a.variant?.skuCode ?? null,
@@ -1486,7 +1893,8 @@ export class InboundFreightService {
         units: a.units,
         unitWeightGrams: a.unitWeightGrams,
         chargeableWeightKg: a.chargeableWeightKg?.toString() ?? null,
-        rateInr: a.rateInr.toString(),
+        rate: a.rate.toString(),
+        lineTotalAgreed: a.lineTotalAgreed.toFixed(2),
         lineTotalInr: a.lineTotalInr.toFixed(2),
         perUnitInr: a.perUnitInr.toString(),
         unitsSettled: a.unitsSettled,
@@ -1535,15 +1943,7 @@ export class InboundFreightService {
     };
   }
 
-  private toView(
-    row: Prisma.InboundFreightChargeGetPayload<{
-      include: {
-        consignment: { select: { consignmentNumber: true } };
-        goodsReceipt: { select: { receiptNumber: true } };
-        seller: { select: { companyName: true } };
-      };
-    }>,
-  ): FreightChargeView {
+  private toView(row: ChargeWithRefs): FreightChargeView {
     return {
       id: row.id,
       consignmentId: row.consignmentId,
@@ -1552,6 +1952,12 @@ export class InboundFreightService {
       goodsReceiptId: row.goodsReceiptId,
       receiptNumber: row.goodsReceipt?.receiptNumber ?? null,
       amountInr: row.amountInr.toString(),
+      agreedAmount: row.agreedAmount.toString(),
+      agreedCurrency: row.agreedCurrency,
+      fxRate: row.fxRate?.toString() ?? null,
+      fxRatePair: row.fxRatePair,
+      fxRateSource: row.fxRateSource,
+      fxRateRecordedAt: row.fxRateRecordedAt,
       ourCostInr: row.ourCostInr?.toString() ?? null,
       mode: row.mode,
       serviceChargePercent: row.serviceChargePercent?.toString() ?? null,
@@ -1560,10 +1966,18 @@ export class InboundFreightService {
       totalUnits: row.totalUnits,
       unitsSettled: row.unitsSettled,
       amountSettledInr: row.amountSettledInr.toString(),
-      outstandingInr: row.totalInr.sub(row.amountSettledInr).toString(),
+      // A WITHDRAWN bill owes nothing. Without this a voided PENDING
+      // bill would report its whole face value as outstanding on every
+      // row that shows one — the seller reading "you still owe ₹4,500"
+      // for a bill we told them was wrong and gave back.
+      outstandingInr:
+        row.voidedAt === null ? row.totalInr.sub(row.amountSettledInr).toString() : '0',
       status: row.status,
       settledAt: row.settledAt,
       walletEntryId: row.walletEntryId,
+      voidedAt: row.voidedAt,
+      voidReason: row.voidReason,
+      voidReversalEntryId: row.voidReversalEntryId,
       note: row.note,
       createdAt: row.createdAt,
     };

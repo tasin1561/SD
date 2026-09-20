@@ -10,10 +10,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Currency, TopupRequestStatus, WalletEntryDirection } from '@skydrop/db';
+import { Currency, TopupRequestStatus } from '@skydrop/db';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { freightRefsForEntries } from '../../../common/wallet/freight-ledger-refs';
 import { WalletTopupService } from '../../wallet-topup/services/wallet-topup.service';
 import { WithdrawalRequestService } from '../../seller-wallet-withdrawal/services/withdrawal-request.service';
 import { AdminSellerWalletService } from '../services/admin-seller-wallet.service';
@@ -116,37 +117,14 @@ export class AdminSellerWalletController {
       },
     });
 
-    // Same reverse lookup the seller's own ledger does: an
-    // INBOUND_FREIGHT debit belongs to a consignment, not an order, so
-    // `linkedOrderId` is null on exactly the row carrying the largest
-    // number on the page. `inbound_freight_charges.wallet_entry_id` is
-    // UNIQUE — the charged-exactly-once evidence — so it answers this
-    // without widening the append-only ledger.
-    //
-    // Admin was missing BOTH links, which is worse than the seller's
-    // half-answer: staff reading a disputed balance had no route from
-    // an entry to the thing it charged for.
-    const freightEntryIds = rows
-      .filter((r) => r.direction === WalletEntryDirection.INBOUND_FREIGHT)
-      .map((r) => r.id);
-    const freightByEntry = new Map<string, { id: string; number: string }>();
-    if (freightEntryIds.length > 0) {
-      const charges = await this.prisma.client.inboundFreightCharge.findMany({
-        where: { walletEntryId: { in: freightEntryIds } },
-        select: {
-          walletEntryId: true,
-          consignmentId: true,
-          consignment: { select: { consignmentNumber: true } },
-        },
-      });
-      for (const c of charges) {
-        if (c.walletEntryId === null) continue;
-        freightByEntry.set(c.walletEntryId, {
-          id: c.consignmentId,
-          number: c.consignment.consignmentNumber,
-        });
-      }
-    }
+    // The same reverse lookup the seller's own ledger does, through the
+    // ONE shared walk: an inbound-freight entry belongs to a consignment,
+    // not an order, so `linkedOrderId` is null on exactly the row
+    // carrying the largest number on the page. Admin was missing BOTH
+    // links, which is worse than the seller's half-answer: staff reading
+    // a disputed balance had no route from an entry to the thing it
+    // charged for.
+    const freightByEntry = await freightRefsForEntries(this.prisma.client, rows);
 
     return {
       items: rows.map((r) => {

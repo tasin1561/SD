@@ -173,6 +173,18 @@ export interface FreightChargeView {
   readonly receiptNumber: string | null;
   readonly consignmentNumber: string | null;
   readonly amountInr: string;
+  /**
+   * What was AGREED, before conversion — equal to `amountInr` on an INR
+   * bill. The rate is settled by phone in whichever currency the two
+   * sides talk in; the seller is charged rupees either way.
+   */
+  readonly agreedAmount: string;
+  readonly agreedCurrency: Currency;
+  /** How the agreed figure became rupees. Null on an INR bill. */
+  readonly fxRate: string | null;
+  readonly fxRatePair: string | null;
+  readonly fxRateSource: string | null;
+  readonly fxRateRecordedAt: string | null;
   /** What the forwarder charged US. Null until their invoice arrives. */
   readonly ourCostInr: string | null;
   readonly mode: InboundFreightMode;
@@ -186,6 +198,17 @@ export interface FreightChargeView {
   readonly status: InboundFreightStatus;
   readonly settledAt: string | null;
   readonly walletEntryId: string | null;
+  /**
+   * Set when the bill was WITHDRAWN as wrong — `voidReason` says why.
+   *
+   * `outstandingInr` above is still total − settled on a withdrawn bill,
+   * so anything showing "still owed" must check this first or it shows a
+   * seller money they do not owe.
+   */
+  readonly voidedAt: string | null;
+  readonly voidReason: string | null;
+  /** The compensating credit the void wrote, or null if it had charged nothing. */
+  readonly voidReversalEntryId: string | null;
   readonly note: string | null;
   readonly createdAt: string;
 }
@@ -424,9 +447,12 @@ export function useRecordFreight(): UseMutationResult<
     lines: ReadonlyArray<{
       goodsReceiptLineId: string;
       basis: string;
-      rateInr: string;
+      /** In the bill's `currency`, NOT necessarily rupees. */
+      rate: string;
       chargeableWeightKg?: string;
     }>;
+    /** What the rates were AGREED in. Omitted means INR. */
+    currency?: string;
     mode?: string;
     ourCostInr?: string;
     note?: string;
@@ -476,13 +502,19 @@ export function useAttributeExpense(): UseMutationResult<
 /** How a freight bill was split, and what has been paid against it. */
 export interface FreightCostBreakdownView {
   readonly ourCostInr: string | null;
+  /** What the rates below are quoted in. */
+  readonly agreedCurrency: Currency;
   readonly lines: ReadonlyArray<{
     readonly skuCode: string | null;
     readonly productName: string | null;
     readonly units: number;
     readonly unitWeightGrams: number | null;
     readonly chargeableWeightKg: string | null;
-    readonly rateInr: string;
+    /** Per kg or per piece, in `agreedCurrency`. */
+    readonly rate: string;
+    /** The invoice line as typed, in `agreedCurrency`. */
+    readonly lineTotalAgreed: string;
+    /** That line in rupees — what it actually costs the seller. */
     readonly lineTotalInr: string;
     readonly perUnitInr: string;
     readonly unitsSettled: number;
@@ -609,6 +641,40 @@ export function useSettleFreight(): UseMutationResult<
         method: 'POST',
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin-freight'] }),
+  });
+}
+
+/**
+ * Withdraw a bill that was WRONG — a mistyped rate, a recount — and give
+ * back whatever it charged.
+ *
+ * Distinct from waive, which forgives a bill that was CORRECT: a waiver
+ * stays countable as money we chose not to collect, a void says the
+ * figure never should have existed. Raising the corrected bill is a
+ * separate act; this one only takes the wrong one away.
+ */
+export function useVoidFreight(): UseMutationResult<
+  FreightChargeView,
+  Error,
+  { freightChargeId: string; reason: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ freightChargeId, reason }) =>
+      client.request<FreightChargeView>(`/api/admin/inbound-freight/${freightChargeId}/void`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-freight'] });
+      // A void hands money back, so the wallet and every figure derived
+      // from the bank book moved with it.
+      void qc.invalidateQueries({ queryKey: ['admin-treasury'] });
+      void qc.invalidateQueries({ queryKey: ['admin-wallet'] });
+      // The consignment's mode unlocks again once its only bill is gone.
+      void qc.invalidateQueries({ queryKey: ['admin-consignments'] });
+    },
   });
 }
 

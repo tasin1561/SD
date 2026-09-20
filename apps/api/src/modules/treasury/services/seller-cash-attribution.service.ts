@@ -132,9 +132,15 @@ export class SellerCashAttributionService {
       // tax and fee on a reversed COD (COD_DEDUCTION_REFUND) go back the
       // same way: the cash the charge made ours returns to the seller,
       // whose COD it was taken from.
+      //
+      // A VOIDED inbound freight bill goes back the same way: the charge
+      // made the seller's cash ours, and withdrawing the bill makes it
+      // theirs again — clamped, like every TO_SELLER, so the part that
+      // repaid a receivable stays ours.
       case WalletEntryDirection.ORDER_CHARGES_REFUND:
       case WalletEntryDirection.SCRAP_REFUND:
       case WalletEntryDirection.COD_DEDUCTION_REFUND:
+      case WalletEntryDirection.INBOUND_FREIGHT_REFUND:
         return 'TO_SELLER';
 
       // Real cash crossing the bank, posted by the flow that moved it.

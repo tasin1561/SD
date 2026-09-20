@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
+  Currency,
   InboundFreightBasis,
   InboundFreightMode,
   InboundFreightStatus,
@@ -14,6 +15,8 @@ import type { SettingsResolverService } from '../../src/modules/settings/service
 import type { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
 import type { InboundFreightAmortisationService } from '../../src/modules/inbound-freight/services/inbound-freight-amortisation.service';
 import type { BankLedgerService } from '../../src/modules/treasury/services/bank-ledger.service';
+import type { ConsignmentFreightModeService } from '../../src/modules/consignment-core/services/consignment-freight-mode.service';
+import type { ConsignmentEventService } from '../../src/modules/consignment-core/services/consignment-event.service';
 
 type AnyArgs = Record<string, unknown>;
 
@@ -41,6 +44,16 @@ function chargeRow(over: AnyArgs = {}): AnyArgs {
     settledAt: null,
     settledByStaffId: null,
     walletEntryId: null,
+    agreedAmount: new Prisma.Decimal('4500.00'),
+    agreedCurrency: 'INR',
+    fxRate: null,
+    fxRatePair: null,
+    fxRateSource: null,
+    fxRateRecordedAt: null,
+    voidedAt: null,
+    voidedByStaffId: null,
+    voidReason: null,
+    voidReversalEntryId: null,
     note: null,
     createdAt: new Date('2026-07-01T00:00:00.000Z'),
     consignment: { consignmentNumber: 'CN-2026-07-000001' },
@@ -80,6 +93,10 @@ function makeSut(
     priorByKey?: Array<AnyArgs | null>;
     /** Thrown by the ledger's post(). */
     postThrows?: unknown;
+    /** What the consignment's own mode resolves to (the three-level chain). */
+    consignmentMode?: string;
+    /** Bills already live on the consignment, for the double-billing guard. */
+    consignmentBills?: AnyArgs[];
   } = {},
 ) {
   // The bill hangs off ONE ARRIVAL, and the consignment is derived from
@@ -116,16 +133,25 @@ function makeSut(
       goodsReceipt: { receiptNumber: 'CN-2026-07-000001-000002' },
     };
   });
-  const chargeUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
-    count: opts.claimCount ?? 1,
-  }));
+  // A guarded `updateMany` that actually APPLIES what it claims, so a
+  // later read of the row sees it. The fake returned the fixture
+  // unchanged, which made every "and then the row says VOIDED / SETTLED"
+  // assertion impossible to write honestly — the test would have had to
+  // assert the service's intent rather than its effect.
+  const applied: AnyArgs = {};
+  const chargeUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async (args) => {
+    const count = opts.claimCount ?? 1;
+    if (count > 0) Object.assign(applied, (args['data'] as AnyArgs | undefined) ?? {});
+    return { count };
+  });
   const chargeUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (args) => ({
     ...(opts.loaded ?? chargeRow()),
     ...((args['data'] as AnyArgs | undefined) ?? {}),
   }));
-  const chargeFindUniqueOrThrow = jest.fn<Promise<AnyArgs>, [AnyArgs]>(
-    async () => opts.loaded ?? chargeRow(),
-  );
+  const chargeFindUniqueOrThrow = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({
+    ...(opts.loaded ?? chargeRow()),
+    ...applied,
+  }));
 
   // Every payment attached to the bill — what our cost is recomputed
   // from. The ledger's post() below appends to it, as the real insert
@@ -134,6 +160,9 @@ function makeSut(
   const priorByKey = [...(opts.priorByKey ?? [])];
   const allocCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({ id: 'alloc-1' }));
   const allocUpdate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async () => ({}));
+  const allocUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: 1,
+  }));
   const lockTaken = jest.fn(async () => 1);
 
   const client: AnyArgs = {
@@ -147,6 +176,7 @@ function makeSut(
         { id: 'alloc-1', units: 10, lineGrossInr: new Prisma.Decimal('4500.00') },
       ]),
       update: allocUpdate,
+      updateMany: allocUpdateMany,
     },
     // Resolved by CODE inside recordForwarderPayment — the caller never
     // picks the category, so one cost cannot be filed two ways.
@@ -195,12 +225,15 @@ function makeSut(
         opts.loaded === undefined ? (opts.existing ?? null) : opts.loaded,
       ),
       findUniqueOrThrow: chargeFindUniqueOrThrow,
-      findMany: jest.fn(async () => []),
+      // The consignment's LIVE bills — what the double-billing guard
+      // reads under its advisory lock.
+      findMany: jest.fn(async () => opts.consignmentBills ?? []),
       aggregate: jest.fn(async () => ({ _sum: { totalInr: null } })),
       create: chargeCreate,
       update: chargeUpdate,
       updateMany: chargeUpdateMany,
     },
+    consignment: { update: jest.fn(async () => ({})) },
   };
   // `record`'s pre-flight duplicate check goes through findUnique too, so
   // keep the two lookups distinguishable for the tests that need it.
@@ -244,16 +277,15 @@ function makeSut(
         units: 10,
         unitWeightGrams: 500,
         basis: InboundFreightBasis.PER_KG,
-        rateInr: new Prisma.Decimal('900'),
+        rate: new Prisma.Decimal('900'),
         chargeableWeightKg: new Prisma.Decimal('5'),
-        lineTotalInr: new Prisma.Decimal('4500.00'),
-        perUnitInr: new Prisma.Decimal('450.0000'),
+        lineTotalAgreed: new Prisma.Decimal('4500.00'),
       },
     ],
     totalUnits: 10,
     // The bill total is the SUM of the lines, computed here rather than
     // typed by the operator.
-    totalInr: new Prisma.Decimal('4500.00'),
+    totalAgreed: new Prisma.Decimal('4500.00'),
   }));
   const amortisation = {
     planFromPricedLines,
@@ -288,8 +320,42 @@ function makeSut(
   const attributeToFreightCharge = jest.fn(async () => ({ claimed: true }));
   const bank = { post, attributeToFreightCharge } as unknown as BankLedgerService;
 
+  /**
+   * The ONE reader of how a consignment's freight is paid for. Stubbed
+   * with the real `legFor` / `settlesImmediately` rules rather than
+   * jest.fn()s returning fixtures, because those two are exactly what
+   * decides which receipt may be billed and whether the wallet is
+   * debited at once — a stub that lied about them would make every case
+   * below agree with itself and nothing else.
+   */
+  const snapshotAtBilling = jest.fn(async () => undefined);
+  const freightMode = {
+    resolveForConsignment: jest.fn(async () => ({
+      mode: opts.consignmentMode ?? opts.mode ?? 'PAY_NOW',
+      source: opts.consignmentMode === undefined ? 'SYSTEM_DEFAULT' : 'CONSIGNMENT',
+      locked: false,
+    })),
+    legFor: (m: string) => (m === 'PAY_ADVANCE' ? 'BD_INTAKE' : 'IN_FINAL'),
+    settlesImmediately: (m: string) => m === 'PAY_NOW' || m === 'PAY_ADVANCE',
+    snapshotAtBilling,
+  } as unknown as ConsignmentFreightModeService;
+
+  // The seller's consignment timeline. A freight bill appeared on it
+  // nowhere until now, so the append is asserted rather than ignored.
+  const appendEvent = jest.fn(async () => undefined);
+  const events = { append: appendEvent } as unknown as ConsignmentEventService;
+
   return {
-    svc: new InboundFreightService(prisma, audit, settings, wallet, amortisation, bank),
+    svc: new InboundFreightService(
+      prisma,
+      audit,
+      settings,
+      wallet,
+      amortisation,
+      bank,
+      freightMode,
+      events,
+    ),
     planFromPricedLines,
     applyEntry,
     auditLog,
@@ -301,6 +367,9 @@ function makeSut(
     allocCreate,
     allocUpdate,
     lockTaken,
+    snapshotAtBilling,
+    appendEvent,
+    allocUpdateMany,
   };
 }
 
@@ -311,7 +380,7 @@ describe('InboundFreightService.record', () => {
       {
         goodsReceiptLineId: 'grl-1',
         basis: InboundFreightBasis.PER_KG,
-        rateInr: '900',
+        rate: '900',
         chargeableWeightKg: '5',
       },
     ],
@@ -431,7 +500,7 @@ describe('InboundFreightService.record', () => {
     await expect(
       sut.svc.record(STAFF, {
         ...input,
-        lines: [{ ...input.lines[0]!, rateInr: rate }],
+        lines: [{ ...input.lines[0]!, rate }],
       }),
     ).rejects.toMatchObject({ response: { code: 'FREIGHT_AMOUNT_INVALID' } });
   });
@@ -540,7 +609,7 @@ describe('the pay-later service charge is actually collected', () => {
         {
           goodsReceiptLineId: 'grl-1',
           basis: InboundFreightBasis.PER_KG,
-          rateInr: '900',
+          rate: '900',
           chargeableWeightKg: '5',
         },
       ],
@@ -1022,5 +1091,451 @@ describe('InboundFreightService.attributeExistingPayment', () => {
     await expect(
       ctx.svc.attributeExistingPayment('st-1', 'fc-1', { bankEntryId: 'be-9' }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+/**
+ * PAY_ADVANCE — billed at the Bangladesh intake, before the goods fly.
+ *
+ * It is not a new billing MECHANISM: the invoice is priced line by line
+ * at a rate ops types after the count, exactly as the other two modes
+ * are. What differs is WHICH goods receipt the bill hangs on, and
+ * therefore when it is raised — so these cases are about the receipt,
+ * the guard that stops a consignment being billed twice across the two
+ * legs, and the money being taken in full up front.
+ */
+describe('InboundFreightService.record — PAY_ADVANCE', () => {
+  const input = {
+    goodsReceiptId: RECEIPT,
+    lines: [
+      {
+        goodsReceiptLineId: 'grl-1',
+        basis: InboundFreightBasis.PER_KG,
+        rate: '900',
+        chargeableWeightKg: '5',
+      },
+    ],
+  };
+
+  it('bills the BANGLADESH INTAKE and debits the wallet in full, there and then', async () => {
+    const sut = makeSut({ consignmentMode: 'PAY_ADVANCE', leg: 'BD_INTAKE' });
+    const view = await sut.svc.record(STAFF, input);
+
+    expect(view.mode).toBe(InboundFreightMode.PAY_ADVANCE);
+    // Settled like PAY_NOW: the whole bill at once, never amortised.
+    expect(view.status).toBe(InboundFreightStatus.SETTLED);
+    expect(view.totalInr).toBe('4500');
+    expect(sut.applyEntry).toHaveBeenCalledTimes(1);
+    expect(sut.applyEntry.mock.calls[0]![1]).toMatchObject({
+      direction: WalletEntryDirection.INBOUND_FREIGHT,
+      amount: expect.objectContaining({}),
+    });
+    // And a PAY_ADVANCE bill never carries a pay-later service charge:
+    // there is no credit being extended.
+    expect(view.serviceChargeInr).toBeNull();
+  });
+
+  it('REFUSES the India arrival — that is not where an advance bill is priced', async () => {
+    const sut = makeSut({ consignmentMode: 'PAY_ADVANCE', leg: 'IN_FINAL' });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_NOT_THE_BD_INTAKE' },
+    });
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('a PAY_NOW consignment still refuses the Bangladesh intake', async () => {
+    // The mirror of the case above, and the behaviour that existed
+    // before PAY_ADVANCE did: a bill for goods that have not flown is
+    // amortised over units that never will.
+    const sut = makeSut({ consignmentMode: 'PAY_NOW', leg: 'BD_INTAKE' });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_NOT_AN_ARRIVAL' },
+    });
+  });
+
+  it('demands the Dhaka COUNT — an advance bill is priced from it', async () => {
+    const sut = makeSut({
+      consignmentMode: 'PAY_ADVANCE',
+      leg: 'BD_INTAKE',
+      receiptStatus: 'ARRIVING',
+    });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_ARRIVAL_NOT_COUNTED' },
+    });
+  });
+
+  it('SNAPSHOTS the mode onto the consignment, so no later setting restates it', async () => {
+    const sut = makeSut({ consignmentMode: 'PAY_ADVANCE', leg: 'BD_INTAKE' });
+    await sut.svc.record(STAFF, input);
+    // Written inside the billing transaction: from here the consignment
+    // says what it was billed on (ORD-6 / RS-5), and `setOverride`
+    // refuses to move it.
+    expect(sut.snapshotAtBilling).toHaveBeenCalledWith(
+      expect.anything(),
+      CONSIGNMENT,
+      InboundFreightMode.PAY_ADVANCE,
+    );
+  });
+
+  it('a mode on the REQUEST pins the consignment rather than forming a fourth level', async () => {
+    // The consignment resolves PAY_NOW; the operator raises the bill as
+    // PAY_ADVANCE. What is snapshotted must be what was USED, or the
+    // consignment and its own bill would disagree the moment anybody
+    // looked at them.
+    const sut = makeSut({ consignmentMode: 'PAY_NOW', leg: 'BD_INTAKE' });
+    const view = await sut.svc.record(STAFF, {
+      ...input,
+      mode: InboundFreightMode.PAY_ADVANCE,
+    });
+    expect(view.mode).toBe(InboundFreightMode.PAY_ADVANCE);
+    expect(sut.snapshotAtBilling).toHaveBeenCalledWith(
+      expect.anything(),
+      CONSIGNMENT,
+      InboundFreightMode.PAY_ADVANCE,
+    );
+  });
+
+  it("writes FREIGHT_RECORDED to the seller's timeline", async () => {
+    // Until now a freight bill appeared on the timeline nowhere, and the
+    // first sign of one was an unexplained wallet debit.
+    const sut = makeSut({ consignmentMode: 'PAY_ADVANCE', leg: 'BD_INTAKE' });
+    await sut.svc.record(STAFF, input);
+    expect(sut.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        consignmentId: CONSIGNMENT,
+        type: 'FREIGHT_RECORDED',
+        data: expect.objectContaining({ mode: 'PAY_ADVANCE', settledImmediately: true }),
+      }),
+      expect.anything(),
+    );
+  });
+});
+
+/**
+ * THE DOUBLE-BILLING GUARD.
+ *
+ * `goods_receipt_id @unique` cannot see this: a PAY_ADVANCE bill hangs
+ * on the Dhaka intake and a PAY_NOW / PAY_LATER one on the India
+ * arrival, which are DIFFERENT rows — so without a consignment-level
+ * rule both would be accepted and the seller charged twice for one
+ * consignment.
+ */
+describe('InboundFreightService.record — the consignment is billed ONCE', () => {
+  const input = {
+    goodsReceiptId: RECEIPT,
+    lines: [
+      {
+        goodsReceiptLineId: 'grl-1',
+        basis: InboundFreightBasis.PER_KG,
+        rate: '900',
+        chargeableWeightKg: '5',
+      },
+    ],
+  };
+
+  it('refuses a SECOND bill on a consignment already billed in advance', async () => {
+    // The arrival lands, somebody reaches for the freight screen, and
+    // the goods have already been paid for at Dhaka.
+    const sut = makeSut({
+      consignmentMode: 'PAY_NOW',
+      leg: 'IN_FINAL',
+      consignmentBills: [
+        {
+          id: 'fc-advance',
+          mode: InboundFreightMode.PAY_ADVANCE,
+          status: InboundFreightStatus.SETTLED,
+          goodsReceiptId: 'gr-bd',
+        },
+      ],
+    });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_CONSIGNMENT_BILLED_IN_ADVANCE' },
+    });
+    // Nothing was written, and nothing was charged.
+    expect(sut.created).toHaveLength(0);
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('refuses an ADVANCE bill on a consignment that already carries one', async () => {
+    const sut = makeSut({
+      consignmentMode: 'PAY_ADVANCE',
+      leg: 'BD_INTAKE',
+      consignmentBills: [
+        {
+          id: 'fc-arrival',
+          mode: InboundFreightMode.PAY_LATER,
+          status: InboundFreightStatus.PENDING,
+          goodsReceiptId: 'gr-in',
+        },
+      ],
+    });
+    await expect(sut.svc.record(STAFF, input)).rejects.toMatchObject({
+      response: { code: 'FREIGHT_CONSIGNMENT_ALREADY_BILLED' },
+    });
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('a VOIDED advance bill does NOT block — that is what re-billing means', async () => {
+    // The guard reads only LIVE bills (`voidedAt: null`), so a bill
+    // withdrawn as wrong leaves the consignment billable again. Without
+    // that, void-and-re-bill would be void-and-stuck.
+    const sut = makeSut({
+      consignmentMode: 'PAY_ADVANCE',
+      leg: 'BD_INTAKE',
+      consignmentBills: [],
+    });
+    const view = await sut.svc.record(STAFF, input);
+    expect(view.status).toBe(InboundFreightStatus.SETTLED);
+  });
+
+  it('two arrivals on ONE consignment are still billed separately', async () => {
+    // The per-arrival rule is unchanged: a consignment lands in as many
+    // shipments as it takes and a forwarder invoices each. Only an
+    // ADVANCE bill is one-per-consignment.
+    const sut = makeSut({
+      consignmentMode: 'PAY_LATER',
+      leg: 'IN_FINAL',
+      consignmentBills: [
+        {
+          id: 'fc-august',
+          mode: InboundFreightMode.PAY_LATER,
+          status: InboundFreightStatus.PENDING,
+          goodsReceiptId: 'gr-august',
+        },
+      ],
+    });
+    const view = await sut.svc.record(STAFF, input);
+    expect(view.status).toBe(InboundFreightStatus.PENDING);
+  });
+
+  it('takes the per-consignment advisory lock before reading the live bills', async () => {
+    // Read-then-write is not a guard under READ COMMITTED: two
+    // operators billing the two legs at the same moment would each see
+    // no bill and each write one.
+    const sut = makeSut({ consignmentMode: 'PAY_ADVANCE', leg: 'BD_INTAKE' });
+    await sut.svc.record(STAFF, input);
+    expect(sut.lockTaken).toHaveBeenCalled();
+  });
+});
+
+/**
+ * THE CURRENCY. The rate is agreed by phone — "৳300 a kilo" — so it is
+ * typed in whatever it was negotiated in and converted to rupees at the
+ * billing instant, through the same helpers the P&L and the flat fees
+ * use (PRC-8).
+ */
+describe('InboundFreightService.record — agreed in a currency, charged in rupees', () => {
+  const input = {
+    goodsReceiptId: RECEIPT,
+    lines: [
+      {
+        goodsReceiptLineId: 'grl-1',
+        basis: InboundFreightBasis.PER_KG,
+        rate: '900',
+        chargeableWeightKg: '5',
+      },
+    ],
+  };
+
+  it('converts a BDT bill at the rate in force, and records what was agreed', async () => {
+    // ৳4,500 at the stored INR→BDT 1.23 is ₹3,658.54. Divided by the
+    // stored rate rather than multiplied by a rounded reciprocal, which
+    // is what `toInr` does and why the pair is kept.
+    const sut = makeSut();
+    const view = await sut.svc.record(STAFF, { ...input, currency: Currency.BDT });
+
+    expect(view.agreedCurrency).toBe(Currency.BDT);
+    expect(view.agreedAmount).toBe('4500');
+    expect(view.amountInr).toBe('3658.54');
+    // The rate, its direction and where it came from — "why was I
+    // billed ₹3,658.54?" has no answer a month later without them.
+    expect(view.fxRate).toBe('1.23');
+    expect(view.fxRatePair).toBe('INR→BDT');
+    expect(view.fxRateSource).toBe('HISTORY');
+  });
+
+  it('an INR bill records NO rate at all', async () => {
+    const sut = makeSut();
+    const view = await sut.svc.record(STAFF, input);
+    expect(view.agreedCurrency).toBe(Currency.INR);
+    expect(view.agreedAmount).toBe('4500');
+    expect(view.amountInr).toBe('4500');
+    expect(view.fxRate).toBeNull();
+    expect(view.fxRatePair).toBeNull();
+  });
+
+  it('REFUSES when there is no rate — never bills the taka figure as rupees', async () => {
+    // The failure that matters: ৳4,500 recorded as ₹4,500 is a 23%
+    // overcharge that typechecks, commits and renders. Refusing sends
+    // whoever reads it to the FX screen, which is where the problem is.
+    const sut = makeSut({ fxHistory: null, fxCurrent: null });
+    await expect(sut.svc.record(STAFF, { ...input, currency: Currency.BDT })).rejects.toMatchObject(
+      { response: { code: 'NO_FX_RATE_FOR_FREIGHT' } },
+    );
+    expect(sut.created).toHaveLength(0);
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('an INR bill is unaffected by a missing BDT rate', async () => {
+    // The conversion is an identity, so it never asks for a rate.
+    const sut = makeSut({ fxHistory: null, fxCurrent: null });
+    const view = await sut.svc.record(STAFF, input);
+    expect(view.amountInr).toBe('4500');
+  });
+
+  it('the wallet is debited the RUPEE figure, never the agreed one', async () => {
+    const sut = makeSut({ mode: 'PAY_NOW' });
+    await sut.svc.record(STAFF, { ...input, currency: Currency.BDT });
+    const entry = sut.applyEntry.mock.calls[0]![1] as AnyArgs;
+    expect(entry['currency']).toBe(Currency.INR);
+    expect(String(entry['amount'])).toBe('3658.54');
+  });
+
+  it('the allocation carries the rate AS AGREED and the line in both', async () => {
+    const sut = makeSut();
+    await sut.svc.record(STAFF, { ...input, currency: Currency.BDT });
+    const alloc = sut.allocCreate.mock.calls[0]![0]['data'] as AnyArgs;
+    // ৳900 a kilo stays ৳900 a kilo. Storing 731.71 here would make the
+    // bill unreadable against the invoice it was typed from.
+    expect(String(alloc['rate'])).toBe('900');
+    expect(String(alloc['lineTotalAgreed'])).toBe('4500');
+    expect(String(alloc['lineTotalInr'])).toBe('3658.54');
+  });
+});
+
+/**
+ * VOID AND RE-BILL. A wrong bill — a mistyped rate, a recount — is
+ * withdrawn and a fresh one raised, so the freight record and the money
+ * always agree and margin stays true.
+ */
+describe('InboundFreightService.void', () => {
+  it('gives back exactly what the bill CHARGED, as a credit', async () => {
+    // The ledger is append-only, so the give-back is a new entry. The
+    // amount is `amountSettledInr` — what was actually taken — not the
+    // bill's face value.
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.SETTLED,
+        mode: InboundFreightMode.PAY_ADVANCE,
+        amountSettledInr: new Prisma.Decimal('4500.00'),
+        walletEntryId: 'we-charge',
+      }),
+    });
+    const view = await sut.svc.void(STAFF, CHARGE, 'Rate was typed as 900, the invoice says 90');
+
+    expect(view.status).toBe(InboundFreightStatus.VOIDED);
+    expect(sut.applyEntry).toHaveBeenCalledTimes(1);
+    const entry = sut.applyEntry.mock.calls[0]![1] as AnyArgs;
+    expect(entry['direction']).toBe(WalletEntryDirection.INBOUND_FREIGHT_REFUND);
+    expect(String(entry['amount'])).toBe('4500');
+    // Points back at the debit it returns, so the pair reads as one
+    // round trip rather than two unrelated lines.
+    expect(entry['linkedEntryId']).toBe('we-charge');
+  });
+
+  it('writes NO entry when the bill had charged nothing', async () => {
+    // A PENDING pay-later bill whose units have not left owes the seller
+    // nothing back, and a ₹0 credit is a line nobody can read a meaning
+    // into.
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.PENDING,
+        amountSettledInr: new Prisma.Decimal('0.00'),
+      }),
+    });
+    await sut.svc.void(STAFF, CHARGE, 'Recounted at Dhaka — 40 units, not 60');
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('zeroes the allocations, so a withdrawn bill never reads as part-paid', async () => {
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.PARTIALLY_SETTLED,
+        amountSettledInr: new Prisma.Decimal('1200.00'),
+      }),
+    });
+    await sut.svc.void(STAFF, CHARGE, 'Wrong consignment — this is not their shipment');
+    expect(sut.allocUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ unitsSettled: 0 }),
+      }),
+    );
+  });
+
+  it('refuses a bill already withdrawn — the money is not given back twice', async () => {
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.VOIDED,
+        voidedAt: new Date('2026-09-19T00:00:00.000Z'),
+      }),
+    });
+    await expect(
+      sut.svc.void(STAFF, CHARGE, 'Withdrawing it again for some reason'),
+    ).rejects.toMatchObject({ response: { code: 'FREIGHT_ALREADY_VOIDED' } });
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('refuses when another operator got there first (the guarded claim)', async () => {
+    // The claim is on "not already voided AND the same amountSettled",
+    // so a unit charged between the read and the write cannot be
+    // silently left uncredited either.
+    const sut = makeSut({
+      loaded: chargeRow({ amountSettledInr: new Prisma.Decimal('4500.00') }),
+      claimCount: 0,
+    });
+    await expect(
+      sut.svc.void(STAFF, CHARGE, 'Rate was typed as 900, the invoice says 90'),
+    ).rejects.toMatchObject({ response: { code: 'FREIGHT_ALREADY_VOIDED' } });
+    expect(sut.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('demands a reason — the seller reads it on their timeline', async () => {
+    const sut = makeSut({ loaded: chargeRow() });
+    await expect(sut.svc.void(STAFF, CHARGE, 'oops')).rejects.toMatchObject({
+      response: { code: 'FREIGHT_VOID_REASON_TOO_SHORT' },
+    });
+  });
+
+  it('audits at HIGH and tells the seller on the timeline', async () => {
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.SETTLED,
+        amountSettledInr: new Prisma.Decimal('4500.00'),
+      }),
+    });
+    await sut.svc.void(STAFF, CHARGE, 'Rate was typed as 900, the invoice says 90');
+    expect(sut.auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'wallet.inbound_freight.voided',
+        severity: 'HIGH',
+        metadata: expect.objectContaining({ refundedInr: '4500' }),
+      }),
+      expect.anything(),
+    );
+    expect(sut.appendEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ voided: true, refundedInr: '4500' }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('nets to ZERO over a charge and its void — and a re-bill starts clean', async () => {
+    // The whole point of void-and-re-bill: the seller is left owing
+    // exactly what the CORRECTED bill says, never the sum of the two.
+    const sut = makeSut({
+      loaded: chargeRow({
+        status: InboundFreightStatus.SETTLED,
+        amountSettledInr: new Prisma.Decimal('4500.00'),
+        walletEntryId: 'we-charge',
+      }),
+    });
+    await sut.svc.void(STAFF, CHARGE, 'Rate was typed as 900, the invoice says 90');
+
+    const charged = new Prisma.Decimal('4500.00');
+    const refund = new Prisma.Decimal(
+      String((sut.applyEntry.mock.calls[0]![1] as AnyArgs)['amount']),
+    );
+    expect(charged.sub(refund).toString()).toBe('0');
   });
 });

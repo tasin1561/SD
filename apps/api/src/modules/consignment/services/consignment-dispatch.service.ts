@@ -5,6 +5,7 @@ import {
   ConsignmentLeg,
   ConsignmentRoute,
   GoodsReceiptStatus,
+  InboundFreightMode,
   LabellingSite,
   Prisma,
   StockMovementType,
@@ -14,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { ConsignmentEventService } from '../../consignment-core/services/consignment-event.service';
+import { ConsignmentFreightModeService } from '../../consignment-core/services/consignment-freight-mode.service';
 import { ConsignmentStatusService } from '../../consignment-core/services/consignment-status.service';
 import { BinPolicyService } from '../../inventory-shared/bin-policy.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
@@ -67,6 +69,7 @@ export class ConsignmentDispatchService {
     private readonly audit: AuditLogService,
     private readonly consignments: ConsignmentService,
     private readonly events: ConsignmentEventService,
+    private readonly freightMode: ConsignmentFreightModeService,
     private readonly status: ConsignmentStatusService,
     private readonly mutation: StockMutationService,
     private readonly units: StockUnitService,
@@ -92,6 +95,47 @@ export class ConsignmentDispatchService {
    * found nothing, and rendering that here would invent a 300-unit
    * shortfall out of a decision not to look.
    */
+  /**
+   * A PAY_ADVANCE consignment may not leave Bangladesh unbilled.
+   *
+   * The owner's model: the rate is agreed up front, Dhaka counts and
+   * weighs, the final bill is raised against THAT count, and the wallet
+   * is debited before the goods fly. Without this refusal "advance"
+   * means nothing — the goods go, and the only billing point left is the
+   * India arrival, which a PAY_ADVANCE consignment is never billed
+   * against, so the whole shipment would be carried free.
+   *
+   * A VOIDED bill does not count: a bill withdrawn as wrong has given
+   * its money back, so a consignment holding only voided bills is
+   * unbilled and the goods stay put until a correct one is raised. That
+   * is what makes void-and-re-bill safe to offer at Dhaka.
+   *
+   * Only PAY_ADVANCE is checked. PAY_NOW and PAY_LATER are billed at the
+   * arrival by design, so demanding a bill before dispatch would refuse
+   * every ordinary consignment.
+   */
+  private async assertAdvanceFreightBilled(
+    consignmentId: string,
+    consignmentNumber: string,
+  ): Promise<void> {
+    const mode = await this.freightMode.modeFor(consignmentId);
+    if (mode !== InboundFreightMode.PAY_ADVANCE) return;
+
+    const billed = await this.prisma.client.inboundFreightCharge.findFirst({
+      where: { consignmentId, voidedAt: null },
+      select: { id: true },
+    });
+    if (billed !== null) return;
+
+    throw new ConflictException({
+      code: 'FREIGHT_ADVANCE_NOT_BILLED',
+      message:
+        `${consignmentNumber} is billed in advance, and no freight bill has been raised for it. ` +
+        'Count it in Bangladesh, record the freight bill against that count, and then dispatch — ' +
+        'once it has left there is no billing point for it.',
+    });
+  }
+
   private async forwardWithoutCounting(
     staffId: string,
     consignment: Awaited<ReturnType<ConsignmentService['requireById']>>,
@@ -251,6 +295,22 @@ export class ConsignmentDispatchService {
         message: `${consignment.consignmentNumber} has no Bangladesh intake to dispatch from`,
       });
     }
+    // PAY_ADVANCE: the bill is raised at Dhaka, so the goods may not
+    // leave until it has been. Refusing here is what makes "advance"
+    // mean anything — once the consignment is in the air the only
+    // remaining lever is the India arrival, which a PAY_ADVANCE
+    // consignment is never billed against, so it would ship free.
+    //
+    // Placed BEFORE the `withoutCounting` branch deliberately: a
+    // forward-without-count has no Dhaka count for a bill to be priced
+    // from, so it cannot have one, and it is refused by exactly this
+    // check rather than by a second rule saying the same thing.
+    //
+    // Same shape as CNS-6's refusal to cancel after dispatch: a rule that
+    // makes an unanswerable state unreachable, rather than one that
+    // decides what to do once it has happened.
+    await this.assertAdvanceFreightBilled(consignment.id, consignment.consignmentNumber);
+
     // Sending it on WITHOUT opening it. A sealed carton going straight to
     // India can travel on the seller's declared quantities and be counted
     // once, when it lands — counting it twice is hours the Dhaka bench

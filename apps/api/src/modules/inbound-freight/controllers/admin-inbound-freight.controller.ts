@@ -26,6 +26,7 @@ import {
   AttributeExpenseDto,
   PayForwarderDto,
   SetFreightOurCostDto,
+  VoidInboundFreightDto,
   WaiveInboundFreightDto,
 } from '../dto/inbound-freight.dto';
 import { InboundFreightService, type FreightChargeView } from '../services/inbound-freight.service';
@@ -87,6 +88,7 @@ export class AdminInboundFreightController {
       {
         goodsReceiptId: body.goodsReceiptId,
         lines: body.lines,
+        ...(body.currency === undefined ? {} : { currency: body.currency }),
         ...(body.mode === undefined ? {} : { mode: body.mode }),
         ...(body.ourCostInr === undefined ? {} : { ourCostInr: body.ourCostInr }),
         ...(body.note === undefined ? {} : { note: body.note }),
@@ -177,6 +179,26 @@ export class AdminInboundFreightController {
       { bankEntryId: body.bankEntryId },
       ctx,
     );
+  }
+
+  @Post(':freightChargeId/void')
+  @RequirePermissions('money.freight.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'WITHDRAW a bill that was wrong — a mistyped rate, a recount — so a fresh one can be ' +
+      'raised against the same receipt. Whatever it had charged comes back as a compensating ' +
+      'wallet CREDIT (the ledger is append-only, so nothing is deleted). Distinct from waive, ' +
+      'which forgives a bill that was correct. Audited HIGH.',
+  })
+  voidBill(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Param('freightChargeId', new ParseUUIDPipe({ version: '7' }))
+    freightChargeId: string,
+    @Body() body: VoidInboundFreightDto,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ): Promise<FreightChargeView> {
+    return this.svc.void(staff.id, freightChargeId, body.reason, ctx);
   }
 
   @Post(':freightChargeId/waive')

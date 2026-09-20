@@ -126,6 +126,44 @@ It also makes "only VIA_BD is billed" structural rather than a rule in
 somebody's head: a `DIRECT_IN` consignment has no BD hop, so there is no bill
 to attach and no action to offer.
 
+#### 7b. PAY_ADVANCE — the bill can also come BEFORE the goods fly (2026-09-20)
+
+Section 7 above is the design as it was written; it has since been corrected
+twice. The bill is keyed on the GOODS RECEIPT again, not the consignment
+(CNS-6, 2026-09-12: a consignment lands in more than one shipment and each
+arrival is invoiced on its own) — and as of this change WHICH receipt depends
+on how the seller pays.
+
+The owner's model, in his words: *"We tell the seller about the freight cost
+before he sends it to our BD warehouse — per kg or per pcs. Then in BD we do
+the count or weight. Then we give the final bill to the seller and the wallet
+is debited."* So a `PAY_ADVANCE` consignment is billed against its **BD_INTAKE**
+receipt — the count and weight that price it — and debited in full there and
+then; `PAY_NOW` and `PAY_LATER` are unchanged and still bill the India arrival.
+
+Three things follow, and each is a refusal rather than a convention:
+
+- **A PAY_ADVANCE consignment may not be dispatched unbilled**
+  (`FREIGHT_ADVANCE_NOT_BILLED`). Once it is in the air the only billing point
+  left is the arrival, which it is never billed against — it would ship free.
+  The guard sits before the `withoutCounting` branch, so forwarding an
+  uncounted carton is refused by the same rule (there is no count to price a
+  bill from) rather than by a second one saying the same thing.
+- **A consignment billed in advance cannot be billed again at the arrival**
+  (`FREIGHT_CONSIGNMENT_BILLED_IN_ADVANCE`). The per-receipt UNIQUE cannot see
+  this — the intake and the arrival are different rows — so it is an
+  application check under `AdvisoryLock.INBOUND_FREIGHT_BILL` inside the
+  writing transaction, backed by a partial unique index.
+- **The mode FREEZES at billing.** It resolves `consignment pin ?? seller
+  override ?? global default` through `ConsignmentFreightModeService` (the ONE
+  reader), is set at BD receiving, and is written onto the consignment by the
+  billing transaction — after which changing it is refused
+  (`FREIGHT_MODE_LOCKED`).
+
+A bill is also AGREED in a currency now (the rate is negotiated by phone, often
+in taka) and CHARGED in rupees at the billing instant, and a wrong bill is
+VOIDED and re-raised rather than edited. See CLAUDE.md FRT-5 and FRT-6.
+
 ### 8. Cancel touches stock, and CLOSES at dispatch
 
 Abandoned goods go BACK TO THE SELLER and the consignment ends `CANCELLED`.

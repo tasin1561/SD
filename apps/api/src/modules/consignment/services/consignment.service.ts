@@ -59,7 +59,58 @@ const CONSIGNMENT_INCLUDE = {
   // — a shipment that lands in September is invoiced separately from one
   // that landed in August.
   freightCharges: {
-    select: { id: true, status: true, totalInr: true, goodsReceiptId: true },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      status: true,
+      goodsReceiptId: true,
+      // WHAT THE SELLER AGREED, beside what they were charged. The rate
+      // is negotiated by phone — "৳300 a kilo" — so the taka figure is
+      // the one they will recognise and the rupee one is what left
+      // their wallet. Four scalars was all this used to carry, which
+      // meant the first sign of a bill was an unexplained wallet debit.
+      mode: true,
+      agreedAmount: true,
+      agreedCurrency: true,
+      amountInr: true,
+      serviceChargeInr: true,
+      totalInr: true,
+      totalUnits: true,
+      unitsSettled: true,
+      amountSettledInr: true,
+      voidedAt: true,
+      voidReason: true,
+      createdAt: true,
+      // The bill LINE BY LINE: the basis, the rate as agreed, and the
+      // quantity it was measured on. Without these a bill is a figure
+      // with nothing behind it, and "why is it that much?" has to be
+      // asked on the phone.
+      //
+      // `ourCostInr` is deliberately NOT here and must never be: what
+      // the forwarder charged US is our margin on the leg, and this
+      // payload is read by the seller.
+      allocations: {
+        orderBy: { lineTotalInr: 'desc' },
+        select: {
+          id: true,
+          units: true,
+          basis: true,
+          rate: true,
+          chargeableWeightKg: true,
+          lineTotalAgreed: true,
+          lineTotalInr: true,
+          unitsSettled: true,
+          amountSettledInr: true,
+          variant: {
+            select: {
+              skuCode: true,
+              variantLabel: true,
+              product: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
   },
 } satisfies Prisma.ConsignmentInclude;
 

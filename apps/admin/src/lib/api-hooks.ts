@@ -41,7 +41,12 @@ import type {
   UpdateSellerStatusResponse,
   UpdateSystemSettingRequest,
 } from '@skydrop/api-client';
-import type { ConsignmentRoute, ConsignmentStatus, LabellingSite } from '@skydrop/db';
+import type {
+  ConsignmentRoute,
+  ConsignmentStatus,
+  InboundFreightMode,
+  LabellingSite,
+} from '@skydrop/db';
 import { usePermission } from './use-permission';
 
 /**
@@ -2248,6 +2253,67 @@ export function useConsignmentDetail(id: string): UseQueryResult<ConsignmentView
     enabled: id !== '',
     queryKey: ['admin-consignments', 'detail', id],
     queryFn: () => client.request<ConsignmentView>(`/api/admin/consignments/${id}`),
+  });
+}
+
+/**
+ * How ONE consignment's inbound freight is paid for, and WHOSE decision
+ * that is.
+ *
+ * The three-level chain — this consignment's pin, else the seller's
+ * override, else the global default — resolved by the server, which is
+ * the only thing that walks it. `inboundFreightMode` on the consignment
+ * row is just the first level and is null on most of them, so it never
+ * answers this on its own.
+ *
+ * `locked` goes true the moment a bill exists: from then the mode is
+ * whatever the bill was raised on.
+ */
+export interface ResolvedFreightMode {
+  readonly mode: InboundFreightMode;
+  readonly source: 'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT';
+  readonly locked: boolean;
+}
+
+export function useConsignmentFreightMode(
+  id: string | null,
+  opts: { readonly enabled?: boolean } = {},
+): UseQueryResult<ResolvedFreightMode> {
+  const client = useApiClient();
+  const key = id ?? '';
+  return useQuery({
+    enabled: key !== '' && (opts.enabled ?? true),
+    queryKey: ['admin-consignments', 'freight-mode', key],
+    queryFn: () =>
+      client.request<ResolvedFreightMode>(`/api/admin/consignments/${key}/freight-mode`),
+  });
+}
+
+/**
+ * Pin how this consignment's freight is paid for, or clear the pin so it
+ * falls back to the seller's terms.
+ *
+ * FE-2: refused server-side once a bill exists (FREIGHT_MODE_LOCKED) —
+ * the UI disables the control for clarity and does not enforce it.
+ */
+export function useSetConsignmentFreightMode(): UseMutationResult<
+  ResolvedFreightMode,
+  Error,
+  { id: string; mode: InboundFreightMode | null }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, mode }) =>
+      client.request<ResolvedFreightMode>(`/api/admin/consignments/${id}/freight-mode`, {
+        method: 'PATCH',
+        body: { mode },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-consignments'] });
+      // Which LEG a bill may be raised against moved with it.
+      void qc.invalidateQueries({ queryKey: ['admin-freight'] });
+    },
   });
 }
 

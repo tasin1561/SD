@@ -71,6 +71,22 @@ export const AdvisoryLock = {
    */
   FREIGHT_COST: 0x04643,
   /**
+   * 'FB' — raising an inbound freight bill for ONE consignment.
+   *
+   * A PAY_ADVANCE bill hangs on the Dhaka intake and a PAY_NOW /
+   * PAY_LATER one on the India arrival, so the `goods_receipt_id` unique
+   * cannot see that a consignment has already been billed: the two are
+   * DIFFERENT receipts, and both bills would be accepted with the seller
+   * charged twice for one consignment. `record` reads the consignment's
+   * live bills and then writes — the exact read-then-write shape that is
+   * not a guard under READ COMMITTED — so the read and the write happen
+   * under this lock, inside the same transaction.
+   *
+   * The partial unique `inbound_freight_one_advance_per_consignment` is
+   * the backstop for the half an index can express.
+   */
+  INBOUND_FREIGHT_BILL: 0x04642,
+  /**
    * 'SP' — provisioning an order's shipment. `provisionFromSnapshot`
    * checks "does this order already have a live shipment?" and then
    * creates one; two writers of CONFIRMED at once (a transition racing a

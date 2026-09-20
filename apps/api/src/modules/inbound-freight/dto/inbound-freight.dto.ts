@@ -1,5 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { InboundFreightBasis, InboundFreightMode, InboundFreightStatus } from '@skydrop/db';
+import {
+  Currency,
+  InboundFreightBasis,
+  InboundFreightMode,
+  InboundFreightStatus,
+} from '@skydrop/db';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -33,9 +38,13 @@ export class InboundFreightLineDto {
   @IsEnum(InboundFreightBasis)
   readonly basis!: InboundFreightBasis;
 
-  @ApiProperty({ description: 'Rate as invoiced — per kg, or per piece. Decimal string.' })
+  @ApiProperty({
+    description:
+      "Rate as AGREED — per kg, or per piece — in the bill's `currency`, NOT necessarily " +
+      'rupees. Decimal string.',
+  })
   @IsNumberString()
-  readonly rateInr!: string;
+  readonly rate!: string;
 
   @ApiPropertyOptional({
     description:
@@ -51,8 +60,11 @@ export class InboundFreightLineDto {
 export class RecordInboundFreightDto {
   @ApiProperty({
     description:
-      'UUID v7 of the INDIA ARRIVAL (goods receipt, leg IN_FINAL) this freight bill covers. ' +
-      'One forwarder invoice per shipment; the consignment is derived from it.',
+      'UUID v7 of the goods receipt this freight bill covers. WHICH receipt depends on the ' +
+      "consignment's freight mode: PAY_ADVANCE bills the BANGLADESH INTAKE (the count and " +
+      'weight it is priced from, raised before the goods fly), PAY_NOW and PAY_LATER bill the ' +
+      'INDIA ARRIVAL (leg IN_FINAL — one forwarder invoice per shipment). The consignment is ' +
+      'derived from it.',
   })
   @IsUUID('7')
   readonly goodsReceiptId!: string;
@@ -72,9 +84,22 @@ export class RecordInboundFreightDto {
   readonly lines!: readonly InboundFreightLineDto[];
 
   @ApiPropertyOptional({
+    enum: Currency,
+    description:
+      'What the rates above are AGREED in. Defaults to INR. A non-INR bill is converted to ' +
+      'rupees at the moment it is recorded, and the rate used is stored on the bill — the ' +
+      'seller is charged rupees whatever the rate was agreed in.',
+  })
+  @IsOptional()
+  @IsEnum(Currency)
+  readonly currency?: Currency;
+
+  @ApiPropertyOptional({
     enum: InboundFreightMode,
     description:
-      "Overrides the seller's resolved payment mode for this one arrival. Omit to use `wallet.inbound_freight_mode`.",
+      'PINS the consignment to this mode as part of raising the bill. Omit to use whatever ' +
+      'is already in force for it (its own pin, else the seller override of ' +
+      '`wallet.inbound_freight_mode`, else the global default).',
   })
   @IsOptional()
   @IsEnum(InboundFreightMode)
@@ -162,6 +187,33 @@ export class WaiveInboundFreightDto {
   @MinLength(10)
   @MaxLength(1000)
   readonly reason!: string;
+}
+
+export class VoidInboundFreightDto {
+  @ApiProperty({
+    description:
+      'Why the bill was wrong — a mistyped rate, a recount. Recorded on the bill, shown on ' +
+      "the seller's consignment timeline, and audited HIGH: this hands money back.",
+    minLength: 10,
+  })
+  @IsString()
+  @MinLength(10)
+  @MaxLength(1000)
+  readonly reason!: string;
+}
+
+export class SetConsignmentFreightModeDto {
+  @ApiPropertyOptional({
+    enum: InboundFreightMode,
+    description:
+      'Pin this consignment to one mode, or send null to clear the pin so it falls through ' +
+      'to the seller override and then the global default. Refused once a bill exists ' +
+      '(FREIGHT_MODE_LOCKED) — how an already-raised bill was going to be paid is settled.',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsEnum(InboundFreightMode)
+  readonly mode?: InboundFreightMode | null;
 }
 
 export class ListInboundFreightQueryDto {

@@ -47,6 +47,18 @@ function world(opts: { lock: boolean } = { lock: true }) {
     consignmentId: 'cn-1',
     goodsReceiptId: 'gr-1',
     amountInr: D('4500.00'),
+    // A rupee bill: what was agreed IS what is charged, and no rate was
+    // needed to get from one to the other.
+    agreedAmount: D('4500.00'),
+    agreedCurrency: 'INR',
+    fxRate: null,
+    fxRatePair: null,
+    fxRateSource: null,
+    fxRateRecordedAt: null,
+    voidedAt: null,
+    voidedByStaffId: null,
+    voidReason: null,
+    voidReversalEntryId: null,
     ourCostInr: cost,
     mode: InboundFreightMode.PAY_LATER,
     serviceChargePercent: null,
@@ -175,6 +187,8 @@ function world(opts: { lock: boolean } = { lock: true }) {
     {} as never,
     {} as never,
     bank as never,
+    {} as never,
+    {} as never,
   );
 
   return {

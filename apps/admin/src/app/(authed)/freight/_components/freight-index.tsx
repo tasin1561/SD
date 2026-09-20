@@ -26,7 +26,7 @@ import {
   Toolbar,
   Tr,
 } from '@skydrop/ui/components';
-import { InboundFreightStatus } from '@skydrop/db';
+import { InboundFreightStatus, type InboundFreightMode } from '@skydrop/db';
 import { useFreightCostBreakdown, useFreightList, type FreightChargeView } from '@/lib/ops-hooks';
 import { RecordFreightModal } from './record-freight-modal';
 import { FreightActions } from './freight-actions';
@@ -54,7 +54,13 @@ export function FreightIndex(): ReactElement {
   const list = useFreightList(status === '' ? {} : { status });
   const rows = useMemo(() => list.data ?? [], [list.data]);
 
-  const outstanding = rows.reduce((sum, r) => sum + Number(r.outstandingInr), 0);
+  // A WITHDRAWN bill still reports total − settled as outstanding — the
+  // arithmetic is unchanged, the debt is not. Counting it would show a
+  // figure nobody owes.
+  const outstanding = rows.reduce(
+    (sum, r) => sum + (r.voidedAt === null ? Number(r.outstandingInr) : 0),
+    0,
+  );
   const pendingCount = rows.filter(
     (r) =>
       r.status === InboundFreightStatus.PENDING ||
@@ -224,9 +230,17 @@ function FreightRow({
           <div className="text-text-faint mt-0.5 text-xs">
             {new Date(row.createdAt).toLocaleDateString()}
           </div>
+          {/* Said here rather than only in a badge: a withdrawn bill is
+            only ever looked at to find out what was wrong with it. */}
+          {row.voidedAt !== null && (
+            <div className="text-text-muted mt-1 text-xs">
+              Withdrawn {new Date(row.voidedAt).toLocaleDateString()}
+              {row.voidReason === null ? '' : ` — ${row.voidReason}`}
+            </div>
+          )}
         </Td>
         <Td className="text-text-muted whitespace-nowrap text-xs">
-          {row.mode === 'PAY_NOW' ? 'Pay now' : 'Pay later'}
+          {MODE_WORDS[row.mode]}
           {row.serviceChargeInr !== null && Number(row.serviceChargeInr) > 0 && (
             <div className="text-text-faint">
               +<Money amount={row.serviceChargeInr} decimals={false} /> service
@@ -235,6 +249,21 @@ function FreightRow({
         </Td>
         <Td align="right">
           <Money amount={row.totalInr} />
+          {/* What was AGREED, when that is not rupees. The seller is
+            charged the figure on the left; this is the figure on the
+            forwarder's invoice, and "why is it ₹162.60?" has no answer
+            without it. */}
+          {row.agreedCurrency !== 'INR' && (
+            <div className="text-text-faint text-xs">
+              <Money
+                amount={row.agreedAmount}
+                currency={row.agreedCurrency}
+                convert={false}
+                decimals={false}
+              />{' '}
+              agreed
+            </div>
+          )}
         </Td>
         <Td align="right">
           <OurCostCell row={row} />
@@ -251,7 +280,9 @@ function FreightRow({
           </div>
         </Td>
         <Td align="right">
-          {Number(row.outstandingInr) === 0 ? (
+          {row.voidedAt !== null ? (
+            <span className="text-text-faint text-xs">Withdrawn</span>
+          ) : Number(row.outstandingInr) === 0 ? (
             <span className="text-text-faint">—</span>
           ) : (
             <Money amount={row.outstandingInr} direction="debit" />
@@ -309,6 +340,11 @@ function CostBreakdown({
 
   const d = q.data;
   const splitTotal = d.lines.reduce((t, l) => t + Number(l.lineTotalInr), 0);
+  // The rates and line figures below are in what was AGREED; the rupee
+  // column beside them is what the seller is actually charged. Shown
+  // together rather than one or the other, because the invoice is
+  // checked against the first and the wallet against the second.
+  const agreed = d.agreedCurrency === 'INR' ? null : d.agreedCurrency;
 
   return (
     <div className="grid gap-5 py-1 lg:grid-cols-2">
@@ -328,6 +364,7 @@ function CostBreakdown({
                 <Th>Product</Th>
                 <Th align="right">Units</Th>
                 <Th align="right">Weight</Th>
+                <Th align="right">Rate{agreed === null ? '' : ` (${agreed})`}</Th>
                 <Th align="right">Per unit</Th>
                 <Th align="right">Line</Th>
               </Tr>
@@ -353,15 +390,32 @@ function CostBreakdown({
                     </span>
                   </Td>
                   <Td align="right">
+                    <span className="tabular-nums">
+                      {agreed === null ? '₹' : ''}
+                      {l.rate}
+                      {agreed === null ? '' : ` ${agreed}`}
+                    </span>
+                  </Td>
+                  <Td align="right">
                     <Money amount={l.perUnitInr} />
                   </Td>
                   <Td align="right">
                     <Money amount={l.lineTotalInr} />
+                    {agreed !== null && (
+                      <div className="text-text-faint text-xs">
+                        <Money
+                          amount={l.lineTotalAgreed}
+                          currency={d.agreedCurrency}
+                          convert={false}
+                        />{' '}
+                        agreed
+                      </div>
+                    )}
                   </Td>
                 </Tr>
               ))}
               <Tr>
-                <Td colSpan={4}>
+                <Td colSpan={5}>
                   <span className="font-medium">Lines add up to</span>
                 </Td>
                 <Td align="right">
@@ -441,6 +495,12 @@ function CostBreakdown({
     </div>
   );
 }
+
+const MODE_WORDS: Record<InboundFreightMode, string> = {
+  PAY_ADVANCE: 'Pay in advance',
+  PAY_NOW: 'Pay now',
+  PAY_LATER: 'Pay later',
+};
 
 function humanise(value: string): string {
   const lower = value.replaceAll('_', ' ').toLowerCase();
