@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Check, MessageCircle, X } from 'lucide-react';
+import { toast } from '../toast';
 import '../micro.css';
 import './contact-fan.css';
 
@@ -125,6 +126,7 @@ export function ContactFan({
               try {
                 await act();
                 setPhase((s) => ({ ...s, [it.id]: 'copied' }));
+                toast({ title: it.doneLabel ?? 'Copied', body: it.detail, tone: 'success' });
               } catch {
                 setPhase((s) => ({ ...s, [it.id]: 'failed' }));
               }

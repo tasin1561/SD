@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactElement, ReactNode } from 'react';
 import localFont from 'next/font/local';
 import './globals.css';
+import { ToastHost } from '@/components/micro/toast';
 import { PlaceholderRibbon } from '@/components/chrome/placeholder-ribbon';
 import { platform } from '@/content/site';
 import { jsonLd } from '@/lib/json-ld';
@@ -139,6 +140,7 @@ export default function RootLayout({ children }: { children: ReactNode }): React
         </a>
         <PlaceholderRibbon />
         {children}
+        <ToastHost />
       </body>
     </html>
   );

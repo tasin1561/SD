@@ -3,9 +3,11 @@
  * Size budget for the micro-interaction library (spec §12):
  *   each pattern's index.tsx, transpiled, gzipped   ≤ 3 072 B
  *   each pattern's .css, gzipped                    ≤ 2 048 B
- *   the library total (all patterns + hooks)        ≤ 25 600 B gz
- * Prints the per-pattern table the Phase 2 report asks for. Runs in
- * postbuild beside check-theme and check-bundle.
+ *   the SHIPPED library total (patterns imported by a production route,
+ *   plus the hooks)                                  ≤ 40 960 B gz (owner, 2026-09-21)
+ * A pattern only the gallery imports is listed but not counted — it is
+ * never in a production chunk. Prints the per-pattern table the phase
+ * reports ask for. Runs in postbuild beside check-theme and check-bundle.
  */
 import ts from 'typescript';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -25,20 +27,39 @@ const transpile = (file) =>
     },
   }).outputText;
 
+/** Every source file outside the library and the dev routes — what production ships. */
+const productionSources = (() => {
+  const out = [];
+  const walk = (d) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) {
+        if (p === DIR || p.endsWith('/app/dev')) continue;
+        walk(p);
+      } else if (/\.(tsx?|css)$/.test(n)) out.push(readFileSync(p, 'utf8'));
+    }
+  };
+  walk(join(ROOT, 'src'));
+  return out.join('\n');
+})();
 const rows = [];
 const failures = [];
 let total = 0;
+let all = 0;
 for (const name of readdirSync(DIR).sort()) {
   const dir = join(DIR, name);
   if (!statSync(dir).isDirectory()) continue;
   const js = gz(transpile(join(dir, 'index.tsx')));
   const cssFile = readdirSync(dir).find((f) => f.endsWith('.css'));
   const css = cssFile ? gz(readFileSync(join(dir, cssFile), 'utf8')) : 0;
-  total += js + css;
+  const shipped = new RegExp(`micro/${name}(/index)?['"]`).test(productionSources) ||
+    new RegExp(`micro/${name}/`).test(productionSources);
+  all += js + css;
+  if (shipped) total += js + css;
   const ok = js <= 3072 && css <= 2048;
   if (!ok) failures.push(`${name}: js ${js} B / 3072, css ${css} B / 2048`);
   rows.push(
-    `${ok ? 'OK  ' : 'FAIL'} ${name.padEnd(24)} js ${String(js).padStart(5)} B   css ${String(css).padStart(5)} B`,
+    `${ok ? 'OK  ' : 'FAIL'} ${name.padEnd(24)} js ${String(js).padStart(5)} B   css ${String(css).padStart(5)} B${shipped ? '' : '   (gallery only)'}`,
   );
 }
 for (const f of ['motion.ts', 'use-async-state.ts', 'micro.css']) {
@@ -47,10 +68,11 @@ for (const f of ['motion.ts', 'use-async-state.ts', 'micro.css']) {
   total += size;
   rows.push(`info ${f.padEnd(24)}    ${String(size).padStart(5)} B`);
 }
+rows.push(`info ${'all patterns'.padEnd(24)}    ${String(all).padStart(5)} B`);
 rows.push(
-  `${total <= 40960 ? 'OK  ' : 'FAIL'} ${'library total'.padEnd(24)}    ${String(total).padStart(5)} B / 40960`,
+  `${total <= 40960 ? 'OK  ' : 'FAIL'} ${'shipped library total'.padEnd(24)}    ${String(total).padStart(5)} B / 40960`,
 );
-if (total > 40960) failures.push(`library total ${total} B > 40960`);
+if (total > 40960) failures.push(`shipped library total ${total} B > 40960`);
 console.log('check:micro\n' + rows.join('\n'));
 if (failures.length) {
   console.error('\ncheck:micro FAILED:\n  ' + failures.join('\n  '));

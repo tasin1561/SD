@@ -3,6 +3,9 @@
 import dynamic from 'next/dynamic';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { ArrowRight, PackageSearch, Plane } from 'lucide-react';
+import { TextField } from '@/components/micro/text-field';
+import { Stepper } from '@/components/micro/stepper';
+import { TrackingCard, type TrackingStep } from '@/components/micro/tracking-card';
 import { LiquidBead } from '@/components/micro/liquid-bead';
 import { RollingLabelButton } from '@/components/micro/rolling-label-button';
 import { ParachuteProgress } from '@/components/micro/parachute-progress';
@@ -74,6 +77,23 @@ function estimate(direction: Direction, kg: number): Quote | null {
   return null;
 }
 
+/** The ILLUSTRATIVE tracking card (u17) — every figure a placeholder, labelled "Sample". */
+export function HeroSampleCard({ className }: { className?: string }): ReactElement {
+  return (
+    <TrackingCard
+      className={className}
+      badge="Sample"
+      orderId={business.sampleTracking.orderId}
+      status={business.sampleTracking.status}
+      steps={business.sampleTracking.steps as readonly TrackingStep[]}
+      progress={business.sampleTracking.progress}
+      progressLabel="On the way"
+      expectedDay={business.sampleTracking.expectedDay}
+      expectedTime={business.sampleTracking.expectedTime}
+    />
+  );
+}
+
 export function quoteLine(q: Quote): string {
   const route = q.direction === 'out' ? 'Bangladesh → India' : 'India → Bangladesh';
   return `Quote: ${route}, ${q.kg} kg, est. ${q.symbol}${q.price.toLocaleString('en-IN')} (${q.transit})`;
@@ -89,7 +109,7 @@ export function HeroActionCard({
   const tab = useHeroTab();
   const [awb, setAwb] = useState('');
   const [phase, setPhase] = useState<'idle' | 'busy'>('idle');
-  const [kg, setKg] = useState('1');
+  const [kg, setKg] = useState(1);
   const [quote, setQuote] = useState<Quote | null>(null);
 
   const track = (e: FormEvent): void => {
@@ -123,21 +143,16 @@ export function HeroActionCard({
             aria-label="Track a parcel"
             className="hero-card__row"
           >
-            <label htmlFor="hero-awb" className="sr-only">
-              Waybill number
-            </label>
-            <div className="hero-card__field">
-              <PackageSearch size={16} aria-hidden="true" />
-              <input
-                id="hero-awb"
-                value={awb}
-                onChange={(e) => setAwb(e.target.value)}
-                placeholder="Waybill number"
-                autoComplete="off"
-                inputMode="text"
-                className="tabular"
-              />
-            </div>
+            <TextField
+              id="hero-awb"
+              label="Waybill number"
+              icon={<PackageSearch size={16} />}
+              value={awb}
+              onChange={(e) => setAwb(e.currentTarget.value)}
+              autoComplete="off"
+              inputMode="text"
+              className="tabular hero-card__awb"
+            />
             {/* Wrapped, not given a className: the button spreads its rest
                 props LAST, so a className here would replace `mi mi-roll`
                 and unroll the label strip. */}
@@ -150,6 +165,14 @@ export function HeroActionCard({
               />
             </div>
           </form>
+        ) : null}
+        {tab === 'track' ? (
+          // On a phone the sample folds away so the trust row stays above the
+          // fold; from lg it sits over the map instead (HeroClient).
+          <details className="hero-card__sample lg:hidden">
+            <summary className="hero-card__sample-toggle">See a sample tracking card</summary>
+            <HeroSampleCard />
+          </details>
         ) : null}
         {tab === 'quote' ? (
           <div className="hero-card__quote">
@@ -179,30 +202,21 @@ export function HeroActionCard({
               ]}
             />
             <div className="hero-card__row">
-              <label htmlFor="hero-kg" className="sr-only">
-                Parcel weight in kilograms
-              </label>
-              <div className="hero-card__field">
-                <input
-                  id="hero-kg"
-                  type="number"
-                  min="0.1"
-                  max={maxKg}
-                  step="0.1"
-                  inputMode="decimal"
-                  value={kg}
-                  onChange={(e) => setKg(e.target.value)}
-                  className="tabular"
-                  aria-describedby="hero-kg-note"
-                />
-                <span className="hero-card__unit">kg</span>
-              </div>
+              <Stepper
+                label="Parcel weight"
+                value={kg}
+                onChange={setKg}
+                min={0.5}
+                max={maxKg}
+                step={0.5}
+                unit="kg"
+                format={(v) => v.toFixed(1)}
+                className="hero-card__kg"
+              />
               <ParachuteProgress
                 label="Calculate"
                 task={async () => {
-                  const n = Number(kg);
-                  if (!Number.isFinite(n) || n <= 0) throw new Error('weight');
-                  const q = estimate(direction, n);
+                  const q = estimate(direction, kg);
                   if (!q) throw new Error('slab');
                   return q;
                 }}

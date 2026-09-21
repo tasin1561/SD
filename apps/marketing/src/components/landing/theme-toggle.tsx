@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { PAGE_BG, type ThemeName } from '@/lib/theme-colors';
-import { ThemeMorphIcon } from '@/components/micro/touches';
+import { ThemeSwitch } from '@/components/micro/theme-switch';
 
 function resolveInitial(): ThemeName {
   if (typeof document === 'undefined') return 'dark';
@@ -59,24 +59,16 @@ export function ThemeToggle({ className }: { className?: string }): ReactElement
 
   if (theme === null) {
     // Placeholder keeps layout stable before hydration resolves.
-    return <span className={cn('inline-block h-11 w-11', className)} aria-hidden="true" />;
+    return <span className={cn('inline-block h-11 w-14', className)} aria-hidden="true" />;
   }
 
   const isDark = theme === 'dark';
+  // u14 — the tactile sun/moon switch; the View Transition fade is above.
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={isDark}
-      aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-      onClick={() => applyTheme(isDark ? 'light' : 'dark')}
-      className={cn(
-        'inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg-strong',
-        className,
-      )}
-    >
-      {/* one icon that MORPHS (touch 15) — the sun's rays retract into the crescent */}
-      <ThemeMorphIcon mode={isDark ? 'dark' : 'light'} />
-    </button>
+    <ThemeSwitch
+      dark={isDark}
+      onChange={(dark) => applyTheme(dark ? 'dark' : 'light')}
+      className={cn(className)}
+    />
   );
 }

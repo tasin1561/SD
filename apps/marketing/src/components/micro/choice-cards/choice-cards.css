@@ -7,8 +7,8 @@
   gap: 0.5rem;
   min-width: 0;
 }
-@media (max-width: 400px) {
-  .mi-choice[style*='--cols: 2'] {
+@media (max-width: 640px) {
+  .mi-choice {
     grid-template-columns: minmax(0, 1fr);
   }
 }

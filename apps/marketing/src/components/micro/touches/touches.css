@@ -226,3 +226,35 @@
 .mi-valid .bad {
   stroke: var(--red-text);
 }
+
+/* u08 — the word ON / OFF inside the track; u03 — a tinted halo on hover. */
+.mi-toggle {
+  min-width: 3.4rem;
+}
+.mi-toggle__word {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #fff;
+  transition: opacity calc(200 * var(--d));
+}
+.mi-toggle__word--on {
+  left: 0.5rem;
+  opacity: 0;
+}
+.mi-toggle__word--off {
+  right: 0.45rem;
+  color: var(--fg-muted);
+}
+.mi-toggle input:checked ~ .mi-toggle__word--on {
+  opacity: 1;
+}
+.mi-toggle input:checked ~ .mi-toggle__word--off {
+  opacity: 0;
+}
+.mi-check:hover .mi-check__box {
+  box-shadow: 0 0 0 4px var(--green-glow);
+}

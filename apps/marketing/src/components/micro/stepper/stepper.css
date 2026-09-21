@@ -1,0 +1,90 @@
+/* 20 · Number stepper (u12). */
+.mi-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  min-width: 0;
+}
+.mi-step__btn {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 0;
+  background: var(--surface-3);
+  color: var(--fg-strong);
+  cursor: pointer;
+  transition:
+    transform calc(160 * var(--d)),
+    box-shadow calc(200 * var(--d)),
+    background-color calc(200 * var(--d)),
+    color calc(200 * var(--d));
+}
+.mi-step__btn--minus:hover,
+.mi-step__btn--minus:focus-visible {
+  background: var(--magenta-tint);
+  color: var(--magenta-on-tint);
+  box-shadow: 0 0 0 4px var(--magenta-glow);
+}
+.mi-step__btn--plus:hover,
+.mi-step__btn--plus:focus-visible {
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+  box-shadow: 0 0 0 4px var(--blue-glow);
+}
+.mi-step__btn:active {
+  transform: scale(0.92);
+}
+.mi-step__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.mi-step__value {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 3.6rem;
+  padding: 0 0.25rem;
+  border-radius: 0.5rem;
+  color: var(--fg-strong);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  outline: none;
+}
+.mi-step__value:focus-visible {
+  box-shadow: 0 0 0 2px var(--blue-text);
+}
+.mi-step__num {
+  display: inline-block;
+  animation: mi-step-in calc(240 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1);
+}
+.mi-step__value[data-dir='down'] .mi-step__num {
+  animation-name: mi-step-in-down;
+}
+@keyframes mi-step-in {
+  from {
+    transform: translateY(70%);
+    opacity: 0;
+  }
+}
+@keyframes mi-step-in-down {
+  from {
+    transform: translateY(-70%);
+    opacity: 0;
+  }
+}
+.mi-step__unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}

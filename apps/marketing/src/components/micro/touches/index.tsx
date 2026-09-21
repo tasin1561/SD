@@ -142,6 +142,12 @@ export function DrawToggle({
     <label className="inline-flex min-h-11 items-center gap-3 text-[15px] text-fg-strong">
       <span className="mi mi-toggle">
         <input type="checkbox" role="switch" {...input} />
+        <span className="mi-toggle__word mi-toggle__word--on" aria-hidden>
+          ON
+        </span>
+        <span className="mi-toggle__word mi-toggle__word--off" aria-hidden>
+          OFF
+        </span>
         <span className="mi-toggle__knob" />
       </span>
       {label}

@@ -1,0 +1,161 @@
+/* 17/18 · Text field, textarea, select (u33 / u05). */
+.mi-tf {
+  display: block;
+  min-width: 0;
+}
+.mi-tf__box {
+  position: relative;
+  display: block;
+}
+.mi-tf__input {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 1.3rem 2.4rem 0.45rem 0.9rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-control);
+  background: var(--surface-input);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+  transition:
+    border-color calc(180 * var(--d)),
+    box-shadow calc(180 * var(--d)),
+    background-color calc(180 * var(--d));
+}
+.mi-tf--area .mi-tf__input {
+  min-height: 7rem;
+  padding-top: 1.6rem;
+  resize: vertical;
+}
+.mi-tf[data-icon='1'] .mi-tf__input {
+  padding-left: 3.1rem;
+}
+.mi-tf__input:hover {
+  border-color: var(--line-strong);
+}
+.mi-tf__input:focus {
+  border-color: var(--blue-text);
+  box-shadow: 0 0 0 4px var(--blue-glow);
+}
+.mi-tf__label {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-faint);
+  font-size: 15px;
+  pointer-events: none;
+  transition:
+    transform calc(180 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1),
+    font-size calc(180 * var(--d)),
+    color calc(180 * var(--d));
+}
+.mi-tf[data-icon='1'] .mi-tf__label {
+  left: 3.1rem;
+}
+.mi-tf--area .mi-tf__label {
+  top: 1.35rem;
+}
+.mi-tf__input:focus ~ .mi-tf__label,
+.mi-tf__input:not(:placeholder-shown) ~ .mi-tf__label,
+.mi-tf--select .mi-tf__label {
+  transform: translateY(-1.35rem);
+  font-size: 0.6875rem;
+  color: var(--fg-muted);
+}
+.mi-tf--area .mi-tf__input:focus ~ .mi-tf__label,
+.mi-tf--area .mi-tf__input:not(:placeholder-shown) ~ .mi-tf__label {
+  transform: translateY(-0.95rem);
+}
+.mi-tf__input:focus ~ .mi-tf__label {
+  color: var(--blue-text);
+}
+.mi-tf__icon {
+  position: absolute;
+  left: 0.6rem;
+  top: 50%;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.5rem;
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  pointer-events: none;
+  transition:
+    background-color calc(180 * var(--d)),
+    color calc(180 * var(--d));
+}
+.mi-tf__box:has(.mi-tf__input:focus) .mi-tf__icon {
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+}
+.mi-tf__status,
+.mi-tf__chev {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: var(--fg-muted);
+}
+.mi-tf__status {
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity calc(180 * var(--d)),
+    transform calc(220 * var(--d)) cubic-bezier(0.3, 1.4, 0.4, 1);
+}
+.mi-tf[data-status='error'] .mi-tf__status,
+.mi-tf[data-status='success'] .mi-tf__status {
+  opacity: 1;
+  transform: scale(1);
+}
+.mi-tf[data-status='error'] .mi-tf__input {
+  border-color: var(--red-text);
+}
+.mi-tf[data-status='error'] .mi-tf__input:focus {
+  box-shadow: 0 0 0 4px var(--red-glow);
+}
+.mi-tf[data-status='error'] .mi-tf__status,
+.mi-tf[data-status='error'] .mi-tf__help {
+  color: var(--red-text);
+}
+.mi-tf[data-status='success'] .mi-tf__input {
+  border-color: var(--green-text);
+}
+.mi-tf[data-status='success'] .mi-tf__status {
+  color: var(--green-text);
+}
+.mi-tf--select .mi-tf__input {
+  appearance: none;
+  cursor: pointer;
+}
+.mi-tf__chev {
+  transition: transform calc(220 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1);
+}
+.mi-tf__box:has(.mi-tf__input:focus) .mi-tf__chev {
+  transform: rotate(180deg);
+  color: var(--blue-text);
+}
+.mi-tf__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.3rem;
+  padding: 0 0.25rem;
+  font-size: 12px;
+  color: var(--fg-muted);
+  line-height: 1.35;
+}
+.mi-tf__count {
+  flex: none;
+}
+.mi-tf__count[data-near] {
+  color: var(--saffron-text);
+  font-weight: 600;
+}

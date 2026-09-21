@@ -1,0 +1,129 @@
+/* 23 · Tooltip card (u35). */
+.mi-tip {
+  position: relative;
+  display: inline-block;
+}
+.mi-tip__term {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.1rem;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: help;
+  text-decoration: underline dotted var(--blue-text);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  border-radius: 0.25rem;
+}
+.mi-tip__term:focus-visible {
+  outline: 2px solid var(--blue-text);
+  outline-offset: 2px;
+}
+.mi-tip__i {
+  color: var(--blue-text);
+  opacity: 0.8;
+}
+.mi-tip__card {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.7rem);
+  z-index: 60;
+  width: min(18rem, 80vw);
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 0.95rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  box-shadow:
+    var(--shadow-2),
+    0 0 0 1px var(--blue-glow);
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.45;
+  transform: translate(-50%, 6px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity calc(180 * var(--d)),
+    transform calc(220 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1),
+    visibility 0s linear calc(180 * var(--d));
+}
+.mi-tip[data-below] .mi-tip__card {
+  bottom: auto;
+  top: calc(100% + 0.7rem);
+  transform: translate(-50%, -6px);
+}
+.mi-tip[data-open='true'] .mi-tip__card {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+.mi-tip__arrow {
+  position: absolute;
+  left: 50%;
+  bottom: -0.4rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  background: var(--surface-2);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: translateX(-50%) rotate(45deg);
+}
+.mi-tip[data-below] .mi-tip__arrow {
+  bottom: auto;
+  top: -0.4rem;
+  transform: translateX(-50%) rotate(-135deg);
+}
+.mi-tip__chip {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.55rem;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+}
+.mi-tip__title {
+  font-weight: 700;
+  color: var(--fg-strong);
+  font-size: 14px;
+}
+.mi-tip__list {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+}
+.mi-tip__point {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--fg-strong);
+}
+.mi-tip__point svg {
+  color: var(--green-text);
+  flex: none;
+}
+@media (max-width: 480px) {
+  .mi-tip__card {
+    left: 0;
+    transform: translate(0, 6px);
+  }
+  .mi-tip[data-open='true'] .mi-tip__card {
+    transform: translate(0, 0);
+  }
+  .mi-tip__arrow {
+    left: 1.25rem;
+    transform: rotate(45deg);
+  }
+  .mi-tip[data-below] .mi-tip__arrow {
+    transform: rotate(-135deg);
+  }
+}

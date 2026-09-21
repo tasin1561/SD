@@ -42,6 +42,43 @@ export const platform = {
     cta: { href: '/request-invite', label: 'Book a shipment' },
     track: { href: 'https://track.skydrop.online', label: 'Track a parcel' },
   },
+  /** Jargon explained on hover — what the product means by each word. */
+  glossary: {
+    cod: {
+      term: 'COD',
+      title: 'Cash on delivery',
+      body: 'The customer pays the courier at the door. The courier pays us; we credit you.',
+      points: ['Every COD order confirmed by phone first', 'Credited to your wallet on settlement'],
+    },
+    rto: {
+      term: 'RTO',
+      title: 'Return to origin',
+      body: 'A parcel the customer did not take comes back to our Indian warehouse.',
+      points: ['Inspected unit by unit', 'Restocked, kept aside, or written off — your call'],
+    },
+    volumetric: {
+      term: 'volumetric weight',
+      title: 'Volumetric weight',
+      body: 'Length × width × height ÷ 5000, in cm. Couriers charge the higher of this and the scale.',
+      points: ['A big light box costs more than it weighs', 'Shown before you book'],
+    },
+    waybill: {
+      term: 'waybill',
+      title: 'Waybill (AWB)',
+      body: "The courier's tracking number for one parcel — the code on the label and the tracking page.",
+    },
+    gstInvoice: {
+      term: 'GST invoice',
+      title: 'GST invoice',
+      body: 'The tax document for a sale into India, issued from your seller account for every delivered order.',
+    },
+    instantPay: {
+      term: 'Instant Pay',
+      title: 'Instant Pay',
+      body: "Your COD credited the moment the parcel is delivered, for a small fee — instead of waiting for the courier's payout.",
+      points: ['Opt in per seller', 'Fee shown before you switch it on'],
+    },
+  },
   /** What ships, in the seller's own words — never more than the app does. */
   capabilities: [
     'Stock held in our Indian warehouse, counted on arrival',
@@ -100,6 +137,48 @@ export const business = {
     { value: dummy(96), suffix: '%', label: 'confirmed before dispatch' },
     { value: dummy(4), suffix: '–7 days', label: 'Dhaka to an Indian doorstep' },
   ],
+  /** Social profiles — each URL is the owner's to supply. */
+  social: [
+    { id: 'facebook', label: 'Facebook', href: dummy('https://facebook.com/skydrop') },
+    { id: 'instagram', label: 'Instagram', href: dummy('https://instagram.com/skydrop') },
+    { id: 'linkedin', label: 'LinkedIn', href: dummy('https://linkedin.com/company/skydrop') },
+    { id: 'whatsapp', label: 'WhatsApp', href: dummy('https://wa.me/8801000000000') },
+  ],
+  /** The ILLUSTRATIVE tracking card beside the hero's Track tab — labelled "Sample". */
+  sampleTracking: {
+    orderId: dummy('SD-2026-41-018240'),
+    status: dummy('Out for delivery'),
+    expectedDay: dummy('Today'),
+    expectedTime: dummy('by 6 pm'),
+    progress: dummy(78),
+    steps: [
+      {
+        label: 'Order confirmed',
+        detail: dummy('Confirmed by phone with the customer'),
+        time: dummy('Mon 11:20'),
+        state: 'done',
+      },
+      {
+        label: 'Packed in Bengaluru',
+        detail: dummy('Scanned at our warehouse'),
+        time: dummy('Mon 16:05'),
+        state: 'done',
+      },
+      {
+        label: 'With the courier',
+        detail: dummy('Delhivery · in transit'),
+        time: dummy('Tue 08:40'),
+        state: 'done',
+      },
+      {
+        label: 'Out for delivery',
+        detail: dummy('Chennai hub → doorstep'),
+        time: dummy('Today 09:15'),
+        state: 'current',
+      },
+      { label: 'Delivered', state: 'todo' },
+    ],
+  },
   trustCount: dummy(120),
   trustLine: 'Bangladeshi sellers ship with Skydrop',
   /**

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { HeroArt } from './hero-island';
-import { HeroActionCard } from './hero-action-card';
-import { setHeroVisible } from '@/lib/hero-tab';
+import { HeroActionCard, HeroSampleCard } from './hero-action-card';
+import { setHeroVisible, useHeroTab } from '@/lib/hero-tab';
 import type { Direction } from './direction';
 
 /**
@@ -23,6 +23,7 @@ export function HeroClient({
 }): ReactElement {
   const [direction, setDirection] = useState<Direction>('out');
   const [labels, setLabels] = useState(true);
+  const tab = useHeroTab();
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export function HeroClient({
     <div ref={root} className="hero__grid" data-direction={direction}>
       <div className="hero__art-slot">
         <HeroArt direction={direction} labels={labels} />
+        {tab === 'track' ? <HeroSampleCard className="hero__sample-overlay" /> : null}
       </div>
       <div className="hero__copy">
         {headline}

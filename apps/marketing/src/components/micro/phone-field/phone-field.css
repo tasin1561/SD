@@ -1,0 +1,55 @@
+/* 19 · Phone field (u02) — the country chip sits inside the field. */
+.mi-phone__box {
+  display: flex;
+  align-items: stretch;
+}
+.mi-phone__country {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.6rem 0 0.75rem;
+  border: 1px solid var(--border-control);
+  border-right: 0;
+  border-radius: 0.75rem 0 0 0.75rem;
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: 14px;
+  flex: none;
+  min-height: 3.25rem;
+}
+.mi-phone__country svg {
+  flex: none;
+}
+.mi-phone__select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+}
+.mi-phone__code {
+  font-weight: 600;
+  color: var(--fg-strong);
+}
+.mi-phone__input.mi-tf__input {
+  border-radius: 0 0.75rem 0.75rem 0;
+  padding-left: 0.9rem;
+}
+.mi-phone__label {
+  /* The label floats over the NUMBER half, after the country chip. */
+  left: calc(6.6rem);
+}
+.mi-phone[data-status='error'] .mi-phone__country {
+  border-color: var(--red-text);
+}
+.mi-phone[data-status='success'] .mi-phone__country {
+  border-color: var(--green-text);
+}
+.mi-phone__box:has(.mi-phone__input:focus) .mi-phone__country {
+  border-color: var(--blue-text);
+}
+.mi-phone__country:has(.mi-phone__select:focus-visible) {
+  outline: 2px solid var(--blue-text);
+  outline-offset: -2px;
+}

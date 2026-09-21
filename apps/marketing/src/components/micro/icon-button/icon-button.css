@@ -1,0 +1,72 @@
+/* 22 · Icon button (u31). */
+.icon-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease,
+    box-shadow 220ms ease,
+    border-color 180ms ease;
+}
+.icon-btn[data-size='lg'] {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 1rem;
+}
+.icon-btn:hover,
+.icon-btn:focus-visible {
+  background: var(--blue-fill);
+  border-color: var(--blue-fill);
+  color: var(--blue-on-fill);
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 24px -12px var(--blue-glow),
+    0 0 0 4px var(--blue-glow);
+  outline: none;
+}
+.icon-btn:active {
+  transform: translateY(0) scale(0.96);
+}
+.icon-btn__badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--red-fill);
+  color: var(--red-on-fill);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.15rem;
+  text-align: center;
+  border: 2px solid var(--surface);
+}
+.icon-btn__dot {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+}
+.icon-btn__dot[data-dot='green'] {
+  background: var(--green-fill);
+}
+.icon-btn__dot[data-dot='saffron'] {
+  background: var(--saffron-fill);
+}
+.icon-btn__dot[data-dot='red'] {
+  background: var(--red-fill);
+}

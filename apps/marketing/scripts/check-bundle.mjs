@@ -99,6 +99,13 @@ check('out/index.html (gz)', gz(indexHtml), 75_000);
 const criticalCss =
   /<style data-critical>([\s\S]*?)<\/style>/.exec(indexHtml.toString())?.[1] ?? '';
 check('inlined critical CSS in index.html (gz)', gz(criticalCss), 15_000);
+{
+  // The deferred stylesheet(s) the home page loads after first paint.
+  let deferred = 0;
+  for (const m of indexHtml.toString().matchAll(/rel="preload" as="style" href="([^"]+\.css)"/g))
+    deferred += gz(readFileSync(join(OUT, m[1])));
+  check('deferred stylesheet(s) for / (gz)', deferred, 45_000);
+}
 let svgTotal = 0;
 let svgMax = 0;
 for (const p of walk(OUT)

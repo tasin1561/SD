@@ -1,0 +1,98 @@
+/* 21 · Button sweep (u28). --s-a / --s-b are the sweep's two stops; the
+   resting fill is the tone's own fill so the button reads as primary
+   before anybody hovers. */
+.btn-sweep {
+  --s-fill: var(--blue-fill);
+  --s-on: var(--blue-on-fill);
+  --s-a: var(--blue-500);
+  --s-b: var(--teal-500);
+  --s-glow: var(--blue-glow);
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border-radius: 999px;
+  border: 0;
+  background: var(--s-fill);
+  color: var(--s-on);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 220ms ease;
+}
+.btn-sweep[data-tone='green'] {
+  --s-fill: var(--green-fill);
+  --s-on: var(--green-on-fill);
+  --s-a: var(--green-500);
+  --s-b: var(--teal-500);
+  --s-glow: var(--green-glow);
+}
+.btn-sweep[data-tone='saffron'] {
+  --s-fill: var(--saffron-fill);
+  --s-on: var(--saffron-on-fill);
+  --s-a: var(--saffron-400);
+  --s-b: var(--saffron-500);
+  --s-glow: var(--saffron-glow);
+}
+.btn-sweep[data-tone='ink'] {
+  --s-fill: var(--slate-950);
+  --s-on: #fff;
+  --s-a: var(--slate-800);
+  --s-b: var(--blue-700);
+  --s-glow: var(--blue-glow);
+}
+.btn-sweep::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, var(--s-a), var(--s-b));
+  transform: translateX(-101%);
+  transition: transform 320ms cubic-bezier(0.3, 1, 0.3, 1);
+}
+.btn-sweep:hover::before,
+.btn-sweep:focus-visible::before {
+  transform: translateX(0);
+}
+.btn-sweep:hover,
+.btn-sweep:focus-visible {
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 26px -12px var(--s-glow),
+    0 0 0 4px var(--s-glow);
+}
+.btn-sweep:active {
+  transform: translateY(0) scale(0.98);
+}
+.btn-sweep__arrow {
+  transition: transform 220ms cubic-bezier(0.3, 1, 0.3, 1);
+}
+.btn-sweep:hover .btn-sweep__arrow,
+.btn-sweep:focus-visible .btn-sweep__arrow {
+  transform: translateX(4px);
+}
+.btn-sweep:focus-visible {
+  outline: none;
+}
+.btn-sweep:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-sweep::before,
+  .btn-sweep__arrow,
+  .btn-sweep {
+    transition: none;
+  }
+}

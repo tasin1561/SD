@@ -30,7 +30,19 @@ import { ReactiveMascot } from './reactive-mascot';
 import { DoorLink } from './door-hover';
 import { ConnectorDraw } from './connector-draw';
 import { ChoiceCards } from './choice-cards';
-import { Plane } from 'lucide-react';
+import { Plane, PackageSearch, Search, Bell, Truck, ShieldCheck } from 'lucide-react';
+import { SelectField, TextArea, TextField } from './text-field';
+import { PhoneField } from './phone-field';
+import { Stepper } from './stepper';
+import { SweepButton, SweepLink } from './sweep';
+import { IconButton } from './icon-button';
+import { TermTip } from './tooltip-card';
+import { EmptyState } from './empty-state';
+import { TrackingCard } from './tracking-card';
+import { SuccessCard } from './success-card';
+import { toast } from './toast';
+import { RowLink } from './list-row';
+import { ThemeSwitch } from './theme-switch';
 
 /**
  * Every micro pattern, with a DEMO that drives it through its states. The
@@ -80,6 +92,237 @@ function ChoiceDemo(): ReactElement {
       ]}
     />
   );
+}
+
+function TextFieldDemo(): ReactElement {
+  const [v, setV] = useState('');
+  return (
+    <div className="grid max-w-sm gap-3">
+      <TextField label="Your name" icon={<Search size={15} />} helper="As on your trade licence." />
+      <TextField
+        label="Store name"
+        maxLength={30}
+        counter
+        value={v}
+        onChange={(e) => setV(e.currentTarget.value)}
+      />
+      <TextField
+        label="Email"
+        status="error"
+        error="That does not look like an email."
+        defaultValue="rahim@"
+      />
+      <TextField label="Email" status="success" defaultValue="rahim@dhakathreads.example" />
+      <SelectField label="Orders a month" icon={<Truck size={15} />} defaultValue="100">
+        <option value="100">100–500</option>
+        <option value="500">500–2,000</option>
+      </SelectField>
+      <TextArea label="Anything else" maxLength={200} counter />
+    </div>
+  );
+}
+function PhoneDemo(): ReactElement {
+  return (
+    <div className="grid max-w-sm gap-3">
+      <PhoneField name="demo-phone" />
+      <PhoneField name="demo-phone-in" defaultCountry="IN" label="Indian number" />
+    </div>
+  );
+}
+function StepperDemo(): ReactElement {
+  const [n, setN] = useState(1);
+  const [kg, setKg] = useState(1.5);
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <Stepper label="Parcels" value={n} onChange={setN} min={1} max={12} pad={2} />
+      <Stepper
+        label="Weight"
+        value={kg}
+        onChange={setKg}
+        min={0.5}
+        max={5}
+        step={0.5}
+        unit="kg"
+        format={(v) => v.toFixed(1)}
+      />
+    </div>
+  );
+}
+function SweepDemo(): ReactElement {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <SweepLink href="#">Book a shipment</SweepLink>
+      <SweepButton tone="green">Get a quote</SweepButton>
+      <SweepButton tone="saffron">Send to India</SweepButton>
+      <SweepButton tone="ink" arrow={false}>
+        Ink
+      </SweepButton>
+    </div>
+  );
+}
+function IconButtonDemo(): ReactElement {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <IconButton label="Track a parcel">
+        <PackageSearch size={18} />
+      </IconButton>
+      <IconButton label="Notifications" badge={3}>
+        <Bell size={18} />
+      </IconButton>
+      <IconButton label="Online" dot="green" size="lg">
+        <ShieldCheck size={20} />
+      </IconButton>
+    </div>
+  );
+}
+function TipDemo(): ReactElement {
+  return (
+    <p className="max-w-sm text-[15px] text-fg-body">
+      Every{' '}
+      <TermTip
+        def={{
+          term: 'COD',
+          title: 'Cash on delivery',
+          body: 'The customer pays the courier at the door; we credit you.',
+          points: ['Confirmed by phone first', 'Credited on settlement'],
+        }}
+      />{' '}
+      order is confirmed before it ships, and a{' '}
+      <TermTip
+        def={{
+          term: 'waybill',
+          title: 'Waybill (AWB)',
+          body: "The courier's tracking number for one parcel.",
+        }}
+      />{' '}
+      follows it home.
+    </p>
+  );
+}
+function EmptyDemo(): ReactElement {
+  return (
+    <div className="max-w-sm">
+      <EmptyState
+        title="Not there yet"
+        body="We do not deliver to that postcode today. Talk to us — the map is growing."
+        action={<SweepButton tone="green">Talk to us</SweepButton>}
+      />
+    </div>
+  );
+}
+function TrackingDemo(): ReactElement {
+  return (
+    <div className="max-w-sm">
+      <TrackingCard
+        orderId="SD-2026-41-018240"
+        status="Out for delivery"
+        badge="Sample"
+        progress={78}
+        progressLabel="On the way"
+        expectedDay="Today"
+        expectedTime="by 6 pm"
+        steps={[
+          {
+            label: 'Order confirmed',
+            detail: 'Confirmed by phone',
+            time: 'Mon 11:20',
+            state: 'done',
+          },
+          { label: 'Packed in Bengaluru', time: 'Mon 16:05', state: 'done' },
+          { label: 'With the courier', detail: 'Delhivery', time: 'Tue 08:40', state: 'done' },
+          {
+            label: 'Out for delivery',
+            detail: 'Chennai hub → doorstep',
+            time: 'Today 09:15',
+            state: 'current',
+          },
+          { label: 'Delivered', state: 'todo' },
+        ]}
+      />
+    </div>
+  );
+}
+function SuccessDemo(): ReactElement {
+  return (
+    <div className="max-w-sm">
+      <SuccessCard
+        title="Request received"
+        body="Someone will read this properly and get back to you within one working day."
+        action={
+          <SweepLink href="#" tone="green">
+            Back to the main site
+          </SweepLink>
+        }
+      />
+    </div>
+  );
+}
+function ToastDemo(): ReactElement {
+  return (
+    <div className="flex flex-wrap gap-3">
+      <SweepButton
+        tone="green"
+        arrow={false}
+        onClick={() => toast({ title: 'Number copied', body: '+880 1XXX-XXXXXX' })}
+      >
+        Toast (u32)
+      </SweepButton>
+      <SweepButton
+        arrow={false}
+        onClick={() =>
+          toast({
+            title: 'CN-2026-08-000003 cancelled',
+            body: '40 units returned to you',
+            tone: 'info',
+            action: { label: 'View', onClick: () => undefined },
+          })
+        }
+      >
+        Snackbar (u22)
+      </SweepButton>
+      <SweepButton
+        tone="saffron"
+        arrow={false}
+        onClick={() =>
+          toast({ title: 'Could not reach us', body: 'Try again in a moment.', tone: 'error' })
+        }
+      >
+        Error
+      </SweepButton>
+    </div>
+  );
+}
+function RowDemo(): ReactElement {
+  return (
+    <div className="grid max-w-sm gap-1">
+      <RowLink
+        href="#"
+        icon={<Truck size={18} />}
+        title="Send to India"
+        helper="Door to door, 4–7 days"
+        hue="saffron"
+      />
+      <RowLink
+        href="#"
+        icon={<PackageSearch size={18} />}
+        title="Track a parcel"
+        helper="Any waybill, no sign-in"
+        active
+      />
+      <RowLink
+        href="#"
+        icon={<ShieldCheck size={18} />}
+        title="Reseller stores"
+        helper="Sell your stock under their name"
+        meta="New"
+        hue="violet"
+      />
+    </div>
+  );
+}
+function ThemeSwitchDemo(): ReactElement {
+  const [d, setD] = useState(true);
+  return <ThemeSwitch dark={d} onChange={setD} />;
 }
 
 function ParachuteDemo(): ReactElement {
@@ -670,6 +913,90 @@ export const MICRO_REGISTRY: readonly MicroEntry[] = [
     where:
       'Hero quote + book direction; freight-billing choice; "Directly / Needs my approval"; parcel type',
     Demo: ChoiceDemo,
+  },
+  {
+    id: 'text-field',
+    n: 17,
+    name: 'Text field · select · textarea (u33 / u05)',
+    where: 'Every form field on the site',
+    Demo: TextFieldDemo,
+  },
+  {
+    id: 'phone-field',
+    n: 18,
+    name: 'Phone field (u02)',
+    where: 'Hero Book tab; invite form; contact form',
+    Demo: PhoneDemo,
+  },
+  {
+    id: 'stepper',
+    n: 19,
+    name: 'Number stepper (u12)',
+    where: 'Hero quote weight; estimator dims; "Units set aside"',
+    Demo: StepperDemo,
+  },
+  {
+    id: 'sweep',
+    n: 20,
+    name: 'Button sweep (u28)',
+    where: 'Every primary button and CTA link',
+    Demo: SweepDemo,
+  },
+  {
+    id: 'icon-button',
+    n: 21,
+    name: 'Icon button (u31)',
+    where: 'Header track + theme; dashboard mocks',
+    Demo: IconButtonDemo,
+  },
+  {
+    id: 'tooltip-card',
+    n: 22,
+    name: 'Tooltip card (u35)',
+    where: 'Jargon: COD, RTO, volumetric weight, waybill, GST invoice, Instant Pay',
+    Demo: TipDemo,
+  },
+  {
+    id: 'empty-state',
+    n: 23,
+    name: 'Empty state (u27)',
+    where: 'Not serviceable; not-found; tracking not found',
+    Demo: EmptyDemo,
+  },
+  {
+    id: 'tracking-card',
+    n: 24,
+    name: 'Tracking card (u17)',
+    where: 'Hero Track tab (Sample); track band; order lifecycle mock',
+    Demo: TrackingDemo,
+  },
+  {
+    id: 'success-card',
+    n: 25,
+    name: 'Success card (u11)',
+    where: 'Hero Book tab after a real 201; invite page',
+    Demo: SuccessDemo,
+  },
+  {
+    id: 'toast',
+    n: 26,
+    name: 'Toast · snackbar (u32 / u22)',
+    where: '"Number copied"; credited/settled events; consignment cancelled',
+    Demo: ToastDemo,
+  },
+  {
+    id: 'list-row',
+    n: 27,
+    name: 'Stacked-list row (u21)',
+    where: 'Drawer; mega-menus; coverage cities; credentials; team/stores mocks',
+    Demo: RowDemo,
+  },
+  {
+    id: 'theme-switch',
+    n: 28,
+    name: 'Theme switch (u14)',
+    where: 'Header, drawer',
+    Demo: ThemeSwitchDemo,
   },
 ];
 

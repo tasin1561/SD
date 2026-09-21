@@ -6,6 +6,12 @@ import { ArrowRight, Check } from 'lucide-react';
 import { Chip, LiveDot } from './chrome';
 import { useAsyncState } from '@/components/micro/use-async-state';
 import { VanSubmitButton } from '@/components/micro/van-drive-off';
+import { ChoiceCards } from '@/components/micro/choice-cards';
+import { PhoneField } from '@/components/micro/phone-field';
+import { SuccessCard } from '@/components/micro/success-card';
+import { SelectField, TextArea, TextField } from '@/components/micro/text-field';
+import { Plane } from 'lucide-react';
+import { useState as useReactState } from 'react';
 import type { Direction } from '@/components/islands/direction';
 
 /**
@@ -63,41 +69,6 @@ const DIRECTIONS = [
   { value: 'BOTH', label: 'Both directions' },
 ] as const;
 
-interface FieldProps {
-  readonly id: string;
-  readonly label: string;
-  readonly required?: boolean;
-  readonly children: ReactElement;
-  readonly hint?: string;
-}
-
-function Field({ id, label, required, children, hint }: FieldProps): ReactElement {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="mono-caps text-fg-muted">
-        {label}
-        {required ? (
-          <span className="text-sky" aria-hidden="true">
-            {' '}
-            *
-          </span>
-        ) : null}
-      </label>
-      {children}
-      {hint ? <span className="text-[12px] leading-snug text-fg-muted">{hint}</span> : null}
-    </div>
-  );
-}
-
-/* `border-border-control`, not `border-line`: a field's border is the
-   ONLY thing marking where it begins, so it carries 3:1 (WCAG 1.4.11)
-   where a divider between two surfaces does not. The 16px floor and
-   44px height on coarse pointers come from globals.css as SELECTORS —
-   deliberately not restated here, or the two would drift. */
-const inputClass =
-  'w-full h-11 px-3 rounded-sm bg-surface-input border border-border-control text-fg-strong ' +
-  'text-[14px] placeholder:text-fg-faint focus:outline-none focus:border-sky transition-colors';
-
 /**
  * Two faces of one form. `page` is /request-invite as it always was.
  * `embedded` is the hero's "Book a shipment" tab: the five fields that
@@ -124,6 +95,9 @@ export function InviteForm({
 } = {}): ReactElement {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dir, setDir] = useReactState<'BD_TO_IN' | 'IN_TO_BD' | 'BOTH'>(
+    direction === 'in' ? 'IN_TO_BD' : 'BD_TO_IN',
+  );
   const embedded = variant === 'embedded';
   const state = useAsyncState<void>({
     minBusyMs: 900,
@@ -187,17 +161,10 @@ export function InviteForm({
 
   if (sent && embedded) {
     return (
-      <div className="invite-embedded__done" role="status">
-        <div className="invite-embedded__tick" aria-hidden>
-          <Check size={20} />
-        </div>
-        <div>
-          <p className="invite-embedded__done-h">Request received</p>
-          <p className="invite-embedded__done-p">
-            Someone will read this properly and get back to you within one working day.
-          </p>
-        </div>
-      </div>
+      <SuccessCard
+        title="Request received"
+        body="Someone will read this properly and get back to you within one working day."
+      />
     );
   }
 
@@ -205,9 +172,9 @@ export function InviteForm({
     return (
       <div className="overflow-hidden rounded-lg border border-line bg-surface-2 shadow-[var(--shadow-2)]">
         <div className="panel-head flex items-center justify-between gap-2 px-4 py-2.5 sm:px-5">
-          <span className="mono-caps flex items-center gap-2 text-fg-muted">
+          <span className="flex items-center gap-2 text-[12px] font-semibold text-fg-muted">
             <LiveDot />
-            <span className="text-fg-strong">invite request</span>
+            <span className="text-fg-strong">Invite request</span>
           </span>
           <Chip tone="good">received</Chip>
         </div>
@@ -262,7 +229,6 @@ export function InviteForm({
     ) : null;
 
   if (embedded) {
-    const dir = direction === 'in' ? 'IN_TO_BD' : 'BD_TO_IN';
     return (
       <form
         onSubmit={(e) => void handleSubmit(e)}
@@ -270,86 +236,62 @@ export function InviteForm({
         noValidate
         data-variant="embedded"
       >
+        {/* Direction as u10 cards — no select. The hero's own direction
+            seeds it; the value travels as the shippingDirection field. */}
+        <ChoiceCards<'BD_TO_IN' | 'IN_TO_BD' | 'BOTH'>
+          name="shippingDirection"
+          label="Where do you want to deliver parcels?"
+          value={dir}
+          onChange={setDir}
+          columns={3}
+          options={[
+            {
+              value: 'BD_TO_IN',
+              title: 'Bangladesh → India',
+              icon: <Plane size={14} />,
+              hue: 'saffron',
+            },
+            {
+              value: 'IN_TO_BD',
+              title: 'India → Bangladesh',
+              icon: <Plane size={14} style={{ transform: 'scaleX(-1)' }} />,
+              hue: 'green',
+            },
+            { value: 'BOTH', title: 'Both directions', hue: 'blue' },
+          ]}
+        />
         <div className="invite-embedded__grid">
-          {/* Floating labels (u33): the label sits in the field and rises
-              into the border on focus or once filled. The select's label is
-              always up — it always has a value. */}
-          <span className="mi mi-float is-select">
-            <select
-              key={dir}
-              id="shippingDirection"
-              name="shippingDirection"
-              className="mi-float__input"
-              defaultValue={dir}
-            >
-              {DIRECTIONS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-            <label htmlFor="shippingDirection" className="mi-float__label">
-              Deliver to
-            </label>
-          </span>
-          <span className="mi mi-float">
-            <input
-              id="companyName"
-              name="companyName"
-              required
-              maxLength={160}
-              autoComplete="organization"
-              className="mi-float__input"
-              placeholder=" "
-            />
-            <label htmlFor="companyName" className="mi-float__label">
-              Business name (or your own name) *
-            </label>
-          </span>
-          <span className="mi mi-float">
-            <input
-              id="fullName"
-              name="fullName"
-              required
-              maxLength={120}
-              autoComplete="name"
-              className="mi-float__input"
-              placeholder=" "
-            />
-            <label htmlFor="fullName" className="mi-float__label">
-              Your name *
-            </label>
-          </span>
-          <span className="mi mi-float">
-            <input
-              id="phone"
-              name="phone"
-              required
-              maxLength={32}
-              autoComplete="tel"
-              inputMode="tel"
-              className="mi-float__input"
-              placeholder=" "
-            />
-            <label htmlFor="phone" className="mi-float__label">
-              Phone or WhatsApp *
-            </label>
-          </span>
-          <span className="mi mi-float invite-embedded__wide">
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              maxLength={200}
-              autoComplete="email"
-              className="mi-float__input"
-              placeholder=" "
-            />
-            <label htmlFor="email" className="mi-float__label">
-              Email *
-            </label>
-          </span>
+          <TextField
+            id="companyName"
+            name="companyName"
+            label="Business name (or your own name) *"
+            required
+            maxLength={160}
+            autoComplete="organization"
+          />
+          <TextField
+            id="fullName"
+            name="fullName"
+            label="Your name *"
+            required
+            maxLength={120}
+            autoComplete="name"
+          />
+          <PhoneField
+            id="phone"
+            name="phone"
+            required
+            defaultCountry={dir === 'IN_TO_BD' ? 'IN' : 'BD'}
+          />
+          <TextField
+            id="email"
+            name="email"
+            type="email"
+            label="Email *"
+            required
+            maxLength={200}
+            autoComplete="email"
+          />
         </div>
         {quote ? <input type="hidden" name="message" value={quote} /> : null}
         {honeypot}
@@ -390,8 +332,8 @@ export function InviteForm({
         noValidate
       >
         <div className="panel-head flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:px-5">
-          <span className="mono-caps text-fg-strong">invite request</span>
-          <span className="mono-caps text-fg-faint">4 required · 5 optional</span>
+          <span className="text-[12px] font-semibold text-fg-strong">Invite request</span>
+          <span className="text-[12px] text-fg-faint">4 required · 5 optional</span>
         </div>
 
         <div className="p-5 sm:p-8">
@@ -409,132 +351,100 @@ export function InviteForm({
           {/* First, because it frames everything after it — and because
               a lead in the wrong direction is worth knowing about before
               reading their volume. */}
-          <div className="mt-7">
-            <Field
+          <div className="mt-7 grid gap-4">
+            <SelectField
               id="shippingDirection"
+              name="shippingDirection"
               label="Where do you want to deliver parcels?"
-              hint="We run Bangladesh → India today. Tell us either way — the other direction is what we are deciding whether to build next."
+              icon={<Plane size={15} />}
+              helper="We run Bangladesh → India today. Tell us either way — the other direction is what we are deciding whether to build next."
+              defaultValue=""
             >
-              <select
-                id="shippingDirection"
-                name="shippingDirection"
-                className={inputClass}
-                defaultValue=""
-              >
-                <option value="">Select…</option>
-                {DIRECTIONS.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
+              <option value="">Select…</option>
+              {DIRECTIONS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
+            </SelectField>
           </div>
 
-          <div className="mt-5 grid gap-5 sm:grid-cols-2">
-            <Field id="fullName" label="Your name" required>
-              <input
-                id="fullName"
-                name="fullName"
-                required
-                maxLength={120}
-                autoComplete="name"
-                className={inputClass}
-                placeholder="Rahim Uddin"
-              />
-            </Field>
-            <Field id="companyName" label="Company" required>
-              <input
-                id="companyName"
-                name="companyName"
-                required
-                maxLength={160}
-                autoComplete="organization"
-                className={inputClass}
-                placeholder="Dhaka Threads"
-              />
-            </Field>
-            <Field id="email" label="Email" required>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                maxLength={200}
-                autoComplete="email"
-                className={inputClass}
-                placeholder="you@yourstore.com"
-              />
-            </Field>
-            <Field
-              id="phone"
-              label="Phone or WhatsApp"
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <TextField
+              id="fullName"
+              name="fullName"
+              label="Your name *"
               required
-              hint="However you write it is fine."
-            >
-              <input
-                id="phone"
-                name="phone"
-                required
-                maxLength={32}
-                autoComplete="tel"
-                inputMode="tel"
-                className={inputClass}
-                placeholder="+880 1712 345678"
-              />
-            </Field>
-            <Field
+              maxLength={120}
+              autoComplete="name"
+            />
+            <TextField
+              id="companyName"
+              name="companyName"
+              label="Business name (or your own name) *"
+              required
+              maxLength={160}
+              autoComplete="organization"
+            />
+            <TextField
+              id="email"
+              name="email"
+              type="email"
+              label="Email *"
+              required
+              maxLength={200}
+              autoComplete="email"
+            />
+            <TextField
+              id="phone"
+              name="phone"
+              label="Phone or WhatsApp *"
+              required
+              maxLength={32}
+              autoComplete="tel"
+              inputMode="tel"
+              helper="However you write it is fine."
+            />
+            <TextField
               id="altPhone"
+              name="altPhone"
               label="Second number"
-              hint="If you have one in the other country — whichever reaches you."
+              maxLength={32}
+              autoComplete="tel"
+              inputMode="tel"
+              helper="If you have one in the other country — whichever reaches you."
+            />
+            <TextField
+              id="productTypes"
+              name="productTypes"
+              label="What do you sell?"
+              maxLength={300}
+            />
+            <SelectField
+              id="monthlyOrders"
+              name="monthlyOrders"
+              label="Orders a month"
+              defaultValue=""
             >
-              <input
-                id="altPhone"
-                name="altPhone"
-                maxLength={32}
-                autoComplete="tel"
-                inputMode="tel"
-                className={inputClass}
-                placeholder="+91 98765 43210"
-              />
-            </Field>
-            <Field id="productTypes" label="What do you sell?">
-              <input
-                id="productTypes"
-                name="productTypes"
-                maxLength={300}
-                className={inputClass}
-                placeholder="Womenswear — kurtis, sarees"
-              />
-            </Field>
-            <Field id="monthlyOrders" label="Orders a month">
-              <select
-                id="monthlyOrders"
-                name="monthlyOrders"
-                className={inputClass}
-                defaultValue=""
-              >
-                <option value="">Select…</option>
-                {VOLUMES.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </Field>
+              <option value="">Select…</option>
+              {VOLUMES.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </SelectField>
           </div>
 
           <div className="mt-5">
-            <Field id="message" label="Anything else">
-              <textarea
-                id="message"
-                name="message"
-                maxLength={2000}
-                rows={4}
-                className={inputClass.replace('h-12', 'min-h-[7rem] py-3')}
-                placeholder="Where you ship from, what you have tried before, what worries you about India."
-              />
-            </Field>
+            <TextArea
+              id="message"
+              name="message"
+              label="Anything else"
+              maxLength={2000}
+              counter
+              rows={4}
+              helper="Where you ship from, what you have tried before, what worries you about India."
+            />
           </div>
 
           {/* Hidden from people, irresistible to scripts. Off-screen rather
