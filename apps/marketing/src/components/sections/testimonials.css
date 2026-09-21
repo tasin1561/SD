@@ -1,0 +1,31 @@
+.testi__card {
+  display: grid;
+  gap: 1rem;
+  height: 100%;
+  padding: 1.5rem;
+}
+.testi__mark {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.8rem;
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.testi__quote {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--fg-strong);
+  text-wrap: pretty;
+}
+.testi__who {
+  display: grid;
+  gap: 0.1rem;
+  font-size: 13.5px;
+  color: var(--fg-muted);
+}
+.testi__name {
+  font-weight: 700;
+  color: var(--fg-body);
+}

@@ -1,0 +1,169 @@
+/* ── Shared section chrome (Phase 4) ─────────────────────────────────── */
+.sec {
+  position: relative;
+  padding-block: 4rem;
+  border-top: 1px solid var(--line);
+  background: var(--page);
+}
+.sec--band {
+  background: var(--surface-band);
+}
+.sec--raised {
+  background: var(--surface);
+}
+@media (min-width: 1024px) {
+  .sec {
+    padding-block: 6rem;
+  }
+}
+.sec__inner {
+  position: relative;
+  max-width: 80rem;
+  margin-inline: auto;
+}
+/* Heading block: eyebrow chip in the section's hue, a balanced h2, one
+   paragraph of sub-copy. Sentence case throughout. */
+.sec-head {
+  display: grid;
+  gap: 0.9rem;
+  max-width: 44rem;
+  margin-bottom: 2.5rem;
+}
+.sec-head--center {
+  margin-inline: auto;
+  text-align: center;
+  justify-items: center;
+}
+.sec-head__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.9rem;
+  padding: 0.2rem 0.75rem 0.2rem 0.35rem;
+  border-radius: 999px;
+  background: var(--h-tint);
+  color: var(--h-on-tint);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.sec-head__eyebrow-ico {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--h);
+  color: var(--h-on);
+}
+.sec-head__h2 {
+  font-size: clamp(1.75rem, 3.4vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: var(--fg-strong);
+  text-wrap: balance;
+}
+.sec-head__sub {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--fg-body);
+  text-wrap: pretty;
+}
+/* Hue scoping for eyebrows and anything else in a section that follows it. */
+[data-hue='blue'] {
+  --h: var(--blue-fill);
+  --h-on: var(--blue-on-fill);
+  --h-tint: var(--blue-tint);
+  --h-on-tint: var(--blue-on-tint);
+  --h-text: var(--blue-text);
+  --h-glow: var(--blue-glow);
+}
+[data-hue='green'] {
+  --h: var(--green-fill);
+  --h-on: var(--green-on-fill);
+  --h-tint: var(--green-tint);
+  --h-on-tint: var(--green-on-tint);
+  --h-text: var(--green-text);
+  --h-glow: var(--green-glow);
+}
+[data-hue='saffron'] {
+  --h: var(--saffron-fill);
+  --h-on: var(--saffron-on-fill);
+  --h-tint: var(--saffron-tint);
+  --h-on-tint: var(--saffron-on-tint);
+  --h-text: var(--saffron-text);
+  --h-glow: var(--saffron-glow);
+}
+[data-hue='teal'] {
+  --h: var(--teal-fill);
+  --h-on: var(--teal-on-fill);
+  --h-tint: var(--teal-tint);
+  --h-on-tint: var(--teal-on-tint);
+  --h-text: var(--teal-text);
+  --h-glow: var(--teal-glow);
+}
+[data-hue='violet'] {
+  --h: var(--violet-fill);
+  --h-on: var(--violet-on-fill);
+  --h-tint: var(--violet-tint);
+  --h-on-tint: var(--violet-on-tint);
+  --h-text: var(--violet-text);
+  --h-glow: var(--violet-glow);
+}
+[data-hue='magenta'] {
+  --h: var(--magenta-fill);
+  --h-on: var(--magenta-on-fill);
+  --h-tint: var(--magenta-tint);
+  --h-on-tint: var(--magenta-on-tint);
+  --h-text: var(--magenta-text);
+  --h-glow: var(--magenta-glow);
+}
+[data-hue='red'] {
+  --h: var(--red-fill);
+  --h-on: var(--red-on-fill);
+  --h-tint: var(--red-tint);
+  --h-on-tint: var(--red-on-tint);
+  --h-text: var(--red-text);
+  --h-glow: var(--red-glow);
+}
+/* A soft mesh behind colour-rich sections: one pool of the hue, drifting.
+   The pool is drawn 10 % past the section on every side, so the section
+   CLIPS it (`clip`, not `hidden`: no scroll container, and the estimator's
+   combo lists still open past the card) — unclipped, the pool's right edge
+   widened the whole document by 36 px at 360 (the responsive spec's
+   horizontal-scroll failure of 2026-09-21). */
+.sec--mesh {
+  overflow: clip;
+}
+.sec--mesh::before {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(40% 45% at 80% 20%, var(--h-glow) 0%, transparent 70%);
+  opacity: 0.5;
+  animation: secMesh 30s ease-in-out infinite alternate;
+}
+@keyframes secMesh {
+  to {
+    transform: translate3d(-3%, 3%, 0) scale(1.05);
+  }
+}
+/* Card surface used across sections. */
+.sec-card {
+  border-radius: 1.1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+}
+.sec-note {
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sec--mesh::before {
+    animation: none;
+  }
+}

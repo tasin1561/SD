@@ -1,0 +1,141 @@
+/* 32 · Chip select (u04 filter bar / u24 multi-select). */
+.mi-chips {
+  --h: var(--blue-fill);
+  --h-on: var(--blue-on-fill);
+  --h-tint: var(--blue-tint);
+  --h-on-tint: var(--blue-on-tint);
+  --h-glow: var(--blue-glow);
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0.15rem;
+  -webkit-overflow-scrolling: touch;
+}
+.mi-chips::-webkit-scrollbar {
+  display: none;
+}
+.mi-chips[data-hue='green'] {
+  --h: var(--green-fill);
+  --h-on: var(--green-on-fill);
+  --h-tint: var(--green-tint);
+  --h-on-tint: var(--green-on-tint);
+  --h-glow: var(--green-glow);
+}
+.mi-chips[data-hue='saffron'] {
+  --h: var(--saffron-fill);
+  --h-on: var(--saffron-on-fill);
+  --h-tint: var(--saffron-tint);
+  --h-on-tint: var(--saffron-on-tint);
+  --h-glow: var(--saffron-glow);
+}
+.mi-chips[data-hue='teal'] {
+  --h: var(--teal-fill);
+  --h-on: var(--teal-on-fill);
+  --h-tint: var(--teal-tint);
+  --h-on-tint: var(--teal-on-tint);
+  --h-glow: var(--teal-glow);
+}
+.mi-chips[data-hue='violet'] {
+  --h: var(--violet-fill);
+  --h-on: var(--violet-on-fill);
+  --h-tint: var(--violet-tint);
+  --h-on-tint: var(--violet-on-tint);
+  --h-glow: var(--violet-glow);
+}
+.mi-chips[data-hue='magenta'] {
+  --h: var(--magenta-fill);
+  --h-on: var(--magenta-on-fill);
+  --h-tint: var(--magenta-tint);
+  --h-on-tint: var(--magenta-on-tint);
+  --h-glow: var(--magenta-glow);
+}
+.mi-chips__chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.9rem 0.35rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    box-shadow 240ms ease,
+    transform 200ms cubic-bezier(0.3, 1.3, 0.4, 1);
+}
+.mi-chips__chip:not(:has(.mi-chips__ico)) {
+  padding-left: 0.9rem;
+}
+.mi-chips__chip:hover {
+  border-color: var(--h);
+  transform: translateY(-1px);
+}
+.mi-chips__chip:focus-visible {
+  outline: 2px solid var(--h);
+  outline-offset: 2px;
+}
+.mi-chips__chip[aria-pressed='true'] {
+  background: var(--h-tint);
+  border-color: var(--h);
+  color: var(--h-on-tint);
+  box-shadow: 0 6px 18px -10px var(--h-glow);
+}
+.mi-chips__ico {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.55rem;
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+.mi-chips__chip[aria-pressed='true'] .mi-chips__ico {
+  background: var(--h);
+  color: var(--h-on);
+}
+.mi-chips__ico-i,
+.mi-chips__check {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.3, 1.3, 0.4, 1);
+}
+.mi-chips__check {
+  opacity: 0;
+  transform: scale(0.4);
+}
+.mi-chips__chip[aria-pressed='true'] .mi-chips__check {
+  opacity: 1;
+  transform: scale(1);
+}
+.mi-chips__chip[aria-pressed='true'] .mi-chips__ico-i:not(:empty) {
+  opacity: 0;
+  transform: scale(0.4);
+}
+.mi-chips__count {
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.mi-chips__chip[aria-pressed='true'] .mi-chips__count {
+  background: var(--h);
+  color: var(--h-on);
+}

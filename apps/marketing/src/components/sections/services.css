@@ -1,0 +1,109 @@
+.svc__content {
+  display: grid;
+  gap: 0.9rem;
+}
+.svc__title {
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fg-strong);
+  text-wrap: balance;
+}
+.svc__body {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--fg-body);
+}
+.svc__points {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.svc__point {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  font-size: 14.5px;
+  color: var(--fg-body);
+}
+.svc__point-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-top: 0.05rem;
+  border-radius: 999px;
+  background: var(--h);
+  color: var(--h-on);
+}
+.svc__cta {
+  margin-top: 0.5rem;
+  justify-self: start;
+}
+/* Scene art: a flat-face isometric prop drawn from tokens. */
+.svc__art {
+  width: min(100%, 22rem);
+  height: auto;
+  aspect-ratio: 4 / 3;
+  color: var(--h);
+}
+/* Who we serve */
+.who {
+  margin-top: 3rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+}
+/* The tablist keeps its intrinsic width and scrolls sideways on a phone
+   rather than widening the page (its grid track is minmax(0, 1fr)). */
+.who__tabs {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.who__tabs::-webkit-scrollbar {
+  display: none;
+}
+.who__panel {
+  min-width: 0;
+}
+.who__panel {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.5rem;
+  animation: whoIn 360ms cubic-bezier(0.3, 1, 0.3, 1) both;
+}
+@media (min-width: 768px) {
+  .who__panel {
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+    padding: 2rem;
+    align-items: center;
+  }
+}
+.who__title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--fg-strong);
+  letter-spacing: -0.015em;
+}
+.who__body {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--fg-body);
+}
+@keyframes whoIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .who__panel {
+    animation: none;
+  }
+}

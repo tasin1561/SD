@@ -29,7 +29,11 @@ test.describe('hero fits the viewport in every tab state', () => {
           .click();
         await page.waitForTimeout(900);
         if (tab === 'Quote') {
-          await page.getByRole('radio', { name: /India.*Bangladesh/ }).check({ force: true });
+          // Scoped to the hero: the estimator further down carries the same direction radios.
+          await page
+            .locator('.hero')
+            .getByRole('radio', { name: /India.*Bangladesh/ })
+            .check({ force: true });
           await page.waitForTimeout(300);
         }
         const offenders = await page.evaluate((vw) => {

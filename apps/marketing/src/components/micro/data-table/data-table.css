@@ -1,0 +1,168 @@
+/* 30 · Data table (u07). */
+.dt {
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+}
+.dt__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+.dt__table thead th {
+  padding: 0.9rem 1rem;
+  text-align: left;
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+  border-bottom: 1px solid var(--line);
+  vertical-align: bottom;
+}
+.dt__col-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+}
+.dt__col-note {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+}
+.dt__col[data-primary],
+.dt__card[data-primary] .dt__card-head {
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+}
+.dt__row th,
+.dt__row td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  transition: background-color 180ms ease;
+}
+.dt__row:last-child th,
+.dt__row:last-child td {
+  border-bottom: 0;
+}
+.dt__label {
+  text-align: left;
+  font-weight: 600;
+  color: var(--fg-strong);
+  background: var(--surface-2);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+.dt__cell[data-primary] {
+  background: color-mix(in srgb, var(--blue-tint) 45%, transparent);
+}
+.dt__row:hover th,
+.dt__row:hover td {
+  background: var(--surface-3);
+}
+.dt__row:hover .dt__cell[data-primary] {
+  background: var(--blue-tint);
+}
+.dt__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem 0.25rem 0.35rem;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-body);
+  background: var(--surface-3);
+}
+.dt__chip[data-kind='text'] {
+  padding-left: 0.6rem;
+}
+.dt__chip-ico {
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+}
+.dt__chip[data-kind='yes'] {
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.dt__chip[data-kind='yes'] .dt__chip-ico {
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.dt__chip[data-kind='no'] {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.dt__chip[data-kind='no'] .dt__chip-ico {
+  background: var(--red-fill);
+  color: var(--red-on-fill);
+}
+.dt__chip[data-kind='partial'] {
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.dt__chip[data-kind='partial'] .dt__chip-ico {
+  background: var(--saffron-fill);
+  color: var(--saffron-on-fill);
+}
+.dt__est {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* Inherits the chip's on-tint colour at full strength: at 11 px an
+     opacity-faded "est." fell to 3.8:1 (Lighthouse a11y 97). */
+}
+/* Swipe cards below md — the table hides, one card per column. */
+.dt__cards {
+  display: none;
+}
+@media (max-width: 767px) {
+  .dt {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .dt__table {
+    display: none;
+  }
+  .dt__cards {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding: 0.25rem 0.25rem 0.75rem;
+    scrollbar-width: thin;
+  }
+  .dt__card {
+    flex: 0 0 min(86%, 20rem);
+    scroll-snap-align: center;
+    border-radius: 1rem;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    overflow: hidden;
+    box-shadow: var(--shadow-1);
+  }
+  .dt__card-head {
+    padding: 0.9rem 1rem;
+    background: var(--blue-tint);
+    color: var(--blue-on-tint);
+  }
+  .dt__card-row {
+    display: grid;
+    gap: 0.3rem;
+    padding: 0.7rem 1rem;
+    border-top: 1px solid var(--line);
+  }
+  .dt__card-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--fg-muted);
+  }
+}

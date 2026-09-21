@@ -1,0 +1,32 @@
+.why__grid {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 768px) {
+  .why__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.why__row {
+  align-items: flex-start;
+  padding: 1.1rem 1.1rem 1.1rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface-2);
+}
+.why__row .row__chip {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.8rem;
+}
+.why__row .row__title {
+  font-size: 16px;
+}
+.why__body {
+  white-space: normal;
+  line-height: 1.55;
+  margin-top: 0.15rem;
+}

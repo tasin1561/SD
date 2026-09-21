@@ -55,7 +55,7 @@ function TabLabel({ long, short }: { long: string; short: string }): ReactElemen
   );
 }
 
-interface Quote {
+export interface Quote {
   direction: Direction;
   kg: number;
   price: number;
@@ -64,7 +64,7 @@ interface Quote {
   transit: string;
 }
 
-function estimate(direction: Direction, kg: number): Quote | null {
+export function estimate(direction: Direction, kg: number): Quote | null {
   const card = direction === 'out' ? business.estimator.toIndia : business.estimator.toBangladesh;
   const transit =
     direction === 'out'

@@ -364,3 +364,81 @@
   background: var(--blue-tint);
   color: var(--blue-on-tint);
 }
+
+/* ── Mega-menus (u21 rows under two nav items) ────────────────────────── */
+.hnav__item {
+  position: relative;
+  display: inline-flex;
+}
+.hnav__chev {
+  margin-left: 0.25rem;
+  transition: transform 260ms cubic-bezier(0.3, 1, 0.3, 1);
+}
+.hnav__item[data-open] .hnav__chev {
+  transform: rotate(180deg);
+}
+.mega {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: 50%;
+  z-index: 40;
+  width: 22rem;
+  padding-top: 0.4rem;
+  transform: translateX(-50%) translateY(-6px) scale(0.98);
+  transform-origin: top center;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 260ms cubic-bezier(0.3, 1, 0.3, 1),
+    opacity 200ms ease,
+    visibility 0s linear 260ms;
+}
+.hnav__item[data-open] .mega {
+  transform: translateX(-50%);
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.mega__panel {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
+}
+.mega__panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 0.9rem;
+  height: 0.9rem;
+  transform: translate(-50%, 0.05rem) rotate(45deg);
+  border-radius: 0.2rem;
+  background: var(--surface-2);
+  border-left: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+}
+.mega__row {
+  animation: megaRow 320ms cubic-bezier(0.3, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+.hnav__item:not([data-open]) .mega__row {
+  animation: none;
+}
+@keyframes megaRow {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mega {
+    transition: none;
+  }
+  .mega__row {
+    animation: none;
+  }
+}

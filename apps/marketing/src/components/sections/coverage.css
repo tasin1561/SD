@@ -1,0 +1,76 @@
+.cov {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+/* Six 44 px boxes do not fit a 320 px phone beside the card's padding:
+   below 360 the card tightens and the boxes narrow to 38 px (still 52 px
+   tall, so the tap target holds). */
+@media (max-width: 360px) {
+  .cov__check {
+    padding: 0.85rem;
+  }
+  .cov__check .mi-seg__box {
+    width: 2.375rem;
+  }
+  .cov__check .mi-seg__row {
+    gap: 0.3rem;
+  }
+}
+.cov__check,
+.cov__lanes {
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .cov {
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+}
+.cov__check {
+  padding: 1.5rem;
+  display: grid;
+  gap: 1.25rem;
+}
+.cov__tabs {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cov__hint {
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+.cov__lanes {
+  display: grid;
+  gap: 1rem;
+}
+.cov__lanes-h {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.cov__list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cov__talk {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border-radius: 999px;
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+}
+.cov__talk:hover {
+  background: var(--green-fill-hover);
+}

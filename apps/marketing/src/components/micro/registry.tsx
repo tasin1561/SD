@@ -43,6 +43,148 @@ import { SuccessCard } from './success-card';
 import { toast } from './toast';
 import { RowLink } from './list-row';
 import { ThemeSwitch } from './theme-switch';
+import { ProgressStepper } from './progress-stepper';
+import { DataTable } from './data-table';
+import { Pagination } from './pagination';
+import { ChipSelect } from './chip-select';
+import { ComboSelect } from './combo-select';
+import { Carousel } from './carousel';
+
+function ProgressStepperDemo(): ReactElement {
+  return (
+    <ProgressStepper
+      label="Demo steps"
+      intervalMs={2200}
+      steps={[
+        {
+          id: 'a',
+          title: 'Stock in',
+          icon: <Truck size={20} />,
+          body: <p className="text-fg-body">Counted at the intake.</p>,
+        },
+        {
+          id: 'b',
+          title: 'Confirmed',
+          icon: <Bell size={20} />,
+          body: <p className="text-fg-body">The customer said yes.</p>,
+        },
+        {
+          id: 'c',
+          title: 'Delivered',
+          icon: <ShieldCheck size={20} />,
+          body: <p className="text-fg-body">Signed for at the door.</p>,
+        },
+      ]}
+    />
+  );
+}
+function DataTableDemo(): ReactElement {
+  return (
+    <DataTable
+      caption="Demo"
+      columns={[
+        { key: 'a', name: 'Skydrop', note: 'this service', primary: true },
+        { key: 'b', name: 'Yourself', note: 'own entity' },
+      ]}
+      rows={[
+        {
+          label: 'COD confirmed by phone',
+          cells: {
+            a: { kind: 'yes', label: 'Every order' },
+            b: { kind: 'partial', label: 'Build the desk' },
+          },
+        },
+        {
+          label: 'Time to first dispatch',
+          cells: {
+            a: { kind: 'text', label: 'Under 3 weeks', estimate: true },
+            b: { kind: 'text', label: '6+ months', estimate: true },
+          },
+        },
+        {
+          label: 'Indian entity',
+          cells: { a: { kind: 'no', label: 'Not to start' }, b: { kind: 'yes' } },
+        },
+      ]}
+    />
+  );
+}
+function PaginationDemo(): ReactElement {
+  const [i, setI] = useState(0);
+  return <Pagination count={5} index={i} onChange={setI} label="Demo page" />;
+}
+function ChipSelectDemo(): ReactElement {
+  const [one, setOne] = useState<string[]>(['all']);
+  const [many, setMany] = useState<string[]>(['Apparel']);
+  return (
+    <div className="grid gap-4">
+      <ChipSelect
+        label="Filter"
+        value={one}
+        onChange={setOne}
+        hue="teal"
+        chips={[
+          { id: 'all', label: 'Everything', count: 12 },
+          { id: 'ok', label: 'Ships', icon: <ShieldCheck size={14} />, count: 5 },
+          { id: 'no', label: 'Not carried', count: 4 },
+        ]}
+      />
+      <ChipSelect
+        label="Goods"
+        multiple
+        hue="violet"
+        value={many}
+        onChange={setMany}
+        chips={['Apparel', 'Handicrafts', 'Beauty', 'Snacks'].map((g) => ({ id: g, label: g }))}
+      />
+    </div>
+  );
+}
+function ComboSelectDemo(): ReactElement {
+  const geo: Record<string, string[]> = {
+    'West Bengal': ['Kolkata', 'Howrah'],
+    Maharashtra: ['Mumbai', 'Pune'],
+    Karnataka: ['Bengaluru', 'Mysuru'],
+  };
+  const [r, setR] = useState<string | null>(null);
+  const [c, setC] = useState<string | null>(null);
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <ComboSelect
+        label="State"
+        options={Object.keys(geo)}
+        value={r}
+        onChange={(v: string | null) => {
+          setR(v);
+          setC(null);
+        }}
+      />
+      <ComboSelect
+        label="City"
+        options={r ? (geo[r] ?? []) : []}
+        value={c}
+        onChange={setC}
+        disabled={!r}
+        {...(r ? {} : { helper: 'Pick a state first' })}
+      />
+    </div>
+  );
+}
+function CarouselDemo(): ReactElement {
+  return (
+    <Carousel
+      label="Demo cards"
+      items={[1, 2, 3, 4].map((n) => ({
+        id: String(n),
+        node: (
+          <div className="rounded-2xl border border-line bg-surface-2 p-6 text-fg-body">
+            Card {n}
+          </div>
+        ),
+      }))}
+    />
+  );
+}
 
 /**
  * Every micro pattern, with a DEMO that drives it through its states. The
@@ -997,6 +1139,48 @@ export const MICRO_REGISTRY: readonly MicroEntry[] = [
     name: 'Theme switch (u14)',
     where: 'Header, drawer',
     Demo: ThemeSwitchDemo,
+  },
+  {
+    id: 'progress-stepper',
+    n: 29,
+    name: 'Progress stepper (u34)',
+    where: 'How it works; Phase 5 — consignment legs',
+    Demo: ProgressStepperDemo,
+  },
+  {
+    id: 'data-table',
+    n: 30,
+    name: 'Data table (u07)',
+    where: 'Compare; Phase 5 — orders, registers, ledger mocks',
+    Demo: DataTableDemo,
+  },
+  {
+    id: 'pagination',
+    n: 31,
+    name: 'Pagination (u16)',
+    where: 'Testimonials carousel pager',
+    Demo: PaginationDemo,
+  },
+  {
+    id: 'chip-select',
+    n: 32,
+    name: 'Chip select (u04 filter bar · u24 multi-select)',
+    where: 'What you can send filter; estimator goods',
+    Demo: ChipSelectDemo,
+  },
+  {
+    id: 'combo-select',
+    n: 33,
+    name: 'Combo select (u18 cascading dropdown)',
+    where: 'Estimator state → city',
+    Demo: ComboSelectDemo,
+  },
+  {
+    id: 'carousel',
+    n: 34,
+    name: 'Snap carousel + pager',
+    where: 'Testimonials',
+    Demo: CarouselDemo,
   },
 ];
 

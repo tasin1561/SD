@@ -1,0 +1,124 @@
+.est {
+  display: grid;
+  gap: 1.5rem;
+}
+.est {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1024px) {
+  .est {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 2rem;
+  }
+}
+.est__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+  padding: 1.5rem;
+  min-width: 0;
+}
+.est__form > * {
+  min-width: 0;
+}
+.est__k {
+  display: block;
+  margin-bottom: 0.6rem;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+}
+.est__row {
+  display: grid;
+  gap: 0.9rem;
+}
+@media (min-width: 560px) {
+  .est__row--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .est__row--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 900px) {
+  .est__row--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.est__field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.est__field-k {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+.est__vol {
+  font-size: 14px;
+  color: var(--fg-body);
+  line-height: 1.55;
+}
+.est__go {
+  justify-self: start;
+}
+.est__result {
+  position: sticky;
+  top: 5.5rem;
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+.est__result-k {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg-muted);
+}
+.est__price {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--fg-strong);
+  line-height: 1;
+}
+.est__price small {
+  font-size: 0.5em;
+  font-weight: 600;
+  color: var(--fg-muted);
+  letter-spacing: 0;
+}
+.est__lines {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  color: var(--fg-body);
+}
+.est__line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--line);
+}
+.est__line b {
+  color: var(--fg-strong);
+  font-weight: 700;
+}
+.est__empty {
+  font-size: 14.5px;
+  color: var(--fg-muted);
+  line-height: 1.55;
+}
+.est__skeleton {
+  min-height: 24rem;
+  border-radius: 1.1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}

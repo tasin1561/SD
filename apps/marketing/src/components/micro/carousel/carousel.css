@@ -1,0 +1,47 @@
+/* 34 · Snap carousel. */
+.mi-carousel {
+  display: grid;
+  gap: 1.25rem;
+  justify-items: center;
+}
+.mi-carousel__track {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.25rem 0.25rem 0.5rem;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+.mi-carousel__track::-webkit-scrollbar {
+  display: none;
+}
+.mi-carousel__item {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  min-width: 0;
+  transition:
+    opacity 300ms ease,
+    transform 400ms cubic-bezier(0.3, 1, 0.3, 1);
+}
+/* A neighbouring card steps back by SCALE only — fading its text took the
+   quote to 4.0:1 and the name to 2.9:1 (Lighthouse a11y 97). */
+.mi-carousel__item:not([aria-current]) {
+  transform: scale(0.96);
+}
+@media (min-width: 768px) {
+  .mi-carousel__item {
+    flex-basis: calc((100% - 2rem) / 3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mi-carousel__track {
+    scroll-behavior: auto;
+  }
+  .mi-carousel__item {
+    transition: none;
+  }
+}

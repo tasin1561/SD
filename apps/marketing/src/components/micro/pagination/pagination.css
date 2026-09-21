@@ -1,0 +1,74 @@
+/* 31 · Pagination (u16). */
+.mi-pg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+}
+.mi-pg__arrow {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 0;
+  background: var(--surface-3);
+  color: var(--fg-strong);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+.mi-pg__arrow:hover,
+.mi-pg__arrow:focus-visible {
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  transform: translateY(-1px);
+  outline: none;
+}
+.mi-pg__pages {
+  position: relative;
+  display: inline-flex;
+  gap: 0.15rem;
+}
+.mi-pg__bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  background: var(--blue-fill);
+  box-shadow: 0 6px 16px -8px var(--blue-glow);
+  transform: translateX(var(--bub-x, 0px));
+  transition: transform calc(320 * var(--d)) cubic-bezier(0.3, 1.2, 0.4, 1);
+}
+.mi-pg__page {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 220ms ease;
+}
+.mi-pg__page[aria-current='true'] {
+  color: var(--blue-on-fill);
+}
+.mi-pg__page:focus-visible {
+  outline: 2px solid var(--blue-text);
+  outline-offset: 2px;
+}

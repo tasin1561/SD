@@ -7,7 +7,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  padding: 0 0.1rem;
+  /* Inline in a sentence, but a 44 px tap target: the block padding is
+     taken back with a negative margin so the line box does not grow. */
+  padding: 0.55rem 0.1rem;
+  margin-block: -0.55rem;
   border: 0;
   background: none;
   font: inherit;
