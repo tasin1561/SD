@@ -130,6 +130,45 @@
   border-color: var(--blue-fill);
   color: var(--blue-on-fill);
 }
+
+.mi-choice__card[data-selected='true'][style*='teal'] {
+  border-color: var(--teal-line);
+  background: var(--teal-tint);
+  box-shadow: 0 0 0 3px var(--teal-glow);
+  --c-text: var(--teal-on-tint);
+}
+.mi-choice__card[data-selected='true'][style*='teal'] .mi-choice__check,
+.mi-choice__card[data-selected='true'][style*='teal'] .mi-choice__icon {
+  background: var(--teal-fill);
+  border-color: var(--teal-fill);
+  color: var(--teal-on-fill);
+}
+
+.mi-choice__card[data-selected='true'][style*='violet'] {
+  border-color: var(--violet-line);
+  background: var(--violet-tint);
+  box-shadow: 0 0 0 3px var(--violet-glow);
+  --c-text: var(--violet-on-tint);
+}
+.mi-choice__card[data-selected='true'][style*='violet'] .mi-choice__check,
+.mi-choice__card[data-selected='true'][style*='violet'] .mi-choice__icon {
+  background: var(--violet-fill);
+  border-color: var(--violet-fill);
+  color: var(--violet-on-fill);
+}
+
+.mi-choice__card[data-selected='true'][style*='magenta'] {
+  border-color: var(--magenta-line);
+  background: var(--magenta-tint);
+  box-shadow: 0 0 0 3px var(--magenta-glow);
+  --c-text: var(--magenta-on-tint);
+}
+.mi-choice__card[data-selected='true'][style*='magenta'] .mi-choice__check,
+.mi-choice__card[data-selected='true'][style*='magenta'] .mi-choice__icon {
+  background: var(--magenta-fill);
+  border-color: var(--magenta-fill);
+  color: var(--magenta-on-fill);
+}
 .mi-choice__card[data-selected='true'] .mi-choice__check {
   transform: scale(1);
 }

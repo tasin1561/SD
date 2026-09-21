@@ -50,14 +50,15 @@ estimator already is); replace hydration-time `useLayoutEffect` measurements wit
 CSS-only initial state where possible; measure TBT three times and report the median.
 Target: back at or under 200 ms.
 
-## 3. Shipped micro-library total 49.9 KB gz vs the owner's 40 KB gate
+## 3. Shipped micro-library total 50.2 KB gz vs the owner's 40 KB gate
 
 Phase 4 ships 29 patterns at ~1.7 KB average, each inside its 3 KB / 2 KB budget. The
 gate in `scripts/check-micro-size.mjs` was raised PROVISIONALLY to 52 KB so the build
-stays green; the owner decides whether to keep 40 KB (then drop or merge patterns) or
-accept the headcount.
+stays green. **Owner (Phase 4 review):** move CSS-only patterns out of JS, dedupe shared
+keyframes, and make sure each pattern ships only with the island that uses it. If it
+genuinely cannot fit 40 KB, report the number and what the extra 10 KB buys.
 
-## 4. LCP 2.8–2.9 s at the end of Phase 4 (2.3 s at Phase 3; target < 2.5 s)
+## 4. LCP 2.7–3.0 s at the end of Phase 4 (2.3 s at Phase 3) — OWNER TARGET ≤ 2.0 s
 
 **Measured:** three runs 2.8 / 2.9 / 2.9 s, LCP element still `p.hero__sub`, FCP
 1.4–1.8 s. The page grew: index.html 44 → 54 KB gz, critical CSS 12.5 → 14.2 KB gz,
@@ -65,7 +66,7 @@ first-load JS 138 → 148 KB gz, and the estimator's islands hydrate in the same
 **Phase 8 plan:** measure the LCP phases (TTFB / load delay / render delay) from the
 trace; trim the critical sheet (the `[data-hue]` blocks are now per-hue; the mega-menu
 and drawer CSS could move to their own deferred chunk); defer below-fold islands as in
-item 2; re-check the HTML-weight gate. Target: ≤ 2.3 s.
+item 2; re-check the HTML-weight gate. **Owner (Phase 4 review): target ≤ 2.0 s on the home page, and report the CAUSE of what grew (HTML weight, critical CSS, hydration before first paint), not just the fix.**
 
 ## 5. Font swap costs ~0.01 CLS at 1440
 

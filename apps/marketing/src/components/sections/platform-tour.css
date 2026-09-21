@@ -1,0 +1,66 @@
+.tour {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+.tour__tabs {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tour__tabs::-webkit-scrollbar {
+  display: none;
+}
+.tour__head {
+  display: grid;
+  gap: 0.35rem;
+  animation: tourIn 320ms cubic-bezier(0.3, 1, 0.3, 1) both;
+}
+.tour__title {
+  font-size: clamp(1.3rem, 2.2vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--fg-strong);
+}
+.tour__promise {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--fg-body);
+  max-width: 44rem;
+}
+.tour__stage {
+  min-width: 0;
+}
+/* Every vignette: checklist beside the frame from md up. */
+.vg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+}
+@media (min-width: 768px) {
+  .vg {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+  }
+}
+.tour__skeleton {
+  min-height: 22rem;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.tour__skeleton--all {
+  min-height: 30rem;
+}
+@keyframes tourIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour__head {
+    animation: none;
+  }
+}

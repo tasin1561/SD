@@ -9,13 +9,13 @@ Public marketing site for Skydrop — `skydrop.online`.
 
 ## Scripts
 
-| Command          | What                                  |
-| ---------------- | ------------------------------------- |
-| `pnpm dev`       | Dev server on port 3006               |
-| `pnpm build`     | Production build (Next.js)            |
-| `pnpm start`     | Run production build on port 3006     |
-| `pnpm typecheck` | `tsc --noEmit`                        |
-| `pnpm lint`      | Next.js / TypeScript lint             |
+| Command          | What                              |
+| ---------------- | --------------------------------- |
+| `pnpm dev`       | Dev server on port 3006           |
+| `pnpm build`     | Production build (Next.js)        |
+| `pnpm start`     | Run production build on port 3006 |
+| `pnpm typecheck` | `tsc --noEmit`                    |
+| `pnpm lint`      | Next.js / TypeScript lint         |
 
 ## Deploy
 

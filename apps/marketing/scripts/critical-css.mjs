@@ -68,7 +68,10 @@ function selectorTokens(selector) {
     );
   for (const m of cleaned.matchAll(/\.([^\s.#:>+~,()\[\]]+)/g)) classes.add(releaseEscapes(m[1]));
   for (const m of cleaned.matchAll(/#([^\s.#:>+~,()\[\]]+)/g)) ids.add(releaseEscapes(m[1]));
-  return { classes, ids };
+  // Attribute NAMES the selector depends on (`[data-beat='2']` → data-beat).
+  const attrs = new Set();
+  for (const m of held.matchAll(/\[([a-zA-Z_:][\w:-]*)/g)) attrs.add(releaseEscapes(m[1]));
+  return { classes, ids, attrs };
 }
 
 function foldMarkup(html) {
@@ -96,8 +99,17 @@ function foldMarkup(html) {
   const footerEnd = html.indexOf('</footer>');
   const mainEnd = html.indexOf('</main>');
   const tailFrom = footerEnd > 0 ? footerEnd : mainEnd;
-  const tail = tailFrom > 0 ? html.slice(tailFrom) : '';
-  return html.slice(0, cut) + tail;
+  let tail = tailFrom > 0 ? html.slice(tailFrom) : '';
+  // React streams every `dynamic()` island's real markup OUT OF ORDER as
+  // `<div hidden id="S:n">` segments at the END of the body, swapped in by a
+  // `$RC` script. They are below the fold whatever their position in the
+  // file, so the tail stops at the first one — otherwise the estimator's, the
+  // tour's and the reseller demo's classes all read as "above the fold"
+  // (Phase 5: 16.4 KB against the 15 KB gate).
+  const streamed = tail.indexOf('<div hidden id="S:');
+  if (streamed > 0) tail = tail.slice(0, streamed);
+  const strip = (s) => s.replace(/<script[\s\S]*?<\/script>/g, '');
+  return strip(html.slice(0, cut)) + strip(tail);
 }
 
 function usedTokens(markup) {
@@ -105,6 +117,12 @@ function usedTokens(markup) {
   const ids = new Set();
   const hues = new Set();
   for (const m of markup.matchAll(/data-hue="([^"]*)"/g)) hues.add(m[1]);
+  // Attribute names the fold carries — a rule keyed only on `[data-beat]`
+  // (a vignette state selector, no class) is kept only when the fold has
+  // that attribute at all; before this every attribute-only rule counted as
+  // "element-only" and rode along (16.4 KB against the 15 KB gate, Phase 5).
+  const attrNames = new Set();
+  for (const m of markup.matchAll(/\s([a-zA-Z_:][\w:-]*)=["']/g)) attrNames.add(m[1]);
   for (const m of markup.matchAll(/class="([^"]*)"/g))
     for (const c of m[1].split(/\s+/)) if (c) classes.add(c);
   for (const m of markup.matchAll(/\sid="([^"]*)"/g)) ids.add(m[1]);
@@ -118,7 +136,7 @@ function usedTokens(markup) {
   for (const file of HYDRATION_ONLY_STYLESHEETS)
     for (const m of readFileSync(join(ROOT, file), 'utf8').matchAll(/\.((?:\\.|[a-zA-Z0-9_-])+)/g))
       classes.add(unescapeCss(m[1]));
-  return { classes, ids, hues };
+  return { classes, ids, hues, attrNames };
 }
 
 function critical(css, used) {
@@ -131,7 +149,9 @@ function critical(css, used) {
       // ~2 KB and a section below the fold declares its own.
       const hue = /^\[data-hue='([a-z]+)'\]$/.exec(sel.trim());
       if (hue) return used.hues.has(hue[1]);
-      const { classes, ids } = selectorTokens(sel);
+      const { classes, ids, attrs } = selectorTokens(sel);
+      if (classes.size === 0 && ids.size === 0 && attrs.size > 0)
+        for (const a of attrs) if (!used.attrNames.has(a)) return false;
       for (const c of classes) if (isDeferrable(c)) return false;
       for (const c of classes) if (!used.classes.has(c)) return false;
       for (const i of ids) if (!used.ids.has(i)) return false;

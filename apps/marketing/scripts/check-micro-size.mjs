@@ -49,7 +49,9 @@ const productionSources = (() => {
 /** Patterns a production route imports, plus everything THOSE import (`../pagination` inside the carousel). */
 const shippedSet = (() => {
   const names = readdirSync(DIR).filter((n) => statSync(join(DIR, n)).isDirectory());
-  const set = new Set(names.filter((n) => new RegExp(`micro/${n}(/index)?['"/]`).test(productionSources)));
+  const set = new Set(
+    names.filter((n) => new RegExp(`micro/${n}(/index)?['"/]`).test(productionSources)),
+  );
   let grew = true;
   while (grew) {
     grew = false;

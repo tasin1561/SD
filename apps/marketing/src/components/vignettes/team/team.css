@@ -1,0 +1,481 @@
+/* 13 · Platform tour — YOUR TEAM.
+   Every rule's BASE state is the beat's finished frame; the animations
+   only add the entrance. So `animation: none` under reduced motion lands
+   on the final picture with no second set of rules to keep in step.
+
+   The `.vg` grid itself is the tour's, declared once in
+   `sections/platform-tour.css` — nothing here redefines it. */
+
+.vg-team__mock {
+  --vg-e: cubic-bezier(0.3, 1, 0.3, 1);
+  position: absolute;
+  inset: 0;
+  font-size: clamp(9px, 1.05vw + 5px, 12px);
+  line-height: 1.35;
+  color: var(--blue-on-tint);
+}
+
+.vg-team__scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6em;
+  padding: 1.25em;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.45em);
+  transition:
+    opacity 340ms var(--vg-e),
+    transform 340ms var(--vg-e);
+}
+.vg-team__mock[data-beat='0'] [data-scene='0'],
+.vg-team__mock[data-beat='1'] [data-scene='1'],
+.vg-team__mock[data-beat='2'] [data-scene='2'] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+/* --- shared --------------------------------------------------------- */
+.vg-team__h {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0;
+  font-weight: 700;
+  color: var(--blue-on-tint);
+}
+/* The chip sits on the frame's own blue tint, so it takes a SURFACE
+   ground rather than a second coat of the colour it is sitting on. */
+.vg-team__note {
+  margin-left: auto;
+  padding: 0.05em 0.5em;
+  border: 1px solid var(--blue-line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--blue-text);
+  font-size: 0.82em;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vg-team__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  margin: 0;
+  padding: 0.6em 0.7em;
+  border: 1px solid var(--line);
+  border-radius: 0.95em;
+  background: var(--surface-2);
+  box-shadow:
+    var(--shadow-1),
+    0 0.55em 1.2em -0.8em var(--blue-glow);
+  list-style: none;
+  transition:
+    transform 300ms var(--vg-e),
+    box-shadow 300ms var(--vg-e);
+}
+.vg-team__card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--shadow-2),
+    0 0.7em 1.4em -0.7em var(--blue-glow);
+}
+.vg-team__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.55em;
+  height: 1.55em;
+  border-radius: 0.45em;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+}
+.vg-team__ico svg {
+  width: 0.92em;
+  height: 0.92em;
+}
+.vg-team__th {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.vg-team__say {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+.vg-team__foot {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}
+.vg-team__grp {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--line);
+  color: var(--blue-text);
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.vg-team__grp em {
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* --- 1 · the member register, and the role behind it ----------------- */
+.vg-team__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  align-items: start;
+  gap: 0.55em;
+}
+.vg-team__list {
+  gap: 0.3em;
+  padding: 0.5em;
+}
+.vg-team__who {
+  --d: 180ms;
+  --s: 110ms;
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.2em 0.25em;
+  border-radius: 0.5em;
+  transition: background-color 260ms var(--vg-e);
+}
+.vg-team__who:hover {
+  background: var(--surface-3);
+}
+.vg-team__av {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.85em;
+  height: 1.85em;
+  border-radius: 999px;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  font-size: 0.82em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.vg-team__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-strong);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vg-team__chip {
+  margin-left: auto;
+  padding: 0.08em 0.5em;
+  border: 1px solid var(--blue-line);
+  border-radius: 999px;
+  background: var(--blue-tint);
+  color: var(--blue-text);
+  font-size: 0.8em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vg-team__roles {
+  gap: 0.35em;
+}
+.vg-team__tabs {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding-bottom: 0.3em;
+  text-align: center;
+}
+.vg-team__tab {
+  color: var(--fg-muted);
+  font-size: 0.88em;
+  font-weight: 600;
+}
+.vg-team__tab[data-on] {
+  color: var(--blue-text);
+  font-weight: 800;
+}
+.vg-team__bead {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 33.333%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--blue-fill);
+  box-shadow: 0 0 0 0.18em var(--blue-glow);
+  transform: translateX(calc(var(--at, 0) * 100%));
+}
+
+/* --- 1 + 2 · a switched row, and the real switch beside it ----------- */
+.vg-team__perms {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vg-team__perm {
+  --d: 700ms;
+  --s: 150ms;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.14em 0;
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+.vg-team__perm > span:first-child {
+  min-width: 0;
+}
+/* Off is never carried by the switch's colour alone: the label dims and
+   the track's own word reads OFF. */
+.vg-team__perm[data-on='false'] > span:first-child {
+  color: var(--fg-faint);
+  font-weight: 500;
+}
+.vg-team__key {
+  display: block;
+  color: var(--fg-faint);
+  font-size: 0.82em;
+  font-weight: 500;
+}
+.vg-team__email {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: 0.82em;
+  font-weight: 600;
+}
+/* The real switch, scaled to the mock and pushed to the right-hand edge.
+   `min-width` is the one that matters: the shared toggle carries a
+   3.4rem floor for a real form, which would beat `width` outright and
+   leave a full-size pill squashed to the mock's height. */
+.vg-team__perm label {
+  min-height: 0;
+  margin-left: auto;
+  font-size: 1em;
+}
+.vg-team__email label {
+  margin-left: 0;
+}
+.vg-team__perm .mi-toggle {
+  flex: none;
+  width: 2.8em;
+  min-width: 0;
+  height: 1.55em;
+}
+.vg-team__perm .mi-toggle__knob {
+  top: 0.16em;
+  left: 0.16em;
+  width: 1.23em;
+  height: 1.23em;
+}
+.vg-team__perm .mi-toggle input:checked ~ .mi-toggle__knob {
+  transform: translateX(1.25em);
+}
+.vg-team__perm .mi-toggle__word {
+  font-size: 0.68em;
+}
+.vg-team__perm .mi-toggle__word--on {
+  left: 0.5em;
+}
+.vg-team__perm .mi-toggle__word--off {
+  right: 0.45em;
+}
+.vg-team__scene[data-scene='1'] .vg-team__card {
+  --d: 140ms;
+  --s: 300ms;
+}
+.vg-team__scene[data-scene='1'] .vg-team__perm {
+  --d: 420ms;
+  --s: 130ms;
+}
+
+/* --- 3 · the terms set for this account ------------------------------ */
+.vg-team__terms {
+  --d: 260ms;
+  --s: 130ms;
+  gap: 0.05em;
+  padding: 0.55em 0.7em 0.55em 0.95em;
+  overflow: hidden;
+}
+/* The spine is a pseudo-element, not an `<i>`: a `<dl>` may hold only
+   `<div>` groups or dt/dd pairs, so an element there is invalid markup
+   the parser quietly moves. */
+.vg-team__terms::before {
+  content: '';
+  position: absolute;
+  top: 0.5em;
+  bottom: 0.5em;
+  left: 0.38em;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--blue-fill);
+  transform-origin: top center;
+}
+.vg-team__term {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  padding: 0.22em 0;
+}
+.vg-team__term + .vg-team__term {
+  border-top: 1px solid var(--line);
+}
+.vg-team__term dt {
+  margin: 0;
+  min-width: 0;
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+.vg-team__term dt small {
+  display: block;
+  color: var(--fg-muted);
+  font-size: 0.85em;
+  font-weight: 400;
+}
+.vg-team__term dd {
+  margin: 0 0 0 auto;
+  flex: none;
+  color: var(--blue-text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* --- motion ---------------------------------------------------------- */
+/* Every entrance is scoped to ITS OWN scene as well as to the beat. A
+   rule that matched the same element at two beats would not restart —
+   an animation only re-runs when the element starts matching — so the
+   later scene's entrance would play once, invisibly, under the first. */
+@keyframes vg-team-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-team-slide {
+  from {
+    opacity: 0;
+    transform: translateX(0.8em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-team-bead {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(var(--at, 0) * 100%));
+  }
+}
+@keyframes vg-team-flip {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(1.25em);
+  }
+}
+@keyframes vg-team-word {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes vg-team-draw {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.vg-team__mock[data-beat='0'] [data-scene='0'] .vg-team__who,
+.vg-team__mock[data-beat='1'] [data-scene='1'] .vg-team__card,
+.vg-team__mock[data-beat='2'] [data-scene='2'] .vg-team__term {
+  animation: vg-team-rise 360ms var(--vg-e) both;
+  animation-delay: calc(var(--d, 0ms) + var(--i, 0) * var(--s, 0ms));
+}
+.vg-team__mock[data-beat='0'] [data-scene='0'] .vg-team__perm,
+.vg-team__mock[data-beat='1'] [data-scene='1'] .vg-team__perm {
+  animation: vg-team-slide 340ms var(--vg-e) both;
+  animation-delay: calc(var(--d, 0ms) + var(--i, 0) * var(--s, 0ms));
+}
+.vg-team__mock[data-beat='0'] .vg-team__bead {
+  animation: vg-team-bead 480ms var(--vg-e) 420ms both;
+}
+/* The switch settling ON: the knob travels, and the word in the track
+   changes with it — so the state is never carried by the colour alone. */
+.vg-team__mock[data-beat='0'] [data-scene='0'] .vg-team__perm[data-on='true'] .mi-toggle__knob,
+.vg-team__mock[data-beat='1'] [data-scene='1'] .vg-team__perm[data-on='true'] .mi-toggle__knob {
+  animation: vg-team-flip 360ms var(--vg-e) both;
+  animation-delay: calc(var(--d, 0ms) + 280ms + var(--i, 0) * var(--s, 0ms));
+}
+.vg-team__mock[data-beat='0'] [data-scene='0'] .vg-team__perm[data-on='true'] .mi-toggle__word--on,
+.vg-team__mock[data-beat='1'] [data-scene='1'] .vg-team__perm[data-on='true'] .mi-toggle__word--on {
+  animation: vg-team-word 300ms var(--vg-e) both;
+  animation-delay: calc(var(--d, 0ms) + 400ms + var(--i, 0) * var(--s, 0ms));
+}
+.vg-team__mock[data-beat='2'] .vg-team__terms::before {
+  animation: vg-team-draw 500ms var(--vg-e) 180ms both;
+}
+.vg-team__mock[data-beat='0'] [data-scene='0'] .vg-team__foot,
+.vg-team__mock[data-beat='1'] [data-scene='1'] .vg-team__foot,
+.vg-team__mock[data-beat='2'] [data-scene='2'] .vg-team__foot {
+  animation: vg-team-rise 360ms var(--vg-e) 1000ms both;
+}
+
+/* Three ways motion is switched off: the sequencer's own answer, the
+   gallery's dev-only simulator on <html>, and the OS preference. The
+   sequencer reads its answer once at render, so the simulator needs a
+   rule of its own or a mid-session toggle would not reach here. */
+.vg-team__mock[data-reduced='true'] *,
+.vg-team__mock[data-reduced='true'] *::before,
+.vg-team__mock[data-reduced='true'] *::after,
+:root[data-reduced='1'] .vg-team__mock *,
+:root[data-reduced='1'] .vg-team__mock *::before,
+:root[data-reduced='1'] .vg-team__mock *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vg-team__mock *,
+  .vg-team__mock *::before,
+  .vg-team__mock *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

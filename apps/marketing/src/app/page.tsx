@@ -8,6 +8,8 @@ import { Services } from '@/components/sections/services';
 import { Coverage } from '@/components/sections/coverage';
 import { HowItWorks } from '@/components/sections/how-it-works';
 import { TrackBand } from '@/components/sections/track-band';
+import { PlatformTour } from '@/components/sections/platform-tour';
+import { ResellerStores } from '@/components/sections/reseller-stores';
 import { Estimator } from '@/components/sections/estimator';
 import { Goods } from '@/components/sections/goods';
 import { Partners } from '@/components/sections/partners';
@@ -23,7 +25,7 @@ export const metadata: Metadata = { alternates: { canonical: '/' } };
 
 /**
  * Section order follows docs/design-direction.md §6: hero · services ·
- * coverage · how it works · [platform tour + reseller stores — Phase 5] ·
+ * coverage · how it works · track band · platform tour · reseller stores ·
  * pricing estimator · what you can send · partners · compare ·
  * testimonials · FAQ · final CTA. The track band sits after how-it-works
  * so a customer who scrolled past the hero's Track tab meets it again.
@@ -38,6 +40,8 @@ export default function HomePage(): ReactElement {
         <Coverage />
         <HowItWorks />
         <TrackBand />
+        <PlatformTour />
+        <ResellerStores />
         <Estimator />
         <Goods />
         <Partners />

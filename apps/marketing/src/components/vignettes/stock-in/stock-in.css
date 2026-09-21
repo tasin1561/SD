@@ -1,0 +1,524 @@
+/* 13 · Platform tour — "Get your stock into India" (teal).
+ *
+ * Four beats share ONE grid cell, so the frame never changes height as
+ * the story advances. Every entry animation carries only a `from`
+ * keyframe and `backwards` fill: the element's DECLARED style is its
+ * finished state, which is what makes `animation: none` under reduced
+ * motion jump straight to it instead of leaving it at `opacity: 0`.
+ *
+ * `.vg` (platform-tour.css) already gives the checklist-beside-frame
+ * grid; nothing here redeclares it.
+ */
+.vg-si {
+  --e: cubic-bezier(0.3, 1, 0.3, 1);
+}
+
+.vg-si__mock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0.85rem;
+  color: var(--fg-body);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.vg-si__p {
+  grid-area: 1 / 1;
+  display: grid;
+  align-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 26rem;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 360ms var(--e),
+    transform 360ms var(--e);
+}
+.vg-si__p[data-on='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── The shared track: a rail, the corridor drawn over it, and a
+   RUNNER that spans the whole track — so `translateX(%)` is a fraction
+   of the TRACK and whatever rides at the runner's left edge lands on an
+   exact stop. ─────────────────────────────────────────────────────── */
+.vg-si__rail,
+.vg-si__railfill,
+.vg-si__runner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--rt, 0.65rem);
+}
+.vg-si__rail,
+.vg-si__railfill {
+  height: 2px;
+  border-radius: 2px;
+}
+.vg-si__rail {
+  background: var(--line);
+}
+.vg-si__railfill {
+  background: var(--corridor-gradient);
+  transform-origin: left;
+  transform: scaleX(1);
+}
+.vg-si__p[data-on='true'] .vg-si__railfill {
+  animation: si-draw 460ms var(--e) 260ms backwards;
+}
+@keyframes si-draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+.vg-si__runner {
+  height: 0;
+  transform: translateX(calc(var(--at, 0) * 100%));
+}
+.vg-si__p[data-on='true'] .vg-si__time .vg-si__runner {
+  animation: si-run 480ms var(--e) 300ms backwards;
+}
+@keyframes si-run {
+  from {
+    transform: translateX(0);
+  }
+}
+
+/* ── 1 · Route ────────────────────────────────────────────────────── */
+.vg-si__route {
+  --rt: 0.8rem;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0.2rem;
+}
+.vg-si__stop {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+}
+.vg-si__p[data-on='true'] .vg-si__stop {
+  animation: si-rise 340ms var(--e) calc(360ms + var(--k, 0) * 140ms) backwards;
+}
+@keyframes si-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+/* One teal chip, two sizes: a stop on the route, and the parcel that
+   rides back down the lane when a consignment is called off. */
+.vg-si__dot,
+.vg-si__parcel {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--teal-line);
+  background: var(--teal-fill);
+  color: var(--teal-on-fill);
+  box-shadow: 0 6px 14px -6px var(--teal-glow);
+}
+.vg-si__dot {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+}
+.vg-si__badge {
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.45rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--fg-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* ── 2 · Variance ─────────────────────────────────────────────────── */
+/* One raised surface, three uses: the count table, the cancel dialog
+   and the snackbar. The depth is the same fact each time. */
+.vg-si__surf {
+  border-radius: 0.85rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
+}
+.vg-si__card {
+  overflow: hidden;
+}
+.vg-si__tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+}
+.vg-si__tbl th,
+.vg-si__tbl td {
+  padding: 0.3rem 0.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+.vg-si__tbl thead th {
+  background: var(--teal-tint);
+  color: var(--teal-on-tint);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+/* The product column absorbs the slack and WRAPS; the three numeric
+   columns keep `nowrap`, so the table fits a 320px phone instead of
+   being clipped by the card at the word that matters. */
+.vg-si__tbl th:first-child,
+.vg-si__prod {
+  width: 99%;
+  text-align: left;
+  white-space: normal;
+}
+.vg-si__prod {
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+.vg-si__tbl tbody tr + tr td {
+  border-top: 1px solid var(--line);
+}
+.vg-si__p[data-on='true'] .vg-si__tbl tbody tr {
+  animation: si-rise 320ms var(--e) calc(120ms + var(--k, 0) * 130ms) backwards;
+}
+.vg-si__diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.vg-si__diff[data-sign='short'] {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  box-shadow: inset 0 0 0 1px var(--red-line);
+}
+.vg-si__diff[data-sign='over'] {
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+  box-shadow: inset 0 0 0 1px var(--saffron-line);
+}
+.vg-si__ticket {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.8rem;
+  border: 1px solid var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+  box-shadow: var(--shadow-2);
+}
+.vg-si__p[data-on='true'] .vg-si__ticket {
+  animation: si-pop 340ms var(--e) 460ms backwards;
+}
+@keyframes si-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+.vg-si__ticon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.5rem;
+  background: var(--saffron-fill);
+  color: var(--saffron-on-fill);
+}
+.vg-si__tk {
+  display: grid;
+  gap: 0.05rem;
+  min-width: 0;
+}
+.vg-si__tk b {
+  font-size: 11px;
+}
+.vg-si__tk span {
+  font-size: 9.5px;
+  opacity: 0.85;
+}
+.vg-si__calm {
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--teal-line);
+  color: var(--teal-on-tint);
+  background: var(--teal-tint);
+  font-size: 10px;
+}
+.vg-si__p[data-on='true'] .vg-si__calm {
+  animation: si-rise 340ms var(--e) 620ms backwards;
+}
+
+/* ── 3 · Cancel before dispatch ───────────────────────────────────── */
+.vg-si__dialog {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-hud);
+}
+.vg-si__dialog b {
+  color: var(--fg-strong);
+  font-size: 12px;
+}
+.vg-si__dialog span {
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+.vg-si__lane {
+  --rt: 0.7rem;
+  position: relative;
+  height: 2.6rem;
+  margin-top: 0.15rem;
+}
+.vg-si__runner--back {
+  --at: 0.06;
+}
+.vg-si__p[data-on='true'] .vg-si__runner--back {
+  animation: si-back 460ms var(--e) 260ms backwards;
+}
+@keyframes si-back {
+  from {
+    transform: translateX(62%);
+  }
+}
+.vg-si__parcel {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: -0.75rem;
+  border-radius: 0.5rem;
+}
+.vg-si__ends,
+.vg-si__tstops {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  color: var(--fg-faint);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.vg-si__ends {
+  display: flex;
+  justify-content: space-between;
+}
+.vg-si__stamp {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.vg-si__p[data-on='true'] .vg-si__stamp {
+  animation: si-pop 340ms var(--e) 660ms backwards;
+}
+.vg-si__snack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--surface-3);
+  color: var(--fg-strong);
+  font-size: 10px;
+  box-shadow: var(--shadow-hud);
+}
+.vg-si__p[data-on='true'] .vg-si__snack {
+  animation: si-rise 360ms var(--e) 900ms backwards;
+}
+.vg-si__snack-a {
+  flex: none;
+  color: var(--teal-text);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 9.5px;
+}
+
+/* ── 4 · Freight billing ──────────────────────────────────────────── */
+.vg-si__ex {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 10.5px;
+}
+.vg-si__time {
+  --rt: 0.35rem;
+  position: relative;
+  height: 1.9rem;
+  margin-top: 0.15rem;
+}
+.vg-si__mark {
+  display: block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin: -0.35rem 0 0 -0.35rem;
+  border-radius: 999px;
+  background: var(--teal-fill);
+  box-shadow: 0 0 0 3px var(--teal-glow);
+}
+.vg-si__tstops {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  text-align: center;
+}
+.vg-si__row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.vg-si__p[data-on='true'] .vg-si__row {
+  animation: si-rise 340ms var(--e) calc(560ms + var(--k, 0) * 130ms) backwards;
+}
+.vg-si__sword {
+  color: var(--fg-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.vg-si__conv {
+  color: var(--fg-muted);
+  font-size: 10px;
+  min-width: 0;
+}
+.vg-si__coin {
+  position: relative;
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  transform-style: preserve-3d;
+  transform: perspective(240px) rotateY(180deg);
+}
+.vg-si__p[data-on='true'] .vg-si__coin {
+  animation: si-flip 460ms var(--e) 700ms backwards;
+}
+@keyframes si-flip {
+  from {
+    transform: perspective(240px) rotateY(0deg);
+  }
+}
+.vg-si__face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--teal-line);
+  background: var(--teal-tint);
+  color: var(--teal-on-tint);
+  font-size: 11px;
+  font-weight: 700;
+  backface-visibility: hidden;
+}
+.vg-si__face--b {
+  transform: rotateY(180deg);
+}
+
+/* ── The shared primitives, at mock scale. ────────────────────────── */
+/* choice-cards ships blue / green / saffron selected states only, so
+   the teal one is declared here — one class deeper than the primitive's
+   own rule, which decides it on specificity rather than file order. */
+.vg-si .vg-si__choice {
+  gap: 0.35rem;
+}
+.vg-si__choice .mi-choice__card {
+  min-height: 2.5rem;
+  gap: 0.45rem;
+  padding: 0.35rem 1.6rem 0.35rem 0.5rem;
+  border-radius: 0.7rem;
+}
+.vg-si__choice .mi-choice__icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.45rem;
+}
+.vg-si__choice .mi-choice__title {
+  font-size: 11px;
+}
+.vg-si__choice .mi-choice__helper {
+  font-size: 9.5px;
+}
+.vg-si__choice .mi-choice__check {
+  right: 0.45rem;
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.vg-si .vg-si__choice .mi-choice__card[data-selected='true'] {
+  --c-text: var(--teal-on-tint);
+  border-color: var(--teal-line);
+  background: var(--teal-tint);
+  box-shadow: 0 0 0 3px var(--teal-glow);
+}
+.vg-si .vg-si__choice .mi-choice__card[data-selected='true'] .mi-choice__check,
+.vg-si .vg-si__choice .mi-choice__card[data-selected='true'] .mi-choice__icon {
+  background: var(--teal-fill);
+  border-color: var(--teal-fill);
+  color: var(--teal-on-fill);
+}
+
+/* The bead's three labels do not fit a mock's width on one line, so the
+   tabs share the row and wrap instead of overflowing the frame. */
+.vg-si .vg-si__bead {
+  display: flex;
+  width: 100%;
+  gap: 0.15rem;
+  padding: 0.22rem;
+}
+.vg-si .vg-si__bead .mi-bead__tab {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  min-height: 2.2rem;
+  padding: 0 0.3rem;
+  font-size: 9.5px;
+  line-height: 1.15;
+  text-align: center;
+  white-space: normal;
+}
+.vg-si .vg-si__bead .mi-bead__bead {
+  top: 0.22rem;
+  bottom: 0.22rem;
+}
+.vg-si__row .mi-toggle {
+  width: 34px;
+  height: 20px;
+}
+.vg-si__row .mi-toggle__knob {
+  width: 14px;
+  height: 14px;
+}
+.vg-si__row .mi-toggle input:checked ~ .mi-toggle__knob {
+  transform: translateX(14px);
+}
+/* Unlayered, so it beats the primitive's `min-h-11` / `text-[15px]`
+   utilities without a specificity fight — globals.css's own touch
+   floors work the same way. Safe here and only here: the mock is
+   `inert`, so nothing in it is a target anybody can hit. */
+.vg-si__row label {
+  min-height: 0;
+  gap: 0.4rem;
+  font-size: 10.5px;
+}
+
+/* The preference removes the motion, never the story: the panels and
+   every staged element sit at their finished state at once. */
+.vg-si__mock[data-reduced='true'] *,
+.vg-si__mock[data-reduced='true'] {
+  transition: none !important;
+  animation: none !important;
+}

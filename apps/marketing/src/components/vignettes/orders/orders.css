@@ -1,0 +1,496 @@
+/* 13 · Platform tour — ORDERS.
+   Every rule's BASE state is the beat's finished frame; the animations
+   only add the entrance. So `animation: none` under reduced motion lands
+   on the final picture with no second set of rules to keep in step. */
+
+.vg-ord__mock {
+  --vg-e: cubic-bezier(0.3, 1, 0.3, 1);
+  position: absolute;
+  inset: 0;
+  font-size: clamp(9px, 1.05vw + 5px, 12px);
+  line-height: 1.35;
+  color: var(--saffron-on-tint);
+}
+
+.vg-ord__scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 1.3em;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.45em);
+  transition:
+    opacity 340ms var(--vg-e),
+    transform 340ms var(--vg-e);
+}
+.vg-ord__mock[data-beat='0'] [data-scene='0'],
+.vg-ord__mock[data-beat='1'] [data-scene='1'],
+.vg-ord__mock[data-beat='2'] [data-scene='2'],
+.vg-ord__mock[data-beat='3'] [data-scene='3'] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+/* --- shared -------------------------------------------------------- */
+.vg-ord__h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0;
+  font-weight: 700;
+  color: var(--saffron-on-tint);
+}
+.vg-ord__card {
+  border: 1px solid var(--line);
+  border-radius: 0.95em;
+  background: var(--surface-2);
+  padding: 0.6em 0.75em;
+  box-shadow:
+    var(--shadow-1),
+    0 0.55em 1.2em -0.8em var(--saffron-glow);
+  transition:
+    transform 300ms var(--vg-e),
+    box-shadow 300ms var(--vg-e);
+}
+.vg-ord__card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--shadow-2),
+    0 0.7em 1.4em -0.7em var(--saffron-glow);
+}
+.vg-ord__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.7em;
+  height: 1.7em;
+  border-radius: 0.5em;
+  background: var(--saffron-fill);
+  color: var(--saffron-on-fill);
+}
+.vg-ord__ico svg {
+  width: 1em;
+  height: 1em;
+}
+.vg-ord__pill {
+  margin-left: auto;
+  padding: 0.05em 0.45em;
+  border-radius: 999px;
+  border: 1px solid var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-text);
+  font-size: 0.82em;
+  font-weight: 700;
+}
+.vg-ord__foot,
+.vg-ord__hint {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}
+
+/* --- 1 · three lanes into one queue --------------------------------- */
+.vg-ord__scene[data-scene='0'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+  gap: 0.85em;
+  align-items: center;
+}
+.vg-ord__srcs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vg-ord__src {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  transition: transform 300ms var(--vg-e);
+}
+.vg-ord__src:hover {
+  transform: translateX(2px);
+}
+.vg-ord__srct {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.vg-ord__srct b {
+  color: var(--saffron-on-tint);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vg-ord__srct i {
+  color: var(--fg-muted);
+  font-size: 0.82em;
+  font-style: normal;
+  white-space: nowrap;
+}
+.vg-ord__track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 1.6em;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--saffron-line);
+}
+.vg-ord__runner {
+  position: absolute;
+  inset: 0;
+}
+.vg-ord__pkt {
+  position: absolute;
+  top: 50%;
+  right: -0.2em;
+  width: 0.6em;
+  height: 0.6em;
+  margin-top: -0.3em;
+  border-radius: 999px;
+  background: var(--saffron-fill);
+  box-shadow: 0 0 0 0.24em var(--saffron-glow);
+}
+.vg-ord__q {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  margin: 0.5em 0 0;
+  padding: 0;
+  list-style: none;
+}
+.vg-ord__qrow {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--fg-body);
+}
+.vg-ord__qdot {
+  flex: none;
+  width: 0.45em;
+  height: 0.45em;
+  border-radius: 999px;
+  background: var(--saffron-fill);
+}
+.vg-ord__qs {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+/* --- 2 · the journey ladder ----------------------------------------- */
+.vg-ord__rungs {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+  margin: 0;
+  padding: 0 0 0 1.55em;
+  list-style: none;
+}
+.vg-ord__rungs::before,
+.vg-ord__rungs::after {
+  content: '';
+  position: absolute;
+  top: 0.6em;
+  bottom: 0.6em;
+  left: 0.5em;
+  width: 2px;
+  border-radius: 2px;
+}
+.vg-ord__rungs::before {
+  background: var(--saffron-line);
+}
+.vg-ord__rungs::after {
+  background: var(--saffron-fill);
+  transform-origin: top center;
+}
+.vg-ord__rung {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-height: 1.5em;
+}
+.vg-ord__rdot {
+  position: absolute;
+  left: -1.6em;
+  display: grid;
+  place-items: center;
+  width: 1.15em;
+  height: 1.15em;
+  border-radius: 999px;
+  background: var(--saffron-fill);
+  color: var(--saffron-on-fill);
+}
+.vg-ord__rdot svg {
+  width: 0.62em;
+  height: 0.62em;
+}
+.vg-ord__rl {
+  color: var(--saffron-on-tint);
+  font-weight: 600;
+}
+.vg-ord__own {
+  margin-left: auto;
+  padding: 0.05em 0.45em;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vg-ord__rung[data-owner='Skydrop'] .vg-ord__own {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-text);
+}
+.vg-ord__rung[data-owner='Courier'] .vg-ord__own {
+  border-color: var(--teal-line);
+  background: var(--teal-tint);
+  color: var(--teal-text);
+}
+.vg-ord__acts {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0.25em 0 0;
+}
+.vg-ord__btn {
+  padding: 0.3em 0.65em;
+  border: 1px solid var(--line);
+  border-radius: 0.6em;
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font-weight: 600;
+  opacity: 0.45;
+}
+.vg-ord__locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+/* --- 3 · what we discussed ------------------------------------------ */
+.vg-ord__calls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vg-ord__call {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+}
+.vg-ord__ch {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  font-weight: 700;
+}
+.vg-ord__ch i {
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: 0.85em;
+  font-style: normal;
+  font-weight: 600;
+}
+.vg-ord__cn {
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+.vg-ord__call[data-tone='wait'] {
+  border-color: var(--saffron-line);
+}
+.vg-ord__call[data-tone='wait'] .vg-ord__ch {
+  color: var(--saffron-text);
+}
+.vg-ord__call[data-tone='ok'] {
+  border-color: var(--green-line);
+}
+.vg-ord__call[data-tone='ok'] .vg-ord__ch {
+  color: var(--green-text);
+}
+
+/* --- 4 · the customer register -------------------------------------- */
+.vg-ord__reg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+.vg-ord__regh {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.vg-ord__regh b {
+  color: var(--fg-strong);
+}
+.vg-ord__regh i {
+  color: var(--fg-muted);
+  font-size: 0.9em;
+  font-style: normal;
+}
+.vg-ord__cells {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.28em;
+  margin: 0;
+}
+.vg-ord__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15em;
+  padding: 0.35em 0.2em;
+  border-radius: 0.55em;
+  background: var(--surface-3);
+}
+.vg-ord__cell dt {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.8em;
+}
+.vg-ord__cell dd {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: 1.05em;
+  font-weight: 700;
+}
+.vg-ord__risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  padding: 0.08em 0.4em;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+.vg-ord__risk[data-level='medium'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-text);
+}
+.vg-ord__risk[data-level='low'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-text);
+}
+.vg-ord__reg[data-closed] .vg-ord__risk {
+  margin-left: auto;
+}
+
+/* --- motion --------------------------------------------------------- */
+@keyframes vg-ord-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-ord-run {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  12% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-ord-draw {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes vg-ord-dim {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}
+
+.vg-ord__mock[data-beat='0'] .vg-ord__src,
+.vg-ord__mock[data-beat='0'] .vg-ord__qrow,
+.vg-ord__mock[data-beat='1'] .vg-ord__rung,
+.vg-ord__mock[data-beat='2'] .vg-ord__call,
+.vg-ord__mock[data-beat='3'] .vg-ord__cell,
+.vg-ord__mock[data-beat='3'] .vg-ord__hint,
+.vg-ord__mock[data-beat='1'] .vg-ord__locked {
+  animation: vg-ord-rise 340ms var(--vg-e) both;
+  animation-delay: calc(var(--d, 0ms) + var(--i, 0) * var(--s, 0ms));
+}
+.vg-ord__src {
+  --s: 90ms;
+}
+.vg-ord__qrow {
+  --d: 1150ms;
+  --s: 190ms;
+}
+.vg-ord__rung {
+  --s: 105ms;
+}
+.vg-ord__call {
+  --d: 120ms;
+  --s: 220ms;
+}
+.vg-ord__cell,
+.vg-ord__hint {
+  --d: 180ms;
+  --s: 70ms;
+}
+.vg-ord__locked {
+  --d: 780ms;
+}
+.vg-ord__mock[data-beat='0'] .vg-ord__runner {
+  animation: vg-ord-run 1400ms var(--vg-e) both;
+  animation-delay: calc(var(--i, 0) * 180ms);
+}
+.vg-ord__mock[data-beat='1'] .vg-ord__rungs::after {
+  animation: vg-ord-draw 1150ms var(--vg-e) both;
+}
+.vg-ord__mock[data-beat='1'] .vg-ord__btn {
+  animation: vg-ord-dim 300ms var(--vg-e) 780ms both;
+}
+
+.vg-ord__mock[data-reduced='true'] *,
+.vg-ord__mock[data-reduced='true'] *::before,
+.vg-ord__mock[data-reduced='true'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vg-ord__mock *,
+  .vg-ord__mock *::before,
+  .vg-ord__mock *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

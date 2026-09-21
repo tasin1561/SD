@@ -1,0 +1,801 @@
+/* SECTION 14 · Reseller stores — the server-rendered half.
+   Two parties, two hues: the SELLER is blue, the STORE is violet, and a
+   card says which it belongs to in words as well as in colour. The
+   `data-hue` blocks in sections.css give each card its `--h*` set, so
+   nothing here names a hue and no hex appears anywhere. */
+
+.rs__cards {
+  --e: cubic-bezier(0.3, 1, 0.3, 1);
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 2rem;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 640px) {
+  .rs__cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .rs__cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Soft depth: layered shadow + a faint pool of the card's own hue, which
+   the hover answers back by lifting a little and deepening the pool. */
+.rs__card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  transition:
+    transform 320ms var(--e),
+    box-shadow 320ms var(--e),
+    border-color 320ms var(--e);
+}
+.rs__card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(75% 90% at 12% 0%, var(--h-glow) 0%, transparent 70%);
+  opacity: 0.4;
+  transition: opacity 320ms var(--e);
+}
+.rs__card > * {
+  position: relative;
+  z-index: 1;
+}
+@media (hover: hover) {
+  .rs__card:hover {
+    transform: translateY(-3px);
+    border-color: var(--h-tint);
+    box-shadow: var(--shadow-2);
+  }
+  .rs__card:hover::after {
+    opacity: 0.85;
+  }
+  .rs__card:hover .rs__cardIco {
+    transform: scale(1.06);
+  }
+}
+
+.rs__cardIco {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.65rem;
+  background: var(--h);
+  color: var(--h-on);
+  box-shadow: 0 0.4rem 1rem -0.5rem var(--h-glow);
+  transition: transform 320ms var(--e);
+}
+.rs__cardT {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--fg-strong);
+}
+.rs__cardL {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--fg-body);
+  text-wrap: pretty;
+}
+
+/* The island's placeholder while its chunk loads — the same height the
+   demo settles at, so nothing under it jumps when it arrives. */
+.rs__skeleton {
+  min-height: 26rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rs__card,
+  .rs__card::after,
+  .rs__cardIco {
+    transition: none;
+  }
+}
+
+/* ── The island: the two-party demo ───────────────────────────────────
+   The SELLER's hue and the STORE's are one `--p*` set swapped by
+   `data-party` on the ROOT — that is "whose screen are we on", and it is
+   what cross-fades the frame. A `--sp*` set is the same idea one element
+   at a time: a step, a wallet or a ledger line that belongs to one party
+   whatever the story is currently showing. Declared as a descendant rule
+   on purpose, so the root's own `data-party` never sets it.
+
+   Every animation moves an element FROM a "before" state TO the state the
+   CSS already rests in, so killing them leaves each beat showing its
+   FINISHED frame. Transform and opacity only. */
+.rs {
+  --e: cubic-bezier(0.3, 1, 0.3, 1);
+  --p-fill: var(--blue-fill);
+  --p-on: var(--blue-on-fill);
+  --p-tint: var(--blue-tint);
+  --p-on-tint: var(--blue-on-tint);
+  --p-line: var(--blue-line);
+  --p-glow: var(--blue-glow);
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.rs[data-party='store'] {
+  --p-fill: var(--violet-fill);
+  --p-on: var(--violet-on-fill);
+  --p-tint: var(--violet-tint);
+  --p-on-tint: var(--violet-on-tint);
+  --p-line: var(--violet-line);
+  --p-glow: var(--violet-glow);
+}
+.rs [data-party='seller'] {
+  --sp: var(--blue-fill);
+  --sp-on: var(--blue-on-fill);
+  --sp-line: var(--blue-line);
+  --sp-text: var(--blue-on-tint);
+}
+.rs [data-party='store'] {
+  --sp: var(--violet-fill);
+  --sp-on: var(--violet-on-fill);
+  --sp-line: var(--violet-line);
+  --sp-text: var(--violet-on-tint);
+}
+@media (min-width: 768px) {
+  .rs {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    align-items: center;
+  }
+}
+/* The frame is shared with the platform tour, so the cross-fade is
+   declared here, on this island's own subtree, rather than on it. */
+.rs figure,
+.rs figure > div,
+.rs figure figcaption {
+  transition:
+    background-color 420ms var(--e),
+    border-color 420ms var(--e);
+}
+
+/* ── Beside the mock: the legend and the five steps ──────────────── */
+.rs__aside {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.rs__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.rs__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.rs__key::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentcolor;
+}
+.rs__key--seller {
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.rs__key--store {
+  background: var(--violet-tint);
+  color: var(--violet-on-tint);
+}
+.rs__steps {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0;
+  list-style: none;
+}
+.rs__step {
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 0.7rem;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--fg-muted);
+  text-wrap: pretty;
+  transition:
+    background-color 300ms var(--e),
+    border-color 300ms var(--e),
+    color 300ms var(--e);
+}
+.rs__step[data-state='current'] {
+  border-color: var(--p-line);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  box-shadow: var(--shadow-1);
+}
+.rs__step[data-state='done'] {
+  color: var(--fg-body);
+}
+.rs__stepN {
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.rs__step:not([data-state='todo']) .rs__stepN {
+  background: var(--sp);
+  color: var(--sp-on);
+}
+.rs__note {
+  font-size: 12px;
+  color: var(--fg-faint);
+}
+
+/* ── The mock ─────────────────────────────────────────────────────────
+   One container query drives every size: the whole picture is laid out
+   in `em` off a root that tracks the frame's width, so it reads the same
+   at 320 px and at 560 px — icons included, which is why they are sized
+   here rather than by the `size` prop each one also carries. */
+.rs__mock {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+}
+.rs__scale {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  padding: 4.5cqi;
+  font-size: clamp(7px, 2.75cqi, 11.5px);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  /* A child that forgets its stagger gets 0, never an invalid calc. */
+  --k: 0;
+}
+.rs__mock svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+.rs__panel {
+  grid-area: 1 / 1;
+  display: grid;
+  align-content: center;
+  gap: 0.5em;
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(0.5em);
+  pointer-events: none;
+  transition:
+    opacity 340ms var(--e),
+    transform 340ms var(--e);
+}
+.rs__panel[data-on] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Shared furniture: one card, one label, one bar, one fill — then only
+   what differs. */
+.rs__bar,
+.rs__box,
+.rs__dial,
+.rs__wallet {
+  border: 1px solid var(--line);
+  border-radius: 0.75em;
+  background: var(--surface-2);
+}
+.rs__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0.35em 0.5em;
+  border-color: var(--p-line);
+  box-shadow:
+    var(--shadow-1),
+    0 0 1.6em -0.6em var(--p-glow);
+  color: var(--fg-strong);
+  font-size: 1.05em;
+}
+.rs__bar code {
+  margin-left: auto;
+  padding: 0.1em 0.45em;
+  border-radius: 0.4em;
+  background: var(--p-tint);
+  color: var(--p-on-tint);
+  font-size: 0.85em;
+  font-weight: 600;
+}
+.rs__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.9em;
+  height: 1.9em;
+  border-radius: 0.5em;
+  background: var(--p-fill);
+  color: var(--p-on);
+}
+.rs__ico--flat {
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.rs__label {
+  color: var(--fg-muted);
+  font-size: 0.9em;
+  font-weight: 600;
+}
+.rs__foot {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+  font-weight: 600;
+  text-wrap: pretty;
+}
+/* A name that would run past its column is cut, never wrapped: these
+   rows are one line tall and the travelling indicator counts on it. */
+.rs__clip,
+.rs__sRow > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The two rails: a share of a whole, and a quantity out of a total. */
+.rs__split,
+.rs__track {
+  border-radius: 999px;
+  overflow: hidden;
+}
+.rs__split {
+  height: 0.34em;
+  background: var(--blue-fill);
+}
+.rs__track {
+  grid-column: 1 / -1;
+  height: 0.4em;
+  background: var(--surface-3);
+}
+.rs__splitStore,
+.rs__trackReal,
+.rs__trackSeen {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transform-origin: left;
+}
+.rs__splitStore {
+  background: var(--violet-fill);
+}
+.rs__trackReal,
+.rs__trackSeen {
+  background: var(--sp);
+}
+/* 8 of 40 — the bar is that fraction, not a decoration. */
+.rs__trackSeen {
+  width: 20%;
+}
+/* The one travelling indicator each of the two list beats gets: a pill
+   that walks the rows. `--row` is the row height, so both share a single
+   keyframe, and each rests on its own last row. */
+.rs__walk,
+.rs__rowLit {
+  position: absolute;
+  left: 0.25em;
+  right: 0.25em;
+  border-radius: 0.45em;
+  background: var(--p-fill);
+  opacity: 0.15;
+}
+.rs__walk {
+  --row: 1.7em;
+  top: 0.25em;
+  height: 1.7em;
+  transform: translateY(8.5em);
+}
+.rs__rowLit {
+  --row: 1.9em;
+  top: 0;
+  height: 1.9em;
+  transform: translateY(11.4em);
+}
+[data-on] .rs__walk,
+[data-on] .rs__rowLit {
+  animation: rsStep 1450ms var(--e) 250ms both;
+}
+
+@keyframes rsStep {
+  0% {
+    transform: translateY(0);
+  }
+  17% {
+    transform: translateY(var(--row));
+  }
+  34% {
+    transform: translateY(calc(var(--row) * 2));
+  }
+  50% {
+    transform: translateY(calc(var(--row) * 3));
+  }
+  67% {
+    transform: translateY(calc(var(--row) * 4));
+  }
+  84% {
+    transform: translateY(calc(var(--row) * 5));
+  }
+}
+@keyframes rsGrow {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes rsRise {
+  from {
+    opacity: 0;
+    transform: translateY(0.55em);
+  }
+}
+@keyframes rsFan {
+  from {
+    opacity: 0;
+    transform: translateX(-0.6em);
+  }
+}
+@keyframes rsPop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@keyframes rsFade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── 1 · Terms ───────────────────────────────────────────────────── */
+.rs__fees {
+  position: relative;
+  display: grid;
+  padding: 0.25em;
+}
+.rs__fee {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.7em 3.4em;
+  align-items: center;
+  gap: 0.45em;
+  height: 1.7em;
+  padding: 0 0.45em;
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+/* The bar's violet head is the store's share; the blue behind it is
+   yours. The percentage beside it says the same thing in a number. */
+.rs__pct {
+  justify-self: end;
+  padding: 0 0.35em;
+  border-radius: 0.35em;
+  background: var(--violet-tint);
+  color: var(--violet-on-tint);
+  font-weight: 800;
+}
+[data-on] .rs__splitStore {
+  animation: rsGrow 440ms var(--e) calc(180ms + var(--k) * 90ms) both;
+}
+.rs__timing {
+  display: grid;
+  gap: 0.2em;
+  padding: 0.4em 0.55em;
+}
+.rs__time {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  color: var(--fg-body);
+  font-weight: 600;
+}
+.rs__time b {
+  color: var(--sp-text);
+}
+[data-on] .rs__time {
+  animation: rsFan 380ms var(--e) calc(900ms + var(--k) * 140ms) both;
+}
+
+/* ── 2 · What the store is shown ─────────────────────────────────── */
+.rs__dials {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4em;
+}
+.rs__dial {
+  display: grid;
+  gap: 0.1em;
+  padding: 0.4em 0.55em;
+  border-color: var(--p-line);
+  border-radius: 0.65em;
+  box-shadow: var(--shadow-1);
+}
+.rs__dialV {
+  color: var(--p-on-tint);
+  font-size: 1.7em;
+  font-weight: 800;
+  line-height: 1.1;
+}
+[data-on] .rs__dial {
+  animation: rsRise 400ms var(--e) calc(var(--k) * 140ms) both;
+}
+.rs__calc {
+  display: grid;
+  gap: 0.35em;
+  padding: 0.5em 0.55em;
+}
+.rs__calcRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.9em;
+  align-items: center;
+  gap: 0.45em;
+  color: var(--fg-strong);
+  font-weight: 700;
+}
+[data-on] .rs__trackReal {
+  animation: rsGrow 460ms var(--e) 420ms both;
+}
+[data-on] .rs__trackSeen {
+  animation: rsGrow 560ms var(--e) 760ms both;
+}
+
+/* ── 3 · What the store may do ───────────────────────────────────
+   The two questions are the column heads, verbatim, so the answer under
+   each one is answering the question a seller was actually asked. They
+   are long, so their columns are wide and the head is free to grow: the
+   rows are what the indicator measures, and they are one line each. */
+.rs__policy {
+  display: grid;
+  padding: 0.25em;
+}
+.rs__pBody {
+  position: relative;
+  display: grid;
+}
+.rs__pHead,
+.rs__pRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.2em 7.8em;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0 0.4em;
+}
+.rs__pRow {
+  height: 1.9em;
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+.rs__pA,
+.rs__pB {
+  display: inline-flex;
+  justify-self: center;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25em;
+  padding: 0.1em 0.45em;
+  border-radius: 0.4em;
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: 0.74em;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+}
+.rs__pA[data-yes] {
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.rs__pB {
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.rs__pB[data-ask] {
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+[data-on] .rs__pA,
+[data-on] .rs__pB {
+  animation: rsPop 300ms var(--e) calc(320ms + var(--k) * 150ms) both;
+}
+
+/* ── 4 · The store's own portal ──────────────────────────────────── */
+.rs__storeTbl {
+  display: grid;
+  padding: 0.25em;
+  overflow: hidden;
+}
+.rs__sHead,
+.rs__sRow {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.7fr) minmax(0, 0.85fr) minmax(0, 1.35fr)
+    minmax(0, 0.95fr) minmax(0, 0.8fr) 3.4em 3.4em;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0 0.4em;
+}
+/* Both mock tables share one head; each then says only its own height
+   and the hue of the rule under it. */
+.rs__pHead,
+.rs__sHead {
+  align-items: end;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--p-line);
+  color: var(--fg-muted);
+  font-size: 0.74em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.rs__sHead {
+  min-height: 2.6em;
+}
+/* The rule under either head follows the party whose screen it is — the
+   policy table is the seller's, the catalogue the store's — so `--p-line`
+   says it once. A question is not a column label, so the policy head
+   keeps its own case; declared after the shared head, or the shorthand
+   above would win. */
+.rs__pHead {
+  min-height: 3.6em;
+  letter-spacing: normal;
+  text-transform: none;
+}
+/* A hair under the panel's own size: a price band is the widest thing in
+   the mock, and the cells are clipped rather than wrapped, so the table
+   buys its headroom here instead of at the ellipsis. */
+.rs__sRow {
+  height: 1.75em;
+  color: var(--fg-body);
+  font-size: 0.92em;
+  font-weight: 600;
+}
+.rs__sRow + .rs__sRow {
+  border-top: 1px solid var(--line);
+}
+.rs__gone {
+  color: var(--fg-faint);
+  text-decoration: line-through;
+}
+/* The two columns the store's response simply does not carry. */
+.rs__hatch {
+  height: 0.55em;
+  border-radius: 0.2em;
+  background: repeating-linear-gradient(-45deg, var(--surface-3) 0 0.2em, transparent 0.2em 0.4em);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+[data-on] .rs__sRow {
+  animation: rsFan 340ms var(--e) calc(200ms + var(--k) * 130ms) both;
+}
+[data-on] .rs__hatch {
+  animation: rsFade 420ms var(--e) calc(700ms + var(--k) * 110ms) both;
+}
+
+/* ── 5 · A disagreement, settled ─────────────────────────────────── */
+.rs__wallets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.6em minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4em;
+}
+.rs__wallet {
+  display: grid;
+  gap: 0.1em;
+  padding: 0.5em 0.6em;
+  border-color: var(--sp-line);
+  box-shadow: var(--shadow-1);
+}
+.rs__wallet b {
+  color: var(--sp-text);
+  font-size: 1.35em;
+  font-weight: 800;
+}
+[data-on] .rs__wallet {
+  animation: rsRise 400ms var(--e) 120ms both;
+}
+.rs__arrow {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 1.9em;
+  color: var(--fg-muted);
+}
+/* The one travelling indicator of this beat: the settlement crossing. */
+.rs__bead {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0.5em;
+  height: 0.5em;
+  margin-top: -0.25em;
+  border-radius: 999px;
+  background: var(--violet-fill);
+  opacity: 0;
+}
+[data-on] .rs__bead {
+  animation: rsCross 1100ms var(--e) 600ms both;
+}
+@keyframes rsCross {
+  10%,
+  80% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(2.1em);
+  }
+}
+.rs__locked {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em 0.6em;
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-weight: 600;
+  text-wrap: pretty;
+}
+.rs__locked b {
+  color: var(--fg-strong);
+}
+[data-on] .rs__locked {
+  animation: rsRise 420ms var(--e) 1000ms both;
+}
+
+/* Reduced motion: no tween anywhere — every beat opens on its finished
+   frame, and the steps and caption beside it still advance.
+
+   Asked THREE ways on purpose. The OS media query is the one that works
+   at first paint: `beats.reducedMotion` is false during SSR and only
+   becomes true once React is running, so an attribute-only rule would
+   let a reduced-motion visitor watch the whole beat animate before
+   hydration. `:root[data-reduced='1']` is the gallery's simulator, and
+   the attribute is the state the sequencer itself is in. */
+@media (prefers-reduced-motion: reduce) {
+  .rs *,
+  .rs *::before,
+  .rs *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+:root[data-reduced='1'] .rs *,
+:root[data-reduced='1'] .rs *::after,
+.rs__mock[data-reduced='true'] *,
+.rs__mock[data-reduced='true'] *::after {
+  animation: none !important;
+  transition: none !important;
+}

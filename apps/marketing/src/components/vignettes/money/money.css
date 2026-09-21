@@ -1,0 +1,435 @@
+/* 13 · Platform tour — MONEY.
+   Every rule's BASE state is the beat's finished frame; the animations
+   only add the entrance. So `animation: none` under reduced motion lands
+   on the final picture with no second set of rules to keep in step.
+
+   The `.vg` grid itself is the tour's, declared once in
+   `sections/platform-tour.css` — nothing here redefines it. */
+
+.vg-mon__mock {
+  --vg-e: cubic-bezier(0.3, 1, 0.3, 1);
+  position: absolute;
+  inset: 0;
+  font-size: clamp(9px, 1.05vw + 5px, 12px);
+  line-height: 1.35;
+  color: var(--green-on-tint);
+}
+
+.vg-mon__scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.7em;
+  padding: 1.3em;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.45em);
+  transition:
+    opacity 340ms var(--vg-e),
+    transform 340ms var(--vg-e);
+}
+.vg-mon__mock[data-beat='0'] [data-scene='0'],
+.vg-mon__mock[data-beat='1'] [data-scene='1'],
+.vg-mon__mock[data-beat='2'] [data-scene='2'],
+.vg-mon__mock[data-beat='3'] [data-scene='3'],
+.vg-mon__mock[data-beat='4'] [data-scene='4'] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+/* --- shared -------------------------------------------------------- */
+.vg-mon__h {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0;
+  font-weight: 700;
+  color: var(--green-on-tint);
+}
+.vg-mon__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  border: 1px solid var(--line);
+  border-radius: 0.95em;
+  background: var(--surface-2);
+  padding: 0.6em 0.75em;
+  box-shadow:
+    var(--shadow-1),
+    0 0.55em 1.2em -0.8em var(--green-glow);
+  transition:
+    transform 300ms var(--vg-e),
+    box-shadow 300ms var(--vg-e);
+}
+.vg-mon__card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--shadow-2),
+    0 0.7em 1.4em -0.7em var(--green-glow);
+}
+.vg-mon__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.55em;
+  height: 1.55em;
+  border-radius: 0.45em;
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.vg-mon__ico svg {
+  width: 0.92em;
+  height: 0.92em;
+}
+.vg-mon__th {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.vg-mon__th i {
+  margin-left: auto;
+  color: var(--fg-strong);
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vg-mon__note {
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}
+.vg-mon__foot {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}
+.vg-mon__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28em;
+  padding: 0.1em 0.55em;
+  border: 1px solid var(--green-line);
+  border-radius: 999px;
+  background: var(--green-tint);
+  color: var(--green-text);
+  font-size: 0.85em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* One row shape, used by the ledger and by the charge table. */
+.vg-mon__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  padding: 0.3em 0.55em;
+  border-radius: 0.55em;
+  background: var(--surface-3);
+  color: var(--fg-body);
+  transition: transform 260ms var(--vg-e);
+}
+.vg-mon__row:hover {
+  transform: translateX(2px);
+}
+.vg-mon__row b {
+  margin-left: auto;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vg-mon__row[data-dir='credit'] b {
+  color: var(--green-text);
+}
+.vg-mon__row[data-dir='debit'] b {
+  color: var(--fg-strong);
+}
+
+/* --- 1 · balance and ledger ----------------------------------------- */
+.vg-mon__tiles,
+.vg-mon__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vg-mon__tile[data-soft='true'] {
+  background: var(--surface-3);
+}
+.vg-mon__big {
+  color: var(--fg-strong);
+  font-size: 1.3em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.vg-mon__hint {
+  color: var(--fg-faint);
+  font-size: 0.82em;
+  font-style: normal;
+}
+.vg-mon__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* --- 2 · the top-up claim -------------------------------------------- */
+.vg-mon__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vg-mon__stp {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.15em 0.6em 0.15em 0.2em;
+  border: 1px solid var(--green-line);
+  border-radius: 999px;
+  background: var(--green-tint);
+  color: var(--green-text);
+  font-size: 0.85em;
+  font-weight: 700;
+}
+.vg-mon__dot {
+  display: grid;
+  place-items: center;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 999px;
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.vg-mon__slot {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.vg-mon__stamp {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.7em;
+  height: 1.7em;
+  border-radius: 999px;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  box-shadow: 0 0 0 0.26em var(--blue-glow);
+}
+.vg-mon__stamp svg {
+  width: 0.92em;
+  height: 0.92em;
+}
+/* Both states in ONE grid cell: the finished frame is "Credited", and
+   only the entrance ever shows the waiting chip. */
+.vg-mon__sts {
+  display: grid;
+}
+.vg-mon__sts > .vg-mon__chip {
+  grid-area: 1 / 1;
+  justify-self: start;
+}
+.vg-mon__chip[data-st='wait'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-text);
+  opacity: 0;
+}
+.vg-mon__chip[data-st='ok'] {
+  border-color: transparent;
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+
+/* --- 3 · the withdrawal switch --------------------------------------- */
+.vg-mon__wd {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6em;
+}
+.vg-mon__tg {
+  margin-left: auto;
+  display: inline-flex;
+}
+/* Unlayered, so it beats the toggle primitive's `min-h-11` / `text-[15px]`
+   utilities and the control scales with the mock. Safe here: the box is
+   `aria-hidden` and the switch is `readOnly` with `tabIndex={-1}`, so it
+   is a picture of a control rather than one. */
+.vg-mon__tg label {
+  min-height: 0;
+  gap: 0;
+}
+.vg-mon__tg .mi-toggle {
+  width: 3.1em;
+  min-width: 0;
+  height: 1.75em;
+}
+.vg-mon__tg .mi-toggle__knob {
+  top: 0.2em;
+  left: 0.2em;
+  width: 1.35em;
+  height: 1.35em;
+}
+.vg-mon__tg .mi-toggle input:checked ~ .mi-toggle__knob {
+  transform: translateX(1.35em);
+}
+.vg-mon__tg .mi-toggle__word {
+  font-size: 0.72em;
+}
+.vg-mon__swap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  margin: 0;
+}
+.vg-mon__swap s {
+  color: var(--fg-faint);
+  text-decoration-thickness: 1px;
+}
+.vg-mon__swap b {
+  color: var(--green-text);
+  font-weight: 700;
+}
+
+/* --- 4 · how COD reaches you ----------------------------------------- */
+.vg-mon__opt[data-hot='true'] {
+  border-color: var(--green-line);
+}
+.vg-mon__opt[data-hot='false'] .vg-mon__ico {
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+}
+
+/* --- 5 · one parcel's money ------------------------------------------ */
+.vg-mon__hd {
+  display: flex;
+  gap: 0.6em;
+  padding: 0 0.55em;
+  color: var(--fg-faint);
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.vg-mon__hd span:last-child {
+  margin-left: auto;
+}
+.vg-mon__row[data-total='true'] {
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+  font-weight: 700;
+}
+.vg-mon__row[data-total='true'] b {
+  color: var(--green-text);
+}
+.vg-mon__inv {
+  border-color: var(--green-line);
+}
+
+/* --- motion ----------------------------------------------------------- */
+@keyframes vg-mon-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-mon-slide {
+  from {
+    opacity: 0;
+    transform: translateX(0.9em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-mon-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.4em);
+  }
+}
+@keyframes vg-mon-stamp {
+  from {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vg-mon__mock[data-beat='0'] .vg-mon__row,
+.vg-mon__mock[data-beat='1'] .vg-mon__stp,
+.vg-mon__mock[data-beat='3'] .vg-mon__opt,
+.vg-mon__mock[data-beat='4'] .vg-mon__row {
+  animation: vg-mon-rise 360ms var(--vg-e) both;
+  animation-delay: calc(var(--d, 0ms) + var(--i, 0) * var(--s, 0ms));
+}
+.vg-mon__row {
+  --d: 420ms;
+  --s: 150ms;
+}
+.vg-mon__stp {
+  --d: 180ms;
+  --s: 240ms;
+}
+.vg-mon__opt {
+  --d: 200ms;
+  --s: 170ms;
+}
+.vg-mon__mock[data-beat='0'] .vg-mon__tile,
+.vg-mon__mock[data-beat='2'] .vg-mon__wd,
+.vg-mon__mock[data-beat='4'] .vg-mon__band {
+  animation: vg-mon-rise 380ms var(--vg-e) 120ms both;
+}
+.vg-mon__mock[data-beat='1'] .vg-mon__chip[data-st='wait'] {
+  animation: vg-mon-out 320ms var(--vg-e) 1000ms both;
+}
+.vg-mon__mock[data-beat='1'] .vg-mon__chip[data-st='ok'] {
+  animation: vg-mon-rise 380ms var(--vg-e) 1280ms both;
+}
+.vg-mon__mock[data-beat='1'] .vg-mon__stamp {
+  animation: vg-mon-stamp 360ms var(--vg-e) 1020ms both;
+}
+.vg-mon__mock[data-beat='2'] .vg-mon__swap b {
+  animation: vg-mon-slide 400ms var(--vg-e) 820ms both;
+}
+.vg-mon__mock[data-beat='4'] .vg-mon__inv {
+  animation: vg-mon-slide 400ms var(--vg-e) 900ms both;
+}
+
+.vg-mon__mock[data-reduced='true'] *,
+.vg-mon__mock[data-reduced='true'] *::before,
+.vg-mon__mock[data-reduced='true'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vg-mon__mock *,
+  .vg-mon__mock *::before,
+  .vg-mon__mock *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

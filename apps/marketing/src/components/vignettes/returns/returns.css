@@ -1,0 +1,424 @@
+/* 13 · Platform tour — RETURNS.
+   Every rule's BASE state is the beat's finished frame; the animations
+   only add the entrance. So `animation: none` under reduced motion lands
+   on the final picture with no second set of rules to keep in step.
+
+   The `.vg` grid itself is the tour's, declared once in
+   `sections/platform-tour.css` — nothing here redefines it. */
+
+.vg-ret__mock {
+  --vg-e: cubic-bezier(0.3, 1, 0.3, 1);
+  position: absolute;
+  inset: 0;
+  font-size: clamp(9px, 1.05vw + 5px, 12px);
+  line-height: 1.35;
+  color: var(--magenta-on-tint);
+}
+
+.vg-ret__scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.7em;
+  padding: 1.3em;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.45em);
+  transition:
+    opacity 340ms var(--vg-e),
+    transform 340ms var(--vg-e);
+}
+.vg-ret__mock[data-beat='0'] [data-scene='0'],
+.vg-ret__mock[data-beat='1'] [data-scene='1'],
+.vg-ret__mock[data-beat='2'] [data-scene='2'] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+/* --- shared -------------------------------------------------------- */
+.vg-ret__h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0;
+  font-weight: 700;
+  color: var(--magenta-on-tint);
+}
+.vg-ret__card {
+  border: 1px solid var(--line);
+  border-radius: 0.95em;
+  background: var(--surface-2);
+  padding: 0.6em 0.75em;
+  box-shadow:
+    var(--shadow-1),
+    0 0.55em 1.2em -0.8em var(--magenta-glow);
+  transition:
+    transform 300ms var(--vg-e),
+    box-shadow 300ms var(--vg-e);
+}
+.vg-ret__card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--shadow-2),
+    0 0.7em 1.4em -0.7em var(--magenta-glow);
+}
+.vg-ret__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.55em;
+  height: 1.55em;
+  border-radius: 0.45em;
+  background: var(--magenta-fill);
+  color: var(--magenta-on-fill);
+}
+.vg-ret__ico svg {
+  width: 0.92em;
+  height: 0.92em;
+}
+.vg-ret__th {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.vg-ret__th i {
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: 0.85em;
+  font-style: normal;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vg-ret__pill {
+  margin-left: auto;
+  padding: 0.05em 0.45em;
+  border-radius: 999px;
+  border: 1px solid var(--magenta-line);
+  background: var(--magenta-tint);
+  color: var(--magenta-text);
+  font-size: 0.82em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.vg-ret__foot {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}
+
+/* --- 1 · the parcel tracks back ------------------------------------- */
+.vg-ret__route {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5em;
+  margin: 0.35em 0 0.1em;
+}
+.vg-ret__rail {
+  position: absolute;
+  top: 0.95em;
+  left: 16.6%;
+  right: 16.6%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 2px;
+  background: var(--magenta-line);
+}
+.vg-ret__rail::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: var(--magenta-fill);
+  transform-origin: left center;
+}
+.vg-ret__runner {
+  position: absolute;
+  inset: 0;
+}
+.vg-ret__pkt {
+  position: absolute;
+  top: 50%;
+  right: -0.25em;
+  width: 0.55em;
+  height: 0.55em;
+  margin-top: -0.275em;
+  border-radius: 999px;
+  background: var(--magenta-fill);
+  box-shadow: 0 0 0 0.24em var(--magenta-glow);
+}
+.vg-ret__stop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3em;
+  text-align: center;
+  transition: transform 300ms var(--vg-e);
+}
+.vg-ret__stop:hover {
+  transform: translateY(-2px);
+}
+.vg-ret__node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 1.9em;
+  height: 1.9em;
+  border-radius: 999px;
+  background: var(--magenta-fill);
+  color: var(--magenta-on-fill);
+}
+.vg-ret__node svg {
+  width: 0.92em;
+  height: 0.92em;
+}
+.vg-ret__stop[data-here='true'] .vg-ret__node {
+  box-shadow: 0 0 0 0.3em var(--magenta-glow);
+}
+.vg-ret__where {
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+.vg-ret__chip {
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--magenta-line);
+  border-radius: 999px;
+  background: var(--magenta-tint);
+  color: var(--magenta-text);
+  font-size: 0.82em;
+  font-weight: 700;
+}
+.vg-ret__stop[data-here='true'] .vg-ret__chip {
+  border-color: transparent;
+  background: var(--magenta-fill);
+  color: var(--magenta-on-fill);
+}
+
+/* --- 2 · two units, three trays ------------------------------------- */
+.vg-ret__trays {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vg-ret__tray {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+  padding: 0.55em;
+}
+.vg-ret__tray .vg-ret__th {
+  align-items: flex-start;
+  gap: 0.35em;
+  font-size: 0.92em;
+  line-height: 1.25;
+}
+.vg-ret__slot {
+  display: grid;
+  place-items: center;
+  min-height: 1.8em;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.55em;
+  background: var(--surface-3);
+}
+.vg-ret__none {
+  color: var(--fg-faint);
+  font-size: 0.85em;
+  font-style: normal;
+}
+.vg-ret__unit {
+  padding: 0.12em 0.5em;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+.vg-ret__tray[data-tone='good'] .vg-ret__ico {
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.vg-ret__tray[data-tone='good'] {
+  border-color: var(--green-line);
+}
+.vg-ret__tray[data-tone='good'] .vg-ret__unit {
+  background: var(--green-tint);
+  color: var(--green-text);
+}
+.vg-ret__tray[data-tone='aside'] .vg-ret__ico {
+  background: var(--saffron-fill);
+  color: var(--saffron-on-fill);
+}
+.vg-ret__tray[data-tone='aside'] {
+  border-color: var(--saffron-line);
+}
+.vg-ret__tray[data-tone='aside'] .vg-ret__unit {
+  background: var(--saffron-tint);
+  color: var(--saffron-text);
+}
+.vg-ret__tray[data-tone='off'] .vg-ret__ico {
+  background: var(--red-fill);
+  color: var(--red-on-fill);
+}
+.vg-ret__tray[data-tone='off'] .vg-ret__slot {
+  opacity: 0.6;
+}
+
+/* --- 3 · the ticket, and the settlement ----------------------------- */
+.vg-ret__tkt,
+.vg-ret__led {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+}
+.vg-ret__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22em;
+  margin: 0;
+}
+.vg-ret__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+}
+.vg-ret__row dt {
+  margin: 0;
+  flex: none;
+  min-width: 7.5em;
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}
+.vg-ret__row dd {
+  margin: 0;
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+.vg-ret__lrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.35em 0.5em;
+  border: 1px solid var(--green-line);
+  border-radius: 0.6em;
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+  font-weight: 600;
+}
+.vg-ret__amt {
+  margin-left: auto;
+  color: var(--green-text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* --- motion --------------------------------------------------------- */
+@keyframes vg-ret-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-ret-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-1.3em) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-ret-run {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  12% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes vg-ret-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes vg-ret-slide {
+  from {
+    opacity: 0;
+    transform: translateX(0.9em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vg-ret__mock[data-beat='0'] .vg-ret__stop,
+.vg-ret__mock[data-beat='1'] .vg-ret__tray,
+.vg-ret__mock[data-beat='2'] .vg-ret__row,
+.vg-ret__mock[data-beat='2'] .vg-ret__foot {
+  animation: vg-ret-rise 360ms var(--vg-e) both;
+  animation-delay: calc(var(--d, 0ms) + var(--i, 0) * var(--s, 0ms));
+}
+.vg-ret__stop {
+  --d: 260ms;
+  --s: 420ms;
+}
+.vg-ret__tray {
+  --s: 110ms;
+}
+.vg-ret__row {
+  --d: 200ms;
+  --s: 130ms;
+}
+.vg-ret__foot {
+  --d: 980ms;
+}
+.vg-ret__mock[data-beat='0'] .vg-ret__rail::after {
+  animation: vg-ret-draw 1350ms var(--vg-e) 200ms both;
+}
+.vg-ret__mock[data-beat='0'] .vg-ret__runner {
+  animation: vg-ret-run 1350ms var(--vg-e) 200ms both;
+}
+.vg-ret__mock[data-beat='1'] .vg-ret__unit {
+  animation: vg-ret-drop 380ms var(--vg-e) both;
+  animation-delay: calc(560ms + var(--i, 0) * 300ms);
+}
+.vg-ret__mock[data-beat='2'] .vg-ret__lrow {
+  animation: vg-ret-slide 400ms var(--vg-e) 720ms both;
+}
+
+.vg-ret__mock[data-reduced='true'] *,
+.vg-ret__mock[data-reduced='true'] *::before,
+.vg-ret__mock[data-reduced='true'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vg-ret__mock *,
+  .vg-ret__mock *::before,
+  .vg-ret__mock *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

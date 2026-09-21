@@ -451,7 +451,63 @@ export const platform = {
     'Jewellery',
     'Home',
   ],
-  /** What ships, in the seller's own words — never more than the app does. */
+  /**
+   * 3A — the owner's verbatim capability list (2026-09-21). THE source of
+   * truth for every on-page claim: FEATURES-COVERAGE.md maps each bullet to
+   * the beat, checklist line or section element that shows it, and no
+   * heading, promise or caption may claim more than these say.
+   */
+  claims: {
+    'SELLER — Getting stock into India': [
+      'Declare a consignment: direct to India, or two-leg via your Dhaka intake (goods counted in BD, flown, counted again in India)',
+      'Per-leg counts with variance recorded in both directions — a short count opens a ticket naming the leg; a surplus sends a notice. Neither blocks your stock',
+      'Cancel before dispatch (goods go back to you, recorded as returned — not written off)',
+      "Inbound freight billed three ways, your choice per seller or per consignment: pay now (on arrival), pay later (each unit's share taken as it's delivered), pay in advance (billed at the Dhaka count, before it flies). Rate agreed in taka or rupees and converted at the moment you're charged",
+    ],
+    'SELLER — Catalogue & inventory': [
+      'Products, variants, images (drag-and-drop), CSV import',
+      'Live stock across warehouses, bins and batches; low-stock alerts',
+      'STRICT mode: per-unit serials, scanned at pick and pack, with a discrepancy report',
+    ],
+    'SELLER — Orders': [
+      'Single entry, bulk CSV, or your own system via API key + webhooks',
+      'Full lifecycle timeline, edit, cancel',
+      'Our call centre confirms every COD order by phone; you see each attempt and outcome',
+      'Customer list with per-customer order history and reputation',
+    ],
+    'SELLER — Returns': [
+      'RTO tracked to your warehouse; inspect per unit — two of an item can go different ways (restock / keep aside damaged / write off)',
+      'Scrap and damage tickets opened automatically with the details, and refunds settled onto them',
+    ],
+    'SELLER — Money': [
+      'Wallet with a full ledger; top-ups against a bank transfer (checked by a human before crediting), withdrawals manual or automatic',
+      'COD credited on settlement, or Instant Pay at delivery for a fee',
+      'Charges broken down per order; GST invoices on delivered orders',
+    ],
+    'SELLER — Running the business': [
+      'Team members with roles and permissions',
+      'Notification inbox plus email, silenceable per topic',
+      'Per-seller settings overrides — fee currency, courier choice policy, call-attempt caps, credit timing',
+    ],
+    'RESELLER STORE — headline': [
+      "A store sells your goods under its own name. The customer never sees you: the tracking page, the courier label and the emails all carry the store's name and logo",
+    ],
+    'RESELLER — What you control': [
+      'Which products a store may sell, and at what transfer price',
+      "How much stock it's shown — hide a share, or set units aside for it",
+      'Versioned terms it must accept: which share of each Skydrop fee it pays, and when each of you gets credited',
+      'Per store, per task: may it recall a parcel, change an order, cancel, send back, chase us — and does it happen directly or wait for your approval',
+      'Auto-pause on a return rate you set; fraud signals surfaced to us',
+    ],
+    'RESELLER — What the store gets': [
+      'Its own login, team and permissions',
+      'A catalogue showing its price and its visible stock — never your cost, real stock, or other stores',
+      'Orders by portal, CSV or API key; COD or prepaid from its wallet',
+      'Its own wallet, P&L and expense book',
+      'Disputes with you, settled between your two wallets — never from ours',
+    ],
+  },
+  /** A one-line-per-group SUMMARY of 3A for the page's short lists — never a substitute for `claims`. */
   capabilities: [
     'Stock held in our Indian warehouse, counted on arrival',
     'Every COD order confirmed by phone before it ships',
@@ -642,3 +698,8 @@ export const features = {
 } as const;
 
 export const site = { platform, business, features } as const;
+
+/** Section 13 content — one file per vignette under `sections/`, owned by that vignette. */
+export { tour } from './sections/tour';
+/** Section 14 content — owned by the reseller-stores section. */
+export { reseller } from './sections/reseller';

@@ -1,0 +1,554 @@
+/* 13b · Catalogue & inventory vignette (violet).
+   Every animation moves an element FROM a "before" state TO the state the
+   CSS already rests in, so `[data-reduced='true']` — which kills all of
+   them — leaves each beat showing its FINISHED frame. Motion is transform
+   and opacity only.
+
+   The ACTIVE panel carries `data-on`, so one short selector scopes every
+   animation to the beat that is playing, and a stagger is `--k` on the
+   element rather than a rule per child. */
+
+.vg-cat {
+  display: grid;
+  gap: 1.25rem;
+}
+@media (min-width: 768px) {
+  .vg-cat {
+    grid-template-columns: 1fr 1.2fr;
+    align-items: center;
+  }
+}
+
+/* ── The mock ─────────────────────────────────────────────────────────
+   One container query drives every size: the whole picture is laid out in
+   `em` off a root that tracks the frame's width, so it reads the same at
+   320 px and at 560 px. */
+.vg-cat__mock {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  --e: cubic-bezier(0.3, 1, 0.3, 1);
+}
+.vg-cat__scale {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  padding: 4.5cqi;
+  font-size: clamp(7px, 2.8cqi, 11.5px);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  /* A child that forgets its stagger gets 0, never an invalid calc (which
+     would take its whole `animation` shorthand down with it). */
+  --k: 0;
+}
+.vg-cat__panel {
+  grid-area: 1 / 1;
+  display: grid;
+  align-content: center;
+  gap: 0.55em;
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(0.5em);
+  pointer-events: none;
+  transition:
+    opacity 340ms var(--e),
+    transform 340ms var(--e);
+}
+.vg-cat__panel[data-on] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── Shared furniture ───────────────────────────────────────────────
+   Six boxes are the same card — soft radius, hairline, raised surface —
+   and each then says only how it differs. */
+.vg-cat__bar,
+.vg-cat__drop,
+.vg-cat__states,
+.vg-cat__tw,
+.vg-cat__units,
+.vg-cat__disc {
+  border: 1px solid var(--line);
+  border-radius: 0.75em;
+  background: var(--surface-2);
+}
+.vg-cat__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0;
+  padding: 0.35em 0.5em;
+  border-color: var(--violet-line);
+  box-shadow:
+    var(--shadow-1),
+    0 0 1.6em -0.6em var(--violet-glow);
+  color: var(--fg-strong);
+  font-size: 1.05em;
+}
+.vg-cat__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.9em;
+  height: 1.9em;
+  border-radius: 0.5em;
+  background: var(--violet-fill);
+  color: var(--violet-on-fill);
+}
+.vg-cat__bar code {
+  margin-left: auto;
+  padding: 0.1em 0.45em;
+  border-radius: 0.4em;
+  background: var(--violet-tint);
+  color: var(--violet-on-tint);
+  font-size: 0.85em;
+  font-weight: 600;
+}
+.vg-cat__dim,
+.vg-cat__foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  color: var(--fg-muted);
+  font-size: 0.92em;
+  font-weight: 600;
+}
+
+/* ── 1 · Product card ─────────────────────────────────────────────── */
+.vg-cat__two {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 0.55em;
+}
+.vg-cat__drop {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.45em;
+  padding: 0.6em 0.4em;
+  border-color: var(--violet-line);
+  border-style: dashed;
+}
+.vg-cat__tiles {
+  display: flex;
+  gap: 0.35em;
+}
+.vg-cat__tile {
+  width: 2.1em;
+  height: 2.1em;
+  border-radius: 0.4em;
+  background: linear-gradient(140deg, var(--violet-fill), var(--violet-tint));
+  box-shadow: var(--shadow-1);
+}
+[data-on] .vg-cat__tile {
+  animation: cat-drop 420ms var(--e) calc(var(--k) * 110ms) both;
+}
+@keyframes cat-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-0.9em) scale(0.82);
+  }
+}
+
+.vg-cat__states {
+  position: relative;
+  display: grid;
+  padding: 0.25em;
+}
+.vg-cat__state {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  height: 1.55em;
+  padding: 0 0.45em;
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+.vg-cat__state:last-child {
+  color: var(--green-text);
+}
+[data-on] .vg-cat__state {
+  animation: cat-lit 320ms var(--e) calc(420ms + var(--k) * 370ms) both;
+}
+@keyframes cat-lit {
+  from {
+    opacity: 0.35;
+  }
+}
+/* The one travelling indicator of this beat: the pill walks the four
+   states the uploader really badges, and rests on `done`. */
+.vg-cat__pill {
+  position: absolute;
+  left: 0.25em;
+  right: 0.25em;
+  top: 0.25em;
+  height: 1.55em;
+  border-radius: 0.45em;
+  background: var(--violet-fill);
+  opacity: 0.2;
+  transform: translateY(4.65em);
+}
+[data-on] .vg-cat__pill {
+  animation: cat-pill 1150ms var(--e) 420ms both;
+}
+@keyframes cat-pill {
+  0% {
+    transform: translateY(0);
+  }
+  32% {
+    transform: translateY(1.55em);
+  }
+  64% {
+    transform: translateY(3.1em);
+  }
+}
+
+.vg-cat__vars,
+.vg-cat__csv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35em;
+  margin: 0;
+}
+.vg-cat__chip {
+  padding: 0.15em 0.5em;
+  border: 1px solid var(--violet-line);
+  border-radius: 999px;
+  background: var(--violet-tint);
+  color: var(--violet-on-tint);
+  font-weight: 600;
+}
+[data-on] .vg-cat__chip {
+  animation: cat-fan 400ms var(--e) calc(900ms + var(--k) * 90ms) both;
+}
+[data-on] .vg-cat__feed {
+  animation: cat-fan 400ms var(--e) calc(1300ms + var(--k) * 120ms) both;
+}
+@keyframes cat-fan {
+  from {
+    opacity: 0;
+    transform: translateX(-0.7em);
+  }
+}
+.vg-cat__ghost,
+.vg-cat__go {
+  padding: 0.25em 0.6em;
+  border-radius: 0.5em;
+  font-weight: 700;
+}
+.vg-cat__ghost {
+  border: 1px solid var(--border-control);
+  color: var(--fg-body);
+}
+.vg-cat__go {
+  background: var(--violet-fill);
+  color: var(--violet-on-fill);
+  box-shadow: 0 0.35em 1em -0.5em var(--violet-glow);
+}
+.vg-cat__feed {
+  flex: 1 1 2.5em;
+  height: 0.4em;
+  border-radius: 999px;
+  background: var(--violet-tint);
+  box-shadow: inset 0 0 0 1px var(--violet-line);
+}
+
+/* ── 2 · Stock register ───────────────────────────────────────────── */
+.vg-cat__tw {
+  position: relative;
+  padding: 0.25em;
+  box-shadow: var(--shadow-1);
+}
+.vg-cat__tbl {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: left;
+}
+.vg-cat__tbl th {
+  height: 3.1em;
+  padding: 0 0.25em;
+  border-bottom: 1px solid var(--violet-line);
+  color: var(--fg-muted);
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: bottom;
+  overflow-wrap: anywhere;
+}
+/* Every row is exactly 1.9em whatever a cell holds — the travelling row
+   highlight steps by that figure, so a wrapped cell would desync it. */
+.vg-cat__tbl td {
+  height: 1.9em;
+  padding: 0 0.25em;
+  color: var(--fg-body);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vg-cat__tbl td:last-child {
+  overflow: visible;
+}
+.vg-cat__tbl tr + tr td {
+  border-top: 1px solid var(--line);
+}
+.vg-cat__n {
+  color: var(--fg-strong);
+}
+.vg-cat__meter {
+  position: relative;
+  display: block;
+  height: 0.35em;
+  margin-top: 0.15em;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.vg-cat__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--violet-fill);
+  transform-origin: left;
+}
+[data-on] .vg-cat__fill {
+  animation: cat-grow 460ms var(--e) calc(200ms + var(--k) * 100ms) both;
+}
+@keyframes cat-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+.vg-cat__mark {
+  position: absolute;
+  top: 0;
+  width: 0.14em;
+  height: 100%;
+  background: var(--fg-muted);
+}
+.vg-cat__key {
+  position: static;
+  display: inline-block;
+  height: 0.8em;
+}
+.vg-cat__low,
+.vg-cat__ok,
+.vg-cat__gate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  padding: 0.1em 0.4em;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+.vg-cat__ok {
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+/* Icon AND the word — the ring is a breath, never a blink. */
+.vg-cat__low {
+  position: relative;
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.vg-cat__low::after {
+  content: '';
+  position: absolute;
+  inset: -0.15em;
+  border: 1px solid var(--red-line);
+  border-radius: 999px;
+  opacity: 0;
+}
+[data-on] .vg-cat__low::after {
+  animation: cat-pulse 1700ms var(--e) 750ms infinite;
+}
+@keyframes cat-pulse {
+  from {
+    opacity: 0.85;
+    transform: scale(0.88);
+  }
+  70%,
+  to {
+    opacity: 0;
+    transform: scale(1.32);
+  }
+}
+.vg-cat__scan {
+  position: absolute;
+  left: 0.25em;
+  right: 0.25em;
+  top: 2.75em;
+  height: 1.9em;
+  border-radius: 0.4em;
+  background: var(--violet-fill);
+  opacity: 0.16;
+  transform: translateY(3.8em);
+}
+[data-on] .vg-cat__scan {
+  animation: cat-row 1050ms var(--e) 260ms both;
+}
+@keyframes cat-row {
+  from {
+    transform: translateY(0);
+  }
+  46% {
+    transform: translateY(1.9em);
+  }
+}
+.vg-cat__foot {
+  margin: 0;
+}
+.vg-cat__foot b {
+  color: var(--violet-on-tint);
+}
+
+/* ── 3 · STRICT mode ──────────────────────────────────────────────── */
+/* Unlayered, so it wins over the toggle's own Tailwind utilities and the
+   control scales with the mock instead of sitting at a fixed 15 px. */
+.vg-cat__toggle label {
+  min-height: 0;
+  gap: 0.5em;
+  font-size: 1.05em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.vg-cat__gates {
+  display: flex;
+  gap: 0.4em;
+  margin: 0;
+}
+.vg-cat__gate {
+  padding: 0.2em 0.7em;
+  background: var(--violet-fill);
+  color: var(--violet-on-fill);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+[data-on] .vg-cat__gate {
+  animation: cat-lit 320ms var(--e) calc(150ms + var(--k) * 1000ms) both;
+}
+.vg-cat__units {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em;
+  padding: 0.45em;
+  border-color: var(--violet-line);
+  overflow: hidden;
+}
+.vg-cat__unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.15em 0.45em;
+  border-radius: 0.45em;
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+  font-size: 0.85em;
+  font-weight: 700;
+}
+/* The mismatch reads red AND carries a cross; it surfaces on the SECOND
+   pass, which is the pack scan that found it. */
+.vg-cat__unit[data-bad] {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+[data-on] .vg-cat__unit {
+  animation: cat-tick 340ms var(--e) calc(350ms + var(--k) * 300ms) both;
+}
+[data-on] .vg-cat__unit[data-bad] {
+  animation-delay: 1500ms;
+}
+@keyframes cat-tick {
+  from {
+    opacity: 0.28;
+    transform: scale(0.94);
+  }
+}
+.vg-cat__sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 22%;
+  background: linear-gradient(90deg, transparent, var(--violet-fill) 50%, transparent);
+  opacity: 0;
+}
+[data-on] .vg-cat__sweep {
+  animation: cat-sweep 900ms linear 150ms 2 both;
+}
+@keyframes cat-sweep {
+  from {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  8%,
+  88% {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(350%);
+  }
+}
+.vg-cat__disc {
+  display: grid;
+  gap: 0.15em;
+  padding: 0.45em 0.6em;
+  border-color: var(--red-line);
+  box-shadow: var(--shadow-1);
+}
+[data-on] .vg-cat__disc {
+  animation: cat-rise 420ms var(--e) 1750ms both;
+}
+@keyframes cat-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.6em);
+  }
+}
+.vg-cat__dischead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  color: var(--red-on-tint);
+  font-weight: 700;
+}
+.vg-cat__mismatch {
+  color: var(--fg-strong);
+  font-weight: 700;
+}
+.vg-cat__note {
+  color: var(--fg-muted);
+  font-size: 0.92em;
+  text-wrap: pretty;
+}
+
+/* Reduced motion: no tween anywhere — every beat opens on its finished
+   frame, and the captions beside it still advance.
+
+   Asked THREE ways on purpose. The OS media query is the one that works
+   at first paint: `beats.reducedMotion` is false during SSR and only
+   becomes true once React is running, so an attribute-only rule would
+   let a reduced-motion visitor watch the whole beat animate before
+   hydration — and would put a mismatched attribute in the HTML besides.
+   `:root[data-reduced='1']` is the gallery's simulator (micro.css), and
+   the attribute is the state the sequencer itself is in. */
+@media (prefers-reduced-motion: reduce) {
+  .vg-cat__mock *,
+  .vg-cat__mock *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+:root[data-reduced='1'] .vg-cat__mock *,
+:root[data-reduced='1'] .vg-cat__mock *::after,
+.vg-cat__mock[data-reduced='true'] *,
+.vg-cat__mock[data-reduced='true'] *::after {
+  animation: none !important;
+  transition: none !important;
+}

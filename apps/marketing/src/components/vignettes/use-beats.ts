@@ -47,7 +47,12 @@ export function useBeats({ beats, restMs = 2000, loop = true, enabled }: BeatsOp
   const [playing, setPlaying] = useState(false);
   const id = useRef(0);
   if (id.current === 0) id.current = nextId++;
-  const reduced = typeof window !== 'undefined' && reducedMotion();
+  // Read AFTER mount: on the server this is false, and a client that read it
+  // during render would hydrate `data-reduced` against different markup.
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    setReduced(reducedMotion());
+  }, []);
 
   const pause = useCallback((): void => {
     setPlaying(false);
