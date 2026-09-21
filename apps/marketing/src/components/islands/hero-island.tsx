@@ -2,6 +2,7 @@
 
 import type { ReactElement } from 'react';
 import { CorridorConsole } from '@/components/landing/corridor-console';
+import type { Direction } from './direction';
 
 /**
  * The hero's ART LAYER: the existing corridor map animation (owner,
@@ -13,10 +14,16 @@ import { CorridorConsole } from '@/components/landing/corridor-console';
  * ONE frame under reduced motion. No poster, no gate, no lazy chunk: the
  * canvas is text-free, so it is never the LCP (the headline is).
  */
-export function HeroArt(): ReactElement {
+export function HeroArt({
+  direction,
+  labels,
+}: {
+  direction: Direction;
+  labels: boolean;
+}): ReactElement {
   return (
     <div className="hero-art" data-hero-art="corridor">
-      <CorridorConsole />
+      <CorridorConsole direction={direction} labels={labels} />
     </div>
   );
 }

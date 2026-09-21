@@ -58,8 +58,8 @@ const VOLUMES = ['Under 100', '100–500', '500–2,000', '2,000+', 'Not sure ye
  * word for it, not theirs.
  */
 const DIRECTIONS = [
-  { value: 'BD_TO_IN', label: 'India — I am in Bangladesh, shipping to Indian customers' },
-  { value: 'IN_TO_BD', label: 'Bangladesh — I am in India, shipping to Bangladeshi customers' },
+  { value: 'BD_TO_IN', label: 'Bangladesh → India' },
+  { value: 'IN_TO_BD', label: 'India → Bangladesh' },
   { value: 'BOTH', label: 'Both directions' },
 ] as const;
 
@@ -115,9 +115,12 @@ const inputClass =
 export function InviteForm({
   variant = 'page',
   direction,
+  quote,
 }: {
   variant?: 'page' | 'embedded';
   direction?: Direction;
+  /** A quote line from the hero's estimator, carried into the lead as its message. */
+  quote?: string | undefined;
 } = {}): ReactElement {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -267,13 +270,16 @@ export function InviteForm({
         noValidate
         data-variant="embedded"
       >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field id="shippingDirection" label="Deliver to">
+        <div className="invite-embedded__grid">
+          {/* Floating labels (u33): the label sits in the field and rises
+              into the border on focus or once filled. The select's label is
+              always up — it always has a value. */}
+          <span className="mi mi-float is-select">
             <select
               key={dir}
               id="shippingDirection"
               name="shippingDirection"
-              className={inputClass}
+              className="mi-float__input"
               defaultValue={dir}
             >
               {DIRECTIONS.map((d) => (
@@ -282,30 +288,39 @@ export function InviteForm({
                 </option>
               ))}
             </select>
-          </Field>
-          <Field id="companyName" label="Company" required>
+            <label htmlFor="shippingDirection" className="mi-float__label">
+              Deliver to
+            </label>
+          </span>
+          <span className="mi mi-float">
             <input
               id="companyName"
               name="companyName"
               required
               maxLength={160}
               autoComplete="organization"
-              className={inputClass}
-              placeholder="Dhaka Threads"
+              className="mi-float__input"
+              placeholder=" "
             />
-          </Field>
-          <Field id="fullName" label="Your name" required>
+            <label htmlFor="companyName" className="mi-float__label">
+              Business name (or your own name) *
+            </label>
+          </span>
+          <span className="mi mi-float">
             <input
               id="fullName"
               name="fullName"
               required
               maxLength={120}
               autoComplete="name"
-              className={inputClass}
-              placeholder="Rahim Uddin"
+              className="mi-float__input"
+              placeholder=" "
             />
-          </Field>
-          <Field id="phone" label="Phone or WhatsApp" required>
+            <label htmlFor="fullName" className="mi-float__label">
+              Your name *
+            </label>
+          </span>
+          <span className="mi mi-float">
             <input
               id="phone"
               name="phone"
@@ -313,25 +328,30 @@ export function InviteForm({
               maxLength={32}
               autoComplete="tel"
               inputMode="tel"
-              className={inputClass}
-              placeholder="+880 1712 345678"
+              className="mi-float__input"
+              placeholder=" "
             />
-          </Field>
-          <div className="sm:col-span-2">
-            <Field id="email" label="Email" required>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                maxLength={200}
-                autoComplete="email"
-                className={inputClass}
-                placeholder="you@yourstore.com"
-              />
-            </Field>
-          </div>
+            <label htmlFor="phone" className="mi-float__label">
+              Phone or WhatsApp *
+            </label>
+          </span>
+          <span className="mi mi-float invite-embedded__wide">
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              maxLength={200}
+              autoComplete="email"
+              className="mi-float__input"
+              placeholder=" "
+            />
+            <label htmlFor="email" className="mi-float__label">
+              Email *
+            </label>
+          </span>
         </div>
+        {quote ? <input type="hidden" name="message" value={quote} /> : null}
         {honeypot}
         {errorNote}
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -342,7 +362,7 @@ export function InviteForm({
             errorLabel="Not sent — check the message above"
           />
           <span className="text-[12px] leading-snug text-fg-muted">
-            We reply within one working day. No newsletter.
+            {quote ? 'Your quote travels with the request. ' : ''}We reply within one working day.
           </span>
         </div>
       </form>

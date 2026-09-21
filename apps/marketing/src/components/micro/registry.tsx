@@ -29,6 +29,8 @@ import { Odometer } from './odometer';
 import { ReactiveMascot } from './reactive-mascot';
 import { DoorLink } from './door-hover';
 import { ConnectorDraw } from './connector-draw';
+import { ChoiceCards } from './choice-cards';
+import { Plane } from 'lucide-react';
 
 /**
  * Every micro pattern, with a DEMO that drives it through its states. The
@@ -51,6 +53,34 @@ const fakeTask =
     if (!ok) throw new Error('refused');
     return 'ok';
   };
+
+function ChoiceDemo(): ReactElement {
+  const [v, setV] = useState<'out' | 'in'>('out');
+  return (
+    <ChoiceCards
+      name="demo-direction"
+      label="Shipping direction"
+      value={v}
+      onChange={setV}
+      options={[
+        {
+          value: 'out',
+          title: 'Bangladesh → India',
+          helper: '4–7 days · taka rates',
+          icon: <Plane size={15} />,
+          hue: 'saffron',
+        },
+        {
+          value: 'in',
+          title: 'India → Bangladesh',
+          helper: '3–5 days · rupee rates',
+          icon: <Plane size={15} />,
+          hue: 'green',
+        },
+      ]}
+    />
+  );
+}
 
 function ParachuteDemo(): ReactElement {
   return (
@@ -632,6 +662,14 @@ export const MICRO_REGISTRY: readonly MicroEntry[] = [
     name: 'Connector draw (kept, extra)',
     where: 'How it works — the four steps join as you scroll',
     Demo: ConnDemo,
+  },
+  {
+    id: 'choice-cards',
+    n: 16,
+    name: 'Choice cards (u10)',
+    where:
+      'Hero quote + book direction; freight-billing choice; "Directly / Needs my approval"; parcel type',
+    Demo: ChoiceDemo,
   },
 ];
 

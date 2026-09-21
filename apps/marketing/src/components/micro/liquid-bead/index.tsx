@@ -55,7 +55,11 @@ export function LiquidBead({
     const el = root.current;
     const active = el?.querySelector<HTMLElement>('[aria-selected="true"]');
     const tab = tabs.find((t) => t.id === value);
-    if (!el || !active || !tab) return;
+    if (!el) return;
+    // No active tab (the bar while the hero is off screen): the bead rests
+    // on nothing rather than on a stale position.
+    el.dataset.none = active && tab ? '' : '1';
+    if (!active || !tab) return;
     el.style.setProperty('--bead-x', `${active.offsetLeft}px`);
     el.style.setProperty('--bead-w', `${active.offsetWidth}px`);
     el.style.setProperty('--bead-color', `var(--${tab.hue}-fill)`);

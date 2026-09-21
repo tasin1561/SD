@@ -1,0 +1,139 @@
+/* 16 · Choice cards (u10) — the selected card gets the hue's border, tint
+   and glow; the check draws in. Colour tokens are resolved per card from
+   `--hue` so a saffron card and a green card share one rule set. */
+.mi-choice {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+  gap: 0.5rem;
+  min-width: 0;
+}
+@media (max-width: 400px) {
+  .mi-choice[style*='--cols: 2'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.mi-choice__card {
+  --c-text: var(--fg-strong);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 3rem;
+  padding: 0.55rem 2.1rem 0.55rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-control);
+  background: var(--surface-input);
+  cursor: pointer;
+  min-width: 0;
+  transition:
+    border-color calc(180 * var(--d)),
+    background-color calc(180 * var(--d)),
+    box-shadow calc(180 * var(--d)),
+    transform calc(180 * var(--d));
+}
+.mi-choice__card:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+.mi-choice__card:has(.mi-choice__input:focus-visible) {
+  outline: 2px solid var(--blue-text);
+  outline-offset: 2px;
+}
+.mi-choice__input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.mi-choice__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.5rem;
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  flex: none;
+}
+.mi-choice__text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.mi-choice__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.mi-choice__helper {
+  font-size: 12px;
+  color: var(--fg-muted);
+  line-height: 1.3;
+}
+.mi-choice__check {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-control);
+  color: transparent;
+  background: transparent;
+  transition:
+    background-color calc(180 * var(--d)),
+    border-color calc(180 * var(--d)),
+    color calc(180 * var(--d)),
+    transform calc(220 * var(--d)) cubic-bezier(0.3, 1.4, 0.4, 1);
+  transform: scale(0.85);
+}
+/* Selected: per-hue tokens through the card's --hue. */
+.mi-choice__card[data-selected='true'][style*='saffron'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  box-shadow: 0 0 0 3px var(--saffron-glow);
+  --c-text: var(--saffron-on-tint);
+}
+.mi-choice__card[data-selected='true'][style*='saffron'] .mi-choice__check,
+.mi-choice__card[data-selected='true'][style*='saffron'] .mi-choice__icon {
+  background: var(--saffron-fill);
+  border-color: var(--saffron-fill);
+  color: var(--saffron-on-fill);
+}
+.mi-choice__card[data-selected='true'][style*='green'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  box-shadow: 0 0 0 3px var(--green-glow);
+  --c-text: var(--green-on-tint);
+}
+.mi-choice__card[data-selected='true'][style*='green'] .mi-choice__check,
+.mi-choice__card[data-selected='true'][style*='green'] .mi-choice__icon {
+  background: var(--green-fill);
+  border-color: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.mi-choice__card[data-selected='true'][style*='blue'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  box-shadow: 0 0 0 3px var(--blue-glow);
+  --c-text: var(--blue-on-tint);
+}
+.mi-choice__card[data-selected='true'][style*='blue'] .mi-choice__check,
+.mi-choice__card[data-selected='true'][style*='blue'] .mi-choice__icon {
+  background: var(--blue-fill);
+  border-color: var(--blue-fill);
+  color: var(--blue-on-fill);
+}
+.mi-choice__card[data-selected='true'] .mi-choice__check {
+  transform: scale(1);
+}
+.mi-choice__card[data-selected='true'] .mi-choice__helper {
+  color: var(--c-text);
+  opacity: 0.85;
+}

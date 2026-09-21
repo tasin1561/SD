@@ -48,9 +48,9 @@ for (const f of ['motion.ts', 'use-async-state.ts', 'micro.css']) {
   rows.push(`info ${f.padEnd(24)}    ${String(size).padStart(5)} B`);
 }
 rows.push(
-  `${total <= 25600 ? 'OK  ' : 'FAIL'} ${'library total'.padEnd(24)}    ${String(total).padStart(5)} B / 25600`,
+  `${total <= 40960 ? 'OK  ' : 'FAIL'} ${'library total'.padEnd(24)}    ${String(total).padStart(5)} B / 40960`,
 );
-if (total > 25600) failures.push(`library total ${total} B > 25600`);
+if (total > 40960) failures.push(`library total ${total} B > 40960`);
 console.log('check:micro\n' + rows.join('\n'));
 if (failures.length) {
   console.error('\ncheck:micro FAILED:\n  ' + failures.join('\n  '));

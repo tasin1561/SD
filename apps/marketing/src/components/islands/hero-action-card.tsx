@@ -2,25 +2,31 @@
 
 import dynamic from 'next/dynamic';
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { Search } from 'lucide-react';
+import { ArrowRight, PackageSearch, Plane } from 'lucide-react';
 import { LiquidBead } from '@/components/micro/liquid-bead';
 import { RollingLabelButton } from '@/components/micro/rolling-label-button';
 import { ParachuteProgress } from '@/components/micro/parachute-progress';
 import { business, platform } from '@/content/site';
+import { setHeroTab, useHeroTab, type HeroTab } from '@/lib/hero-tab';
 import type { Direction } from './direction';
-import { DirectionToggle } from './direction-toggle';
+import { ChoiceCards } from '@/components/micro/choice-cards';
 
 /**
- * Track · Get a quote · Book a shipment — the three things a visitor
- * came to do, reachable without scrolling on a 360×780 phone.
+ * Track · Get a quote · Book a shipment — the three things a visitor came
+ * to do, reachable without scrolling on a 360×780 phone.
  *
  * Track is a NAVIGATION to the tracking page: the label rolls to
  * "Finding…" as ≤350 ms press feedback and the page changes; there is no
- * "found" because we never learn the result. The quote is pure local
- * arithmetic over the (placeholder) slabs — the parachute descends while
- * it "runs" and the landing is the figure, labelled Estimated. Book
- * embeds the real invite form, fetched only when its tab is chosen or
- * hovered, so the form's code is not in the hero's first load.
+ * "found" because we never learn the result. The quote is local
+ * arithmetic over the direction's (placeholder) rate card — taka from
+ * Bangladesh, rupees from India — with the parachute descending while it
+ * runs; the RESULT lives on its own row under the input with the slab,
+ * the transit estimate and a link that carries the quote into the Book
+ * tab, and the button stays available for another weight. Book embeds
+ * the real invite form, fetched only when its tab is chosen or hovered.
+ *
+ * The open tab is shared through `hero-tab.ts` so the phone's bottom bar
+ * can follow it.
  */
 const InviteForm = dynamic(
   () => import('@/components/landing/invite-form').then((m) => m.InviteForm),
@@ -29,15 +35,48 @@ const InviteForm = dynamic(
 const warmForm = (): void => void import('@/components/landing/invite-form');
 
 const TABS = [
-  { id: 'track', label: 'Track', hue: 'blue' },
-  { id: 'quote', label: 'Get a quote', hue: 'saffron' },
-  { id: 'book', label: 'Book a shipment', hue: 'green' },
+  { id: 'track', label: <TabLabel long="Track" short="Track" />, hue: 'blue' },
+  { id: 'quote', label: <TabLabel long="Get a quote" short="Quote" />, hue: 'saffron' },
+  { id: 'book', label: <TabLabel long="Book a shipment" short="Book" />, hue: 'green' },
 ] as const;
 
-function estimate(kg: number): { price: number; slab: number } | null {
-  const slabs = business.estimator.slabs;
-  for (const s of slabs) if (kg <= s.upToKg) return { price: s.price, slab: s.upToKg };
+/** Two spellings; CSS shows the short one at ≤ 400 px. */
+function TabLabel({ long, short }: { long: string; short: string }): ReactElement {
+  return (
+    <>
+      <span className="hero-card__tab-long">{long}</span>
+      <span className="hero-card__tab-short" aria-hidden>
+        {short}
+      </span>
+    </>
+  );
+}
+
+interface Quote {
+  direction: Direction;
+  kg: number;
+  price: number;
+  symbol: string;
+  slabKg: number;
+  transit: string;
+}
+
+function estimate(direction: Direction, kg: number): Quote | null {
+  const card = direction === 'out' ? business.estimator.toIndia : business.estimator.toBangladesh;
+  const transit =
+    direction === 'out'
+      ? business.serviceability.transitDaysIndia
+      : business.serviceability.transitDaysBangladesh;
+  for (const s of card.slabs) {
+    if (kg <= s.upToKg)
+      return { direction, kg, price: s.price, symbol: card.symbol, slabKg: s.upToKg, transit };
+  }
   return null;
+}
+
+export function quoteLine(q: Quote): string {
+  const route = q.direction === 'out' ? 'Bangladesh → India' : 'India → Bangladesh';
+  return `Quote: ${route}, ${q.kg} kg, est. ${q.symbol}${q.price.toLocaleString('en-IN')} (${q.transit})`;
 }
 
 export function HeroActionCard({
@@ -47,10 +86,11 @@ export function HeroActionCard({
   direction: Direction;
   onDirectionChange: (d: Direction) => void;
 }): ReactElement {
-  const [tab, setTab] = useState<string>('track');
+  const tab = useHeroTab();
   const [awb, setAwb] = useState('');
   const [phase, setPhase] = useState<'idle' | 'busy'>('idle');
   const [kg, setKg] = useState('1');
+  const [quote, setQuote] = useState<Quote | null>(null);
 
   const track = (e: FormEvent): void => {
     e.preventDefault();
@@ -59,16 +99,18 @@ export function HeroActionCard({
     setPhase('busy');
     window.location.assign(`${platform.nav.track.href}?awb=${encodeURIComponent(clean)}`);
   };
+  const choose = (id: HeroTab): void => {
+    if (id === 'book') warmForm();
+    setHeroTab(id);
+  };
+  const maxKg = Math.max(...business.estimator.toIndia.slabs.map((s) => s.upToKg));
 
   return (
     <div className="hero-card" data-tab={tab}>
       <LiquidBead
         tabs={TABS}
         value={tab}
-        onChange={(id) => {
-          if (id === 'book') warmForm();
-          setTab(id);
-        }}
+        onChange={(id) => choose(id as HeroTab)}
         label="What would you like to do?"
         variant="pill"
         className="hero-card__tabs"
@@ -85,7 +127,7 @@ export function HeroActionCard({
               Waybill number
             </label>
             <div className="hero-card__field">
-              <Search size={16} aria-hidden="true" />
+              <PackageSearch size={16} aria-hidden="true" />
               <input
                 id="hero-awb"
                 value={awb}
@@ -103,61 +145,105 @@ export function HeroActionCard({
               <RollingLabelButton
                 type="submit"
                 phase={phase}
+                icon={<PackageSearch size={16} />}
                 labels={{ idle: 'Track', busy: 'Finding…', success: 'Found', error: 'Try again' }}
               />
             </div>
           </form>
         ) : null}
         {tab === 'quote' ? (
-          <div className="hero-card__row">
-            <div className="hero-card__span">
-              <DirectionToggle value={direction} onChange={onDirectionChange} />
-            </div>
-            <label htmlFor="hero-kg" className="sr-only">
-              Parcel weight in kilograms
-            </label>
-            <div className="hero-card__field">
-              <input
-                id="hero-kg"
-                type="number"
-                min="0.1"
-                max="30"
-                step="0.1"
-                inputMode="decimal"
-                value={kg}
-                onChange={(e) => setKg(e.target.value)}
-                className="tabular"
-                aria-describedby="hero-kg-note"
-              />
-              <span className="hero-card__unit">kg</span>
-            </div>
-            <ParachuteProgress
-              label={direction === 'out' ? 'Quote to India' : 'Quote to Bangladesh'}
-              task={async () => {
-                const n = Number(kg);
-                if (!Number.isFinite(n) || n <= 0) throw new Error('weight');
-                const e = estimate(n);
-                if (!e) throw new Error('slab');
-                return e;
+          <div className="hero-card__quote">
+            <ChoiceCards<Direction>
+              name="hero-direction"
+              label="Shipping direction"
+              value={direction}
+              onChange={(d) => {
+                onDirectionChange(d);
+                setQuote(null);
               }}
-              successLabel={(e) => (
-                <span className="tabular">
-                  ≈ {business.estimator.currency} {e.price.toLocaleString('en-IN')}
-                </span>
-              )}
-              errorLabel="Over 5 kg — ask us for a quote"
-              settleMs={Infinity}
-              className="hero-card__go"
+              options={[
+                {
+                  value: 'out',
+                  title: 'Bangladesh → India',
+                  helper: `${business.serviceability.transitDaysIndia} · taka rates`,
+                  icon: <Plane size={15} />,
+                  hue: 'saffron',
+                },
+                {
+                  value: 'in',
+                  title: 'India → Bangladesh',
+                  helper: `${business.serviceability.transitDaysBangladesh} · rupee rates`,
+                  icon: <Plane size={15} style={{ transform: 'scaleX(-1)' }} />,
+                  hue: 'green',
+                },
+              ]}
             />
+            <div className="hero-card__row">
+              <label htmlFor="hero-kg" className="sr-only">
+                Parcel weight in kilograms
+              </label>
+              <div className="hero-card__field">
+                <input
+                  id="hero-kg"
+                  type="number"
+                  min="0.1"
+                  max={maxKg}
+                  step="0.1"
+                  inputMode="decimal"
+                  value={kg}
+                  onChange={(e) => setKg(e.target.value)}
+                  className="tabular"
+                  aria-describedby="hero-kg-note"
+                />
+                <span className="hero-card__unit">kg</span>
+              </div>
+              <ParachuteProgress
+                label="Calculate"
+                task={async () => {
+                  const n = Number(kg);
+                  if (!Number.isFinite(n) || n <= 0) throw new Error('weight');
+                  const q = estimate(direction, n);
+                  if (!q) throw new Error('slab');
+                  return q;
+                }}
+                onSettled={(r) => {
+                  if (r.ok) setQuote(r.value);
+                }}
+                successLabel={() => 'Estimated'}
+                errorLabel={`Over ${maxKg} kg — ask us for a quote`}
+                settleMs={1600}
+                className="hero-card__go"
+              />
+            </div>
+            {quote ? (
+              <div className="hero-card__result" role="status" aria-live="polite">
+                <span className="hero-card__price tabular">
+                  ≈ {quote.symbol}
+                  {quote.price.toLocaleString('en-IN')}
+                </span>
+                <span className="hero-card__meta">
+                  up to {quote.slabKg} kg · {quote.transit} ·{' '}
+                  {quote.direction === 'out' ? 'Bangladesh → India' : 'India → Bangladesh'}
+                </span>
+                <button type="button" className="hero-card__link" onClick={() => choose('book')}>
+                  Book this shipment
+                  <ArrowRight size={14} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
             <p id="hero-kg-note" className="hero-card__note">
-              {business.estimator.note} Priced by weight slab (up to{' '}
-              {business.estimator.slabs.map((sl) => sl.upToKg).join(' / ')} kg).
+              {business.estimator.note} {direction === 'out' ? 'Taka' : 'Rupee'} rates, priced by
+              weight slab.
             </p>
           </div>
         ) : null}
         {tab === 'book' ? (
           <div className="hero-card__form" onPointerEnter={warmForm}>
-            <InviteForm variant="embedded" direction={direction} />
+            <InviteForm
+              variant="embedded"
+              direction={direction}
+              quote={quote ? quoteLine(quote) : undefined}
+            />
           </div>
         ) : null}
       </div>

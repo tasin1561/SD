@@ -23,7 +23,8 @@ export function SiteFooter(): ReactElement {
             <div className="flex items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/brand/skydrop-icon.svg"
+                src="/brand/skydrop-icon@2x.webp"
+                srcSet="/brand/skydrop-icon@1x.webp 1x, /brand/skydrop-icon@2x.webp 2x, /brand/skydrop-icon@3x.webp 3x"
                 alt=""
                 aria-hidden="true"
                 width={53}

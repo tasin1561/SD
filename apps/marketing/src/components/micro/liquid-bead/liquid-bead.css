@@ -138,3 +138,7 @@
   background: var(--bead-glow);
   filter: blur(8px);
 }
+
+.mi-bead[data-none='1'] .mi-bead__bead {
+  opacity: 0;
+}

@@ -33,7 +33,7 @@ import { themeInitScript } from '@/lib/theme-init';
 const sans = localFont({
   src: './fonts/plus-jakarta-sans-latin.woff2',
   variable: '--font-sans-face',
-  display: 'swap',
+  display: 'optional',
   declarations: [
     {
       prop: 'unicode-range',

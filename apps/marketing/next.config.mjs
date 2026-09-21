@@ -21,12 +21,11 @@ const nextConfig = {
   // Strip Next.js "powered by" header in the static HTML.
   poweredByHeader: false,
   experimental: {
-    // Every client component's CSS import became its own render-blocking
-    // <link> — eight of them on the home page, each a round trip on a slow
-    // phone before anything painted. Inlined into the HTML they cost ~12 KB
-    // gzipped once and zero requests; check-bundle's index.html budget is
-    // the ceiling on that trade.
-    inlineCss: true,
+    // ONE stylesheet instead of one per client component (eight on the home
+    // page, each a render-blocking round trip). `scripts/critical-css.mjs`
+    // (postbuild) then inlines the above-the-fold rules and loads this one
+    // file without blocking render.
+    cssChunking: false,
   },
 
   // NOTE — no `headers()` here, and adding one would do nothing.

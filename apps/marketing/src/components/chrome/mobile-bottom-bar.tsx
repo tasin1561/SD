@@ -4,7 +4,7 @@ import { useState, type ReactElement } from 'react';
 import { Calculator, MessageCircle, PackageSearch, Send } from 'lucide-react';
 import { LiquidBead } from '@/components/micro/liquid-bead';
 import { ContactFan } from '@/components/micro/contact-fan';
-import { platform } from '@/content/site';
+import { requestHeroTab, useBarTab, type HeroTab } from '@/lib/hero-tab';
 import { contactItems } from './contact-items';
 
 /**
@@ -16,29 +16,30 @@ import { contactItems } from './contact-items';
  * `md` inside the safe area; `body` reserves its height in globals.css.
  */
 export function MobileBottomBar(): ReactElement {
-  const [active, setActive] = useState('track');
+  // The bead FOLLOWS the hero card's open tab (Track / Quote / Book are the
+  // same three tabs) and rests on nothing once the hero has scrolled away;
+  // Contact lights while its fan is open.
+  const heroTab = useBarTab();
   const [contactOpen, setContactOpen] = useState(false);
+  const active = contactOpen ? 'contact' : heroTab;
   const tabs = [
     {
       id: 'track',
       label: 'Track',
       hue: 'blue',
       icon: <PackageSearch size={20} aria-hidden="true" />,
-      href: platform.nav.track.href,
     },
     {
       id: 'quote',
       label: 'Quote',
       hue: 'saffron',
       icon: <Calculator size={20} aria-hidden="true" />,
-      href: '/#quote',
     },
     {
       id: 'book',
       label: 'Book',
       hue: 'green',
       icon: <Send size={20} aria-hidden="true" />,
-      href: platform.nav.cta.href,
     },
     {
       id: 'contact',
@@ -48,9 +49,12 @@ export function MobileBottomBar(): ReactElement {
     },
   ];
   const onChange = (id: string): void => {
-    setActive(id);
-    if (id === 'contact') setContactOpen((v) => !v);
-    else setContactOpen(false);
+    if (id === 'contact') {
+      setContactOpen((v) => !v);
+      return;
+    }
+    setContactOpen(false);
+    requestHeroTab(id as HeroTab);
   };
   return (
     <nav
@@ -63,10 +67,7 @@ export function MobileBottomBar(): ReactElement {
             items={contactItems()}
             anchor="bar"
             open={contactOpen}
-            onOpenChange={(v) => {
-              setContactOpen(v);
-              if (!v && active === 'contact') setActive('track');
-            }}
+            onOpenChange={setContactOpen}
             label="Contact options"
           />
         </div>

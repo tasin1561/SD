@@ -1,6 +1,6 @@
 'use client';
 
-import type { ButtonHTMLAttributes, ReactElement } from 'react';
+import type { ButtonHTMLAttributes, ReactElement, ReactNode } from 'react';
 import { Check, LoaderCircle, OctagonX, Upload } from 'lucide-react';
 import type { AsyncPhase } from '../use-async-state';
 import '../micro.css';
@@ -23,10 +23,13 @@ export interface RollingLabels {
 export function RollingLabelButton({
   phase,
   labels,
+  icon,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   phase: AsyncPhase;
   labels: RollingLabels;
+  /** The idle icon; the default is the gallery's upload arrow. */
+  icon?: ReactNode;
 }): ReactElement {
   return (
     <button
@@ -45,7 +48,7 @@ export function RollingLabelButton({
         ) : phase === 'error' ? (
           <OctagonX size={16} />
         ) : (
-          <Upload size={16} />
+          icon || <Upload size={16} />
         )}
       </span>
       <span className="mi-roll__window">

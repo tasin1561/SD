@@ -5,15 +5,56 @@
   background: var(--page);
   border-bottom: 1px solid var(--line);
 }
+/* The mesh: three soft pools of the corridor's colours — green, gold,
+   brand blue — at low alpha, painted once (no blur filters) and drifting
+   on transform only. Calm behind text: every pool sits at ≤ 14 % alpha
+   over --page, so AA contrast on the copy is untouched. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: -20% -10%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 42% at 78% 18%, var(--green-glow) 0%, transparent 70%),
+    radial-gradient(34% 40% at 88% 72%, var(--saffron-glow) 0%, transparent 70%),
+    radial-gradient(42% 46% at 14% 82%, var(--blue-glow) 0%, transparent 72%);
+  opacity: 0.55;
+  animation: heroMesh 26s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes heroMesh {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-2.5%, 2%, 0) scale(1.06);
+  }
+}
 .hero__inner {
   position: relative;
   padding-top: 1.25rem;
-  padding-bottom: 2rem;
+  padding-bottom: 1.5rem;
 }
 .hero__grid {
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
+}
+/* Every grid/flex child that can hold wide content says so: a tablist
+   or a form row with an intrinsic width wider than a 360 px column
+   otherwise pushes the whole card past the viewport edge. */
+.hero__copy,
+.hero__headline,
+.hero-card,
+.hero-card__panel,
+.hero-card__row,
+.hero-card__quote,
+.hero-card__form,
+.hero-card__field,
+.hero-card__result {
+  min-width: 0;
 }
 .hero__copy {
   position: relative;
@@ -33,6 +74,7 @@
   font-weight: 800;
   color: var(--fg-strong);
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .hero__arrows {
   background: var(--corridor-gradient);
@@ -54,18 +96,31 @@
   }
 }
 
-/* The art. Phone: behind the copy under a scrim. lg: the right column. */
+/* The art. Phone: behind the copy, dimmed, under a surface scrim — nothing
+   shows through the headline, paragraph or figures. lg: the right column,
+   no panel, no border — it blends into the hero. */
 .hero__art-slot {
   position: absolute;
-  inset: -1.25rem -1rem -2rem;
+  inset: -1.25rem 0 -1.5rem;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 0.32;
   mask-image: linear-gradient(
     180deg,
-    rgba(0, 0, 0, 0.95) 0%,
-    rgba(0, 0, 0, 0.6) 55%,
-    transparent 100%
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.5) 50%,
+    transparent 95%
+  );
+}
+.hero__art-slot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--page) 55%, transparent) 0%,
+    color-mix(in srgb, var(--page) 35%, transparent) 40%,
+    color-mix(in srgb, var(--page) 70%, transparent) 100%
   );
 }
 .hero-art {
@@ -82,7 +137,7 @@
   }
   .hero__grid {
     grid-template-columns: minmax(0, 6fr) minmax(0, 6fr);
-    align-items: center;
+    align-items: start; /* the card may grow; the map must not move */
     gap: 2.5rem;
   }
   .hero__copy {
@@ -96,14 +151,13 @@
     opacity: 1;
     pointer-events: auto;
     mask-image: none;
-    border-radius: 1.25rem;
-    overflow: hidden;
-    border: 1px solid var(--line);
-    background: var(--surface-2);
-    box-shadow: 0 30px 80px -40px var(--blue-glow);
+    margin-top: 0.25rem;
+  }
+  .hero__art-slot::after {
+    content: none;
   }
   .hero__art-slot .hero-art {
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 16 / 11;
     height: auto;
   }
   .hero__art-slot .hero-art > div {
@@ -113,45 +167,6 @@
   .hero__h1 {
     font-size: clamp(2.6rem, 3.9vw, 3.9rem);
   }
-}
-
-/* ── Direction toggle ─────────────────────────────────────────────────── */
-.hero-dir {
-  display: inline-flex;
-  gap: 0.375rem;
-  padding: 0.25rem;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  width: max-content;
-  max-width: 100%;
-}
-.hero-dir__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-height: 2.5rem;
-  padding: 0 0.85rem;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--fg-muted);
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    background-color 180ms ease,
-    color 180ms ease;
-}
-.hero-dir__btn[data-hue='saffron'][aria-pressed='true'] {
-  background: var(--saffron-tint);
-  color: var(--saffron-on-tint);
-  border-color: var(--saffron-line);
-}
-.hero-dir__btn[data-hue='green'][aria-pressed='true'] {
-  background: var(--green-tint);
-  color: var(--green-on-tint);
-  border-color: var(--green-line);
 }
 
 /* ── Action card ──────────────────────────────────────────────────────── */
@@ -166,12 +181,39 @@
 }
 .hero-card__tabs {
   width: 100%;
+  max-width: 100%;
+}
+.hero-card__tab-short {
+  display: none;
+}
+@media (max-width: 400px) {
+  .hero-card__tab-long {
+    display: none;
+  }
+  .hero-card__tab-short {
+    display: inline;
+  }
 }
 .hero-card__row {
   display: grid;
   gap: 0.5rem;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+}
+/* The parachute pill needs its landing strip (11rem); beside a field on a
+   360 px card that is 2 px too much, so the quote row stacks. */
+@media (max-width: 400px) {
+  .hero-card__quote .hero-card__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hero-card__quote .hero-card__go,
+  .hero-card__quote .mi-para {
+    width: 100%;
+  }
+}
+.hero-card__quote {
+  display: grid;
+  gap: 0.6rem;
 }
 .hero-card__field {
   display: flex;
@@ -183,9 +225,13 @@
   border: 1px solid var(--border-control);
   background: var(--surface-input);
   color: var(--fg-faint);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 .hero-card__field:focus-within {
-  border-color: var(--sky);
+  border-color: var(--blue-text);
+  box-shadow: 0 0 0 4px var(--blue-glow);
 }
 .hero-card__field input {
   flex: 1;
@@ -209,26 +255,98 @@
   min-height: 2.75rem;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 .hero-card__go .mi-roll {
   min-height: 2.75rem;
 }
-/* A row spanning the card — the direction chips above the quote fields. */
-.hero-card__span {
-  grid-column: 1 / -1;
+/* The quote's result is its own row, never on the parachute's landing strip. */
+.hero-card__result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.625rem;
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+  border: 1px solid var(--saffron-line);
+}
+[data-direction='in'] .hero-card__result {
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+  border-color: var(--green-line);
+}
+.hero-card__price {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.hero-card__meta {
+  font-size: 13px;
+  opacity: 0.9;
+}
+.hero-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+  min-height: 2rem;
+  padding: 0 0.25rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  cursor: pointer;
+}
+.hero-card__link:hover svg {
+  transform: translateX(2px);
+}
+.hero-card__link svg {
+  transition: transform 180ms ease;
 }
 .hero-card__note {
-  grid-column: 1 / -1;
   margin: 0;
   font-size: 12px;
   color: var(--fg-muted);
 }
-.hero-card__est {
-  font-weight: 400;
-  opacity: 0.85;
-}
 .hero-card__form {
   padding-top: 0.25rem;
+}
+
+/* Embedded invite form: floating-label fields in a two-column grid. */
+.invite-embedded__grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 640px) {
+  .invite-embedded__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .invite-embedded__wide {
+    grid-column: 1 / -1;
+  }
+}
+.mi-float.is-select .mi-float__label {
+  transform: translateY(-1.35rem);
+  font-size: 0.6875rem;
+}
+.mi-float.is-select .mi-float__input {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--fg-muted) 50%),
+    linear-gradient(135deg, var(--fg-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.15rem) 1.45rem,
+    calc(100% - 0.85rem) 1.45rem;
+  background-size:
+    0.3rem 0.3rem,
+    0.3rem 0.3rem;
+  background-repeat: no-repeat;
+  padding-right: 2.25rem;
 }
 .invite-embedded__done {
   display: flex;
@@ -259,12 +377,17 @@
   font-size: 13px;
 }
 
-/* ── Trust row ────────────────────────────────────────────────────────── */
+/* ── Trust row: 2 × 2 on a phone, one row of four from lg ─────────────── */
 .hero__trust {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
   margin: 0;
+}
+@media (min-width: 1024px) {
+  .hero__trust {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 .hero__stat {
   display: grid;
@@ -290,6 +413,17 @@
   color: var(--fg-muted);
   line-height: 1.3;
 }
-.hero__stat--trust .hero__stat-n {
-  color: var(--blue-text);
+
+/* ── Drawer rows and buttons: thumb-sized (u20) ───────────────────────── */
+.drawer-row {
+  min-height: 3.25rem;
+}
+.drawer-btn {
+  min-height: 3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero::before {
+    animation: none;
+  }
 }

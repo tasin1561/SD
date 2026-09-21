@@ -100,17 +100,34 @@ export const business = {
     { value: dummy(96), suffix: '%', label: 'confirmed before dispatch' },
     { value: dummy(4), suffix: '–7 days', label: 'Dhaka to an Indian doorstep' },
   ],
-  trustCount: dummy('120+'),
+  trustCount: dummy(120),
   trustLine: 'Bangladeshi sellers ship with Skydrop',
-  /** Estimator — ILLUSTRATIVE until the owner supplies the rate card. Each rate is its own placeholder. */
+  /**
+   * Estimator — ILLUSTRATIVE until the owner supplies the rate cards. One
+   * card per DIRECTION, each priced in the currency the sender pays in:
+   * taka from Bangladesh, rupees from India. Each rate is its own placeholder.
+   */
   estimator: {
-    currency: dummy('BDT'),
-    slabs: [
-      { upToKg: dummy(0.5), price: dummy(450) },
-      { upToKg: dummy(1), price: dummy(650) },
-      { upToKg: dummy(2), price: dummy(950) },
-      { upToKg: dummy(5), price: dummy(1800) },
-    ],
+    toIndia: {
+      currency: 'BDT',
+      symbol: '৳',
+      slabs: [
+        { upToKg: dummy(0.5), price: dummy(450) },
+        { upToKg: dummy(1), price: dummy(650) },
+        { upToKg: dummy(2), price: dummy(950) },
+        { upToKg: dummy(5), price: dummy(1800) },
+      ],
+    },
+    toBangladesh: {
+      currency: 'INR',
+      symbol: '₹',
+      slabs: [
+        { upToKg: dummy(0.5), price: dummy(380) },
+        { upToKg: dummy(1), price: dummy(540) },
+        { upToKg: dummy(2), price: dummy(790) },
+        { upToKg: dummy(5), price: dummy(1500) },
+      ],
+    },
     codFeePercent: dummy(1),
     note: 'Estimated. Your quote is agreed before anything ships.',
   },

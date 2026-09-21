@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "MARKETING_DEV_ROUTES=1 next dev -p 3006",
     "build": "next build",
-    "postbuild": "node scripts/check-theme.mjs && node scripts/check-micro-size.mjs && node scripts/check-bundle.mjs",
+    "postbuild": "node scripts/critical-css.mjs && node scripts/check-theme.mjs && node scripts/check-micro-size.mjs && node scripts/check-bundle.mjs",
     "build:preview": "MARKETING_DEV_ROUTES=1 NEXT_PUBLIC_PLACEHOLDER_RIBBON=1 next build",
     "start": "node ../../scripts/serve-static.mjs out 3006",
     "serve": "node ../../scripts/serve-static.mjs out 3006",

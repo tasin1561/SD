@@ -51,8 +51,9 @@ export function SiteHeader(): ReactElement {
 
   const linkClass =
     'rounded-md px-3 py-2 text-[14px] font-medium text-fg-body transition-colors hover:bg-surface-3 hover:text-fg-strong';
+  // Rows ≥ 48 px with 18 px type — a drawer is a thumb surface (u20).
   const drawerRow =
-    'safe-x flex min-h-12 items-center text-[17px] font-medium text-fg-strong hover:bg-surface-3';
+    'drawer-row safe-x flex items-center text-[18px] font-medium text-fg-strong hover:bg-surface-3';
 
   return (
     <header
@@ -77,7 +78,8 @@ export function SiteHeader(): ReactElement {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/brand/skydrop-icon.svg"
+            src="/brand/skydrop-icon@2x.webp"
+            srcSet="/brand/skydrop-icon@1x.webp 1x, /brand/skydrop-icon@2x.webp 2x, /brand/skydrop-icon@3x.webp 3x"
             alt=""
             aria-hidden="true"
             width={53}
@@ -105,6 +107,7 @@ export function SiteHeader(): ReactElement {
           </span>
           <Link
             href={platform.nav.cta.href}
+            prefetch={false}
             className="inline-flex h-11 items-center whitespace-nowrap rounded-md bg-blue-fill px-3 text-[13px] font-semibold text-blue-on-fill transition-colors hover:bg-blue-fill-hover sm:px-4 sm:text-[14px]"
           >
             {platform.nav.cta.label}
@@ -127,8 +130,11 @@ export function SiteHeader(): ReactElement {
       <div
         id="site-drawer"
         className={cn(
-          'fixed inset-0 z-50 transition-opacity duration-200 lg:hidden',
-          open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+          // `overflow-hidden` + `invisible` when closed: the panel parks at
+          // translate-x-full, and a fixed box's overflow still widens the
+          // document — a 360 px phone scrolled sideways to an empty 720.
+          'fixed inset-0 z-50 overflow-hidden transition-[opacity,visibility] duration-200 lg:hidden',
+          open ? 'pointer-events-auto opacity-100' : 'pointer-events-none invisible opacity-0',
         )}
         aria-hidden={!open}
         // `inert` as well: aria-hidden alone leaves the drawer's links in the
@@ -192,8 +198,9 @@ export function SiteHeader(): ReactElement {
             <div className="safe-x flex flex-col gap-3 py-5">
               <Link
                 href={platform.nav.cta.href}
+                prefetch={false}
                 onClick={() => setOpen(false)}
-                className="inline-flex min-h-12 items-center justify-center rounded-md bg-blue-fill px-4 text-[16px] font-semibold text-blue-on-fill"
+                className="drawer-btn inline-flex items-center justify-center rounded-md bg-blue-fill px-4 text-[17px] font-semibold text-blue-on-fill"
               >
                 {platform.nav.cta.label}
               </Link>
@@ -202,7 +209,7 @@ export function SiteHeader(): ReactElement {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className="inline-flex min-h-12 items-center justify-center rounded-md border border-border-control px-4 text-[16px] font-medium text-fg-strong hover:bg-surface-3"
+                  className="drawer-btn inline-flex items-center justify-center rounded-md border border-border-control px-4 text-[17px] font-medium text-fg-strong hover:bg-surface-3"
                 >
                   {l.label}
                 </a>
@@ -211,7 +218,7 @@ export function SiteHeader(): ReactElement {
             <div className="safe-x flex flex-col gap-2 border-t border-line py-4 text-[15px] text-fg-body">
               <a
                 href={business.hotlineHref}
-                className="inline-flex min-h-11 items-center gap-2 font-medium text-fg-strong"
+                className="drawer-btn inline-flex items-center gap-2 font-medium text-fg-strong"
               >
                 <Phone size={16} aria-hidden="true" className="text-blue-text" />
                 <span className="tabular">{business.hotline}</span>

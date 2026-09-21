@@ -2,63 +2,69 @@
 
 import { useEffect, useRef, type ReactElement } from 'react';
 import { BD_RINGS, LAND_RINGS, GEO_NODES, type Ring } from './map-geometry';
-import { subscribeThemeTokens } from '@/lib/theme-tokens';
+import { readTokens, subscribeThemeTokens } from '@/lib/theme-tokens';
 
 /**
- * THE SIGNATURE MOMENT (docs/design-direction.md §5) — v2 with REAL
- * cartography. Natural Earth 50m coastlines (simplified + projected at
- * build time into map-geometry.ts) drawn as a phosphor basemap; corridor
- * nodes pinned to true lat/lon — Dhaka east, Indian metros west, so
- * flights read geographically correctly (right → left).
+ * The corridor map — the hero's art, and the site's oldest animation.
  *
- * Still zero libraries. Base layer (map + grid + routes + nodes) is
- * rendered ONCE to an offscreen canvas and blitted per frame; the rAF
- * loop (30fps cap) only draws flights, pulses, and the scan sweep.
- * Starts on requestIdleCallback; pauses off-viewport + tab-hidden;
- * reduced-motion renders a single static frame.
+ * Real Natural Earth coastlines from `map-geometry.ts`, Dhaka and the
+ * Indian metros at their true positions, route arcs drawn in the corridor
+ * gradient (Bangladesh's green to India's saffron), parcels flying the
+ * arcs at altitude — saffron when they are bound for India, green when
+ * they are bound for Bangladesh — and a pulse at every landing. Six cities
+ * carry a NAME in the UI face (Dhaka, Kolkata, Delhi, Mumbai, Bengaluru,
+ * Chennai); the other lanes are dots. No panel, no border, no grid: it
+ * blends into the hero (owner, Phase 3 review — "stop looking like a
+ * console").
+ *
+ * Every colour is read off the theme tokens (`--map-*`, `--scene-arc-*`)
+ * and re-read on BOTH theme triggers — the toggle and the OS preference.
+ * The first frame and the loop wait for `requestIdleCallback`; the loop
+ * pauses off-screen and when the tab is hidden; reduced motion draws one
+ * frame. `direction` reverses the flow (parcels fly TO Dhaka, the pulses
+ * land there); `labels={false}` is the phone, where the map sits behind
+ * the copy and a name showing through a headline is noise.
  */
+
+export type MapDirection = 'out' | 'in';
 
 interface NodeDef {
   id: string;
   x: number;
   y: number;
-  label: string;
-  labelDx: number;
-  labelDy: number;
-  origin?: boolean;
+  /** Sentence-case city name; only the six named cities carry one. */
+  name?: string;
+  /** Label anchor relative to the dot. */
+  anchor?: 'left' | 'right';
+  dy?: number;
 }
 
 function geo(id: string): readonly [number, number] {
   return GEO_NODES[id] ?? [0.5, 0.5];
 }
+function node(id: string, extra: Omit<NodeDef, 'id' | 'x' | 'y'> = {}): NodeDef {
+  const [x, y] = geo(id);
+  return { id, x, y, ...extra };
+}
 
-const ORIGIN: NodeDef = {
-  id: 'DAC',
-  x: geo('DAC')[0],
-  y: geo('DAC')[1],
-  label: 'DAC',
-  labelDx: 12,
-  labelDy: -10,
-  origin: true,
-};
+const ORIGIN: NodeDef = node('DAC', { name: 'Dhaka', anchor: 'right', dy: -8 });
 
-// Pan-India destination set — Delhivery covers all of these lanes.
-// Label offsets hand-placed to avoid collisions at hero scale.
+/** Pan-India destination set — Delhivery covers all of these lanes. */
 const DESTS: NodeDef[] = [
-  { id: 'DEL', x: geo('DEL')[0], y: geo('DEL')[1], label: 'DEL', labelDx: -34, labelDy: -6 },
-  { id: 'JAI', x: geo('JAI')[0], y: geo('JAI')[1], label: 'JAI', labelDx: -32, labelDy: 10 },
-  { id: 'LKO', x: geo('LKO')[0], y: geo('LKO')[1], label: 'LKO', labelDx: 10, labelDy: -6 },
-  { id: 'GAU', x: geo('GAU')[0], y: geo('GAU')[1], label: 'GAU', labelDx: 12, labelDy: 0 },
-  { id: 'PAT', x: geo('PAT')[0], y: geo('PAT')[1], label: 'PAT', labelDx: -32, labelDy: -6 },
-  { id: 'BBI', x: geo('BBI')[0], y: geo('BBI')[1], label: 'BBI', labelDx: 10, labelDy: 14 },
-  { id: 'AMD', x: geo('AMD')[0], y: geo('AMD')[1], label: 'AMD', labelDx: -36, labelDy: 4 },
-  { id: 'CCU', x: geo('CCU')[0], y: geo('CCU')[1], label: 'CCU', labelDx: -36, labelDy: 18 },
-  { id: 'NAG', x: geo('NAG')[0], y: geo('NAG')[1], label: 'NAG', labelDx: 10, labelDy: 14 },
-  { id: 'BOM', x: geo('BOM')[0], y: geo('BOM')[1], label: 'BOM', labelDx: -38, labelDy: 0 },
-  { id: 'PNQ', x: geo('PNQ')[0], y: geo('PNQ')[1], label: 'PNQ', labelDx: 10, labelDy: 12 },
-  { id: 'HYD', x: geo('HYD')[0], y: geo('HYD')[1], label: 'HYD', labelDx: 11, labelDy: 4 },
-  { id: 'MAA', x: geo('MAA')[0], y: geo('MAA')[1], label: 'MAA', labelDx: 11, labelDy: 6 },
-  { id: 'BLR', x: geo('BLR')[0], y: geo('BLR')[1], label: 'BLR', labelDx: -34, labelDy: 12 },
+  node('DEL', { name: 'Delhi', anchor: 'left', dy: -6 }),
+  node('JAI'),
+  node('LKO'),
+  node('GAU'),
+  node('PAT'),
+  node('BBI'),
+  node('AMD'),
+  node('CCU', { name: 'Kolkata', anchor: 'left', dy: 14 }),
+  node('NAG'),
+  node('BOM', { name: 'Mumbai', anchor: 'left', dy: 2 }),
+  node('PNQ'),
+  node('HYD'),
+  node('MAA', { name: 'Chennai', anchor: 'right', dy: 4 }),
+  node('BLR', { name: 'Bengaluru', anchor: 'left', dy: 12 }),
 ];
 
 function ctrl(a: NodeDef, b: NodeDef): { x: number; y: number } {
@@ -87,20 +93,66 @@ interface Parcel {
   speed: number;
   delay: number;
 }
-
 interface Pulse {
   x: number;
   y: number;
   r: number;
   alpha: number;
+  color: string;
 }
 
-export function CorridorConsole(): ReactElement {
+const TOKENS = [
+  '--map-land',
+  '--map-coast',
+  '--map-bd-fill',
+  '--map-bd-coast',
+  '--map-halo',
+  '--map-blip',
+  '--fg-muted',
+  '--fg-strong',
+  '--scene-arc-out',
+  '--scene-arc-in',
+  '--font-sans-face',
+] as const;
+type Token = (typeof TOKENS)[number];
+const FALLBACK: Record<Token, string> = {
+  '--map-land': 'rgba(180,197,255,0.05)',
+  '--map-coast': 'rgba(180,197,255,0.30)',
+  '--map-bd-fill': 'rgba(251,191,36,0.10)',
+  '--map-bd-coast': 'rgba(251,191,36,0.50)',
+  '--map-halo': 'rgba(180,197,255,0.34)',
+  '--map-blip': '#b4c5ff',
+  '--fg-muted': '#8296b0',
+  '--fg-strong': '#f1f5ff',
+  '--scene-arc-out': '#fbbf24',
+  '--scene-arc-in': '#34d399',
+  '--font-sans-face': 'system-ui',
+};
+
+/** `#rrggbb` (or `#rrggbbaa`) → `rgba(r,g,b,a)` at the given alpha. */
+function withAlpha(hex: string, alpha: number): string {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex.trim());
+  if (!m) return hex;
+  return `rgba(${parseInt(m[1] ?? '0', 16)},${parseInt(m[2] ?? '0', 16)},${parseInt(m[3] ?? '0', 16)},${alpha})`;
+}
+
+export function CorridorConsole({
+  direction = 'out',
+  labels = true,
+}: {
+  direction?: MapDirection;
+  labels?: boolean;
+}): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dirRef = useRef<MapDirection>(direction);
+  const labelsRef = useRef(labels);
+  /** Set by the mount effect; the prop effects call it. */
+  const redraw = useRef<((resetFlights: boolean) => void) | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const host = canvas?.parentElement;
+    if (!canvas || !host) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -108,63 +160,15 @@ export function CorridorConsole(): ReactElement {
 
     let W = 0;
     let H = 0;
-    // Aspect-preserving map fit: normalized [0..1]² region → centered
-    // square of side S with offsets (OX, OY). Margins show the dot grid.
     let S = 0;
     let OX = 0;
     let OY = 0;
     let raf = 0;
     let running = false;
+    let tokens = readTokens(TOKENS, FALLBACK);
 
-    /*
-     * The map reads its palette from the THEME, not from a light/dark
-     * pair written out here.
-     *
-     * It used to carry its own: a `light` branch choosing between two
-     * hardcoded sets of cyan and amber. That is two palettes in two
-     * places, which is the drift CNS-2 and BIN-1 exist to prevent — and
-     * it bit exactly that way, because when the page moved to Precision
-     * Logistics the map stayed cyan and nothing pointed at why.
-     *
-     * The fallbacks below are the dark theme's own values, used only if
-     * a property comes back empty (a browser that cannot resolve a
-     * custom property at all). They are never the ordinary path.
-     */
-    const colors = {
-      saffron: '#fbbf24',
-      muted: '#8296b0',
-      grid: 'rgba(148,163,184,0.07)',
-      land: 'rgba(180,197,255,0.05)',
-      coast: 'rgba(180,197,255,0.30)',
-      bdFill: 'rgba(251,191,36,0.10)',
-      bdCoast: 'rgba(251,191,36,0.50)',
-      route: 'rgba(180,197,255,0.18)',
-      halo: 'rgba(180,197,255,0.34)',
-      trail: 'rgba(180,197,255,0.58)',
-      sweepTint: '180,197,255',
-      blip: '#b4c5ff',
-    };
-    const readColors = (): void => {
-      const cs = getComputedStyle(document.documentElement);
-      const read = (name: string, fallback: string): string =>
-        cs.getPropertyValue(name).trim() || fallback;
-      colors.saffron = read('--saffron', colors.saffron);
-      colors.muted = read('--fg-muted', colors.muted);
-      colors.grid = read('--grid', colors.grid);
-      colors.land = read('--map-land', colors.land);
-      colors.coast = read('--map-coast', colors.coast);
-      colors.bdFill = read('--map-bd-fill', colors.bdFill);
-      colors.bdCoast = read('--map-bd-coast', colors.bdCoast);
-      colors.route = read('--map-route', colors.route);
-      colors.halo = read('--map-halo', colors.halo);
-      colors.trail = read('--map-trail', colors.trail);
-      colors.sweepTint = read('--map-sweep-rgb', colors.sweepTint);
-      colors.blip = read('--map-blip', colors.blip);
-    };
-    readColors();
-
-    // With 12 lanes, keep ~4 parcels airborne at once — the rest wait
-    // on staggered delays so traffic reads alive, not swarmed.
+    // With 14 lanes, keep ~4 parcels airborne at once — the rest wait on
+    // staggered delays so traffic reads alive, not swarmed.
     const parcels: Parcel[] = DESTS.map((_, i) => ({
       dest: i,
       t: i % 3 === 0 ? Math.random() * 0.8 : 0,
@@ -172,19 +176,20 @@ export function CorridorConsole(): ReactElement {
       delay: i % 3 === 0 ? 0 : 90 + Math.random() * 700,
     }));
     const pulses: Pulse[] = [];
-    let sweep = -0.2;
+    let beat = 0;
 
     const resize = (): void => {
-      const rect = canvas.getBoundingClientRect();
+      const rect = host.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       W = Math.round(rect.width);
       H = Math.round(rect.height);
-      canvas.width = Math.round(W * dpr);
-      canvas.height = Math.round(H * dpr);
+      canvas.width = Math.max(1, Math.round(W * dpr));
+      canvas.height = Math.max(1, Math.round(H * dpr));
+      canvas.style.width = `${W}px`;
+      canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // Map region is square-ish; scale it to fill the panel's height
-      // generously — coastlines may bleed past the sides, which reads
-      // as a real console viewport, not a shrunken postage stamp.
+      // The [0..1]² map fits the box's height generously; coastlines may
+      // bleed past the sides, which reads as a viewport, not a stamp.
       S = Math.max(Math.min(W, H) * 1.06, Math.min(W * 0.8, H * 1.35));
       OX = (W - S) / 2;
       OY = (H - S) / 2;
@@ -210,7 +215,97 @@ export function CorridorConsole(): ReactElement {
       g.closePath();
     };
 
+    const font = (weight: number, size: number): string =>
+      `${weight} ${size}px ${tokens['--font-sans-face']}, system-ui, sans-serif`;
+
+    /** The corridor gradient along one arc, dominant colour by direction. */
+    const arcGradient = (
+      o: { x: number; y: number },
+      d: { x: number; y: number },
+    ): CanvasGradient => {
+      const out = dirRef.current === 'out';
+      const g = ctx.createLinearGradient(o.x, o.y, d.x, d.y);
+      const green = tokens['--scene-arc-in'];
+      const saffron = tokens['--scene-arc-out'];
+      if (out) {
+        g.addColorStop(0, withAlpha(green, 0.7));
+        g.addColorStop(0.45, withAlpha(saffron, 0.6));
+        g.addColorStop(1, withAlpha(saffron, 0.35));
+      } else {
+        g.addColorStop(0, withAlpha(saffron, 0.35));
+        g.addColorStop(0.55, withAlpha(green, 0.6));
+        g.addColorStop(1, withAlpha(green, 0.7));
+      }
+      return g;
+    };
+
+    // The static layer (land, arcs, pins, names) is painted once into an
+    // offscreen canvas and blitted each frame; it is rebuilt on resize,
+    // theme change and direction change.
     let base: HTMLCanvasElement | null = null;
+    const drawBase = (g: CanvasRenderingContext2D): void => {
+      g.clearRect(0, 0, W, H);
+      g.lineWidth = 1;
+      for (const ring of LAND_RINGS) {
+        tracePath(g, ring);
+        g.fillStyle = tokens['--map-land'];
+        g.fill();
+        g.strokeStyle = tokens['--map-coast'];
+        g.stroke();
+      }
+      for (const ring of BD_RINGS) {
+        tracePath(g, ring);
+        g.fillStyle = tokens['--map-bd-fill'];
+        g.fill();
+        g.strokeStyle = tokens['--map-bd-coast'];
+        g.stroke();
+      }
+      // Routes — the corridor gradient, solid and thin.
+      const o = px(ORIGIN);
+      for (const d of DESTS) {
+        const cp = px(ctrl(ORIGIN, d));
+        const dp = px(d);
+        g.beginPath();
+        g.moveTo(o.x, o.y);
+        g.quadraticCurveTo(cp.x, cp.y, dp.x, dp.y);
+        g.strokeStyle = arcGradient(o, dp);
+        g.lineWidth = 1.25;
+        g.stroke();
+      }
+      // Destination dots (+ halo), names for the six.
+      g.font = font(600, 12);
+      g.textBaseline = 'middle';
+      for (const d of DESTS) {
+        const dp = px(d);
+        g.beginPath();
+        g.arc(dp.x, dp.y, 3, 0, Math.PI * 2);
+        g.fillStyle = tokens['--map-blip'];
+        g.fill();
+        g.beginPath();
+        g.arc(dp.x, dp.y, 7, 0, Math.PI * 2);
+        g.strokeStyle = tokens['--map-halo'];
+        g.lineWidth = 1;
+        g.stroke();
+        if (labelsRef.current && d.name) {
+          g.fillStyle = tokens['--fg-strong'];
+          g.textAlign = d.anchor === 'left' ? 'right' : 'left';
+          const dx = d.anchor === 'left' ? -11 : 11;
+          g.fillText(d.name, dp.x + dx, dp.y + (d.dy ?? 0));
+        }
+      }
+      // Dhaka — the origin, in saffron; its pulse is drawn per frame.
+      g.beginPath();
+      g.arc(o.x, o.y, 4, 0, Math.PI * 2);
+      g.fillStyle = tokens['--scene-arc-out'];
+      g.fill();
+      if (labelsRef.current && ORIGIN.name) {
+        g.fillStyle = tokens['--fg-strong'];
+        g.font = font(700, 13);
+        g.textAlign = 'left';
+        g.fillText(ORIGIN.name, o.x + 12, o.y + (ORIGIN.dy ?? 0));
+      }
+      g.textAlign = 'start';
+    };
     const renderBase = (): void => {
       if (W === 0 || H === 0) {
         base = null;
@@ -225,108 +320,34 @@ export function CorridorConsole(): ReactElement {
       bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawBase(bctx);
     };
-
     const drawStatic = (): void => {
       if (W === 0 || H === 0) return;
+      // The FULL canvas, every frame — a stale strip after a resize is
+      // exactly the artefact the Phase 3 review found.
       ctx.clearRect(0, 0, W, H);
-      if (base) {
-        ctx.drawImage(base, 0, 0, W, H);
-        return;
-      }
-      drawBase(ctx);
-    };
-
-    const drawBase = (g: CanvasRenderingContext2D): void => {
-      g.clearRect(0, 0, W, H);
-
-      // Dot grid across the whole panel
-      g.fillStyle = colors.grid;
-      const step = 34;
-      for (let gx = step / 2; gx < W; gx += step) {
-        for (let gy = step / 2; gy < H; gy += step) {
-          g.fillRect(gx, gy, 1.5, 1.5);
-        }
-      }
-
-      // Landmass — real Natural Earth coastlines
-      g.lineWidth = 1;
-      for (const ring of LAND_RINGS) {
-        tracePath(g, ring);
-        g.fillStyle = colors.land;
-        g.fill();
-        g.strokeStyle = colors.coast;
-        g.stroke();
-      }
-      // Bangladesh — origin country, warmer
-      for (const ring of BD_RINGS) {
-        tracePath(g, ring);
-        g.fillStyle = colors.bdFill;
-        g.fill();
-        g.strokeStyle = colors.bdCoast;
-        g.stroke();
-      }
-
-      // Routes
-      const o = px(ORIGIN);
-      for (const d of DESTS) {
-        const c = ctrl(ORIGIN, d);
-        const cp = px(c);
-        const dp = px(d);
-        g.beginPath();
-        g.moveTo(o.x, o.y);
-        g.quadraticCurveTo(cp.x, cp.y, dp.x, dp.y);
-        g.strokeStyle = colors.route;
-        g.lineWidth = 1;
-        g.setLineDash([4, 5]);
-        g.stroke();
-        g.setLineDash([]);
-      }
-
-      // Destination nodes
-      g.font = '10px ui-monospace, monospace';
-      for (const d of DESTS) {
-        const dp = px(d);
-        g.beginPath();
-        g.arc(dp.x, dp.y, 3.2, 0, Math.PI * 2);
-        g.fillStyle = colors.blip;
-        g.fill();
-        g.beginPath();
-        g.arc(dp.x, dp.y, 8, 0, Math.PI * 2);
-        g.strokeStyle = colors.halo;
-        g.lineWidth = 1;
-        g.stroke();
-        g.fillStyle = colors.muted;
-        g.fillText(d.label, dp.x + d.labelDx, dp.y + d.labelDy);
-      }
-
-      // Origin — saffron
-      g.beginPath();
-      g.arc(o.x, o.y, 4, 0, Math.PI * 2);
-      g.fillStyle = colors.saffron;
-      g.fill();
-      g.beginPath();
-      g.arc(o.x, o.y, 10, 0, Math.PI * 2);
-      g.strokeStyle = 'rgba(245,158,11,0.4)';
-      g.stroke();
-      g.fillStyle = colors.muted;
-      g.fillText(ORIGIN.label, o.x + ORIGIN.labelDx, o.y + ORIGIN.labelDy);
+      if (base) ctx.drawImage(base, 0, 0, W, H);
+      else drawBase(ctx);
     };
 
     const drawFrame = (): void => {
       if (W === 0 || H === 0) return;
       drawStatic();
+      const out = dirRef.current === 'out';
+      const flight = out ? tokens['--scene-arc-out'] : tokens['--scene-arc-in'];
+      const o = px(ORIGIN);
+      beat += 1;
 
-      // Scan sweep
-      sweep += 0.0016;
-      if (sweep > 1.25) sweep = -0.25;
-      const sx = sweep * W;
-      const grad = ctx.createLinearGradient(sx - 70, 0, sx + 8, 0);
-      grad.addColorStop(0, `rgba(${colors.sweepTint},0)`);
-      grad.addColorStop(1, `rgba(${colors.sweepTint},0.07)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(sx - 70, 0, 78, H);
+      // Dhaka pulses — a ring every ~1.6 s, fading as it grows.
+      const period = 48;
+      for (let k = 0; k < 2; k++) {
+        const ph = ((beat + k * (period / 2)) % period) / period;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, 5 + ph * 16, 0, Math.PI * 2);
+        ctx.strokeStyle = withAlpha(tokens['--scene-arc-out'], 0.55 * (1 - ph));
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
 
-      // Parcels
       for (const p of parcels) {
         if (p.delay > 0) {
           p.delay -= 1;
@@ -336,54 +357,52 @@ export function CorridorConsole(): ReactElement {
         const dest = DESTS[p.dest];
         if (!dest) continue;
         if (p.t >= 1) {
-          const dp = px(dest);
-          pulses.push({ x: dp.x, y: dp.y, r: 4, alpha: 0.7 });
+          const land = out ? px(dest) : o;
+          pulses.push({ x: land.x, y: land.y, r: 4, alpha: 0.7, color: flight });
           p.t = 0;
           p.delay = 260 + Math.random() * 640;
           p.speed = 0.0016 + Math.random() * 0.0012;
           continue;
         }
+        // Direction 'in' flies the same arc backwards: metro → Dhaka.
+        const from = out ? ORIGIN : dest;
+        const to = out ? dest : ORIGIN;
         const c = ctrl(ORIGIN, dest);
-        const pos = qPoint(ORIGIN, c, dest, p.t);
+        const pos = qPoint(from, c, to, p.t);
         const pp = px(pos);
         const tBack = Math.max(0, p.t - 0.05);
-        const back = qPoint(ORIGIN, c, dest, tBack);
-        const bp = px(back);
-        // Altitude — parcels FLY above the route: lift peaks mid-flight.
-        // A faint ground marker stays on the route line below the blip,
-        // selling the third dimension without any 3D library.
+        const bp = px(qPoint(from, c, to, tBack));
+        // Altitude — parcels FLY above the route; a faint ground marker
+        // on the arc below sells the third dimension without 3D.
         const alt = Math.sin(p.t * Math.PI) * S * 0.035;
         const altBack = Math.sin(tBack * Math.PI) * S * 0.035;
-        // Ground marker + altitude leg
         ctx.beginPath();
-        ctx.arc(pp.x, pp.y, 1.4, 0, Math.PI * 2);
-        ctx.fillStyle = colors.route;
+        ctx.arc(pp.x, pp.y, 1.3, 0, Math.PI * 2);
+        ctx.fillStyle = withAlpha(flight, 0.45);
         ctx.fill();
         ctx.beginPath();
         ctx.moveTo(pp.x, pp.y);
         ctx.lineTo(pp.x, pp.y - alt);
-        ctx.strokeStyle = colors.route;
+        ctx.strokeStyle = withAlpha(flight, 0.35);
         ctx.lineWidth = 0.75;
         ctx.stroke();
-        // Trail at altitude
         ctx.beginPath();
         ctx.moveTo(bp.x, bp.y - altBack);
         ctx.lineTo(pp.x, pp.y - alt);
-        ctx.strokeStyle = colors.trail;
+        ctx.strokeStyle = withAlpha(flight, 0.75);
         ctx.lineWidth = 1.6;
         ctx.stroke();
-        // Glow: concentric fills — no shadowBlur (kills software rendering)
+        // Glow: concentric fills — no shadowBlur (kills software rendering).
         ctx.beginPath();
         ctx.arc(pp.x, pp.y - alt, 5.5, 0, Math.PI * 2);
-        ctx.fillStyle = colors.trail.replace(/[\d.]+\)$/, '0.18)');
+        ctx.fillStyle = withAlpha(flight, 0.2);
         ctx.fill();
         ctx.beginPath();
         ctx.arc(pp.x, pp.y - alt, 2.6, 0, Math.PI * 2);
-        ctx.fillStyle = colors.blip;
+        ctx.fillStyle = flight;
         ctx.fill();
       }
 
-      // Arrival pulses
       for (let i = pulses.length - 1; i >= 0; i--) {
         const pu = pulses[i];
         if (!pu) continue;
@@ -395,7 +414,7 @@ export function CorridorConsole(): ReactElement {
         }
         ctx.beginPath();
         ctx.arc(pu.x, pu.y, pu.r, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(52,211,153,${pu.alpha.toFixed(3)})`;
+        ctx.strokeStyle = withAlpha(pu.color, pu.alpha);
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
@@ -409,7 +428,6 @@ export function CorridorConsole(): ReactElement {
       lastT = t;
       drawFrame();
     };
-
     const start = (): void => {
       if (running || reduced) return;
       running = true;
@@ -420,12 +438,25 @@ export function CorridorConsole(): ReactElement {
       cancelAnimationFrame(raf);
     };
 
+    redraw.current = (resetFlights) => {
+      if (resetFlights) {
+        parcels.forEach((p, i) => {
+          p.t = 0;
+          p.delay = (i % 4) * 40;
+        });
+        pulses.length = 0;
+      }
+      renderBase();
+      if (running) drawFrame();
+      else drawStatic();
+    };
+
     resize();
-    // The FIRST frame is deferred past hydration too, not only the loop: the
-    // base-map render (a thousand-point coastline at device pixel ratio)
-    // used to run inside the hydration task and was ~80 ms of Total
-    // Blocking Time on a 4×-throttled phone. The canvas is text-free and
-    // never the LCP, so nothing measurable waits for it.
+    // The FIRST frame is deferred past hydration too, not only the loop:
+    // the base-map render (a thousand-point coastline at device pixel
+    // ratio) used to run inside the hydration task and was ~80 ms of
+    // Total Blocking Time on a 4×-throttled phone. The canvas is text-free
+    // to the page (its names are paint), so nothing measurable waits.
     let idleId = 0;
     const ric: (cb: () => void) => number =
       'requestIdleCallback' in window
@@ -442,7 +473,7 @@ export function CorridorConsole(): ReactElement {
       renderBase();
       drawStatic();
     });
-    ro.observe(canvas);
+    ro.observe(host);
 
     const io = new IntersectionObserver(
       (entries) => {
@@ -453,7 +484,7 @@ export function CorridorConsole(): ReactElement {
       },
       { threshold: 0.05 },
     );
-    io.observe(canvas);
+    io.observe(host);
 
     const onVis = (): void => {
       if (reduced) return;
@@ -463,16 +494,17 @@ export function CorridorConsole(): ReactElement {
     document.addEventListener('visibilitychange', onVis);
 
     // Both theme triggers: the toggle's data-theme AND the OS preference
-    // flipping under an unpinned page (the second was missed until the hero
-    // rebuild — the map stayed dark while the page went light).
+    // flipping under an unpinned page (the second was missed for months —
+    // the map stayed dark while the page went light).
     const unsubTheme = subscribeThemeTokens(() => {
-      readColors();
+      tokens = readTokens(TOKENS, FALLBACK);
       renderBase();
       drawStatic();
     });
 
     return () => {
       stop();
+      redraw.current = null;
       if (idleId && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
       ro.disconnect();
       io.disconnect();
@@ -481,13 +513,25 @@ export function CorridorConsole(): ReactElement {
     };
   }, []);
 
+  useEffect(() => {
+    if (dirRef.current === direction && labelsRef.current === labels) return;
+    const flip = dirRef.current !== direction;
+    dirRef.current = direction;
+    labelsRef.current = labels;
+    redraw.current?.(flip);
+  }, [direction, labels]);
+
   return (
-    <div className="relative w-full h-full min-h-[280px]">
+    <div className="relative h-full min-h-[280px] w-full">
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
+        className="absolute inset-0 block"
         role="img"
-        aria-label="Live corridor map of South Asia: parcels moving from Dhaka to Delhi, Kolkata, Mumbai, and Bangalore with delivery confirmations"
+        aria-label={
+          direction === 'out'
+            ? 'Map of South Asia: parcels flying from Dhaka to Delhi, Kolkata, Mumbai, Bengaluru, Chennai and other Indian cities'
+            : 'Map of South Asia: parcels flying from Indian cities to Dhaka'
+        }
       />
     </div>
   );

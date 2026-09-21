@@ -1,6 +1,6 @@
 'use client';
 
-import type { InputHTMLAttributes, ReactElement } from 'react';
+import { useId, type InputHTMLAttributes, type ReactElement } from 'react';
 import '../micro.css';
 import './touches.css';
 
@@ -8,9 +8,14 @@ import './touches.css';
 
 /** Sun ↔ moon: the rays retract and a mask slides in to carve the crescent. */
 export function ThemeMorphIcon({ mode }: { mode: 'light' | 'dark' }): ReactElement {
+  // One id per INSTANCE: two toggles on a page (header + drawer) shared a
+  // mask id, and the drawer's disc resolved to the header's mask — which
+  // sat inside a display:none subtree on a phone, so it rendered as a
+  // grey blob.
+  const maskId = `tm${useId().replace(/\W/g, '')}`;
   return (
     <svg className="mi mi-theme" viewBox="0 0 24 24" data-mode={mode} aria-hidden>
-      <mask id="mi-theme-mask">
+      <mask id={maskId}>
         <rect width="24" height="24" fill="#fff" />
         <circle className="mi-theme__mask" cx="12" cy="12" r="6" fill="#000" />
       </mask>
@@ -20,7 +25,7 @@ export function ThemeMorphIcon({ mode }: { mode: 'light' | 'dark' }): ReactEleme
         cy="12"
         r="5"
         fill="currentColor"
-        mask="url(#mi-theme-mask)"
+        mask={`url(#${maskId})`}
       />
       <g className="mi-theme__rays" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         {Array.from({ length: 8 }, (_, i) => (

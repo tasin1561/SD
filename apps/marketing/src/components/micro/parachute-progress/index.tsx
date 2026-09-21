@@ -14,6 +14,8 @@ export interface ParachuteProgressProps<T> {
   /** Keep the result on screen (Infinity) or return to idle after this many ms. */
   settleMs?: number;
   className?: string;
+  /** Fires with the real result — the caller may render it outside the pill. */
+  onSettled?: (result: { ok: true; value: T } | { ok: false; error: unknown }) => void;
 }
 
 /**
@@ -28,8 +30,9 @@ export function ParachuteProgress<T>({
   errorLabel = 'Something went wrong — try again',
   settleMs = Infinity,
   className,
+  onSettled,
 }: ParachuteProgressProps<T>): ReactElement {
-  const s = useAsyncState<T>({ minBusyMs: 2400, settleMs });
+  const s = useAsyncState<T>({ minBusyMs: 2400, settleMs, ...(onSettled ? { onSettled } : {}) });
   return (
     <span className={`mi mi-para ${className ?? ''}`} {...s.a11y}>
       <button

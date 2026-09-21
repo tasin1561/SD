@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { HeroClient } from '@/components/islands/hero-client';
 import { Odometer } from '@/components/micro/odometer';
-import { business, platform } from '@/content/site';
+import { business } from '@/content/site';
 import './hero.css';
 
 /**
@@ -29,9 +29,9 @@ export function Hero(): ReactElement {
                 door to door.
               </h1>
               <p className="hero__sub">
-                Courier and fulfilment across the {platform.brand.corridor} corridor. We hold your
-                stock, confirm every order by phone, deliver it, handle the returns and itemise your
-                money — in either direction.
+                Send parcels between Bangladesh and India, door to door, in both directions. Selling
+                online? We also hold your stock in India, confirm every COD order by phone and send
+                your money home.
               </p>
             </div>
           }
@@ -46,8 +46,11 @@ export function Hero(): ReactElement {
                   <dt className="hero__stat-k">{s.label}</dt>
                 </div>
               ))}
-              <div className="hero__stat hero__stat--trust">
-                <dd className="hero__stat-n">{business.trustCount}</dd>
+              <div className="hero__stat">
+                <dd className="hero__stat-n">
+                  <Odometer value={business.trustCount} />
+                  <span className="hero__stat-suffix">+</span>
+                </dd>
                 <dt className="hero__stat-k">{business.trustLine}</dt>
               </div>
             </dl>
