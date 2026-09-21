@@ -5,7 +5,9 @@
   overflow: hidden;
   border-radius: 1rem;
   border: 1px solid var(--line);
-  background: var(--scene-tint, var(--surface-2));
+  background:
+    radial-gradient(120% 80% at 80% 0%, var(--scene-glow, transparent), transparent 60%),
+    var(--scene-tint, var(--surface-2));
   transition: background-color calc(500 * var(--d));
 }
 .mi-scene__ghost {

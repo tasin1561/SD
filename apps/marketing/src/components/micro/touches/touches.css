@@ -1,0 +1,228 @@
+/* 15 · Supporting touches — mostly CSS. Sun↔moon morph, accordion chevron
+   morph, copy tick, floating field label, checkbox and toggle draw-on,
+   inline validation icons that draw themselves. */
+
+/* theme icon: in light a sun (disc + rays); in dark the rays retract and a
+   mask circle slides in to carve a clear crescent from a larger disc. */
+.mi-theme {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+.mi-theme__disc {
+  r: 5px;
+  transition: r calc(300 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1);
+}
+.mi-theme[data-mode='dark'] .mi-theme__disc {
+  r: 7.5px;
+}
+.mi-theme__mask {
+  transform: translate(11px, -11px);
+  transition: transform calc(300 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1);
+}
+.mi-theme[data-mode='dark'] .mi-theme__mask {
+  transform: translate(4px, -4px);
+}
+.mi-theme__ray {
+  transform-origin: 12px 12px;
+  transition:
+    opacity calc(200 * var(--d)),
+    scale calc(300 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1);
+}
+.mi-theme[data-mode='dark'] .mi-theme__ray {
+  opacity: 0;
+  scale: 0.5;
+}
+
+/* accordion chevron → minus */
+.mi-chev {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+}
+.mi-chev__a,
+.mi-chev__b {
+  transform-origin: 10px 10px;
+  transition: transform calc(240 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1);
+}
+.mi-chev__a {
+  transform: rotate(45deg);
+}
+.mi-chev__b {
+  transform: rotate(-45deg);
+}
+[aria-expanded='true'] .mi-chev__a,
+.mi-chev[data-open='true'] .mi-chev__a,
+.mi-chev[data-open='true'] .mi-chev__b {
+  transform: rotate(0deg);
+}
+
+/* copy → tick */
+.mi-copy {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+.mi-copy__doc {
+  transition:
+    opacity calc(160 * var(--d)),
+    transform calc(200 * var(--d));
+}
+.mi-copy__tick {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  transition: stroke-dashoffset calc(280 * var(--d)) calc(120 * var(--d)) ease-out;
+}
+.mi-copy[data-done='true'] .mi-copy__doc {
+  opacity: 0;
+  transform: scale(0.6);
+}
+.mi-copy[data-done='true'] .mi-copy__tick {
+  stroke-dashoffset: 0;
+}
+
+/* floating field label */
+.mi-float {
+  position: relative;
+  display: block;
+}
+.mi-float__input {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 1.25rem 0.9rem 0.4rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-control);
+  background: var(--surface-input);
+  color: var(--fg-strong);
+  font: inherit;
+  outline: 0;
+  transition:
+    border-color calc(160 * var(--d)),
+    box-shadow calc(160 * var(--d));
+}
+.mi-float__input:focus {
+  border-color: var(--blue-text);
+  box-shadow: 0 0 0 4px var(--blue-glow);
+}
+.mi-float__label {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-faint);
+  pointer-events: none;
+  transition:
+    transform calc(200 * var(--d)) cubic-bezier(0.3, 1, 0.3, 1),
+    font-size calc(200 * var(--d)),
+    color calc(200 * var(--d));
+}
+.mi-float__input:focus + .mi-float__label,
+.mi-float__input:not(:placeholder-shown) + .mi-float__label {
+  transform: translateY(-1.35rem);
+  font-size: 0.6875rem;
+  color: var(--blue-text);
+}
+
+/* checkbox draw-on */
+.mi-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+.mi-check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.mi-check__box {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--border-control);
+  background: var(--surface-input);
+  transition:
+    background-color calc(200 * var(--d)),
+    border-color calc(200 * var(--d));
+}
+.mi-check__mark {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  transition: stroke-dashoffset calc(260 * var(--d)) calc(60 * var(--d)) ease-out;
+}
+.mi-check input:checked + .mi-check__box {
+  background: var(--blue-fill);
+  border-color: var(--blue-fill);
+}
+.mi-check input:checked + .mi-check__box .mi-check__mark {
+  stroke-dashoffset: 0;
+}
+.mi-check input:focus-visible + .mi-check__box {
+  box-shadow: 0 0 0 4px var(--blue-glow);
+}
+
+/* toggle draw-on: the knob slides and the track fills behind it */
+.mi-toggle {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--border-control);
+  transition: background-color calc(240 * var(--d));
+  cursor: pointer;
+}
+.mi-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.mi-toggle__knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #fff;
+  transition: transform calc(260 * var(--d)) cubic-bezier(0.3, 1.2, 0.3, 1);
+}
+.mi-toggle input:checked ~ .mi-toggle__knob {
+  transform: translateX(20px);
+}
+.mi-toggle:has(input:checked) {
+  background: var(--green-fill);
+}
+.mi-toggle:has(input:focus-visible) {
+  box-shadow: 0 0 0 4px var(--blue-glow);
+}
+
+/* inline validation icons that draw themselves */
+.mi-valid {
+  width: 20px;
+  height: 20px;
+}
+.mi-valid path {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  transition: stroke-dashoffset calc(300 * var(--d)) ease-out;
+}
+.mi-valid[data-state='ok'] .ok,
+.mi-valid[data-state='bad'] .bad {
+  stroke-dashoffset: 0;
+}
+.mi-valid .ok {
+  stroke: var(--green-text);
+}
+.mi-valid .bad {
+  stroke: var(--red-text);
+}

@@ -21,6 +21,7 @@ export interface BeatsOptions {
 
 export interface Beats {
   index: number;
+  count: number;
   beat: Beat | undefined;
   playing: boolean;
   reducedMotion: boolean;
@@ -99,6 +100,7 @@ export function useBeats({ beats, restMs = 2000, loop = true, enabled }: BeatsOp
 
   return {
     index,
+    count: beats.length,
     beat: beats[index],
     playing,
     reducedMotion: reduced,

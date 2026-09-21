@@ -23,7 +23,7 @@ export function UtilityBar(): ReactElement {
           </a>
           <span className="inline-flex items-center gap-1.5">
             <Clock size={13} aria-hidden="true" />
-            {business.hours}
+            {business.hoursDays} · {business.hoursTime} ({business.hoursZone})
           </span>
         </div>
         <div className="flex items-center gap-5">

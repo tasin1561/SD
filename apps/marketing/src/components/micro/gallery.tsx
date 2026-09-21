@@ -28,7 +28,7 @@ export function MotionGallery(): ReactElement {
           <p className="text-xs font-medium uppercase tracking-[0.08em] text-fg-muted">
             Skydrop marketing rebuild · Phase 2 · dev route
           </p>
-          <h1 className="mt-1 text-2xl font-semibold">Motion gallery — 15 patterns</h1>
+          <h1 className="mt-1 text-2xl font-semibold">Motion gallery — 15 patterns + 2 extras</h1>
           <p className="mt-2 max-w-[70ch] text-sm text-fg-muted">
             Each demo runs a FAKE task so the busy state can be seen; on the page a success frame
             only ever follows the real result (`useAsyncState`). Links navigate at once and show
@@ -60,7 +60,11 @@ export function MotionGallery(): ReactElement {
         >
           <header className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-base font-semibold text-fg-strong">
-              <span className="tabular mr-2 text-fg-faint">{String(m.n).padStart(2, '0')}</span>
+              <span className="tabular mr-2 text-fg-faint">
+                {Number.isInteger(m.n)
+                  ? String(m.n).padStart(2, '0')
+                  : `${String(Math.floor(m.n)).padStart(2, '0')}b`}
+              </span>
               {m.name}
             </h2>
             <p className="text-xs text-fg-muted">{m.where}</p>

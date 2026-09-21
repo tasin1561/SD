@@ -1,50 +1,18 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { Copy, Mail, MessageCircle, Phone } from 'lucide-react';
-import { RadialContactFan } from '@/components/micro/radial-contact-fan';
-import { business, platform } from '@/content/site';
+import { ContactFan } from '@/components/micro/contact-fan';
+import { contactItems } from './contact-items';
 
 /**
- * The floating contact control — bottom-right, above the mobile bar — is
- * micro pattern 9, the radial fan: WhatsApp · Call · Email · Copy hotline.
- * Links navigate at once; "Copy" is the one honest success state, because
- * the clipboard write is real and local.
+ * The floating contact control — bottom-right, DESKTOP ONLY (`md:` up).
+ * Below that the mobile bottom bar's "Contact" item opens the same fan, so
+ * the button no longer sits on top of page content on a phone.
  */
 export function FloatingContact(): ReactElement {
   return (
-    <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.75rem)] right-4 z-40 md:bottom-6 md:right-6">
-      <RadialContactFan
-        items={[
-          {
-            id: 'whatsapp',
-            icon: <MessageCircle size={18} aria-hidden="true" />,
-            label: 'WhatsApp',
-            href: business.whatsappHref,
-            external: true,
-          },
-          {
-            id: 'call',
-            icon: <Phone size={18} aria-hidden="true" />,
-            label: `Call ${business.hotline}`,
-            href: business.hotlineHref,
-          },
-          {
-            id: 'email',
-            icon: <Mail size={18} aria-hidden="true" />,
-            label: platform.brand.email,
-            href: `mailto:${platform.brand.email}`,
-          },
-          {
-            id: 'copy',
-            icon: <Copy size={18} aria-hidden="true" />,
-            label: 'Copy hotline number',
-            doneLabel: 'Number copied',
-            failLabel: 'Could not copy — long-press the number',
-            action: () => navigator.clipboard.writeText(business.hotline),
-          },
-        ]}
-      />
+    <div className="fixed bottom-6 right-6 z-40 hidden md:block">
+      <ContactFan items={contactItems()} />
     </div>
   );
 }

@@ -130,6 +130,7 @@
   --color-blue-on-tint: var(--blue-on-tint);
   --color-blue-line: var(--blue-line);
   --color-blue-glow: var(--blue-glow);
+  --color-blue-surface: var(--blue-surface);
   --color-saffron-text: var(--saffron-text);
   --color-saffron-fill: var(--saffron-fill);
   --color-saffron-fill-hover: var(--saffron-fill-hover);
@@ -138,6 +139,7 @@
   --color-saffron-on-tint: var(--saffron-on-tint);
   --color-saffron-line: var(--saffron-line);
   --color-saffron-glow: var(--saffron-glow);
+  --color-saffron-surface: var(--saffron-surface);
   --color-green-text: var(--green-text);
   --color-green-fill: var(--green-fill);
   --color-green-fill-hover: var(--green-fill-hover);
@@ -146,6 +148,7 @@
   --color-green-on-tint: var(--green-on-tint);
   --color-green-line: var(--green-line);
   --color-green-glow: var(--green-glow);
+  --color-green-surface: var(--green-surface);
   --color-teal-text: var(--teal-text);
   --color-teal-fill: var(--teal-fill);
   --color-teal-fill-hover: var(--teal-fill-hover);
@@ -154,6 +157,7 @@
   --color-teal-on-tint: var(--teal-on-tint);
   --color-teal-line: var(--teal-line);
   --color-teal-glow: var(--teal-glow);
+  --color-teal-surface: var(--teal-surface);
   --color-violet-text: var(--violet-text);
   --color-violet-fill: var(--violet-fill);
   --color-violet-fill-hover: var(--violet-fill-hover);
@@ -162,6 +166,7 @@
   --color-violet-on-tint: var(--violet-on-tint);
   --color-violet-line: var(--violet-line);
   --color-violet-glow: var(--violet-glow);
+  --color-violet-surface: var(--violet-surface);
   --color-magenta-text: var(--magenta-text);
   --color-magenta-fill: var(--magenta-fill);
   --color-magenta-fill-hover: var(--magenta-fill-hover);
@@ -170,6 +175,7 @@
   --color-magenta-on-tint: var(--magenta-on-tint);
   --color-magenta-line: var(--magenta-line);
   --color-magenta-glow: var(--magenta-glow);
+  --color-magenta-surface: var(--magenta-surface);
   --color-red-text: var(--red-text);
   --color-red-fill: var(--red-fill);
   --color-red-fill-hover: var(--red-fill-hover);
@@ -178,6 +184,7 @@
   --color-red-on-tint: var(--red-on-tint);
   --color-red-line: var(--red-line);
   --color-red-glow: var(--red-glow);
+  --color-red-surface: var(--red-surface);
 
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);

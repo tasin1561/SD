@@ -12,7 +12,17 @@ import { RollingLabelButton } from './rolling-label-button';
 import { LabelIntoParcel } from './label-into-parcel';
 import { ExpandingTrackField } from './expanding-track-field';
 import { LiquidBead } from './liquid-bead';
-import { RadialContactFan } from './radial-contact-fan';
+import { ContactFan } from './contact-fan';
+import {
+  ChevronMorph,
+  CopyTick,
+  DrawCheckbox,
+  DrawToggle,
+  FloatingField,
+  ThemeMorphIcon,
+  ValidationIcon,
+} from './touches';
+import { StubVignette } from '@/components/vignettes/stub-vignette';
 import { SegmentedCode, type CodeVerdict } from './segmented-code';
 import { SceneSwitcher } from './scene-switcher';
 import { Odometer } from './odometer';
@@ -203,32 +213,144 @@ const BEAD_TABS = [
 ];
 function BeadDemo(): ReactElement {
   const [v, setV] = useState('stock');
-  return <LiquidBead tabs={BEAD_TABS} value={v} onChange={setV} label="Platform groups" />;
+  const [b, setB] = useState('track');
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="mb-2 text-xs text-fg-muted">
+          (b) text tablist — the pill stretches and squashes as it travels
+        </p>
+        <LiquidBead tabs={BEAD_TABS} value={v} onChange={setV} label="Platform groups" />
+      </div>
+      <div className="max-w-sm rounded-t-xl border border-line bg-surface-2">
+        <p className="px-3 pt-2 text-xs text-fg-muted">
+          (a) icon bar — the active icon lifts out on a rising bead
+        </p>
+        <LiquidBead
+          variant="icon"
+          tabs={[
+            {
+              id: 'track',
+              label: 'Track',
+              hue: 'blue',
+              icon: <Phone size={20} aria-hidden="true" />,
+            },
+            {
+              id: 'quote',
+              label: 'Quote',
+              hue: 'saffron',
+              icon: <Copy size={20} aria-hidden="true" />,
+            },
+            {
+              id: 'book',
+              label: 'Book',
+              hue: 'green',
+              icon: <Mail size={20} aria-hidden="true" />,
+            },
+            {
+              id: 'contact',
+              label: 'Contact',
+              hue: 'violet',
+              icon: <MessageCircle size={20} aria-hidden="true" />,
+            },
+          ]}
+          value={b}
+          onChange={setB}
+          label="Quick actions"
+        />
+      </div>
+    </div>
+  );
 }
 function FanDemo(): ReactElement {
   return (
-    <div className="flex h-44 items-end justify-end pr-2">
-      <RadialContactFan
+    <div className="flex h-72 items-end justify-end pr-2">
+      <ContactFan
         items={[
           {
             id: 'wa',
-            icon: <MessageCircle size={18} />,
+            icon: <MessageCircle size={15} />,
+            hue: 'green',
             label: 'WhatsApp',
             href: '#',
             external: true,
           },
-          { id: 'call', icon: <Phone size={18} />, label: 'Call', href: '#' },
-          { id: 'mail', icon: <Mail size={18} />, label: 'Email', href: '#' },
+          {
+            id: 'call',
+            icon: <Phone size={15} />,
+            hue: 'blue',
+            label: 'Call',
+            detail: '+880 1XXX-XXXXXX',
+            href: '#',
+          },
+          {
+            id: 'mail',
+            icon: <Mail size={15} />,
+            hue: 'violet',
+            label: 'Email',
+            detail: 'hello@skydrop.online',
+            href: '#',
+          },
           {
             id: 'copy',
-            icon: <Copy size={18} />,
-            label: 'Copy hotline',
+            icon: <Copy size={15} />,
+            hue: 'saffron',
+            label: 'Copy hotline number',
+            busyLabel: 'Copying…',
             doneLabel: 'Number copied',
             failLabel: 'Could not copy',
             action: async () => navigator.clipboard.writeText('+880 1XXX-XXXXXX'),
           },
         ]}
       />
+    </div>
+  );
+}
+function TouchesDemo(): ReactElement {
+  const [mode, setMode] = useState<'light' | 'dark'>('light');
+  const [open, setOpen] = useState(false);
+  const [done, setDone] = useState(false);
+  const [v, setV] = useState('');
+  const state = v === '' ? 'idle' : /.+@.+\..+/.test(v) ? 'ok' : 'bad';
+  return (
+    <div className="flex flex-wrap items-start gap-8">
+      <button
+        type="button"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line px-3 text-sm text-fg-strong"
+        onClick={() => setMode((m) => (m === 'light' ? 'dark' : 'light'))}
+      >
+        <ThemeMorphIcon mode={mode} /> theme {mode}
+      </button>
+      <button
+        type="button"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line px-3 text-sm text-fg-strong"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        accordion <ChevronMorph open={open} />
+      </button>
+      <button
+        type="button"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line px-3 text-sm text-fg-strong"
+        onClick={() => {
+          setDone(true);
+          window.setTimeout(() => setDone(false), 1400);
+        }}
+      >
+        <CopyTick done={done} /> {done ? 'Copied' : 'Copy'}
+      </button>
+      <span className="flex items-center gap-2">
+        <FloatingField
+          id="touch-email"
+          label="Email"
+          value={v}
+          onChange={(e) => setV(e.target.value)}
+          type="email"
+        />
+        <ValidationIcon state={state} />
+      </span>
+      <DrawCheckbox label="Confirm every order by phone" defaultChecked />
+      <DrawToggle label="Instant Pay" />
     </div>
   );
 }
@@ -448,10 +570,10 @@ export const MICRO_REGISTRY: readonly MicroEntry[] = [
     Demo: BeadDemo,
   },
   {
-    id: 'radial-contact-fan',
+    id: 'contact-fan',
     n: 9,
-    name: 'Radial contact fan',
-    where: 'The floating contact control',
+    name: 'Contact fan (labelled)',
+    where: "The floating control on desktop · the bottom bar's Contact on a phone",
     Demo: FanDemo,
   },
   {
@@ -468,7 +590,20 @@ export const MICRO_REGISTRY: readonly MicroEntry[] = [
     where: 'The services showcase — four scenes, one component',
     Demo: SceneDemo,
   },
-  { id: 'odometer', n: 12, name: 'Odometer', where: 'Trust row + KPI card figures', Demo: OdoDemo },
+  {
+    id: 'feature-vignette',
+    n: 12,
+    name: 'Feature vignette',
+    where: 'The platform tour — six of these in Phase 5 (this is the stub that proves the frame)',
+    Demo: StubVignette,
+  },
+  {
+    id: 'odometer',
+    n: 12.5,
+    name: 'Odometer (kept, extra)',
+    where: 'Trust row + KPI card figures',
+    Demo: OdoDemo,
+  },
   {
     id: 'reactive-mascot',
     n: 13,
@@ -484,9 +619,17 @@ export const MICRO_REGISTRY: readonly MicroEntry[] = [
     Demo: DoorDemo,
   },
   {
-    id: 'connector-draw',
+    id: 'touches',
     n: 15,
-    name: 'Connector draw',
+    name: 'Supporting touches',
+    where:
+      'Theme icon morph · accordion chevron · copy tick · floating labels · checkbox and toggle draw-on · validation icons',
+    Demo: TouchesDemo,
+  },
+  {
+    id: 'connector-draw',
+    n: 15.5,
+    name: 'Connector draw (kept, extra)',
     where: 'How it works — the four steps join as you scroll',
     Demo: ConnDemo,
   },

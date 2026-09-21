@@ -39,7 +39,7 @@ export const platform = {
       { href: 'https://app.skydrop.online/login', label: 'Seller sign-in' },
       { href: 'https://reseller.skydrop.online/login', label: 'Store sign-in' },
     ],
-    cta: { href: '/request-invite', label: 'Request an invite' },
+    cta: { href: '/request-invite', label: 'Book a shipment' },
     track: { href: 'https://track.skydrop.online', label: 'Track a parcel' },
   },
   /** What ships, in the seller's own words — never more than the app does. */
@@ -67,7 +67,7 @@ export const platform = {
       {
         title: 'Access',
         links: [
-          { href: '/request-invite', label: 'Request an invite' },
+          { href: '/request-invite', label: 'Book a shipment' },
           { href: 'https://app.skydrop.online/login', label: 'Seller sign-in', external: true },
           { href: 'https://reseller.skydrop.online/login', label: 'Store sign-in', external: true },
           { href: 'https://track.skydrop.online', label: 'Track a parcel', external: true },
@@ -87,53 +87,65 @@ export const platform = {
 } as const;
 
 export const business = {
-  /** Utility bar. Hours are shown in the visitor's words; the zone is stated. */
+  /** Utility bar and contact fan. Every FACT is its own dummy() — never one wrapper around an object. */
   hotline: dummy('+880 1XXX-XXXXXX'),
   hotlineHref: dummy('tel:+8801000000000'),
   whatsappHref: dummy('https://wa.me/8801000000000'),
-  hours: dummy('Sat–Thu · 10:00–19:00 (Dhaka)'),
+  hoursDays: dummy('Sat–Thu'),
+  hoursTime: dummy('10:00–19:00'),
+  hoursZone: 'Dhaka',
   /** Hero trust row + KPI card. Real figures replace these. */
   stats: [
-    { value: dummy('18,240'), label: 'parcels delivered' },
-    { value: dummy('96%'), label: 'confirmed before dispatch' },
-    { value: dummy('4–7 days'), label: 'Dhaka to an Indian doorstep' },
+    { value: dummy(18240), suffix: '', label: 'parcels delivered' },
+    { value: dummy(96), suffix: '%', label: 'confirmed before dispatch' },
+    { value: dummy(4), suffix: '–7 days', label: 'Dhaka to an Indian doorstep' },
   ],
-  trustLine: dummy('Trusted by 120+ Bangladeshi sellers'),
-  /** Estimator slabs — ILLUSTRATIVE until the owner supplies the rate card. */
+  trustCount: dummy('120+'),
+  trustLine: 'Bangladeshi sellers ship with Skydrop',
+  /** Estimator — ILLUSTRATIVE until the owner supplies the rate card. Each rate is its own placeholder. */
   estimator: {
     currency: dummy('BDT'),
-    slabs: dummy([
-      { upToKg: 0.5, priceBdt: 450 },
-      { upToKg: 1, priceBdt: 650 },
-      { upToKg: 2, priceBdt: 950 },
-      { upToKg: 5, priceBdt: 1800 },
-    ]),
+    slabs: [
+      { upToKg: dummy(0.5), price: dummy(450) },
+      { upToKg: dummy(1), price: dummy(650) },
+      { upToKg: dummy(2), price: dummy(950) },
+      { upToKg: dummy(5), price: dummy(1800) },
+    ],
     codFeePercent: dummy(1),
     note: 'Estimated. Your quote is agreed before anything ships.',
   },
   /** Serviceability — a list shaped for a real endpoint later. */
   serviceability: {
-    indiaPinPrefixes: dummy(['1', '2', '3', '4', '5', '6', '7', '8']),
-    bdPostcodePrefixes: dummy(['1', '2', '3', '4', '5', '6', '7', '8', '9']),
+    indiaPinFirstDigits: dummy('12345678'),
+    bdPostcodeFirstDigits: dummy('123456789'),
     transitDaysIndia: dummy('4–7 days'),
     transitDaysBangladesh: dummy('3–5 days'),
   },
-  partners: dummy(['Delhivery', 'Shiprocket', 'Blue Dart', 'DTDC', 'Ekart', 'Xpressbees']),
-  testimonials: dummy([
+  partners: [
+    dummy('Delhivery'),
+    dummy('Shiprocket'),
+    dummy('Blue Dart'),
+    dummy('DTDC'),
+    dummy('Ekart'),
+    dummy('Xpressbees'),
+  ],
+  testimonials: [
     {
-      quote: 'Our returns dropped once every order was confirmed by phone first.',
-      name: 'Rahim Uddin',
-      company: 'Dhaka Threads',
+      quote: dummy('Our returns dropped once every order was confirmed by phone first.'),
+      name: dummy('Rahim Uddin'),
+      company: dummy('Dhaka Threads'),
     },
     {
-      quote: 'I see the parcel, the call and the money in one place.',
-      name: 'Nusrat Jahan',
-      company: 'Nusrat Beauty',
+      quote: dummy('I see the parcel, the call and the money in one place.'),
+      name: dummy('Nusrat Jahan'),
+      company: dummy('Nusrat Beauty'),
     },
-  ]),
+  ],
   offices: {
-    dhaka: dummy('Mirpur DOHS, Dhaka 1216'),
-    india: dummy('Bengaluru, Karnataka'),
+    dhakaLine1: dummy('Mirpur DOHS'),
+    dhakaLine2: dummy('Dhaka 1216'),
+    indiaCity: dummy('Bengaluru'),
+    indiaState: dummy('Karnataka'),
   },
 } as const;
 

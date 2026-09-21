@@ -52,26 +52,13 @@ const jakarta = localFont({
     },
   ],
 });
-const manrope = localFont({
-  src: '../../fonts/candidates/manrope-latin.woff2',
-  variable: '--font-cand-manrope',
-  display: 'swap',
-  preload: false,
-  declarations: [
-    {
-      prop: 'unicode-range',
-      value:
-        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    },
-  ],
-});
 
 const FONT_BUDGET = 35_000;
 
 interface Candidate {
   id: string;
   name: string;
-  status: 'provisional' | 'candidate';
+  status: 'final';
   variableClass: string;
   cssVar: string;
   file: string;
@@ -82,20 +69,11 @@ const CANDIDATES: readonly Candidate[] = [
   {
     id: 'jakarta',
     name: 'Plus Jakarta Sans',
-    status: 'provisional',
+    status: 'final',
     variableClass: jakarta.variable,
     cssVar: '--font-cand-jakarta',
     file: 'plus-jakarta-sans-latin.woff2',
-    note: 'PROVISIONAL family (one token + one file). Geometric with soft terminals; strong numerals. wght 200–800.',
-  },
-  {
-    id: 'manrope',
-    name: 'Manrope',
-    status: 'candidate',
-    variableClass: manrope.variable,
-    cssVar: '--font-cand-manrope',
-    file: 'candidates/manrope-latin.woff2',
-    note: 'Geometric grotesque, slightly wide, calm; the most even body texture. wght 200–800.',
+    note: 'FINAL (owner, 2026-09-21): headings and body, one family — geometric with soft terminals, strong numerals. wght 200–800.',
   },
 ];
 
@@ -290,8 +268,8 @@ function Specimen({ c }: { c: Candidate }): ReactElement {
           <span
             className="ml-2 rounded-sm px-1.5 py-0.5 text-[11px] font-medium"
             style={{
-              background: c.status === 'provisional' ? 'var(--blue-tint)' : 'var(--surface-3)',
-              color: c.status === 'provisional' ? 'var(--blue-on-tint)' : 'var(--fg-muted)',
+              background: 'var(--green-tint)',
+              color: 'var(--green-on-tint)',
             }}
           >
             {c.status}
@@ -371,12 +349,12 @@ function TintPanel({
     <div
       className="rounded-lg border p-6"
       style={{
-        background: `var(--${hue}-tint)`,
+        background: `radial-gradient(120% 80% at 80% 0%, var(--${hue}-glow), transparent 60%), var(--${hue}-surface)`,
         borderColor: `var(--${hue}-line)`,
         color: `var(--${hue}-on-tint)`,
       }}
     >
-      <div className="text-xs font-semibold uppercase tracking-[0.08em] opacity-80">{hue} tint</div>
+      <div className="text-xs font-semibold uppercase tracking-[0.08em] opacity-80">{hue} surface (large area)</div>
       <h3 className="mt-2 text-2xl font-bold" style={{ color: 'inherit' }}>
         {title}
       </h3>
@@ -393,10 +371,7 @@ function TintPanel({
 export default function SwatchesPage(): ReactElement {
   const decMinWhite = gradientMin(CORRIDOR_STOPS.decorative, '#ffffff');
   const decMinDark = gradientMin(CORRIDOR_STOPS.decorative, '#020617');
-  const strMinWhite = gradientMin(CORRIDOR_STOPS.strong, '#ffffff');
-  const strMinDark = gradientMin(CORRIDOR_STOPS.strong, '#020617');
   const decSamples = sampleGradient(CORRIDOR_STOPS.decorative, 3);
-  const strSamples = sampleGradient(CORRIDOR_STOPS.strong, 3);
   const largeTextOk = HUES.filter(
     (h) => h.id !== 'slate' && contrast(h.scale[600], PAGE.light) >= 3,
   );
@@ -474,7 +449,7 @@ export default function SwatchesPage(): ReactElement {
 
       <section id="dark-tints" className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">
-          3 · Magenta tint beside red tint — as whole surfaces
+          3 · Large tinted surfaces — `-surface`, not `-tint`: magenta beside red
         </h2>
         <p className="max-w-[70ch] text-sm text-fg-muted">
           Finding C: at pink-950 the dark magenta tint was a maroon indistinguishable from red-950.
@@ -499,25 +474,23 @@ export default function SwatchesPage(): ReactElement {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold">4 · The corridor gradient — one declaration</h2>
+        <h2 className="text-lg font-semibold">
+          4 · The corridor gradient — one declaration, dark text only
+        </h2>
         <div className="grid grid-cols-1 gap-5">
           <GradientBar
             css={CORRIDOR.decorative}
             label="--corridor-gradient (SHIPS)"
-            note={`decorative only — arcs, the scroll-progress line, highlights. Never carries text: white bottoms out at ${decMinWhite.ratio.toFixed(2)}:1 over ${decMinWhite.at}; slate-950 stays ≥ ${decMinDark.ratio.toFixed(2)}:1 but the rule is no text at all.`}
-          />
-          <GradientBar
-            css={CORRIDOR.decorativeOklch}
-            label="same three stops, in oklch (comparison only)"
-            note="adopt only if visibly as golden or better; otherwise the sRGB declaration above stands."
-          />
-          <GradientBar
-            css={CORRIDOR.strong}
-            label="--corridor-gradient-strong (for bands that carry WHITE text)"
-            note={`green-700 → saffron-700. White never drops below ${strMinWhite.ratio.toFixed(2)}:1 (at ${strMinWhite.at}); slate-950 bottoms out at ${strMinDark.ratio.toFixed(2)}:1, so dark text is NOT allowed on it.`}
+            note={`arcs, the scroll-progress line, highlights, bands. Text on it is ALWAYS slate-950 in both themes (${decMinDark.ratio.toFixed(2)} worst case, at ${decMinDark.at}); white bottoms out at ${decMinWhite.ratio.toFixed(2)} over the gold and is never used. There is no "strong" variant — its midpoint was olive running to brown.`}
           >
-            <span className="text-lg font-bold text-white">
-              Ready to ship into India? — white on the strong gradient
+            <span className="text-lg font-bold" style={{ color: '#020617' }}>
+              Ready to ship into India? — slate-950 on the gradient
+            </span>
+            <span
+              className="ml-4 inline-flex min-h-10 items-center rounded-md px-4 text-sm font-semibold"
+              style={{ background: '#020617', color: '#ffffff' }}
+            >
+              Book a shipment
             </span>
           </GradientBar>
         </div>
@@ -525,49 +498,35 @@ export default function SwatchesPage(): ReactElement {
           <table className="tabular w-full text-left text-xs">
             <thead className="text-fg-muted">
               <tr>
-                <th className="py-1 pr-4">gradient</th>
                 <th className="py-1 pr-4">green end</th>
-                <th className="py-1 pr-4">midpoint</th>
+                <th className="py-1 pr-4">gold midpoint</th>
                 <th className="py-1 pr-4">saffron end</th>
-                <th className="py-1 pr-4">min white</th>
                 <th className="py-1 pr-4">min slate-950</th>
+                <th className="py-1 pr-4">min white</th>
               </tr>
             </thead>
             <tbody className="font-mono text-fg-body">
-              {[
-                ['decorative', decSamples, decMinWhite, decMinDark],
-                ['strong', strSamples, strMinWhite, strMinDark],
-              ].map(([name, samples, mw, md]) => {
-                const s = samples as string[];
-                const w = mw as { ratio: number; at: string };
-                const d = md as { ratio: number; at: string };
-                return (
-                  <tr key={String(name)} className="border-t border-line">
-                    <td className="py-1 pr-4 font-sans font-semibold">{String(name)}</td>
-                    {s.map((hex) => (
-                      <td key={hex} className="py-1 pr-4">
-                        <span
-                          className="mr-1 inline-block h-3 w-3 rounded-sm align-middle"
-                          style={{ background: hex }}
-                        />
-                        {hex} · W {contrast('#ffffff', hex).toFixed(2)} · S{' '}
-                        {contrast('#020617', hex).toFixed(2)}
-                      </td>
-                    ))}
-                    <td className="py-1 pr-4">{w.ratio.toFixed(2)}</td>
-                    <td className="py-1 pr-4">{d.ratio.toFixed(2)}</td>
-                  </tr>
-                );
-              })}
+              <tr className="border-t border-line">
+                {decSamples.map((hex) => (
+                  <td key={hex} className="py-1 pr-4">
+                    <span
+                      className="mr-1 inline-block h-3 w-3 rounded-sm align-middle"
+                      style={{ background: hex }}
+                    />
+                    {hex} · S {contrast('#020617', hex).toFixed(2)} · W{' '}
+                    {contrast('#ffffff', hex).toFixed(2)}
+                  </td>
+                ))}
+                <td className="py-1 pr-4">{decMinDark.ratio.toFixed(2)}</td>
+                <td className="py-1 pr-4">{decMinWhite.ratio.toFixed(2)}</td>
+              </tr>
             </tbody>
           </table>
         </div>
       </section>
 
       <section id="type" className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold">
-          5 · Type specimens — headings now follow the candidate
-        </h2>
+        <h2 className="text-lg font-semibold">5 · Type specimen — headings follow the family</h2>
         <p className="max-w-[70ch] text-sm text-fg-muted">
           Each card sets <code className="font-mono">--font-sans-face</code> to its candidate, and
           h1/h2 follow <code className="font-mono">--font-sans</code> (the global rule that pinned

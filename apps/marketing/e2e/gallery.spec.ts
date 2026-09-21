@@ -16,12 +16,14 @@ const PATTERNS = [
   'label-into-parcel',
   'expanding-track-field',
   'liquid-bead',
-  'radial-contact-fan',
+  'contact-fan',
   'segmented-code',
   'scene-switcher',
+  'feature-vignette',
   'odometer',
   'reactive-mascot',
   'door-hover',
+  'touches',
   'connector-draw',
 ];
 

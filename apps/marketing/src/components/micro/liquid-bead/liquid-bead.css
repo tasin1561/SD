@@ -1,22 +1,28 @@
-/* 8 · Liquid bead — a tablist whose active marker is a coloured bead that
-   rises above the bar and slides between tabs, taking each tab's hue with
-   a matching glow below. Shared by the platform tour, the FAQ categories
-   and the freight-mode selector. */
+/* 8 · Liquid bead — TWO variants of one tablist.
+   (a) `icon`: an icon bar (the mobile bottom bar). The active icon LIFTS out
+       of the bar on a rising bead in the item's accent, soft glow beneath.
+   (b) `pill`: a text tablist. A pill STRETCHES and squashes as it travels,
+       taking each tab's accent. */
 .mi-bead {
   position: relative;
+  --bead-x: 0px;
+  --bead-w: 0px;
+  --bead-color: var(--blue-fill);
+  --bead-glow: var(--blue-glow);
+  --bead-on: var(--blue-on-fill);
+  --bead-text: var(--blue-text);
+}
+
+/* ── (b) pill ─────────────────────────────────────────────────────────── */
+.mi-bead--pill {
   display: inline-flex;
   gap: 0.25rem;
   padding: 0.35rem;
   border-radius: 9999px;
   border: 1px solid var(--line);
   background: var(--surface-2);
-  --bead-x: 0px;
-  --bead-w: 0px;
-  --bead-color: var(--blue-fill);
-  --bead-glow: var(--blue-glow);
-  --bead-on: var(--blue-on-fill);
 }
-.mi-bead__tab {
+.mi-bead--pill .mi-bead__tab {
   position: relative;
   z-index: 1;
   display: inline-flex;
@@ -31,10 +37,10 @@
   white-space: nowrap;
   transition: color calc(200 * var(--d));
 }
-.mi-bead__tab[aria-selected='true'] {
+.mi-bead--pill .mi-bead__tab[aria-selected='true'] {
   color: var(--bead-on);
 }
-.mi-bead__bead {
+.mi-bead--pill .mi-bead__bead {
   position: absolute;
   top: 0.35rem;
   bottom: 0.35rem;
@@ -45,18 +51,90 @@
   background: var(--bead-color);
   box-shadow: 0 10px 22px -8px var(--bead-glow);
   transition:
-    transform calc(320 * var(--d)) cubic-bezier(0.3, 1.2, 0.3, 1),
-    width calc(320 * var(--d)) cubic-bezier(0.3, 1.2, 0.3, 1),
-    background-color calc(320 * var(--d));
+    transform calc(340 * var(--d)) cubic-bezier(0.3, 1.1, 0.3, 1),
+    width calc(340 * var(--d)) cubic-bezier(0.3, 1.1, 0.3, 1),
+    background-color calc(340 * var(--d));
 }
-.mi-bead__bead::after {
+.mi-bead--pill.is-moving .mi-bead__bead {
+  animation: mi-bead-squash calc(340 * var(--d)) ease-in-out;
+}
+@keyframes mi-bead-squash {
+  0% {
+    scale: 1 1;
+  }
+  35% {
+    scale: 1.28 0.82;
+  }
+  70% {
+    scale: 0.92 1.08;
+  }
+  100% {
+    scale: 1 1;
+  }
+}
+
+/* ── (a) icon bar ─────────────────────────────────────────────────────── */
+.mi-bead--icon {
+  display: flex;
+  align-items: stretch;
+}
+.mi-bead--icon .mi-bead__tab {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  min-height: 3.5rem;
+  padding: 0.35rem 0 0.45rem;
+  color: var(--fg-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  transition: color calc(240 * var(--d));
+}
+.mi-bead--icon .mi-bead__tab[aria-selected='true'] {
+  color: var(--bead-text);
+}
+.mi-bead--icon .mi-bead__ico {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  transition:
+    transform calc(360 * var(--d)) cubic-bezier(0.3, 1.3, 0.3, 1),
+    color calc(240 * var(--d));
+}
+.mi-bead--icon .mi-bead__tab[aria-selected='true'] .mi-bead__ico {
+  transform: translateY(-1.4rem);
+  color: var(--bead-on);
+}
+.mi-bead--icon .mi-bead__bead {
+  position: absolute;
+  top: -1.1rem;
+  left: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  background: var(--bead-color);
+  border: 3px solid var(--surface-2);
+  box-shadow: 0 8px 18px -6px var(--bead-glow);
+  transform: translateX(calc(var(--bead-x) + var(--bead-w) / 2 - 1.375rem));
+  transition:
+    transform calc(360 * var(--d)) cubic-bezier(0.3, 1.2, 0.3, 1),
+    background-color calc(300 * var(--d));
+}
+.mi-bead--icon .mi-bead__bead::after {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: inherit;
-  filter: blur(10px);
-  opacity: 0.45;
-  transform: translateY(6px) scale(0.9);
-  z-index: -1;
+  left: 50%;
+  bottom: -1.5rem;
+  width: 3.5rem;
+  height: 1.25rem;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background: var(--bead-glow);
+  filter: blur(8px);
 }

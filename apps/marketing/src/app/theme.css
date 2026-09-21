@@ -110,7 +110,10 @@
   --accent-line: rgba(37, 99, 235, 0.42);
 
   /* Semantic tokens per hue. A component picks a ROLE here, never a raw
-     step — text / fill + on-fill / tint + on-tint / line / glow. The
+     step — text / fill + on-fill / tint + on-tint / surface / line / glow.
+     `-tint` is for CHIPS; `-surface` is for a LARGE tinted area (a scene,
+     a section band): in dark it is the page navy mixed with the hue, so a
+     saffron scene is not a brown panel and the theme stays navy-based. The
      steps behind them follow the rules of 2026-09-21: light text is 700
      for saffron, green, teal, magenta and red and 600 for blue and violet;
      dark text is 400 everywhere; primary fills are blue-600 + white;
@@ -121,6 +124,7 @@
   --blue-fill-hover: var(--blue-700);
   --blue-on-fill: #ffffff;
   --blue-tint: var(--blue-950);
+  --blue-surface: color-mix(in oklab, var(--page) 86%, var(--blue-500) 14%);
   --blue-on-tint: var(--blue-400);
   --blue-line: var(--blue-800);
   --blue-glow: rgba(123, 175, 234, 0.28);
@@ -130,6 +134,7 @@
   --saffron-fill-hover: var(--saffron-500);
   --saffron-on-fill: #020617;
   --saffron-tint: var(--saffron-950);
+  --saffron-surface: color-mix(in oklab, var(--page) 86%, var(--saffron-500) 14%);
   --saffron-on-tint: var(--saffron-400);
   --saffron-line: var(--saffron-800);
   --saffron-glow: rgba(251, 191, 36, 0.28);
@@ -139,6 +144,7 @@
   --green-fill-hover: var(--green-800);
   --green-on-fill: #ffffff;
   --green-tint: var(--green-950);
+  --green-surface: color-mix(in oklab, var(--page) 86%, var(--green-500) 14%);
   --green-on-tint: var(--green-400);
   --green-line: var(--green-800);
   --green-glow: rgba(52, 211, 153, 0.28);
@@ -148,6 +154,7 @@
   --teal-fill-hover: var(--teal-800);
   --teal-on-fill: #ffffff;
   --teal-tint: var(--teal-950);
+  --teal-surface: color-mix(in oklab, var(--page) 86%, var(--teal-500) 14%);
   --teal-on-tint: var(--teal-400);
   --teal-line: var(--teal-800);
   --teal-glow: rgba(45, 212, 191, 0.28);
@@ -157,6 +164,7 @@
   --violet-fill-hover: var(--violet-700);
   --violet-on-fill: #ffffff;
   --violet-tint: var(--violet-950);
+  --violet-surface: color-mix(in oklab, var(--page) 86%, var(--violet-500) 14%);
   --violet-on-tint: var(--violet-400);
   --violet-line: var(--violet-800);
   --violet-glow: rgba(167, 139, 250, 0.28);
@@ -166,6 +174,7 @@
   --magenta-fill-hover: var(--magenta-800);
   --magenta-on-fill: #ffffff;
   --magenta-tint: var(--magenta-950);
+  --magenta-surface: color-mix(in oklab, var(--page) 86%, var(--magenta-500) 14%);
   --magenta-on-tint: var(--magenta-400);
   --magenta-line: var(--magenta-800);
   --magenta-glow: rgba(244, 114, 182, 0.28);
@@ -175,6 +184,7 @@
   --red-fill-hover: var(--red-800);
   --red-on-fill: #ffffff;
   --red-tint: var(--red-950);
+  --red-surface: color-mix(in oklab, var(--page) 86%, var(--red-500) 14%);
   --red-on-tint: var(--red-400);
   --red-line: var(--red-800);
   --red-glow: rgba(248, 113, 113, 0.28);
@@ -186,17 +196,17 @@
   --red: var(--red-text);
 
   /* The corridor gradient — Bangladesh's green to India's saffron, never
-     a flag. DECORATIVE ONLY: arcs, the scroll-progress bar, highlights,
-     the hero band. White text on it bottoms out at 1.7:1 over the gold,
-     so it never carries text; a band that must carry white uses the
-     STRONG one, whose worst point is 5.0:1 (green-700 → saffron-700). */
+     a flag. Text on it is ALWAYS slate-950, in both themes (7.95 at the
+     green end, 12.08 over the gold, 9.39 at the saffron end) — never white
+     (1.67 over the gold). A button on it is a slate-950 fill with white
+     text, or a white surface card. There is no "strong" variant: the
+     700-level stops ran through an olive midpoint to brown. */
   --corridor-gradient: linear-gradient(
     90deg,
     var(--green-500),
     var(--saffron-400) 60%,
     var(--saffron-500)
   );
-  --corridor-gradient-strong: linear-gradient(90deg, var(--green-700), var(--saffron-700));
 
   /* Backdrops, glow, scrim, shadows. */
   --grid: rgba(148, 163, 184, 0.07);
@@ -290,6 +300,7 @@
     --blue-fill-hover: var(--blue-700);
     --blue-on-fill: #ffffff;
     --blue-tint: var(--blue-50);
+    --blue-surface: var(--blue-50);
     --blue-on-tint: var(--blue-700);
     --blue-line: var(--blue-200);
     --blue-glow: rgba(59, 130, 246, 0.12);
@@ -299,6 +310,7 @@
     --saffron-fill-hover: var(--saffron-500);
     --saffron-on-fill: #020617;
     --saffron-tint: var(--saffron-50);
+    --saffron-surface: var(--saffron-50);
     --saffron-on-tint: var(--saffron-700);
     --saffron-line: var(--saffron-200);
     --saffron-glow: rgba(245, 158, 11, 0.12);
@@ -308,6 +320,7 @@
     --green-fill-hover: var(--green-800);
     --green-on-fill: #ffffff;
     --green-tint: var(--green-50);
+    --green-surface: var(--green-50);
     --green-on-tint: var(--green-700);
     --green-line: var(--green-200);
     --green-glow: rgba(16, 185, 129, 0.12);
@@ -317,6 +330,7 @@
     --teal-fill-hover: var(--teal-800);
     --teal-on-fill: #ffffff;
     --teal-tint: var(--teal-50);
+    --teal-surface: var(--teal-50);
     --teal-on-tint: var(--teal-700);
     --teal-line: var(--teal-200);
     --teal-glow: rgba(20, 184, 166, 0.12);
@@ -326,6 +340,7 @@
     --violet-fill-hover: var(--violet-700);
     --violet-on-fill: #ffffff;
     --violet-tint: var(--violet-50);
+    --violet-surface: var(--violet-50);
     --violet-on-tint: var(--violet-700);
     --violet-line: var(--violet-200);
     --violet-glow: rgba(139, 92, 246, 0.12);
@@ -335,6 +350,7 @@
     --magenta-fill-hover: var(--magenta-800);
     --magenta-on-fill: #ffffff;
     --magenta-tint: var(--magenta-50);
+    --magenta-surface: var(--magenta-50);
     --magenta-on-tint: var(--magenta-800);
     --magenta-line: var(--magenta-200);
     --magenta-glow: rgba(236, 72, 153, 0.12);
@@ -344,6 +360,7 @@
     --red-fill-hover: var(--red-800);
     --red-on-fill: #ffffff;
     --red-tint: var(--red-50);
+    --red-surface: var(--red-50);
     --red-on-tint: var(--red-700);
     --red-line: var(--red-200);
     --red-glow: rgba(239, 68, 68, 0.12);
@@ -355,17 +372,17 @@
     --red: var(--red-text);
 
     /* The corridor gradient — Bangladesh's green to India's saffron, never
-       a flag. DECORATIVE ONLY: arcs, the scroll-progress bar, highlights,
-       the hero band. White text on it bottoms out at 1.7:1 over the gold,
-       so it never carries text; a band that must carry white uses the
-       STRONG one, whose worst point is 5.0:1 (green-700 → saffron-700). */
+       a flag. Text on it is ALWAYS slate-950, in both themes (7.95 at the
+       green end, 12.08 over the gold, 9.39 at the saffron end) — never white
+       (1.67 over the gold). A button on it is a slate-950 fill with white
+       text, or a white surface card. There is no "strong" variant: the
+       700-level stops ran through an olive midpoint to brown. */
     --corridor-gradient: linear-gradient(
       90deg,
       var(--green-500),
       var(--saffron-400) 60%,
       var(--saffron-500)
     );
-    --corridor-gradient-strong: linear-gradient(90deg, var(--green-700), var(--saffron-700));
 
     /* Backdrops, glow, scrim, shadows. */
     --grid: rgba(195, 198, 215, 0.34);
@@ -445,7 +462,10 @@
   --accent-line: rgba(0, 74, 198, 0.3);
 
   /* Semantic tokens per hue. A component picks a ROLE here, never a raw
-     step — text / fill + on-fill / tint + on-tint / line / glow. The
+     step — text / fill + on-fill / tint + on-tint / surface / line / glow.
+     `-tint` is for CHIPS; `-surface` is for a LARGE tinted area (a scene,
+     a section band): in dark it is the page navy mixed with the hue, so a
+     saffron scene is not a brown panel and the theme stays navy-based. The
      steps behind them follow the rules of 2026-09-21: light text is 700
      for saffron, green, teal, magenta and red and 600 for blue and violet;
      dark text is 400 everywhere; primary fills are blue-600 + white;
@@ -456,6 +476,7 @@
   --blue-fill-hover: var(--blue-700);
   --blue-on-fill: #ffffff;
   --blue-tint: var(--blue-50);
+  --blue-surface: var(--blue-50);
   --blue-on-tint: var(--blue-700);
   --blue-line: var(--blue-200);
   --blue-glow: rgba(59, 130, 246, 0.12);
@@ -465,6 +486,7 @@
   --saffron-fill-hover: var(--saffron-500);
   --saffron-on-fill: #020617;
   --saffron-tint: var(--saffron-50);
+  --saffron-surface: var(--saffron-50);
   --saffron-on-tint: var(--saffron-700);
   --saffron-line: var(--saffron-200);
   --saffron-glow: rgba(245, 158, 11, 0.12);
@@ -474,6 +496,7 @@
   --green-fill-hover: var(--green-800);
   --green-on-fill: #ffffff;
   --green-tint: var(--green-50);
+  --green-surface: var(--green-50);
   --green-on-tint: var(--green-700);
   --green-line: var(--green-200);
   --green-glow: rgba(16, 185, 129, 0.12);
@@ -483,6 +506,7 @@
   --teal-fill-hover: var(--teal-800);
   --teal-on-fill: #ffffff;
   --teal-tint: var(--teal-50);
+  --teal-surface: var(--teal-50);
   --teal-on-tint: var(--teal-700);
   --teal-line: var(--teal-200);
   --teal-glow: rgba(20, 184, 166, 0.12);
@@ -492,6 +516,7 @@
   --violet-fill-hover: var(--violet-700);
   --violet-on-fill: #ffffff;
   --violet-tint: var(--violet-50);
+  --violet-surface: var(--violet-50);
   --violet-on-tint: var(--violet-700);
   --violet-line: var(--violet-200);
   --violet-glow: rgba(139, 92, 246, 0.12);
@@ -501,6 +526,7 @@
   --magenta-fill-hover: var(--magenta-800);
   --magenta-on-fill: #ffffff;
   --magenta-tint: var(--magenta-50);
+  --magenta-surface: var(--magenta-50);
   --magenta-on-tint: var(--magenta-800);
   --magenta-line: var(--magenta-200);
   --magenta-glow: rgba(236, 72, 153, 0.12);
@@ -510,6 +536,7 @@
   --red-fill-hover: var(--red-800);
   --red-on-fill: #ffffff;
   --red-tint: var(--red-50);
+  --red-surface: var(--red-50);
   --red-on-tint: var(--red-700);
   --red-line: var(--red-200);
   --red-glow: rgba(239, 68, 68, 0.12);
@@ -521,17 +548,17 @@
   --red: var(--red-text);
 
   /* The corridor gradient — Bangladesh's green to India's saffron, never
-     a flag. DECORATIVE ONLY: arcs, the scroll-progress bar, highlights,
-     the hero band. White text on it bottoms out at 1.7:1 over the gold,
-     so it never carries text; a band that must carry white uses the
-     STRONG one, whose worst point is 5.0:1 (green-700 → saffron-700). */
+     a flag. Text on it is ALWAYS slate-950, in both themes (7.95 at the
+     green end, 12.08 over the gold, 9.39 at the saffron end) — never white
+     (1.67 over the gold). A button on it is a slate-950 fill with white
+     text, or a white surface card. There is no "strong" variant: the
+     700-level stops ran through an olive midpoint to brown. */
   --corridor-gradient: linear-gradient(
     90deg,
     var(--green-500),
     var(--saffron-400) 60%,
     var(--saffron-500)
   );
-  --corridor-gradient-strong: linear-gradient(90deg, var(--green-700), var(--saffron-700));
 
   /* Backdrops, glow, scrim, shadows. */
   --grid: rgba(195, 198, 215, 0.34);
@@ -610,7 +637,10 @@
   --accent-line: rgba(37, 99, 235, 0.42);
 
   /* Semantic tokens per hue. A component picks a ROLE here, never a raw
-     step — text / fill + on-fill / tint + on-tint / line / glow. The
+     step — text / fill + on-fill / tint + on-tint / surface / line / glow.
+     `-tint` is for CHIPS; `-surface` is for a LARGE tinted area (a scene,
+     a section band): in dark it is the page navy mixed with the hue, so a
+     saffron scene is not a brown panel and the theme stays navy-based. The
      steps behind them follow the rules of 2026-09-21: light text is 700
      for saffron, green, teal, magenta and red and 600 for blue and violet;
      dark text is 400 everywhere; primary fills are blue-600 + white;
@@ -621,6 +651,7 @@
   --blue-fill-hover: var(--blue-700);
   --blue-on-fill: #ffffff;
   --blue-tint: var(--blue-950);
+  --blue-surface: color-mix(in oklab, var(--page) 86%, var(--blue-500) 14%);
   --blue-on-tint: var(--blue-400);
   --blue-line: var(--blue-800);
   --blue-glow: rgba(123, 175, 234, 0.28);
@@ -630,6 +661,7 @@
   --saffron-fill-hover: var(--saffron-500);
   --saffron-on-fill: #020617;
   --saffron-tint: var(--saffron-950);
+  --saffron-surface: color-mix(in oklab, var(--page) 86%, var(--saffron-500) 14%);
   --saffron-on-tint: var(--saffron-400);
   --saffron-line: var(--saffron-800);
   --saffron-glow: rgba(251, 191, 36, 0.28);
@@ -639,6 +671,7 @@
   --green-fill-hover: var(--green-800);
   --green-on-fill: #ffffff;
   --green-tint: var(--green-950);
+  --green-surface: color-mix(in oklab, var(--page) 86%, var(--green-500) 14%);
   --green-on-tint: var(--green-400);
   --green-line: var(--green-800);
   --green-glow: rgba(52, 211, 153, 0.28);
@@ -648,6 +681,7 @@
   --teal-fill-hover: var(--teal-800);
   --teal-on-fill: #ffffff;
   --teal-tint: var(--teal-950);
+  --teal-surface: color-mix(in oklab, var(--page) 86%, var(--teal-500) 14%);
   --teal-on-tint: var(--teal-400);
   --teal-line: var(--teal-800);
   --teal-glow: rgba(45, 212, 191, 0.28);
@@ -657,6 +691,7 @@
   --violet-fill-hover: var(--violet-700);
   --violet-on-fill: #ffffff;
   --violet-tint: var(--violet-950);
+  --violet-surface: color-mix(in oklab, var(--page) 86%, var(--violet-500) 14%);
   --violet-on-tint: var(--violet-400);
   --violet-line: var(--violet-800);
   --violet-glow: rgba(167, 139, 250, 0.28);
@@ -666,6 +701,7 @@
   --magenta-fill-hover: var(--magenta-800);
   --magenta-on-fill: #ffffff;
   --magenta-tint: var(--magenta-950);
+  --magenta-surface: color-mix(in oklab, var(--page) 86%, var(--magenta-500) 14%);
   --magenta-on-tint: var(--magenta-400);
   --magenta-line: var(--magenta-800);
   --magenta-glow: rgba(244, 114, 182, 0.28);
@@ -675,6 +711,7 @@
   --red-fill-hover: var(--red-800);
   --red-on-fill: #ffffff;
   --red-tint: var(--red-950);
+  --red-surface: color-mix(in oklab, var(--page) 86%, var(--red-500) 14%);
   --red-on-tint: var(--red-400);
   --red-line: var(--red-800);
   --red-glow: rgba(248, 113, 113, 0.28);
@@ -686,17 +723,17 @@
   --red: var(--red-text);
 
   /* The corridor gradient — Bangladesh's green to India's saffron, never
-     a flag. DECORATIVE ONLY: arcs, the scroll-progress bar, highlights,
-     the hero band. White text on it bottoms out at 1.7:1 over the gold,
-     so it never carries text; a band that must carry white uses the
-     STRONG one, whose worst point is 5.0:1 (green-700 → saffron-700). */
+     a flag. Text on it is ALWAYS slate-950, in both themes (7.95 at the
+     green end, 12.08 over the gold, 9.39 at the saffron end) — never white
+     (1.67 over the gold). A button on it is a slate-950 fill with white
+     text, or a white surface card. There is no "strong" variant: the
+     700-level stops ran through an olive midpoint to brown. */
   --corridor-gradient: linear-gradient(
     90deg,
     var(--green-500),
     var(--saffron-400) 60%,
     var(--saffron-500)
   );
-  --corridor-gradient-strong: linear-gradient(90deg, var(--green-700), var(--saffron-700));
 
   /* Backdrops, glow, scrim, shadows. */
   --grid: rgba(148, 163, 184, 0.07);

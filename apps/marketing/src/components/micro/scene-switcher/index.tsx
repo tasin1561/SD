@@ -24,7 +24,9 @@ export interface Scene {
 
 /**
  * 11 · Scene switcher. Picking a thumbnail swaps art, content, ghost word
- * and the tint in ONE 500 ms move: the panels slide out toward the old
+ * and the tint in ONE 500 ms move. The background is `--{hue}-surface` —
+ * in dark the page navy mixed with the hue plus its glow, never the 950
+ * (a saffron-950 scene was a brown panel) — the panels slide out toward the old
  * scene, swap, and slide in from the new one. The services showcase is
  * this component with four scenes.
  */
@@ -56,7 +58,8 @@ export function SceneSwitcher({
   const scene = scenes[shown] ?? scenes[0];
   if (!scene) return <div className="mi mi-scene" />;
   const style = {
-    '--scene-tint': `var(--${scene.hue}-tint)`,
+    '--scene-tint': `var(--${scene.hue}-surface)`,
+    '--scene-glow': `var(--${scene.hue}-glow)`,
     '--scene-ink': `var(--${scene.hue}-text)`,
     '--dir': `${dir.current}px`,
   } as CSSProperties;

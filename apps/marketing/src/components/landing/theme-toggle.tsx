@@ -1,9 +1,9 @@
 'use client';
 
-import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState, type ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { PAGE_BG, type ThemeName } from '@/lib/theme-colors';
+import { ThemeMorphIcon } from '@/components/micro/touches';
 
 function resolveInitial(): ThemeName {
   if (typeof document === 'undefined') return 'dark';
@@ -75,7 +75,8 @@ export function ThemeToggle({ className }: { className?: string }): ReactElement
         className,
       )}
     >
-      {isDark ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
+      {/* one icon that MORPHS (touch 15) — the sun's rays retract into the crescent */}
+      <ThemeMorphIcon mode={isDark ? 'dark' : 'light'} />
     </button>
   );
 }

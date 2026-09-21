@@ -6,10 +6,10 @@ import '../micro.css';
 import './connector-draw.css';
 
 /**
- * 15 · Connector draw. A horizontal SVG rail with `steps` nodes; when the
- * element scrolls into view the ink line draws left to right and the
- * nodes light in sequence. `pathLength="1"` makes the dash math width-
- * independent. Reduced motion: drawn at once.
+ * 15b · Connector draw. A rail with `steps` nodes; when it scrolls into
+ * view the ink grows left to right and the nodes light in sequence. Built
+ * from HTML boxes rather than a stretched SVG, so the nodes are circles at
+ * every width. Reduced motion: drawn at once.
  */
 export function ConnectorDraw({
   steps,
@@ -19,7 +19,7 @@ export function ConnectorDraw({
   className?: string;
 }): ReactElement {
   const [drawn, setDrawn] = useState(false);
-  const ref = useRef<SVGSVGElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -39,38 +39,27 @@ export function ConnectorDraw({
     io.observe(el);
     return () => io.disconnect();
   }, []);
-  const w = 100;
-  const xs = Array.from({ length: steps }, (_, i) =>
-    steps === 1 ? w / 2 : (i / (steps - 1)) * (w - 8) + 4,
-  );
+  // Nodes sit at the centre of `steps` equal columns, so they line up with
+  // a `grid-cols-{steps}` of labels underneath.
+  const pct = (i: number): string => `${(((i + 0.5) / steps) * 100).toFixed(3)}%`;
+  const edge = `${((0.5 / steps) * 100).toFixed(3)}%`;
   return (
-    <svg
+    <div
       ref={ref}
       className={`mi mi-conn ${className ?? ''}`}
       data-drawn={drawn}
-      viewBox={`0 0 ${w} 12`}
-      preserveAspectRatio="none"
       aria-hidden
+      style={{ '--x0': edge, '--x1': edge } as CSSProperties}
     >
-      <line className="mi-conn__line" x1={xs[0] ?? 0} x2={xs[xs.length - 1] ?? w} y1="6" y2="6" />
-      <line
-        className="mi-conn__ink"
-        x1={xs[0] ?? 0}
-        x2={xs[xs.length - 1] ?? w}
-        y1="6"
-        y2="6"
-        pathLength={1}
-      />
-      {xs.map((x, i) => (
-        <circle
+      <span className="mi-conn__line" />
+      <span className="mi-conn__ink" />
+      {Array.from({ length: steps }, (_, i) => (
+        <span
           key={i}
           className="mi-conn__node"
-          cx={x}
-          cy="6"
-          r="3.5"
-          style={{ '--i': i } as CSSProperties}
+          style={{ '--x': pct(i), '--i': i } as CSSProperties}
         />
       ))}
-    </svg>
+    </div>
   );
 }

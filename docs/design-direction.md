@@ -64,16 +64,17 @@ gradients and the 3D scene. Body and heading text stay neutral;
 accent-coloured text is for small labels, links and chips only.
 
 **Corridor gradient** — `--corridor-gradient: linear-gradient(90deg,
-green-500, saffron-400 60%, saffron-500)`, decorative only (arcs, the
-scroll-progress line, highlights; white text bottoms out at 1.67:1 over
-the gold). `--corridor-gradient-strong` (green-700 → saffron-700, white
-≥ 5.02:1 everywhere) is for bands that carry white text.
+green-500, saffron-400 60%, saffron-500)` for arcs, the scroll-progress
+line, highlights and bands. Text on it is ALWAYS slate-950 (≥ 7.95 in both
+themes); never white (1.67 over the gold). A button on it is a slate-950
+fill with white text, or a white surface card. There is no "strong"
+variant — its 700-level midpoint was olive running to brown.
 
 ### Typography
 
 | Slot | Font | Why |
 |---|---|---|
-| Headings AND body | **Plus Jakarta Sans** (variable, latin, 27 KB) — PROVISIONAL; Manrope (25 KB) is the other candidate | one family, geometric with soft terminals, strong numerals; headings follow `--font-sans`, never a face by name |
+| Headings AND body | **Plus Jakarta Sans** (variable, latin, 27 KB) — FINAL | one family, geometric with soft terminals, strong numerals; headings follow `--font-sans-face`, never a face by name |
 | Identifiers / figures | **JetBrains Mono** | waybills, serials, SKUs only; `preload: false` |
 
 Fonts are COMMITTED (`next/font/local`), never fetched at build. The

@@ -222,14 +222,10 @@ export function grade(r: number): 'AA' | 'AA-large' | 'fail' {
   return 'fail';
 }
 
-/** The corridor gradient — Bangladesh's green to India's saffron. ONE declaration ships. */
+/** The corridor gradient — Bangladesh's green to India's saffron. ONE declaration ships; text on it is always slate-950. */
 export const CORRIDOR = {
   /** `--corridor-gradient`: decorative only, never carries text. */
   decorative: `linear-gradient(90deg, ${HUES[2]?.scale[500]}, ${HUES[1]?.scale[400]} 60%, ${HUES[1]?.scale[500]})`,
-  /** The same three stops interpolated in OKLCH — rendered once beside it for the owner to compare. */
-  decorativeOklch: `linear-gradient(90deg in oklch, ${HUES[2]?.scale[500]}, ${HUES[1]?.scale[400]} 60%, ${HUES[1]?.scale[500]})`,
-  /** `--corridor-gradient-strong`: 700-level stops for a band that carries WHITE text. */
-  strong: `linear-gradient(90deg, ${HUES[2]?.scale[700]}, ${HUES[1]?.scale[700]})`,
 } as const;
 
 /** The stops, for the contrast table below the bars. */
@@ -238,10 +234,6 @@ export const CORRIDOR_STOPS = {
     [HUES[2]?.scale[500] ?? '#000000', 0],
     [HUES[1]?.scale[400] ?? '#000000', 0.6],
     [HUES[1]?.scale[500] ?? '#000000', 1],
-  ] as [string, number][],
-  strong: [
-    [HUES[2]?.scale[700] ?? '#000000', 0],
-    [HUES[1]?.scale[700] ?? '#000000', 1],
   ] as [string, number][],
 };
 

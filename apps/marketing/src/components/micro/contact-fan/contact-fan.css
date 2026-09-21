@@ -1,0 +1,100 @@
+/* 9 · Contact fan — ONE component for the site and the gallery. LABELLED
+   rows (people must see the number and the address) that stagger out from
+   the button along a slight arc and collapse back in reverse. */
+.mi-fan {
+  position: relative;
+  display: inline-block;
+  width: 3.5rem;
+  height: 3.5rem;
+}
+.mi-fan--bar {
+  width: 0;
+  height: 0;
+}
+.mi-fan__toggle {
+  position: relative;
+  z-index: 2;
+  display: inline-grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  box-shadow: var(--shadow-hud);
+  transition:
+    background-color calc(200 * var(--d)),
+    transform calc(200 * var(--d));
+}
+.mi-fan__toggle:hover {
+  background: var(--blue-fill-hover);
+}
+.mi-fan[data-open='true'] .mi-fan__toggle {
+  background: var(--slate-700);
+  transform: rotate(90deg);
+}
+.mi-fan__list {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+.mi-fan__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0 1rem 0 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  transform: translate(var(--fx, 0), 1.5rem) scale(0.85);
+  transition:
+    transform calc(320 * var(--d)) cubic-bezier(0.2, 1.1, 0.3, 1),
+    opacity calc(180 * var(--d));
+  /* closing: the LAST item leaves first (reverse stagger) */
+  transition-delay: calc((var(--n) - 1 - var(--i)) * 40 * var(--d));
+}
+.mi-fan[data-open='true'] .mi-fan__list {
+  pointer-events: auto;
+}
+.mi-fan[data-open='true'] .mi-fan__item {
+  opacity: 1;
+  transform: translate(var(--fx, 0), 0) scale(1);
+  transition-delay: calc(var(--i) * 40 * var(--d));
+}
+.mi-fan__item[data-phase='copied'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.mi-fan__item[data-phase='failed'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.mi-fan__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  color: var(--icon, var(--blue-text));
+  background: color-mix(in oklab, var(--icon, var(--blue-text)) 14%, transparent);
+}
+.mi-fan__sub {
+  font-weight: 500;
+  color: var(--fg-muted);
+}

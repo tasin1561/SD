@@ -23,7 +23,7 @@ const scales = readFileSync(join(ROOT, 'src/app/scales.css'), 'utf8');
 const colors = readFileSync(join(ROOT, 'src/lib/theme-colors.ts'), 'utf8');
 
 const HUES = ['blue', 'saffron', 'green', 'teal', 'violet', 'magenta', 'red'];
-const ROLES = ['text', 'fill', 'fill-hover', 'on-fill', 'tint', 'on-tint', 'line', 'glow'];
+const ROLES = ['text', 'fill', 'fill-hover', 'on-fill', 'tint', 'on-tint', 'surface', 'line', 'glow'];
 
 /** Extract `--name: value;` pairs from the block that follows `selector`. */
 function block(css, selector) {

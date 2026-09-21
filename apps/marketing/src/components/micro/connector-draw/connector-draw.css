@@ -1,34 +1,49 @@
-/* 15 · Connector draw — the line joining a sequence of steps draws itself
-   as the visitor scrolls to it; each step node lights in turn. */
+/* 15b · Connector draw — an HTML rail (no SVG viewBox to squash the nodes):
+   the ink line grows left to right; the nodes are true circles at every
+   width and light in sequence. */
 .mi-conn {
   position: relative;
+  height: 1.5rem;
+}
+.mi-conn__line,
+.mi-conn__ink {
+  position: absolute;
+  top: calc(50% - 1px);
+  height: 2px;
+  left: var(--x0);
+  right: var(--x1);
+  border-radius: 9999px;
 }
 .mi-conn__line {
-  stroke: var(--line-strong);
-  stroke-width: 2;
-  fill: none;
+  background: var(--line-strong);
 }
 .mi-conn__ink {
-  stroke: var(--corridor-gradient-stroke, var(--blue-fill));
-  stroke-width: 2;
-  fill: none;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  transition: stroke-dashoffset calc(1200 * var(--d)) cubic-bezier(0.3, 0.6, 0.3, 1);
+  background: var(--corridor-gradient);
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform calc(1200 * var(--d)) cubic-bezier(0.3, 0.6, 0.3, 1);
 }
 .mi-conn[data-drawn='true'] .mi-conn__ink {
-  stroke-dashoffset: 0;
+  transform: scaleX(1);
 }
 .mi-conn__node {
-  fill: var(--surface-2);
-  stroke: var(--line-strong);
-  stroke-width: 2;
+  position: absolute;
+  top: calc(50% - 0.375rem);
+  left: var(--x);
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: -0.375rem;
+  border-radius: 9999px;
+  background: var(--surface-2);
+  border: 2px solid var(--line-strong);
   transition:
-    fill calc(200 * var(--d)),
-    stroke calc(200 * var(--d));
+    background-color calc(200 * var(--d)),
+    border-color calc(200 * var(--d)),
+    transform calc(200 * var(--d));
   transition-delay: calc(var(--i) * 300 * var(--d));
 }
 .mi-conn[data-drawn='true'] .mi-conn__node {
-  fill: var(--green-fill);
-  stroke: var(--green-fill);
+  background: var(--green-fill);
+  border-color: var(--green-fill);
+  transform: scale(1.15);
 }

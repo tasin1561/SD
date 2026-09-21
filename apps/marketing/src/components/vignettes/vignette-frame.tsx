@@ -44,7 +44,7 @@ export function VignetteFrame({
         </span>
         <span className="flex items-center gap-1">
           <span className="tabular text-[11px] text-fg-faint">
-            {beats.index + 1}/{Math.max(1, beats.index + 1)}
+            {beats.index + 1}/{beats.count}
           </span>
           <button
             type="button"

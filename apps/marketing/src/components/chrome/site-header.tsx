@@ -2,21 +2,23 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type ReactElement } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Clock, Menu, Phone, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { platform } from '@/content/site';
+import { business, platform } from '@/content/site';
 import { ThemeToggle } from '@/components/landing/theme-toggle';
+import { ExpandingTrackField } from '@/components/micro/expanding-track-field';
 import { ScrollProgress } from './scroll-progress';
 
 /**
- * The header. Logo + wordmark, five section links on `lg`, ONE filled CTA
- * that survives on every width beside the hamburger (Shiprocket does this;
- * CarryBee's three header CTAs are the anti-pattern), the theme toggle,
- * and a drawer below `lg` carrying the links, the sign-ins and Track.
+ * The header. Logo + wordmark, five section links on `lg`, the expanding
+ * TRACK field beside the theme toggle (a courier site tracks from the
+ * header — the utility bar's text link is the secondary), ONE filled CTA
+ * that survives on every width beside the hamburger, and a drawer below
+ * `lg`: rows ≥ 48 px, the CTA, the sign-ins, the hotline and hours, in a
+ * body that SCROLLS inside the safe area so nothing is cut at 320×568.
  *
- * Sticky, with a backdrop blur only once scrolled — a blur at rest over the
- * hero costs paint for nothing. The corridor-gradient progress line sits
- * on its bottom edge (`ScrollProgress` writes the variable it reads).
+ * Sticky, blurred only once scrolled; the corridor-gradient progress line
+ * sits on its bottom edge (`ScrollProgress` writes the variable it reads).
  */
 export function SiteHeader(): ReactElement {
   const [scrolled, setScrolled] = useState(false);
@@ -43,16 +45,21 @@ export function SiteHeader(): ReactElement {
     };
   }, [open]);
 
+  const track = (awb: string): void => {
+    window.location.assign(`${platform.nav.track.href}?awb=${encodeURIComponent(awb)}`);
+  };
+
   const linkClass =
     'rounded-md px-3 py-2 text-[14px] font-medium text-fg-body transition-colors hover:bg-surface-3 hover:text-fg-strong';
+  const drawerRow =
+    'safe-x flex min-h-12 items-center text-[17px] font-medium text-fg-strong hover:bg-surface-3';
 
   return (
     <header
       data-site-header
       className={cn(
         // z-50: the drawer is a descendant, so it can never paint above a
-        // sibling with a higher z — the mobile bottom bar (z-40) sat over
-        // the drawer's sign-in buttons until the header itself outranked it.
+        // sibling with a higher z — the mobile bottom bar (z-40).
         'sticky top-0 z-50 border-b transition-colors duration-200',
         scrolled ? 'border-line backdrop-blur-md' : 'border-line/60',
       )}
@@ -68,7 +75,6 @@ export function SiteHeader(): ReactElement {
           className="flex items-center gap-2.5 text-[18px] font-bold tracking-tight text-fg-strong"
           aria-label="Skydrop home"
         >
-          {/* A plain <img>: static export, a 24px SVG — the optimiser has nothing to do. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/brand/skydrop-icon.svg"
@@ -91,9 +97,9 @@ export function SiteHeader(): ReactElement {
         </nav>
 
         <div className="flex items-center gap-1.5">
-          {/* Wrapped rather than `hidden sm:inline-flex` on the toggle: it
-              carries its own `inline-flex`, and two display utilities on one
-              element resolve by source order, not by breakpoint. */}
+          <span className="hidden lg:block">
+            <ExpandingTrackField onSubmit={track} />
+          </span>
           <span className="hidden sm:block">
             <ThemeToggle />
           </span>
@@ -140,7 +146,7 @@ export function SiteHeader(): ReactElement {
             open ? 'translate-x-0' : 'translate-x-full',
           )}
         >
-          <div className="safe-x flex h-16 items-center justify-between border-b border-line">
+          <div className="safe-x flex h-16 shrink-0 items-center justify-between border-b border-line">
             <span className="text-[13px] font-medium uppercase tracking-[0.08em] text-fg-muted">
               Menu
             </span>
@@ -156,36 +162,62 @@ export function SiteHeader(): ReactElement {
               </button>
             </div>
           </div>
-          <nav className="flex flex-col divide-y divide-line" aria-label="Sections">
-            {platform.nav.primary.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className="safe-x flex min-h-12 items-center text-[16px] font-medium text-fg-strong hover:bg-surface-3"
-              >
-                {l.label}
-              </Link>
-            ))}
-            <a
-              href={platform.nav.track.href}
-              onClick={() => setOpen(false)}
-              className="safe-x flex min-h-12 items-center text-[16px] font-medium text-fg-strong hover:bg-surface-3"
+          {/* Everything below the bar scrolls, and ends inside the safe area. */}
+          <div className="safe-b min-h-0 flex-1 overflow-y-auto pb-6">
+            <nav
+              className="flex flex-col divide-y divide-line border-b border-line"
+              aria-label="Sections"
             >
-              {platform.nav.track.label}
-            </a>
-          </nav>
-          <div className="safe-x safe-b mt-auto flex flex-col gap-2.5 border-t border-line py-5">
-            {platform.nav.signIn.map((l) => (
+              {platform.nav.primary.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  className={drawerRow}
+                >
+                  {l.label}
+                </Link>
+              ))}
               <a
-                key={l.href}
-                href={l.href}
+                href={platform.nav.track.href}
                 onClick={() => setOpen(false)}
-                className="inline-flex min-h-11 items-center justify-center rounded-md border border-border-control px-4 text-[15px] font-medium text-fg-strong hover:bg-surface-3"
+                className={drawerRow}
               >
-                {l.label}
+                {platform.nav.track.label}
               </a>
-            ))}
+            </nav>
+            <div className="safe-x flex flex-col gap-3 py-5">
+              <Link
+                href={platform.nav.cta.href}
+                onClick={() => setOpen(false)}
+                className="inline-flex min-h-12 items-center justify-center rounded-md bg-blue-fill px-4 text-[16px] font-semibold text-blue-on-fill"
+              >
+                {platform.nav.cta.label}
+              </Link>
+              {platform.nav.signIn.map((l) => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  className="inline-flex min-h-12 items-center justify-center rounded-md border border-border-control px-4 text-[16px] font-medium text-fg-strong hover:bg-surface-3"
+                >
+                  {l.label}
+                </a>
+              ))}
+            </div>
+            <div className="safe-x flex flex-col gap-2 border-t border-line py-4 text-[15px] text-fg-body">
+              <a
+                href={business.hotlineHref}
+                className="inline-flex min-h-11 items-center gap-2 font-medium text-fg-strong"
+              >
+                <Phone size={16} aria-hidden="true" className="text-blue-text" />
+                <span className="tabular">{business.hotline}</span>
+              </a>
+              <span className="inline-flex items-center gap-2 text-fg-muted">
+                <Clock size={16} aria-hidden="true" />
+                {business.hoursDays} · {business.hoursTime} ({business.hoursZone})
+              </span>
+            </div>
           </div>
         </div>
       </div>

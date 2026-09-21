@@ -1,12 +1,13 @@
 import type { ReactElement } from 'react';
 
 /**
- * A thin ribbon saying the page carries placeholder content.
- *
- * Rendered ONLY when `NEXT_PUBLIC_PLACEHOLDER_RIBBON=1` at BUILD time —
- * under `output: 'export'` there is no runtime env, so this is a
- * constant the bundler folds away, and a production build carries
- * neither the element nor the string. `e2e/export.spec.ts` proves both.
+ * A slim strip at the very TOP of the page saying the build carries
+ * placeholder content. Static and first in the body — never a floating
+ * pill, which covered swatch labels, drawer buttons and hero cards in
+ * every review screenshot. Rendered ONLY when
+ * `NEXT_PUBLIC_PLACEHOLDER_RIBBON=1` at BUILD time (`build:preview`): under
+ * `output: 'export'` that is a constant the bundler folds away, so a
+ * production build carries neither the element nor the string.
  */
 export function PlaceholderRibbon(): ReactElement | null {
   if (process.env.NEXT_PUBLIC_PLACEHOLDER_RIBBON !== '1') return null;
@@ -14,7 +15,7 @@ export function PlaceholderRibbon(): ReactElement | null {
     <div
       data-placeholder-ribbon
       role="status"
-      className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] left-1/2 z-[60] -translate-x-1/2 rounded-full border border-saffron-line bg-saffron-tint px-3 py-1 text-[12px] font-medium text-saffron-on-tint shadow-[var(--shadow-2)] md:bottom-4"
+      className="w-full bg-saffron-fill px-3 py-1 text-center text-[12px] font-medium text-saffron-on-fill"
     >
       Preview build — placeholder content, not published figures
     </div>

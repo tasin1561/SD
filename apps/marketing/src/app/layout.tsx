@@ -11,10 +11,9 @@ import { themeInitScript } from '@/lib/theme-init';
 /**
  * Type stack — the COURIER redesign (2026-09-21).
  *
- *   Plus Jakarta Sans — headings AND body, one family (PROVISIONAL: the
- *                       owner is choosing between it and Manrope from the
- *                       swatch specimens; swapping is this file + one
- *                       woff2, because everything reads `--font-sans`).
+ *   Plus Jakarta Sans — headings AND body, one family (FINAL, owner
+ *                       2026-09-21; a swap would still be this file + one
+ *                       woff2, because everything reads `--font-sans-face`).
  *   JetBrains Mono    — IDENTIFIERS and FIGURES only: waybills, serials,
  *                       SKUs. `preload: false` — a 40 KB file for a handful
  *                       of identifiers must not sit on the critical path.
@@ -138,8 +137,8 @@ export default function RootLayout({ children }: { children: ReactNode }): React
         <a href="#main" className="skip-to-content">
           Skip to content
         </a>
-        {children}
         <PlaceholderRibbon />
+        {children}
       </body>
     </html>
   );
