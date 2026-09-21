@@ -1,0 +1,27 @@
+/* 12 · Odometer — a stat counts up in tabular digits; each digit column
+   rolls to its final value with a stagger from the right. */
+.mi-odo {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  line-height: 1;
+}
+.mi-odo__col {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+}
+.mi-odo__strip {
+  display: grid;
+  transform: translateY(calc(var(--n) * -1em));
+  transition: transform calc(900 * var(--d)) cubic-bezier(0.2, 0.9, 0.2, 1);
+  transition-delay: calc(var(--i) * 60 * var(--d));
+}
+.mi-odo__strip > span {
+  display: block;
+  height: 1em;
+}
+.mi-odo[data-armed='false'] .mi-odo__strip {
+  transform: translateY(0);
+  transition: none;
+}

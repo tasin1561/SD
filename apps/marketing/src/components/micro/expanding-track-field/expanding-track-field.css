@@ -1,0 +1,59 @@
+/* 7 · Expanding track field — a round icon stretches into a pill input;
+   the icon becomes ×; collapses back. */
+.mi-etf {
+  display: inline-flex;
+  align-items: center;
+  height: 2.75rem;
+  width: 2.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-2);
+  overflow: hidden;
+  transition:
+    width calc(320 * var(--d)) cubic-bezier(0.2, 0.8, 0.2, 1.1),
+    box-shadow calc(160 * var(--d));
+}
+.mi-etf[data-open='true'] {
+  width: min(22rem, 90vw);
+  box-shadow: 0 0 0 4px var(--blue-glow);
+}
+.mi-etf__toggle,
+.mi-etf__go {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2.65rem;
+  height: 2.65rem;
+  border-radius: 9999px;
+  color: var(--fg-strong);
+}
+.mi-etf__toggle svg {
+  transition: transform calc(220 * var(--d));
+}
+.mi-etf[data-open='true'] .mi-etf__toggle svg {
+  transform: rotate(90deg);
+}
+.mi-etf__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--fg-strong);
+  font: inherit;
+  font-family: var(--font-mono);
+  opacity: 0;
+  transition: opacity calc(160 * var(--d)) calc(120 * var(--d));
+}
+.mi-etf[data-open='true'] .mi-etf__input {
+  opacity: 1;
+}
+.mi-etf__go {
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  opacity: 0;
+  transition: opacity calc(160 * var(--d)) calc(160 * var(--d));
+}
+.mi-etf[data-open='true'] .mi-etf__go {
+  opacity: 1;
+}

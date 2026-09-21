@@ -38,6 +38,8 @@ export default defineConfig({
   ],
   webServer: {
     command: `node ../../scripts/serve-static.mjs out ${PORT}`,
+    // A render script may already be serving out/ on another port; this
+    // config always brings its own server on 3006 and tears it down.
     cwd: __dirname,
     url: `http://localhost:${PORT}/`,
     reuseExistingServer: false,

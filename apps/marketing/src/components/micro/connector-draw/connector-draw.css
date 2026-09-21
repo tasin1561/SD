@@ -1,0 +1,34 @@
+/* 15 · Connector draw — the line joining a sequence of steps draws itself
+   as the visitor scrolls to it; each step node lights in turn. */
+.mi-conn {
+  position: relative;
+}
+.mi-conn__line {
+  stroke: var(--line-strong);
+  stroke-width: 2;
+  fill: none;
+}
+.mi-conn__ink {
+  stroke: var(--corridor-gradient-stroke, var(--blue-fill));
+  stroke-width: 2;
+  fill: none;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset calc(1200 * var(--d)) cubic-bezier(0.3, 0.6, 0.3, 1);
+}
+.mi-conn[data-drawn='true'] .mi-conn__ink {
+  stroke-dashoffset: 0;
+}
+.mi-conn__node {
+  fill: var(--surface-2);
+  stroke: var(--line-strong);
+  stroke-width: 2;
+  transition:
+    fill calc(200 * var(--d)),
+    stroke calc(200 * var(--d));
+  transition-delay: calc(var(--i) * 300 * var(--d));
+}
+.mi-conn[data-drawn='true'] .mi-conn__node {
+  fill: var(--green-fill);
+  stroke: var(--green-fill);
+}

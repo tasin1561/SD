@@ -1,0 +1,133 @@
+/* 2 · Van drive-off — the ONE real in-page submit. The pill's label becomes
+   a parcel, the pill shrinks into a van, the van drives off right and a
+   success pill is revealed behind it. */
+.mi-van {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 12rem;
+  min-height: 2.75rem;
+}
+.mi-van__btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.5rem;
+  border-radius: 9999px;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  font-weight: 600;
+  overflow: hidden;
+  transition:
+    background-color calc(200 * var(--d)),
+    transform calc(300 * var(--d)) cubic-bezier(0.4, 0, 0.6, 1),
+    opacity calc(200 * var(--d));
+}
+.mi-van__btn:hover {
+  background: var(--blue-fill-hover);
+}
+.mi-van__label,
+.mi-van__parcel {
+  transition:
+    transform calc(240 * var(--d)),
+    opacity calc(200 * var(--d));
+}
+.mi-van__parcel {
+  position: absolute;
+  opacity: 0;
+  transform: translateY(14px);
+}
+.mi-van[data-phase='busy'] .mi-van__label {
+  opacity: 0;
+  transform: translateY(-14px);
+}
+.mi-van[data-phase='busy'] .mi-van__parcel {
+  opacity: 1;
+  transform: none;
+}
+.mi-van[data-phase='success'] .mi-van__btn,
+.mi-van[data-phase='error'] .mi-van__btn {
+  transform: scaleX(0.35);
+  opacity: 0;
+  pointer-events: none;
+}
+.mi-van__truck {
+  position: absolute;
+  left: 50%;
+  width: 56px;
+  height: 32px;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  color: var(--blue-fill);
+}
+.mi-van[data-phase='success'] .mi-van__truck {
+  animation: mi-van-drive calc(900 * var(--d)) cubic-bezier(0.5, 0, 0.9, 0.4) forwards;
+}
+@keyframes mi-van-drive {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(260%);
+  }
+}
+.mi-van__lines {
+  opacity: 0;
+}
+.mi-van[data-phase='success'] .mi-van__lines {
+  animation: mi-van-lines calc(900 * var(--d)) ease-out forwards;
+}
+@keyframes mi-van-lines {
+  0%,
+  30% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.mi-van__done {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* a status overlay must never eat the click on the button under it */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+  font-weight: 600;
+  opacity: 0;
+  transform: scaleX(0.6);
+  transition:
+    opacity calc(240 * var(--d)),
+    transform calc(300 * var(--d)) cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition-delay: calc(500 * var(--d));
+}
+.mi-van[data-phase='success'] .mi-van__done {
+  opacity: 1;
+  transform: none;
+}
+.mi-van[data-phase='error'] .mi-van__done {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0ms;
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}

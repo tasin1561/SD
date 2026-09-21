@@ -1,0 +1,53 @@
+/* 6 · Label-into-parcel — HOVER FEEDBACK ONLY (the contact "Send" is a
+   mailto/WhatsApp link, so there is no busy or success). The parcel's
+   flaps open, the label drops in, the flaps close. */
+.mi-lip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem 0 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-control);
+  color: var(--fg-strong);
+  font-weight: 600;
+  overflow: hidden;
+  text-decoration: none;
+}
+.mi-lip__box {
+  width: 26px;
+  height: 26px;
+  overflow: visible;
+}
+.mi-lip__flap {
+  transform-origin: 50% 100%;
+  transition: transform calc(220 * var(--d)) ease-out;
+}
+.mi-lip__label {
+  display: inline-block;
+  transition:
+    transform calc(360 * var(--d)) cubic-bezier(0.5, 0, 1, 0.6),
+    opacity calc(200 * var(--d)) calc(160 * var(--d));
+}
+.mi-lip:hover .mi-lip__flap,
+.mi-lip:focus-visible .mi-lip__flap {
+  transform: rotateX(-140deg) scaleY(0.4);
+}
+.mi-lip:hover .mi-lip__label,
+.mi-lip:focus-visible .mi-lip__label {
+  transform: translate(-2.2rem, 0.3rem) scale(0.5);
+  opacity: 0;
+}
+.mi-lip__ghost {
+  position: absolute;
+  left: 3.2rem;
+  right: 1.1rem;
+  opacity: 0;
+  font-weight: 600;
+  transition: opacity calc(160 * var(--d)) calc(360 * var(--d));
+}
+.mi-lip:hover .mi-lip__ghost,
+.mi-lip:focus-visible .mi-lip__ghost {
+  opacity: 1;
+}

@@ -1,0 +1,81 @@
+/* 9 · Radial contact fan — a round button whose channels fan out along an
+   arc ABOVE it (so it never leaves a phone's viewport), staggered. */
+.mi-fan {
+  position: relative;
+  width: 3.5rem;
+  height: 3.5rem;
+}
+.mi-fan__toggle {
+  position: relative;
+  z-index: 2;
+  display: inline-grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  box-shadow: var(--shadow-hud);
+  transition:
+    background-color calc(200 * var(--d)),
+    transform calc(200 * var(--d));
+}
+.mi-fan__toggle:hover {
+  background: var(--blue-fill-hover);
+}
+.mi-fan[data-open='true'] .mi-fan__toggle {
+  background: var(--slate-700);
+  transform: rotate(90deg);
+}
+.mi-fan__item {
+  position: absolute;
+  left: 0.25rem;
+  top: 0.25rem;
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  transform: translate(0, 0) scale(0.4);
+  transition:
+    transform calc(360 * var(--d)) cubic-bezier(0.2, 1.1, 0.3, 1),
+    opacity calc(200 * var(--d));
+  transition-delay: calc(var(--i) * 40 * var(--d));
+  pointer-events: none;
+}
+.mi-fan[data-open='true'] .mi-fan__item {
+  opacity: 1;
+  transform: translate(var(--fx), var(--fy)) scale(1);
+  pointer-events: auto;
+}
+.mi-fan__item[data-phase='copied'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.mi-fan__label {
+  position: absolute;
+  right: calc(100% + 0.5rem);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--fg-strong);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  padding: 0.2rem 0.5rem;
+  opacity: 0;
+  transition: opacity calc(160 * var(--d));
+}
+.mi-fan__item:hover .mi-fan__label,
+.mi-fan__item:focus-visible .mi-fan__label,
+.mi-fan__item[data-phase]:not([data-phase='idle']) .mi-fan__label {
+  opacity: 1;
+}

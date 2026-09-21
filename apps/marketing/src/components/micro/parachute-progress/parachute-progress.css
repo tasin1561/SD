@@ -1,0 +1,146 @@
+/* 1 · Parachute progress — a round button whose ring UNROLLS into a bar
+   while a parcel descends under a canopy; landing = the result. The
+   general loading motif and the quote "Calculate". */
+.mi-para {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  min-width: 11rem;
+  min-height: 3.5rem;
+  color: var(--fg-strong);
+}
+.mi-para__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border-radius: 9999px;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  font-weight: 600;
+  transition:
+    transform calc(220 * var(--d)),
+    opacity calc(180 * var(--d));
+}
+.mi-para[data-phase='busy'] .mi-para__btn,
+.mi-para[data-phase='success'] .mi-para__btn,
+.mi-para[data-phase='error'] .mi-para__btn {
+  transform: scaleX(0.2);
+  opacity: 0;
+  pointer-events: none;
+}
+.mi-para__stage {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  opacity: 0;
+  transition: opacity calc(160 * var(--d));
+}
+.mi-para[data-phase]:not([data-phase='idle']) .mi-para__stage {
+  opacity: 1;
+}
+.mi-para__sky {
+  position: relative;
+  height: 2.25rem;
+}
+.mi-para__chute {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  transform: translate(-50%, -8px);
+  color: var(--blue-text);
+}
+.mi-para[data-phase='busy'] .mi-para__chute {
+  animation: mi-para-descend calc(2400 * var(--d)) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.mi-para[data-phase='success'] .mi-para__chute,
+.mi-para[data-phase='error'] .mi-para__chute {
+  transform: translate(-50%, 12px);
+}
+.mi-para__chute .canopy {
+  transform-origin: 50% 100%;
+  transition: transform calc(220 * var(--d)) ease-in;
+}
+.mi-para[data-phase='success'] .canopy,
+.mi-para[data-phase='error'] .canopy {
+  transform: scaleY(0);
+}
+@keyframes mi-para-descend {
+  from {
+    transform: translate(-50%, -8px);
+  }
+  to {
+    transform: translate(-50%, 12px);
+  }
+}
+.mi-para__bar {
+  position: relative;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.mi-para__bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(0);
+  background: var(--corridor-gradient);
+}
+.mi-para[data-phase='busy'] .mi-para__bar::after {
+  animation: mi-para-fill calc(2400 * var(--d)) cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.mi-para[data-phase='success'] .mi-para__bar::after,
+.mi-para[data-phase='error'] .mi-para__bar::after {
+  transform: scaleX(1);
+}
+.mi-para[data-phase='error'] .mi-para__bar::after {
+  background: var(--red-fill);
+}
+@keyframes mi-para-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.mi-para__result {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity calc(200 * var(--d)),
+    transform calc(200 * var(--d));
+  transition-delay: calc(200 * var(--d));
+}
+.mi-para[data-phase='success'] .mi-para__result,
+.mi-para[data-phase='error'] .mi-para__result {
+  opacity: 1;
+  transform: none;
+}
+.mi-para[data-phase='success'] .mi-para__result {
+  color: var(--green-text);
+}
+.mi-para[data-phase='error'] .mi-para__result {
+  color: var(--red-text);
+}
+.mi-para[data-phase='success'] .mi-para__stage,
+.mi-para[data-phase='error'] .mi-para__stage {
+  opacity: 0;
+  transition-delay: calc(200 * var(--d));
+}

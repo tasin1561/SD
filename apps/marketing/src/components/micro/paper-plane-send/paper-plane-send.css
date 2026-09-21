@@ -1,0 +1,76 @@
+/* 3 · Paper-plane send — the newsletter's submit (gallery-only until an
+   endpoint exists). The button folds into a plane that flies up-right. */
+.mi-plane {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 7rem;
+  min-height: 2.75rem;
+}
+.mi-plane__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border-radius: 9999px;
+  background: var(--slate-700);
+  color: #fff;
+  font-weight: 600;
+  transition:
+    background-color calc(200 * var(--d)),
+    transform calc(240 * var(--d)),
+    opacity calc(200 * var(--d));
+}
+.mi-plane[data-valid='true'] .mi-plane__btn {
+  background: var(--blue-fill);
+}
+.mi-plane[data-phase='busy'] .mi-plane__btn,
+.mi-plane[data-phase='success'] .mi-plane__btn {
+  transform: scale(0.4);
+  opacity: 0;
+  pointer-events: none;
+}
+.mi-plane__plane {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  color: var(--blue-text);
+  opacity: 0;
+  pointer-events: none;
+}
+.mi-plane[data-phase='busy'] .mi-plane__plane {
+  animation: mi-plane-fly calc(1100 * var(--d)) cubic-bezier(0.5, 0, 0.8, 0.3) forwards;
+}
+@keyframes mi-plane-fly {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(0.6);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(-10deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(140px, -90px) rotate(-25deg) scale(0.7);
+  }
+}
+.mi-plane__done {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  border: 1px solid var(--green-line);
+  color: var(--green-text);
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity calc(200 * var(--d));
+}
+.mi-plane[data-phase='success'] .mi-plane__done {
+  opacity: 1;
+}

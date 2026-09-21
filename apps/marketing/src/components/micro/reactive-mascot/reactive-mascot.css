@@ -1,0 +1,40 @@
+/* 13 · Reactive mascot — an original parcel character perched on a card;
+   its eyes follow the caret/pointer, it blinks, and it beams on success. */
+.mi-mascot {
+  width: 72px;
+  height: 64px;
+  overflow: visible;
+}
+.mi-mascot__eye {
+  transition: transform calc(120 * var(--d)) ease-out;
+  transform: translate(var(--ex, 0px), var(--ey, 0px));
+}
+.mi-mascot__lid {
+  transform-origin: 50% 0;
+  transform: scaleY(0);
+  animation: mi-mascot-blink calc(4200 * var(--d)) infinite;
+}
+@keyframes mi-mascot-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(0);
+  }
+  95% {
+    transform: scaleY(1);
+  }
+}
+.mi-mascot__mouth {
+  transition: d calc(200 * var(--d));
+}
+.mi-mascot[data-mood='happy'] .mi-mascot__mouth {
+  d: path('M28 44q8 8 16 0');
+}
+.mi-mascot[data-mood='happy'] {
+  animation: mi-mascot-hop calc(500 * var(--d)) cubic-bezier(0.3, 1.4, 0.4, 1);
+}
+@keyframes mi-mascot-hop {
+  40% {
+    transform: translateY(-8px);
+  }
+}

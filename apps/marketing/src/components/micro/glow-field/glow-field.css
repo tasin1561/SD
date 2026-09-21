@@ -1,0 +1,38 @@
+/* 4 · Glow field — a field whose border lights on focus and whose partner
+   button is muted until the value is valid. CSS only. */
+.mi-glow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.9rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-input);
+  transition:
+    border-color calc(160 * var(--d)),
+    box-shadow calc(160 * var(--d));
+}
+.mi-glow:focus-within {
+  border-color: var(--blue-text);
+  box-shadow: 0 0 0 4px var(--blue-glow);
+}
+.mi-glow[data-valid='true'] {
+  border-color: var(--green-text);
+}
+.mi-glow[data-valid='true']:focus-within {
+  box-shadow: 0 0 0 4px var(--green-glow);
+}
+.mi-glow__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--fg-strong);
+  border: 0;
+  outline: 0;
+  font: inherit;
+}
+.mi-glow__input::placeholder {
+  color: var(--fg-faint);
+}

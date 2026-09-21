@@ -1,0 +1,62 @@
+/* 8 · Liquid bead — a tablist whose active marker is a coloured bead that
+   rises above the bar and slides between tabs, taking each tab's hue with
+   a matching glow below. Shared by the platform tour, the FAQ categories
+   and the freight-mode selector. */
+.mi-bead {
+  position: relative;
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.35rem;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  --bead-x: 0px;
+  --bead-w: 0px;
+  --bead-color: var(--blue-fill);
+  --bead-glow: var(--blue-glow);
+  --bead-on: var(--blue-on-fill);
+}
+.mi-bead__tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0 0.9rem;
+  border-radius: 9999px;
+  color: var(--fg-muted);
+  font-weight: 600;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  transition: color calc(200 * var(--d));
+}
+.mi-bead__tab[aria-selected='true'] {
+  color: var(--bead-on);
+}
+.mi-bead__bead {
+  position: absolute;
+  top: 0.35rem;
+  bottom: 0.35rem;
+  left: 0;
+  width: var(--bead-w);
+  transform: translateX(var(--bead-x));
+  border-radius: 9999px;
+  background: var(--bead-color);
+  box-shadow: 0 10px 22px -8px var(--bead-glow);
+  transition:
+    transform calc(320 * var(--d)) cubic-bezier(0.3, 1.2, 0.3, 1),
+    width calc(320 * var(--d)) cubic-bezier(0.3, 1.2, 0.3, 1),
+    background-color calc(320 * var(--d));
+}
+.mi-bead__bead::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(10px);
+  opacity: 0.45;
+  transform: translateY(6px) scale(0.9);
+  z-index: -1;
+}

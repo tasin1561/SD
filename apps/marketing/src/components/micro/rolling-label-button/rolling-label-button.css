@@ -1,0 +1,58 @@
+/* 5 · Rolling-label state button — Publish → Loading → Done: the label
+   ROLLS vertically between states; the icon loops while busy. */
+.mi-roll {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border-radius: 0.5rem;
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+  font-weight: 600;
+  transition: background-color calc(200 * var(--d));
+}
+.mi-roll[data-phase='success'] {
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.mi-roll[data-phase='error'] {
+  background: var(--red-fill);
+  color: var(--red-on-fill);
+}
+.mi-roll__icon {
+  display: inline-grid;
+  place-items: center;
+}
+.mi-roll[data-phase='busy'] .mi-roll__icon {
+  animation: mi-roll-spin calc(1000 * var(--d)) linear infinite;
+}
+@keyframes mi-roll-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.mi-roll__window {
+  position: relative;
+  height: 1.25em;
+  overflow: hidden;
+}
+.mi-roll__strip {
+  display: grid;
+  transition: transform calc(220 * var(--d)) cubic-bezier(0.3, 0.9, 0.3, 1.1);
+}
+.mi-roll__strip > span {
+  display: block;
+  height: 1.25em;
+  line-height: 1.25em;
+  white-space: nowrap;
+}
+.mi-roll[data-phase='busy'] .mi-roll__strip {
+  transform: translateY(-1.25em);
+}
+.mi-roll[data-phase='success'] .mi-roll__strip {
+  transform: translateY(-2.5em);
+}
+.mi-roll[data-phase='error'] .mi-roll__strip {
+  transform: translateY(-3.75em);
+}

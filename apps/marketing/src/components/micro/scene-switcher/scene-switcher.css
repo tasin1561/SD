@@ -1,0 +1,72 @@
+/* 11 · Scene switcher — a thumbnail rail swaps the whole scene together:
+   background tint, giant ghost word, art, title and card, on ONE clock. */
+.mi-scene {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: var(--scene-tint, var(--surface-2));
+  transition: background-color calc(500 * var(--d));
+}
+.mi-scene__ghost {
+  position: absolute;
+  right: -0.05em;
+  top: -0.15em;
+  font-size: clamp(5rem, 22vw, 14rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--scene-ink, var(--fg-strong));
+  opacity: 0.06;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity calc(400 * var(--d));
+}
+.mi-scene__stage {
+  position: relative;
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  min-height: 16rem;
+}
+@media (min-width: 640px) {
+  .mi-scene__stage {
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+  }
+}
+.mi-scene__panel {
+  transition:
+    opacity calc(500 * var(--d)),
+    transform calc(500 * var(--d)) cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mi-scene[data-switching='true'] .mi-scene__panel {
+  opacity: 0;
+  transform: translateX(var(--dir, 24px));
+}
+.mi-scene__rail {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem 1.25rem;
+  overflow-x: auto;
+}
+.mi-scene__thumb {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition:
+    border-color calc(200 * var(--d)),
+    color calc(200 * var(--d));
+}
+.mi-scene__thumb[aria-selected='true'] {
+  border-color: var(--scene-ink, var(--blue-text));
+  color: var(--scene-ink, var(--fg-strong));
+}
