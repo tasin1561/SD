@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { FloatingContact } from '@/components/chrome/floating-contact';
 import { MobileBottomBar } from '@/components/chrome/mobile-bottom-bar';
 import { Nav } from '@/components/landing/nav';
-import { Hero } from '@/components/landing/hero';
+import { Hero } from '@/components/sections/hero';
 import { Problem } from '@/components/landing/problem';
 import { HowItWorks } from '@/components/landing/how-it-works';
 import { WhySkydrop } from '@/components/landing/why-skydrop';

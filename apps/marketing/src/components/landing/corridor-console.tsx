@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactElement } from 'react';
 import { BD_RINGS, LAND_RINGS, GEO_NODES, type Ring } from './map-geometry';
+import { subscribeThemeTokens } from '@/lib/theme-tokens';
 
 /**
  * THE SIGNATURE MOMENT (docs/design-direction.md §5) — v2 with REAL
@@ -420,18 +421,21 @@ export function CorridorConsole(): ReactElement {
     };
 
     resize();
-    renderBase();
-    drawStatic();
-    // Defer the animation loop past hydration/TTI — the static frame is
-    // already on screen; flights begin when the main thread is idle.
+    // The FIRST frame is deferred past hydration too, not only the loop: the
+    // base-map render (a thousand-point coastline at device pixel ratio)
+    // used to run inside the hydration task and was ~80 ms of Total
+    // Blocking Time on a 4×-throttled phone. The canvas is text-free and
+    // never the LCP, so nothing measurable waits for it.
     let idleId = 0;
-    if (!reduced) {
-      const ric: (cb: () => void) => number =
-        'requestIdleCallback' in window
-          ? (cb) => window.requestIdleCallback(cb, { timeout: 2500 })
-          : (cb) => window.setTimeout(cb, 1200) as unknown as number;
-      idleId = ric(() => start());
-    }
+    const ric: (cb: () => void) => number =
+      'requestIdleCallback' in window
+        ? (cb) => window.requestIdleCallback(cb, { timeout: 2500 })
+        : (cb) => window.setTimeout(cb, 1200) as unknown as number;
+    idleId = ric(() => {
+      renderBase();
+      drawStatic();
+      if (!reduced) start();
+    });
 
     const ro = new ResizeObserver(() => {
       resize();
@@ -458,19 +462,21 @@ export function CorridorConsole(): ReactElement {
     };
     document.addEventListener('visibilitychange', onVis);
 
-    const mo = new MutationObserver(() => {
+    // Both theme triggers: the toggle's data-theme AND the OS preference
+    // flipping under an unpinned page (the second was missed until the hero
+    // rebuild — the map stayed dark while the page went light).
+    const unsubTheme = subscribeThemeTokens(() => {
       readColors();
       renderBase();
       drawStatic();
     });
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     return () => {
       stop();
       if (idleId && 'cancelIdleCallback' in window) window.cancelIdleCallback(idleId);
       ro.disconnect();
       io.disconnect();
-      mo.disconnect();
+      unsubTheme();
       document.removeEventListener('visibilitychange', onVis);
     };
   }, []);

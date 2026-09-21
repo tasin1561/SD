@@ -354,7 +354,9 @@ function TintPanel({
         color: `var(--${hue}-on-tint)`,
       }}
     >
-      <div className="text-xs font-semibold uppercase tracking-[0.08em] opacity-80">{hue} surface (large area)</div>
+      <div className="text-xs font-semibold uppercase tracking-[0.08em] opacity-80">
+        {hue} surface (large area)
+      </div>
       <h3 className="mt-2 text-2xl font-bold" style={{ color: 'inherit' }}>
         {title}
       </h3>

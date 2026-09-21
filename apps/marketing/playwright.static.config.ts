@@ -33,7 +33,19 @@ export default defineConfig({
   projects: [
     {
       name: 'marketing',
-      use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${PORT}` },
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${PORT}`,
+        // Software GL, so the hero's positive gate case can mount the scene.
+        launchOptions: {
+          args: [
+            '--use-gl=angle',
+            '--use-angle=swiftshader',
+            '--enable-unsafe-swiftshader',
+            '--ignore-gpu-blocklist',
+          ],
+        },
+      },
     },
   ],
   webServer: {

@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { ArrowRight, Check } from 'lucide-react';
 import { Chip, LiveDot } from './chrome';
+import { useAsyncState } from '@/components/micro/use-async-state';
+import { VanSubmitButton } from '@/components/micro/van-drive-off';
+import type { Direction } from '@/components/islands/direction';
 
 /**
  * Asking to be let in.
@@ -95,16 +98,41 @@ const inputClass =
   'w-full h-11 px-3 rounded-sm bg-surface-input border border-border-control text-fg-strong ' +
   'text-[14px] placeholder:text-fg-faint focus:outline-none focus:border-sky transition-colors';
 
-export function InviteForm(): ReactElement {
+/**
+ * Two faces of one form. `page` is /request-invite as it always was.
+ * `embedded` is the hero's "Book a shipment" tab: the five fields that
+ * qualify a lead, no heading (the hero has one), the direction prefilled
+ * from the hero's own toggle. Same endpoint, same field names, same
+ * honeypot, same literal "Request received" — the contract the e2e spec
+ * and the API both read.
+ *
+ * The submit is the [Van drive-off]: `useAsyncState` fires the request at
+ * t=0 and lets the van leave only once the server has said yes, never
+ * before (an honest busy state — the contract lives in the hook, not
+ * here). An error returns the button to idle so the same values can be
+ * sent again.
+ */
+export function InviteForm({
+  variant = 'page',
+  direction,
+}: {
+  variant?: 'page' | 'embedded';
+  direction?: Direction;
+} = {}): ReactElement {
   const [sent, setSent] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const embedded = variant === 'embedded';
+  const state = useAsyncState<void>({
+    minBusyMs: 900,
+    settleMs: 1800,
+    onSettled: (r) => {
+      if (r.ok) setSent(true);
+    },
+  });
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setError(null);
-    setBusy(true);
-
     const form = new FormData(e.currentTarget);
 
     // Read from the form itself, never from a second list of field names.
@@ -126,12 +154,20 @@ export function InviteForm(): ReactElement {
       if (value !== '' || REQUIRED.has(key)) payload[key] = value;
     }
 
-    try {
-      const res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    await state.run(async () => {
+      let res: Response;
+      try {
+        res = await fetch(ENDPOINT, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        const msg =
+          'Could not reach us just now. Please try again, or write to hello@skydrop.online.';
+        setError(msg);
+        throw new Error(msg);
+      }
       if (!res.ok) {
         const body: unknown = await res.json().catch(() => null);
         const detail =
@@ -141,14 +177,25 @@ export function InviteForm(): ReactElement {
         // Verbatim. "email must be an email" is the useful part, and
         // paraphrasing it into "something went wrong" helps nobody.
         setError(detail);
-        return;
+        throw new Error(detail);
       }
-      setSent(true);
-    } catch {
-      setError('Could not reach us just now. Please try again, or write to hello@skydrop.online.');
-    } finally {
-      setBusy(false);
-    }
+    });
+  }
+
+  if (sent && embedded) {
+    return (
+      <div className="invite-embedded__done" role="status">
+        <div className="invite-embedded__tick" aria-hidden>
+          <Check size={20} />
+        </div>
+        <div>
+          <p className="invite-embedded__done-h">Request received</p>
+          <p className="invite-embedded__done-p">
+            Someone will read this properly and get back to you within one working day.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (sent) {
@@ -192,6 +239,113 @@ export function InviteForm(): ReactElement {
           </Link>
         </div>
       </div>
+    );
+  }
+
+  const honeypot = (
+    <div aria-hidden className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
+      <label htmlFor="website">Website</label>
+      <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+    </div>
+  );
+  const errorNote =
+    error !== null ? (
+      <p
+        role="alert"
+        className="mt-4 rounded-sm border border-red-line bg-red-tint px-4 py-3 text-[13px] text-red"
+      >
+        {error}
+      </p>
+    ) : null;
+
+  if (embedded) {
+    const dir = direction === 'in' ? 'IN_TO_BD' : 'BD_TO_IN';
+    return (
+      <form
+        onSubmit={(e) => void handleSubmit(e)}
+        className="invite-embedded relative"
+        noValidate
+        data-variant="embedded"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field id="shippingDirection" label="Deliver to">
+            <select
+              key={dir}
+              id="shippingDirection"
+              name="shippingDirection"
+              className={inputClass}
+              defaultValue={dir}
+            >
+              {DIRECTIONS.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field id="companyName" label="Company" required>
+            <input
+              id="companyName"
+              name="companyName"
+              required
+              maxLength={160}
+              autoComplete="organization"
+              className={inputClass}
+              placeholder="Dhaka Threads"
+            />
+          </Field>
+          <Field id="fullName" label="Your name" required>
+            <input
+              id="fullName"
+              name="fullName"
+              required
+              maxLength={120}
+              autoComplete="name"
+              className={inputClass}
+              placeholder="Rahim Uddin"
+            />
+          </Field>
+          <Field id="phone" label="Phone or WhatsApp" required>
+            <input
+              id="phone"
+              name="phone"
+              required
+              maxLength={32}
+              autoComplete="tel"
+              inputMode="tel"
+              className={inputClass}
+              placeholder="+880 1712 345678"
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <Field id="email" label="Email" required>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                maxLength={200}
+                autoComplete="email"
+                className={inputClass}
+                placeholder="you@yourstore.com"
+              />
+            </Field>
+          </div>
+        </div>
+        {honeypot}
+        {errorNote}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <VanSubmitButton
+            phase={state.phase}
+            label="Book a shipment"
+            successLabel="Request received"
+            errorLabel="Not sent — check the message above"
+          />
+          <span className="text-[12px] leading-snug text-fg-muted">
+            We reply within one working day. No newsletter.
+          </span>
+        </div>
+      </form>
     );
   }
 
@@ -379,20 +533,14 @@ export function InviteForm(): ReactElement {
             </p>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="group mt-7 inline-flex items-center gap-2 rounded-sm bg-accent-fill px-6 py-3.5 text-[14px] font-semibold text-accent-fg transition-colors hover:bg-accent-fill-hover disabled:opacity-60"
-          >
-            {busy ? 'Sending…' : 'Request an invite'}
-            {busy ? null : (
-              <ArrowRight
-                size={16}
-                aria-hidden="true"
-                className="transition-transform group-hover:translate-x-0.5"
-              />
-            )}
-          </button>
+          <div className="mt-7">
+            <VanSubmitButton
+              phase={state.phase}
+              label="Request an invite"
+              successLabel="Request received"
+              errorLabel="Not sent — check the message above"
+            />
+          </div>
 
           <p className="mt-5 max-w-[52ch] text-[12px] leading-relaxed text-fg-muted">
             We use this only to get in touch about Skydrop. No newsletter, and we do not pass it on.

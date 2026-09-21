@@ -43,7 +43,13 @@ export function Odometer({
   const chars = Array.from(text);
   let digitIndex = 0;
   return (
-    <span ref={ref} className={`mi mi-odo ${className ?? ''}`} data-armed={armed} aria-label={text}>
+    <span
+      ref={ref}
+      className={`mi mi-odo ${className ?? ''}`}
+      data-armed={armed}
+      role="img"
+      aria-label={text}
+    >
       {chars.map((c, i) => {
         if (!/\d/.test(c))
           return (

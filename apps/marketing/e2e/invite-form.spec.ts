@@ -80,7 +80,7 @@ test.describe('invite form', () => {
       chosen[name] = value;
     }
 
-    await page.click('button[type=submit]');
+    await page.locator('form:has(input[name=fullName]) button[type=submit]').click();
     await expect(page.getByText(/request received/i)).toBeVisible({ timeout: 10_000 });
 
     expect(body, 'the form never issued a request').not.toBeNull();
@@ -110,7 +110,7 @@ test.describe('invite form', () => {
     await page.fill('[name=companyName]', 'Dhaka Threads');
     await page.fill('[name=email]', 'rahim@dhakathreads.example');
     await page.fill('[name=phone]', '+880 1712 345678');
-    await page.click('button[type=submit]');
+    await page.locator('form:has(input[name=fullName]) button[type=submit]').click();
     await expect(page.getByText(/request received/i)).toBeVisible({ timeout: 10_000 });
 
     const sent = (body ?? {}) as Record<string, unknown>;

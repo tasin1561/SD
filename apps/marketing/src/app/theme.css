@@ -237,6 +237,11 @@
   --scene-arc-out: #fbbf24;
   --scene-arc-in: #34d399;
   --scene-haze: #090d16;
+  --scene-plate: #0f1729;
+  --scene-plane: #e8edf7;
+  --scene-van: #7bafea;
+  --scene-parcel: #fbbf24;
+  --scene-chute: #b4c5ff;
 
   /* The 2D corridor canvas (kept until Phase 4). */
   --map-land: rgba(180, 197, 255, 0.05);
@@ -413,6 +418,11 @@
     --scene-arc-out: #d97706;
     --scene-arc-in: #059669;
     --scene-haze: #f8f9ff;
+    --scene-plate: #eef2ff;
+    --scene-plane: #1e293b;
+    --scene-van: #2563eb;
+    --scene-parcel: #d97706;
+    --scene-chute: #004ac6;
 
     /* The 2D corridor canvas (kept until Phase 4). */
     --map-land: rgba(0, 74, 198, 0.06);
@@ -589,6 +599,11 @@
   --scene-arc-out: #d97706;
   --scene-arc-in: #059669;
   --scene-haze: #f8f9ff;
+  --scene-plate: #eef2ff;
+  --scene-plane: #1e293b;
+  --scene-van: #2563eb;
+  --scene-parcel: #d97706;
+  --scene-chute: #004ac6;
 
   /* The 2D corridor canvas (kept until Phase 4). */
   --map-land: rgba(0, 74, 198, 0.06);
@@ -764,6 +779,11 @@
   --scene-arc-out: #fbbf24;
   --scene-arc-in: #34d399;
   --scene-haze: #090d16;
+  --scene-plate: #0f1729;
+  --scene-plane: #e8edf7;
+  --scene-van: #7bafea;
+  --scene-parcel: #fbbf24;
+  --scene-chute: #b4c5ff;
 
   /* The 2D corridor canvas (kept until Phase 4). */
   --map-land: rgba(180, 197, 255, 0.05);

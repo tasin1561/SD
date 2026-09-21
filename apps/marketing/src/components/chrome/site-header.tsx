@@ -131,6 +131,9 @@ export function SiteHeader(): ReactElement {
           open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
         )}
         aria-hidden={!open}
+        // `inert` as well: aria-hidden alone leaves the drawer's links in the
+        // tab order while it is closed (axe: aria-hidden-focus).
+        inert={!open}
         role="dialog"
         aria-modal="true"
         aria-label="Menu"

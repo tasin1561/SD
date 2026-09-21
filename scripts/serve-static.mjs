@@ -17,6 +17,14 @@
  * work — so a test server that does not do it is testing a different
  * site. The lookup order below is that directive.
  *
+ * ── Compression ──────────────────────────────────────────────────────
+ * Text is gzipped when the client accepts it, because production's Caddy
+ * runs `encode zstd gzip` and a Lighthouse run against an uncompressed
+ * copy simulates three times the bytes the real site sends — the home
+ * page's 30 KB of HTML read as 230 KB, and every score that follows from
+ * transfer size was wrong. Binary types (fonts, images) are already
+ * compressed and are sent as they are.
+ *
  * ── What it deliberately does NOT do ─────────────────────────────────
  * It sends no security headers. Marketing's headers come from Caddy
  * (`docs/caddy-security-headers.md`), and inventing a local imitation
@@ -30,6 +38,7 @@ import { createServer } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { join, resolve, extname, sep } from 'node:path';
+import { createGzip } from 'node:zlib';
 
 const [, , dirArg, portArg] = process.argv;
 if (dirArg === undefined) {
@@ -90,11 +99,17 @@ const server = createServer((req, res) => {
       else res.end('404');
       return;
     }
+    const type = TYPES[extname(file)] ?? 'application/octet-stream';
+    const compressible = /^(text\/|application\/(json|xml|javascript))|image\/svg/.test(type);
+    const gzip = compressible && /\bgzip\b/.test(req.headers['accept-encoding'] ?? '');
     res.writeHead(200, {
-      'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
+      'content-type': type,
       'cache-control': 'no-store',
+      ...(gzip ? { 'content-encoding': 'gzip', vary: 'accept-encoding' } : {}),
     });
-    createReadStream(file).pipe(res);
+    const stream = createReadStream(file);
+    if (gzip) stream.pipe(createGzip()).pipe(res);
+    else stream.pipe(res);
   })();
 });
 
