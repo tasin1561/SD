@@ -1,5 +1,7 @@
 /* 19 · Phone field (u02) — the country chip sits inside the field. */
-.mi-phone__box {
+/* Doubled selector: chunk order between text-field.css and this file is not
+   ours to control, and `.mi-tf__box { display: block }` must lose. */
+.mi-tf__box.mi-phone__box {
   display: flex;
   align-items: stretch;
 }
