@@ -83,6 +83,12 @@
 .site-header__menu {
   margin-right: -0.25rem;
 }
+/* The primitive's own display beats Tailwind's layered `lg:hidden`. */
+@media (min-width: 1024px) {
+  .site-header__menu {
+    display: none;
+  }
+}
 
 /* Scroll-spy nav pill */
 .hnav {

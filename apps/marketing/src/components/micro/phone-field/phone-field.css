@@ -35,6 +35,10 @@
 .mi-phone__input.mi-tf__input {
   border-radius: 0 0.75rem 0.75rem 0;
   padding-left: 0.9rem;
+  /* Beside the country chip, never under it: the base field is width:100%. */
+  width: auto;
+  flex: 1;
+  min-width: 0;
 }
 .mi-phone__label {
   /* The label floats over the NUMBER half, after the country chip. */

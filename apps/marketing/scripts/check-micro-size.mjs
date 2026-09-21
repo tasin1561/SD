@@ -52,7 +52,8 @@ for (const name of readdirSync(DIR).sort()) {
   const js = gz(transpile(join(dir, 'index.tsx')));
   const cssFile = readdirSync(dir).find((f) => f.endsWith('.css'));
   const css = cssFile ? gz(readFileSync(join(dir, cssFile), 'utf8')) : 0;
-  const shipped = new RegExp(`micro/${name}(/index)?['"]`).test(productionSources) ||
+  const shipped =
+    new RegExp(`micro/${name}(/index)?['"]`).test(productionSources) ||
     new RegExp(`micro/${name}/`).test(productionSources);
   all += js + css;
   if (shipped) total += js + css;
