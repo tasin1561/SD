@@ -65,6 +65,12 @@
 .est__go {
   justify-self: start;
 }
+/* The pill sits on the form's left edge: the parachute's stage is a centred
+   grid 11 rem wide (room for the bar it unrolls into), so its items are
+   left-aligned here rather than centred in that stage. */
+.est__go .mi-para {
+  justify-items: start;
+}
 /* The Estimate pill is the u28 sweep too: a gradient slides in under the label
    on hover while idle; the parachute still owns the click. */
 .est__go .mi-para__btn {
@@ -114,7 +120,15 @@
     justify-content: center;
   }
 }
-@media (max-width: 359px) {
+@media (max-width: 559px) {
+  .est__field .mi-step__value {
+    font-size: 18px;
+    min-width: 3rem;
+  }
+}
+/* Below 400 two columns leave ~40 px for the number beside two 44 px
+   buttons — "1.0 kg" was clipped to ".0" at 360 — so the four steppers stack. */
+@media (max-width: 399px) {
   .est__row--4 {
     grid-template-columns: minmax(0, 1fr);
   }
