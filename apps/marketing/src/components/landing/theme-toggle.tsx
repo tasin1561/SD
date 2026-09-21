@@ -59,7 +59,7 @@ export function ThemeToggle({ className }: { className?: string }): ReactElement
 
   if (theme === null) {
     // Placeholder keeps layout stable before hydration resolves.
-    return <span className={cn('inline-block h-11 w-14', className)} aria-hidden="true" />;
+    return <span className={cn('block h-11 w-14', className)} aria-hidden="true" />;
   }
 
   const isDark = theme === 'dark';

@@ -34,7 +34,12 @@ import { themeInitScript } from '@/lib/theme-init';
 const sans = localFont({
   src: './fonts/plus-jakarta-sans-latin.woff2',
   variable: '--font-sans-face',
-  display: 'optional',
+  // swap, not optional (owner, 2026-09-21): on slow 4G `optional` would leave
+  // most first-time visitors without the typeface at all. The metric-matched
+  // Arial fallback face next/font generates (size-adjust / ascent-override)
+  // is what keeps the swap free of layout shift.
+  display: 'swap',
+  adjustFontFallback: 'Arial',
   declarations: [
     {
       prop: 'unicode-range',

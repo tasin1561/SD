@@ -23,21 +23,37 @@ import postcss from 'postcss';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const OUT = join(ROOT, 'out');
 const LIMIT = 15_000;
+/** Stylesheets of components whose real markup appears only after hydration (see usedTokens). */
+const HYDRATION_ONLY_STYLESHEETS = ['src/components/micro/theme-switch/theme-switch.css'];
+const unescapeCss = (s) => s.replace(/\\(.)/g, '$1');
 
-const unescape = (s) => s.replace(/\\(.)/g, '$1');
+// CSS escapes: Tailwind writes `.lg\:flex`, `.text-\[12px\]`, `.w-1\/2`. The
+// pseudo-class and attribute strippers below must not see the escaped
+// characters, so every `\X` becomes a private-use placeholder first and is
+// mapped back when the token is compared with the markup. Before this
+// (2026-09-21) `:flex` was stripped as a pseudo-class and `[12px]` as an
+// attribute, so EVERY responsive/variant utility above the fold was dropped
+// from the critical sheet: the header rendered mobile-shaped for ~400 ms
+// at 1440 and the deferred sheet then moved <main> by 30 px (CLS 0.064).
+const HOLD = '\uE000';
+const holdEscapes = (s) =>
+  s.replace(/\\(.)/g, (_, c) => `${HOLD}${c.charCodeAt(0).toString(16).padStart(4, '0')}${HOLD}`);
+const releaseEscapes = (s) =>
+  s.replace(/\uE000([0-9a-f]{4})\uE000/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 
 /** Class and id tokens a selector depends on. Pseudo-classes and attribute selectors are ignored. */
 function selectorTokens(selector) {
   const classes = new Set();
   const ids = new Set();
+  const held = holdEscapes(selector);
   // Strip attribute selectors and :not(...)/:is(...) contents' brackets to avoid mis-reads.
-  const cleaned = selector
+  const cleaned = held
     .replace(/\[[^\]]*\]/g, '')
     .replace(/::?[a-zA-Z-]+(\([^)]*\))?/g, (m) =>
       /^::?(is|where|not|has)\(/.test(m) ? m.slice(m.indexOf('(') + 1, -1) : '',
     );
-  for (const m of cleaned.matchAll(/\.((?:\\.|[^\s.#:>+~,()\[\]])+)/g)) classes.add(unescape(m[1]));
-  for (const m of cleaned.matchAll(/#((?:\\.|[^\s.#:>+~,()\[\]])+)/g)) ids.add(unescape(m[1]));
+  for (const m of cleaned.matchAll(/\.([^\s.#:>+~,()\[\]]+)/g)) classes.add(releaseEscapes(m[1]));
+  for (const m of cleaned.matchAll(/#([^\s.#:>+~,()\[\]]+)/g)) ids.add(releaseEscapes(m[1]));
   return { classes, ids };
 }
 
@@ -69,6 +85,14 @@ function usedTokens(markup) {
   for (const m of markup.matchAll(/\sid="([^"]*)"/g)) ids.add(m[1]);
   // State classes toggled by JS at load or first interaction.
   for (const c of ['is-moving', 'is-select', 'data-none']) classes.add(c);
+  // Components that render a placeholder on the server and their real markup
+  // only after hydration (the theme switch cannot know the theme before the
+  // client runs). Their classes are not in the fold markup, so read them off
+  // their own stylesheet — otherwise the switch pops in unstyled for the
+  // ~400 ms until the deferred sheet lands (seen 2026-09-21: 14×56 px).
+  for (const file of HYDRATION_ONLY_STYLESHEETS)
+    for (const m of readFileSync(join(ROOT, file), 'utf8').matchAll(/\.((?:\\.|[a-zA-Z0-9_-])+)/g))
+      classes.add(unescapeCss(m[1]));
   return { classes, ids };
 }
 
