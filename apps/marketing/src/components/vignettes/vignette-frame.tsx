@@ -31,7 +31,7 @@ export function VignetteFrame({
       <div
         aria-hidden
         className="relative aspect-[4/3] w-full overflow-hidden"
-        style={{ background: `var(--${hue}-tint)` }}
+        style={{ background: `var(--${hue}-surface)` }}
       >
         {children}
       </div>

@@ -34,15 +34,35 @@
   text-align: center;
   justify-items: center;
 }
+.sec-head--center .sec-head__eyebrow {
+  justify-self: center;
+}
+/* Every anchored section lands BELOW the floating header (utility bar +
+   header + 16 px), for nav links and deep links alike. */
+section[id],
+[id^='platform-'] {
+  scroll-margin-top: calc(var(--header-offset, 4.5rem) + 1rem);
+}
+@media (min-width: 1024px) {
+  section[id],
+  [id^='platform-'] {
+    --header-offset: 6.75rem;
+  }
+}
 .sec-head__eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  /* A CHIP, not a bar: a grid child stretches to the track unless told otherwise. */
+  justify-self: start;
+  width: fit-content;
   min-height: 1.9rem;
   padding: 0.2rem 0.75rem 0.2rem 0.35rem;
   border-radius: 999px;
-  background: var(--h-tint);
-  color: var(--h-on-tint);
+  /* Navy-mix surface in dark (never the 950 — a saffron eyebrow was brown). */
+  background: var(--h-surface);
+  border: 1px solid color-mix(in srgb, var(--h) 35%, transparent);
+  color: var(--h-text);
   font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -70,8 +90,18 @@
   color: var(--fg-body);
   text-wrap: pretty;
 }
-/* Hue scoping for eyebrows and anything else in a section that follows it. */
+/* Hue scoping for eyebrows and anything else in a section that follows it.
+   `--h-surface` is the NAVY-MIX surface (page + a little hue, never the 950)
+   for any large tinted area in dark; `--art-*` are the flat isometric faces
+   an illustration in this hue is drawn from (top / mid / side / edge / glow),
+   theme-invariant raw steps so both themes are free. */
 [data-hue='blue'] {
+  --h-surface: var(--blue-surface);
+  --art-top: var(--blue-400);
+  --art-mid: var(--blue-600);
+  --art-side: var(--blue-800);
+  --art-edge: var(--blue-200);
+  --art-glow: var(--blue-glow);
   --h: var(--blue-fill);
   --h-on: var(--blue-on-fill);
   --h-tint: var(--blue-tint);
@@ -80,6 +110,12 @@
   --h-glow: var(--blue-glow);
 }
 [data-hue='green'] {
+  --h-surface: var(--green-surface);
+  --art-top: var(--green-400);
+  --art-mid: var(--green-600);
+  --art-side: var(--green-800);
+  --art-edge: var(--green-200);
+  --art-glow: var(--green-glow);
   --h: var(--green-fill);
   --h-on: var(--green-on-fill);
   --h-tint: var(--green-tint);
@@ -88,6 +124,12 @@
   --h-glow: var(--green-glow);
 }
 [data-hue='saffron'] {
+  --h-surface: var(--saffron-surface);
+  --art-top: var(--saffron-400);
+  --art-mid: var(--saffron-600);
+  --art-side: var(--saffron-800);
+  --art-edge: var(--saffron-200);
+  --art-glow: var(--saffron-glow);
   --h: var(--saffron-fill);
   --h-on: var(--saffron-on-fill);
   --h-tint: var(--saffron-tint);
@@ -96,6 +138,12 @@
   --h-glow: var(--saffron-glow);
 }
 [data-hue='teal'] {
+  --h-surface: var(--teal-surface);
+  --art-top: var(--teal-400);
+  --art-mid: var(--teal-600);
+  --art-side: var(--teal-800);
+  --art-edge: var(--teal-200);
+  --art-glow: var(--teal-glow);
   --h: var(--teal-fill);
   --h-on: var(--teal-on-fill);
   --h-tint: var(--teal-tint);
@@ -104,6 +152,12 @@
   --h-glow: var(--teal-glow);
 }
 [data-hue='violet'] {
+  --h-surface: var(--violet-surface);
+  --art-top: var(--violet-400);
+  --art-mid: var(--violet-600);
+  --art-side: var(--violet-800);
+  --art-edge: var(--violet-200);
+  --art-glow: var(--violet-glow);
   --h: var(--violet-fill);
   --h-on: var(--violet-on-fill);
   --h-tint: var(--violet-tint);
@@ -112,6 +166,12 @@
   --h-glow: var(--violet-glow);
 }
 [data-hue='magenta'] {
+  --h-surface: var(--magenta-surface);
+  --art-top: var(--magenta-400);
+  --art-mid: var(--magenta-600);
+  --art-side: var(--magenta-800);
+  --art-edge: var(--magenta-200);
+  --art-glow: var(--magenta-glow);
   --h: var(--magenta-fill);
   --h-on: var(--magenta-on-fill);
   --h-tint: var(--magenta-tint);
@@ -120,6 +180,12 @@
   --h-glow: var(--magenta-glow);
 }
 [data-hue='red'] {
+  --h-surface: var(--red-surface);
+  --art-top: var(--red-400);
+  --art-mid: var(--red-600);
+  --art-side: var(--red-800);
+  --art-edge: var(--red-200);
+  --art-glow: var(--red-glow);
   --h: var(--red-fill);
   --h-on: var(--red-on-fill);
   --h-tint: var(--red-tint);

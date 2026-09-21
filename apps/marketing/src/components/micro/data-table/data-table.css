@@ -86,27 +86,27 @@
   height: 1.15rem;
   border-radius: 999px;
 }
-.dt__chip[data-kind='yes'] {
+.dt__chip[data-kind='good'] {
   background: var(--green-tint);
   color: var(--green-on-tint);
 }
-.dt__chip[data-kind='yes'] .dt__chip-ico {
+.dt__chip[data-kind='good'] .dt__chip-ico {
   background: var(--green-fill);
   color: var(--green-on-fill);
 }
-.dt__chip[data-kind='no'] {
+.dt__chip[data-kind='bad'] {
   background: var(--red-tint);
   color: var(--red-on-tint);
 }
-.dt__chip[data-kind='no'] .dt__chip-ico {
+.dt__chip[data-kind='bad'] .dt__chip-ico {
   background: var(--red-fill);
   color: var(--red-on-fill);
 }
-.dt__chip[data-kind='partial'] {
+.dt__chip[data-kind='mixed'] {
   background: var(--saffron-tint);
   color: var(--saffron-on-tint);
 }
-.dt__chip[data-kind='partial'] .dt__chip-ico {
+.dt__chip[data-kind='mixed'] .dt__chip-ico {
   background: var(--saffron-fill);
   color: var(--saffron-on-fill);
 }

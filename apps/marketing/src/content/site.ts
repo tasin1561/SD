@@ -189,7 +189,7 @@ export const platform = {
     },
     {
       id: 'sell',
-      hue: 'violet',
+      hue: 'magenta',
       label: 'Sell in India',
       ghost: 'SELL',
       title: 'Sell in India without an Indian operation',
@@ -225,7 +225,43 @@ export const platform = {
       hue: 'teal',
     },
   ],
-  /** How it works — four phases, with what each one actually does. */
+  /** How it works — the COURIER track first (this is a courier site), then the seller track. */
+  howItWorksParcel: [
+    {
+      id: 'book',
+      title: 'Book',
+      body: 'Tell us where it is going and how big it is. The rate is agreed before anything moves, and a waybill is booked with the courier the moment you confirm.',
+      runs: ['Quote agreed first', 'Waybill booked on confirmation', 'Tracking link issued'],
+    },
+    {
+      id: 'pickup',
+      title: 'Pickup',
+      body: 'A courier collects from your door in Bangladesh or India. Label it or let us; the scan at pickup is where tracking starts.',
+      runs: ['Door pickup', 'Labelled at pickup', 'First scan starts the timeline'],
+    },
+    {
+      id: 'border',
+      title: 'Border & customs',
+      body: 'The parcel crosses as part of a declared consignment. We handle the paperwork; you see when it has left and when it has landed.',
+      runs: ['Declared as a consignment', 'Paperwork ours', 'Left → landed, both stamped'],
+    },
+    {
+      id: 'lastmile',
+      title: 'Last-mile courier',
+      body: 'On the far side it is handed to our courier network for the run to the address, with every scan flowing to the public tracking page.',
+      runs: [
+        'Handed to the courier network',
+        'Every scan on the tracking page',
+        'English and Hindi',
+      ],
+    },
+    {
+      id: 'delivered',
+      title: 'Delivered',
+      body: 'Signed for at the door. If it cannot be delivered it comes back to us, is inspected, and you are told — never lost in the gap.',
+      runs: ['Signed for', 'Failed → returned and inspected', 'You are told either way'],
+    },
+  ],
   howItWorks: [
     {
       id: 'stock',
@@ -299,53 +335,56 @@ export const platform = {
       { key: 'marketplace', name: 'Marketplace', note: 'sell on theirs' },
     ],
     rows: [
+      // `kind` is the BENEFIT to the reader — good / bad / mixed — never the literal yes/no
+      // (owner, Phase 4 review: "Indian entity required" showed Skydrop a red ✗ for the
+      // GOOD answer). The word carries the fact; the tone carries what it means for you.
       {
         label: 'Time to first dispatch',
-        skydrop: { kind: 'text', label: 'Under 3 weeks', estimate: true },
-        diy: { kind: 'text', label: '6+ months', estimate: true },
-        marketplace: { kind: 'text', label: '1–2 months', estimate: true },
+        skydrop: { kind: 'good', label: 'Under 3 weeks', estimate: true },
+        diy: { kind: 'bad', label: '6+ months', estimate: true },
+        marketplace: { kind: 'mixed', label: '1–2 months', estimate: true },
       },
       {
         label: 'Capital before order one',
-        skydrop: { kind: 'text', label: 'Pay per order' },
-        diy: { kind: 'text', label: '₹50 lakh+', estimate: true },
-        marketplace: { kind: 'text', label: 'Low' },
+        skydrop: { kind: 'good', label: 'Pay per order' },
+        diy: { kind: 'bad', label: '₹50 lakh+', estimate: true },
+        marketplace: { kind: 'good', label: 'Low' },
       },
       {
         label: 'Indian entity required',
-        skydrop: { kind: 'no', label: 'Not to start' },
-        diy: { kind: 'yes', label: 'Yes' },
-        marketplace: { kind: 'partial', label: 'Varies' },
+        skydrop: { kind: 'good', label: 'Not needed to start' },
+        diy: { kind: 'bad', label: 'Required' },
+        marketplace: { kind: 'mixed', label: 'Varies' },
       },
       {
         label: 'COD confirmed by phone',
-        skydrop: { kind: 'yes', label: 'Every order' },
-        diy: { kind: 'partial', label: 'Build the desk' },
-        marketplace: { kind: 'no', label: 'No' },
+        skydrop: { kind: 'good', label: 'Every order' },
+        diy: { kind: 'mixed', label: 'Build the desk yourself' },
+        marketplace: { kind: 'bad', label: 'Not offered' },
       },
       {
         label: 'Stock held in India',
-        skydrop: { kind: 'yes', label: 'Our warehouse' },
-        diy: { kind: 'partial', label: 'Lease and staff it' },
-        marketplace: { kind: 'partial', label: 'Their terms' },
+        skydrop: { kind: 'good', label: 'Our warehouse' },
+        diy: { kind: 'mixed', label: 'Lease and staff it' },
+        marketplace: { kind: 'mixed', label: 'On their terms' },
       },
       {
         label: 'Returns handling',
-        skydrop: { kind: 'yes', label: 'Inspected, per item' },
-        diy: { kind: 'partial', label: 'Yours to solve' },
-        marketplace: { kind: 'partial', label: 'Limited visibility' },
+        skydrop: { kind: 'good', label: 'Inspected, per unit' },
+        diy: { kind: 'mixed', label: 'Yours to solve' },
+        marketplace: { kind: 'mixed', label: 'Limited visibility' },
       },
       {
         label: 'Brand and customer data',
-        skydrop: { kind: 'yes', label: 'Yours' },
-        diy: { kind: 'yes', label: 'Yours' },
-        marketplace: { kind: 'no', label: 'Theirs' },
+        skydrop: { kind: 'good', label: 'Yours' },
+        diy: { kind: 'good', label: 'Yours' },
+        marketplace: { kind: 'bad', label: 'Theirs' },
       },
       {
         label: 'Money back to Bangladesh',
-        skydrop: { kind: 'yes', label: 'Built in' },
-        diy: { kind: 'partial', label: 'Arrange it yourself' },
-        marketplace: { kind: 'partial', label: 'Marketplace terms' },
+        skydrop: { kind: 'good', label: 'Built in' },
+        diy: { kind: 'mixed', label: 'Arrange it yourself' },
+        marketplace: { kind: 'mixed', label: 'Marketplace terms' },
       },
     ],
   },
@@ -645,14 +684,9 @@ export const business = {
     transitDaysIndia: dummy('4–7 days'),
     transitDaysBangladesh: dummy('3–5 days'),
   },
-  partners: [
-    dummy('Delhivery'),
-    dummy('Shiprocket'),
-    dummy('Blue Dart'),
-    dummy('DTDC'),
-    dummy('Ekart'),
-    dummy('Xpressbees'),
-  ],
+  /** The two couriers we book through (block 3B — real, so not placeholders). No other company is named on the page. */
+  partners: ['Delhivery', 'Shiprocket'],
+  partnersLine: 'and the couriers in their networks',
   testimonials: [
     {
       quote: dummy('Our returns dropped once every order was confirmed by phone first.'),

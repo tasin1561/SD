@@ -1,0 +1,254 @@
+/* COVERAGE MAP — a ground plane tipped back, with pins standing on it.
+
+   The tilt lives in exactly two custom properties. The stage rotates by
+   them; every pin rotates by their inverse, in reverse order, which is
+   what stands a pin UP out of a plane that is lying down. Change `--tilt`
+   or `--spin` here and both halves move together — there is no second
+   place that knows the angle.
+
+   Nothing here animates a length. A pin's rise is `scaleY`, its lift when
+   picked is a `translateY`, and the geometry underneath both (`height`,
+   `bottom`) never moves — so every transition is transform, opacity or
+   `stroke-dashoffset`, and none of them can reach layout. */
+.covmap {
+  --tilt: 48deg;
+  --spin: -7deg;
+  --e: cubic-bezier(0.3, 1, 0.3, 1);
+  --hue: var(--h, var(--green-fill));
+  --hue-text: var(--h-text, var(--green-text));
+  container-type: inline-size;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  perspective: 1200px;
+  /* `clip`, not `hidden`: perspective widens the plane's near edge past the
+     column and an absolutely positioned descendant of a `contain: layout`
+     box can still extend the page's scroll width — which is the one thing
+     `e2e-shared/responsive.spec.ts` fails a page for. `clip` establishes no
+     scroll container, and it cannot flatten the 3D context because the
+     `preserve-3d` lives on the stage, not here. Every label is anchored
+     INWARD (`data-side`), so nothing readable is cut; the coastline running
+     off the frame is the point. */
+  overflow: clip;
+}
+
+/* The pin sizes are declared HERE, not on `.covmap`, and that is not a
+   matter of taste: a container query unit used in the query container's OWN
+   declarations resolves against the nearest ANCESTOR container — or, with
+   none, the viewport. Sized on `.covmap` they would track the window while
+   the map tracked its column, which at the two-column break is half. One
+   level down they resolve against `.covmap`, which is what was meant.
+
+   `--rise` is the FULL pin height; a resting pin is `--rest` of it, so the
+   two states are one number apart and `scaleY` can carry the difference. */
+.covmap__stage {
+  --rise: clamp(21px, 6.6cqw, 38px);
+  --rest: 0.62;
+  --dot: clamp(5px, 1.5cqw, 8px);
+  --nm: clamp(10px, 2.5cqw, 13px);
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  /* Matches the viewBox crop, so the SVG fills the plane exactly and a pin's
+     percentage position is the same percentage of the drawing. */
+  aspect-ratio: 76 / 68;
+  transform-style: preserve-3d;
+  transform: translateY(-50%) rotateX(var(--tilt)) rotateZ(var(--spin)) scale(1.1);
+}
+
+.covmap__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.covmap__grid {
+  fill: none;
+  stroke: var(--map-route);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+.covmap__land {
+  fill: var(--map-land);
+  stroke: var(--map-coast);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.covmap__bd {
+  fill: var(--map-bd-fill);
+  stroke: var(--map-bd-coast);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+/* `pathLength="1"` normalises every arc, so ONE dash rule draws them all
+   without measuring a single path in JavaScript. The picked arc is thicker
+   as a static fact — only its opacity animates. */
+.covmap__arc {
+  --dly: calc(var(--i) * 40ms);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.5;
+  transition:
+    stroke-dashoffset 760ms var(--e) var(--dly),
+    opacity 400ms var(--e);
+}
+.covmap[data-live='1'] .covmap__arc {
+  stroke-dashoffset: 0;
+}
+.covmap__arc[data-on] {
+  stroke-width: 3.2;
+  opacity: 1;
+}
+
+/* A zero-size anchor at the city's own position; everything inside hangs
+   off that point, and the counter-rotation pivots on it. */
+.covmap__pin {
+  --dly: calc(var(--i) * 45ms);
+  --live: 0;
+  --sy: var(--rest);
+  --drop: calc(var(--rise) * (1 - var(--rest)));
+  --slide: 4px;
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  transform: rotateZ(calc(-1 * var(--spin))) rotateX(calc(-1 * var(--tilt)));
+  opacity: 0.85;
+  transition: opacity 400ms var(--e);
+}
+.covmap[data-live='1'] .covmap__pin {
+  --live: 1;
+  --slide: 0px;
+}
+.covmap__pin[data-far] {
+  opacity: 0.45;
+}
+.covmap__pin[data-on] {
+  --sy: 1;
+  --drop: 0px;
+  opacity: 1;
+  /* z-index does not sort inside a preserve-3d context; lifting the pin a
+     hair off the ground plane does, and costs one transform function. */
+  transform: translateZ(1px) rotateZ(calc(-1 * var(--spin))) rotateX(calc(-1 * var(--tilt)));
+}
+
+.covmap__stalk {
+  position: absolute;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  height: var(--rise);
+  border-radius: 1px;
+  background: linear-gradient(to top, transparent, var(--map-halo) 35%, var(--map-blip));
+  transform-origin: 50% 100%;
+  transform: scaleY(calc(var(--sy) * var(--live)));
+  transition: transform 560ms var(--e) var(--dly);
+}
+.covmap__pin[data-on] .covmap__stalk {
+  background: linear-gradient(to top, transparent, var(--hue));
+}
+
+.covmap__head {
+  position: absolute;
+  left: 50%;
+  bottom: var(--rise);
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--map-blip);
+  opacity: var(--live);
+  transform: translate(-50%, 50%) translateY(var(--drop)) scale(calc(0.4 + 0.6 * var(--live)));
+  transition:
+    opacity 420ms var(--e) calc(var(--dly) + 180ms),
+    transform 420ms var(--e);
+}
+.covmap__pin[data-on] .covmap__head {
+  background: var(--hue);
+  box-shadow: 0 0 0 3px var(--h-glow, var(--green-glow));
+}
+
+/* The pulse exists ONLY on the picked pin, so nothing loops on a map at
+   rest — and it moves transform and opacity alone. */
+.covmap__ring {
+  position: absolute;
+  left: 50%;
+  bottom: var(--rise);
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  border: 1.5px solid var(--hue);
+  opacity: 0;
+  transform: translate(-50%, 50%);
+}
+.covmap__pin[data-on] .covmap__ring {
+  animation: covmap-pulse 900ms var(--e) infinite;
+}
+@keyframes covmap-pulse {
+  from {
+    opacity: 0.75;
+    transform: translate(-50%, 50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, 50%) scale(3.4);
+  }
+}
+
+.covmap__name {
+  position: absolute;
+  bottom: calc(var(--rise) + var(--dot) * 0.2);
+  font-size: var(--nm);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  opacity: 0;
+  transform: translateY(calc(var(--drop) + var(--slide)));
+  transition:
+    opacity 420ms var(--e) calc(var(--dly) + 240ms),
+    transform 420ms var(--e);
+}
+/* Anchored away from the map's middle, so a label never runs off its side. */
+.covmap__pin[data-side='r'] .covmap__name {
+  left: calc(var(--dot) * 0.9);
+}
+.covmap__pin[data-side='l'] .covmap__name {
+  right: calc(var(--dot) * 0.9);
+}
+.covmap[data-live='1'] .covmap__pin[data-named] .covmap__name,
+.covmap[data-live='1'] .covmap__pin[data-on] .covmap__name {
+  opacity: 1;
+}
+.covmap__pin[data-on] .covmap__name {
+  color: var(--hue-text);
+}
+
+/* Full width under the checker below the two-column break: a shallower tilt
+   keeps the coastline legible, and still fits the 4/3 box (the plane is
+   76/68, so height × cos(42°) × 1.1 = 0.73w against the box's 0.75w). */
+@media (max-width: 1023px) {
+  .covmap {
+    --tilt: 42deg;
+  }
+}
+
+/* Final states, no motion — the OS preference and the gallery's
+   `data-reduced` simulator, which is an attribute and not a media query,
+   so the two halves cannot be written as one rule. */
+@media (prefers-reduced-motion: reduce) {
+  .covmap * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+:root[data-reduced='1'] .covmap * {
+  animation: none !important;
+  transition: none !important;
+}

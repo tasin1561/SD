@@ -28,7 +28,7 @@ diff (critical-only vs full CSS, hydrated, at 412 and 1440) must show NO differe
 above the fold. After the fix the residual CLS was 0 / 0.015 / 0.015, the 0.015 from an
 old section's island (deleted in Phase 4) — re-measure and confirm 0.
 
-## 2. TBT 330–910 ms after Phase 3.5 (was 140 ms)
+## 2. TBT 330–910 ms after Phase 3.5 (was 140 ms); 750–850 ms after Phase 5
 
 **Measured:** TBT 330 / 440 / 550 / 620 / 840 / 910 ms across runs on the same build
 (noisy on this machine; the 2530 ms run coincided with load). Lighthouse's breakdown:
@@ -37,6 +37,8 @@ Style & Layout ~1.5 s, Script Evaluation ~1.4 s (4× throttled); long tasks of 2
 271 ms in `main-app`, 198 ms in the React chunk, 145 ms in the page chunk. The first-load
 JS is 147.5 KB gz after Phase 4 (138.4 at Phase 3), so bytes are not the story;
 hydration work is.
+
+**Phase 5 (2026-09-21):** with the tour and reseller islands hydrating eagerly TBT read 1,010 / 1,350 ms; gating their chunk fetch on near-viewport (`lib/near-gate.ts`) brought it to 750 / 850 ms. What remains is the FIRST-LOAD hydration (153 KB gz of JS on the page) plus the deferred-sheet restyle.
 
 **Suspects (not yet isolated):** the deferred stylesheet's full restyle of a 1,600-node
 page; `useLayoutEffect` measurements at hydration (`HeaderNav` pill, `LiquidBead` bead,

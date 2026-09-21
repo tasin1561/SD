@@ -43,13 +43,6 @@
   margin-top: 0.5rem;
   justify-self: start;
 }
-/* Scene art: a flat-face isometric prop drawn from tokens. */
-.svc__art {
-  width: min(100%, 22rem);
-  height: auto;
-  aspect-ratio: 4 / 3;
-  color: var(--h);
-}
 /* Who we serve */
 .who {
   margin-top: 3rem;

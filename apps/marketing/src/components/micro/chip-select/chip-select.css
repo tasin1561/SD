@@ -1,5 +1,8 @@
 /* 32 · Chip select (u04 filter bar / u24 multi-select). */
 .mi-chips {
+  /* Wraps from 640 up; below that it scrolls, snaps, and fades at the edge
+     so a cut-off row never looks complete. */
+  flex-wrap: wrap;
   --h: var(--blue-fill);
   --h-on: var(--blue-on-fill);
   --h-tint: var(--blue-tint);
@@ -14,6 +17,23 @@
 }
 .mi-chips::-webkit-scrollbar {
   display: none;
+}
+@media (max-width: 639px) {
+  .mi-chips {
+    flex-wrap: nowrap;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 0.15rem;
+    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 2.75rem), transparent 100%);
+  }
+  .mi-chips__chip {
+    scroll-snap-align: start;
+  }
+}
+/* Multi-select: an UNCHECKED chip still shows its box — a dashed square the
+   check draws into — so the state is never an empty tile. */
+.mi-chips__chip[aria-pressed='false'] .mi-chips__ico:has(.mi-chips__check) {
+  border: 1.5px dashed var(--line-strong);
+  background: transparent;
 }
 .mi-chips[data-hue='green'] {
   --h: var(--green-fill);

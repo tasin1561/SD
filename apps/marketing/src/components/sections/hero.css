@@ -112,6 +112,17 @@
     transparent 95%
   );
 }
+/* lg: the map has no panel, so its LEFT and TOP edges fade into the page
+   instead of ending in a hard rectangle (owner, Phase 4 review, 1440 dark). */
+@media (min-width: 1024px) {
+  .hero__art-slot {
+    mask-image:
+      linear-gradient(90deg, transparent 0%, #000 22%),
+      linear-gradient(180deg, transparent 0%, #000 18%, #000 80%, transparent 100%);
+    mask-composite: intersect;
+    -webkit-mask-composite: source-in;
+  }
+}
 .hero__art-slot::after {
   content: '';
   position: absolute;
@@ -128,6 +139,9 @@
   width: 100%;
   height: 100%;
   min-height: 280px;
+  /* The canvas is sized from a measured rect; a half-pixel rounded up during
+     load once widened the document by 1 px at 320 (responsive spec). Clip it. */
+  overflow: hidden;
 }
 
 @media (min-width: 1024px) {

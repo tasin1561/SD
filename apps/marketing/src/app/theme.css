@@ -124,7 +124,7 @@
   --blue-fill-hover: var(--blue-700);
   --blue-on-fill: #ffffff;
   --blue-tint: var(--blue-950);
-  --blue-surface: color-mix(in oklab, var(--page) 86%, var(--blue-500) 14%);
+  --blue-surface: color-mix(in oklab, var(--page) 92%, var(--blue-500) 8%);
   --blue-on-tint: var(--blue-400);
   --blue-line: var(--blue-800);
   --blue-glow: rgba(123, 175, 234, 0.28);
@@ -134,7 +134,7 @@
   --saffron-fill-hover: var(--saffron-500);
   --saffron-on-fill: #020617;
   --saffron-tint: var(--saffron-950);
-  --saffron-surface: color-mix(in oklab, var(--page) 86%, var(--saffron-500) 14%);
+  --saffron-surface: color-mix(in oklab, var(--page) 92%, var(--saffron-500) 8%);
   --saffron-on-tint: var(--saffron-400);
   --saffron-line: var(--saffron-800);
   --saffron-glow: rgba(251, 191, 36, 0.28);
@@ -144,7 +144,7 @@
   --green-fill-hover: var(--green-800);
   --green-on-fill: #ffffff;
   --green-tint: var(--green-950);
-  --green-surface: color-mix(in oklab, var(--page) 86%, var(--green-500) 14%);
+  --green-surface: color-mix(in oklab, var(--page) 92%, var(--green-500) 8%);
   --green-on-tint: var(--green-400);
   --green-line: var(--green-800);
   --green-glow: rgba(52, 211, 153, 0.28);
@@ -154,7 +154,7 @@
   --teal-fill-hover: var(--teal-800);
   --teal-on-fill: #ffffff;
   --teal-tint: var(--teal-950);
-  --teal-surface: color-mix(in oklab, var(--page) 86%, var(--teal-500) 14%);
+  --teal-surface: color-mix(in oklab, var(--page) 92%, var(--teal-500) 8%);
   --teal-on-tint: var(--teal-400);
   --teal-line: var(--teal-800);
   --teal-glow: rgba(45, 212, 191, 0.28);
@@ -164,7 +164,7 @@
   --violet-fill-hover: var(--violet-700);
   --violet-on-fill: #ffffff;
   --violet-tint: var(--violet-950);
-  --violet-surface: color-mix(in oklab, var(--page) 86%, var(--violet-500) 14%);
+  --violet-surface: color-mix(in oklab, var(--page) 92%, var(--violet-500) 8%);
   --violet-on-tint: var(--violet-400);
   --violet-line: var(--violet-800);
   --violet-glow: rgba(167, 139, 250, 0.28);
@@ -174,7 +174,7 @@
   --magenta-fill-hover: var(--magenta-800);
   --magenta-on-fill: #ffffff;
   --magenta-tint: var(--magenta-950);
-  --magenta-surface: color-mix(in oklab, var(--page) 86%, var(--magenta-500) 14%);
+  --magenta-surface: color-mix(in oklab, var(--page) 92%, var(--magenta-500) 8%);
   --magenta-on-tint: var(--magenta-400);
   --magenta-line: var(--magenta-800);
   --magenta-glow: rgba(244, 114, 182, 0.28);
@@ -184,7 +184,7 @@
   --red-fill-hover: var(--red-800);
   --red-on-fill: #ffffff;
   --red-tint: var(--red-950);
-  --red-surface: color-mix(in oklab, var(--page) 86%, var(--red-500) 14%);
+  --red-surface: color-mix(in oklab, var(--page) 92%, var(--red-500) 8%);
   --red-on-tint: var(--red-400);
   --red-line: var(--red-800);
   --red-glow: rgba(248, 113, 113, 0.28);
@@ -666,7 +666,7 @@
   --blue-fill-hover: var(--blue-700);
   --blue-on-fill: #ffffff;
   --blue-tint: var(--blue-950);
-  --blue-surface: color-mix(in oklab, var(--page) 86%, var(--blue-500) 14%);
+  --blue-surface: color-mix(in oklab, var(--page) 92%, var(--blue-500) 8%);
   --blue-on-tint: var(--blue-400);
   --blue-line: var(--blue-800);
   --blue-glow: rgba(123, 175, 234, 0.28);
@@ -676,7 +676,7 @@
   --saffron-fill-hover: var(--saffron-500);
   --saffron-on-fill: #020617;
   --saffron-tint: var(--saffron-950);
-  --saffron-surface: color-mix(in oklab, var(--page) 86%, var(--saffron-500) 14%);
+  --saffron-surface: color-mix(in oklab, var(--page) 92%, var(--saffron-500) 8%);
   --saffron-on-tint: var(--saffron-400);
   --saffron-line: var(--saffron-800);
   --saffron-glow: rgba(251, 191, 36, 0.28);
@@ -686,7 +686,7 @@
   --green-fill-hover: var(--green-800);
   --green-on-fill: #ffffff;
   --green-tint: var(--green-950);
-  --green-surface: color-mix(in oklab, var(--page) 86%, var(--green-500) 14%);
+  --green-surface: color-mix(in oklab, var(--page) 92%, var(--green-500) 8%);
   --green-on-tint: var(--green-400);
   --green-line: var(--green-800);
   --green-glow: rgba(52, 211, 153, 0.28);
@@ -696,7 +696,7 @@
   --teal-fill-hover: var(--teal-800);
   --teal-on-fill: #ffffff;
   --teal-tint: var(--teal-950);
-  --teal-surface: color-mix(in oklab, var(--page) 86%, var(--teal-500) 14%);
+  --teal-surface: color-mix(in oklab, var(--page) 92%, var(--teal-500) 8%);
   --teal-on-tint: var(--teal-400);
   --teal-line: var(--teal-800);
   --teal-glow: rgba(45, 212, 191, 0.28);
@@ -706,7 +706,7 @@
   --violet-fill-hover: var(--violet-700);
   --violet-on-fill: #ffffff;
   --violet-tint: var(--violet-950);
-  --violet-surface: color-mix(in oklab, var(--page) 86%, var(--violet-500) 14%);
+  --violet-surface: color-mix(in oklab, var(--page) 92%, var(--violet-500) 8%);
   --violet-on-tint: var(--violet-400);
   --violet-line: var(--violet-800);
   --violet-glow: rgba(167, 139, 250, 0.28);
@@ -716,7 +716,7 @@
   --magenta-fill-hover: var(--magenta-800);
   --magenta-on-fill: #ffffff;
   --magenta-tint: var(--magenta-950);
-  --magenta-surface: color-mix(in oklab, var(--page) 86%, var(--magenta-500) 14%);
+  --magenta-surface: color-mix(in oklab, var(--page) 92%, var(--magenta-500) 8%);
   --magenta-on-tint: var(--magenta-400);
   --magenta-line: var(--magenta-800);
   --magenta-glow: rgba(244, 114, 182, 0.28);
@@ -726,7 +726,7 @@
   --red-fill-hover: var(--red-800);
   --red-on-fill: #ffffff;
   --red-tint: var(--red-950);
-  --red-surface: color-mix(in oklab, var(--page) 86%, var(--red-500) 14%);
+  --red-surface: color-mix(in oklab, var(--page) 92%, var(--red-500) 8%);
   --red-on-tint: var(--red-400);
   --red-line: var(--red-800);
   --red-glow: rgba(248, 113, 113, 0.28);

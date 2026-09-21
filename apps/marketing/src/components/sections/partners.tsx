@@ -12,7 +12,7 @@ export function Partners(): ReactElement {
   return (
     <section className="sec sec--band partners" aria-label="Couriers we book through">
       <div className="sec__inner safe-x sm:px-6">
-        <p className="partners__k">Booked through the couriers India already trusts</p>
+        <p className="partners__k">Booked through</p>
         <ul className="partners__list">
           {business.partners.map((p) => (
             <li key={p} className="partners__chip">
@@ -22,6 +22,7 @@ export function Partners(): ReactElement {
               {p}
             </li>
           ))}
+          <li className="partners__more">— {business.partnersLine}</li>
         </ul>
       </div>
     </section>

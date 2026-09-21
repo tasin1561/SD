@@ -65,6 +65,60 @@
 .est__go {
   justify-self: start;
 }
+/* The Estimate pill is the u28 sweep too: a gradient slides in under the label
+   on hover while idle; the parachute still owns the click. */
+.est__go .mi-para__btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.est__go .mi-para__btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, var(--saffron-400), var(--saffron-600));
+  transform: translateX(-101%);
+  transition: transform 320ms cubic-bezier(0.3, 1, 0.3, 1);
+}
+.est__go .mi-para[data-phase='idle'] .mi-para__btn:hover::before,
+.est__go .mi-para[data-phase='idle'] .mi-para__btn:focus-visible::before {
+  transform: translateX(0);
+}
+/* Book waits for an estimate. */
+.est__result .btn-sweep[aria-disabled='true'] {
+  opacity: 0.55;
+  pointer-events: none;
+  filter: saturate(0.4);
+}
+/* ≤ 430: the four steppers 2 × 2, each pill spread − / value / + across its
+   width. The ± buttons never shrink (they are the 44 px targets); the value
+   gives. Below 360 two columns cannot hold two 44 px buttons and a number, so
+   the steppers stack — 360 is the primary phone width, 320 the floor. */
+@media (max-width: 559px) {
+  .est__row--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .est__field .mi-step {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .est__field .mi-step__btn {
+    flex: none;
+  }
+  .est__field .mi-step__value {
+    flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    justify-content: center;
+  }
+}
+@media (max-width: 359px) {
+  .est__row--4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .est__result {
   position: sticky;
   top: 5.5rem;

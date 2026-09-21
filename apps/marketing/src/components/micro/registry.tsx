@@ -90,20 +90,23 @@ function DataTableDemo(): ReactElement {
         {
           label: 'COD confirmed by phone',
           cells: {
-            a: { kind: 'yes', label: 'Every order' },
-            b: { kind: 'partial', label: 'Build the desk' },
+            a: { kind: 'good', label: 'Every order' },
+            b: { kind: 'mixed', label: 'Build the desk' },
           },
         },
         {
           label: 'Time to first dispatch',
           cells: {
-            a: { kind: 'text', label: 'Under 3 weeks', estimate: true },
-            b: { kind: 'text', label: '6+ months', estimate: true },
+            a: { kind: 'good', label: 'Under 3 weeks', estimate: true },
+            b: { kind: 'bad', label: '6+ months', estimate: true },
           },
         },
         {
           label: 'Indian entity',
-          cells: { a: { kind: 'no', label: 'Not to start' }, b: { kind: 'yes' } },
+          cells: {
+            a: { kind: 'good', label: 'Not needed to start' },
+            b: { kind: 'bad', label: 'Required' },
+          },
         },
       ]}
     />

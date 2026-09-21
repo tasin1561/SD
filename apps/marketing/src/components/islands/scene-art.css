@@ -1,0 +1,125 @@
+/* Service scene art — a flat-face isometric piece filling the scene's right
+   half. Colour comes entirely from the `--art-*` faces `[data-hue]` sets on
+   the wrapper (sections.css), so the piece re-paints per scene and per theme
+   with no code here. Compound selectors so import order cannot beat us. */
+.svc-art {
+  display: block;
+  width: 100%;
+  line-height: 0;
+}
+.svc-art .svc__art {
+  display: block;
+  width: 100%;
+  max-width: 34rem;
+  height: auto;
+  margin-inline: auto;
+  aspect-ratio: 4 / 3;
+  animation: svcFloat 7.5s ease-in-out infinite;
+}
+
+/* One accent motion per scene, transform-only (the arc is the one exception:
+   a dash flowing along the corridor, which no transform can express). */
+.svc-art .art-arc {
+  animation: artArc 2.4s linear infinite;
+}
+.svc-art .art-fly {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: artFly 11s ease-in-out infinite;
+}
+.svc-art .art-drop {
+  transform-box: fill-box;
+  transform-origin: 50% 8%;
+  animation: artDrop 6.5s ease-in-out infinite alternate;
+}
+.svc-art .art-lift {
+  animation: artLift 5.5s ease-in-out infinite;
+}
+.svc-art .art-tag {
+  animation: artTag 4.5s ease-in-out infinite alternate;
+}
+.svc-art .art-van {
+  animation: artVan 4s ease-in-out infinite alternate;
+}
+.svc-art .art-phone {
+  animation: artPhone 5s ease-in-out infinite alternate;
+}
+
+@keyframes svcFloat {
+  50% {
+    transform: translateY(-7px);
+  }
+}
+@keyframes artArc {
+  to {
+    stroke-dashoffset: -48;
+  }
+}
+@keyframes artFly {
+  0% {
+    opacity: 0;
+    transform: translate(-58px, 34px) rotate(11deg);
+  }
+  12%,
+  88% {
+    opacity: 1;
+  }
+  30% {
+    transform: translate(-30px, 12px) rotate(6deg);
+  }
+  52% {
+    transform: translate(4px, 0) rotate(-2deg);
+  }
+  74% {
+    transform: translate(36px, 9px) rotate(-9deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(62px, 34px) rotate(-15deg);
+  }
+}
+@keyframes artDrop {
+  from {
+    transform: translateY(-5px) rotate(-2deg);
+  }
+  to {
+    transform: translateY(6px) rotate(2deg);
+  }
+}
+@keyframes artLift {
+  0%,
+  100% {
+    transform: translateY(6px);
+  }
+  50% {
+    transform: translateY(-9px);
+  }
+}
+@keyframes artTag {
+  to {
+    transform: translateY(-6px);
+  }
+}
+@keyframes artVan {
+  to {
+    transform: translateX(7px);
+  }
+}
+@keyframes artPhone {
+  to {
+    transform: translateY(-6px);
+  }
+}
+
+/* Every piece is a still frame when motion is not wanted — the dashed arc,
+   the lifted carton's gap and the plane at its apex all read on their own. */
+@media (prefers-reduced-motion: reduce) {
+  .svc-art,
+  .svc-art * {
+    animation: none !important;
+  }
+}
+:root[data-reduced='1'] .svc-art,
+:root[data-reduced='1'] .svc-art * {
+  animation: none !important;
+}

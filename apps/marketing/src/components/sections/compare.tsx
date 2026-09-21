@@ -32,8 +32,8 @@ export function Compare(): ReactElement {
           }))}
         />
         <p className="sec-note" style={{ marginTop: '0.9rem' }}>
-          “est.” marks a typical figure rather than something we measure. Your own numbers depend on
-          what you sell and where.
+          Green is good for you, red is a cost to you, amber depends. “est.” marks a typical figure
+          rather than something we measure; your own numbers depend on what you sell and where.
         </p>
       </div>
     </section>

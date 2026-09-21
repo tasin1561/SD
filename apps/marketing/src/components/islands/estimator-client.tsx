@@ -1,7 +1,20 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import { FileText, Package, PackagePlus, Plane } from 'lucide-react';
+import {
+  BookOpen,
+  Cookie,
+  Cpu,
+  Gem,
+  Home,
+  Palette,
+  Shirt,
+  Sparkles,
+  FileText,
+  Package,
+  PackagePlus,
+  Plane,
+} from 'lucide-react';
 import { ChoiceCards } from '@/components/micro/choice-cards';
 import { ComboSelect } from '@/components/micro/combo-select';
 import { Stepper } from '@/components/micro/stepper';
@@ -15,6 +28,18 @@ import { estimate, type Quote } from './hero-action-card';
 import type { Direction } from './direction';
 
 type ParcelType = (typeof platform.parcelTypes)[number]['id'];
+
+/** One glyph per goods category, so a chip reads before it is picked. */
+const GOODS_ICONS: Record<string, ReactElement> = {
+  Apparel: <Shirt size={14} />,
+  Handicrafts: <Palette size={14} />,
+  Beauty: <Sparkles size={14} />,
+  Snacks: <Cookie size={14} />,
+  Books: <BookOpen size={14} />,
+  Electronics: <Cpu size={14} />,
+  Jewellery: <Gem size={14} />,
+  Home: <Home size={14} />,
+};
 
 /** Volumetric weight in kg: L × W × H (cm) ÷ 5000 — the couriers' rule. */
 export function volumetricKg(l: number, w: number, h: number): number {
@@ -185,7 +210,11 @@ export function EstimatorClient(): ReactElement {
                 hue="violet"
                 value={goods}
                 onChange={setGoods}
-                chips={platform.goodsCategories.map((g) => ({ id: g, label: g }))}
+                chips={platform.goodsCategories.map((g) => ({
+                  id: g,
+                  label: g,
+                  icon: GOODS_ICONS[g],
+                }))}
               />
             </div>
             <div className="est__go">
@@ -262,8 +291,16 @@ export function EstimatorClient(): ReactElement {
             before anything ships.
           </p>
         )}
-        <SweepLink href={bookHref} tone={dir === 'out' ? 'saffron' : 'green'}>
-          Book this shipment
+        <SweepLink
+          href={bookHref}
+          tone={dir === 'out' ? 'saffron' : 'green'}
+          aria-disabled={type !== 'bulk' && !quote ? true : undefined}
+          tabIndex={type !== 'bulk' && !quote ? -1 : undefined}
+          onClick={(e) => {
+            if (type !== 'bulk' && !quote) e.preventDefault();
+          }}
+        >
+          {type !== 'bulk' && !quote ? 'Estimate first, then book' : 'Book this shipment'}
         </SweepLink>
         <p className="sec-note">{business.estimator.note}</p>
       </aside>

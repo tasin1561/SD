@@ -2,7 +2,8 @@ import type { ReactElement, ReactNode } from 'react';
 import { Check, Minus, X } from 'lucide-react';
 import './data-table.css';
 
-export type CellKind = 'yes' | 'no' | 'partial' | 'text';
+/** The BENEFIT to the reader — colour never means the literal yes/no. */
+export type CellKind = 'good' | 'bad' | 'mixed' | 'text';
 export interface TableCell {
   kind: CellKind;
   label?: string;
@@ -11,8 +12,8 @@ export interface TableCell {
 }
 
 /**
- * 30 · Data table (u07). An accent-tinted header row, chips for yes /
- * no / partial (icon + word, never colour alone), row hover that tints and
+ * 30 · Data table (u07). An accent-tinted header row, chips coloured by the
+ * BENEFIT to the reader — good / bad / mixed (icon + word, never colour alone), row hover that tints and
  * lifts the row, the first column sticky on a narrow screen. Below `md`
  * the SAME markup becomes swipe cards — one card per column — through
  * CSS only.
@@ -80,18 +81,18 @@ export function DataTable({
 
 function Cell({ cell }: { cell: TableCell }): ReactElement {
   const icon: ReactNode =
-    cell.kind === 'yes' ? (
+    cell.kind === 'good' ? (
       <Check size={13} strokeWidth={3} />
-    ) : cell.kind === 'no' ? (
+    ) : cell.kind === 'bad' ? (
       <X size={13} strokeWidth={3} />
-    ) : cell.kind === 'partial' ? (
+    ) : cell.kind === 'mixed' ? (
       <Minus size={13} strokeWidth={3} />
     ) : null;
   return (
     <span className="dt__chip" data-kind={cell.kind}>
       {icon ? <span className="dt__chip-ico">{icon}</span> : null}
       <span>
-        {cell.label ?? (cell.kind === 'yes' ? 'Yes' : cell.kind === 'no' ? 'No' : 'Partly')}
+        {cell.label ?? (cell.kind === 'good' ? 'Yes' : cell.kind === 'bad' ? 'No' : 'Partly')}
       </span>
       {cell.estimate ? <span className="dt__est">est.</span> : null}
     </span>

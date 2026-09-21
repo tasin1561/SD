@@ -62,3 +62,17 @@
     animation: none;
   }
 }
+.how {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+.how__tabs {
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.how__tabs::-webkit-scrollbar {
+  display: none;
+}

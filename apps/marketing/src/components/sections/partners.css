@@ -52,3 +52,11 @@
   background: var(--blue-tint);
   color: var(--blue-on-tint);
 }
+
+.partners__more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: 14.5px;
+  color: var(--fg-muted);
+}

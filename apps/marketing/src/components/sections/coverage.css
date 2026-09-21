@@ -74,3 +74,8 @@
 .cov__talk:hover {
   background: var(--green-fill-hover);
 }
+
+.cov__map {
+  margin-top: 0.5rem;
+  min-width: 0;
+}
