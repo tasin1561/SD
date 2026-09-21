@@ -2,9 +2,12 @@ import type { Metadata } from 'next';
 import type { ReactElement, ReactNode } from 'react';
 import { Nav } from '@/components/landing/nav';
 import { SiteFooter } from '@/components/landing/site-footer';
+import { FloatingContact } from '@/components/chrome/floating-contact';
+import { MobileBottomBar } from '@/components/chrome/mobile-bottom-bar';
 
 export const metadata: Metadata = {
   title: 'Privacy policy · Skydrop',
+  alternates: { canonical: '/privacy' },
   description:
     'What information Skydrop handles to confirm, pack and deliver orders, who it is shared with, and how to reach us about it.',
 };
@@ -151,6 +154,8 @@ export default function PrivacyPage(): ReactElement {
         </article>
       </main>
       <SiteFooter />
+      <MobileBottomBar />
+      <FloatingContact />
     </>
   );
 }

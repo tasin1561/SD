@@ -2,11 +2,14 @@ import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
 import { Nav } from '@/components/landing/nav';
 import { SiteFooter } from '@/components/landing/site-footer';
+import { FloatingContact } from '@/components/chrome/floating-contact';
+import { MobileBottomBar } from '@/components/chrome/mobile-bottom-bar';
 import { CorridorConsole } from '@/components/landing/corridor-console';
 import { InviteForm } from '@/components/landing/invite-form';
 
 export const metadata: Metadata = {
   title: 'Request an invite · Skydrop',
+  alternates: { canonical: '/request-invite' },
   description:
     'Skydrop is invite-only while we scale the warehouse. Tell us about your store and we will get back to you within one working day.',
 };
@@ -68,6 +71,8 @@ export default function RequestInvitePage(): ReactElement {
         </div>
       </main>
       <SiteFooter />
+      <MobileBottomBar />
+      <FloatingContact />
     </>
   );
 }

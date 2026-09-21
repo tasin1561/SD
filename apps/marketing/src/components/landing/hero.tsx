@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { ArrowRight, Search } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { CorridorConsole } from './corridor-console';
-import { TelemetryTicker } from './telemetry-ticker';
 import { Chip, DataStrip, LiveDot } from './chrome';
 
 /**
@@ -169,8 +168,6 @@ export function Hero(): ReactElement {
           />
         </div>
       </div>
-
-      <TelemetryTicker />
     </section>
   );
 }

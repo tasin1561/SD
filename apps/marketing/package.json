@@ -6,11 +6,15 @@
   "scripts": {
     "dev": "MARKETING_DEV_ROUTES=1 next dev -p 3006",
     "build": "next build",
-    "build:preview": "MARKETING_DEV_ROUTES=1 next build",
+    "postbuild": "node scripts/check-theme.mjs && node scripts/check-bundle.mjs",
+    "build:preview": "MARKETING_DEV_ROUTES=1 NEXT_PUBLIC_PLACEHOLDER_RIBBON=1 next build",
     "start": "node ../../scripts/serve-static.mjs out 3006",
     "serve": "node ../../scripts/serve-static.mjs out 3006",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "check:content": "node scripts/check-content.mjs",
+    "check:theme": "node scripts/check-theme.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "clean": "rm -rf .next out .turbo dist *.tsbuildinfo"
   },
   "dependencies": {

@@ -129,7 +129,7 @@ export const HUES: readonly HueScale[] = [
   {
     id: 'magenta',
     name: 'Magenta',
-    meaning: 'E-commerce sellers · Returns group (replaces coral)',
+    meaning: 'E-commerce sellers · Returns group (replaces coral; plum from 800)',
     light: 600,
     dark: 400,
     scale: {
@@ -222,12 +222,71 @@ export function grade(r: number): 'AA' | 'AA-large' | 'fail' {
   return 'fail';
 }
 
-/** The corridor gradient — Bangladesh's green to India's saffron. */
+/** The corridor gradient — Bangladesh's green to India's saffron. ONE declaration ships. */
 export const CORRIDOR = {
-  /** Wins where `in oklch` is supported (Chrome 111+, Safari 16.2+, Firefox 113+). */
-  oklch: `linear-gradient(90deg in oklch, ${HUES[2]?.scale[500]}, ${HUES[1]?.scale[500]})`,
-  /** sRGB fallback with an explicit warm mid-stop so it never dips through olive. */
-  srgbFallback: `linear-gradient(90deg, ${HUES[2]?.scale[500]}, ${HUES[1]?.scale[400]} 60%, ${HUES[1]?.scale[500]})`,
-  /** What NOT to ship — shown only so the difference is visible. */
-  srgbNaive: `linear-gradient(90deg, ${HUES[2]?.scale[500]}, ${HUES[1]?.scale[500]})`,
+  /** `--corridor-gradient`: decorative only, never carries text. */
+  decorative: `linear-gradient(90deg, ${HUES[2]?.scale[500]}, ${HUES[1]?.scale[400]} 60%, ${HUES[1]?.scale[500]})`,
+  /** The same three stops interpolated in OKLCH — rendered once beside it for the owner to compare. */
+  decorativeOklch: `linear-gradient(90deg in oklch, ${HUES[2]?.scale[500]}, ${HUES[1]?.scale[400]} 60%, ${HUES[1]?.scale[500]})`,
+  /** `--corridor-gradient-strong`: 700-level stops for a band that carries WHITE text. */
+  strong: `linear-gradient(90deg, ${HUES[2]?.scale[700]}, ${HUES[1]?.scale[700]})`,
 } as const;
+
+/** The stops, for the contrast table below the bars. */
+export const CORRIDOR_STOPS = {
+  decorative: [
+    [HUES[2]?.scale[500] ?? '#000000', 0],
+    [HUES[1]?.scale[400] ?? '#000000', 0.6],
+    [HUES[1]?.scale[500] ?? '#000000', 1],
+  ] as [string, number][],
+  strong: [
+    [HUES[2]?.scale[700] ?? '#000000', 0],
+    [HUES[1]?.scale[700] ?? '#000000', 1],
+  ] as [string, number][],
+};
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function rgbToHex(rgb: [number, number, number]): string {
+  return '#' + rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+}
+
+/** Sample an sRGB linear-gradient at `n` evenly spaced points. */
+export function sampleGradient(stops: [string, number][], n = 21): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    let j = 0;
+    while (j < stops.length - 2 && t > (stops[j + 1]?.[1] ?? 1)) j++;
+    const a = stops[j];
+    const b = stops[j + 1];
+    if (!a || !b) continue;
+    const u = Math.min(1, Math.max(0, (t - a[1]) / (b[1] - a[1] || 1)));
+    const ra = hexToRgb(a[0]);
+    const rb = hexToRgb(b[0]);
+    out.push(
+      rgbToHex([
+        ra[0] + (rb[0] - ra[0]) * u,
+        ra[1] + (rb[1] - ra[1]) * u,
+        ra[2] + (rb[2] - ra[2]) * u,
+      ]),
+    );
+  }
+  return out;
+}
+
+/** Worst-case contrast of `fg` anywhere along the gradient, and where. */
+export function gradientMin(stops: [string, number][], fg: string): { ratio: number; at: string } {
+  let ratio = Infinity;
+  let at = '';
+  for (const hex of sampleGradient(stops)) {
+    const r = contrast(fg, hex);
+    if (r < ratio) {
+      ratio = r;
+      at = hex;
+    }
+  }
+  return { ratio, at };
+}

@@ -1,1 +1,6 @@
+# Windows junk that arrives via /mnt/c copies
 C:*
+# Build outputs
+.next/
+out/
+*.tsbuildinfo

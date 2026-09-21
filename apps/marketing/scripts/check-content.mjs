@@ -1,0 +1,93 @@
+#!/usr/bin/env node
+/**
+ * Lists every `dummy()` placeholder still in `src/content/**`, with the
+ * key it sits under, and exits 1 while any remain. NOT wired into the
+ * build (the owner's instruction) — run it before declaring a section
+ * "real". Also refuses: `dummy` aliased or re-exported, a `dummy(` call
+ * outside `src/content/`, and any `dummy(` inside `platform` — product
+ * facts are never placeholders.
+ */
+import ts from 'typescript';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+const ROOT = new URL('..', import.meta.url).pathname;
+const SRC = join(ROOT, 'src');
+const CONTENT = join(SRC, 'content');
+
+function walk(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) walk(p, out);
+    else if (/\.(ts|tsx)$/.test(p)) out.push(p);
+  }
+  return out;
+}
+
+const problems = [];
+const placeholders = [];
+
+for (const file of walk(SRC)) {
+  const text = readFileSync(file, 'utf8');
+  if (!text.includes('dummy')) continue;
+  const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const rel = relative(ROOT, file);
+  const inContent = file.startsWith(CONTENT + '/') && !file.endsWith('dummy.ts');
+
+  const visit = (node, keyPath) => {
+    if (
+      ts.isImportDeclaration(node) &&
+      node.importClause?.namedBindings &&
+      ts.isNamedImports(node.importClause.namedBindings)
+    ) {
+      for (const el of node.importClause.namedBindings.elements) {
+        if (el.propertyName?.text === 'dummy' && el.name.text !== 'dummy')
+          problems.push(
+            `${rel}: dummy is aliased to ${el.name.text} — the scanner cannot follow an alias`,
+          );
+      }
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'dummy'
+    ) {
+      const { line } = sf.getLineAndCharacterOfPosition(node.getStart());
+      if (!inContent)
+        problems.push(
+          `${rel}:${line + 1}  dummy() outside src/content/ — placeholders live in the content module only`,
+        );
+      else if (keyPath[0] === 'platform')
+        problems.push(
+          `${rel}:${line + 1}  dummy() inside platform.${keyPath.slice(1).join('.')} — product facts are never placeholders`,
+        );
+      else placeholders.push(`${rel}:${line + 1}  ${keyPath.join('.')}`);
+    }
+    let next = keyPath;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) next = [node.name.text];
+    else if (ts.isPropertyAssignment(node))
+      next = [
+        ...keyPath,
+        ts.isIdentifier(node.name) || ts.isStringLiteral(node.name) ? node.name.text : '?',
+      ];
+    else if (ts.isArrayLiteralExpression(node)) {
+      node.elements.forEach((el, i) => visit(el, [...keyPath, `[${i}]`]));
+      return;
+    }
+    ts.forEachChild(node, (c) => visit(c, next));
+  };
+  visit(sf, []);
+}
+
+if (problems.length) {
+  console.error('check:content — violations:\n  ' + problems.join('\n  '));
+}
+if (placeholders.length) {
+  console.log(
+    `check:content — ${placeholders.length} placeholder(s) still to replace:\n  ` +
+      placeholders.join('\n  '),
+  );
+} else {
+  console.log('check:content — no placeholders remain.');
+}
+process.exit(problems.length || placeholders.length ? 1 : 0);
