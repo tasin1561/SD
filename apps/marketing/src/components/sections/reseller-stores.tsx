@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
+import { Reveal } from '@/lib/reveal';
 import {
   BadgeCheck,
   EyeOff,
@@ -62,14 +63,20 @@ export function ResellerStores(): ReactElement {
         />
 
         <ul className="rs__cards">
-          {reseller.cards.map((c) => (
-            <li key={c.id} className="rs__card" data-hue={HUES[c.id] ?? 'violet'}>
+          {reseller.cards.map((c, i) => (
+            <Reveal
+              as="li"
+              key={c.id}
+              delay={i * 60}
+              className="rs__card"
+              data-hue={HUES[c.id] ?? 'violet'}
+            >
               <span className="rs__cardIco" aria-hidden>
                 {ICONS[c.id]}
               </span>
               <h3 className="rs__cardT">{c.title}</h3>
               <p className="rs__cardL">{c.line}</p>
-            </li>
+            </Reveal>
           ))}
         </ul>
 

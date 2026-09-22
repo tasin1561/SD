@@ -39,6 +39,19 @@
   display: grid;
   gap: 1rem;
 }
+.ct__form-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3rem;
+}
+.ct__form-top .mi-mascot {
+  width: 54px;
+  height: 48px;
+  flex: none;
+  margin-bottom: -0.25rem;
+}
 .ct__form-h {
   font-size: 15px;
   font-weight: 700;

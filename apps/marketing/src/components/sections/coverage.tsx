@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { Reveal } from '@/lib/reveal';
 import { MapPin } from 'lucide-react';
 import { business, platform } from '@/content/site';
 import { CoverageClient } from '@/components/islands/coverage-client';
@@ -34,7 +35,7 @@ export function Coverage(): ReactElement {
             <h3 className="cov__lanes-h">The lanes most parcels take</h3>
             <ul className="cov__list">
               {platform.coverageCities.map((c, i) => (
-                <li key={c}>
+                <Reveal as="li" key={c} delay={i * 50}>
                   <RowLink
                     href="/#pricing"
                     hue={i === 0 ? 'green' : 'saffron'}
@@ -43,7 +44,7 @@ export function Coverage(): ReactElement {
                     helper={i === 0 ? 'Bangladesh · origin' : 'India · destination'}
                     meta={business.coverageTransit[c as keyof typeof business.coverageTransit]}
                   />
-                </li>
+                </Reveal>
               ))}
             </ul>
             <EmptyState

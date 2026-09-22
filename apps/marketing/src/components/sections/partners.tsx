@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { Reveal } from '@/lib/reveal';
 import { Truck } from 'lucide-react';
 import { business } from '@/content/site';
 import './sections.css';
@@ -14,13 +15,13 @@ export function Partners(): ReactElement {
       <div className="sec__inner safe-x sm:px-6">
         <p className="partners__k">Booked through</p>
         <ul className="partners__list">
-          {business.partners.map((p) => (
-            <li key={p} className="partners__chip">
+          {business.partners.map((p, i) => (
+            <Reveal as="li" key={p} delay={i * 60} className="partners__chip">
               <span className="partners__ico" aria-hidden>
                 <Truck size={14} />
               </span>
               {p}
-            </li>
+            </Reveal>
           ))}
           <li className="partners__more">— {business.partnersLine}</li>
         </ul>

@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
+import { Reveal } from '@/lib/reveal';
 
 export type Hue = 'blue' | 'green' | 'saffron' | 'teal' | 'violet' | 'magenta' | 'red';
 
@@ -26,7 +27,7 @@ export function SectionHeading({
   center?: boolean;
 }): ReactElement {
   return (
-    <div className={`sec-head ${center ? 'sec-head--center' : ''}`} data-hue={hue}>
+    <Reveal className={`sec-head ${center ? 'sec-head--center' : ''}`} data-hue={hue}>
       <span className="sec-head__eyebrow">
         <span className="sec-head__eyebrow-ico" aria-hidden>
           {icon}
@@ -37,6 +38,6 @@ export function SectionHeading({
         {title}
       </h2>
       {sub ? <p className="sec-head__sub">{sub}</p> : null}
-    </div>
+    </Reveal>
   );
 }

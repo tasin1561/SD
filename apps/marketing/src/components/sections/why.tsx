@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { Reveal } from '@/lib/reveal';
 import { BarChart3, Boxes, Home, Languages, ShieldCheck, Truck, Undo2 } from 'lucide-react';
 import { platform } from '@/content/site';
 import { SectionHeading } from './section-heading';
@@ -33,10 +34,16 @@ export function Why(): ReactElement {
           sub="Each of these is a thing the system does, not a promise. Ask to see it working before you ship."
         />
         <ul className="why__grid">
-          {platform.why.map((w) => {
+          {platform.why.map((w, i) => {
             const Icon = ICONS[w.icon as keyof typeof ICONS] ?? ShieldCheck;
             return (
-              <li key={w.title} className="row why__row" data-hue={w.hue}>
+              <Reveal
+                as="li"
+                key={w.title}
+                delay={i * 60}
+                className="row why__row"
+                data-hue={w.hue}
+              >
                 <span className="row__chip" aria-hidden>
                   <Icon size={18} />
                 </span>
@@ -44,7 +51,7 @@ export function Why(): ReactElement {
                   <span className="row__title">{w.title}</span>
                   <span className="row__helper why__body">{w.body}</span>
                 </span>
-              </li>
+              </Reveal>
             );
           })}
         </ul>

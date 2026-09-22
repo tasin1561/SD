@@ -5,6 +5,7 @@ import { Mail, User } from 'lucide-react';
 import { TextArea, TextField, type FieldStatus } from '@/components/micro/text-field';
 import { PhoneField } from '@/components/micro/phone-field';
 import { LabelIntoParcel } from '@/components/micro/label-into-parcel';
+import { ReactiveMascot } from '@/components/micro/reactive-mascot';
 import { SweepLink } from '@/components/micro/sweep';
 import { contact } from '@/content/sections/contact';
 
@@ -120,11 +121,19 @@ export function ContactClient({
 
   return (
     <form ref={formRef} className="ct__form-body" onSubmit={openEmail} noValidate>
-      <h3 className="ct__form-h">{c.heading}</h3>
+      <div className="ct__form-top">
+        <h3 className="ct__form-h">{c.heading}</h3>
+        {/* Pattern 13: eyes follow the caret; beams once the message is ready to send. */}
+        <ReactiveMascot
+          watch={formRef}
+          mood={messageStatus === 'success' && emailStatus === 'success' ? 'happy' : 'neutral'}
+        />
+      </div>
 
       <div className="ct__grid">
         <TextField
           label={c.name.label}
+          name="name"
           icon={<User size={15} />}
           autoComplete="name"
           value={name}
@@ -135,6 +144,7 @@ export function ContactClient({
         />
         <TextField
           label={c.email.label}
+          name="email"
           type="email"
           inputMode="email"
           autoComplete="email"
@@ -153,6 +163,7 @@ export function ContactClient({
 
       <TextArea
         label={c.message.label}
+        name="message"
         rows={4}
         maxLength={c.messageMax}
         counter

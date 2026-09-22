@@ -55,12 +55,15 @@ export function Reveal({
   as: Tag = 'div',
   className,
   style,
+  ...data
 }: {
   children: ReactNode;
   delay?: number;
   as?: 'div' | 'li' | 'section' | 'span';
   className?: string;
   style?: CSSProperties;
+  /** `data-*` only — the sections' rows and headings carry `data-hue`, which the hue CSS keys on. */
+  [attr: `data-${string}`]: string | undefined;
 }): ReactElement {
   const ref = useRef<HTMLElement | null>(null);
   const base = useContext(GroupDelay);
@@ -88,6 +91,7 @@ export function Reveal({
       ref={ref as React.Ref<HTMLDivElement> & React.Ref<HTMLLIElement>}
       className={`reveal${className ? ` ${className}` : ''}`}
       style={total ? { ...style, transitionDelay: `${total}ms` } : style}
+      {...data}
     >
       {children}
     </Tag>

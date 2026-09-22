@@ -30,20 +30,24 @@ export function ReactiveMascot({
     };
     const onMove = (e: PointerEvent): void => look(e.clientX, e.clientY);
     const onInput = (): void => {
-      const t = watch?.current;
-      if (!t) return;
+      const root = watch?.current;
+      if (!root) return;
+      // The active field inside `watch` (a form), or `watch` itself when it IS the field.
+      const a = document.activeElement;
+      const t = a instanceof HTMLElement && root.contains(a) && a !== root ? a : root;
       const r = t.getBoundingClientRect();
-      const len = t instanceof HTMLInputElement ? t.value.length : 0;
+      const len =
+        t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement ? t.value.length : 0;
       look(r.left + Math.min(r.width, 12 + len * 8), r.top + r.height / 2);
     };
     window.addEventListener('pointermove', onMove, { passive: true });
     const t = watch?.current;
     t?.addEventListener('input', onInput);
-    t?.addEventListener('focus', onInput);
+    t?.addEventListener('focusin', onInput);
     return () => {
       window.removeEventListener('pointermove', onMove);
       t?.removeEventListener('input', onInput);
-      t?.removeEventListener('focus', onInput);
+      t?.removeEventListener('focusin', onInput);
     };
   }, [watch]);
   return (
