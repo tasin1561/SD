@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import {
   ChevronDown,
@@ -43,6 +42,11 @@ const MEGA_ICONS = [
  * Two items carry a MEGA-MENU (u21 rows): it grows from the item on
  * hover or focus-within, closes on Escape or when the pointer leaves, and
  * the item itself stays a real link, so keyboard users can skip the panel.
+ *
+ * Every link here is a PLAIN <a>, not next/link: on the static export a
+ * <Link> to a hash on the current path changed nothing — no hash, no scroll
+ * (found on the live site, 2026-09-22). The browser's own hash navigation
+ * honours `scroll-margin-top`; SiteHeader re-settles the landing afterwards.
  */
 export function HeaderNav(): ReactElement {
   const [active, setActive] = useState<string | null>(null);
@@ -112,7 +116,7 @@ export function HeaderNav(): ReactElement {
         const mega = (platform.nav.mega as Record<string, readonly MegaRow[] | undefined>)[l.label];
         if (!mega)
           return (
-            <Link
+            <a
               key={l.href}
               href={l.href}
               data-target={id}
@@ -120,7 +124,7 @@ export function HeaderNav(): ReactElement {
               aria-current={active === id ? 'location' : undefined}
             >
               {l.label}
-            </Link>
+            </a>
           );
         const isOpen = open === l.label;
         const start = iconIndex;
@@ -137,7 +141,7 @@ export function HeaderNav(): ReactElement {
               if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(null);
             }}
           >
-            <Link
+            <a
               href={l.href}
               data-target={id}
               className="hnav__link"
@@ -149,7 +153,7 @@ export function HeaderNav(): ReactElement {
             >
               {l.label}
               <ChevronDown size={13} aria-hidden className="hnav__chev" />
-            </Link>
+            </a>
             <div
               id={`mega-${id}`}
               className="mega"

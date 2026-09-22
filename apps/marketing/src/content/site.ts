@@ -71,37 +71,37 @@ export const platform = {
       ],
       Platform: [
         {
-          href: '/#platform',
+          href: '/#platform-stock-in',
           label: 'Get your stock into India',
           helper: 'Consignments, counts, freight billing',
           hue: 'teal',
         },
         {
-          href: '/#platform',
+          href: '/#platform-catalogue',
           label: 'Know what is on the shelf',
           helper: 'Catalogue, live stock, serials',
           hue: 'violet',
         },
         {
-          href: '/#platform',
+          href: '/#platform-orders',
           label: 'Every order confirmed',
           helper: 'Call desk, journey, customer register',
           hue: 'saffron',
         },
         {
-          href: '/#platform',
+          href: '/#platform-returns',
           label: 'Returns, unit by unit',
           helper: 'Inspection, dispositions, tickets',
           hue: 'magenta',
         },
         {
-          href: '/#platform',
+          href: '/#platform-money',
           label: 'Your money, itemised',
           helper: 'Wallet, top-ups, withdrawals, invoices',
           hue: 'green',
         },
         {
-          href: '/#platform',
+          href: '/#platform-team',
           label: 'Run it with your team',
           helper: 'Roles, notifications, your limits',
           hue: 'blue',

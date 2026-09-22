@@ -119,6 +119,37 @@ export function SiteHeader(): ReactElement {
     };
   }, [open]);
 
+  // After a hash navigation the target is re-scrolled into view a few times
+  // while the sections above it finish rendering. The sections carry
+  // `content-visibility: auto`, so a jump to a far anchor (the FAQ) landed
+  // ~80 px deep as the ones in between grew from their placeholder height.
+  // `scrollIntoView` honours each section's `scroll-margin-top`. A hash
+  // with no element yet (`#platform-<tab>` before the tour has mounted)
+  // settles on its section instead.
+  useEffect(() => {
+    const settle = (): void => {
+      const raw = window.location.hash.slice(1);
+      if (!raw) return;
+      const target = (id: string): HTMLElement | null => document.getElementById(id);
+      // A tour deep link settles on the SECTION (heading and tabs in view),
+      // never on the stage element the tab switch creates below them.
+      const el = raw.startsWith('platform-') ? target('platform') : target(raw);
+      if (!el) return;
+      const go = (): void => el.scrollIntoView({ block: 'start' });
+      const t1 = window.setTimeout(go, 60);
+      const t2 = window.setTimeout(go, 260);
+      const t3 = window.setTimeout(go, 700);
+      timers.current.push(t1, t2, t3);
+    };
+    const timers = { current: [] as number[] };
+    window.addEventListener('hashchange', settle);
+    if (window.location.hash) settle();
+    return () => {
+      window.removeEventListener('hashchange', settle);
+      for (const t of timers.current) window.clearTimeout(t);
+    };
+  }, []);
+
   const track = (awb: string): void => {
     window.location.assign(`${platform.nav.track.href}?awb=${encodeURIComponent(awb)}`);
   };

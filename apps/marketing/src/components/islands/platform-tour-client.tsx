@@ -46,9 +46,17 @@ export function PlatformTourClient(): ReactElement {
   const [near, setNear] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
+  // `#platform-<id>` opens that tab — on mount AND on every hash change, so
+  // the header's Platform menu rows (and a shared link) land on the right
+  // scene while the section is already on screen.
   useEffect(() => {
-    const m = /^#platform-([a-z-]+)$/.exec(window.location.hash);
-    if (m && m[1] && isId(m[1])) setActive(m[1]);
+    const fromHash = (): void => {
+      const m = /^#platform-([a-z-]+)$/.exec(window.location.hash);
+      if (m && m[1] && isId(m[1])) setActive(m[1]);
+    };
+    fromHash();
+    window.addEventListener('hashchange', fromHash);
+    return () => window.removeEventListener('hashchange', fromHash);
   }, []);
   useEffect(() => {
     const el = root.current;
