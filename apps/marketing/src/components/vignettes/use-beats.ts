@@ -54,11 +54,17 @@ export function useBeats({ beats, restMs = 2000, loop = true, enabled }: BeatsOp
     setReduced(reducedMotion());
   }, []);
 
+  // A pause pressed by a PERSON holds until they press play — the stage
+  // auto-claim below must not undo it (it did, for a morning: the Pause
+  // button released the stage and the next 250 ms tick took it straight back).
+  const userPaused = useRef(false);
   const pause = useCallback((): void => {
+    userPaused.current = true;
     setPlaying(false);
     if (activeId === id.current) activeId = 0;
   }, []);
   const play = useCallback((): void => {
+    userPaused.current = false;
     activeId = id.current;
     setPlaying(true);
   }, []);
@@ -70,7 +76,7 @@ export function useBeats({ beats, restMs = 2000, loop = true, enabled }: BeatsOp
       // otherwise kept it, and the reseller mock further down never started.
       setPlaying(false);
       if (activeId === id.current) activeId = 0;
-    } else if (activeId === 0) play();
+    } else if (activeId === 0 && !userPaused.current) play();
   }, [enabled, play]);
 
   // Release the stage on unmount. Switching tour tabs unmounts the playing
@@ -90,7 +96,7 @@ export function useBeats({ beats, restMs = 2000, loop = true, enabled }: BeatsOp
   useEffect(() => {
     const t = window.setInterval(() => {
       if (playing && activeId !== id.current) setPlaying(false);
-      else if (!playing && enabled && activeId === 0) play();
+      else if (!playing && enabled && activeId === 0 && !userPaused.current) play();
     }, 250);
     return () => window.clearInterval(t);
   }, [playing, enabled, play]);

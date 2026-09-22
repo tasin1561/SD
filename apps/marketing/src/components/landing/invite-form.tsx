@@ -110,6 +110,35 @@ export function InviteForm({
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setError(null);
+    // Refuse an incomplete form HERE, before a byte leaves the page. The
+    // form is `noValidate` so the browser's bubbles stay off, which also
+    // meant an empty submit went straight to the API and came back as a
+    // 400 with the server's wording (found on the live site, 2026-09-22).
+    // The rules are the fields' own (`required`, `type="email"`); the first
+    // offender takes focus and every one is marked for assistive tech.
+    const invalid = Array.from(e.currentTarget.elements).filter(
+      (el): el is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
+        (el instanceof HTMLInputElement ||
+          el instanceof HTMLSelectElement ||
+          el instanceof HTMLTextAreaElement) &&
+        !el.disabled &&
+        el.type !== 'hidden' &&
+        !el.checkValidity(),
+    );
+    for (const el of e.currentTarget.elements) el.removeAttribute('aria-invalid');
+    if (invalid.length > 0) {
+      for (const el of invalid) el.setAttribute('aria-invalid', 'true');
+      invalid[0]?.focus();
+      const names = invalid
+        .map((el) => el.labels?.[0]?.textContent?.replace(/\s*\*\s*$/, '').trim() || el.name)
+        .slice(0, 4);
+      setError(
+        invalid.length === 1
+          ? `Please check ${names[0]}.`
+          : `${invalid.length} fields still need attention: ${names.join(', ')}${invalid.length > 4 ? '…' : ''}.`,
+      );
+      return;
+    }
     const form = new FormData(e.currentTarget);
 
     // Read from the form itself, never from a second list of field names.

@@ -23,6 +23,18 @@ export function Carousel({
 }): ReactElement {
   const track = useRef<HTMLUListElement>(null);
   const [index, setIndex] = useState(0);
+  // Previous / Next / dots only when the cards do not all fit: at 1440 the
+  // three testimonials sit side by side and the buttons did nothing.
+  const [scrollable, setScrollable] = useState(true);
+  useEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    const measure = (): void => setScrollable(el.scrollWidth > el.clientWidth + 1);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const el = track.current;
     if (!el) return;
@@ -58,13 +70,15 @@ export function Carousel({
           </li>
         ))}
       </ul>
-      <Pagination
-        count={items.length}
-        index={index}
-        onChange={go}
-        label={label}
-        className="mi-carousel__pager"
-      />
+      {scrollable ? (
+        <Pagination
+          count={items.length}
+          index={index}
+          onChange={go}
+          label={label}
+          className="mi-carousel__pager"
+        />
+      ) : null}
     </div>
   );
 }

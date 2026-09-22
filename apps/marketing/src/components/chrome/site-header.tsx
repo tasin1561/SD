@@ -74,14 +74,48 @@ export function SiteHeader(): ReactElement {
 
   useEffect(() => {
     if (!open) return;
+    // Focus goes INTO the drawer (its close button) and comes back to the
+    // menu button on close; Tab wraps inside while it is open. Without this
+    // a keyboard or screen-reader user opened the menu and stayed on the
+    // button behind it (found on the live site, 2026-09-22).
+    const opener = document.activeElement as HTMLElement | null;
+    const drawer = document.getElementById('site-drawer');
+    const focusables = (): HTMLElement[] =>
+      drawer
+        ? Array.from(
+            drawer.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((el) => el.offsetParent !== null)
+        : [];
+    const raf = requestAnimationFrame(() => {
+      (
+        drawer?.querySelector<HTMLElement>('button[aria-label="Close menu"]') ?? focusables()[0]
+      )?.focus();
+    });
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Tab') {
+        const list = focusables();
+        const first = list[0];
+        const last = list[list.length - 1];
+        if (!first || !last) return;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
+      opener?.focus();
     };
   }, [open]);
 

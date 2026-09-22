@@ -94,7 +94,7 @@ error at the terminal.
 The marketing block served the static export with a single catch-all:
 
 ```
-try_files {path} {path}.html {path}/index.html /index.html
+try_files {path} {path}.html {path}/index.html
 ```
 
 That last fallback answers **any** unknown path with the landing page and a
@@ -126,7 +126,7 @@ handle {
     }
 
     handle {
-        try_files {path} {path}.html {path}/index.html /index.html
+        try_files {path} {path}.html {path}/index.html
         file_server
     }
 }
@@ -153,3 +153,41 @@ done
 Cloudflare already stored — that needs a dashboard purge of the affected
 URLs, or waiting out the remaining TTL. There are still no Cloudflare
 credentials on the droplet or in the repo, so this cannot be scripted.
+
+## Routing fixes applied on the droplet (2026-09-22)
+
+Found by probing the live site: `/privacy/`, `/request-invite/` and every unknown path
+rendered the HOME page with a 200 (the `try_files … /index.html` catch-all; the export writes
+`/privacy.html`, so a trailing slash matched nothing), and `www.` served a second copy of the
+site against an apex canonical. The marketing block now carries, in this order:
+
+```caddyfile
+	@www host www.skydrop.online
+	redir @www https://skydrop.online{uri} 308
+	…
+	handle {
+		root * /var/www/skydrop-marketing
+		@slash path_regexp ts ^(/.+)/$
+		redir @slash {re.ts.1} 308
+		@asset path_regexp \.[A-Za-z0-9]+$
+		handle @asset {
+			file_server
+		}
+		handle {
+			try_files {path} {path}.html {path}/index.html
+			file_server
+		}
+	}
+	handle_errors {
+		@notfound expression {http.error.status_code} == 404
+		handle @notfound {
+			root * /var/www/skydrop-marketing
+			rewrite * /404.html
+			file_server
+		}
+	}
+```
+
+Verified after reload: `/privacy/` → 308 `/privacy`; `www.skydrop.online/privacy` → 308 apex;
+`/definitely-not-here` → **404** with the export's 404 page; `/api/public/invite-leads` still
+proxied; the other hosts untouched. Backup: `/etc/caddy/Caddyfile.bak-<timestamp>`.
