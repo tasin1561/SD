@@ -1,6 +1,14 @@
 'use client';
 
-import { useId, type ReactElement } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import './scene-art.css';
 
 /**
@@ -17,27 +25,87 @@ import './scene-art.css';
 export function SceneArt({ kind }: { kind: string }): ReactElement {
   const raw = useId();
   const uid = `sa${raw.replace(/[^a-zA-Z0-9]/g, '')}${kind.replace(/[^a-z]/g, '')}`;
+  // Animations run only while the scene is on screen — the same gate the
+  // hero canvas has. Off screen (or before the observer has spoken) every
+  // loop is paused; a client without IntersectionObserver plays.
+  const ref = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setActive(true);
+      return;
+    }
+    const io = new IntersectionObserver((es) => setActive(es.some((e) => e.isIntersecting)));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const home = kind === 'to-bangladesh';
   return (
-    <div className="svc-art" data-hue={HUE[kind] ?? 'saffron'}>
-      <svg
-        viewBox="0 0 480 360"
-        className="svc__art"
-        role="img"
-        aria-label={LABEL[kind] ?? 'Skydrop service illustration'}
-      >
-        <defs>
-          {/* The ground pool. A flat ellipse of `--art-glow` reads as a hard
+    <div
+      ref={ref}
+      className="svc-art"
+      data-hue={HUE[kind] ?? 'saffron'}
+      data-active={active ? '' : undefined}
+    >
+      <div className="svc-art__stage">
+        <svg
+          viewBox="0 0 480 360"
+          className="svc__art"
+          role="img"
+          aria-label={LABEL[kind] ?? 'Skydrop service illustration'}
+        >
+          <defs>
+            {/* The ground pool. A flat ellipse of `--art-glow` reads as a hard
               puddle; faded to nothing it reads as light. */}
-          <radialGradient id={`${uid}g`}>
-            <stop offset="0" stopColor="var(--art-glow)" />
-            <stop offset="1" stopColor="var(--art-glow)" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        {kind === 'to-india' ? <Corridor id={uid} /> : null}
-        {kind === 'to-bangladesh' ? <Corridor id={uid} home /> : null}
-        {kind === 'import' ? <Warehouse id={uid} /> : null}
-        {kind === 'sell' ? <Shop id={uid} /> : null}
-      </svg>
+            <radialGradient id={`${uid}g`}>
+              <stop offset="0" stopColor="var(--art-glow)" />
+              <stop offset="1" stopColor="var(--art-glow)" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          {kind === 'to-india' ? <Corridor id={uid} /> : null}
+          {kind === 'to-bangladesh' ? <Corridor id={uid} home /> : null}
+          {kind === 'import' ? <Warehouse id={uid} /> : null}
+          {kind === 'sell' ? <Shop id={uid} /> : null}
+        </svg>
+        {kind === 'to-india' || kind === 'to-bangladesh' ? (
+          <>
+            <Layer
+              cls="fly"
+              root={CORRIDOR_ROOT(home)}
+              origin={home ? '50.8% 28.6%' : '49.2% 28.6%'}
+            >
+              <CorridorFly />
+            </Layer>
+            <Layer cls="drop" root={CORRIDOR_ROOT(home)} origin={home ? '17.1% 21%' : '82.9% 21%'}>
+              <CorridorDrop />
+            </Layer>
+          </>
+        ) : null}
+        {kind === 'import' ? (
+          <>
+            <Layer cls="lift" root="translate(0 44)">
+              <WarehouseLift />
+            </Layer>
+            <Layer cls="tag" root="translate(0 44)">
+              <WarehouseTag />
+            </Layer>
+          </>
+        ) : null}
+        {kind === 'sell' ? (
+          <>
+            <Layer cls="van" root="translate(0 40)">
+              <ShopVan />
+            </Layer>
+            <Layer cls="still" root="translate(0 40)">
+              <ShopCarton />
+            </Layer>
+            <Layer cls="phone" root="translate(0 40)">
+              <ShopPhone />
+            </Layer>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -190,44 +258,7 @@ function Corridor({ id, home }: { id: string; home?: boolean }): ReactElement {
       <path d="M372 262L358 240a17 17 0 1 1 28 0Z" fill="var(--art-top)" />
       <circle cx="372" cy="237" r="5.5" fill="var(--art-side)" />
 
-      <g transform="translate(240 120)">
-        <g className="art-fly">
-          <path d="M-14 -5L-44 -34L-26 -36L8 -8Z" fill="var(--art-side)" />
-          <path d="M-48 -2L-53 -28L-42 -29L-36 -4Z" fill="var(--art-side)" />
-          <path d="M-46 3L-58 11L-49 12L-38 5Z" fill="var(--art-side)" />
-          <path d="M-54 2L18 11L50 0Z" fill="var(--art-mid)" />
-          <path d="M-54 -2L18 -11L50 0L-54 2Z" fill="var(--art-top)" />
-          <path d="M-32 -3L2 -7L2 -3L-32 0Z" fill="var(--art-edge)" opacity="0.9" />
-          <path
-            d="M-10 5L-40 36L-20 38L14 7Z"
-            fill="var(--art-mid)"
-            stroke="var(--art-edge)"
-            strokeWidth="1.5"
-            strokeOpacity="0.5"
-          />
-        </g>
-      </g>
-
       {/* down under a chute */}
-      <g transform="translate(398 132)">
-        <g className="art-drop">
-          <path d="M-46 -4C-46 -34 -30 -46 -15 -47L-15 -4Q-31 3 -46 -4Z" fill="var(--art-mid)" />
-          <path d="M-15 -47C-5 -48 5 -48 15 -47L15 -4Q0 3 -15 -4Z" fill="var(--art-top)" />
-          <path d="M15 -47C30 -46 46 -34 46 -4Q31 3 15 -4Z" fill="var(--art-side)" />
-          <path
-            d="M-46 -4Q-31 3 -15 -4Q0 3 15 -4Q31 3 46 -4"
-            fill="none"
-            stroke="var(--art-side)"
-            strokeWidth="2.5"
-          />
-          <path
-            d="M-42 -2L-11 24M-13 -3L-6 24M13 -3L6 24M42 -2L11 24"
-            stroke="var(--art-mid)"
-            strokeWidth="2"
-          />
-          <Box x={0} y={28} w={24} d={22} h={22} tape />
-        </g>
-      </g>
     </g>
   );
 }
@@ -272,38 +303,6 @@ function Warehouse({ id }: { id: string }): ReactElement {
         strokeDasharray="3 4"
         strokeOpacity="0.7"
       />
-      <g className="art-lift">
-        <Box x={304} y={122} w={36} d={32} h={32} tape />
-      </g>
-
-      <g className="art-tag">
-        <rect x="338" y="38" width="56" height="56" rx="12" fill="var(--art-mid)" />
-        <path
-          d="M352 56h30M352 70h30M352 84h18"
-          stroke="var(--art-edge)"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          strokeOpacity="0.8"
-        />
-        <circle cx="404" cy="90" r="26" fill="var(--art-top)" />
-        <circle
-          cx="404"
-          cy="90"
-          r="26"
-          fill="none"
-          stroke="var(--art-edge)"
-          strokeWidth="2.5"
-          strokeOpacity="0.7"
-        />
-        <path
-          d="M392 90l8 10 17-20"
-          fill="none"
-          stroke="var(--art-side)"
-          strokeWidth="5.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </g>
     </g>
   );
 }
@@ -362,54 +361,182 @@ function Shop({ id }: { id: string }): ReactElement {
       <path d="M214 173L294 133L294 144L214 184Z" fill="var(--art-side)" />
 
       <Box x={300} y={256} w={120} d={52} h={10} />
+    </g>
+  );
+}
 
-      <g className="art-van">
-        <Box x={306} y={195} w={76} d={40} h={46} />
-        <Box x={382} y={171} w={32} d={40} h={32} />
-        <path d="M388 172L410 161L410 179L388 190Z" fill="var(--art-edge)" opacity="0.85" />
-        <ellipse
-          cx="332"
-          cy="228"
-          rx="12"
-          ry="8"
-          fill="var(--art-side)"
-          transform="rotate(-26 332 228)"
+/* ── The animated pieces, each drawn on its OWN overlay <svg> ──────────────
+   A `transform` animated on an SVG <g> is laid out by Chrome on the main
+   thread every frame (SVG transforms are not composited): ~60 layouts a
+   second while the scene was on screen, in every build (PHASE-8-MUST-FIX,
+   final pass). An overlay <svg> is an HTML-level box, so the same keyframes
+   on it composite. Each layer shares the base's viewBox and its scene's
+   root transform, so coordinates are unchanged; the keyframe offsets are
+   percentages of the layer box (scene-art.css). */
+function Layer({
+  cls,
+  root,
+  origin,
+  children,
+}: {
+  cls: string;
+  root: string;
+  origin?: string;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <svg
+      className={`svc__layer svc__layer--${cls}`}
+      viewBox="0 0 480 360"
+      aria-hidden="true"
+      focusable="false"
+      style={origin ? ({ transformOrigin: origin } as CSSProperties) : undefined}
+    >
+      <g transform={root}>{children}</g>
+    </svg>
+  );
+}
+
+const CORRIDOR_ROOT = (home?: boolean): string =>
+  home ? 'translate(480 -18)scale(-1 1)' : 'translate(0 -18)';
+
+function CorridorFly(): ReactElement {
+  return (
+    <g transform="translate(240 120)">
+      <g>
+        <path d="M-14 -5L-44 -34L-26 -36L8 -8Z" fill="var(--art-side)" />
+        <path d="M-48 -2L-53 -28L-42 -29L-36 -4Z" fill="var(--art-side)" />
+        <path d="M-46 3L-58 11L-49 12L-38 5Z" fill="var(--art-side)" />
+        <path d="M-54 2L18 11L50 0Z" fill="var(--art-mid)" />
+        <path d="M-54 -2L18 -11L50 0L-54 2Z" fill="var(--art-top)" />
+        <path d="M-32 -3L2 -7L2 -3L-32 0Z" fill="var(--art-edge)" opacity="0.9" />
+        <path
+          d="M-10 5L-40 36L-20 38L14 7Z"
+          fill="var(--art-mid)"
+          stroke="var(--art-edge)"
+          strokeWidth="1.5"
+          strokeOpacity="0.5"
         />
-        <ellipse
-          cx="398"
-          cy="196"
-          rx="12"
-          ry="8"
-          fill="var(--art-side)"
-          transform="rotate(-26 398 196)"
-        />
-        <circle cx="332" cy="228" r="3.5" fill="var(--art-edge)" />
-        <circle cx="398" cy="196" r="3.5" fill="var(--art-edge)" />
       </g>
-      <Box x={302} y={221} w={24} d={22} h={24} tape />
-
-      <g transform="translate(348 76) rotate(-10)">
-        <g className="art-phone">
-          <rect x="-31" y="-54" width="62" height="108" rx="13" fill="var(--art-side)" />
-          <rect x="-25" y="-46" width="50" height="86" rx="6" fill="var(--art-mid)" />
-          <path
-            d="M-13 -5l9 11 19-24"
-            fill="none"
-            stroke="var(--art-top)"
-            strokeWidth="7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <rect x="-9" y="44" width="18" height="4" rx="2" fill="var(--art-edge)" opacity="0.7" />
-          <path
-            d="M40 -16q10 12 0 24M52 -26q19 22 0 44"
-            fill="none"
-            stroke="var(--art-top)"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeOpacity="0.75"
-          />
-        </g>
+    </g>
+  );
+}
+function CorridorDrop(): ReactElement {
+  return (
+    <g transform="translate(398 132)">
+      <g>
+        <path d="M-46 -4C-46 -34 -30 -46 -15 -47L-15 -4Q-31 3 -46 -4Z" fill="var(--art-mid)" />
+        <path d="M-15 -47C-5 -48 5 -48 15 -47L15 -4Q0 3 -15 -4Z" fill="var(--art-top)" />
+        <path d="M15 -47C30 -46 46 -34 46 -4Q31 3 15 -4Z" fill="var(--art-side)" />
+        <path
+          d="M-46 -4Q-31 3 -15 -4Q0 3 15 -4Q31 3 46 -4"
+          fill="none"
+          stroke="var(--art-side)"
+          strokeWidth="2.5"
+        />
+        <path
+          d="M-42 -2L-11 24M-13 -3L-6 24M13 -3L6 24M42 -2L11 24"
+          stroke="var(--art-mid)"
+          strokeWidth="2"
+        />
+        <Box x={0} y={28} w={24} d={22} h={22} tape />
+      </g>
+    </g>
+  );
+}
+function WarehouseLift(): ReactElement {
+  return (
+    <g>
+      <Box x={304} y={122} w={36} d={32} h={32} tape />
+    </g>
+  );
+}
+function WarehouseTag(): ReactElement {
+  return (
+    <g>
+      <rect x="338" y="38" width="56" height="56" rx="12" fill="var(--art-mid)" />
+      <path
+        d="M352 56h30M352 70h30M352 84h18"
+        stroke="var(--art-edge)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeOpacity="0.8"
+      />
+      <circle cx="404" cy="90" r="26" fill="var(--art-top)" />
+      <circle
+        cx="404"
+        cy="90"
+        r="26"
+        fill="none"
+        stroke="var(--art-edge)"
+        strokeWidth="2.5"
+        strokeOpacity="0.7"
+      />
+      <path
+        d="M392 90l8 10 17-20"
+        fill="none"
+        stroke="var(--art-side)"
+        strokeWidth="5.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </g>
+  );
+}
+function ShopVan(): ReactElement {
+  return (
+    <g>
+      <Box x={306} y={195} w={76} d={40} h={46} />
+      <Box x={382} y={171} w={32} d={40} h={32} />
+      <path d="M388 172L410 161L410 179L388 190Z" fill="var(--art-edge)" opacity="0.85" />
+      <ellipse
+        cx="332"
+        cy="228"
+        rx="12"
+        ry="8"
+        fill="var(--art-side)"
+        transform="rotate(-26 332 228)"
+      />
+      <ellipse
+        cx="398"
+        cy="196"
+        rx="12"
+        ry="8"
+        fill="var(--art-side)"
+        transform="rotate(-26 398 196)"
+      />
+      <circle cx="332" cy="228" r="3.5" fill="var(--art-edge)" />
+      <circle cx="398" cy="196" r="3.5" fill="var(--art-edge)" />
+    </g>
+  );
+}
+/** The carton at the kerb: static, drawn ABOVE the van as it was in the base. */
+function ShopCarton(): ReactElement {
+  return <Box x={302} y={221} w={24} d={22} h={24} tape />;
+}
+function ShopPhone(): ReactElement {
+  return (
+    <g transform="translate(348 76) rotate(-10)">
+      <g>
+        <rect x="-31" y="-54" width="62" height="108" rx="13" fill="var(--art-side)" />
+        <rect x="-25" y="-46" width="50" height="86" rx="6" fill="var(--art-mid)" />
+        <path
+          d="M-13 -5l9 11 19-24"
+          fill="none"
+          stroke="var(--art-top)"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <rect x="-9" y="44" width="18" height="4" rx="2" fill="var(--art-edge)" opacity="0.7" />
+        <path
+          d="M40 -16q10 12 0 24M52 -26q19 22 0 44"
+          fill="none"
+          stroke="var(--art-top)"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeOpacity="0.75"
+        />
       </g>
     </g>
   );

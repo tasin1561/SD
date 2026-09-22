@@ -1,48 +1,69 @@
 /* Service scene art — a flat-face isometric piece filling the scene's right
    half. Colour comes entirely from the `--art-*` faces `[data-hue]` sets on
    the wrapper (sections.css), so the piece re-paints per scene and per theme
-   with no code here. Compound selectors so import order cannot beat us. */
+   with no code here. Compound selectors so import order cannot beat us.
+
+   Layout: a STAGE box (the float animates on it — an HTML box, composited)
+   holding the base <svg> and one overlay <svg> per animated piece. Every
+   animation is paused unless `[data-active]` says the scene is on screen
+   (an IntersectionObserver in scene-art.tsx). */
 .svc-art {
   display: block;
   width: 100%;
   line-height: 0;
 }
-.svc-art .svc__art {
-  display: block;
+.svc-art .svc-art__stage {
+  position: relative;
   width: 100%;
   max-width: 34rem;
-  height: auto;
   margin-inline: auto;
   aspect-ratio: 4 / 3;
   animation: svcFloat 7.5s ease-in-out infinite;
 }
+.svc-art .svc__art,
+.svc-art .svc__layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.svc-art .svc__layer {
+  pointer-events: none;
+}
 
-/* One accent motion per scene, transform-only (the arc is the one exception:
-   a dash flowing along the corridor, which no transform can express). */
+/* One accent motion per scene. Each transform runs on an overlay <svg>
+   (see scene-art.tsx `Layer`) — the arc is the one exception: a dash flowing
+   along the corridor, which no transform can express, so it stays a paint-only
+   `stroke-dashoffset` on the path itself. */
 .svc-art .art-arc {
   animation: artArc 2.4s linear infinite;
 }
-.svc-art .art-fly {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
+.svc-art .svc__layer--fly {
   animation: artFly 11s ease-in-out infinite;
 }
-.svc-art .art-drop {
-  transform-box: fill-box;
-  transform-origin: 50% 8%;
+.svc-art .svc__layer--drop {
   animation: artDrop 6.5s ease-in-out infinite alternate;
 }
-.svc-art .art-lift {
+.svc-art .svc__layer--lift {
   animation: artLift 5.5s ease-in-out infinite;
 }
-.svc-art .art-tag {
+.svc-art .svc__layer--tag {
   animation: artTag 4.5s ease-in-out infinite alternate;
 }
-.svc-art .art-van {
+.svc-art .svc__layer--van {
   animation: artVan 4s ease-in-out infinite alternate;
 }
-.svc-art .art-phone {
+.svc-art .svc__layer--phone {
   animation: artPhone 5s ease-in-out infinite alternate;
+}
+
+/* Off screen: nothing ticks. */
+.svc-art:not([data-active]) .svc-art__stage,
+.svc-art:not([data-active]) .svc__layer,
+.svc-art:not([data-active]) .art-arc {
+  animation-play-state: paused;
 }
 
 @keyframes svcFloat {
@@ -58,56 +79,56 @@
 @keyframes artFly {
   0% {
     opacity: 0;
-    transform: translate(-58px, 34px) rotate(11deg);
+    transform: translate(-12.1%, 9.4%) rotate(11deg);
   }
   12%,
   88% {
     opacity: 1;
   }
   30% {
-    transform: translate(-30px, 12px) rotate(6deg);
+    transform: translate(-6.25%, 3.3%) rotate(6deg);
   }
   52% {
-    transform: translate(4px, 0) rotate(-2deg);
+    transform: translate(0.8%, 0) rotate(-2deg);
   }
   74% {
-    transform: translate(36px, 9px) rotate(-9deg);
+    transform: translate(7.5%, 2.5%) rotate(-9deg);
   }
   100% {
     opacity: 0;
-    transform: translate(62px, 34px) rotate(-15deg);
+    transform: translate(12.9%, 9.4%) rotate(-15deg);
   }
 }
 @keyframes artDrop {
   from {
-    transform: translateY(-5px) rotate(-2deg);
+    transform: translateY(-1.4%) rotate(-2deg);
   }
   to {
-    transform: translateY(6px) rotate(2deg);
+    transform: translateY(1.7%) rotate(2deg);
   }
 }
 @keyframes artLift {
   0%,
   100% {
-    transform: translateY(6px);
+    transform: translateY(1.7%);
   }
   50% {
-    transform: translateY(-9px);
+    transform: translateY(-2.5%);
   }
 }
 @keyframes artTag {
   to {
-    transform: translateY(-6px);
+    transform: translateY(-1.7%);
   }
 }
 @keyframes artVan {
   to {
-    transform: translateX(7px);
+    transform: translateX(1.5%);
   }
 }
 @keyframes artPhone {
   to {
-    transform: translateY(-6px);
+    transform: translateY(-1.7%);
   }
 }
 

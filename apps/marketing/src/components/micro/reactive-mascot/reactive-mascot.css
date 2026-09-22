@@ -9,19 +9,21 @@
   transition: transform calc(120 * var(--d)) ease-out;
   transform: translate(var(--ex, 0px), var(--ey, 0px));
 }
+/* The blink is an opacity STEP, not a scaleY: a transform on an SVG <rect>
+   is a layout every frame for the whole 4.2 s loop; opacity is a repaint at
+   the two frames that change. */
 .mi-mascot__lid {
-  transform-origin: 50% 0;
-  transform: scaleY(0);
-  animation: mi-mascot-blink calc(4200 * var(--d)) infinite;
+  opacity: 0;
+  animation: mi-mascot-blink calc(4200 * var(--d)) steps(1, end) infinite;
 }
 @keyframes mi-mascot-blink {
   0%,
   92%,
   100% {
-    transform: scaleY(0);
+    opacity: 0;
   }
-  95% {
-    transform: scaleY(1);
+  93% {
+    opacity: 1;
   }
 }
 .mi-mascot__mouth {

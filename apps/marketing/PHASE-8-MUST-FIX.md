@@ -230,3 +230,27 @@ bound):** move the plane and the dropping parcel out of the scene `<svg>` into t
 absolutely positioned `<svg>` elements so the transform animates an HTML-level box and
 composites, or gate the scene's animations on an IntersectionObserver the way the hero canvas
 already is.
+
+**Idle-layout fix — DONE (2026-09-22).** Every looping transform that lived on an SVG child
+now runs on an HTML-level box: the services scene's plane, chute, lifted carton, tally, van and
+phone are each drawn on their own overlay `<svg>` (`Layer` in scene-art.tsx — same viewBox,
+same root transform, keyframe offsets as percentages of the layer box), the float runs on a
+stage div, and the whole scene is paused unless an IntersectionObserver says it is on screen.
+The coverage empty state's bob runs on its wrapper and the lens sweep on an overlay, its sparks
+are opacity-only; the mascot blinks by opacity steps instead of a `scaleY` on a `<rect>`; the
+404 parcel bobs on its wrapper with the tag on an overlay and an opacity-only shadow. The
+corridor arc keeps its paint-only `stroke-dashoffset`. Measured with the same counter
+(`Performance.getMetrics`, 2 s windows), home page, mobile 412 / desktop 1440:
+
+| position                 | layouts/s before | layouts/s after | layout ms/s after |
+| ------------------------ | ---------------- | --------------- | ----------------- |
+| at load                  | 60 / 0           | **0 / 0**       | 0                 |
+| services scene on screen | 60 / 31.5        | **0 / 0**       | 0                 |
+| coverage on screen       | — / 31.5         | **0 / 0**       | 0                 |
+| contact on screen        | —                | **0 / 0**       | 0                 |
+| 404 page                 | ~60              | **3 / 2.5**     | 0                 |
+
+Style recalculations still tick at 60/s in headless while any CSS animation runs (5–24 ms/s);
+that is Chrome updating animated style on the main thread, not layout, and it composites on
+a real device. Static suite green; the four scenes, the empty state, the mascot and the 404
+re-rendered and checked.

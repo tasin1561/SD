@@ -25,16 +25,26 @@
   --e-ring: var(--green-text);
   --e-glass: var(--green-tint);
 }
-.mi-empty__art {
+/* The art is a wrapper holding two stacked <svg>s: the bob animates the
+   wrapper and the lens sweep its own overlay — both HTML-level boxes, so
+   they composite instead of forcing an SVG layout every frame. */
+.mi-empty__artwrap {
+  position: relative;
+  display: block;
   width: 7.5rem;
-  height: auto;
+  aspect-ratio: 120 / 84;
   margin-bottom: 0.4rem;
-}
-.mi-empty__box {
   animation: mi-empty-bob 4s ease-in-out infinite;
 }
+.mi-empty__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
 .mi-empty__lens {
-  transform-origin: 78px 30px;
+  transform-origin: 65% 35.7%;
   animation: mi-empty-sweep 3.2s ease-in-out infinite;
 }
 .mi-empty__spark {
@@ -54,18 +64,17 @@
     transform: translate(0, 0) rotate(0);
   }
   50% {
-    transform: translate(-22px, 14px) rotate(-8deg);
+    transform: translate(-18.3%, 16.7%) rotate(-8deg);
   }
 }
+/* Opacity only: a scale on an SVG circle is a layout every frame. */
 @keyframes mi-empty-spark {
   0%,
   100% {
     opacity: 0.2;
-    transform: scale(0.8);
   }
   50% {
     opacity: 1;
-    transform: scale(1.2);
   }
 }
 .mi-empty__title {
@@ -85,6 +94,7 @@
   margin-top: 0.6rem;
 }
 @media (prefers-reduced-motion: reduce) {
+  .mi-empty__artwrap,
   .mi-empty__box,
   .mi-empty__lens,
   .mi-empty__spark {

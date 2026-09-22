@@ -56,22 +56,26 @@ export default function NotFound(): ReactElement {
  */
 function LostParcel(): ReactElement {
   return (
-    <svg className="nf__art" viewBox="0 0 146 124" aria-hidden focusable="false">
-      <ellipse className="nf__shadow" cx="66" cy="110" rx="38" ry="6.5" />
-      <g className="nf__box">
-        <path className="nf__top" d="M66 30 100 49.5 66 69 32 49.5Z" />
-        <path className="nf__left" d="M32 49.5v27L66 96V76.5Z" />
-        <path className="nf__right" d="M100 49.5v27L66 96V76.5Z" />
-        <path className="nf__tape" d="M49 39.7 83 59.2v10.6l-6-3.4v-4L43 43.1Z" />
-        <path className="nf__edge" d="M32 49.5 66 69l34-19.5M66 69v27" />
-      </g>
-      <g className="nf__tag">
-        <path className="nf__lead" d="M103 33c8-5 13-7 18-7" />
-        <rect className="nf__chip" x="106" y="6" width="32" height="32" rx="10" />
-        <text className="nf__q" x="122" y="29" textAnchor="middle">
-          ?
-        </text>
-      </g>
-    </svg>
+    <span className="nf__artwrap">
+      <svg className="nf__art" viewBox="0 0 146 124" aria-hidden focusable="false">
+        <ellipse className="nf__shadow" cx="66" cy="110" rx="38" ry="6.5" />
+        <g className="nf__box">
+          <path className="nf__top" d="M66 30 100 49.5 66 69 32 49.5Z" />
+          <path className="nf__left" d="M32 49.5v27L66 96V76.5Z" />
+          <path className="nf__right" d="M100 49.5v27L66 96V76.5Z" />
+          <path className="nf__tape" d="M49 39.7 83 59.2v10.6l-6-3.4v-4L43 43.1Z" />
+          <path className="nf__edge" d="M32 49.5 66 69l34-19.5M66 69v27" />
+        </g>
+      </svg>
+      <svg className="nf__art nf__tagLayer" viewBox="0 0 146 124" aria-hidden focusable="false">
+        <g className="nf__tag">
+          <path className="nf__lead" d="M103 33c8-5 13-7 18-7" />
+          <rect className="nf__chip" x="106" y="6" width="32" height="32" rx="10" />
+          <text className="nf__q" x="122" y="29" textAnchor="middle">
+            ?
+          </text>
+        </g>
+      </svg>
+    </span>
   );
 }

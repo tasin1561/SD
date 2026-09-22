@@ -23,18 +23,31 @@ export function EmptyState({
 }): ReactElement {
   return (
     <div className={`mi mi-empty ${className ?? ''}`} data-tone={tone} role="status">
-      <svg className="mi-empty__art" viewBox="0 0 120 84" aria-hidden>
-        <g className="mi-empty__box">
-          <path d="M34 36l26-12 26 12v26L60 74 34 62z" fill="var(--e-box)" />
-          <path
-            d="M34 36l26 12 26-12M60 48v26"
-            fill="none"
-            stroke="var(--e-edge)"
-            strokeWidth="1.5"
+      {/* Two stacked <svg>s in one box: the bob runs on the wrapper and the lens
+          sweep on its own overlay — HTML-level boxes, so both composite. A
+          transform on an SVG <g> is laid out on the main thread every frame. */}
+      <span className="mi-empty__artwrap">
+        <svg className="mi-empty__art" viewBox="0 0 120 84" aria-hidden>
+          <g className="mi-empty__box">
+            <path d="M34 36l26-12 26 12v26L60 74 34 62z" fill="var(--e-box)" />
+            <path
+              d="M34 36l26 12 26-12M60 48v26"
+              fill="none"
+              stroke="var(--e-edge)"
+              strokeWidth="1.5"
+            />
+            <path d="M47 30l26 12v10l-4-2v-7L43 31z" fill="var(--e-tape)" />
+          </g>
+          <circle className="mi-empty__spark" cx="28" cy="22" r="2" fill="var(--e-ring)" />
+          <circle
+            className="mi-empty__spark mi-empty__spark--2"
+            cx="100"
+            cy="66"
+            r="1.6"
+            fill="var(--e-ring)"
           />
-          <path d="M47 30l26 12v10l-4-2v-7L43 31z" fill="var(--e-tape)" />
-        </g>
-        <g className="mi-empty__lens">
+        </svg>
+        <svg className="mi-empty__art mi-empty__lens" viewBox="0 0 120 84" aria-hidden>
           <circle
             cx="78"
             cy="30"
@@ -44,16 +57,8 @@ export function EmptyState({
             strokeWidth="3"
           />
           <path d="M88 40l10 10" stroke="var(--e-ring)" strokeWidth="4" strokeLinecap="round" />
-        </g>
-        <circle className="mi-empty__spark" cx="28" cy="22" r="2" fill="var(--e-ring)" />
-        <circle
-          className="mi-empty__spark mi-empty__spark--2"
-          cx="100"
-          cy="66"
-          r="1.6"
-          fill="var(--e-ring)"
-        />
-      </svg>
+        </svg>
+      </span>
       <p className="mi-empty__title">{title}</p>
       <p className="mi-empty__body">{body}</p>
       {action ? <div className="mi-empty__action">{action}</div> : null}
