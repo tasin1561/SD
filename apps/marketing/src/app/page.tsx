@@ -16,8 +16,9 @@ import { Partners } from '@/components/sections/partners';
 import { Compare } from '@/components/sections/compare';
 import { Why } from '@/components/sections/why';
 import { Testimonials } from '@/components/sections/testimonials';
-import { Faq } from '@/components/landing/faq';
-import { FinalCta } from '@/components/landing/final-cta';
+import { Faq } from '@/components/sections/faq';
+import { Contact } from '@/components/sections/contact';
+import { FinalCta } from '@/components/sections/final-cta';
 import { SiteFooter } from '@/components/landing/site-footer';
 
 /** The canonical is per PAGE (a root-level one pointed every page at `/`). */
@@ -27,7 +28,7 @@ export const metadata: Metadata = { alternates: { canonical: '/' } };
  * Section order follows docs/design-direction.md §6: hero · services ·
  * coverage · how it works · track band · platform tour · reseller stores ·
  * pricing estimator · what you can send · partners · compare ·
- * testimonials · FAQ · final CTA. The track band sits after how-it-works
+ * testimonials · FAQ · contact · final CTA. The track band sits after how-it-works
  * so a customer who scrolled past the hero's Track tab meets it again.
  */
 export default function HomePage(): ReactElement {
@@ -49,6 +50,7 @@ export default function HomePage(): ReactElement {
         <Why />
         <Testimonials />
         <Faq />
+        <Contact />
         <FinalCta />
       </main>
       <SiteFooter />

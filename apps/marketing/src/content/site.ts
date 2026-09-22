@@ -737,3 +737,9 @@ export const site = { platform, business, features } as const;
 export { tour } from './sections/tour';
 /** Section 14 content — owned by the reseller-stores section. */
 export { reseller } from './sections/reseller';
+/** Section 15 content — owned by the FAQ section. */
+export { faq, faqCategories } from './sections/faq';
+/** Section 16 content — owned by the contact section. */
+export { contact } from './sections/contact';
+/** Section 17 content — owned by the final CTA band. */
+export { cta } from './sections/cta';

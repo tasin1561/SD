@@ -1,0 +1,287 @@
+/* SECTION 15 · FAQ — u19 accordion.
+
+   Every question is a native `<details name="faq">`, so the exclusive
+   accordion, the keyboard handling and the focusable summary are the
+   browser's rather than ours, and the whole list works with no JS at all.
+   The category tabs are the one island, and they only set `data-category`
+   on `.faq`: the rules below hide the rest with `display: none`, which
+   also takes them out of the tab order — nothing is unmounted, so every
+   answer stays in the HTML for the FAQPage schema and for a reader
+   without JavaScript.
+
+   No hex appears here. Each card names its category's hue with
+   `data-hue`, and sections.css turns that into the `--h*` set. */
+
+.faq {
+  --e: cubic-bezier(0.3, 1, 0.3, 1);
+}
+
+/* The tab row scrolls sideways on a phone rather than wrapping — the bead
+   travels along one line or it is not a bead. The vertical padding is
+   room for the bead's own shadow, which `overflow-x: auto` would
+   otherwise clip; the negative margin gives it back. */
+.faq__tabs {
+  max-width: 100%;
+  padding-block: 0.6rem;
+  margin: -0.6rem 0 0.9rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.faq__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.faq__list {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.faq__item {
+  min-width: 0;
+  /* A deep link lands below the floating header, like every section id. */
+  scroll-margin-top: calc(var(--header-offset, 4.5rem) + 1rem);
+  animation: faqIn 320ms var(--e) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 26ms);
+}
+
+/* Category filter. A stylesheet cannot compare two attributes, so each
+   category names itself once — and the "all" tab needs no rule at all. */
+.faq[data-category='sending'] .faq__item:not([data-category='sending']),
+.faq[data-category='sellers'] .faq__item:not([data-category='sellers']),
+.faq[data-category='platform'] .faq__item:not([data-category='platform']),
+.faq[data-category='reseller'] .faq__item:not([data-category='reseller']),
+.faq[data-category='money'] .faq__item:not([data-category='money']),
+.faq[data-category='customs'] .faq__item:not([data-category='customs']),
+.faq[data-category='returns'] .faq__item:not([data-category='returns']) {
+  display: none;
+}
+
+/* ── the card ──────────────────────────────────────────────────────── */
+.faq__d {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-1);
+  transition:
+    border-color 320ms var(--e),
+    box-shadow 320ms var(--e);
+}
+.faq__d[open] {
+  border-color: color-mix(in srgb, var(--h) 45%, transparent);
+  box-shadow: var(--shadow-2);
+}
+@media (hover: hover) {
+  .faq__d:hover {
+    border-color: color-mix(in srgb, var(--h) 28%, var(--line));
+  }
+}
+
+/* ── the summary ───────────────────────────────────────────────────── */
+.faq__q {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 3.5rem;
+  padding: 0.9rem 1rem;
+  border-radius: inherit;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.faq__q::-webkit-details-marker {
+  display: none;
+}
+.faq__q:focus-visible {
+  border-radius: 1rem;
+}
+/* A pool of the card's own hue under the summary, deepening as it opens.
+   Absolutely positioned, so it is not a flex item of the summary. */
+.faq__q::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(60% 140% at 2% 50%, var(--h-glow) 0%, transparent 72%);
+  opacity: 0;
+  transition: opacity 320ms var(--e);
+}
+.faq__d[open] > .faq__q::after {
+  opacity: 0.85;
+}
+/* Open, the summary is the card's lid: its bottom corners square off. */
+.faq__d[open] > .faq__q {
+  border-radius: 1rem 1rem 0 0;
+}
+@media (hover: hover) {
+  .faq__q:hover::after {
+    opacity: 0.5;
+  }
+}
+.faq__q > * {
+  position: relative;
+  z-index: 1;
+}
+
+.faq__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.7rem;
+  background: var(--h);
+  color: var(--h-on);
+  box-shadow: 0 6px 14px -8px var(--h-glow);
+  transition: transform 320ms var(--e);
+}
+.faq__d[open] > .faq__q .faq__ico {
+  transform: scale(1.06);
+}
+
+.faq__qt {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+  color: var(--fg-strong);
+  text-wrap: pretty;
+}
+
+/* Plus → minus: the horizontal line never moves, the vertical one lies
+   down on it. Two rotations of one glyph, so nothing swaps mid-flight. */
+.faq__pm {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--fg-muted);
+  transition: color 320ms var(--e);
+}
+.faq__d[open] > .faq__q .faq__pm {
+  color: var(--h-text);
+}
+.faq__pm-h,
+.faq__pm-v {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transform-origin: 10px 10px;
+  transition: transform 380ms var(--e);
+}
+.faq__pm-v {
+  transform: rotate(90deg);
+}
+.faq__d[open] .faq__pm-v {
+  transform: rotate(0deg);
+}
+
+/* ── the answer ────────────────────────────────────────────────────── */
+/* `grid-template-rows: 0fr → 1fr` grows the panel with no JS measuring a
+   height. The base is 1fr, and the keyframe only ever plays on open — so
+   when motion is reduced (or the property does not interpolate) the
+   answer is simply there, which is the right answer rather than a faster
+   version of the move. Closing is instant: that is what a native
+   `<details>` does, and JS is the only way to change it. */
+.faq__wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.faq__d[open] > .faq__wrap {
+  animation: faqOpen 420ms var(--e);
+}
+/* The clip, and NOTHING else. A grid item stretched into a 0fr track
+   cannot shrink below its own padding, so the panel's inset lives on the
+   paragraph's MARGIN instead — `overflow: hidden` makes this a block
+   formatting context, so that margin stays inside the clip. */
+.faq__well {
+  min-height: 0;
+  overflow: hidden;
+}
+.faq__d[open] > .faq__wrap > .faq__well > .faq__a {
+  animation: faqWell 420ms var(--e);
+}
+
+/* The inset well itself: a recessed panel, ruled down its left edge in
+   the category's hue. */
+.faq__a {
+  margin: 0 1rem 1rem calc(1rem + 2.25rem + 0.85rem);
+  padding: 0.85rem 1rem;
+  max-width: 68ch;
+  border-radius: 0.75rem;
+  /* Recessed by SURFACE, not by a shadow: `--surface` sits below
+     `--surface-2` in both themes, so the well reads as sunk into the card
+     without a shadow colour that would have to be guessed per theme. */
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--h);
+  background: var(--surface);
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--fg-body);
+  text-wrap: pretty;
+}
+
+@media (max-width: 479px) {
+  /* Below 480 the answer runs the full width of the card — a 3.1 rem
+     indent leaves about nineteen characters a line at 320. */
+  .faq__a {
+    margin-left: 1rem;
+  }
+}
+
+@keyframes faqIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes faqOpen {
+  from {
+    grid-template-rows: 0fr;
+  }
+}
+@keyframes faqWell {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+}
+
+/* Reduced motion: the finished state, not a quicker move. Both triggers —
+   the OS preference and the gallery's simulator — answer the same way. */
+@media (prefers-reduced-motion: reduce) {
+  .faq__item,
+  .faq__d[open] > .faq__wrap,
+  .faq__d[open] > .faq__wrap > .faq__well > .faq__a {
+    animation: none;
+  }
+  .faq__d,
+  .faq__q::after,
+  .faq__ico,
+  .faq__pm,
+  .faq__pm-h,
+  .faq__pm-v {
+    transition: none;
+  }
+}
+:root[data-reduced='1'] .faq__item,
+:root[data-reduced='1'] .faq__d[open] > .faq__wrap,
+:root[data-reduced='1'] .faq__d[open] > .faq__wrap > .faq__well > .faq__a {
+  animation: none;
+}
+:root[data-reduced='1'] .faq__d,
+:root[data-reduced='1'] .faq__q::after,
+:root[data-reduced='1'] .faq__ico,
+:root[data-reduced='1'] .faq__pm,
+:root[data-reduced='1'] .faq__pm-h,
+:root[data-reduced='1'] .faq__pm-v {
+  transition: none;
+}

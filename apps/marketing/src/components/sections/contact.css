@@ -1,0 +1,222 @@
+/* ── Contact (u25 form · u21 channel rows · static address block) ────── */
+.ct {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+.ct__form,
+.ct__aside {
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .ct {
+    grid-template-columns: 1.2fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+}
+
+/* ── The form card ───────────────────────────────────────────────────── */
+.ct__form {
+  padding: 1.5rem;
+  transition:
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+}
+/* The card answers the field the way each field answers the caret. */
+.ct__form:focus-within {
+  border-color: var(--green-line);
+  box-shadow:
+    var(--shadow-2),
+    0 0 0 4px var(--green-glow);
+}
+@media (max-width: 380px) {
+  .ct__form {
+    padding: 1.1rem;
+  }
+}
+.ct__form-body {
+  display: grid;
+  gap: 1rem;
+}
+.ct__form-h {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+/* Name and email pair up only once both fit without squeezing the
+   floating label; below that they stack, as everything does at 320. */
+.ct__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+@media (min-width: 520px) {
+  .ct__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+/* Neither address is required — this is a note, never an error. */
+.ct__either {
+  margin-top: -0.35rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--green-line);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+.ct__reassure {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--green-text);
+}
+.ct__reassure::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--green-fill);
+  flex: none;
+}
+.ct__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.15rem;
+}
+/* Wide enough that the parcel's "packed" word is not clipped on hover. */
+.ct__email.mi-lip {
+  min-width: 11rem;
+  background: var(--surface-2);
+  transition:
+    border-color 200ms ease,
+    background-color 200ms ease,
+    transform 180ms ease;
+}
+.ct__email.mi-lip:hover,
+.ct__email.mi-lip:focus-visible {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  transform: translateY(-1px);
+}
+.ct__note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+/* ── Channels and addresses ──────────────────────────────────────────── */
+.ct__aside {
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+.ct__block {
+  display: grid;
+  gap: 0.6rem;
+}
+.ct__h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.ct__hours {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.ct__hours svg {
+  color: var(--green-text);
+  flex: none;
+}
+.ct__list,
+.ct__addrs {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The value inside a row's helper line — the number, the address. */
+.ct__val {
+  color: var(--fg-strong);
+  font-weight: 600;
+}
+
+/* An address is not a control: the row's chrome, none of its affordances. */
+.ct__addr {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 0.8rem;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.ct__addr-chip {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  background: var(--h-tint);
+  color: var(--h-text);
+  flex: none;
+}
+.ct__addr-text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+.ct__addr-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--fg-strong);
+}
+.ct__addr-line {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--fg-muted);
+}
+.ct__addr-meta {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-faint);
+  flex: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct__form,
+  .ct__email.mi-lip {
+    transition: none;
+  }
+  .ct__email.mi-lip:hover,
+  .ct__email.mi-lip:focus-visible {
+    transform: none;
+  }
+}
+:root[data-reduced='1'] .ct__form,
+:root[data-reduced='1'] .ct__email.mi-lip {
+  transition: none;
+}
+:root[data-reduced='1'] .ct__email.mi-lip:hover,
+:root[data-reduced='1'] .ct__email.mi-lip:focus-visible {
+  transform: none;
+}
+
+/* Held while the island's chunk is fetched near the viewport (the form itself
+   is server-rendered; this only fills the boundary during a client-side re-render). */
+.ct__skeleton {
+  min-height: 24rem;
+  border-radius: 1.25rem;
+  background: var(--surface-2);
+}

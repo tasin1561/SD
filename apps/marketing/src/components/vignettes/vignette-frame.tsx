@@ -23,7 +23,6 @@ export function VignetteFrame({
 }): ReactElement {
   return (
     <figure
-      role="group"
       aria-label={title}
       className="overflow-hidden rounded-lg border shadow-[var(--shadow-hud)]"
       style={{ borderColor: `var(--${hue}-line)`, background: 'var(--surface-2)' }}

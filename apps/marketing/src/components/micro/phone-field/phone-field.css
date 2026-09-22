@@ -42,9 +42,13 @@
   flex: 1;
   min-width: 0;
 }
-.mi-phone__label {
-  /* The label floats over the NUMBER half, after the country chip. */
-  left: calc(6.6rem);
+.mi-tf__label.mi-phone__label {
+  /* The label floats over the NUMBER half, after the country chip. Doubled
+     selector for the same reason as the box above: `.mi-tf__label { left }`
+     from text-field.css wins on chunk order otherwise, and the label then
+     sits under the chip ("one +880 WhatsApp" — seen at 360 on the contact
+     form, the first field to use a label longer than the chip). */
+  left: 6.6rem;
 }
 .mi-phone[data-status='error'] .mi-phone__country {
   border-color: var(--red-text);

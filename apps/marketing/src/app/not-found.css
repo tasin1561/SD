@@ -1,0 +1,147 @@
+/* ── 404 ──────────────────────────────────────────────────────────── */
+.nf {
+  display: grid;
+  place-items: center;
+  min-height: 62vh;
+  padding-block: 3.5rem 5rem;
+  background: var(--page);
+}
+.nf__inner {
+  display: grid;
+  justify-items: center;
+  gap: 1.1rem;
+  width: 100%;
+  max-width: 34rem;
+}
+.nf__card {
+  width: 100%;
+}
+
+/* The art. `--art-face-*` are theme.css's Tier-B flat shades, declared in
+   all four theme blocks, so this file never picks a step itself. */
+.nf__art {
+  width: min(14rem, 58vw);
+  height: auto;
+}
+.nf__shadow {
+  fill: var(--art-shadow);
+  transform-box: view-box;
+  transform-origin: 66px 110px;
+  animation: nfShadow 4.6s ease-in-out infinite;
+}
+.nf__box {
+  transform-box: view-box;
+  transform-origin: 66px 63px;
+  animation: nfBob 4.6s ease-in-out infinite;
+}
+.nf__top {
+  fill: var(--art-face-top);
+}
+.nf__left {
+  fill: var(--art-face-left);
+}
+.nf__right {
+  fill: var(--art-face-right);
+}
+.nf__tape {
+  fill: var(--saffron-fill);
+}
+.nf__edge {
+  fill: none;
+  stroke: var(--art-edge);
+  stroke-width: 1.1;
+  opacity: 0.45;
+}
+.nf__tag {
+  transform-box: view-box;
+  transform-origin: 122px 22px;
+  animation: nfFloat 4.6s ease-in-out infinite;
+  animation-delay: -1.3s;
+}
+.nf__lead {
+  fill: none;
+  stroke: var(--art-edge);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: 3 3.5;
+  opacity: 0.5;
+}
+.nf__chip {
+  fill: var(--saffron-fill);
+}
+.nf__q {
+  fill: var(--saffron-on-fill);
+  font-size: 21px;
+  font-weight: 800;
+}
+@keyframes nfBob {
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes nfFloat {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes nfShadow {
+  50% {
+    transform: scaleX(0.92);
+    opacity: 0.7;
+  }
+}
+
+/* The two ways back in. */
+.nf__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.nf__alt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  padding-inline: 1.15rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+.nf__alt:hover,
+.nf__alt:focus-visible {
+  background: var(--surface-3);
+  transform: translateY(-1px);
+}
+.nf__alt:active {
+  transform: translateY(0) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nf__shadow,
+  .nf__box,
+  .nf__tag {
+    animation: none;
+  }
+  .nf__alt {
+    transition: none;
+  }
+}
+:root[data-reduced='1'] .nf__shadow,
+:root[data-reduced='1'] .nf__box,
+:root[data-reduced='1'] .nf__tag {
+  animation: none;
+}
+
+/* The page draws its own parcel above the card; the empty state's built-in
+   parcel-and-magnifier would be a second one twelve lines below it. */
+.nf__card .mi-empty__art {
+  display: none;
+}

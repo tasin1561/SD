@@ -1,0 +1,191 @@
+/* ── SECTION: clearance (the final CTA band) ──────────────────────────
+   On the corridor gradient. Every colour here is either the gradient
+   itself or a RAW slate step, and that is deliberate: the gradient is
+   identical in both themes, so a theme-aware token on top of it would
+   change contrast when somebody touches the toggle. slate-950 on the
+   three stops is 7.95 / 12.08 / 9.39; slate-950 on the slate-50 cards is
+   19.3; the cards' slate-600 labels are 7.2.
+
+   The root and inner rules are written `.sec.cta` / `.cta .cta__inner`
+   rather than `.cta` / `.cta__inner`: they override `.sec` and
+   `.sec__inner` from sections.css, and at EQUAL specificity that would
+   be decided by which stylesheet the bundler happened to emit first. */
+.sec.cta {
+  border-top: 0;
+  background: var(--corridor-gradient);
+  padding-block: 4.5rem;
+  /* `clip`, not `hidden`: no scroll container, and the drifting glyphs
+     can hang past the edge without widening the document (the 320 px
+     horizontal-overflow failure the responsive spec pins). */
+  overflow: clip;
+}
+@media (min-width: 1024px) {
+  .sec.cta {
+    padding-block: 6.5rem;
+  }
+}
+
+/* ── The drifting parcel mesh ─────────────────────────────────────── */
+.cta__mesh {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  pointer-events: none;
+}
+.cta__sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.cta__parcel {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  top: calc(var(--y) * 1%);
+  width: calc(var(--s) * 1rem);
+  height: auto;
+  fill: var(--slate-950);
+  opacity: 0.09;
+  animation: ctaDrift calc(20s + var(--i) * 1.1s) ease-in-out infinite alternate;
+  animation-delay: calc(var(--i) * -2.4s);
+}
+@keyframes ctaDrift {
+  from {
+    transform: translate3d(0, 0, 0) rotate(-3deg);
+  }
+  to {
+    transform: translate3d(10px, -14px, 0) rotate(5deg);
+  }
+}
+
+/* ── The ask ──────────────────────────────────────────────────────── */
+.cta .cta__inner {
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+  max-width: 54rem;
+  text-align: center;
+}
+.cta__h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4.2vw, 2.9rem);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: var(--slate-950);
+  text-wrap: balance;
+}
+.cta__lead {
+  margin: 0;
+  max-width: 48ch;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--slate-950);
+  text-wrap: pretty;
+}
+
+.cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.55rem;
+}
+.cta__go.btn-sweep {
+  min-height: 3rem;
+  padding-inline: 1.6rem;
+  font-size: 15.5px;
+}
+/* The sweep hides its outline in favour of a coloured glow ring; over the
+   gradient that ring is invisible, so the focus mark here is an ink
+   outline instead. */
+.cta .btn-sweep:focus-visible {
+  outline: 2px solid var(--slate-950);
+  outline-offset: 3px;
+}
+/* The quieter call: a white surface card, the second shape theme.css
+   sanctions on the gradient. */
+.cta__talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding-inline: 1.35rem;
+  border: 1px solid var(--slate-200);
+  border-radius: 999px;
+  background: var(--slate-50);
+  color: var(--slate-950);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease,
+    box-shadow 220ms ease;
+}
+.cta__talk:hover,
+.cta__talk:focus-visible {
+  background: var(--slate-100);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px -12px color-mix(in srgb, var(--slate-950) 55%, transparent);
+}
+.cta__talk:focus-visible {
+  outline: 2px solid var(--slate-950);
+  outline-offset: 3px;
+}
+.cta__talk:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* ── The three readouts ───────────────────────────────────────────── */
+.cta__readouts {
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 46rem;
+  margin: 1.35rem 0 0;
+  text-align: left;
+}
+@media (min-width: 640px) {
+  .cta__readouts {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.cta__readout {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--slate-200);
+  border-radius: 0.85rem;
+  background: var(--slate-50);
+  box-shadow: 0 8px 22px -16px color-mix(in srgb, var(--slate-950) 70%, transparent);
+}
+.cta__readout dt {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slate-600);
+}
+.cta__readout dd {
+  margin: 0.25rem 0 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--slate-950);
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta__parcel {
+    animation: none;
+  }
+  .cta__talk {
+    transition: none;
+  }
+}
+/* The dev reduced-motion simulator (`data-reduced` on <html>); micro.css
+   only covers `.mi` subtrees, and this band is not one. */
+:root[data-reduced='1'] .cta__parcel {
+  animation: none;
+}
