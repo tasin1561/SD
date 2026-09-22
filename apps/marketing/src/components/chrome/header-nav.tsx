@@ -84,7 +84,12 @@ export function HeaderNav(): ReactElement {
     const link = active ? el.querySelector<HTMLElement>(`[data-target="${active}"]`) : null;
     el.dataset.none = link ? '' : '1';
     if (link) {
-      el.style.setProperty('--pill-x', `${link.offsetLeft}px`);
+      // Measured against the NAV, not `offsetLeft`: a mega item's link sits
+      // in its own positioned wrapper, so its offsetLeft was ~0 and the pill
+      // parked under the first item while "Platform" turned white on white
+      // (owner's screenshot, 2026-09-22).
+      const x = link.getBoundingClientRect().left - el.getBoundingClientRect().left;
+      el.style.setProperty('--pill-x', `${Math.round(x)}px`);
       el.style.setProperty('--pill-w', `${link.offsetWidth}px`);
     }
   }, [active]);
