@@ -65,18 +65,35 @@ export function useBeats({ beats, restMs = 2000, loop = true, enabled }: BeatsOp
   const toggle = useCallback((): void => (playing ? pause() : play()), [playing, pause, play]);
 
   useEffect(() => {
-    if (!enabled) setPlaying(false);
-    else if (activeId === 0) play();
+    if (!enabled) {
+      // Leaving the viewport releases the stage too — the tour scrolling away
+      // otherwise kept it, and the reseller mock further down never started.
+      setPlaying(false);
+      if (activeId === id.current) activeId = 0;
+    } else if (activeId === 0) play();
   }, [enabled, play]);
 
-  // Another sequencer taking the stage pauses this one.
+  // Release the stage on unmount. Switching tour tabs unmounts the playing
+  // vignette, and without this `activeId` kept pointing at it, so the NEXT
+  // vignette saw the stage taken and never started — every tab after the
+  // first sat on beat 1 with a play button (found capturing beats, final pass).
+  useEffect(
+    () => () => {
+      if (activeId === id.current) activeId = 0;
+    },
+    [],
+  );
+
+  // Another sequencer taking the stage pauses this one; a stage that frees
+  // up while this one is enabled and idle is claimed (the reseller mock came
+  // into view while the tour still held it, and nothing re-asked).
   useEffect(() => {
-    if (!playing) return;
     const t = window.setInterval(() => {
-      if (activeId !== id.current) setPlaying(false);
+      if (playing && activeId !== id.current) setPlaying(false);
+      else if (!playing && enabled && activeId === 0) play();
     }, 250);
     return () => window.clearInterval(t);
-  }, [playing]);
+  }, [playing, enabled, play]);
 
   useEffect(() => {
     if (!playing || beats.length === 0) return;

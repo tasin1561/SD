@@ -1,6 +1,7 @@
 'use client';
 
 import { Pause, Play } from 'lucide-react';
+import './vignette-frame.css';
 import type { ReactElement, ReactNode } from 'react';
 import type { Beats } from './use-beats';
 
@@ -29,10 +30,10 @@ export function VignetteFrame({
     >
       <div
         aria-hidden
-        className="relative aspect-[4/3] w-full overflow-hidden"
+        className="vg-stage relative aspect-[4/3] w-full overflow-hidden"
         style={{ background: `var(--${hue}-surface)` }}
       >
-        {children}
+        <div className="vg-fit">{children}</div>
       </div>
       <figcaption
         className="flex items-center justify-between gap-3 border-t px-3 py-2"

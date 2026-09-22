@@ -1,0 +1,32 @@
+/* The frame's stage and the FIT BOX every mock renders into.
+
+   Below lg the box is the stage (the mocks lay themselves out responsively,
+   as they always did). From lg the seven mocks are drawn into ONE design box,
+   480 × 360 (4:3, like the stage), and that box is scaled as a whole — a
+   container query on the stage, no JS — so the tallest beat fills ~85% of
+   the frame's width and ~80% of its height, and every beat is centred at the
+   same scale (owner, final pass: "the mock content is the point of the
+   section"). `tan(atan2(length, length))` is how a length ratio becomes the
+   unitless number `scale()` needs. The stage's height is 75cqi (4:3), so 80%
+   of it is 60cqi. */
+.vg-stage {
+  container-type: inline-size;
+}
+.vg-fit {
+  position: absolute;
+  inset: 0;
+}
+@media (min-width: 1024px) {
+  @supports (width: tan(atan2(1px, 1px))) {
+    .vg-fit {
+      --vg-k: min(tan(atan2(85cqi, 480px)), tan(atan2(60cqi, 360px)));
+      inset: auto;
+      left: 50%;
+      top: 50%;
+      width: 480px;
+      height: 360px;
+      transform: translate(-50%, -50%) scale(var(--vg-k));
+      transform-origin: 50% 50%;
+    }
+  }
+}
