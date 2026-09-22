@@ -31,6 +31,13 @@
      off the frame is the point. */
   overflow: clip;
 }
+/* From lg the tilted plane needs more height than 4:3 gives it, or the
+   southern pins (Bengaluru, Chennai) sit on the card's bottom edge. */
+@media (min-width: 1024px) {
+  .covmap {
+    aspect-ratio: 1 / 0.86;
+  }
+}
 
 /* The pin sizes are declared HERE, not on `.covmap`, and that is not a
    matter of taste: a container query unit used in the query container's OWN

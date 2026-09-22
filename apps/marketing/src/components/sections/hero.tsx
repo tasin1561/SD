@@ -33,6 +33,10 @@ export function Hero(): ReactElement {
                 online? We also hold your stock in India, confirm every COD order by phone and send
                 your money home.
               </p>
+              <p className="hero__note">
+                Skydrop is invite-only while we scale the Indian warehouse. Request an invite and a
+                person reads it.
+              </p>
             </div>
           }
           trust={

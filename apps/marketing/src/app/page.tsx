@@ -5,6 +5,7 @@ import { MobileBottomBar } from '@/components/chrome/mobile-bottom-bar';
 import { Nav } from '@/components/landing/nav';
 import { Hero } from '@/components/sections/hero';
 import { Services } from '@/components/sections/services';
+import { ImportExport } from '@/components/sections/import-export';
 import { Coverage } from '@/components/sections/coverage';
 import { HowItWorks } from '@/components/sections/how-it-works';
 import { TrackBand } from '@/components/sections/track-band';
@@ -15,6 +16,7 @@ import { Goods } from '@/components/sections/goods';
 import { Partners } from '@/components/sections/partners';
 import { Compare } from '@/components/sections/compare';
 import { Why } from '@/components/sections/why';
+import { Trust } from '@/components/sections/trust';
 import { Testimonials } from '@/components/sections/testimonials';
 import { Faq } from '@/components/sections/faq';
 import { Contact } from '@/components/sections/contact';
@@ -26,9 +28,9 @@ export const metadata: Metadata = { alternates: { canonical: '/' } };
 
 /**
  * Section order follows docs/design-direction.md §6: hero · services ·
- * coverage · how it works · track band · platform tour · reseller stores ·
+ * import & export · coverage · how it works · track band · platform tour · reseller stores ·
  * pricing estimator · what you can send · partners · compare ·
- * testimonials · FAQ · contact · final CTA. The track band sits after how-it-works
+ * credentials & trust · testimonials · FAQ · contact · final CTA. The track band sits after how-it-works
  * so a customer who scrolled past the hero's Track tab meets it again.
  */
 export default function HomePage(): ReactElement {
@@ -38,6 +40,7 @@ export default function HomePage(): ReactElement {
       <main id="main">
         <Hero />
         <Services />
+        <ImportExport />
         <Coverage />
         <HowItWorks />
         <TrackBand />
@@ -48,6 +51,7 @@ export default function HomePage(): ReactElement {
         <Partners />
         <Compare />
         <Why />
+        <Trust />
         <Testimonials />
         <Faq />
         <Contact />

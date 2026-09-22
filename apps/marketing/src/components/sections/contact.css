@@ -102,18 +102,23 @@
   margin-top: 0.15rem;
 }
 /* Wide enough that the parcel's "packed" word is not clipped on hover. */
-.ct__email.mi-lip {
-  min-width: 11rem;
+/* Email is the SECONDARY action: an outline button the same height as the
+   WhatsApp sweep beside it, no sweep of its own (owner, final pass — the
+   label-into-parcel read as an icon-over-text blob next to a real button). */
+.ct__email.btn-sweep {
   background: var(--surface-2);
-  transition:
-    border-color 200ms ease,
-    background-color 200ms ease,
-    transform 180ms ease;
+  color: var(--fg-strong);
+  border: 1px solid var(--line-strong);
+  box-shadow: none;
 }
-.ct__email.mi-lip:hover,
-.ct__email.mi-lip:focus-visible {
-  border-color: var(--saffron-line);
-  background: var(--saffron-tint);
+.ct__email.btn-sweep::before {
+  display: none;
+}
+.ct__email.btn-sweep:hover,
+.ct__email.btn-sweep:focus-visible {
+  background: var(--surface-3);
+  border-color: var(--blue-text);
+  color: var(--fg-strong);
   transform: translateY(-1px);
 }
 .ct__note {
@@ -209,20 +214,20 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ct__form,
-  .ct__email.mi-lip {
+  .ct__email.btn-sweep {
     transition: none;
   }
-  .ct__email.mi-lip:hover,
-  .ct__email.mi-lip:focus-visible {
+  .ct__email.btn-sweep:hover,
+  .ct__email.btn-sweep:focus-visible {
     transform: none;
   }
 }
 :root[data-reduced='1'] .ct__form,
-:root[data-reduced='1'] .ct__email.mi-lip {
+:root[data-reduced='1'] .ct__email.btn-sweep {
   transition: none;
 }
-:root[data-reduced='1'] .ct__email.mi-lip:hover,
-:root[data-reduced='1'] .ct__email.mi-lip:focus-visible {
+:root[data-reduced='1'] .ct__email.btn-sweep:hover,
+:root[data-reduced='1'] .ct__email.btn-sweep:focus-visible {
   transform: none;
 }
 

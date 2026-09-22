@@ -39,7 +39,7 @@ export const platform = {
       { href: 'https://app.skydrop.online/login', label: 'Seller sign-in' },
       { href: 'https://reseller.skydrop.online/login', label: 'Store sign-in' },
     ],
-    cta: { href: '/request-invite', label: 'Book a shipment' },
+    cta: { href: '/request-invite', label: 'Request an invite' },
     track: { href: 'https://track.skydrop.online', label: 'Track a parcel' },
     /** Mega-menu rows (u21) under two of the primary items; the rest are plain links. */
     mega: {
@@ -571,7 +571,7 @@ export const platform = {
       {
         title: 'Access',
         links: [
-          { href: '/request-invite', label: 'Book a shipment' },
+          { href: '/request-invite', label: 'Request an invite' },
           { href: 'https://app.skydrop.online/login', label: 'Seller sign-in', external: true },
           { href: 'https://reseller.skydrop.online/login', label: 'Store sign-in', external: true },
           { href: 'https://track.skydrop.online', label: 'Track a parcel', external: true },
@@ -741,5 +741,9 @@ export { reseller } from './sections/reseller';
 export { faq, faqCategories } from './sections/faq';
 /** Section 16 content — owned by the contact section. */
 export { contact } from './sections/contact';
+/** Import & export panels — owned by that section. */
+export { importExport } from './sections/import-export';
+/** Credentials & trust — owned by that section. */
+export { trust } from './sections/trust';
 /** Section 17 content — owned by the final CTA band. */
 export { cta } from './sections/cta';

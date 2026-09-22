@@ -11,7 +11,7 @@
  *   three.js / R3F                                    never in first load; lazy total ≤ 220 000 B gz
  *   platform + reseller islands (`__SD_ISLAND_PLATFORM__`)  not in first load; ≤ 60 000 B gz
  *   each vignette (`__SD_VIGNETTE__=`)                ≤ 5 000 B gz
- *   out/index.html                                     ≤ 75 000 B gz (inline SVG is for above-the-fold art only) — provisionally 88 000, see below
+ *   out/index.html                                     ≤ 88 000 B gz (owner-accepted 2026-09-22; inline SVG is for above-the-fold art only)
  *   inlined critical CSS                               ≤ 15 000 B gz (scripts/critical-css.mjs)
  *   inline <svg> across out/**.html                    ≤ 700 000 B raw, each ≤ 25 000 B
  *   the sans woff2                                     ≤ 35 000 B
@@ -95,7 +95,7 @@ check('platform + reseller islands (total)', islandTotal, 60_000);
 
 // HTML weight + inline SVG.
 const indexHtml = readFileSync(join(OUT, 'index.html'));
-// PROVISIONAL 88 000 (owner's gate is 75 000; PHASE-8-MUST-FIX item 6). Phase 6's
+// 88 000 — ACCEPTED by the owner on 2026-09-22 as the ceiling (was 75 000; PHASE-8-MUST-FIX item 6). Phase 6's
 // FAQ + contact + final CTA added ~16 KB gz: each server section lands twice
 // (DOM + the RSC flight payload, 31.5 KB gz on its own) plus the FAQ JSON-LD.
 check('out/index.html (gz)', gz(indexHtml), 88_000);

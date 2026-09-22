@@ -8,7 +8,8 @@
  *   — the owner set 40 960 B on 2026-09-21 (raised from 25 600). Phase 4
  *   ships 29 patterns at ~1.7 KB each = 49.9 KB, every one inside its
  *   own 3 KB / 2 KB budget, so the total is a headcount, not fat. Raised
- *   PROVISIONALLY to 52 KB in the Phase 4 report, 54 KB after Phase 7 (the contact mascot), for the owner's call.
+ *   PROVISIONALLY to 52 KB in the Phase 4 report, 54 KB after Phase 7 (the contact mascot); the owner ACCEPTED
+ *   54 KB as the ceiling on 2026-09-22 — per island, never in first load.
  * A pattern only the gallery imports is listed but not counted — it is
  * never in a production chunk. Prints the per-pattern table the phase
  * reports ask for. Runs in postbuild beside check-theme and check-bundle.

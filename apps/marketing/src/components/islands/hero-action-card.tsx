@@ -40,7 +40,7 @@ const warmForm = (): void => void import('@/components/landing/invite-form');
 const TABS = [
   { id: 'track', label: <TabLabel long="Track" short="Track" />, hue: 'blue' },
   { id: 'quote', label: <TabLabel long="Get a quote" short="Quote" />, hue: 'saffron' },
-  { id: 'book', label: <TabLabel long="Book a shipment" short="Book" />, hue: 'green' },
+  { id: 'book', label: <TabLabel long="Request an invite" short="Invite" />, hue: 'green' },
 ] as const;
 
 /** Two spellings; CSS shows the short one at ≤ 400 px. */
@@ -240,7 +240,7 @@ export function HeroActionCard({
                   {quote.direction === 'out' ? 'Bangladesh → India' : 'India → Bangladesh'}
                 </span>
                 <button type="button" className="hero-card__link" onClick={() => choose('book')}>
-                  Book this shipment
+                  Request an invite for this shipment
                   <ArrowRight size={14} aria-hidden="true" />
                 </button>
               </div>

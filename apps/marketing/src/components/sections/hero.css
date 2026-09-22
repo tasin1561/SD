@@ -90,6 +90,15 @@
   line-height: 1.55;
   color: var(--fg-body);
 }
+/* The one plain statement of the invite-only beta (owner, final pass): every
+   CTA on the page says "Request an invite", and this is where it is explained. */
+.hero__note {
+  margin: 0.75rem 0 0;
+  max-width: 46ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
 @media (min-width: 640px) {
   .hero__sub {
     font-size: 17px;

@@ -1,0 +1,143 @@
+/* ── Credentials & trust ──────────────────────────────────────────────
+   Small section: a wrapping row of credential badges, then four static
+   rows. Nothing here is interactive, so nothing carries a focus ring or
+   a 44 px hit floor — those belong to controls, and adding them to a
+   paragraph is how a page grows targets that go nowhere.
+
+   `.sec`'s shared `contain-intrinsic-size` is deliberately NOT overridden
+   here. This section is shorter than the 50rem guess at desktop and about
+   that tall stacked at phone width, so a tighter number would be right in
+   one layout and an under-guess — a scrollbar that GROWS as you reach it —
+   in the other. The guess is measured, not reasoned about; leave it shared
+   until somebody profiles this section on a real page. */
+.tr {
+  display: grid;
+  gap: 2.25rem;
+}
+.tr__block {
+  display: grid;
+  gap: 0.9rem;
+}
+.tr__h3 {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* Badges. One column at phone width — `minmax(0, …)` everywhere, so a
+   long credential name shrinks its track instead of widening the page. */
+.tr__badges,
+.tr__rows {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 640px) {
+  .tr__badges {
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  }
+}
+@media (min-width: 768px) {
+  .tr__rows {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.tr__badge,
+.tr__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface-2);
+}
+.tr__badge {
+  box-shadow: var(--shadow-1);
+  transition:
+    transform 200ms cubic-bezier(0.3, 1.3, 0.4, 1),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+/* A card acknowledging the pointer — not a promise that it does something. */
+.tr__badge:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--h) 45%, var(--line));
+  box-shadow: var(--shadow-2);
+}
+.tr__row {
+  padding: 1.1rem 1.1rem 1.1rem 1rem;
+}
+
+.tr__chip {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  background: var(--h-tint);
+  color: var(--h-text);
+  flex: none;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+.tr__chip--lg {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.8rem;
+}
+.tr__badge:hover .tr__chip {
+  background: var(--h);
+  color: var(--h-on);
+}
+
+.tr__text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+.tr__name,
+.tr__title {
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--fg-strong);
+  text-wrap: pretty;
+}
+.tr__name {
+  font-size: 15px;
+}
+.tr__title {
+  font-size: 16px;
+}
+.tr__line {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tr__badge,
+  .tr__chip {
+    transition: none;
+  }
+  .tr__badge:hover {
+    transform: none;
+  }
+}
+/* The gallery's reduced-motion simulator (`data-reduced` on <html>). */
+:root[data-reduced='1'] .tr__badge,
+:root[data-reduced='1'] .tr__chip {
+  transition: none;
+}
+:root[data-reduced='1'] .tr__badge:hover {
+  transform: none;
+}

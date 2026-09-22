@@ -37,7 +37,7 @@ export function MobileBottomBar(): ReactElement {
     },
     {
       id: 'book',
-      label: 'Book',
+      label: 'Invite',
       hue: 'green',
       icon: <Send size={20} aria-hidden="true" />,
     },

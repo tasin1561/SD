@@ -52,7 +52,7 @@ estimator already is); replace hydration-time `useLayoutEffect` measurements wit
 CSS-only initial state where possible; measure TBT three times and report the median.
 Target: back at or under 200 ms.
 
-## 3. Shipped micro-library total 50.2 KB gz vs the owner's 40 KB gate (53.4 KB after Phase 7)
+## 3. Shipped micro-library total 50.2 KB gz vs the owner's 40 KB gate (53.4 KB after Phase 7) — CLOSED: owner accepted 54 KB (2026-09-22)
 
 **Phase 7:** the reactive mascot (pattern 13, 1.5 KB) joined the contact form and took the total to 53.4 KB; the gate moved to 54 KB provisionally. It ships only in the near-gated contact chunk, so first-load is untouched (154.9 KB).
 
@@ -80,7 +80,7 @@ moved up 26 px at ~1.4 s, v=0.010). Acceptable against the owner's rule (swap ov
 optional); Phase 8 may pin `.hero__sub`'s line count with a `text-wrap: balance` +
 `min-height` pair if the residual matters.
 
-## 6. `out/index.html` 83.0 KB gz after Phase 6 — the owner's gate is 75 KB (provisionally 88 KB)
+## 6. `out/index.html` 83.0 KB gz after Phase 6 — the owner's gate is 75 KB (provisionally 88 KB) — CLOSED: owner accepted 88 KB (2026-09-22)
 
 **Measured (Phase 6 build):** 528 KB raw / 83.0 KB gz, up from 66.9 KB at the end of the
 Phase 4 fix pass. Breakdown: DOM 39.4 KB gz · the RSC flight payload
@@ -169,3 +169,23 @@ device, is accepted.
 **Not done, and why:** subsetting the mono font (40 KB → ~6 KB for digits + uppercase) needs
 `fonttools`, which is not installed here and is not installed without approval; it no longer
 loads on the home page, so the win would be on the waybill fields when typing.
+
+## Final pass — the owner's bounded LCP experiment (2026-09-22, ≤ 45 min)
+
+**Question asked:** is the LCP candidate the hero text's SECOND render, when Plus Jakarta
+arrives? **No.** Under a real Slow 4G + 4× CPU emulation the `largest-contentful-paint`
+observer reports exactly ONE candidate for `p.hero__sub`, at first paint (0.58–0.86 s); the
+swap to the web font does not emit a second entry, because the metric-matched fallback keeps
+the box the same size. Lighthouse's own trace paints it at 208 ms.
+
+**Experiment run anyway:** the sans preload at `fetchpriority="high"` as the first request
+after the HTML, and every async script at `fetchpriority="low"`. Two runs each on the same
+build: baseline LCP **2.3 / 2.3 s** (FCP 1.3 / 1.2, TBT 770 / 510); experiment LCP **2.4 /
+2.8 s** (FCP 1.7 / 1.3, TBT 2,310 / 910). Worse on every metric — starving the runtime
+pushes hydration out and the simulation's LCP with it. **Reverted; the flag is gone from the
+script.** The remaining gap to 2.0 s is the simulated cost of the first-load JS requested
+before the paint (see Phase 8 above); 2.3 s is accepted.
+
+The font-subset half (a ~10 KB wght-700 latin subset for the h1) was not attempted: it needs
+`fonttools`, which is not installed here and is not installed without approval, and the
+measurement above says the font is not on the LCP path.

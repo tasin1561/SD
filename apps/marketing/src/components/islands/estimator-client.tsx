@@ -300,7 +300,9 @@ export function EstimatorClient(): ReactElement {
             if (type !== 'bulk' && !quote) e.preventDefault();
           }}
         >
-          {type !== 'bulk' && !quote ? 'Estimate first, then book' : 'Book this shipment'}
+          {type !== 'bulk' && !quote
+            ? 'Estimate first, then request an invite'
+            : 'Request an invite'}
         </SweepLink>
         <p className="sec-note">{business.estimator.note}</p>
       </aside>

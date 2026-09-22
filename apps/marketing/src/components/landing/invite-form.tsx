@@ -299,7 +299,7 @@ export function InviteForm({
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <VanSubmitButton
             phase={state.phase}
-            label="Book a shipment"
+            label="Request an invite"
             successLabel="Request received"
             errorLabel="Not sent — check the message above"
           />

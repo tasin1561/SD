@@ -1,0 +1,161 @@
+/* ── Import & export (two hue-coded direction panels) ────────────────── */
+
+/* A list of two, not a decorative grid: side by side from `lg`, stacked
+   below. `minmax(0, 1fr)` on both tracks, because a grid child's default
+   `min-width: auto` is what lets one long word widen the whole page at
+   320 rather than wrap inside its own panel. */
+.ie {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 1024px) {
+  .ie {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+}
+
+/* The panel. `sec-card` carries the radius, border, surface and shadow;
+   this adds the hue. The border is MIXED rather than replaced, so a panel
+   still reads as one of the page's cards in both themes and only leans
+   towards its hue. `clip` keeps the wash inside the rounded corner
+   without creating a scroll container. */
+.ie__panel {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  /* FLEX, not grid: the CTA sits on the panel floor via `margin-top: auto`
+     so two panels of unequal copy line their buttons up, and that keeps
+     working when a row is added — a `grid-template-rows` list would have
+     to be recounted every time the panel gains a child. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.5rem;
+  border-color: color-mix(in srgb, var(--h) 22%, var(--line));
+}
+@media (max-width: 400px) {
+  .ie__panel {
+    padding: 1.1rem;
+  }
+}
+/* One still pool of the panel's hue behind the heading — depth, no
+   animation. A drifting wash on two large blurred layers is paint cost
+   for an effect nobody looks at; the section's motion is the reveal
+   stagger and the CTA's own sweep. */
+.ie__panel::before {
+  content: '';
+  position: absolute;
+  inset: -30% 40% 55% -20%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(60% 60% at 50% 50%, var(--h-glow) 0%, transparent 72%);
+  opacity: 0.55;
+}
+
+/* The eyebrow is the section heading's chip, reused: it already reads
+   from `--h-surface` / `--h` / `--h-text`, which the panel's own
+   `data-hue` sets, so it takes the panel's colour with no extra rule.
+   Its `justify-self: start` is a grid property and does nothing in this
+   flex panel — `align-items: flex-start` above is what holds it to its
+   own width. */
+.ie__eyebrow {
+  margin-bottom: 0.15rem;
+}
+
+.ie__title,
+.ie__who {
+  width: 100%;
+}
+.ie__title {
+  font-size: clamp(1.2rem, 2.2vw, 1.5rem);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--fg-strong);
+  text-wrap: balance;
+}
+/* Who the direction is for — one line, and the only sentence in the
+   panel set in the hue, so the eye pairs it with the chip above it. */
+.ie__who {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--fg-body);
+  text-wrap: pretty;
+}
+
+.ie__rows-h {
+  margin-top: 0.35rem;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.ie__rows {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  width: 100%;
+  margin: 0 0 0.35rem;
+  padding: 0;
+  list-style: none;
+}
+/* The stacked-row chrome (u21) with none of its affordances — these go
+   nowhere, so there is no chevron, no lift and no pointer. Same call the
+   contact section's address block makes. */
+.ie__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  min-width: 0;
+  padding: 0.55rem 0.15rem;
+}
+.ie__row-chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  background: var(--h-tint);
+  color: var(--h-text);
+}
+.ie__row-text {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+.ie__row-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--fg-strong);
+}
+.ie__row-line {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The one control in the panel, and the only 44 px target in the
+   section (`.btn-sweep` is `min-height: 2.75rem`). `align-items:
+   flex-start` on the panel keeps it a button rather than a full-width
+   bar; `margin-top: auto` drops it to the floor so two panels of unequal
+   copy line their buttons up.
+   The breathing room above it is a MARGIN ON THE LIST, never padding on
+   the button: `.btn-sweep` sets `padding: 0 1.25rem` and centres its
+   label on the box, so a `padding-top` here would grow the control and
+   push its own label off centre. */
+.ie__cta {
+  margin-top: auto;
+}

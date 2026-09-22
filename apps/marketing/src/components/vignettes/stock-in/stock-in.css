@@ -18,6 +18,11 @@
   inset: 0;
   display: grid;
   place-items: center;
+  /* From lg the frame is ~670 px wide and the mock is laid out in rem, so the
+     whole mock is scaled as ONE transform to fill ~85% of it (owner, final
+     pass). One transform on the container — a per-scene `zoom` let the beats'
+     stacked scenes drift apart. */
+  transform-origin: 50% 50%;
   padding: 0.85rem;
   color: var(--fg-body);
   font-size: 11px;
@@ -521,4 +526,9 @@
 .vg-si__mock[data-reduced='true'] {
   transition: none !important;
   animation: none !important;
+}
+@media (min-width: 1024px) {
+  .vg-si__mock {
+    transform: scale(1.3);
+  }
 }

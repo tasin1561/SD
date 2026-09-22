@@ -4,7 +4,6 @@ import { useRef, useState, type FormEvent, type MouseEvent, type ReactElement } 
 import { Mail, User } from 'lucide-react';
 import { TextArea, TextField, type FieldStatus } from '@/components/micro/text-field';
 import { PhoneField } from '@/components/micro/phone-field';
-import { LabelIntoParcel } from '@/components/micro/label-into-parcel';
 import { ReactiveMascot } from '@/components/micro/reactive-mascot';
 import { SweepLink } from '@/components/micro/sweep';
 import { contact } from '@/content/sections/contact';
@@ -177,13 +176,9 @@ export function ContactClient({
       <p className="ct__reassure">{c.reassurance}</p>
 
       <div className="ct__actions">
-        <LabelIntoParcel
-          className="ct__email"
-          href={mailto('')}
-          onClick={openEmail}
-          label={c.emailCta}
-          packedLabel={c.emailPacked}
-        />
+        <SweepLink className="ct__email" href={mailto('')} onClick={openEmail}>
+          {c.emailCta}
+        </SweepLink>
         <SweepLink
           tone="green"
           href={whatsapp('')}

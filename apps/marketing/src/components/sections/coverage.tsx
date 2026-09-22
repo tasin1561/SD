@@ -17,7 +17,7 @@ import './coverage.css';
  */
 export function Coverage(): ReactElement {
   return (
-    <section id="coverage" className="sec" aria-labelledby="coverage-h2">
+    <section id="coverage" className="sec sec--band" aria-labelledby="coverage-h2">
       <div className="sec__inner safe-x sm:px-6">
         <SectionHeading
           id="coverage-h2"

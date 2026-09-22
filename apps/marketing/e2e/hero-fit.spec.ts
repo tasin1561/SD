@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
  * the direction chip and every Book-tab field were cut off.
  */
 const WIDTHS = [320, 360, 414] as const;
-const TABS = ['Track', 'Quote', 'Book'] as const;
+const TABS = ['Track', 'Quote', '(?:Request an invite|Invite)'] as const;
 
 test.describe('hero fits the viewport in every tab state', () => {
   for (const w of WIDTHS) {

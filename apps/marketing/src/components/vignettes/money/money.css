@@ -10,7 +10,7 @@
   --vg-e: cubic-bezier(0.3, 1, 0.3, 1);
   position: absolute;
   inset: 0;
-  font-size: clamp(9px, 1.05vw + 5px, 12px);
+  font-size: clamp(9px, 1.05vw + 5px, 16px); /* cap raised 12 → 16 so the mock fills the lg frame */
   line-height: 1.35;
   color: var(--green-on-tint);
 }
