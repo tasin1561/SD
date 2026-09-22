@@ -36,6 +36,7 @@
   width: min(14rem, 58vw);
   aspect-ratio: 146 / 124;
   margin-inline: auto;
+  overflow: clip; /* the tag overlay floats; the old single <svg> clipped it */
   animation: nfBob 4.6s ease-in-out infinite;
 }
 .nf__tagLayer {

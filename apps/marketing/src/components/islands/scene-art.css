@@ -18,6 +18,11 @@
   max-width: 34rem;
   margin-inline: auto;
   aspect-ratio: 4 / 3;
+  /* The single <svg> used to clip the plane's travel at its viewport; the
+     overlay layers are `overflow: visible`, so the stage clips instead — or
+     the plane at the far right of its arc widened the document 7 px at 320
+     (CI, 2026-09-22). `clip`, not `hidden`: no scroll container. */
+  overflow: clip;
   animation: svcFloat 7.5s ease-in-out infinite;
 }
 .svc-art .svc__art,

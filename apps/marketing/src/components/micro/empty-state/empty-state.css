@@ -34,6 +34,7 @@
   width: 7.5rem;
   aspect-ratio: 120 / 84;
   margin-bottom: 0.4rem;
+  overflow: clip; /* the lens overlay travels; the old single <svg> clipped it */
   animation: mi-empty-bob 4s ease-in-out infinite;
 }
 .mi-empty__art {

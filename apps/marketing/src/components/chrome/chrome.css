@@ -80,6 +80,22 @@
     font-size: 17px;
   }
 }
+/* Below 380 the row is brand + CTA + menu in 288 px of content. "Request an
+   invite" is two characters longer than the label it replaced, and at 320
+   that put the menu button 7 px past the edge (CI, 2026-09-22). */
+@media (max-width: 379px) {
+  .site-header__actions {
+    gap: 0.35rem;
+  }
+  .site-header__cta {
+    padding: 0 0.6rem;
+    font-size: 12.5px;
+    letter-spacing: -0.01em;
+  }
+  .site-header__brand {
+    font-size: 16px;
+  }
+}
 .site-header__menu {
   margin-right: -0.25rem;
 }
