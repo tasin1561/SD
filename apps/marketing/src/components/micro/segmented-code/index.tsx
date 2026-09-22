@@ -104,6 +104,7 @@ export function SegmentedCode({
             pattern="[0-9]*"
             maxLength={1}
             value={d}
+            data-filled={d ? '' : undefined}
             aria-label={`${label} digit ${i + 1} of ${length}`}
             onChange={(e) => set(i, e.target.value)}
             onKeyDown={(e) => onKey(i, e)}

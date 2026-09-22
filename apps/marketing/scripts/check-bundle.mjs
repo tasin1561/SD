@@ -105,7 +105,9 @@ check('inlined critical CSS in index.html (gz)', gz(criticalCss), 15_000);
 {
   // The deferred stylesheet(s) the home page loads after first paint.
   let deferred = 0;
-  for (const m of indexHtml.toString().matchAll(/rel="preload" as="style" href="([^"]+\.css)"/g))
+  for (const m of indexHtml
+    .toString()
+    .matchAll(/rel="preload" as="style" (?:fetchpriority="low" )?href="([^"]+\.css)"/g))
     deferred += gz(readFileSync(join(OUT, m[1])));
   check('deferred stylesheet(s) for / (gz)', deferred, 45_000);
 }

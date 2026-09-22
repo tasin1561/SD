@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { Reveal } from '@/lib/reveal';
 import { MapPin } from 'lucide-react';
 import { business, platform } from '@/content/site';
-import { CoverageClient } from '@/components/islands/coverage-client';
+import { CoverageLoader } from '@/components/islands/loaders/coverage-loader';
 import { RowLink } from '@/components/micro/list-row';
 import { EmptyState } from '@/components/micro/empty-state';
 import { SectionHeading } from './section-heading';
@@ -29,7 +29,7 @@ export function Coverage(): ReactElement {
         />
         <div className="cov">
           <div className="cov__check sec-card" data-hue="green">
-            <CoverageClient serviceability={business.serviceability} />
+            <CoverageLoader serviceability={business.serviceability} />
           </div>
           <div className="cov__lanes">
             <h3 className="cov__lanes-h">The lanes most parcels take</h3>

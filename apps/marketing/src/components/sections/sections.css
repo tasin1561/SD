@@ -4,6 +4,15 @@
   padding-block: 4rem;
   border-top: 1px solid var(--line);
   background: var(--page);
+  /* Off-screen sections are not styled, laid out or painted until they
+     approach the viewport. The page is ~500 KB of HTML; with every section
+     rendered up front, the stylesheets landing after first paint cost one
+     700 ms style-and-layout task at 4× CPU (Phase 8 profile: JS was ~1 s of a
+     7 s window — the rest was the browser's own layout). The hero is `.hero`,
+     not `.sec`, so it is always rendered. `auto` keeps the last measured
+     height once a section has been shown, so scrolling back does not jump. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 50rem;
 }
 .sec--band {
   background: var(--surface-band);

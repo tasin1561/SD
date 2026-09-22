@@ -41,9 +41,13 @@
   outline: 0;
   color: var(--fg-strong);
   font: inherit;
-  font-family: var(--font-mono);
   opacity: 0;
   transition: opacity calc(160 * var(--d)) calc(120 * var(--d));
+}
+/* Mono only once a waybill is being typed: the family's 40 KB file must not
+   download for a placeholder nobody has touched (it sat in the LCP window). */
+.mi-etf__input:not(:placeholder-shown) {
+  font-family: var(--font-mono);
 }
 .mi-etf[data-open='true'] .mi-etf__input {
   opacity: 1;

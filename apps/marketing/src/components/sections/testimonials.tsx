@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { MessageSquareQuote } from 'lucide-react';
 import { business } from '@/content/site';
-import { TestimonialsClient } from '@/components/islands/testimonials-client';
+import { TestimonialsLoader } from '@/components/islands/loaders/testimonials-loader';
 import { SectionHeading } from './section-heading';
 import './sections.css';
 import './testimonials.css';
@@ -23,7 +23,7 @@ export function Testimonials(): ReactElement {
           title="What sellers say"
           center
         />
-        <TestimonialsClient items={business.testimonials} />
+        <TestimonialsLoader items={business.testimonials} />
       </div>
     </section>
   );

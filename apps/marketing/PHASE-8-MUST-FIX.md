@@ -100,3 +100,72 @@ duplicate alone is 37% of the file and cannot be removed without leaving the App
 map's SVG into the near-gated island so it leaves the HTML (≈ −5 KB gz, desktop only, at the
 cost of the map arriving with the chunk). The gate in `scripts/check-bundle.mjs` is raised
 to 88 000 provisionally so CI stays green; the owner's 75 000 is recorded there.
+
+## Phase 8 pass — what was measured and what moved (2026-09-22)
+
+Lighthouse mobile (Slow 4G, 4× CPU) on the home page, before → after, two runs each:
+perf 78–83 → **86–93** · FCP 1.7 → **1.2–1.4 s** · LCP 3.0–3.3 → **2.6–2.7 s** · CLS 0 → **0**
+(0.066 mid-pass, see below) · TBT 550–660 → **190–420 ms** (noisy on this machine) · a11y /
+bp / seo 100. First-load JS 154.9 → **146.5 KB gz**; `out/index.html` 83.8 → **79.3 KB gz**;
+the sans font fetched once; the mono font no longer downloaded at all (−40 KB on every visit).
+
+Deterministic companion measure (Playwright, Slow 4G + 4× CPU, 412×823, three runs): first paint
+0.58–0.86 s, hydration complete 2.7–3.2 s, long-task excess after FCP 0.52–0.87 s, **longest
+task 243–295 ms (was 650–726)**.
+
+**What moved it, in order of effect:**
+
+1. **`content-visibility: auto` on every `.sec`** (the hero is `.hero`). A CPU profile showed
+   JavaScript at ~1 s of a 7 s window; the 700 ms task after the stylesheets landed was the
+   browser restyling and laying out all ~500 KB of HTML. Off-screen sections are now skipped
+   until they approach. `contain-intrinsic-size: auto 50rem` keeps the last measured height.
+2. **Six more islands near-gated** (services, coverage, how-it-works, track band, goods,
+   testimonials) — server-rendered, chunk fetched and hydrated when near. Every loader carries a
+   `loading` fallback, which is load-bearing: without one next/dynamic gives an SSR'd component
+   NO Suspense boundary and the pending gate suspends the page segment — nothing hydrates, no
+   error anywhere (found by `theme.spec` + `hero-fit.spec` going red together in Phase 6).
+3. **The seven island stylesheets (`data-precedence="dynamic"`, `href` first) were
+   render-blocking** — the critical-CSS script only matched `rel` before `href`. Converted like
+   the rest; Next's low-priority `<link rel="preload" as="script">` hints for the ten lazy chunks
+   (~60 KB) are stripped, since the near-gate's `import()` is what should fetch them.
+4. **The mono font.** Tailwind's preflight styles bare `<code>` with `--font-mono`, so the
+   `<code>` in the platform mocks pulled JetBrains's 40 KB file; and an `<input>` loads its font
+   for its own metrics even when empty, so the empty PIN boxes and the waybill field did too.
+   Bare code gets the system mono (`--default-mono-font-family`); the fields take the mono face
+   only once they hold a value (`data-filled`, `:not(:placeholder-shown)`).
+5. **The coverage map** is drawn after mount, so its ~6 KB gz of SVG is in neither the HTML nor
+   the flight payload (it was desktop-only and below the fold anyway).
+6. **The local harness lied about fonts**: `serve-static.mjs` sent `no-store` for everything, so
+   the sans font downloaded twice (preload + the stylesheet's @font-face) in every local run.
+   Hashed `/_next/static/` assets are now `immutable`, as Caddy serves them in production.
+
+**CLS 0.066 mid-pass — a mechanism worth remembering.** Once first paint happened before the
+deferred sheets, the FAQ's eight category tabs (774 px of `inline-flex nowrap`, styled by the
+liquid-bead rules the hero also uses) sat in a container whose `overflow-x: auto` was deferred.
+The document was wider than the screen, so Chrome's MOBILE layout viewport grew to fit it
+(412 → 790 px, 823 → 1579 px), the fixed bottom bar sat at the bottom of the 1579 px viewport,
+and it jumped 750 px when the sheet landed. `overflow-x: clip` on the root does NOT prevent
+this. The critical-CSS script now runs a **containment pass**: `overflow*` declarations for
+every class present anywhere in the page, not only the fold — a few hundred bytes. Verified by
+loading with every `.css` request blocked: the viewport stays 412 px.
+
+**Stylesheet flip A/B** (single flip of all eleven once the last arrived vs. per-link `onload`):
+the same long-task total; the per-link shape keeps the longest task 243–295 ms against 304–330
+and needs no inline script, so it stays. A single CONCATENATED deferred sheet was tried and
+reverted: React Float looks for the page's own stylesheet hrefs at hydration and re-inserted all
+four (30 KB re-downloaded, hydration held until they landed).
+
+**Item 4, LCP — where the remaining 0.6 s is, and why it is not the font.** A Lighthouse run with
+every `.woff2` blocked still reports LCP 2.6 s (FCP 1.4), so `font-display: optional` would not
+have helped. The observed paint in Lighthouse's own trace is 208 ms (FCP = LCP); the 2.6 s is
+Lantern's simulation, whose pessimistic LCP graph counts every request started before the paint
+— the React runtime and page chunks (146 KB gz) requested at ~90 ms. Under a real Slow 4G + 4×
+CPU emulation the hero paints at 0.58–0.86 s. **To move the simulated figure further, the
+levers left are fewer first-load JS bytes (the App Router runtime is 103 KB of the 146) and a
+smaller HTML document (the RSC flight payload is 31 KB gz of the 79).** Neither is a Phase 8
+change; the owner decides whether 2.6 s in the simulation, against 0.6–0.9 s on an emulated
+device, is accepted.
+
+**Not done, and why:** subsetting the mono font (40 KB → ~6 KB for digits + uppercase) needs
+`fonttools`, which is not installed here and is not installed without approval; it no longer
+loads on the home page, so the win would be on the waybill fields when typing.

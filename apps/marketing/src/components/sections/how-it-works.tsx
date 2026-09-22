@@ -10,7 +10,7 @@ import {
   Bike,
 } from 'lucide-react';
 import { platform } from '@/content/site';
-import { HowItWorksClient } from '@/components/islands/how-it-works-client';
+import { HowItWorksLoader } from '@/components/islands/loaders/how-it-works-loader';
 import { SectionHeading } from './section-heading';
 import './sections.css';
 import './how-it-works.css';
@@ -38,7 +38,7 @@ export function HowItWorks(): ReactElement {
           title="From a door in Bangladesh to a door in India"
           sub="Sending a parcel is five steps and one agreed price. Selling in India is four: your stock goes once, and every order after that is confirmed by phone, picked, packed and tracked to the customer."
         />
-        <HowItWorksClient
+        <HowItWorksLoader
           tracks={[
             {
               id: 'parcel',

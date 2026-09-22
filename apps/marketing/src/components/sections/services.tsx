@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { Sparkles } from 'lucide-react';
 import { platform } from '@/content/site';
-import { ServicesClient } from '@/components/islands/services-client';
+import { ServicesLoader } from '@/components/islands/loaders/services-loader';
 import { SectionHeading } from './section-heading';
 import './sections.css';
 import './services.css';
@@ -24,7 +24,7 @@ export function Services(): ReactElement {
           title="One corridor, four services"
           sub="Parcels either way across the border, stock held in India, and the whole selling operation run for you: phone-confirmed COD, a warehouse, couriers and money sent home."
         />
-        <ServicesClient services={platform.services} whoWeServe={platform.whoWeServe} />
+        <ServicesLoader services={platform.services} whoWeServe={platform.whoWeServe} />
       </div>
     </section>
   );

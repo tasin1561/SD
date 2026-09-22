@@ -215,6 +215,12 @@
      rule here pinned `h1–h4` to `--font-plex-sans` by name. */
   --font-sans: var(--font-sans-face), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  /* Tailwind's preflight styles bare `code`/`pre`/`kbd` with this. It defaults
+     to `--font-mono`, which pulled JetBrains's 40 KB file on first paint for
+     the `<code>` in the platform mocks — none of it above the fold. Bare code
+     gets the system mono; the design's mono (`.figure-mono`, `.mono-caps`,
+     the waybill fields) still asks for JetBrains by name. */
+  --default-mono-font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   /* Elements below reference `--font-sans-face` DIRECTLY rather than
      `--font-sans`: a var() inside a custom property is substituted where
      that property is DECLARED (`:root`), so `var(--font-sans)` would carry
@@ -581,4 +587,11 @@ h4 {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--fg-muted);
   background-clip: content-box;
+}
+
+/* A near-gated island's wrapper is a grid item; `min-width: auto` would let a
+   no-wrap child (a chip row) widen it past the viewport before the child's
+   own overflow can clip. */
+[data-near-gate] {
+  min-width: 0;
 }

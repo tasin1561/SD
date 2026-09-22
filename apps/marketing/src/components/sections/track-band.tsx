@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { PackageSearch } from 'lucide-react';
-import { TrackBandClient } from '@/components/islands/track-band-client';
+import { TrackBandLoader } from '@/components/islands/loaders/track-band-loader';
 import { SectionHeading } from './section-heading';
 import './sections.css';
 import './track-band.css';
@@ -31,9 +31,9 @@ export function TrackBand(): ReactElement {
               title="Where is it now?"
               sub="Every parcel has a public tracking page in English and Hindi, driven by the courier's own scans. Type the waybill number from your label or your order."
             />
-            <TrackBandClient />
+            <TrackBandLoader />
           </div>
-          <TrackBandClient sample />
+          <TrackBandLoader sample />
         </div>
       </div>
     </section>

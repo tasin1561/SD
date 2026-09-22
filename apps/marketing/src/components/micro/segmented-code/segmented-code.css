@@ -13,12 +13,19 @@
   display: flex;
   gap: 0.5rem;
 }
+/* Mono only once a digit is in the box. An <input> loads its font for its own
+   metrics even when empty, so the empty boxes cost every visitor the mono's
+   40 KB file on first paint (Phase 8); the box has no placeholder, so
+   `:placeholder-shown` cannot tell the two states apart — the component
+   stamps `data-filled`. */
+.mi-seg__box[data-filled] {
+  font-family: var(--font-mono);
+}
 .mi-seg__box {
   width: 2.75rem;
   height: 3.25rem;
   text-align: center;
   font: inherit;
-  font-family: var(--font-mono);
   font-size: 1.25rem;
   font-weight: 600;
   color: var(--fg-strong);

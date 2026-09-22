@@ -21,6 +21,10 @@ export function CoverageClient({
 }): ReactElement {
   const [dir, setDir] = useState<'in' | 'bd'>('in');
   const [code, setCode] = useState<string | null>(null);
+  // The 2.5D map is desktop-only and below the fold: drawn after mount, so its
+  // ~6 KB gz of SVG is in neither the HTML nor the flight payload (PHASE-8 item 6).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   // Memoised: SegmentedCode calls `verify` from an effect that lists it as a
   // dependency, so an inline function that also sets state would re-render
   // and re-fire forever. It fires only on a COMPLETE code, which is exactly
@@ -71,9 +75,11 @@ export function CoverageClient({
         The result is an estimate; the courier confirms at booking.
       </p>
       {/* Desktop only: the 2.5D corridor map under the checker, the checked code's region lit. */}
-      <div className="cov__map hidden lg:block">
-        <CoverageMap direction={dir} code={code} />
-      </div>
+      {mounted ? (
+        <div className="cov__map hidden lg:block">
+          <CoverageMap direction={dir} code={code} />
+        </div>
+      ) : null}
     </>
   );
 }

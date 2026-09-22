@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { PackageOpen } from 'lucide-react';
 import { platform } from '@/content/site';
-import { GoodsClient } from '@/components/islands/goods-client';
+import { GoodsLoader } from '@/components/islands/loaders/goods-loader';
 import { SectionHeading } from './section-heading';
 import './sections.css';
 import './goods.css';
@@ -22,7 +22,7 @@ export function Goods(): ReactElement {
           title="What crosses the border, and what does not"
           sub="The corridor's staples ship every day. A few categories need a look first, and some are not carried at all — we would rather say so here than at the counter."
         />
-        <GoodsClient goods={platform.goods} />
+        <GoodsLoader goods={platform.goods} />
       </div>
     </section>
   );

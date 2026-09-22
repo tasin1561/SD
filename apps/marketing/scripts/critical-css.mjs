@@ -190,6 +190,38 @@ function critical(css, used) {
     .replace(/;\}/g, '}');
 }
 
+/**
+ * Containment pass — overflow rules for EVERY class on the page, not only the
+ * fold's. First paint now happens before any deferred sheet, and a scroll
+ * container whose `overflow-x: auto` is deferred while its no-wrap child is
+ * already styled (the FAQ's eight category tabs, 774 px wide, under the
+ * liquid-bead rules the hero also uses) makes the document wider than the
+ * screen; Chrome's MOBILE layout viewport then grows to fit it (412 → 790 px)
+ * and every fixed element jumps when the sheet lands — CLS 0.066, all of it
+ * on the bottom bar. Clipping the root does not stop that. Only the
+ * `overflow*` declarations are kept, so the pass costs a few hundred bytes.
+ */
+function containment(css, usedAll) {
+  const root = postcss.parse(css);
+  const out = [];
+  root.walkRules((rule) => {
+    const decls = rule.nodes.filter((n) => n.type === 'decl' && /^overflow(-x|-y)?$/.test(n.prop));
+    if (decls.length === 0) return;
+    if (rule.parent && rule.parent.type === 'atrule' && rule.parent.name === 'media') return;
+    const sels = (rule.selectors ?? [rule.selector]).filter((sel) => {
+      const { classes, ids, attrs } = selectorTokens(sel);
+      if (classes.size === 0 && ids.size === 0) return false;
+      if (attrs.size > 0) for (const a of attrs) if (!usedAll.attrNames.has(a)) return false;
+      for (const c of classes) if (isDeferrable(c) || !usedAll.classes.has(c)) return false;
+      for (const i of ids) if (!usedAll.ids.has(i)) return false;
+      return true;
+    });
+    if (sels.length === 0) return;
+    out.push(`${sels.join(',')}{${decls.map((d) => `${d.prop}:${d.value}`).join(';')}}`);
+  });
+  return out.join('');
+}
+
 const pages = readdirSync(OUT).filter((n) => n.endsWith('.html'));
 const rows = [];
 let failed = false;
@@ -201,21 +233,68 @@ for (const name of pages) {
     html = html
       .replace(/<style data-critical>[\s\S]*?<\/style>/, '')
       .replace(
-        /<link rel="preload" as="style" href="([^"]+)" onload="[^"]*"><noscript><link rel="stylesheet" href="\1"><\/noscript>/g,
+        /<link rel="preload" as="style" (?:fetchpriority="low" )?href="([^"]+)" onload="[^"]*"><noscript><link rel="stylesheet" href="\1"><\/noscript>/g,
         '<link rel="stylesheet" href="$1">',
-      );
+      )
+      .replace(
+        /<link rel="preload" as="style" href="([^"]+)" data-defer>/g,
+        '<link rel="stylesheet" href="$1">',
+      )
+      .replace(
+        /<script>\(function\(\)\{var l=document\.querySelectorAll\('link\[data-defer\]'\)[\s\S]*?<\/script>/,
+        '',
+      )
+      .replace(/<noscript>(<link rel="stylesheet" href="[^"]+">)+<\/noscript>/, '');
   }
-  const links = [...html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+\.css)"[^>]*>/g)];
+  // Two shapes: Next's page stylesheets (`rel` before `href`) and React
+  // Float's `data-precedence="dynamic"` links for the lazy islands' CSS
+  // (`href` FIRST). The second shape was missed until Phase 8 — seven small
+  // render-blocking stylesheets, one RTT each in Lighthouse's simulation,
+  // for sections that are all below the fold.
+  const links = [
+    ...html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+\.css)"[^>]*>/g),
+    ...html.matchAll(/<link href="([^"]+\.css)"[^>]*rel="stylesheet"[^>]*>/g),
+  ];
   if (links.length === 0) continue;
+  // Next preloads every lazy chunk it knows about, low priority — which is
+  // still ~60 KB competing with the fonts and the React runtime on Slow 4G
+  // for islands the near-gate deliberately does not want yet. The gate's
+  // `import()` fetches each chunk when its section approaches; the hints go.
+  html = html.replace(
+    /<link rel="preload" href="\/_next\/static\/chunks\/[^"]+" as="script" fetchPriority="low"\/>/g,
+    '',
+  );
   const css = links.map((m) => readFileSync(join(OUT, m[1]), 'utf8')).join('\n');
-  const inline = critical(css, usedTokens(foldMarkup(html)));
+  const inline =
+    critical(css, usedTokens(foldMarkup(html))) +
+    containment(css, usedTokens(html.replace(/<script[\s\S]*?<\/script>/g, '')));
   const gz = gzipSync(inline).length;
-  const swap = links
-    .map(
-      (m) =>
-        `<link rel="preload" as="style" href="${m[1]}" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="${m[1]}"></noscript>`,
-    )
-    .join('');
+  // Eleven preloads, ONE swap. Each stylesheet landing on its own is a full
+  // style recalculation and layout of a 500 KB document at 4× CPU — eleven of
+  // them were the "Style & Layout" 2 s in Lighthouse's breakdown (Phase 8).
+  // The links stay individually addressable on purpose: React Float looks for
+  // the page's own stylesheet hrefs at hydration and RE-INSERTS any it cannot
+  // find (a concatenated sheet cost 30 KB of re-downloads and held hydration
+  // until they landed). So every sheet is preloaded, and a tiny inline script
+  // flips them all to `rel="stylesheet"` in one task once the last has arrived.
+  // Per-link `onload` flips by default. Measured against a single flip of all
+  // eleven once the last arrived (Phase 8, Slow 4G + 4× CPU, three runs each,
+  // with content-visibility on the sections): the same long-task total, but
+  // the per-link shape keeps the LONGEST task at 243–295 ms against 304–330,
+  // and needs no inline script. `CSS_SWAP=flip` keeps the other shape for a
+  // re-measure. `fetchpriority="low"`: these sheets style nothing above the
+  // fold (the critical set does), so the font and the React runtime go first.
+  const swap =
+    process.env.CSS_SWAP !== 'flip'
+      ? links
+          .map(
+            (m) =>
+              `<link rel="preload" as="style" fetchpriority="low" href="${m[1]}" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="${m[1]}"></noscript>`,
+          )
+          .join('')
+      : links.map((m) => `<link rel="preload" as="style" href="${m[1]}" data-defer>`).join('') +
+        `<script>(function(){var l=document.querySelectorAll('link[data-defer]'),n=l.length;function d(){if(--n<=0)for(var i=0;i<l.length;i++)l[i].rel='stylesheet'}for(var i=0;i<l.length;i++){l[i].addEventListener('load',d);l[i].addEventListener('error',d)}})()</script>` +
+        `<noscript>${links.map((m) => `<link rel="stylesheet" href="${m[1]}">`).join('')}</noscript>`;
   let out = html;
   for (const m of links) out = out.replace(m[0], '');
   out = out.replace('</head>', `<style data-critical>${inline}</style>${swap}</head>`);

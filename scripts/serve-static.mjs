@@ -104,7 +104,13 @@ const server = createServer((req, res) => {
     const gzip = compressible && /\bgzip\b/.test(req.headers['accept-encoding'] ?? '');
     res.writeHead(200, {
       'content-type': type,
-      'cache-control': 'no-store',
+      // Hashed build assets are immutable in production (Caddy's `@immutable`
+      // matcher); mirroring that here keeps a local Lighthouse honest — under
+      // `no-store` the sans font downloaded TWICE (preload + the deferred
+      // stylesheet's @font-face) and the second copy sat in the LCP window.
+      'cache-control': (req.url ?? '/').startsWith('/_next/static/')
+        ? 'public, max-age=31536000, immutable'
+        : 'no-store',
       ...(gzip ? { 'content-encoding': 'gzip', vary: 'accept-encoding' } : {}),
     });
     const stream = createReadStream(file);
