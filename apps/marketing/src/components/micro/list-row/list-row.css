@@ -71,6 +71,14 @@
   transform: translateX(2px);
   outline: none;
 }
+/* Keyboard focus is a RING, not only the tint and the accent bar — a colour
+   change is never the only signal, and the Phase 9 keyboard pass found the ten
+   mega-menu rows with no visible focus at all. */
+.row:focus-visible {
+  box-shadow:
+    inset 0 0 0 2px var(--blue-text),
+    var(--shadow-1);
+}
 .row:hover .row__bar,
 .row:focus-visible .row__bar {
   transform: scaleY(1);
