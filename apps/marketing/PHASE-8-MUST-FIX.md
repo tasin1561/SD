@@ -189,3 +189,44 @@ before the paint (see Phase 8 above); 2.3 s is accepted.
 The font-subset half (a ~10 KB wght-700 latin subset for the h1) was not attempted: it needs
 `fonttools`, which is not installed here and is not installed without approval, and the
 measurement above says the font is not on the LCP path.
+
+## Final pass — "perf dropped 86–93 → 78–85 between 80fd056e and f02ea195" (2026-09-22, bounded)
+
+**Method.** The three commits (80fd056e Phase 9, 2ccc8648 final pass, f02ea195 fit box) were
+built into three separate `out/` folders and measured INTERLEAVED — A, B, C, then again, three
+rounds — so host drift lands on all three alike. Each round: one Lighthouse mobile run (Slow 4G,
+4× CPU, simulate) and one Playwright probe (real Slow 4G + 4× CPU emulation, longest task).
+
+| build                 | LH perf r1 / r2 / r3 | LH TBT r1 / r2 / r3  | probe longest task r1 / r2 / r3 |
+| --------------------- | -------------------- | -------------------- | ------------------------------- |
+| 80fd056e (Phase 9)    | 70 / 89 / 82         | 1,850 / 360 / 650 ms | 601 / 346 / 396 ms              |
+| 2ccc8648 (final pass) | 78 / 81 / 81         | 880 / 600 / 680 ms   | 474 / 371 / 658 ms              |
+| f02ea195 (fit box)    | 70 / 88 / 75         | 860 / 360 / 920 ms   | 671 / 375 / 359 ms              |
+
+**Reading.** The same build spans 70 → 89 across rounds; the three builds overlap entirely and
+no ordering repeats. The Phase 9 build measured 86–93 on a quieter host; today it measures
+70–89. Nothing inside WSL was busy (load 1.5–2 from these runs alone) — the contention is on
+the Windows side, invisible from here. **No commit moved the score.**
+
+**The three suspects, checked with deterministic counters** (Chrome `Performance.getMetrics`,
+a counting `requestAnimationFrame` wrapper, the chunk list), identical across all three builds:
+11 chunks hydrated at load and 14 after scrolling to the tour (the restored sections are
+server components — the only client code they reach is the shared `Reveal`); 0 timers at
+load; DOM 5,162 → 5,326 nodes (the two sections); the sequencer's rAF tick runs only while ONE
+vignette plays (one "Pause" button in the DOM) and costs 2 layouts/s; the container-query fit
+box adds no layout per beat.
+
+**What the counters DID find — pre-existing, in every build, not the regression:** ~60
+layouts and ~60 style recalculations per second at idle on the home page, before any scroll.
+Pausing every CSS animation takes it to 0.5/s; neutralising rAF changes only script time. The
+running animations are `heroMesh` (the hero's mesh), and the services scene's `svcFloat`,
+`artArc`, `artFly`, `artDrop`. All are transform / opacity / `stroke-dashoffset` — within the
+motion rules — but `artFly` and `artDrop` animate `transform` on SVG `<g>` elements, which
+Chrome lays out on the main thread every frame (SVG transforms are not composited), and the
+services scene is in view at load on a phone. Cost here: ~19 ms/s style + 4 ms/s layout,
+about four times that on a 4× phone. It never forms a long task, so it does not move TBT;
+it is battery and heat while the hero is on screen. **Fix, if wanted (not done — outside this
+bound):** move the plane and the dropping parcel out of the scene `<svg>` into their own
+absolutely positioned `<svg>` elements so the transform animates an HTML-level box and
+composites, or gate the scene's animations on an IntersectionObserver the way the hero canvas
+already is.
