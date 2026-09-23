@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, ErrorNote, FormField, Modal, Textarea, useToast } from '@skydrop/ui/components';
+import { OctagonX, Undo2 } from 'lucide-react';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Notice } from './orders-parts';
 import { useRequestReturn } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -61,53 +67,62 @@ export function RequestReturnDialog({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
       title="Bring this parcel back?"
+      icon={<Undo2 size={18} />}
+      locked={request.isPending}
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose} disabled={request.isPending}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            state={request.isPending ? 'busy' : undefined}
+            labels={{ idle: 'Request return', busy: 'Requesting…' }}
+            onClick={submit}
+            disabled={request.isPending || reason.trim().length < 5}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="flex flex-col gap-3">
-        <p className="text-text-muted text-sm leading-relaxed">
+      <div className="ord-stack ord-stack--tight">
+        {/* The order it is about, restated: a return books a real
+            collection and a second delivery charge. */}
+        <div className="sk-confirm__subject">
+          <span className="sk-confirm__entity sk-ident">{orderNumber}</span>
+        </div>
+        <p className="ord-p">
           The courier collects it from your customer and brings it to our warehouse. It travels the
           same distance again, so it is charged as a second delivery —{' '}
-          <span className="text-text-bright font-medium">₹200</span> on top of the delivery you
-          already paid. Nothing is charged until the parcel actually arrives.
+          <span className="ord-strong">₹200</span> on top of the delivery you already paid. Nothing
+          is charged until the parcel actually arrives.
         </p>
-        <p className="text-text-faint text-xs">
+        <p className="ord-faint">
           Stock goes back on the shelf once the warehouse has checked it. If it comes back damaged
           it is written off instead, and you will see that on the order.
         </p>
 
-        <FormField
+        <TextArea
           label="Why is it coming back?"
           hint="The warehouse reads this when it arrives — it decides whether the stock can be resold."
-        >
-          <Textarea
-            className="min-h-20"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Damaged product / quality not as expected / customer changed their mind…"
-            maxLength={500}
-          />
-        </FormField>
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Damaged product / quality not as expected / customer changed their mind…"
+          maxLength={500}
+          rows={3}
+        />
 
-        {request.isError && <ErrorNote message={serverVerdict(request.error)} />}
-
-        <div className="mt-1 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={submit}
-            disabled={request.isPending || reason.trim().length < 5}
-          >
-            {request.isPending ? 'Requesting…' : 'Request return'}
-          </Button>
-        </div>
+        {request.isError && (
+          <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
+            <span>{serverVerdict(request.error)}</span>
+          </Notice>
+        )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

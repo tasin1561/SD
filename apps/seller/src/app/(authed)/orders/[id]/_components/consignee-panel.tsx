@@ -1,17 +1,15 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Info } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorNote,
-  FormField,
-  Input,
-  SkeletonRows,
-  useToast,
-} from '@skydrop/ui/components';
+import { Info, Send, X } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Notice, OrdSection } from '../../_components/orders-parts';
 import { useChangeConsignee, useConsignee, useConsigneeHistory } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
@@ -32,9 +30,12 @@ import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-moda
  */
 export function ConsigneePanel({
   orderId,
+  orderNumber,
   onClose,
 }: {
   readonly orderId: string;
+  /** Restated when the change is confirmed. */
+  readonly orderNumber?: string | undefined;
   /** Put it away again. The Recipient card is what opens it. */
   readonly onClose?: () => void;
 }): ReactElement {
@@ -48,8 +49,12 @@ export function ConsigneePanel({
   const [name, setName] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [address, setAddress] = useState<string | null>(null);
+  // A change goes to the courier on the click, so it is confirmed first,
+  // restating the order and exactly what moves.
+  const [confirming, setConfirming] = useState(false);
 
-  if (info.isLoading) return <SkeletonRows rows={3} cols={1} />;
+  if (info.isLoading)
+    return <SkeletonRows rows={3} cols={1} label="Loading the customer details…" />;
   if (info.isError) {
     // An order with no parcel yet is not an error, it is Tuesday: the
     // shipment is provisioned when the order is CONFIRMED, so every
@@ -57,7 +62,7 @@ export function ConsigneePanel({
     // being at a perfectly normal stage of its life.
     const code = (info.error as { body?: { code?: string } } | undefined)?.body?.code;
     if (code === 'NO_LIVE_PARCEL') return <div />;
-    return <ErrorNote message={serverVerdict(info.error)} retry={() => void info.refetch()} />;
+    return <ErrorState message={serverVerdict(info.error)} retry={() => void info.refetch()} />;
   }
   const d = info.data;
   if (d === undefined) return <div />;
@@ -70,162 +75,144 @@ export function ConsigneePanel({
     (phone !== null && phone !== d.currentPhone) ||
     (address !== null && address !== d.currentAddressLine1);
 
-  const submit = (): void => {
-    void (async () => {
-      try {
-        const r = await change.mutateAsync({
-          orderId,
-          ...(name !== null && name !== d.currentName ? { name } : {}),
-          ...(phone !== null && phone !== d.currentPhone ? { phone } : {}),
-          ...(address !== null && address !== d.currentAddressLine1
-            ? { addressLine1: address }
-            : {}),
-        });
-        setName(null);
-        setPhone(null);
-        setAddress(null);
-        // Sent is not landed. Saying "changed" here would be a claim we
-        // have not checked — the portal confirms it within the hour.
-        if (r.accepted) {
-          toast.success('Sent to the courier. We confirm it on their system shortly.');
-        } else {
-          toast.error(r.message ?? 'The courier would not take the change.');
-        }
-      } catch (err) {
-        toast.error(serverVerdict(err));
+  const send = async (): Promise<void> => {
+    try {
+      const r = await change.mutateAsync({
+        orderId,
+        ...(name !== null && name !== d.currentName ? { name } : {}),
+        ...(phone !== null && phone !== d.currentPhone ? { phone } : {}),
+        ...(address !== null && address !== d.currentAddressLine1 ? { addressLine1: address } : {}),
+      });
+      setName(null);
+      setPhone(null);
+      setAddress(null);
+      // Sent is not landed. Saying "changed" here would be a claim we
+      // have not checked — the portal confirms it within the hour.
+      if (r.accepted) {
+        toast.success('Sent to the courier. We confirm it on their system shortly.');
+      } else {
+        toast.error(r.message ?? 'The courier would not take the change.');
       }
-    })();
+    } catch (err) {
+      toast.error(serverVerdict(err));
+    }
   };
 
-  return (
-    <Card className="mt-4">
-      <CardBody>
-        <div className="mb-3">
-          {/* Heading and lock chip on ONE row: the chip is a property of
-              this section, not an announcement under it, and stacking
-              them pushed the fields down for a label six words long. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-medium">Customer details</h2>
-            {/*
-            When the courier has stopped accepting changes, the reason
-            sits behind an ⓘ next to the heading rather than in a block
-            that pushed the fields off the screen.
+  // What the confirmation restates: only the fields that actually move.
+  const changes = [
+    name !== null && name !== d.currentName ? `Name: ${d.currentName} → ${name}` : null,
+    phone !== null && phone !== d.currentPhone ? `Phone: ${d.currentPhone} → ${phone}` : null,
+    address !== null && address !== d.currentAddressLine1
+      ? `Address: ${d.currentAddressLine1} → ${address}`
+      : null,
+  ].filter((x): x is string => x !== null);
 
-            The panel is READ-ONLY in that state anyway — every input is
-            disabled — so the explanation is not something somebody
-            needs before they can act; it is what they go looking for
-            once they notice they cannot type. A permanent five-line
-            warning above the thing it describes buys attention it does
-            not need and spends the space the fields wanted. The button
-            is highlighted so it is plainly there to be pressed, and
-            "Raise an issue" moves inside, which is where somebody is
-            when they have just read why they are stuck.
-          */}
-            {d.editable ? (
-              <p className="text-text-muted text-xs">{d.reason}</p>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setWhyOpen((v) => !v)}
-                aria-expanded={whyOpen}
-                className="border-warning/40 bg-warning/10 text-text-muted hover:bg-warning/15 hover:text-text-body inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] leading-none transition-colors"
-              >
-                <Info size={10} className="text-warning shrink-0" aria-hidden />
-                Locked by the courier
-              </button>
-            )}
-            {onClose !== undefined && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-text-faint hover:text-text-body ml-auto text-xs underline underline-offset-2"
-              >
-                Close
-              </button>
-            )}
-          </div>
-          {!d.editable && whyOpen && (
-            <div className="border-warning/40 bg-warning/10 mt-2 rounded-lg border p-3">
-              <p className="text-text-bright text-sm font-medium">
-                These can no longer be changed through the courier
-              </p>
-              <p className="text-text-body mt-1 text-sm">{d.reason}</p>
-              <p className="text-text-muted mt-1 text-xs">
-                If something here is wrong, tell us and we will take it up with them directly —
-                sometimes they can still reach the driver.
-              </p>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="mt-2"
-                onClick={() => setRaising(true)}
-              >
+  return (
+    <OrdSection
+      title="Customer details"
+      note={
+        d.editable ? (
+          d.reason
+        ) : (
+          /*
+            When the courier has stopped accepting changes, the reason
+            sits behind a chip next to the heading rather than in a
+            block that pushed the fields off the screen. The panel is
+            READ-ONLY in that state anyway, so the explanation is what
+            somebody goes looking for once they notice they cannot type.
+          */
+          <button
+            type="button"
+            onClick={() => setWhyOpen((v) => !v)}
+            aria-expanded={whyOpen}
+            className="ord-lock"
+          >
+            <Info size={12} aria-hidden />
+            Locked by the courier
+          </button>
+        )
+      }
+      action={
+        onClose !== undefined ? (
+          <Button variant="ghost" size="sm" icon={<X size={14} />} onClick={onClose}>
+            Close
+          </Button>
+        ) : undefined
+      }
+    >
+      <div className="ord-stack ord-stack--tight">
+        {!d.editable && whyOpen && (
+          <Notice
+            tone="warn"
+            icon={<Info size={16} />}
+            title="These can no longer be changed through the courier"
+          >
+            <span className="ord-p">{d.reason}</span>
+            <span className="ord-faint">
+              If something here is wrong, tell us and we will take it up with them directly —
+              sometimes they can still reach the driver.
+            </span>
+            <div>
+              <Button variant="secondary" size="sm" onClick={() => setRaising(true)}>
                 Raise an issue
               </Button>
             </div>
-          )}
-        </div>
+          </Notice>
+        )}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField label="Name" htmlFor="cons-name">
-            <Input
-              id="cons-name"
-              value={name ?? d.currentName}
-              disabled={!d.editable}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Phone" htmlFor="cons-phone">
-            <Input
-              id="cons-phone"
-              value={phone ?? d.currentPhone}
-              disabled={!d.editable}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </FormField>
-        </div>
-
-        <FormField
-          label="Address"
-          htmlFor="cons-address"
-          hint="The street address only — see below for why the rest cannot move."
-        >
-          <Input
-            id="cons-address"
-            value={address ?? d.currentAddressLine1}
+        <div className="ord-grid-2">
+          <TextField
+            id="cons-name"
+            label="Name"
+            value={name ?? d.currentName}
             disabled={!d.editable}
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
           />
-        </FormField>
+          <TextField
+            id="cons-phone"
+            label="Phone"
+            value={phone ?? d.currentPhone}
+            disabled={!d.editable}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </div>
 
-        <p className="text-text-muted mt-2 text-xs">
+        <TextField
+          id="cons-address"
+          label="Address"
+          hint="The street address only — see below for why the rest cannot move."
+          value={address ?? d.currentAddressLine1}
+          disabled={!d.editable}
+          onChange={(e) => setAddress(e.target.value)}
+        />
+
+        <p className="ord-faint">
           {d.city} · {d.stateProvince} · {d.postalCode} — fixed. The parcel is already sorted and
           routed on this pincode, so it cannot be sent somewhere else; only the street address can
           be corrected.
         </p>
 
         {d.editable ? (
-          <div className="mt-3 flex justify-end">
-            <Button
+          <div className="ord-row ord-row--end">
+            <AsyncButton
               variant="primary"
               size="sm"
+              icon={<Send size={14} />}
+              state={change.isPending ? 'busy' : undefined}
+              labels={{ idle: 'Send to the courier', busy: 'Sending…' }}
               disabled={!dirty || change.isPending}
-              onClick={submit}
-            >
-              {change.isPending ? 'Sending…' : 'Send to the courier'}
-            </Button>
+              onClick={() => setConfirming(true)}
+            />
           </div>
         ) : null}
 
         {rows.length > 0 ? (
-          <div className="border-border mt-4 border-t pt-3">
-            <p className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
-              Changes made
-            </p>
-            <ol className="space-y-2">
+          <div>
+            <h3 className="ord-h3">Changes made</h3>
+            <ol className="ord-log">
               {rows.map((r) => (
-                <li key={r.id} className="text-sm">
-                  <span className="text-text-muted mr-2 text-xs tabular-nums">
+                <li key={r.id}>
+                  <span className="ord-log__when sk-figure">
                     {new Date(r.createdAt).toLocaleString('en-IN', {
                       day: 'numeric',
                       month: 'short',
@@ -241,29 +228,46 @@ export function ConsigneePanel({
                       : null,
                   ]
                     .filter((x) => x !== null)
-                    .join(' · ')}
-                  <span className="ml-2 text-xs">
-                    {r.courierAcceptedAt === null ? (
-                      <span className="text-danger">the courier did not take it</span>
-                    ) : r.verifiedAt === null ? (
-                      <span className="text-text-muted">sent — confirming</span>
-                    ) : r.verifiedMatch === true ? (
-                      <span className="text-success">confirmed on their system</span>
-                    ) : (
-                      <span className="text-danger">
-                        their system still shows the old value — we are on it
-                      </span>
-                    )}
-                  </span>
+                    .join(' · ')}{' '}
+                  {r.courierAcceptedAt === null ? (
+                    <span className="ord-tone-bad">the courier did not take it</span>
+                  ) : r.verifiedAt === null ? (
+                    <span className="ord-faint">sent — confirming</span>
+                  ) : r.verifiedMatch === true ? (
+                    <span className="ord-tone-good">confirmed on their system</span>
+                  ) : (
+                    <span className="ord-tone-bad">
+                      their system still shows the old value — we are on it
+                    </span>
+                  )}
                 </li>
               ))}
             </ol>
           </div>
         ) : null}
-      </CardBody>
+      </div>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Send this change to the courier?"
+        entity={orderNumber ?? 'This order'}
+        entityIsIdentifier={orderNumber !== undefined}
+        consequence="The courier is asked to update the parcel straight away. It is confirmed on their system within the hour."
+        confirmLabel="Send to the courier"
+        onConfirm={() => send()}
+      >
+        <ul className="ord-mini-list">
+          {changes.map((c) => (
+            <li key={c} className="ord-p">
+              {c}
+            </li>
+          ))}
+        </ul>
+      </ConfirmDialog>
 
       {/* The order is already known, so it is not asked for again. */}
       <RaiseTicketModal open={raising} onOpenChange={setRaising} orderId={orderId} />
-    </Card>
+    </OrdSection>
   );
 }

@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
-import { Crumbs, PageHeader } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
 import { CsvImportPanel } from '../_components/csv-import-panel';
 
 /**
@@ -15,19 +15,15 @@ import { CsvImportPanel } from '../_components/csv-import-panel';
  */
 export default function OrderImportPage(): ReactElement {
   return (
-    <div>
+    <div className="ord-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Fulfilment' },
-              { label: 'Orders', href: '/orders' },
-              { label: 'CSV import' },
-            ]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Fulfilment' },
+          { label: 'Orders', href: '/orders' },
+          { label: 'CSV import' },
+        ]}
+        Link={Link}
         title="Bulk order import"
         subtitle="Upload a CSV of orders. One row is one order, and re-uploading a row you have already sent updates it rather than placing it twice."
       />

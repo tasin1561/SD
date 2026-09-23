@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  Money,
-  useToast,
-} from '@skydrop/ui/components';
+import { OctagonX, TriangleAlert, XCircle } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Notice } from './orders-parts';
 import { useCancelOrder } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -102,7 +101,7 @@ export function CancelOrderDialog({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) {
@@ -112,59 +111,59 @@ export function CancelOrderDialog({
         onOpenChange(next);
       }}
       title={`Cancel ${orderNumber}?`}
+      icon={heavy ? <TriangleAlert size={18} /> : <XCircle size={18} />}
       tone={heavy ? 'critical' : 'default'}
+      size="sm"
+      locked={cancel.isPending}
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={cancel.isPending}>
+            Keep it
+          </Button>
+          <AsyncButton
+            variant="destructive"
+            state={cancel.isPending ? 'busy' : undefined}
+            labels={{ idle: 'Cancel this order', busy: 'Cancelling…' }}
+            onClick={() => void submit()}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-4">
-        <p className="text-text-muted text-sm">
+      <div className="ord-stack ord-stack--tight">
+        <p className="ord-p">
           This cannot be undone. To ship to this customer afterwards you would place a new order.
         </p>
 
         {consequence !== null && (
-          <div
-            className="border-border rounded-[5px] border-l-2 py-1 pl-3 text-sm"
-            style={heavy ? { borderLeftColor: 'var(--status-rto-fg)' } : undefined}
-          >
-            <span className={heavy ? 'text-critical' : 'text-text-body'}>{consequence}</span>
-          </div>
+          <Notice tone={heavy ? 'bad' : 'neutral'} icon={<TriangleAlert size={16} />}>
+            <span>{consequence}</span>
+          </Notice>
         )}
 
         {chargedInr != null && Number(chargedInr) > 0 && (
-          <div className="text-text-body text-sm">
+          <p className="ord-p">
             The delivery fee of{' '}
-            <span className="font-medium">
+            <span className="ord-strong">
               <Money amount={chargedInr} />
             </span>{' '}
             already charged for this order goes back to your wallet.
-          </div>
+          </p>
         )}
 
-        {error !== null && <ErrorNote message={error} />}
+        {error !== null && (
+          <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
+            <span>{error}</span>
+          </Notice>
+        )}
 
-        <FormField
+        <TextField
           label="Reason (optional)"
           hint="Kept on the order's history — useful when you look back at why."
-        >
-          <Input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Customer changed their mind"
-          />
-        </FormField>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={cancel.isPending}
-            onClick={() => void submit()}
-          >
-            {cancel.isPending ? 'Cancelling…' : 'Cancel this order'}
-          </Button>
-          <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-            Keep it
-          </Button>
-        </div>
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Customer changed their mind"
+        />
       </div>
-    </Modal>
+    </Dialog>
   );
 }

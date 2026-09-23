@@ -8,32 +8,32 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { useOrderStatusSummary, usePendingRows, useOrdersList } from '@/lib/api-hooks';
 import { can, canSeePath } from '@/lib/page-access';
 import { useResellerStores } from '@/lib/reseller-store-hooks';
-import { CheckCircle2, PhoneCall, Plus, Search, ShoppingCart, Truck } from 'lucide-react';
 import {
-  BandBody,
-  Button,
-  Crumbs,
-  FilterChip,
-  Input,
-  MetaChip,
-  Money,
-  SectionBand,
-  Select,
-  Stat,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  TablePaginator,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  OrderStatusBadge,
-} from '@skydrop/ui/components';
+  CheckCircle2,
+  Hourglass,
+  Package,
+  PhoneCall,
+  Plus,
+  Search,
+  ShoppingCart,
+  Truck,
+  Upload,
+} from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { Tabs, type TabItem } from '@skydrop/ui/app/tabs';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { LinkButton, MetaFact } from './orders-parts';
 import { useStores } from '@/lib/store-hooks';
 
 /**
@@ -108,6 +108,8 @@ const RANGES: ReadonlyArray<{
   { key: 'custom', label: 'Custom range…', days: null },
 ];
 const DEFAULT_PAGE_SIZE = 20;
+/** The status tab that means "no status filter". Not an OrderStatus value. */
+const ALL_TAB = 'all';
 
 /**
  * The chips, in lifecycle order.
@@ -278,89 +280,93 @@ export function OrdersIndex(): ReactElement {
 
   const filtered =
     params.status !== '' || params.search !== '' || params.range !== '' || params.storeId !== '';
+  // How many filter controls are narrowing the list — what the filter
+  // bar's count and its Reset read. The same four `filtered` is made of.
+  const activeFilters = [
+    params.status !== '',
+    params.search !== '',
+    params.range !== '',
+    params.storeId !== '',
+  ].filter(Boolean).length;
+
+  // The status chips, as a liquid-bead tab row. Same rule as before: a
+  // status this seller has never had is not offered, one they have had
+  // stays even at zero, and the active one always stays.
+  const statusTabs: TabItem[] = [
+    { id: ALL_TAB, label: 'All', count: summary.data?.total },
+    ...CHIP_STATUSES.flatMap((s): TabItem[] => {
+      const n = counts.get(s)?.count ?? 0;
+      if (n === 0 && params.status !== s) return [];
+      return [{ id: s, label: chipWords(statusLabel(s)), count: n }];
+    }),
+  ];
 
   return (
-    <div>
+    <div className="ord-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Fulfilment' }, { label: 'Orders' }]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[{ label: 'Seller console' }, { label: 'Fulfilment' }, { label: 'Orders' }]}
+        Link={Link}
         title="Orders"
         subtitle="Everything you have sent us, and where each one has got to."
         meta={
           summary.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">{summary.data.total} placed</MetaChip>
-              {countOf(MOVING) > 0 && <MetaChip dot>{countOf(MOVING)} on the road</MetaChip>}
-              {pendingCount > 0 && <MetaChip tone="warn">{pendingCount} pending</MetaChip>}
-            </>
+            <span className="ord-meta">
+              <MetaFact tone="accent">{summary.data.total} placed</MetaFact>
+              {countOf(MOVING) > 0 && <MetaFact dot>{countOf(MOVING)} on the road</MetaFact>}
+              {pendingCount > 0 && <MetaFact tone="warn">{pendingCount} pending</MetaFact>}
+            </span>
           )
         }
         action={
-          <div className="flex items-center gap-2">
+          <div className="ord-row">
             {/* Only when there IS something waiting. A permanent nav
                 item for an empty queue is noise; a queue nobody knows
                 about is worse than both. */}
             {pendingCount > 0 && canSeePath(identity, '/orders/pending') && (
-              <Link href="/orders/pending">
-                <Button variant="ghost" size="md">
-                  <span className="text-[var(--status-pending-fg)]">{pendingCount} pending</span>
-                </Button>
-              </Link>
+              <LinkButton href="/orders/pending" variant="ghost" icon={<Hourglass size={15} />}>
+                {pendingCount} pending
+              </LinkButton>
             )}
             {canSeePath(identity, '/orders/import') && (
-              <Link href="/orders/import">
-                <Button variant="ghost" size="md">
-                  CSV import
-                </Button>
-              </Link>
+              <LinkButton href="/orders/import" variant="ghost" icon={<Upload size={15} />}>
+                CSV import
+              </LinkButton>
             )}
             {canSeePath(identity, '/orders/new') && (
-              <Link href="/orders/new">
-                <Button variant="primary" size="md">
-                  <Plus size={14} /> New order
-                </Button>
-              </Link>
+              <LinkButton href="/orders/new" variant="primary" icon={<Plus size={15} />}>
+                New order
+              </LinkButton>
             )}
           </div>
         }
       />
 
       {/* ── How the day is going, before the table says anything ────
-             Four tiles on the shared `Stat`, each carrying its own
-             breakdown under a hairline — the comps' shape, and the
-             reason `Stat` grew `icon`/`unit`/`foot` rather than this
-             page keeping a tile of its own. A value is ABSENT rather
-             than 0 while loading: a tile reading "0 delivered" that
-             then becomes 8 has told you something false in between. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
+             A value is ABSENT rather than 0 while loading: a tile reading
+             "0 delivered" that then becomes 8 has told you something false
+             in between. The count-up runs once per load, never on a
+             refetch. */}
+      <div className="ord-kpis">
+        <KpiCard
           label="Total orders"
-          icon={<ShoppingCart size={13} aria-hidden />}
-          value={summary.data?.total ?? <span className="text-text-faint">—</span>}
-          unit={summary.data === undefined ? undefined : 'orders'}
+          icon={<ShoppingCart size={14} />}
           tone="neutral"
+          {...(summary.data === undefined
+            ? { figure: <span className="ord-faint">—</span> }
+            : { value: summary.data.total, unit: 'orders' })}
           {...(summary.data === undefined
             ? {}
             : {
                 foot: [{ label: 'COD placed', value: <Money amount={summary.data.totalCodInr} /> }],
               })}
         />
-        <Stat
+        <KpiCard
           label="Being processed"
-          icon={<PhoneCall size={13} aria-hidden />}
-          value={
-            summary.data === undefined ? (
-              <span className="text-text-faint">—</span>
-            ) : (
-              countOf(PROCESSING)
-            )
-          }
-          unit={summary.data === undefined ? undefined : 'orders'}
-          tone={countOf(PROCESSING) > 0 ? 'warn' : 'neutral'}
+          icon={<PhoneCall size={14} />}
+          tone={countOf(PROCESSING) > 0 ? 'pending' : 'neutral'}
+          {...(summary.data === undefined
+            ? { figure: <span className="ord-faint">—</span> }
+            : { value: countOf(PROCESSING), unit: 'orders' })}
           {...(summary.data === undefined
             ? {}
             : {
@@ -372,18 +378,13 @@ export function OrdersIndex(): ReactElement {
                 ],
               })}
         />
-        <Stat
+        <KpiCard
           label="On the road"
-          icon={<Truck size={13} aria-hidden />}
-          value={
-            summary.data === undefined ? (
-              <span className="text-text-faint">—</span>
-            ) : (
-              countOf(MOVING)
-            )
-          }
-          unit={summary.data === undefined ? undefined : 'parcels'}
-          tone="neutral"
+          icon={<Truck size={14} />}
+          tone="info"
+          {...(summary.data === undefined
+            ? { figure: <span className="ord-faint">—</span> }
+            : { value: countOf(MOVING), unit: 'parcels' })}
           {...(summary.data === undefined
             ? {}
             : {
@@ -395,18 +396,13 @@ export function OrdersIndex(): ReactElement {
                 ],
               })}
         />
-        <Stat
+        <KpiCard
           label="Delivered"
-          icon={<CheckCircle2 size={13} aria-hidden />}
-          value={
-            summary.data === undefined ? (
-              <span className="text-text-faint">—</span>
-            ) : (
-              (counts.get(OrderStatus.DELIVERED)?.count ?? 0)
-            )
-          }
-          unit={summary.data === undefined ? undefined : 'settled'}
-          tone="good"
+          icon={<CheckCircle2 size={14} />}
+          tone="credit"
+          {...(summary.data === undefined
+            ? { figure: <span className="ord-faint">—</span> }
+            : { value: counts.get(OrderStatus.DELIVERED)?.count ?? 0, unit: 'settled' })}
           {...(summary.data === undefined
             ? {}
             : {
@@ -421,320 +417,273 @@ export function OrdersIndex(): ReactElement {
         />
       </div>
 
-      {/* ── ONE banded region: the band names it, the filters narrow
-             it, the chips say what is in it, and the table is it.
-             They were four separate cards with gaps between them, so
-             a filter and the rows it governs read as unrelated
-             panels. ───────────────────────────────────────────── */}
-      <SectionBand
-        index="04"
-        title="Consignment monitor"
-        note={
-          list.data === undefined
-            ? undefined
-            : `${list.data.items.length} of ${list.data.total} shown`
-        }
-      />
-      <div className="border-border bg-surface border border-b-0 px-3 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              updateUrl({ search: searchInput.trim(), page: 1 });
-            }}
-            // BOUNDED, not `flex-1`. The row's leftover space goes to
-            // the filters after it rather than stretching one field
-            // across the page.
-            className="flex w-full min-w-0 items-center gap-2 sm:w-[440px]"
-          >
-            {/*
-              ONE magnifier, and it is the button.
+      {/* ── ONE region: the heading names it, the filters narrow it, the
+             status tabs say what is in it, and the table is it. ───── */}
+      <section className="ord-section">
+        <SectionHeading
+          title="Consignment monitor"
+          note={
+            list.data === undefined
+              ? undefined
+              : `${list.data.items.length} of ${list.data.total} shown`
+          }
+        />
 
-              The decorative glass on the left went with the word
-              "Search" on the right: keeping both would have put two
-              magnifiers on one control, one of which did nothing. The
-              remaining one is a real <button type="submit"> with an
-              aria-label, so Enter still submits, it is reachable by
-              keyboard, and a screen reader hears "Search" rather than
-              nothing — an icon-shaped div would have bought the look by
-              giving that up.
-            */}
-            <div className="relative min-w-0 flex-1">
-              <Input
+        <FilterBar
+          activeCount={activeFilters}
+          onReset={() => {
+            setSearchInput('');
+            // `storeId` too. It counts towards `filtered`, so the
+            // reset is offered because a store is selected — a Reset
+            // that left it selected would not clear the thing that
+            // summoned it.
+            updateUrl({
+              status: '',
+              search: '',
+              range: '',
+              from: '',
+              to: '',
+              storeId: '',
+              page: 1,
+            });
+          }}
+        >
+          <FilterField wide>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateUrl({ search: searchInput.trim(), page: 1 });
+              }}
+            >
+              {/*
+                ONE magnifier, and it is the button: a real
+                <button type="submit"> with an aria-label, so Enter still
+                submits, it is reachable by keyboard, and a screen reader
+                hears "Search".
+              */}
+              <TextField
+                label="Search"
                 aria-label="Search orders"
                 placeholder="Order number, ref, AWB, recipient name or phone…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                // Room for the button, or a long AWB runs under it.
-                className="pr-10"
+                trail={
+                  <button
+                    type="submit"
+                    aria-label="Search"
+                    title="Search"
+                    className="ord-search-btn"
+                  >
+                    <Search size={16} aria-hidden />
+                  </button>
+                }
               />
-              <button
-                type="submit"
-                aria-label="Search"
-                title="Search"
-                className="text-text-muted hover:text-accent absolute inset-y-0 right-0 flex w-10 items-center justify-center transition-colors"
-              >
-                <Search size={15} aria-hidden />
-              </button>
-            </div>
-          </form>
+            </form>
+          </FilterField>
 
-          <Select
-            aria-label="Placed when"
-            value={params.range}
-            onChange={(e) => updateUrl({ range: e.target.value, from: '', to: '', page: 1 })}
-            className="w-[150px]"
-          >
-            {RANGES.map((r) => (
-              <option key={r.key} value={r.key}>
-                {r.label}
-              </option>
-            ))}
-          </Select>
+          <FilterField>
+            <Select
+              label="Placed when"
+              aria-label="Placed when"
+              value={params.range}
+              onChange={(e) => updateUrl({ range: e.target.value, from: '', to: '', page: 1 })}
+            >
+              {RANGES.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.label}
+                </option>
+              ))}
+            </Select>
+          </FilterField>
 
           {custom && (
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="date"
-                aria-label="Placed from"
-                value={params.from}
-                max={params.to === '' ? undefined : params.to}
-                onChange={(e) => updateUrl({ from: e.target.value, page: 1 })}
-                className="w-[150px]"
-              />
-              <span className="text-text-faint text-xs">to</span>
-              <Input
-                type="date"
-                aria-label="Placed to"
-                value={params.to}
-                min={params.from === '' ? undefined : params.from}
-                onChange={(e) => updateUrl({ to: e.target.value, page: 1 })}
-                className="w-[150px]"
-              />
-            </div>
+            <FilterField wide>
+              <div className="ord-dates">
+                <DateField
+                  label="From"
+                  aria-label="Placed from"
+                  value={params.from}
+                  max={params.to === '' ? undefined : params.to}
+                  onChange={(e) => updateUrl({ from: e.target.value, page: 1 })}
+                />
+                <DateField
+                  label="To"
+                  aria-label="Placed to"
+                  value={params.to}
+                  min={params.from === '' ? undefined : params.from}
+                  onChange={(e) => updateUrl({ to: e.target.value, page: 1 })}
+                />
+              </div>
+            </FilterField>
           )}
 
           {/* Only when there is a choice to make. One shopfront is the
               ordinary case, and a filter with a single option is a
               control that can only ever narrow to everything. */}
           {stores.length > 1 && (
+            <FilterField>
+              <Select
+                label="Store"
+                aria-label="Filter by store"
+                value={params.storeId}
+                onChange={(e) => updateUrl({ storeId: e.target.value, page: 1 })}
+              >
+                <option value="">All stores</option>
+                {stores.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
+                ))}
+              </Select>
+            </FilterField>
+          )}
+
+          <FilterField>
             <Select
-              aria-label="Filter by store"
-              value={params.storeId}
-              onChange={(e) => updateUrl({ storeId: e.target.value, page: 1 })}
-              className="w-[180px]"
+              label="Status"
+              aria-label="Filter by status"
+              value={params.status}
+              onChange={(e) =>
+                updateUrl({ status: (e.target.value as OrderStatus | '') || '', page: 1 })
+              }
             >
-              <option value="">All stores</option>
-              {stores.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.name}
+              <option value="">All statuses</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {chipWords(statusLabel(s))}
                 </option>
               ))}
             </Select>
-          )}
+          </FilterField>
+        </FilterBar>
 
-          <Select
-            aria-label="Filter by status"
-            value={params.status}
-            onChange={(e) =>
-              updateUrl({ status: (e.target.value as OrderStatus | '') || '', page: 1 })
-            }
-            className="w-[210px]"
-          >
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {statusLabel(s)}
-              </option>
-            ))}
-          </Select>
+        {/* ── The counts live HERE rather than only in a dropdown,
+               because "how many are stuck at the call" is the question
+               this page is opened to answer. ───────────────────────── */}
+        <Tabs
+          label="Filter by status"
+          size="sm"
+          items={statusTabs}
+          value={params.status === '' ? ALL_TAB : params.status}
+          onChange={(id) =>
+            updateUrl({ status: id === ALL_TAB ? '' : (id as OrderStatus), page: 1 })
+          }
+        />
 
-          {filtered && (
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={() => {
-                setSearchInput('');
-                // `storeId` too. It counts towards `filtered`, so the
-                // button APPEARS because a store is selected and then
-                // left it selected — a Clear that does not clear the
-                // thing that summoned it.
-                updateUrl({
-                  status: '',
-                  search: '',
-                  range: '',
-                  from: '',
-                  to: '',
-                  storeId: '',
-                  page: 1,
-                });
-              }}
-            >
-              Clear
-            </Button>
-          )}
-        </div>
-
-        {/* ── Chips. The counts live HERE rather than only in a
-               dropdown, because "how many are stuck at the call" is the
-               question this page is opened to answer. ───────────── */}
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <FilterChip
-            label="All"
-            count={summary.data?.total}
-            active={params.status === ''}
-            onClick={() => updateUrl({ status: '', page: 1 })}
-          />
-          {CHIP_STATUSES.map((s) => {
-            const n = counts.get(s)?.count ?? 0;
-            // A status this seller has never had is not a filter worth
-            // offering; one they have had stays even at zero, so a
-            // filter cannot vanish out from under somebody mid-task.
-            if (n === 0 && params.status !== s) return null;
-            return (
-              <FilterChip
-                key={s}
-                label={statusLabel(s)}
-                count={n}
-                dotColor={`var(--status-${orderStatusKind(s)}-fg)`}
-                active={params.status === s}
-                onClick={() => updateUrl({ status: s, page: 1 })}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {list.isLoading ? (
-        <BandBody>
-          <LoadingState label="Loading orders…" />
-        </BandBody>
-      ) : list.isError ? (
-        <BandBody>
+        {list.isLoading ? (
+          <SkeletonRows rows={6} cols={6} label="Loading orders…" />
+        ) : list.isError ? (
           <ErrorState
             message={list.error?.message ?? 'Failed to load orders.'}
             retry={() => void list.refetch()}
           />
-        </BandBody>
-      ) : !list.data || list.data.items.length === 0 ? (
-        <BandBody>
+        ) : !list.data || list.data.items.length === 0 ? (
           <EmptyState
+            icon={<Package size={20} />}
             title={filtered ? 'No orders match that' : 'No orders yet'}
             description={
               filtered
-                ? 'Try clearing the filters — the counts on the chips above show what you do have.'
+                ? 'Try clearing the filters — the counts on the tabs above show what you do have.'
                 : 'Orders appear here as you create them or your CSVs import.'
             }
-            bare
+            action={
+              !filtered && canSeePath(identity, '/orders/new') ? (
+                <LinkButton href="/orders/new" variant="primary" icon={<Plus size={15} />}>
+                  New order
+                </LinkButton>
+              ) : undefined
+            }
           />
-        </BandBody>
-      ) : (
-        <BandBody flush>
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Order</Th>
-                <Th>Recipient</Th>
-                <Th>Phone</Th>
-                <Th>Status</Th>
-                <Th align="right">COD</Th>
-                <Th>Placed</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {list.data.items.map((o) => (
-                <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
-                  <Td>
-                    <Link
-                      href={`/orders/${o.id}`}
-                      className="text-accent font-mono text-xs hover:underline"
-                    >
-                      {o.orderNumber}
-                    </Link>
-                    {o.sellerOrderRef !== null && o.sellerOrderRef !== '' && (
-                      <div className="text-text-faint mt-0.5 font-mono text-xs">
-                        ref {o.sellerOrderRef}
-                      </div>
-                    )}
-                    {/* RS-5: which reseller store placed it. */}
-                    {o.storeKind === 'RESELLER' && (
-                      <div className="text-text-muted mt-0.5 text-xs">
-                        via{' '}
-                        {o.storeId !== undefined ? (
-                          <Link
-                            href={`/reseller-stores/${o.storeId}`}
-                            className="text-accent hover:underline"
-                          >
-                            {o.storeNameSnapshot ?? 'a reseller store'}
-                          </Link>
-                        ) : (
-                          (o.storeNameSnapshot ?? 'a reseller store')
-                        )}
-                      </div>
-                    )}
-                  </Td>
-                  <Td>
-                    <div className="text-text-body">{o.recipientName}</div>
-                    {/* City is blank on everything placed since the form
-                      stopped asking (ORD-5), so the PIN carries the
-                      destination and the city joins it when present. */}
-                    <div className="text-text-faint mt-0.5 text-xs">
-                      {[o.recipientCity, o.recipientPostalCode]
-                        .filter((v) => v !== '')
-                        .join(' · ') || '—'}
-                    </div>
-                  </Td>
-                  <Td className="text-text-muted font-mono text-xs">
-                    {o.recipientPhoneE164 || '—'}
-                  </Td>
-                  <Td>
-                    <OrderStatusBadge status={o.status} />
-                  </Td>
-                  <Td align="right">
-                    {o.codAmountInr === null ? (
-                      <span className="text-text-faint text-xs">Prepaid</span>
-                    ) : (
-                      <Money amount={o.codAmountInr} />
-                    )}
-                  </Td>
-                  <Td className="text-text-muted font-mono text-xs">
-                    {new Date(o.placedAt).toISOString().slice(0, 16).replace('T', ' ')}
-                  </Td>
+        ) : (
+          <div className="ord-card" data-flush="1">
+            <Table caption="Orders">
+              <THead>
+                <Tr>
+                  <Th>Order</Th>
+                  <Th>Recipient</Th>
+                  <Th>Phone</Th>
+                  <Th>Status</Th>
+                  <Th align="right">COD</Th>
+                  <Th>Placed</Th>
                 </Tr>
-              ))}
-            </TBody>
-            <tfoot>
-              <tr>
-                <td colSpan={6} className="p-0">
-                  <div className="border-border-subtle flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
-                    <label className="text-text-faint flex items-center gap-2 text-xs">
-                      Rows
-                      <Select
-                        aria-label="Rows per page"
-                        value={params.pageSize}
-                        onChange={(e) => updateUrl({ pageSize: Number(e.target.value), page: 1 })}
-                        className="w-[76px]"
-                      >
-                        {PAGE_SIZES.map((n) => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
-                      </Select>
-                    </label>
-                    <TablePaginator
-                      page={params.page}
-                      pageSize={params.pageSize}
-                      total={list.data.total}
-                      onPageChange={(next) => updateUrl({ page: next })}
-                    />
-                  </div>
-                </td>
-              </tr>
-            </tfoot>
-          </Table>
-        </BandBody>
-      )}
+              </THead>
+              <TBody>
+                {list.data.items.map((o) => (
+                  <Tr key={o.id} onActivate={() => router.push(`/orders/${o.id}`)}>
+                    <Td>
+                      <Link href={`/orders/${o.id}`} className="ord-order-link sk-ident">
+                        {o.orderNumber}
+                      </Link>
+                      {o.sellerOrderRef !== null && o.sellerOrderRef !== '' && (
+                        <span className="ord-sub">
+                          ref <span className="sk-ident">{o.sellerOrderRef}</span>
+                        </span>
+                      )}
+                      {/* RS-5: which reseller store placed it. */}
+                      {o.storeKind === 'RESELLER' && (
+                        <span className="ord-sub">
+                          via{' '}
+                          {o.storeId !== undefined ? (
+                            <Link href={`/reseller-stores/${o.storeId}`} className="ord-link">
+                              {o.storeNameSnapshot ?? 'a reseller store'}
+                            </Link>
+                          ) : (
+                            (o.storeNameSnapshot ?? 'a reseller store')
+                          )}
+                        </span>
+                      )}
+                    </Td>
+                    <Td>
+                      <div>{o.recipientName}</div>
+                      {/* City is blank on everything placed since the form
+                          stopped asking (ORD-5), so the PIN carries the
+                          destination and the city joins it when present. */}
+                      <span className="ord-sub">
+                        {[o.recipientCity, o.recipientPostalCode]
+                          .filter((v) => v !== '')
+                          .join(' · ') || '—'}
+                      </span>
+                    </Td>
+                    <Td>
+                      <span className="sk-figure ord-nowrap">{o.recipientPhoneE164 || '—'}</span>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        kind={orderStatusKind(o.status)}
+                        label={statusLabel(o.status)}
+                        size="sm"
+                      />
+                    </Td>
+                    <Td align="right">
+                      {o.codAmountInr === null ? (
+                        <span className="ord-prepaid">Prepaid</span>
+                      ) : (
+                        <Money amount={o.codAmountInr} />
+                      )}
+                    </Td>
+                    <Td>
+                      <span className="sk-figure ord-nowrap ord-muted">
+                        {new Date(o.placedAt).toISOString().slice(0, 16).replace('T', ' ')}
+                      </span>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+            <div className="ord-table-foot">
+              <Pagination
+                page={params.page}
+                pageSize={params.pageSize}
+                total={list.data.total}
+                pageSizes={PAGE_SIZES}
+                onPageChange={(next) => updateUrl({ page: next })}
+                onPageSizeChange={(n) => updateUrl({ pageSize: n, page: 1 })}
+                label="Orders pages"
+              />
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

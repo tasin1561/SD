@@ -5,20 +5,33 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { OrderedProducts, ProductCatalogue, type PickedLine } from '@/components/product-picker';
+import { Money } from '@skydrop/ui/components';
 import {
-  BandBody,
-  Button,
-  Crumbs,
-  FormField,
-  Input,
-  Money,
-  PageHeader,
-  SectionBand,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
-import { ArrowLeft, Banknote, CreditCard, MapPin, Scale, Store } from 'lucide-react';
+  ArrowLeft,
+  Banknote,
+  CreditCard,
+  ListChecks,
+  MapPin,
+  NotebookPen,
+  OctagonX,
+  PackageSearch,
+  PackageX,
+  Save,
+  Scale,
+  Send,
+  Store,
+} from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Stepper } from '@skydrop/ui/app/stepper';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { useToast } from '@skydrop/ui/app/toast';
+import { BackLink, Notice, OrdSection } from '../../_components/orders-parts';
 import { ApiError } from '@skydrop/api-client';
 import {
   useCreateOrder,
@@ -156,6 +169,8 @@ export function NewOrderForm(): ReactElement {
    * rather than a dialog you dismiss without reading.
    */
   const [acceptShort, setAcceptShort] = useState(false);
+  /** "Submit for confirmation" asks once before it creates and submits. */
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
 
   const create = useCreateOrder();
   const feePrefilled = useRef(false);
@@ -498,102 +513,116 @@ export function NewOrderForm(): ReactElement {
     }
   }
 
-  /**
-   * A card title with a short accent rule in front of it.
-   *
-   * The tinted header band alone is nearly invisible in dark, where the
-   * band and the card are within a few percent of each other; the rule
-   * is what makes a section start read as a section start in BOTH
-   * themes rather than only in light.
-   */
   /** The three actions, rendered twice — at the top and on the sticky
    *  bar. A long form whose only submit is 1,400px below the fold makes
-   *  a seller scroll past everything they have just checked. */
+   *  a seller scroll past everything they have just checked.
+   *
+   *  "Submit for confirmation" navigates to the new order the moment it
+   *  succeeds, so it carries the rolling label only — a storytelling
+   *  animation there would either be cut off or delay the navigation. */
   const actions = (
     <>
       {/* Desktop only in BOTH placements. On a phone the sticky bar is
           the only action strip, and "Back to orders" sits at the top of
-          the page doing the same thing — a third row of buttons there
-          costs more screen than the duplicate is worth. */}
+          the page doing the same thing. */}
       <Button
         type="button"
         variant="ghost"
-        size="md"
-        // `max-sm:hidden`, NOT `hidden sm:inline-flex`: the Button
-        // primitive's own base classes carry `inline-flex`, and which of
-        // two unprefixed display utilities wins is decided by Tailwind's
-        // generated source order rather than by the class attribute — so
-        // the plain `hidden` lost and the button stayed visible. A
-        // variant outranks a bare utility, which settles it.
-        className="max-sm:hidden"
+        className="ord-desktop-only"
         disabled={busy !== null}
         onClick={() => router.push('/orders')}
       >
         Cancel
       </Button>
-      <Button
+      <AsyncButton
         type="button"
         variant="secondary"
-        size="md"
-        className="whitespace-nowrap max-sm:flex-1"
+        className="ord-nowrap"
+        icon={<Save size={15} />}
+        state={busy === 'draft' ? 'busy' : undefined}
+        labels={{ idle: 'Save as draft', busy: 'Saving…' }}
         disabled={busy !== null}
         onClick={(e) => void go('draft', e)}
-      >
-        {busy === 'draft' ? 'Saving…' : 'Save as draft'}
-      </Button>
-      <Button
+      />
+      <AsyncButton
         type="submit"
         variant="primary"
-        size="md"
-        className="whitespace-nowrap max-sm:flex-1"
+        className="ord-nowrap"
+        icon={<Send size={15} />}
+        state={busy === 'submit' ? 'busy' : undefined}
+        labels={{ idle: 'Submit for confirmation', busy: 'Submitting…' }}
         disabled={busy !== null}
-      >
-        {busy === 'submit' ? 'Submitting…' : 'Submit for confirmation'}
-      </Button>
+      />
     </>
   );
 
   const serviceabilityChip =
     serviceability.data?.known !== true ? null : serviceability.data.serviceable ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--status-delivered-bg)] px-2 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--status-delivered-fg)] uppercase">
-        <MapPin size={11} aria-hidden />
+      <span className="ord-serviceable" data-ok="1">
+        <MapPin size={12} aria-hidden />
         We deliver there
       </span>
     ) : (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--status-pending-bg)] px-2 py-0.5 text-[11px] font-semibold tracking-wide text-[var(--status-pending-fg)] uppercase">
-        <MapPin size={11} aria-hidden />
+      <span className="ord-serviceable" data-ok="0">
+        <MapPin size={12} aria-hidden />
         May not be serviceable
       </span>
     );
 
+  const storeHint =
+    openStores.length > 1
+      ? 'Which of your shopfronts this order was placed on'
+      : 'Every order is filed under a shopfront. Add another to sell under more than one brand.';
+
   return (
-    <form onSubmit={(e) => void go('submit', e)}>
-      <Link
-        href="/orders"
-        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-sm"
-      >
-        <ArrowLeft size={14} aria-hidden />
+    <form
+      className="ord-page"
+      onSubmit={(e) => {
+        // A form that would be refused goes straight to `go`, which
+        // names the problem exactly as before; only a submit that can
+        // go through is asked to confirm first.
+        if (validate() !== null) {
+          void go('submit', e);
+          return;
+        }
+        e.preventDefault();
+        setConfirmSubmit(true);
+      }}
+    >
+      <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
         Back to orders
-      </Link>
+      </BackLink>
 
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Fulfilment' },
-              { label: 'Orders', href: '/orders' },
-              { label: 'New' },
-            ]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Fulfilment' },
+          { label: 'Orders', href: '/orders' },
+          { label: 'New' },
+        ]}
+        Link={Link}
         title="New order"
         subtitle="Who it goes to and what is in it. Stock is held when the call centre confirms the order, not now."
         // Desktop only. The sticky bar carries the same three actions and
         // is always on screen; on a phone the pair together cost about a
         // fifth of the viewport before a single field is visible.
-        action={<div className="hidden flex-wrap items-center gap-2 sm:flex">{actions}</div>}
+        action={<div className="ord-row ord-desktop-only">{actions}</div>}
+      />
+
+      {/* A progress header over the SAME single form: it marks the
+          section in view and scrolls to one on click. Nothing is hidden
+          or unmounted — every field stays in the one form. */}
+      <Stepper
+        mode="sections"
+        label="Order form sections"
+        sticky
+        steps={[
+          { id: 'no-recipient', label: 'Recipient', icon: <MapPin size={15} /> },
+          { id: 'no-notes', label: 'Reference', icon: <NotebookPen size={15} /> },
+          { id: 'no-products', label: 'Products', icon: <PackageSearch size={15} /> },
+          { id: 'no-lines', label: 'Ordered', icon: <ListChecks size={15} /> },
+          { id: 'no-payment', label: 'Payment', icon: <Banknote size={15} /> },
+        ]}
       />
 
       {/* Who they are shipping to — rendered ABOVE the columns, because a
@@ -607,549 +636,428 @@ export function NewOrderForm(): ReactElement {
         LEFT is what the seller TYPES from what the customer said —
         address, landmark, reference, notes. RIGHT is what the seller
         CHOOSES and what follows from it — the catalogue, the lines, and
-        the money those lines add up to. Reading down one column is one
-        task; the old single stack interleaved them, so the collectable
-        amount sat a screen and a half below the products that decide it.
+        the money those lines add up to.
       */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+      <div className="ord-split">
         {/* ── Left: what the customer told them ─────────────────── */}
-        <div className="flex flex-col gap-4">
-          <div>
-            <SectionBand
-              index="01"
-              title="Recipient"
-              note="Where the parcel is going."
-              action={serviceabilityChip}
-            />
-            <BandBody>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <FormField
-                  label="Full name"
-                  required
-                  className="sm:col-span-2"
-                  hint={prefixHint(sellerInitials)}
-                >
-                  {/* The seller code is CHROME, exactly like the +91 below:
-                      it cannot be edited or deleted, and the field holds only
-                      the customer's name. The API composes the stored value,
-                      so a CSV import lands the same shape as this form. */}
-                  <div className="flex items-stretch">
-                    {sellerInitials !== null && sellerInitials !== '' && (
-                      <span
-                        aria-hidden
-                        className="border-border-strong text-text-muted bg-surface-raised inline-flex shrink-0 items-center rounded-l-[6px] border border-r-0 px-2.5 font-mono text-sm"
-                      >
-                        {sellerInitials}
-                      </span>
-                    )}
-                    <Input
-                      className={
-                        sellerInitials !== null && sellerInitials !== ''
-                          ? 'rounded-l-none'
-                          : undefined
-                      }
-                      value={form.recipientName}
-                      onChange={(e) => set('recipientName', e.target.value)}
-                      maxLength={160}
-                      required
-                    />
-                  </div>
-                </FormField>
-                <FormField
-                  label="Phone"
-                  required
-                  className="sm:col-span-2"
-                  hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
-                >
-                  {/* The dial code is CHROME, not input: it cannot be edited
-                      or deleted, so a seller cannot clear it, type 0091, or
-                      paste a differently-formatted number into it. The field
-                      itself holds only the ten national digits. */}
-                  <div className="flex items-stretch">
-                    <span
-                      aria-hidden
-                      className="border-border-strong text-text-muted bg-surface-raised inline-flex shrink-0 items-center rounded-l-[6px] border border-r-0 px-2.5 font-mono text-sm"
-                    >
-                      {IN_DIAL}
+        <div className="ord-stack">
+          <OrdSection
+            id="no-recipient"
+            title="Recipient"
+            note="Where the parcel is going."
+            action={serviceabilityChip}
+          >
+            <div className="ord-stack ord-stack--tight">
+              {/* The seller code is CHROME, exactly like the +91 below:
+                  it cannot be edited or deleted, and the field holds only
+                  the customer's name. The API composes the stored value,
+                  so a CSV import lands the same shape as this form. */}
+              <TextField
+                label="Full name"
+                required
+                hint={prefixHint(sellerInitials)}
+                lead={
+                  sellerInitials !== null && sellerInitials !== '' ? (
+                    <span className="ord-prefix" aria-hidden>
+                      {sellerInitials}
                     </span>
-                    <Input
-                      className="rounded-l-none"
-                      value={toLocalDigits(form.recipientPhoneE164)}
-                      onChange={(e) =>
-                        set('recipientPhoneE164', toE164(sanitiseLocal(e.target.value)))
-                      }
-                      // inputMode drives the numeric keypad on a phone; the
-                      // sanitiser is what actually enforces digits, because a
-                      // paste bypasses the keypad entirely.
-                      inputMode="numeric"
-                      autoComplete="tel-national"
-                      maxLength={IN_LOCAL_LENGTH}
-                      placeholder="9812345678"
-                      aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
-                      required
-                    />
-                  </div>
-                </FormField>
-                <FormField
-                  label="Address line 1"
-                  required
-                  className="sm:col-span-2"
-                  hint={ADDRESS_LINE_1_HINT}
-                >
-                  <Input
-                    value={form.recipientAddressLine1}
-                    onChange={(e) => set('recipientAddressLine1', e.target.value)}
-                    maxLength={200}
-                    required
-                  />
-                </FormField>
-                <FormField
-                  label="Address line 2 (the landmark)"
-                  required
-                  className="sm:col-span-2"
-                  hint={ADDRESS_LINE_2_HINT}
-                  error={
-                    linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-                      ? DUPLICATE_LINES_ERROR
-                      : undefined
-                  }
-                >
-                  <Input
-                    value={form.recipientAddressLine2}
-                    onChange={(e) => set('recipientAddressLine2', e.target.value)}
-                    maxLength={200}
-                    required
-                  />
-                </FormField>
-                <FormField
-                  label="PIN code"
-                  required
-                  // A WARNING, so `notice` and not `hint`: it is the one
-                  // thing on this field the seller did not ask about and
-                  // needs anyway, and folding it behind the (i) would mean
-                  // it is read after the parcel is refused rather than
-                  // before it is placed.
-                  //
-                  // Advisory all the same. The answer can be a day stale
-                  // and a seller knows their customer's area better than a
-                  // lookup does, so it informs and never blocks the submit.
-                  notice={
-                    serviceability.data?.known === true && !serviceability.data.serviceable
-                      ? (serviceability.data.reason ??
-                        'Our courier may not deliver here — the order can still be placed.')
-                      : undefined
-                  }
-                  hint="Delhivery routes on the PIN and works the locality out itself."
-                >
-                  <Input
-                    value={form.recipientPostalCode}
-                    onChange={(e) =>
-                      set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
-                    }
-                    placeholder="560001"
-                    inputMode="numeric"
-                    className="font-mono tabular-nums"
-                    required
-                  />
-                </FormField>
-              </div>
-            </BandBody>
-          </div>
+                  ) : undefined
+                }
+                value={form.recipientName}
+                onChange={(e) => set('recipientName', e.target.value)}
+                maxLength={160}
+              />
+              {/* The dial code is CHROME, not input: it cannot be edited
+                  or deleted, so a seller cannot clear it, type 0091, or
+                  paste a differently-formatted number into it. The field
+                  itself holds only the ten national digits. */}
+              <TextField
+                label="Phone"
+                required
+                hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
+                lead={
+                  <span className="ord-prefix" aria-hidden>
+                    {IN_DIAL}
+                  </span>
+                }
+                value={toLocalDigits(form.recipientPhoneE164)}
+                onChange={(e) => set('recipientPhoneE164', toE164(sanitiseLocal(e.target.value)))}
+                // inputMode drives the numeric keypad on a phone; the
+                // sanitiser is what actually enforces digits, because a
+                // paste bypasses the keypad entirely.
+                inputMode="numeric"
+                autoComplete="tel-national"
+                maxLength={IN_LOCAL_LENGTH}
+                placeholder="9812345678"
+                aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+                inputClassName="sk-figure"
+              />
+              <TextField
+                label="Address line 1"
+                required
+                hint={ADDRESS_LINE_1_HINT}
+                value={form.recipientAddressLine1}
+                onChange={(e) => set('recipientAddressLine1', e.target.value)}
+                maxLength={200}
+              />
+              <TextField
+                label="Address line 2 (the landmark)"
+                required
+                hint={ADDRESS_LINE_2_HINT}
+                error={
+                  linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
+                    ? DUPLICATE_LINES_ERROR
+                    : undefined
+                }
+                value={form.recipientAddressLine2}
+                onChange={(e) => set('recipientAddressLine2', e.target.value)}
+                maxLength={200}
+              />
+              <TextField
+                label="PIN code"
+                required
+                // A WARNING, so `notice` and not `hint`: it is the one
+                // thing on this field the seller did not ask about and
+                // needs anyway. Advisory all the same — it informs and
+                // never blocks the submit.
+                notice={
+                  serviceability.data?.known === true && !serviceability.data.serviceable
+                    ? (serviceability.data.reason ??
+                      'Our courier may not deliver here — the order can still be placed.')
+                    : undefined
+                }
+                hint="Delhivery routes on the PIN and works the locality out itself."
+                value={form.recipientPostalCode}
+                onChange={(e) =>
+                  set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
+                }
+                placeholder="560001"
+                inputMode="numeric"
+                inputClassName="sk-figure"
+              />
+            </div>
+          </OrdSection>
 
-          <div>
-            <SectionBand
-              index="02"
-              title="Reference &amp; notes"
-              note="Yours and the call agent's — none of it reaches the customer."
-            />
-            <BandBody>
-              <div className="grid grid-cols-1 gap-3">
-                {/*
-                  Always SHOWN, only sometimes a CHOICE.
+          <OrdSection
+            id="no-notes"
+            title="Reference &amp; notes"
+            note="Yours and the call agent's — none of it reaches the customer."
+          >
+            <div className="ord-stack ord-stack--tight">
+              {/*
+                Always SHOWN, only sometimes a CHOICE.
 
-                  A dropdown with one option is a question nobody asked —
-                  but hiding the field entirely leaves somebody with two
-                  shopfronts in mind wondering where the setting went, and
-                  somebody with one unable to see which brand their order is
-                  filed under. One store reads as a statement with a way to
-                  add another; two or more becomes a select.
-                */}
-                <FormField
+                A dropdown with one option is a question nobody asked —
+                but hiding the field entirely leaves somebody with two
+                shopfronts in mind wondering where the setting went. One
+                store reads as a statement with a way to add another; two
+                or more becomes a select.
+              */}
+              {openStores.length > 1 ? (
+                <Select
                   label="Store"
-                  hint={
-                    openStores.length > 1
-                      ? 'Which of your shopfronts this order was placed on'
-                      : 'Every order is filed under a shopfront. Add another to sell under more than one brand.'
-                  }
+                  hint={storeHint}
+                  value={form.storeId}
+                  onChange={(e) => set('storeId', e.target.value)}
                 >
-                  {openStores.length > 1 ? (
-                    <Select value={form.storeId} onChange={(e) => set('storeId', e.target.value)}>
-                      {openStores.map((st) => (
-                        <option key={st.id} value={st.id}>
-                          {st.name}
-                          {st.isDefault ? ' (default)' : ''}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <div className="border-border bg-surface-raised flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
-                      <span className="inline-flex min-w-0 items-center gap-2">
-                        <Store size={14} aria-hidden className="text-text-muted shrink-0" />
-                        <span className="truncate">
-                          {openStores[0]?.name ?? 'Your default store'}
-                        </span>
-                      </span>
-                      <Link
-                        href="/settings/stores"
-                        className="text-text-muted hover:text-text shrink-0 text-xs underline underline-offset-2"
-                      >
-                        Manage stores
-                      </Link>
-                    </div>
-                  )}
-                </FormField>
-                <FormField
-                  label="Your reference"
-                  hint="Optional. Your own order ID — unique per store."
-                >
-                  <Input
-                    value={form.sellerOrderRef}
-                    onChange={(e) => set('sellerOrderRef', e.target.value)}
-                    maxLength={120}
-                    placeholder="ORD-2024-9981"
-                    className="font-mono"
-                  />
-                </FormField>
-                <FormField
-                  label="Notes for the call agent"
-                  hint="Read out on the confirmation call — a preferred time, a fragile item, a second number."
-                >
-                  <Textarea
-                    rows={3}
-                    value={form.sellerNotes}
-                    onChange={(e) => set('sellerNotes', e.target.value)}
-                    placeholder="Anything the call agent should know"
-                  />
-                </FormField>
-              </div>
-            </BandBody>
-          </div>
+                  {openStores.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                      {st.isDefault ? ' (default)' : ''}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <div className="ord-stack ord-stack--tight">
+                  <span className="ord-strong">Store</span>
+                  <div className="ord-store-line">
+                    <span className="ord-store-line__name">
+                      <Store size={14} aria-hidden />
+                      <span>{openStores[0]?.name ?? 'Your default store'}</span>
+                    </span>
+                    <Link href="/settings/stores" className="ord-link">
+                      Manage stores
+                    </Link>
+                  </div>
+                  <span className="ord-faint">{storeHint}</span>
+                </div>
+              )}
+              <TextField
+                label="Your reference"
+                hint="Optional. Your own order ID — unique per store."
+                value={form.sellerOrderRef}
+                onChange={(e) => set('sellerOrderRef', e.target.value)}
+                maxLength={120}
+                placeholder="ORD-2024-9981"
+                inputClassName="sk-ident"
+              />
+              <TextArea
+                label="Notes for the call agent"
+                hint="Read out on the confirmation call — a preferred time, a fragile item, a second number."
+                rows={3}
+                value={form.sellerNotes}
+                onChange={(e) => set('sellerNotes', e.target.value)}
+                placeholder="Anything the call agent should know"
+              />
+            </div>
+          </OrdSection>
         </div>
 
         {/* ── Right: what they are sending, and what it comes to ─── */}
-        <div className="flex flex-col gap-4">
-          <div>
-            <SectionBand
-              index="03"
-              title="Click to add products"
-              note="Price and stock are on the row, before you choose."
+        <div className="ord-stack">
+          <OrdSection
+            id="no-products"
+            title="Click to add products"
+            note="Price and stock are on the row, before you choose."
+            flush
+          >
+            <ProductCatalogue
+              lines={items}
+              stockByVariant={stockByVariant}
+              onAdd={addFromCatalogue}
             />
-            <BandBody flush>
-              <ProductCatalogue
-                lines={items}
-                stockByVariant={stockByVariant}
-                onAdd={addFromCatalogue}
-              />
-            </BandBody>
-          </div>
+          </OrdSection>
 
-          <div>
-            <SectionBand
-              index="04"
-              title="Ordered products"
-              note={`${items.length} ${items.length === 1 ? 'item' : 'items'}`}
-              action={
-                items.length === 0 ? null : (
-                  <span className="text-text-bright font-mono text-sm tabular-nums">
-                    Subtotal <Money amount={itemsTotal} convert={false} />
-                  </span>
-                )
-              }
+          <OrdSection
+            id="no-lines"
+            title="Ordered products"
+            note={`${items.length} ${items.length === 1 ? 'item' : 'items'}`}
+            action={
+              items.length === 0 ? null : (
+                <span className="ord-strong sk-figure">
+                  Subtotal <Money amount={itemsTotal} convert={false} />
+                </span>
+              )
+            }
+            flush
+          >
+            <OrderedProducts
+              lines={items}
+              stockByVariant={stockByVariant}
+              onPatch={patchItem}
+              onRemove={removeItem}
             />
-            <BandBody flush>
-              <OrderedProducts
-                lines={items}
-                stockByVariant={stockByVariant}
-                onPatch={patchItem}
-                onRemove={removeItem}
-              />
-            </BandBody>
-          </div>
+          </OrdSection>
 
           {shortLines.length > 0 && (
-            <div className="rounded-[7px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-4 py-3">
-              <p className="text-critical text-sm font-medium">
-                {shortLines.length === 1
+            <Notice
+              tone="bad"
+              icon={<PackageX size={16} />}
+              title={
+                shortLines.length === 1
                   ? 'One product is short of stock'
-                  : `${shortLines.length} products are short of stock`}
-              </p>
-              <ul className="text-text-muted mt-1 space-y-0.5 text-xs">
+                  : `${shortLines.length} products are short of stock`
+              }
+            >
+              <ul className="ord-mini-list">
                 {shortLines.map((l) => (
-                  <li key={l.variantId}>
+                  <li key={l.variantId} className="ord-faint">
                     asked for {l.want},{' '}
                     {l.have === 0 ? 'none available' : `only ${l.have} available`}
                   </li>
                 ))}
               </ul>
-              <p className="text-text-muted mt-1.5 text-xs">
+              <span className="ord-faint">
                 You can still place it — stock on its way in will cover it once it lands. But the
                 call centre cannot confirm an order we cannot pick, so it waits until then.
-              </p>
-              <label className="text-text-body mt-2 flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={acceptShort}
-                  onChange={(e) => setAcceptShort(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                Place it anyway
-              </label>
-            </div>
+              </span>
+              <Checkbox
+                checked={acceptShort}
+                onChange={(e) => setAcceptShort(e.target.checked)}
+                label="Place it anyway"
+              />
+            </Notice>
           )}
 
-          <div>
-            <SectionBand
-              index="05"
-              title="Payment &amp; parcel"
-              note="What the customer pays, and what it weighs."
+          <OrdSection
+            id="no-payment"
+            title="Payment &amp; parcel"
+            note="What the customer pays, and what it weighs."
+          >
+            {/*
+              Two cards, not a dropdown. There are exactly two answers,
+              one of them is nearly always the right one, and which is
+              chosen changes what the rest of this card means.
+            */}
+            <ChoiceCards
+              label="Payment mode"
+              required
+              columns={2}
+              value={form.paymentMode}
+              onChange={(v) => set('paymentMode', v === 'PREPAID' ? 'PREPAID' : 'COD')}
+              options={[
+                { value: 'COD', title: 'Cash on delivery', icon: <Banknote size={16} /> },
+                { value: 'PREPAID', title: 'Prepaid', icon: <CreditCard size={16} /> },
+              ]}
             />
-            <BandBody>
-              {/*
-                A segmented pair, not a dropdown. There are exactly two
-                answers, one of them is nearly always the right one, and
-                which is chosen changes what the rest of this card means
-                — a collapsed select hides the most consequential choice
-                on the form behind a click.
-              */}
-              <fieldset>
-                <legend className="text-text-muted mb-1.5 text-xs font-medium">
-                  Payment mode <span className="text-critical">*</span>
-                </legend>
-                <div className="grid grid-cols-2 gap-2">
-                  {(
-                    [
-                      { mode: 'COD' as const, label: 'Cash on delivery', Icon: Banknote },
-                      { mode: 'PREPAID' as const, label: 'Prepaid', Icon: CreditCard },
-                    ] satisfies ReadonlyArray<{
-                      mode: 'COD' | 'PREPAID';
-                      label: string;
-                      Icon: typeof Banknote;
-                    }>
-                  ).map(({ mode, label, Icon }) => {
-                    const on = form.paymentMode === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => set('paymentMode', mode)}
-                        className={`skydrop-hit inline-flex items-center justify-center gap-2 rounded-[5px] border px-3 py-2 text-sm font-medium transition-colors ${
-                          on
-                            ? 'border-accent bg-accent-fill text-accent-fg'
-                            : 'border-border bg-surface text-text-body hover:border-border-strong hover:text-text-bright'
-                        }`}
-                      >
-                        <Icon size={15} aria-hidden />
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
 
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <FormField
-                  label="Delivery fee (INR)"
-                  hint={
-                    feeDefault.data === undefined
-                      ? 'Added to the collectable amount.'
-                      : `Added to the collectable. Your default is ₹${feeDefault.data.amountInr}; change it in Settings.`
-                  }
-                >
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.deliveryFeeInr}
-                    onChange={(e) => set('deliveryFeeInr', e.target.value)}
-                    className="tabular-nums"
-                  />
-                </FormField>
-                <FormField label="Advance already paid (INR)" hint="Deducted from the collectable.">
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.advanceAmountInr}
-                    onChange={(e) => set('advanceAmountInr', e.target.value)}
-                    placeholder="0"
-                    className="tabular-nums"
-                  />
-                </FormField>
-                <FormField label="Discount (INR)" hint="Deducted from the collectable.">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={form.discountInr}
-                    onChange={(e) => set('discountInr', e.target.value)}
-                    placeholder="0"
-                    className="tabular-nums"
-                  />
-                </FormField>
-                <FormField
-                  label="Declared value (INR)"
-                  hint={
-                    computedDeclaredValue > 0
-                      ? `For customs, not collection. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue.`
-                      : "The parcel's value for customs — not what is collected."
-                  }
-                >
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={form.declaredValueInr}
-                    onChange={(e) => set('declaredValueInr', e.target.value)}
-                    className="tabular-nums"
-                    placeholder={
-                      computedDeclaredValue > 0
-                        ? computedDeclaredValue.toLocaleString('en-IN')
-                        : 'Sum of the line values'
-                    }
-                  />
-                </FormField>
-                <FormField
+            <div className="ord-grid-2" style={{ marginTop: 'var(--sp-3)' }}>
+              <TextField
+                label="Delivery fee (INR)"
+                hint={
+                  feeDefault.data === undefined
+                    ? 'Added to the collectable amount.'
+                    : `Added to the collectable. Your default is ₹${feeDefault.data.amountInr}; change it in Settings.`
+                }
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.deliveryFeeInr}
+                onChange={(e) => set('deliveryFeeInr', e.target.value)}
+                inputClassName="sk-figure"
+              />
+              <TextField
+                label="Advance already paid (INR)"
+                hint="Deducted from the collectable."
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.advanceAmountInr}
+                onChange={(e) => set('advanceAmountInr', e.target.value)}
+                placeholder="0"
+                inputClassName="sk-figure"
+              />
+              <TextField
+                label="Discount (INR)"
+                hint="Deducted from the collectable."
+                type="number"
+                step="0.01"
+                value={form.discountInr}
+                onChange={(e) => set('discountInr', e.target.value)}
+                placeholder="0"
+                inputClassName="sk-figure"
+              />
+              <TextField
+                label="Declared value (INR)"
+                hint={
+                  computedDeclaredValue > 0
+                    ? `For customs, not collection. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue.`
+                    : "The parcel's value for customs — not what is collected."
+                }
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.declaredValueInr}
+                onChange={(e) => set('declaredValueInr', e.target.value)}
+                inputClassName="sk-figure"
+                placeholder={
+                  computedDeclaredValue > 0
+                    ? computedDeclaredValue.toLocaleString('en-IN')
+                    : 'Sum of the line values'
+                }
+              />
+              <div className="ord-span-2">
+                <TextField
                   // The unit is the suffix on the field itself; saying
                   // it twice reads as two different things being asked for.
                   label="Total weight"
-                  className="sm:col-span-2"
                   hint={
                     computedWeight > 0
                       ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
                       : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
                   }
-                >
-                  <div className="flex items-stretch">
-                    <Input
-                      type="number"
-                      min={0}
-                      className="rounded-r-none tabular-nums"
-                      value={form.totalWeightGrams}
-                      onChange={(e) => set('totalWeightGrams', e.target.value)}
-                      placeholder={
-                        computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'
-                      }
-                    />
-                    {/* A SUFFIX. The unit follows the figure when it is
-                        spoken, and a "grams" box in front of an empty
-                        field reads as a label for the wrong thing. */}
-                    <span
-                      aria-hidden
-                      className="border-border-strong text-text-muted bg-surface-raised inline-flex shrink-0 items-center gap-1.5 rounded-r-[6px] border border-l-0 px-2.5 text-xs"
-                    >
+                  type="number"
+                  min={0}
+                  inputClassName="sk-figure"
+                  value={form.totalWeightGrams}
+                  onChange={(e) => set('totalWeightGrams', e.target.value)}
+                  placeholder={computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'}
+                  // A SUFFIX. The unit follows the figure when it is
+                  // spoken, and a "grams" box in front of an empty
+                  // field reads as a label for the wrong thing.
+                  trail={
+                    <span className="ord-suffix" aria-hidden>
                       <Scale size={13} />
                       grams
                     </span>
-                  </div>
-                </FormField>
+                  }
+                />
               </div>
+            </div>
 
-              {form.paymentMode === 'COD' ? (
-                /*
-                  The one figure the customer is asked for at the door,
-                  and the one the call centre reads out. It used to look
-                  exactly like the three inputs feeding it; now it is the
-                  loudest thing on the card, with its own arithmetic
-                  printed underneath so it can be checked at a glance.
-                */
-                <div className="border-accent/30 mt-4 rounded-[7px] border bg-[var(--color-accent-tint)] px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <label
-                      htmlFor="collectable-amount"
-                      className="text-text-muted text-xs font-semibold tracking-wide uppercase"
-                    >
-                      Collectable amount (INR)
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-text-bright text-xl font-semibold" aria-hidden>
-                        ₹
-                      </span>
-                      <Input
-                        id="collectable-amount"
-                        type="number"
-                        min={0.01}
-                        step="0.01"
-                        className="border-accent h-11 w-40 text-right text-xl font-semibold tabular-nums ring-1 ring-[var(--color-accent-tint)]"
-                        value={
-                          collectableDraft ??
-                          (computedCollectable === 0 ? '' : String(computedCollectable))
-                        }
-                        onBlur={() => setCollectableDraft(null)}
-                        // Typing here moves the DISCOUNT, so the four numbers
-                        // still add up. A collectable that silently disagrees
-                        // with its own breakdown is worse than no breakdown.
-                        onChange={(e) => {
-                          const typed = e.target.value;
-                          setCollectableDraft(typed);
-                          const target = Number(typed);
-                          if (typed.trim() === '' || !Number.isFinite(target)) return;
-                          setForm((p) => {
-                            const before =
-                              itemsTotal + num(p.deliveryFeeInr) - num(p.advanceAmountInr);
-                            return { ...p, discountInr: String(before - target) };
-                          });
-                        }}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <p className="text-text-muted mt-2 font-mono text-xs tabular-nums">
-                    {/* The arithmetic, spelled out. A number the call centre
-                        reads to a customer should be checkable at a glance. */}
-                    {itemsTotal.toLocaleString('en-IN')} of goods
-                    {num(form.deliveryFeeInr) !== 0
-                      ? ` + ${num(form.deliveryFeeInr).toLocaleString('en-IN')} delivery`
-                      : ''}
-                    {num(form.advanceAmountInr) !== 0
-                      ? ` − ${num(form.advanceAmountInr).toLocaleString('en-IN')} advance`
-                      : ''}
-                    {/* A NEGATIVE discount is a surcharge, and reads as one.
-                        "− -40 discount" is arithmetic nobody should have to
-                        parse to check their own total. */}
-                    {num(form.discountInr) > 0
-                      ? ` − ${num(form.discountInr).toLocaleString('en-IN')} discount`
-                      : num(form.discountInr) < 0
-                        ? ` + ${Math.abs(num(form.discountInr)).toLocaleString('en-IN')} surcharge`
-                        : ''}
-                    {` = ${computedCollectable.toLocaleString('en-IN')}`}
-                  </p>
-                </div>
-              ) : (
-                <div className="border-border bg-surface-raised mt-4 rounded-[7px] border px-4 py-3">
-                  <p className="text-text-body text-sm font-medium">
-                    Nothing to collect at the door
-                  </p>
-                  <p className="text-text-muted mt-1 text-xs">
-                    Prepaid — the driver hands it over and takes no money. The goods still come to{' '}
-                    <span className="font-mono tabular-nums">
-                      ₹{itemsTotal.toLocaleString('en-IN')}
+            {form.paymentMode === 'COD' ? (
+              /*
+                The one figure the customer is asked for at the door,
+                and the one the call centre reads out — the loudest thing
+                on the card, with its own arithmetic printed underneath
+                so it can be checked at a glance.
+              */
+              <div className="ord-collect">
+                <TextField
+                  id="collectable-amount"
+                  label="Collectable amount (INR)"
+                  required
+                  className="ord-collect__field"
+                  lead={
+                    <span className="ord-prefix" aria-hidden>
+                      ₹
                     </span>
-                    , which is what the seller is charged against.
-                  </p>
-                </div>
-              )}
-            </BandBody>
-          </div>
+                  }
+                  type="number"
+                  min={0.01}
+                  step="0.01"
+                  inputClassName="sk-figure"
+                  value={
+                    collectableDraft ??
+                    (computedCollectable === 0 ? '' : String(computedCollectable))
+                  }
+                  onBlur={() => setCollectableDraft(null)}
+                  // Typing here moves the DISCOUNT, so the four numbers
+                  // still add up. A collectable that silently disagrees
+                  // with its own breakdown is worse than no breakdown.
+                  onChange={(e) => {
+                    const typed = e.target.value;
+                    setCollectableDraft(typed);
+                    const target = Number(typed);
+                    if (typed.trim() === '' || !Number.isFinite(target)) return;
+                    setForm((p) => {
+                      const before = itemsTotal + num(p.deliveryFeeInr) - num(p.advanceAmountInr);
+                      return { ...p, discountInr: String(before - target) };
+                    });
+                  }}
+                />
+                <p className="ord-collect__sum sk-figure">
+                  {/* The arithmetic, spelled out. A number the call centre
+                      reads to a customer should be checkable at a glance. */}
+                  {itemsTotal.toLocaleString('en-IN')} of goods
+                  {num(form.deliveryFeeInr) !== 0
+                    ? ` + ${num(form.deliveryFeeInr).toLocaleString('en-IN')} delivery`
+                    : ''}
+                  {num(form.advanceAmountInr) !== 0
+                    ? ` − ${num(form.advanceAmountInr).toLocaleString('en-IN')} advance`
+                    : ''}
+                  {/* A NEGATIVE discount is a surcharge, and reads as one.
+                      "− -40 discount" is arithmetic nobody should have to
+                      parse to check their own total. */}
+                  {num(form.discountInr) > 0
+                    ? ` − ${num(form.discountInr).toLocaleString('en-IN')} discount`
+                    : num(form.discountInr) < 0
+                      ? ` + ${Math.abs(num(form.discountInr)).toLocaleString('en-IN')} surcharge`
+                      : ''}
+                  {` = ${computedCollectable.toLocaleString('en-IN')}`}
+                </p>
+              </div>
+            ) : (
+              <Notice
+                tone="neutral"
+                icon={<CreditCard size={16} />}
+                title="Nothing to collect at the door"
+              >
+                <span className="ord-faint">
+                  Prepaid — the driver hands it over and takes no money. The goods still come to{' '}
+                  <span className="sk-figure">₹{itemsTotal.toLocaleString('en-IN')}</span>, which is
+                  what the seller is charged against.
+                </span>
+              </Notice>
+            )}
+          </OrdSection>
         </div>
       </div>
 
       {error && (
-        <div
-          role="alert"
-          className="text-critical mt-4 rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-2 text-xs"
-        >
-          {error}
-        </div>
+        <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
+          <span>{error}</span>
+        </Notice>
       )}
 
       {/*
@@ -1158,18 +1066,13 @@ export function NewOrderForm(): ReactElement {
         money right" and "how many lines", and both were a scroll away
         from the button that commits them.
       */}
-      <div className="border-border bg-surface/95 sticky bottom-0 z-10 mt-4 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t px-3 py-2 backdrop-blur sm:-mx-5 sm:px-5 sm:py-3 lg:-mx-6 lg:px-6">
+      <div className="ord-bar">
         {/*
-          The refusal goes HERE, next to the button that was refused.
-
-          It used to render only at the bottom of the form, which on a
-          two-column layout is well below the fold — so pressing Submit
-          with an empty field looked like pressing Submit did nothing,
-          and the reason was a scroll away. The bar is the one part of
-          this page that is always on screen.
+          The refusal goes HERE, next to the button that was refused —
+          the bar is the one part of this page that is always on screen.
         */}
         {error === null ? (
-          <p className="text-text-muted text-xs">
+          <p className="ord-bar__summary">
             {items.length === 0
               ? 'No products yet'
               : // "products", not "lines" — a line is what the order model
@@ -1178,7 +1081,7 @@ export function NewOrderForm(): ReactElement {
             {form.paymentMode === 'COD' && computedCollectable > 0 && (
               <>
                 {' · '}
-                <span className="text-text-bright font-mono tabular-nums">
+                <span className="ord-strong sk-figure">
                   ₹{computedCollectable.toLocaleString('en-IN')}
                 </span>{' '}
                 to collect
@@ -1186,10 +1089,29 @@ export function NewOrderForm(): ReactElement {
             )}
           </p>
         ) : (
-          <p className="text-critical min-w-0 flex-1 text-xs font-medium max-sm:w-full">{error}</p>
+          <p className="ord-bar__summary ord-error">{error}</p>
         )}
-        <div className="flex items-center gap-2 max-sm:w-full">{actions}</div>
+        <div className="ord-bar__actions">{actions}</div>
       </div>
+
+      <ConfirmDialog
+        open={confirmSubmit}
+        onOpenChange={setConfirmSubmit}
+        title="Submit this order for confirmation?"
+        entity={`${form.recipientName.trim()} · ${IN_DIAL} ${toLocalDigits(form.recipientPhoneE164)}`}
+        amount={
+          form.paymentMode === 'COD' && computedCollectable > 0 ? (
+            <>₹{computedCollectable.toLocaleString('en-IN')} to collect</>
+          ) : (
+            'Prepaid'
+          )
+        }
+        consequence={`It is created and joins the call queue: the call centre phones this customer to confirm ${
+          items.length === 1 ? 'the product' : `the ${items.length} products`
+        }. Stock is held only when they confirm.`}
+        confirmLabel="Submit for confirmation"
+        onConfirm={() => go('submit', null)}
+      />
 
       <DuplicateOrderDialog
         open={duplicates !== null}

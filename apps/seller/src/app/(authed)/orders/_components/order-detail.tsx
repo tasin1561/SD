@@ -7,9 +7,13 @@ import {
   CircleDot,
   Clock,
   CreditCard,
+  Download,
+  FileText,
+  LifeBuoy,
   Package,
   Pencil,
   PhoneCall,
+  Truck,
   Undo2,
   XCircle,
 } from 'lucide-react';
@@ -23,39 +27,25 @@ import {
   useOrderInvoice,
   useOrderJourney,
 } from '@/lib/api-hooks';
-import {
-  BandBody,
-  Button,
-  Card,
-  CardBody,
-  Crumbs,
-  DescriptionList,
-  ErrorState,
-  LoadingState,
-  MetaChip,
-  OrderStatusBadge,
-  Money,
-  PageHeader,
-  SectionBand,
-  Stat,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  useToast,
-  ProductThumb,
-  OrderJourneyPanels,
-  SkeletonRows,
-  ErrorNote,
-} from '@skydrop/ui/components';
+import { Money, ProductThumb } from '@skydrop/ui/components';
 import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, THead, TableEmpty, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import { DeliveryTroublePanel } from '../[id]/_components/delivery-trouble-panel';
 import { CancelOrderDialog } from './cancel-order-dialog';
 import { RequestReturnDialog } from './request-return-dialog';
 import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
+import { OrderJourney } from './order-journey-parts';
+import { BackLink, Facts, LinkButton, MetaFact, Notice, OrdSection } from './orders-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -151,7 +141,7 @@ function statusTone(status: OrderStatus): 'neutral' | 'warn' | 'bad' | 'good' {
 }
 
 function Dash(): ReactElement {
-  return <span className="text-text-faint">—</span>;
+  return <span className="ord-faint">—</span>;
 }
 
 /** `21 Aug 2026` — a tile is a glance, not a timestamp. */
@@ -162,6 +152,14 @@ function tileDate(value: string): string {
     year: 'numeric',
   });
 }
+
+/** The status tile's glow, from the same four tones. */
+const TILE_TONE: Record<ReturnType<typeof statusTone>, KpiTone> = {
+  good: 'credit',
+  bad: 'debit',
+  warn: 'pending',
+  neutral: 'neutral',
+};
 
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
   const detail = useOrderDetail(orderId);
@@ -193,36 +191,19 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const deliveryActions = useDeliveryActions(orderId);
   const canAsk = deliveryActions.data?.canRequest === true;
 
-  /*
-    The band numbers, allocated in render order.
-
-    Two of the bands are conditional — the notes only exist when the
-    seller wrote some, the charges only when they may see them — so
-    fixed numbers left a jump from 03 to 05 on the commonest order,
-    which reads as a section that failed to load rather than one this
-    parcel does not have. JSX children evaluate top to bottom, so
-    calling this inline gives 01, 02, 03… down whatever actually
-    renders.
-  */
-  let bandsAllocated = 0;
-  const band = (): string => String(++bandsAllocated).padStart(2, '0');
-
   return (
-    <div>
+    <div className="ord-page">
       {/* The BACK link stays beside the breadcrumb rather than being
           replaced by it. They answer different questions — "where am
           I" and "take me back one" — and a crumb trail is a poor
           back button on a phone, where the tap target is a word in a
           line of words. */}
-      <Link
-        href="/orders"
-        className="text-text-muted hover:text-text-body mb-3 inline-flex items-center gap-1.5 text-xs transition-colors"
-      >
-        <ArrowLeft size={12} aria-hidden /> Orders
-      </Link>
+      <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
+        Orders
+      </BackLink>
 
       {detail.isLoading ? (
-        <LoadingState label="Loading order…" />
+        <SkeletonRows rows={6} cols={4} label="Loading order…" />
       ) : detail.isError ? (
         <ErrorState
           message={detail.error?.message ?? 'Failed to load order.'}
@@ -233,21 +214,17 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
       ) : (
         <>
           <PageHeader
-            breadcrumb={
-              <Crumbs
-                items={[
-                  { label: 'Seller console' },
-                  { label: 'Orders', href: '/orders' },
-                  { label: detail.data.orderNumber },
-                ]}
-                Link={Link}
-              />
-            }
-            title={<span className="font-mono">{detail.data.orderNumber}</span>}
+            breadcrumbs={[
+              { label: 'Seller console' },
+              { label: 'Orders', href: '/orders' },
+              { label: detail.data.orderNumber },
+            ]}
+            Link={Link}
+            title={<span className="sk-ident">{detail.data.orderNumber}</span>}
             subtitle={
               detail.data.sellerOrderRef ? (
                 <span>
-                  Your ref: <span className="font-mono">{detail.data.sellerOrderRef}</span>
+                  Your ref: <span className="sk-ident">{detail.data.sellerOrderRef}</span>
                 </span>
               ) : undefined
             }
@@ -263,28 +240,40 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               "SAFTA 0%" on a screen is taken as a customs fact.
             */
             meta={
-              <>
-                <MetaChip tone="accent">
+              <span className="ord-meta">
+                <StatusChip
+                  kind={orderStatusKind(detail.data.status as OrderStatus)}
+                  label={statusLabel(detail.data.status as OrderStatus)}
+                />
+                <MetaFact tone="accent">
                   {detail.data.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid'}
-                </MetaChip>
+                </MetaFact>
                 {detail.data.storeKind === 'RESELLER' && (
-                  <MetaChip>Sold by {detail.data.storeNameSnapshot ?? 'a reseller store'}</MetaChip>
+                  <MetaFact>Sold by {detail.data.storeNameSnapshot ?? 'a reseller store'}</MetaFact>
                 )}
-              </>
+              </span>
             }
             action={
-              <div className="flex items-center gap-2">
+              <div className="ord-row">
                 {/* The two things a seller can DO about a live parcel,
-                    beside the order number. They used to live on cards
-                    further down — one of which has since moved below
-                    the invoice — so the actions were somewhere you
-                    arrived at rather than somewhere you look. */}
+                    beside the order number, where a seller looks for
+                    something to do. */}
                 {canAsk && (
-                  <Button variant="primary" size="sm" onClick={() => setAskOpen(true)}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Truck size={14} />}
+                    onClick={() => setAskOpen(true)}
+                  >
                     Ask admin to act
                   </Button>
                 )}
-                <Button variant="secondary" size="sm" onClick={() => setRaiseOpen(true)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LifeBuoy size={14} />}
+                  onClick={() => setRaiseOpen(true)}
+                >
                   Raise an issue
                 </Button>
                 {/* A Reseller store's order is EDITABLE HERE TOO (owner,
@@ -296,22 +285,28 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     under the terms it was placed on. */}
                 {(detail.data.status === 'DRAFT' ||
                   detail.data.status === 'PENDING_CONFIRMATION') && (
-                  <Link href={`/orders/${orderId}/edit`}>
-                    <Button variant="secondary" size="sm">
-                      <Pencil size={12} /> Edit
-                    </Button>
-                  </Link>
+                  <LinkButton
+                    href={`/orders/${orderId}/edit`}
+                    variant="secondary"
+                    size="sm"
+                    icon={<Pencil size={14} />}
+                  >
+                    Edit
+                  </LinkButton>
                 )}
                 {/* The customer declined, so nothing calls this order
                     again on its own. Asking is the only path — and it is
-                    an ASK: an admin decides. */}
-                {/* `canRequest` is the SERVER's answer — which statuses
-                    qualify is a per-seller setting, and it already
-                    accounts for the one-open-request rule. Guessing here
-                    would show a button the server refuses. */}
+                    an ASK: an admin decides. `canRequest` is the SERVER's
+                    answer — which statuses qualify is a per-seller
+                    setting, and it already accounts for the
+                    one-open-request rule. */}
                 {canRequest && identity !== null && can(identity, 'orders.create') && (
-                  <Button variant="secondary" size="sm" onClick={() => setReattemptOpen(true)}>
-                    <PhoneCall size={12} />{' '}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<PhoneCall size={14} />}
+                    onClick={() => setReattemptOpen(true)}
+                  >
                     {lastDecided === null ? 'Ask us to call again' : 'Ask again'}
                   </Button>
                 )}
@@ -322,18 +317,27 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 {detail.data.status === 'DELIVERED' &&
                   identity !== null &&
                   can(identity, 'orders.cancel') && (
-                    <Button variant="secondary" size="sm" onClick={() => setReturnOpen(true)}>
-                      <Undo2 size={12} /> Request return
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<Undo2 size={14} />}
+                      onClick={() => setReturnOpen(true)}
+                    >
+                      Request return
                     </Button>
                   )}
                 {CANCELLABLE.has(detail.data.status) &&
                   identity !== null &&
                   can(identity, 'orders.cancel') && (
-                    <Button variant="ghost" size="sm" onClick={() => setCancelOpen(true)}>
-                      <XCircle size={12} /> Cancel
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<XCircle size={14} />}
+                      onClick={() => setCancelOpen(true)}
+                    >
+                      Cancel
                     </Button>
                   )}
-                <OrderStatusBadge status={detail.data.status as OrderStatus} />
               </div>
             }
           />
@@ -343,36 +347,26 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                  a tile that needed arithmetic to exist would be a
                  claim rather than a record. The exceptions are the two
                  sums in the items tile's footer, which add up lines
-                 that are all on the page directly below it.
-
-                 What the comps put here and we do not have: a service
-                 level, an SLA clock and a "customs cleared" seal.
-                 There is no service level on a shipment, nothing
-                 measures a per-parcel SLA, and no customs state is
-                 recorded — a cleared/held badge is precisely the sort
-                 of thing a seller would ring us about. */}
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat
+                 that are all on the page directly below it. */}
+          <div className="ord-kpis">
+            <KpiCard
               label="Status"
-              icon={<CircleDot size={13} aria-hidden />}
+              icon={<CircleDot size={14} />}
               /* `statusLabel` from `@skydrop/ui/status`, never the raw
-                 enum: the badge in the header beside this tile reads
-                 the same vocabulary, and two words for one status on
-                 one screen reads as two things having happened. */
-              value={
-                <span className="text-base">{statusLabel(detail.data.status as OrderStatus)}</span>
-              }
-              tone={statusTone(detail.data.status as OrderStatus)}
+                 enum: the chip in the header beside this tile reads
+                 the same vocabulary. */
+              figure={<span>{statusLabel(detail.data.status as OrderStatus)}</span>}
+              tone={TILE_TONE[statusTone(detail.data.status as OrderStatus)]}
             />
-            <Stat
+            <KpiCard
               label={detail.data.paymentMode === 'COD' ? 'To collect' : 'Paid up front'}
-              icon={<CreditCard size={13} aria-hidden />}
+              icon={<CreditCard size={14} />}
               /* A PREPAID order reads "Prepaid", never ₹0 — nothing
                  being owed and nothing having been recorded look the
                  same at a glance otherwise. */
-              value={
+              figure={
                 detail.data.codAmountInr === null ? (
-                  <span className="text-text-faint text-base">Prepaid</span>
+                  <span className="ord-faint">Prepaid</span>
                 ) : (
                   <Money amount={detail.data.codAmountInr} />
                 )
@@ -389,9 +383,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     ],
                   })}
             />
-            <Stat
+            <KpiCard
               label="What is in it"
-              icon={<Package size={13} aria-hidden />}
+              icon={<Package size={14} />}
               value={detail.data.items.length}
               unit={detail.data.items.length === 1 ? 'line' : 'lines'}
               tone="neutral"
@@ -404,89 +398,52 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   label: 'Weight',
                   value:
                     detail.data.totalWeightGrams === null ? (
-                      <span className="text-text-faint">Not recorded</span>
+                      <span className="ord-faint">Not recorded</span>
                     ) : (
                       `${detail.data.totalWeightGrams} g`
                     ),
                 },
               ]}
             />
-            <Stat
+            <KpiCard
               label="Placed"
-              icon={<Clock size={13} aria-hidden />}
-              value={<span className="text-base">{tileDate(detail.data.placedAt)}</span>}
+              icon={<Clock size={14} />}
+              figure={<span>{tileDate(detail.data.placedAt)}</span>}
               tone="neutral"
               hint={`Last moved ${tileDate(detail.data.updatedAt)}.`}
             />
           </div>
 
-          {/*
-            ── THE 2026-09-05 REDESIGN ────────────────────────────────
-            Built from two reference comps, one light and one dark. The
-            page was one long column: a seller checking a parcel that
-            had gone wrong scrolled past the recipient, the items and
-            the money to reach the timeline that told them what
-            happened.
-
-            It is two columns now. The JOURNEY is the wide left one —
-            it is what the page is for — and the FACTS stack down the
-            right, where they can be checked without leaving the
-            timeline. Anything WRONG stays full-width above both,
-            because a delivery in trouble is not a sidebar.
-
-            What the comps showed that is not here, for the same reason
-            as the orders list: a drawing can show a field we do not
-            have. No "Origin hub" or "Destination sector" (we have a
-            warehouse and a PIN, not hubs and sectors), no "Channel:
-            Shopify Direct" (an order has a SOURCE — manual, CSV, API —
-            which is not a sales channel), no "B2C Consignment" chip.
-          */}
           {pendingRequest !== null && (
-            // The ORDER is still REJECTED_BY_CUSTOMER and the badge above
+            // The ORDER is still REJECTED_BY_CUSTOMER and the chip above
             // says so, because that is what it is until somebody
             // approves. This says what is ALSO true: a request is with
             // us. Two facts, not one overwritten by the other.
-            <Card>
-              <CardBody>
-                <div className="flex items-start gap-3">
-                  <Clock size={16} className="text-pending mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-text-bright text-sm font-medium">
-                      We are reviewing your request to call this customer again
-                    </p>
-                    <p className="text-text-muted mt-0.5 text-sm">
-                      Sent {new Date(pendingRequest.createdAt).toLocaleString('en-IN')}. The order
-                      stays rejected until we decide. If we approve it, it goes back into the call
-                      queue and you will see the status change here.
-                    </p>
-                    <p className="text-text-faint mt-1.5 text-sm italic">
-                      “{pendingRequest.reason}”
-                    </p>
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
+            <Notice
+              tone="warn"
+              icon={<Clock size={16} />}
+              title="We are reviewing your request to call this customer again"
+            >
+              <span className="ord-p">
+                Sent {new Date(pendingRequest.createdAt).toLocaleString('en-IN')}. The order stays
+                rejected until we decide. If we approve it, it goes back into the call queue and you
+                will see the status change here.
+              </span>
+              <p className="ord-quote">“{pendingRequest.reason}”</p>
+            </Notice>
           )}
 
           {pendingRequest === null && lastDecided !== null && lastDecided.status === 'REJECTED' && (
-            <Card>
-              <CardBody>
-                <div className="flex items-start gap-3">
-                  <XCircle size={16} className="text-failed mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-text-bright text-sm font-medium">
-                      We reviewed your request and did not call again
-                    </p>
-                    {lastDecided.decisionNote !== null && lastDecided.decisionNote !== '' && (
-                      <p className="text-text-muted mt-0.5 text-sm">{lastDecided.decisionNote}</p>
-                    )}
-                    <p className="text-text-faint mt-0.5 text-sm">
-                      You can ask again if something changes.
-                    </p>
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
+            <Notice
+              tone="bad"
+              icon={<XCircle size={16} />}
+              title="We reviewed your request and did not call again"
+            >
+              {lastDecided.decisionNote !== null && lastDecided.decisionNote !== '' && (
+                <span className="ord-p">{lastDecided.decisionNote}</span>
+              )}
+              <span className="ord-faint">You can ask again if something changes.</span>
+            </Notice>
           )}
 
           {/* Correcting the consignee sits with the parcel, not in a
@@ -496,309 +453,265 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               Edit on the Recipient card. */}
           {editingCustomer && (
             <div id="customer-details">
-              <ConsigneePanel orderId={orderId} onClose={() => setEditingCustomer(false)} />
+              <ConsigneePanel
+                orderId={orderId}
+                orderNumber={detail.data.orderNumber}
+                onClose={() => setEditingCustomer(false)}
+              />
             </div>
           )}
 
           {/*
-            `mt-6` because the panels above space themselves from what
-            precedes them (each carries its own `mt-4`) and this grid
-            carried nothing — so the facts butted straight up against
-            the consignee panel with no gap at all. Six rather than four:
-            this is the seam between "something needs you" and "here is
-            the order", and it should read as a bigger break than the
-            one between two notices.
+            Two columns. The JOURNEY is the wide left one — it is what the
+            page is for — and the FACTS stack down the right, where they
+            can be checked without leaving the timeline.
           */}
-          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          <div className="ord-split ord-split--journey">
             {/* The journey: the stage ladder, the parcels, and the
                 courier's own scans merged with our handling. */}
-            <div className="min-w-0 space-y-4">
-              <OrderJourneySection orderId={orderId} />
+            <div className="ord-stack">
+              <OrderJourneySection
+                orderId={orderId}
+                orderNumber={detail.data.orderNumber}
+                status={detail.data.status as OrderStatus}
+              />
             </div>
 
             {/* The facts, in the order a seller checks them: who it is
                 going to, what is in it, what it costs, the paperwork. */}
-            <div className="min-w-0 space-y-4">
-              {/* ── The facts, each under its own numbered band ──────
-                     The bands are numbered down the FACTS column only.
-                     The journey beside them brings its own panels and
-                     their own heads (it is shared with apps/admin), so
-                     capping it with a band would have drawn a second
-                     border a hair outside the first — the same mistake
-                     the profile conversion had to undo. */}
-              <div>
-                <SectionBand
-                  index={band()}
-                  title="Recipient"
-                  note="Snapshotted when the order was placed."
-                  action={
-                    // `orders.create` is what the SERVER requires to save
-                    // a consignee change ("whoever may commit the company
-                    // to a delivery is who may change where it goes").
-                    // Gating on anything else shows an Edit whose save
-                    // comes back 403 — cosmetic RBAC that disagrees with
-                    // the boundary is worse than none.
-                    // A Reseller store's order uses the SAME editor
-                    // (2026-09-18, owner): Seller staff may change anything
-                    // on it, and the store is told what moved. A separate
-                    // narrow editor for reseller orders was the old rule
-                    // wearing a component.
-                    identity !== null && can(identity, 'orders.create') ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditingCustomer(true);
-                          // Opened, then scrolled to. The editor is full
-                          // width at the top — it needs the room — so
-                          // revealing it without moving there would look
-                          // like the button did nothing.
-                          window.setTimeout(
-                            () =>
-                              document
-                                .getElementById('customer-details')
-                                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
-                            50,
-                          );
-                        }}
-                      >
-                        <Pencil size={12} /> Edit
-                      </Button>
-                    ) : undefined
-                  }
-                />
-                {/* No <Card> inside: `BandBody` IS the bordered surface
-                  the band caps. */}
-                <BandBody>
+            <div className="ord-stack">
+              <OrdSection
+                title="Recipient"
+                note="Snapshotted when the order was placed."
+                action={
+                  // `orders.create` is what the SERVER requires to save
+                  // a consignee change ("whoever may commit the company
+                  // to a delivery is who may change where it goes").
+                  // Gating on anything else shows an Edit whose save
+                  // comes back 403 — cosmetic RBAC that disagrees with
+                  // the boundary is worse than none.
+                  identity !== null && can(identity, 'orders.create') ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Pencil size={14} />}
+                      onClick={() => {
+                        setEditingCustomer(true);
+                        // Opened, then scrolled to. The editor is full
+                        // width at the top — it needs the room — so
+                        // revealing it without moving there would look
+                        // like the button did nothing.
+                        window.setTimeout(
+                          () =>
+                            document
+                              .getElementById('customer-details')
+                              ?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+                          50,
+                        );
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  ) : undefined
+                }
+              >
+                <div className="ord-stack ord-stack--tight">
                   {detail.data.storeKind === 'RESELLER' && (
                     // The order is yours and so are its details; the
                     // note says who sold to this person, because they
                     // are who the customer will ring first.
-                    <p className="text-text-muted mb-3 text-sm">
+                    <p className="ord-p">
                       Sold by your reseller store{' '}
                       {detail.data.storeId !== null ? (
-                        <Link
-                          href={`/reseller-stores/${detail.data.storeId}`}
-                          className="text-accent font-medium hover:underline"
-                        >
+                        <Link href={`/reseller-stores/${detail.data.storeId}`} className="ord-link">
                           {detail.data.storeNameSnapshot ?? 'a reseller store'}
                         </Link>
                       ) : (
-                        <span className="font-medium">
+                        <span className="ord-strong">
                           {detail.data.storeNameSnapshot ?? 'a reseller store'}
                         </span>
                       )}
                       .
                     </p>
                   )}
-                  <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
-                    <dt className="text-text-muted">Name</dt>
-                    <dd className="text-text-body">{detail.data.recipientName}</dd>
-                    <dt className="text-text-muted">Phone</dt>
-                    <dd className="text-text-body font-mono text-xs">
-                      {detail.data.recipientPhoneE164}
-                      {detail.data.recipientAltPhoneE164 && (
-                        <span className="text-text-faint ml-2">
-                          / {detail.data.recipientAltPhoneE164}
-                        </span>
-                      )}
-                    </dd>
-                    {detail.data.recipientEmail && (
-                      <>
-                        <dt className="text-text-muted">Email</dt>
-                        <dd className="text-text-body font-mono text-xs">
-                          {detail.data.recipientEmail}
-                        </dd>
-                      </>
-                    )}
-                    <dt className="text-text-muted">Address</dt>
-                    <dd className="text-text-body">
-                      <div>{detail.data.recipientAddressLine1}</div>
-                      {detail.data.recipientAddressLine2 && (
-                        <div>{detail.data.recipientAddressLine2}</div>
-                      )}
-                      {detail.data.recipientLandmark && (
-                        <div className="text-text-muted text-xs">
-                          Landmark: {detail.data.recipientLandmark}
-                        </div>
-                      )}
-                      <div className="mt-0.5">
-                        {[detail.data.recipientCity, detail.data.recipientStateProvince]
-                          .filter(Boolean)
-                          .join(', ')}{' '}
-                        <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
-                        <span className="text-text-muted">{detail.data.recipientCountryCode}</span>
-                      </div>
-                    </dd>
-                  </dl>
-                </BandBody>
-              </div>
-
-              {/* Payment and Physical were two cards side by side in a
-                  column that is barely wide enough for one. Six facts
-                  do not need two bordered boxes and two heads, so they
-                  are one band and one list that reflows to a single
-                  column on a phone. */}
-              <div>
-                <SectionBand
-                  index={band()}
-                  title="Payment &amp; parcel"
-                  note="What it is worth and what it weighs."
-                />
-                <BandBody>
-                  <DescriptionList
-                    columns={2}
+                  <Facts
                     items={[
+                      { label: 'Name', value: detail.data.recipientName },
                       {
-                        label: 'Payment mode',
-                        value: <span className="uppercase">{detail.data.paymentMode}</span>,
-                      },
-                      {
-                        // The one figure here that decides whether the
-                        // parcel is worth chasing, through `Money` so it
-                        // groups the Indian way and sits on tabular
-                        // figures, and given the accent so the eye lands
-                        // on it rather than on the word above it.
-                        label: 'To collect',
-                        value:
-                          detail.data.codAmountInr === null ? (
-                            <span className="text-text-faint">Prepaid</span>
-                          ) : (
-                            <span className="text-accent font-semibold">
-                              <Money amount={detail.data.codAmountInr} />
-                            </span>
-                          ),
-                      },
-                      {
-                        label: 'Declared value',
-                        value:
-                          detail.data.declaredValueInr === null ? (
-                            <Dash />
-                          ) : (
-                            <Money amount={detail.data.declaredValueInr} />
-                          ),
-                      },
-                      {
-                        label: 'Weight',
-                        value:
-                          detail.data.totalWeightGrams === null ? (
-                            <Dash />
-                          ) : (
-                            <span className="font-mono">{detail.data.totalWeightGrams} g</span>
-                          ),
-                      },
-                      {
-                        label: 'Package',
-                        value: <span className="uppercase">{detail.data.packageType}</span>,
-                      },
-                      {
-                        label: 'Flags',
-                        value: detail.data.isUrgent ? (
-                          <span className="text-pending text-xs tracking-wide uppercase">
-                            Urgent
+                        label: 'Phone',
+                        value: (
+                          <span className="sk-figure">
+                            {detail.data.recipientPhoneE164}
+                            {detail.data.recipientAltPhoneE164 && (
+                              <span className="ord-faint">
+                                {' '}
+                                / {detail.data.recipientAltPhoneE164}
+                              </span>
+                            )}
                           </span>
-                        ) : (
-                          <Dash />
+                        ),
+                      },
+                      ...(detail.data.recipientEmail
+                        ? [{ label: 'Email', value: detail.data.recipientEmail }]
+                        : []),
+                      {
+                        label: 'Address',
+                        value: (
+                          <>
+                            <div>{detail.data.recipientAddressLine1}</div>
+                            {detail.data.recipientAddressLine2 && (
+                              <div>{detail.data.recipientAddressLine2}</div>
+                            )}
+                            {detail.data.recipientLandmark && (
+                              <div className="ord-faint">
+                                Landmark: {detail.data.recipientLandmark}
+                              </div>
+                            )}
+                            <div>
+                              {[detail.data.recipientCity, detail.data.recipientStateProvince]
+                                .filter(Boolean)
+                                .join(', ')}{' '}
+                              <span className="sk-figure">{detail.data.recipientPostalCode}</span>{' '}
+                              <span className="ord-faint">{detail.data.recipientCountryCode}</span>
+                            </div>
+                          </>
                         ),
                       },
                     ]}
                   />
-                </BandBody>
-              </div>
+                </div>
+              </OrdSection>
 
-              <div>
-                <SectionBand
-                  index={band()}
-                  title="Items"
-                  note={`${detail.data.items.length} ${detail.data.items.length === 1 ? 'line' : 'lines'}`}
+              {/* Six facts do not need two bordered boxes and two
+                  heads, so they are one section and one list that
+                  reflows to a single column on a phone. */}
+              <OrdSection title="Payment &amp; parcel" note="What it is worth and what it weighs.">
+                <Facts
+                  items={[
+                    {
+                      label: 'Payment mode',
+                      value: detail.data.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid',
+                    },
+                    {
+                      // The one figure here that decides whether the
+                      // parcel is worth chasing, through `Money` so it
+                      // groups the Indian way and sits on tabular
+                      // figures.
+                      label: 'To collect',
+                      value:
+                        detail.data.codAmountInr === null ? (
+                          <span className="ord-faint">Prepaid</span>
+                        ) : (
+                          <span className="ord-strong">
+                            <Money amount={detail.data.codAmountInr} />
+                          </span>
+                        ),
+                    },
+                    {
+                      label: 'Declared value',
+                      value:
+                        detail.data.declaredValueInr === null ? (
+                          <Dash />
+                        ) : (
+                          <Money amount={detail.data.declaredValueInr} />
+                        ),
+                    },
+                    {
+                      label: 'Weight',
+                      value:
+                        detail.data.totalWeightGrams === null ? (
+                          <Dash />
+                        ) : (
+                          <span className="sk-figure">{detail.data.totalWeightGrams} g</span>
+                        ),
+                    },
+                    {
+                      label: 'Package',
+                      value: packageWords(detail.data.packageType),
+                    },
+                    {
+                      label: 'Flags',
+                      value: detail.data.isUrgent ? (
+                        <StatusChip kind="pending" label="Urgent" size="sm" />
+                      ) : (
+                        <Dash />
+                      ),
+                    },
+                  ]}
                 />
-                {/* The `Table` primitive, not a hand-rolled `<thead>`.
-                  It was the latter, which meant this table alone did
-                  NOT inherit the below-`md` card layout every other
-                  table on the estate gets (FE-7) — five columns on a
-                  360px phone pushed the page sideways. */}
-                <BandBody flush>
-                  <Table>
-                    <THead>
-                      <Tr>
-                        <Th className="w-14" aria-label="Picture" />
-                        <Th>SKU</Th>
-                        <Th>Product</Th>
-                        <Th align="right">Qty</Th>
-                        <Th align="right">Unit weight</Th>
-                      </Tr>
-                    </THead>
-                    <TBody>
-                      {detail.data.items.length === 0 && (
-                        // A header row over nothing says less than a
-                        // sentence does.
-                        <Tr>
-                          <Td colSpan={5} className="text-text-muted py-4 text-center">
-                            No items recorded on this order.
-                          </Td>
-                        </Tr>
-                      )}
-                      {detail.data.items.map((item) => (
-                        <Tr key={item.id}>
-                          <Td>
-                            {/* Live presigned thumbnail, NOT the snapshot's
+              </OrdSection>
+
+              <OrdSection
+                title="Items"
+                note={`${detail.data.items.length} ${detail.data.items.length === 1 ? 'line' : 'lines'}`}
+                flush
+              >
+                <Table caption="Items on this order">
+                  <THead>
+                    <Tr>
+                      <Th className="ord-thumb-cell" aria-label="Picture" />
+                      <Th>SKU</Th>
+                      <Th>Product</Th>
+                      <Th align="right">Qty</Th>
+                      <Th align="right">Unit weight</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {detail.data.items.length === 0 && (
+                      // A header row over nothing says less than a
+                      // sentence does.
+                      <TableEmpty colSpan={5}>No items recorded on this order.</TableEmpty>
+                    )}
+                    {detail.data.items.map((item) => (
+                      <Tr key={item.id}>
+                        <Td className="ord-thumb-cell">
+                          {/* Live presigned thumbnail, NOT the snapshot's
                               stored url — that one has resolved for
                               nobody since the bucket went private. */}
-                            <ProductThumb src={item.imageUrl} size={36} />
-                          </Td>
-                          <Td className="text-text-body font-mono text-xs">{item.skuCode}</Td>
-                          <Td className="text-text-body">
-                            {item.productName}
-                            {item.variantLabel && (
-                              <span className="text-text-muted ml-1">· {item.variantLabel}</span>
-                            )}
-                          </Td>
-                          <Td align="right" className="text-text-body font-mono">
-                            {item.quantity}
-                          </Td>
-                          <Td align="right" className="text-text-muted font-mono text-xs">
+                          <ProductThumb src={item.imageUrl} size={36} />
+                        </Td>
+                        <Td>
+                          <span className="sk-ident">{item.skuCode}</span>
+                        </Td>
+                        <Td>
+                          {item.productName}
+                          {item.variantLabel && (
+                            <span className="ord-faint"> · {item.variantLabel}</span>
+                          )}
+                        </Td>
+                        <Td align="right">
+                          <span className="sk-figure">{item.quantity}</span>
+                        </Td>
+                        <Td align="right">
+                          <span className="sk-figure ord-muted">
                             {item.unitWeightGrams === null ? <Dash /> : `${item.unitWeightGrams} g`}
-                          </Td>
-                        </Tr>
-                      ))}
-                    </TBody>
-                  </Table>
-                </BandBody>
-              </div>
+                          </span>
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </Table>
+              </OrdSection>
 
               {detail.data.sellerNotes && (
-                <div>
-                  <SectionBand
-                    index={band()}
-                    title="Your notes"
-                    note="What you told us at order time."
-                  />
-                  <BandBody>
-                    <p className="text-text-body text-sm whitespace-pre-wrap">
-                      {detail.data.sellerNotes}
-                    </p>
-                  </BandBody>
-                </div>
+                <OrdSection title="Your notes" note="What you told us at order time.">
+                  <p className="ord-body">{detail.data.sellerNotes}</p>
+                </OrdSection>
               )}
 
               {/* Hidden rather than shown-and-refused for a VIEWER: the
-              server rejects /charges for that role, and rendering its
-              403 in a red box reads as a broken page rather than as
-              policy. Cosmetic — the server is still the boundary. */}
+                  server rejects /charges for that role, and rendering its
+                  403 in a red box reads as a broken page rather than as
+                  policy. Cosmetic — the server is still the boundary. */}
               {identity !== null && can(identity, 'charges.view') && (
-                <div>
-                  <SectionBand index={band()} title="Charges" note="What this parcel costs you." />
-                  {/* The section brings its own card, so the band caps it
-                      with `flush` rather than a second padded surface. */}
-                  <BandBody flush>
-                    <OrderChargesSection orderId={orderId} />
-                  </BandBody>
-                </div>
+                <OrdSection title="Charges" note="What this parcel costs you." flush>
+                  <OrderChargesSection orderId={orderId} />
+                </OrdSection>
               )}
 
               {/* RS-6 phase 3c — a reseller store's order: your transfer
-              price, your fee shares, and when. Hidden from a VIEWER,
-              whom the endpoint refuses (cosmetic — FE-2). */}
+                  price, your fee shares, and when. Hidden from a VIEWER,
+                  whom the endpoint refuses (cosmetic — FE-2). */}
               <ResellerMoneyPanel
                 orderId={orderId}
                 enabled={
@@ -809,31 +722,20 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 }
               />
 
-              <div>
-                <SectionBand
-                  index={band()}
-                  title="Invoice"
-                  note="The tax document for this sale."
+              <OrdSection title="Invoice" note="The tax document for this sale.">
+                <OrderInvoiceSection
+                  orderId={orderId}
+                  orderNumber={detail.data.orderNumber}
+                  status={detail.data.status}
                 />
-                <BandBody flush>
-                  <OrderInvoiceSection orderId={orderId} status={detail.data.status} />
-                </BandBody>
-              </div>
+              </OrdSection>
 
-              {/*
-                Directly UNDER the invoice, in the facts column.
-
-                They spent a commit full-width below the grid, which was
-                technically "after the invoice" and useless: the journey
-                column runs to hundreds of scan rows on a real parcel,
-                so these landed a screen and a half past the thing they
-                were meant to sit beneath. Position in a two-column
-                layout is what the eye sees, not what the DOM order
-                says. The column is wider now so they still have room
-                for the detail they carry.
-              */}
+              {/* Directly UNDER the invoice, in the facts column: position
+                  in a two-column layout is what the eye sees, not what
+                  the DOM order says. */}
               <DeliveryTroublePanel
                 orderId={orderId}
+                orderNumber={detail.data.orderNumber}
                 orderStatus={detail.data.status}
                 open={askOpen}
                 onOpenChange={setAskOpen}
@@ -843,23 +745,17 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 raising={raiseOpen}
                 onRaisingChange={setRaiseOpen}
               />
-
-              {/* The whole journey — the stage ladder, what the courier
-              says the parcel weighs and will collect, and our own
-              handling merged with their scans into one history.
-              Replaces a bare scan list next to a near-empty timeline,
-              which between them never showed that Skydrop had taken
-              the order, phoned the customer, picked or packed it. */}
             </div>
           </div>
 
-          <div className="text-text-faint text-xs text-center mt-8">
+          <p className="ord-footnote sk-figure">
             Placed {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·
             Updated {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
-          </div>
+          </p>
 
           <ReattemptRequestDialog
             orderId={orderId}
+            orderNumber={detail.data.orderNumber}
             open={reattemptOpen}
             onOpenChange={setReattemptOpen}
           />
@@ -883,6 +779,20 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   );
 }
 
+/** The package type in words — the enum names the same three things. */
+function packageWords(t: string): string {
+  switch (t) {
+    case 'STANDARD':
+      return 'Standard';
+    case 'FRAGILE':
+      return 'Fragile';
+    case 'DOCUMENT':
+      return 'Document';
+    default:
+      return t;
+  }
+}
+
 /**
  * The journey panels.
  *
@@ -891,21 +801,28 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
  * unavailable must not blank the recipient and the items a seller came
  * to check.
  */
-function OrderJourneySection({ orderId }: { readonly orderId: string }): ReactElement | null {
+function OrderJourneySection({
+  orderId,
+  orderNumber,
+  status,
+}: {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly status: OrderStatus;
+}): ReactElement | null {
   const journey = useOrderJourney(orderId);
-  if (journey.isPending) return <SkeletonRows rows={4} />;
+  if (journey.isPending) return <SkeletonRows rows={4} cols={1} label="Loading the journey…" />;
   if (journey.isError || journey.data === undefined) {
     return (
-      <div>
-        <SectionBand title="Order tracker" />
-        <BandBody>
-          <ErrorNote message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
-        </BandBody>
-      </div>
+      <OrdSection title="Order tracker">
+        <ErrorState message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
+      </OrdSection>
     );
   }
   return (
-    <OrderJourneyPanels
+    <OrderJourney
+      orderNumber={orderNumber}
+      status={<StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />}
       milestones={journey.data.milestones}
       parcels={journey.data.parcels}
       entries={journey.data.timeline}
@@ -919,15 +836,18 @@ function OrderJourneySection({ orderId }: { readonly orderId: string }): ReactEl
 
 function OrderInvoiceSection({
   orderId,
+  orderNumber,
   status,
 }: {
   readonly orderId: string;
+  readonly orderNumber: string;
   readonly status: string;
 }): ReactElement {
   const invoice = useOrderInvoice(orderId);
   const generate = useGenerateInvoice(orderId);
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   // RS-10 / decision 8: an order sold by a reseller store gets no tax
   // invoice. The SERVER refuses it by name; we show its verdict verbatim
@@ -936,18 +856,14 @@ function OrderInvoiceSection({
   // promise that never comes true for this order.
   if (invoice.data !== undefined && invoice.data !== null && 'refused' in invoice.data) {
     return (
-      <p className="text-text-muted p-3 text-sm" data-testid="invoice-refused">
+      <p className="ord-p" data-testid="invoice-refused">
         {invoice.data.refused}
       </p>
     );
   }
 
   if (status !== 'DELIVERED') {
-    return (
-      <p className="text-text-muted p-3 text-sm">
-        Invoices are auto-generated when the order is delivered.
-      </p>
-    );
+    return <p className="ord-p">Invoices are auto-generated when the order is delivered.</p>;
   }
 
   async function onGenerate(): Promise<void> {
@@ -961,60 +877,62 @@ function OrderInvoiceSection({
   }
 
   if (invoice.isLoading) {
-    return (
-      <div className="p-3">
-        <LoadingState label="Loading invoice…" />
-      </div>
-    );
+    return <SkeletonRows rows={1} cols={2} label="Loading invoice…" />;
   }
 
   if (!invoice.data) {
     return (
-      <div className="p-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <p className="text-text-muted text-sm">
-            No invoice yet — usually generated within seconds of delivery.
-          </p>
-          <Button
-            type="button"
+      <div className="ord-stack ord-stack--tight">
+        <div className="ord-row ord-row--between">
+          <p className="ord-p">No invoice yet — usually generated within seconds of delivery.</p>
+          <AsyncButton
             variant="secondary"
             size="sm"
-            disabled={generate.isPending}
-            onClick={() => void onGenerate()}
-          >
-            {generate.isPending ? 'Generating…' : 'Generate now'}
-          </Button>
+            icon={<FileText size={14} />}
+            state={generate.isPending ? 'busy' : undefined}
+            labels={{ idle: 'Generate now', busy: 'Generating…' }}
+            onClick={() => setConfirming(true)}
+          />
         </div>
-        {error && <div className="text-critical mt-2 text-xs">{error}</div>}
+        {error && <p className="ord-error">{error}</p>}
+        <ConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          title="Generate the invoice now?"
+          entity={orderNumber}
+          entityIsIdentifier
+          consequence="We issue the tax invoice for this delivered order. If one already exists, that one is loaded instead."
+          confirmLabel="Generate invoice"
+          onConfirm={() => onGenerate()}
+        />
       </div>
     );
   }
 
   return (
-    <div className="p-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-text-bright font-mono text-sm">{invoice.data.invoiceNumber}</div>
-          <div className="text-text-muted mt-0.5 text-xs">
-            Issued {new Date(invoice.data.invoiceDate).toLocaleString()} · Total ₹{' '}
-            {invoice.data.totalInr}
-          </div>
-        </div>
-        {invoice.data.pdfUrl !== null && (
-          // A PLAIN, PERMANENT href. The endpoint signs at the moment
-          // it is followed, so there is no expiring URL in the page —
-          // this survives a bookmark, a refresh and a slow reader,
-          // and needs no popup-blocker dance.
-          <a
-            href={`/api/seller/orders/${orderId}/invoice/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent inline-flex items-center gap-1 text-sm hover:underline"
-          >
-            Download PDF →
-          </a>
-        )}
+    <div className="ord-row ord-row--between">
+      <div>
+        <div className="sk-ident ord-strong">{invoice.data.invoiceNumber}</div>
+        <span className="ord-sub">
+          Issued {new Date(invoice.data.invoiceDate).toLocaleString()} · Total ₹{' '}
+          {invoice.data.totalInr}
+        </span>
       </div>
+      {invoice.data.pdfUrl !== null && (
+        // A PLAIN, PERMANENT href. The endpoint signs at the moment
+        // it is followed, so there is no expiring URL in the page —
+        // this survives a bookmark, a refresh and a slow reader,
+        // and needs no popup-blocker dance.
+        <a
+          href={`/api/seller/orders/${orderId}/invoice/pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ord-link ord-link--block"
+        >
+          <Download size={14} aria-hidden />
+          Download PDF
+        </a>
+      )}
     </div>
   );
 }

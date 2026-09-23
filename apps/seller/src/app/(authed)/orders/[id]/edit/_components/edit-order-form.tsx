@@ -4,19 +4,28 @@ import { useRouter } from 'next/navigation';
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
 import {
-  Button,
-  Card,
-  BandBody,
-  CardBody,
-  SectionBand,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+  Banknote,
+  CreditCard,
+  MapPin,
+  NotebookPen,
+  OctagonX,
+  PackageSearch,
+  Save,
+  Send,
+  Trash2,
+} from 'lucide-react';
+import { Stepper } from '@skydrop/ui/app/stepper';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Notice, OrdSection } from '../../../_components/orders-parts';
 import { OrderedProducts, ProductCatalogue, type PickedLine } from '@/components/product-picker';
 import {
   useDiscardDraftOrder,
@@ -132,6 +141,8 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   const [busy, setBusy] = useState<'save' | 'submit' | 'discard' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  /** "Save + submit" asks once before it saves and joins the call queue. */
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
 
   useEffect(() => {
     if (form !== null || !detail.data) return;
@@ -262,7 +273,8 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
         retry={() => void detail.refetch()}
       />
     );
-  if (detail.isLoading || form === null) return <LoadingState label="Loading order…" />;
+  if (detail.isLoading || form === null)
+    return <SkeletonRows rows={6} cols={2} label="Loading order…" />;
   if (!detail.data) return <ErrorState message="Order not found." />;
 
   const status = detail.data.status;
@@ -272,18 +284,17 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
 
   if (!canEdit) {
     return (
-      <Card>
-        <CardBody>
-          <div className="text-text-bright text-sm mb-2">This order is no longer editable.</div>
-          <p className="text-text-muted text-xs mb-4">
-            Status: <span className="font-mono text-text-bright">{status}</span>. The server allows
-            edits only for DRAFT (full) and PENDING_CONFIRMATION (recipient + notes).
-          </p>
-          <Button variant="secondary" size="md" onClick={() => router.push(`/orders/${orderId}`)}>
+      <Notice tone="neutral" title="This order is no longer editable.">
+        <span className="ord-p">
+          Status: <span className="sk-ident ord-strong">{status}</span>. The server allows edits
+          only for DRAFT (full) and PENDING_CONFIRMATION (recipient + notes).
+        </span>
+        <div>
+          <Button variant="secondary" onClick={() => router.push(`/orders/${orderId}`)}>
             Back to order
           </Button>
-        </CardBody>
-      </Card>
+        </div>
+      </Notice>
     );
   }
 
@@ -432,266 +443,245 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   */
 
   return (
-    <form className="space-y-4" onSubmit={(e) => void onSave(e)}>
-      <div className="text-text-muted text-xs">
-        Editing order <span className="font-mono text-text-bright">{detail.data.orderNumber}</span>{' '}
-        · status <span className="font-mono text-text-bright">{status}</span>
-        {isPending && (
-          <span className="text-text-muted ml-2">
-            — editable until the confirmation call is done
-          </span>
-        )}
-      </div>
+    <form className="ord-page" onSubmit={(e) => void onSave(e)}>
+      <p className="ord-p">
+        Editing order <span className="sk-ident ord-strong">{detail.data.orderNumber}</span> ·
+        status <span className="sk-ident ord-strong">{status}</span>
+        {isPending && <span> — editable until the confirmation call is done</span>}
+      </p>
+
+      {/* A progress header over the SAME single form: it marks the
+          section in view and scrolls to one on click. Nothing is hidden
+          or unmounted — every field stays in the one form. */}
+      <Stepper
+        mode="sections"
+        label="Order form sections"
+        sticky
+        steps={[
+          { id: 'eo-items', label: 'Items', icon: <PackageSearch size={15} /> },
+          { id: 'eo-recipient', label: 'Recipient', icon: <MapPin size={15} /> },
+          { id: 'eo-payment', label: 'Payment', icon: <Banknote size={15} /> },
+          { id: 'eo-notes', label: 'Notes', icon: <NotebookPen size={15} /> },
+        ]}
+      />
 
       {/* The lines — editable, because a wrong product on an order
           nobody has confirmed yet is a correction, not a reason to
           cancel and start again. */}
-      <div>
-        <SectionBand
-          index="01"
-          title="Items"
-          note={
-            linesChanged ? (
-              <span className="text-pending">changed — save to apply</span>
-            ) : (
-              'What is in the parcel.'
-            )
-          }
-        />
-        <BandBody>
-          {lines === null ? (
-            <LoadingState label="Loading the items…" />
+      <OrdSection
+        id="eo-items"
+        title="Items"
+        note={
+          linesChanged ? (
+            <span className="ord-tone-warn">changed — save to apply</span>
           ) : (
-            <div className="space-y-3">
-              <OrderedProducts
-                lines={lines}
-                stockByVariant={stockByVariant}
-                onPatch={(key: number, patch: Partial<PickedLine>) =>
-                  setLines((prev) =>
-                    (prev ?? []).map((l) => (l.key === key ? { ...l, ...patch } : l)),
-                  )
-                }
-                onRemove={(key) => setLines((prev) => (prev ?? []).filter((l) => l.key !== key))}
-              />
-              <ProductCatalogue
-                lines={lines}
-                stockByVariant={stockByVariant}
-                onAdd={(hit) => {
-                  setLines((prev) => {
-                    const existing = (prev ?? []).find((l) => l.variantId === hit.id);
-                    // Adding something already on the order means "one
-                    // more of those", not a second line for the same SKU.
-                    if (existing !== undefined) {
-                      return (prev ?? []).map((l) =>
-                        l.variantId === hit.id
-                          ? { ...l, quantity: String(Number(l.quantity || '0') + 1) }
-                          : l,
-                      );
-                    }
-                    return [
-                      ...(prev ?? []),
-                      {
-                        key: nextKey,
-                        variantId: hit.id,
-                        skuCode: hit.skuCode,
-                        productName: hit.productName,
-                        variantLabel: hit.variantLabel,
-                        imageUrl: hit.primaryImageUrl,
-                        weightGrams: hit.effectiveWeightGrams,
-                        catalogueValueInr: hit.effectiveDeclaredValueInr,
-                        quantity: '1',
-                        unitPriceInr: hit.effectiveDeclaredValueInr ?? '',
-                      },
-                    ];
-                  });
-                  setNextKey((k) => k + 1);
-                }}
-              />
-            </div>
-          )}
-        </BandBody>
-      </div>
+            'What is in the parcel.'
+          )
+        }
+      >
+        {lines === null ? (
+          <SkeletonRows rows={3} cols={3} label="Loading the items…" />
+        ) : (
+          <div className="ord-stack ord-stack--tight">
+            <OrderedProducts
+              lines={lines}
+              stockByVariant={stockByVariant}
+              onPatch={(key: number, patch: Partial<PickedLine>) =>
+                setLines((prev) =>
+                  (prev ?? []).map((l) => (l.key === key ? { ...l, ...patch } : l)),
+                )
+              }
+              onRemove={(key) => setLines((prev) => (prev ?? []).filter((l) => l.key !== key))}
+            />
+            <ProductCatalogue
+              lines={lines}
+              stockByVariant={stockByVariant}
+              onAdd={(hit) => {
+                setLines((prev) => {
+                  const existing = (prev ?? []).find((l) => l.variantId === hit.id);
+                  // Adding something already on the order means "one
+                  // more of those", not a second line for the same SKU.
+                  if (existing !== undefined) {
+                    return (prev ?? []).map((l) =>
+                      l.variantId === hit.id
+                        ? { ...l, quantity: String(Number(l.quantity || '0') + 1) }
+                        : l,
+                    );
+                  }
+                  return [
+                    ...(prev ?? []),
+                    {
+                      key: nextKey,
+                      variantId: hit.id,
+                      skuCode: hit.skuCode,
+                      productName: hit.productName,
+                      variantLabel: hit.variantLabel,
+                      imageUrl: hit.primaryImageUrl,
+                      weightGrams: hit.effectiveWeightGrams,
+                      catalogueValueInr: hit.effectiveDeclaredValueInr,
+                      quantity: '1',
+                      unitPriceInr: hit.effectiveDeclaredValueInr ?? '',
+                    },
+                  ];
+                });
+                setNextKey((k) => k + 1);
+              }}
+            />
+          </div>
+        )}
+      </OrdSection>
 
-      {/* Recipient */}
-      <div>
-        <SectionBand index="02" title="Recipient" note="Where it is going." />
-        <BandBody>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label="Full name" required hint={prefixHint(sellerInitials)}>
-              {/* Chrome, like the +91 below — the seller cannot edit
-                  their own code, so it is not part of the input. */}
-              <div className="flex items-stretch">
-                {sellerInitials !== null && sellerInitials !== '' && (
-                  <span
-                    aria-hidden
-                    className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
-                  >
-                    {sellerInitials}
-                  </span>
-                )}
-                <Input
-                  className={
-                    sellerInitials !== null && sellerInitials !== '' ? 'rounded-l-none' : undefined
-                  }
-                  value={form.recipientName}
-                  onChange={(e) => set('recipientName', e.target.value)}
-                  maxLength={160}
-                  required
-                />
-              </div>
-            </FormField>
-            <FormField
-              label="Phone"
-              required
-              hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
-            >
-              {/* The dial code is CHROME, not input: it cannot be edited
-                  or deleted, so a seller cannot clear it, type 0091, or
-                  paste a differently-formatted number into it. The field
-                  itself holds only the ten national digits. */}
-              <div className="flex items-stretch">
-                <span
-                  aria-hidden
-                  className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
-                >
-                  {IN_DIAL}
+      <OrdSection id="eo-recipient" title="Recipient" note="Where it is going.">
+        <div className="ord-grid-2">
+          {/* Chrome, like the +91 below — the seller cannot edit their
+              own code, so it is not part of the input. */}
+          <TextField
+            label="Full name"
+            required
+            hint={prefixHint(sellerInitials)}
+            lead={
+              sellerInitials !== null && sellerInitials !== '' ? (
+                <span className="ord-prefix" aria-hidden>
+                  {sellerInitials}
                 </span>
-                <Input
-                  className="rounded-l-none"
-                  value={toLocalDigits(form.recipientPhoneE164)}
-                  onChange={(e) => set('recipientPhoneE164', toE164(sanitiseLocal(e.target.value)))}
-                  // inputMode drives the numeric keypad on a phone; the
-                  // sanitiser is what actually enforces digits, because a
-                  // paste bypasses the keypad entirely.
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  maxLength={IN_LOCAL_LENGTH}
-                  placeholder="9812345678"
-                  aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
-                  required
-                />
-              </div>
-            </FormField>
-            <FormField
-              label="Second number"
-              hint="Tried when the first does not answer — the call centre uses it before giving up on an order."
-            >
-              <div className="flex items-stretch">
-                <span
-                  aria-hidden
-                  className="border-border-strong text-text-muted inline-flex select-none items-center rounded-l-[6px] border border-r-0 px-2.5 text-sm"
-                >
-                  {IN_DIAL}
-                </span>
-                <Input
-                  className="rounded-l-none"
-                  value={toLocalDigits(form.recipientAltPhoneE164)}
-                  onChange={(e) =>
-                    set(
-                      'recipientAltPhoneE164',
-                      e.target.value.trim() === '' ? '' : toE164(sanitiseLocal(e.target.value)),
-                    )
-                  }
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  maxLength={IN_LOCAL_LENGTH}
-                  placeholder="optional"
-                  aria-label={`Second phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
-                />
-              </div>
-            </FormField>
-            <FormField
+              ) : undefined
+            }
+            value={form.recipientName}
+            onChange={(e) => set('recipientName', e.target.value)}
+            maxLength={160}
+          />
+          {/* The dial code is CHROME, not input: it cannot be edited
+              or deleted, so a seller cannot clear it, type 0091, or
+              paste a differently-formatted number into it. The field
+              itself holds only the ten national digits. */}
+          <TextField
+            label="Phone"
+            required
+            hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
+            lead={
+              <span className="ord-prefix" aria-hidden>
+                {IN_DIAL}
+              </span>
+            }
+            value={toLocalDigits(form.recipientPhoneE164)}
+            onChange={(e) => set('recipientPhoneE164', toE164(sanitiseLocal(e.target.value)))}
+            // inputMode drives the numeric keypad on a phone; the
+            // sanitiser is what actually enforces digits, because a
+            // paste bypasses the keypad entirely.
+            inputMode="numeric"
+            autoComplete="tel-national"
+            maxLength={IN_LOCAL_LENGTH}
+            placeholder="9812345678"
+            aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+            inputClassName="sk-figure"
+          />
+          <TextField
+            label="Second number"
+            hint="Tried when the first does not answer — the call centre uses it before giving up on an order."
+            lead={
+              <span className="ord-prefix" aria-hidden>
+                {IN_DIAL}
+              </span>
+            }
+            value={toLocalDigits(form.recipientAltPhoneE164)}
+            onChange={(e) =>
+              set(
+                'recipientAltPhoneE164',
+                e.target.value.trim() === '' ? '' : toE164(sanitiseLocal(e.target.value)),
+              )
+            }
+            inputMode="numeric"
+            autoComplete="tel-national"
+            maxLength={IN_LOCAL_LENGTH}
+            placeholder="optional"
+            aria-label={`Second phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+            inputClassName="sk-figure"
+          />
+          <div className="ord-span-2">
+            <TextField
               label="Address line 1"
               required
-              className="col-span-2"
               hint={ADDRESS_LINE_1_HINT}
-            >
-              <Input
-                value={form.recipientAddressLine1}
-                onChange={(e) => set('recipientAddressLine1', e.target.value)}
-                maxLength={200}
-                required
-              />
-            </FormField>
-            <FormField
+              value={form.recipientAddressLine1}
+              onChange={(e) => set('recipientAddressLine1', e.target.value)}
+              maxLength={200}
+            />
+          </div>
+          <div className="ord-span-2">
+            <TextField
               label="Address line 2"
               required
-              className="col-span-2"
               hint={ADDRESS_LINE_2_HINT}
               error={
                 linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
                   ? DUPLICATE_LINES_ERROR
                   : undefined
               }
-            >
-              <Input
-                value={form.recipientAddressLine2}
-                onChange={(e) => set('recipientAddressLine2', e.target.value)}
-                maxLength={200}
-                required
-              />
-            </FormField>
-            <FormField label="PIN code" required>
-              <Input
-                value={form.recipientPostalCode}
-                onChange={(e) =>
-                  set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
-                }
-                inputMode="numeric"
-                required
-              />
-            </FormField>
+              value={form.recipientAddressLine2}
+              onChange={(e) => set('recipientAddressLine2', e.target.value)}
+              maxLength={200}
+            />
           </div>
-        </BandBody>
-      </div>
+          <TextField
+            label="PIN code"
+            required
+            value={form.recipientPostalCode}
+            onChange={(e) =>
+              set('recipientPostalCode', e.target.value.replace(/\D/g, '').slice(0, 6))
+            }
+            inputMode="numeric"
+            inputClassName="sk-figure"
+          />
+        </div>
+      </OrdSection>
 
-      {/* Payment + physical */}
-      <div>
-        <SectionBand
-          index="03"
-          title="Payment &amp; parcel"
-          note="What the customer pays, and what it weighs."
-        />
-        <BandBody>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label="Payment mode" required>
-              <Select
-                value={form.paymentMode}
-                onChange={(e) => set('paymentMode', e.target.value as 'COD' | 'PREPAID')}
-              >
-                <option value="PREPAID">Prepaid</option>
-                <option value="COD">Cash on Delivery</option>
-              </Select>
-            </FormField>
-            <FormField label="Delivery fee charged to the customer (INR)">
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.deliveryFeeInr}
-                onChange={(e) => set('deliveryFeeInr', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Advance already paid (INR)">
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.advanceAmountInr}
-                onChange={(e) => set('advanceAmountInr', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Discount (INR)">
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.discountInr}
-                onChange={(e) => set('discountInr', e.target.value)}
-              />
-            </FormField>
+      <OrdSection
+        id="eo-payment"
+        title="Payment &amp; parcel"
+        note="What the customer pays, and what it weighs."
+      >
+        <div className="ord-stack ord-stack--tight">
+          <ChoiceCards
+            label="Payment mode"
+            required
+            columns={2}
+            value={form.paymentMode}
+            onChange={(v) => set('paymentMode', v as 'COD' | 'PREPAID')}
+            options={[
+              { value: 'PREPAID', title: 'Prepaid', icon: <CreditCard size={16} /> },
+              { value: 'COD', title: 'Cash on Delivery', icon: <Banknote size={16} /> },
+            ]}
+          />
+          <div className="ord-grid-2">
+            <TextField
+              label="Delivery fee charged to the customer (INR)"
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.deliveryFeeInr}
+              onChange={(e) => set('deliveryFeeInr', e.target.value)}
+              inputClassName="sk-figure"
+            />
+            <TextField
+              label="Advance already paid (INR)"
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.advanceAmountInr}
+              onChange={(e) => set('advanceAmountInr', e.target.value)}
+              inputClassName="sk-figure"
+            />
+            <TextField
+              label="Discount (INR)"
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.discountInr}
+              onChange={(e) => set('discountInr', e.target.value)}
+              inputClassName="sk-figure"
+            />
             {form.paymentMode === 'COD' && (
-              <FormField
+              <TextField
                 label="COD amount (INR)"
                 required
                 /*
@@ -707,17 +697,14 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                     ? `Items + delivery − advance − discount = ${inr.format(computedCollectable)}`
                     : undefined
                 }
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    type="number"
-                    min={0.01}
-                    step="0.01"
-                    value={form.codAmountInr}
-                    onChange={(e) => set('codAmountInr', e.target.value)}
-                    required
-                  />
-                  {Math.abs(computedCollectable - (Number(form.codAmountInr) || 0)) > 0.005 && (
+                type="number"
+                min={0.01}
+                step="0.01"
+                value={form.codAmountInr}
+                onChange={(e) => set('codAmountInr', e.target.value)}
+                inputClassName="sk-figure"
+                after={
+                  Math.abs(computedCollectable - (Number(form.codAmountInr) || 0)) > 0.005 ? (
                     <Button
                       type="button"
                       variant="ghost"
@@ -726,161 +713,161 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                     >
                       Use {inr.format(computedCollectable)}
                     </Button>
-                  )}
-                </div>
-              </FormField>
-            )}
-            <FormField label="Declared value (INR)">
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.declaredValueInr}
-                onChange={(e) => set('declaredValueInr', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Total weight (grams)">
-              <Input
-                type="number"
-                min={0}
-                value={form.totalWeightGrams}
-                onChange={(e) => set('totalWeightGrams', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Package type">
-              <Select
-                value={form.packageType}
-                onChange={(e) =>
-                  set('packageType', e.target.value as 'STANDARD' | 'FRAGILE' | 'DOCUMENT')
+                  ) : undefined
                 }
-              >
-                <option value="STANDARD">Standard</option>
-                <option value="FRAGILE">Fragile</option>
-                <option value="DOCUMENT">Document</option>
-              </Select>
-            </FormField>
-            <FormField label="Your reference">
-              <Input
-                value={form.sellerOrderRef}
-                maxLength={100}
-                placeholder="e.g. the number your shop gave it"
-                onChange={(e) => set('sellerOrderRef', e.target.value)}
               />
-            </FormField>
+            )}
+            <TextField
+              label="Declared value (INR)"
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.declaredValueInr}
+              onChange={(e) => set('declaredValueInr', e.target.value)}
+              inputClassName="sk-figure"
+            />
+            <TextField
+              label="Total weight (grams)"
+              type="number"
+              min={0}
+              value={form.totalWeightGrams}
+              onChange={(e) => set('totalWeightGrams', e.target.value)}
+              inputClassName="sk-figure"
+            />
+            <Select
+              label="Package type"
+              value={form.packageType}
+              onChange={(e) =>
+                set('packageType', e.target.value as 'STANDARD' | 'FRAGILE' | 'DOCUMENT')
+              }
+            >
+              <option value="STANDARD">Standard</option>
+              <option value="FRAGILE">Fragile</option>
+              <option value="DOCUMENT">Document</option>
+            </Select>
+            <TextField
+              label="Your reference"
+              value={form.sellerOrderRef}
+              maxLength={100}
+              placeholder="e.g. the number your shop gave it"
+              onChange={(e) => set('sellerOrderRef', e.target.value)}
+              inputClassName="sk-ident"
+            />
             {openStores.length > 1 && (
-              <FormField
+              <Select
                 label="Store"
                 hint="Which of your shopfronts this order belongs to. Your reference has to be unique within one shopfront, not across them."
+                value={form.storeId}
+                onChange={(e) => set('storeId', e.target.value)}
               >
-                <Select value={form.storeId} onChange={(e) => set('storeId', e.target.value)}>
-                  {openStores.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.name}
-                      {st.isDefault ? ' (default)' : ''}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
+                {openStores.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                    {st.isDefault ? ' (default)' : ''}
+                  </option>
+                ))}
+              </Select>
             )}
-            <FormField label="Urgent">
-              <label className="text-text-body flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.isUrgent}
-                  onChange={(e) => set('isUrgent', e.target.checked)}
-                />
-                Treat this order as urgent
-              </label>
-            </FormField>
+            <Checkbox
+              label="Treat this order as urgent"
+              checked={form.isUrgent}
+              onChange={(e) => set('isUrgent', e.target.checked)}
+            />
           </div>
-        </BandBody>
-      </div>
+        </div>
+      </OrdSection>
 
       {/* Notes — always editable */}
-      <div>
-        <SectionBand index="04" title="Notes" note="For us, never the customer." />
-        <BandBody>
-          <FormField label="Seller notes">
-            <Textarea
-              rows={3}
-              maxLength={2000}
-              value={form.sellerNotes}
-              onChange={(e) => set('sellerNotes', e.target.value)}
-              placeholder="Anything the call agent should know"
-            />
-          </FormField>
-        </BandBody>
-      </div>
+      <OrdSection id="eo-notes" title="Notes" note="For us, never the customer.">
+        <TextArea
+          label="Seller notes"
+          rows={3}
+          maxLength={2000}
+          value={form.sellerNotes}
+          onChange={(e) => set('sellerNotes', e.target.value)}
+          placeholder="Anything the call agent should know"
+        />
+      </OrdSection>
 
       {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-          {error}
-        </div>
+        <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
+          <span>{error}</span>
+        </Notice>
       )}
 
-      <div className="flex items-center justify-between gap-2 pt-2">
+      <div className="ord-bar">
         {isDraft ? (
-          confirmDiscard ? (
-            <div className="flex items-center gap-2">
-              <span className="text-critical text-xs">Discard this draft?</span>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                disabled={busy !== null}
-                onClick={() => void onDiscard()}
-              >
-                {busy === 'discard' ? 'Discarding…' : 'Yes, discard'}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirmDiscard(false)}
-              >
-                Keep
-              </Button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="md"
-              disabled={busy !== null}
-              onClick={() => setConfirmDiscard(true)}
-            >
-              Discard draft
-            </Button>
-          )
-        ) : (
-          <span />
-        )}
-        <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="ghost"
-            size="md"
+            icon={<Trash2 size={15} />}
+            disabled={busy !== null}
+            onClick={() => setConfirmDiscard(true)}
+          >
+            Discard draft
+          </Button>
+        ) : (
+          <span />
+        )}
+        <div className="ord-bar__actions">
+          <Button
+            type="button"
+            variant="ghost"
             disabled={busy !== null}
             onClick={() => router.push(`/orders/${orderId}`)}
           >
             Cancel
           </Button>
-          <Button type="submit" variant="secondary" size="md" disabled={busy !== null}>
-            {busy === 'save' ? 'Saving…' : 'Save changes'}
-          </Button>
+          <AsyncButton
+            type="submit"
+            variant="secondary"
+            icon={<Save size={15} />}
+            state={busy === 'save' ? 'busy' : undefined}
+            labels={{ idle: 'Save changes', busy: 'Saving…' }}
+            disabled={busy !== null}
+          />
           {isDraft && (
-            <Button
+            <AsyncButton
               type="button"
               variant="primary"
-              size="md"
+              icon={<Send size={15} />}
+              state={busy === 'submit' ? 'busy' : undefined}
+              labels={{ idle: 'Save + submit', busy: 'Submitting…' }}
               disabled={busy !== null}
-              onClick={() => void onSaveAndSubmit()}
-            >
-              {busy === 'submit' ? 'Submitting…' : 'Save + submit'}
-            </Button>
+              onClick={() => setConfirmSubmit(true)}
+            />
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmSubmit}
+        onOpenChange={setConfirmSubmit}
+        title="Save and submit for confirmation?"
+        entity={detail.data.orderNumber}
+        entityIsIdentifier
+        amount={
+          form.paymentMode === 'COD' && form.codAmountInr.trim() !== ''
+            ? `${inr.format(Number(form.codAmountInr))} to collect`
+            : form.paymentMode === 'COD'
+              ? undefined
+              : 'Prepaid'
+        }
+        consequence="Your changes are saved, then the order joins the call queue and the call centre phones this customer to confirm it."
+        confirmLabel="Save + submit"
+        onConfirm={() => onSaveAndSubmit()}
+      />
+      <ConfirmDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title="Discard this draft?"
+        entity={detail.data.orderNumber}
+        entityIsIdentifier
+        consequence="The draft is deleted and nothing is sent to the call centre. This cannot be undone."
+        confirmLabel="Yes, discard"
+        destructive
+        onConfirm={() => onDiscard()}
+      />
     </form>
   );
 }
