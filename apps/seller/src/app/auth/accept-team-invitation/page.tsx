@@ -2,8 +2,8 @@ import type { ReactElement } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { resolveSellerSsrIdentity } from '@skydrop/auth/server';
+import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { apiOrigin } from '@/lib/api-origin';
-import { TiltPanel } from '@/lib/tilt';
 import { AcceptTeamInvitationForm } from './_components/accept-team-invitation-form';
 
 /**
@@ -39,73 +39,37 @@ export default async function AcceptTeamInvitationPage({
     }
   }
 
+  const footer = (
+    <p>
+      Already have an account? <a href="/login">Sign in</a>
+    </p>
+  );
+
+  if (token === '') {
+    return (
+      <SignInCard
+        title="Invalid invitation link"
+        note={
+          <>
+            The link you used is missing the invitation token. Open the email and click the button
+            there, or paste the full URL including the <span className="font-mono">?token=…</span>{' '}
+            parameter.
+          </>
+        }
+        footer={footer}
+      >
+        {null}
+      </SignInCard>
+    );
+  }
+
   return (
-    <div className="w-full max-w-md">
-      <div className="boot-rise mb-6 text-center">
-        <div className="flex items-center justify-center gap-2.5">
-          {/* Decorative — the wordmark beside it already names the brand. */}
-          <img
-            src="/brand/skydrop-icon.svg"
-            alt=""
-            aria-hidden="true"
-            width={53}
-            height={26}
-            className="h-[26px] w-auto shrink-0 select-none"
-            draggable={false}
-          />
-          <span className="text-text-bright text-lg font-semibold tracking-tight">Skydrop</span>
-        </div>
-        <div className="telemetry text-text-muted mt-1.5">seller portal</div>
-      </div>
-
-      <TiltPanel max={3} className="boot-rise boot-rise-2">
-        <div className="border-border bg-surface ticks relative overflow-hidden rounded-[var(--radius-3)] border p-6 sm:p-7">
-          <div className="border-border mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b pb-3">
-            <span className="telemetry text-text-strong inline-flex items-center gap-2">
-              <span
-                aria-hidden
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${token === '' ? 'bg-critical' : 'bg-accent'}`}
-              />
-              enrolment
-            </span>
-            <span className="telemetry text-text-faint">
-              {token === '' ? 'link incomplete' : 'team access'}
-            </span>
-          </div>
-          {token === '' ? (
-            <>
-              <h1 className="text-text-bright mb-1 text-base font-semibold">
-                Invalid invitation link
-              </h1>
-              <p className="text-text-muted mb-4 text-xs leading-relaxed">
-                The link you used is missing the invitation token. Open the email and click the
-                button there, or paste the full URL including the{' '}
-                <span className="font-mono">?token=…</span> parameter.
-              </p>
-            </>
-          ) : (
-            <>
-              <h1 className="text-text-bright mb-1 text-base font-semibold">Join the team</h1>
-              <p className="text-text-muted mb-5 text-xs leading-relaxed">
-                Set your name and password to accept the invitation.
-              </p>
-              <AcceptTeamInvitationForm token={token} />
-            </>
-          )}
-          <div aria-hidden className="glow-follow" />
-        </div>
-      </TiltPanel>
-
-      <div className="boot-rise boot-rise-3 telemetry text-text-muted mt-5 text-center">
-        already have an account?{' '}
-        <a
-          href="/login"
-          className="hover:text-text-bright transition-colors"
-          style={{ color: 'var(--sky)' }}
-        >
-          sign in
-        </a>
-      </div>
-    </div>
+    <SignInCard
+      title="Join the team"
+      note="Set your name and password to accept the invitation."
+      footer={footer}
+    >
+      <AcceptTeamInvitationForm token={token} />
+    </SignInCard>
   );
 }

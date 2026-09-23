@@ -5,7 +5,10 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
-import { AppShell, MenuButton, StripFact, Toaster, type NavGroup } from '@skydrop/ui/components';
+import { MenuButton, StripFact, Toaster } from '@skydrop/ui/components';
+import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
+import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { ToastProvider } from '@skydrop/ui/app/toast';
 import { RestrictionBanner } from './restriction-banner';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { canSeePath } from '@/lib/page-access';
@@ -37,8 +40,11 @@ import { OrderOmnisearch } from './order-omnisearch';
 /**
  * The seller shell.
  *
- * Same AppShell as apps/admin (FE-5: the chrome is identity-
- * parameterized, not duplicated). What differs is the nav, the brand
+ * The brand `Shell` (apps restyle, Phase 3) with the same props the legacy
+ * AppShell took — nav, identity, header slots, status strip — plus the
+ * three-way theme switch (System / Light / Dark). Both toast providers are
+ * mounted while pages move across: a page still calling the legacy
+ * `useToast` and a rebuilt one calling the new one each find theirs. What differs is the nav, the brand
  * line, and which identity fields to surface — a seller sees their
  * company and their own email; staff see their email and role.
  *
@@ -202,25 +208,26 @@ export function AuthedShell({
 
   return (
     <Toaster>
-      <AppShell
-        subtitle="Seller"
-        sectionLabel="Seller portal"
-        navGroups={visibleGroups}
-        identityPrimary={identity.companyName}
-        identitySecondary={identity.emailDisplay}
-        // Reachable from EVERY page: the moment somebody needs an order
-        // is rarely the moment they are on the orders list. In its OWN
-        // slot so it does not squeeze the identity beside it.
-        headerCenter={<OrderOmnisearch />}
-        headerActions={<MenuButton label="Quick actions" items={quickActions} Link={Link} />}
-        // The bell, and ONLY the bell, survives below `lg`: it is the
-        // one control that says something needs you, and the inbox has
-        // no other route on a phone.
-        headerAlways={<NotificationBellContainer />}
-        drawerActions={
-          <MenuButton label="Quick actions" items={quickActions} Link={Link} placement="above" />
-        }
-        /*
+      <ToastProvider>
+        <Shell
+          subtitle="Seller"
+          sectionLabel="Seller portal"
+          navGroups={visibleGroups}
+          identityPrimary={identity.companyName}
+          identitySecondary={identity.emailDisplay}
+          // Reachable from EVERY page: the moment somebody needs an order
+          // is rarely the moment they are on the orders list. In its OWN
+          // slot so it does not squeeze the identity beside it.
+          headerCenter={<OrderOmnisearch />}
+          headerActions={<MenuButton label="Quick actions" items={quickActions} Link={Link} />}
+          // The bell, and ONLY the bell, survives below `lg`: it is the
+          // one control that says something needs you, and the inbox has
+          // no other route on a phone.
+          headerAlways={<NotificationBellContainer />}
+          drawerActions={
+            <MenuButton label="Quick actions" items={quickActions} Link={Link} placement="above" />
+          }
+          /*
           The bottom strip — STANDING FACTS about the ground this
           console is standing on, and nothing else.
 
@@ -238,52 +245,54 @@ export function AuthedShell({
           instrumentation, and an invented reading there is worse than
           an empty strip.
         */
-        statusStrip={
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <StripFact
-              label="Account"
-              value={identity.status === 'APPROVED' ? 'Active' : identity.status}
-              tone={identity.status === 'APPROVED' ? 'good' : 'warn'}
-            />
-            <StripFact label="Figures in" value={identity.displayCurrency} />
-            {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
+          statusStrip={
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <StripFact
-                label="Rate"
-                value={`₹1 = ৳${Number(identity.displayFxRate).toFixed(4)}`}
+                label="Account"
+                value={identity.status === 'APPROVED' ? 'Active' : identity.status}
+                tone={identity.status === 'APPROVED' ? 'good' : 'warn'}
               />
-            )}
-            {canSeeRequests && waitingCount > 0 && (
-              <StripFact
-                label="Waiting on you"
-                value={`${waitingCount} store ${waitingCount === 1 ? 'request' : 'requests'}`}
-                tone="warn"
-              />
-            )}
-          </div>
-        }
-        pathname={pathname}
-        Link={Link}
-        onSignOut={() => {
-          void handleLogout();
-        }}
-        signingOut={loggingOut}
-      >
-        {/* A hold changes what the whole portal will do, so it is said
+              <StripFact label="Figures in" value={identity.displayCurrency} />
+              {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
+                <StripFact
+                  label="Rate"
+                  value={`₹1 = ৳${Number(identity.displayFxRate).toFixed(4)}`}
+                />
+              )}
+              {canSeeRequests && waitingCount > 0 && (
+                <StripFact
+                  label="Waiting on you"
+                  value={`${waitingCount} store ${waitingCount === 1 ? 'request' : 'requests'}`}
+                  tone="warn"
+                />
+              )}
+            </div>
+          }
+          pathname={pathname}
+          Link={Link}
+          onSignOut={() => {
+            void handleLogout();
+          }}
+          signingOut={loggingOut}
+          themeControl={<ThemeSwitch />}
+        >
+          {/* A hold changes what the whole portal will do, so it is said
             on every page rather than discovered by a refusal. */}
-        <RestrictionBanner />
-        {/* Said ONCE, not on every figure. When the whole app is in
+          <RestrictionBanner />
+          {/* Said ONCE, not on every figure. When the whole app is in
             taka, marking each amount as converted is noise; what a
             reader needs is to know the ground they are standing on and
             the rate it was worked out at. */}
-        {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
-          <p className="text-text-muted border-border bg-surface-raised mb-4 rounded-lg border px-3 py-2 text-xs">
-            Amounts are shown in taka, converted from rupees at ₹1 = ৳
-            {Number(identity.displayFxRate).toFixed(2)}. Your account is kept in rupees — withdrawal
-            requests are made in rupees.
-          </p>
-        )}
-        {children}
-      </AppShell>
+          {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
+            <p className="text-text-muted border-border bg-surface-raised mb-4 rounded-lg border px-3 py-2 text-xs">
+              Amounts are shown in taka, converted from rupees at ₹1 = ৳
+              {Number(identity.displayFxRate).toFixed(2)}. Your account is kept in rupees —
+              withdrawal requests are made in rupees.
+            </p>
+          )}
+          {children}
+        </Shell>
+      </ToastProvider>
     </Toaster>
   );
 }

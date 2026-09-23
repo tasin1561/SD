@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { pinnedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
+import { motionInitScript } from '@skydrop/ui/app/motion-init';
 import localFont from 'next/font/local';
 import './globals.css';
 
 /**
- * Root layout — applies the design tokens + IBM Plex typography to every
- * page. Same shape as apps/admin (FE-6 token system shared from
- * @skydrop/ui; per-app shell deferred until the (authed) layout).
- * Dark is the default; the ThemeToggle in the app shell pins
+ * Root layout — the brand skin and Plus Jakarta Sans on every page (apps
+ * restyle, Phase 3). The theme follows the OS until somebody pins one;
+ * the theme switch in the shell pins
  * [data-theme] on <html> and stores the choice in localStorage AND the
  * `sd-theme` cookie, which this layout renders from (see below).
  */
@@ -29,26 +29,13 @@ import './globals.css';
  * carried and is otherwise lost when self-hosting.
  */
 /*
- * PRECISION LOGISTICS uses IBM Plex Sans and JetBrains Mono (the comps'
- * `typography.fontFamily`, every block). Both are the LATIN SUBSET of
- * the same VARIABLE faces Google serves — one file each covering 400–700
- * — fetched once and committed here, 77KB for the pair. Nothing is
- * downloaded at build time and nothing is fetched at runtime.
- *
- * `unicode-range` is the CDN's own, for the reason above: self-hosting
- * silently drops it, and without it the browser will pull a face down
- * for text it cannot render. It differs from Geist's by one codepoint
- * (no U+2074), which is what the latin subset actually covers.
- *
- * The MONO face is load-bearing here rather than incidental. In this
- * design every identifier and every figure is set in it — waybills,
- * order numbers, SKUs, amounts, timestamps, column captions — because a
- * column of proportional digits does not line up and a waybill in a
- * humanist sans is a waybill somebody misreads down a phone.
+ * Plus Jakarta Sans everywhere (the brand face, as on the marketing site and
+ * the tracking page); JetBrains Mono ONLY for identifiers — AWB, order ID,
+ * SKU, serial — and not preloaded. Figures are tabular Plus Jakarta.
  */
-const plexSans = localFont({
-  src: './fonts/ibm-plex-sans-latin.woff2',
-  variable: '--font-plex-sans',
+const sans = localFont({
+  src: './fonts/plus-jakarta-sans-latin.woff2',
+  variable: '--font-sans-face',
   display: 'swap',
   declarations: [
     {
@@ -59,10 +46,12 @@ const plexSans = localFont({
   ],
 });
 
-const jetbrainsMono = localFont({
+// Mono is for identifiers only (AWB, order ID, SKU, serial): not preloaded.
+const mono = localFont({
   src: './fonts/jetbrains-mono-latin.woff2',
-  variable: '--font-jetbrains-mono',
+  variable: '--font-mono-face',
   display: 'swap',
+  preload: false,
   declarations: [
     {
       prop: 'unicode-range',
@@ -100,7 +89,7 @@ export default async function RootLayout({
       lang="en"
       suppressHydrationWarning
       data-theme={theme}
-      className={`${plexSans.variable} ${jetbrainsMono.variable}`}
+      className={`${sans.variable} ${mono.variable}`}
     >
       <head>
         {/* `suppressHydrationWarning` on the SCRIPT, not just on
@@ -113,6 +102,13 @@ export default async function RootLayout({
           nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
+        {/* The per-user "Motion: reduced" preference (localStorage only),
+            applied before first paint like the theme. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: motionInitScript }}
         />
       </head>
       <body>{children}</body>

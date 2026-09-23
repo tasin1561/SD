@@ -1,15 +1,18 @@
 import type { ReactNode, ReactElement } from 'react';
-import { AuthConsoleShell } from '@/components/auth-console/console-shell';
+import { SignInFrame } from '@skydrop/ui/app/sign-in';
+import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 
 /**
- * Login layout — bare, no AuthProvider. If a SSR-authenticated seller
- * lands here, the login page itself redirects them onward; we don't gate
- * access. The (authed) layout is the gate.
- *
- * The backdrop now lives in `AuthConsoleShell`, shared with everything
- * under /auth and /password-reset — see the note there for why those
- * pages had no skin at all until this was extracted.
+ * The sign-in screen's frame — the ONE shared SignInFrame (apps restyle):
+ * backdrop map, the Skydrop mark and "seller portal", and the theme switch
+ * (every unauthenticated route funnels through one of these layouts, so a
+ * signed-out visitor can always change the theme). The page renders its
+ * SignInCard inside.
  */
 export default function LoginLayout({ children }: { children: ReactNode }): ReactElement {
-  return <AuthConsoleShell>{children}</AuthConsoleShell>;
+  return (
+    <SignInFrame portal="seller portal" themeControl={<ThemeSwitch />}>
+      {children}
+    </SignInFrame>
+  );
 }

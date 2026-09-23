@@ -164,6 +164,13 @@
   --color-accent-tint: var(--accent-tint);
   --color-accent-ring: var(--focus-ring);
   --color-critical: var(--red-text);
+  /* Read by legacy components but declared nowhere before the restyle (a
+     silent fallback to the inherited colour): given real values here. */
+  --color-bad: var(--red-text);
+  --color-success: var(--green-text);
+  --color-success-tint: var(--green-tint);
+  --color-warning-tint: var(--saffron-tint);
+  --color-warning-ring: var(--saffron-line);
   --color-critical-tint: var(--red-tint);
   --color-critical-ring: var(--red-line);
   --color-credit: var(--money-credit);

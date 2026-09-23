@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
+import { ButtonLink } from '@skydrop/ui/app/button';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -53,12 +54,9 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
         <div className="rounded-[var(--radius-2)] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
           Email verified. Nothing else to do here.
         </div>
-        <a
-          href="/dashboard"
-          className="block text-center w-full px-3 py-1.5 rounded-[var(--radius-2)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors"
-        >
+        <ButtonLink href="/dashboard" variant="primary" fullWidth>
           Go to your dashboard
-        </a>
+        </ButtonLink>
       </div>
     );
   }
@@ -72,12 +70,9 @@ export function VerifyEmailPanel({ token }: { readonly token: string }): ReactEl
         Verification links are single-use and expire. If this one was already used or has aged out,
         sign in and request a new one.
       </p>
-      <a
-        href="/login"
-        className="block text-center w-full px-3 py-1.5 rounded-[var(--radius-2)] border border-border text-text-body text-sm hover:border-border-strong transition-colors"
-      >
+      <ButtonLink href="/login" variant="secondary" fullWidth>
         Sign in
-      </a>
+      </ButtonLink>
     </div>
   );
 }

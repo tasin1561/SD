@@ -1,33 +1,23 @@
 /*
- * apps/seller global stylesheet — mirrors apps/admin (FE-6).
+ * apps/seller global stylesheet — the brand skin (apps restyle, Phase 3).
  *
  * Layer order:
- *   1. @skydrop/ui tokens.css — every CSS variable (color, type,
- *      spacing, radii) lives here. Dark theme primary; light theme
- *      under [data-theme='light'].
- *   2. Tailwind v4 — utilities layered on top, configured to use
- *      our tokens via @theme.
- *   3. A small set of base resets / element styles.
+ *   1. the brand: raw scales + the four-block marketing theme (byte copies,
+ *      CI-checked) + the app layer (scales, status roles, the legacy alias
+ *      layer, base rules, reduced motion) from @skydrop/ui;
+ *   2. legacy.css — ONLY while screens still render the legacy
+ *      `@skydrop/ui/components`; delete the import when the last one goes;
+ *   3. Tailwind v4 — utilities mapped to the (aliased) tokens via @theme;
+ *   4. a small set of base resets.
  *
- * The token .css import is side-effectful (declared in the
- * @skydrop/ui package.json sideEffects). It's the ONLY route to
- * body-color etc. Apps NEVER hardcode hex.
+ * The PRECISION LOGISTICS seller palette (`seller-theme.css`) is retired:
+ * seller now wears the same brand as every other app.
  */
 
-@import '@skydrop/ui/tokens.css';
-/*
- * PRECISION LOGISTICS — apps/seller's own skin, and the reason
- * apps/admin can keep the palette it has.
- *
- * Loaded AFTER tokens.css on purpose: it redefines the same variables,
- * at the same specificity, so the cascade resolves in its favour. That
- * ordering IS the mechanism — see the header of the file itself.
- *
- * apps/admin's globals.css does NOT contain this line, which is what
- * makes "admin is unchanged" a property of the build rather than a
- * promise. `seller-theme-scope.test.ts` reads both files and pins it.
- */
-@import '@skydrop/ui/seller-theme.css';
+@import '@skydrop/ui/brand/scales.css';
+@import '@skydrop/ui/brand/theme.css';
+@import '@skydrop/ui/brand/app.css';
+@import '@skydrop/ui/brand/legacy.css';
 @import 'tailwindcss';
 
 /*

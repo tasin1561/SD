@@ -2,8 +2,8 @@ import type { ReactElement } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { resolveSellerSsrIdentity } from '@skydrop/auth/server';
+import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { apiOrigin } from '@/lib/api-origin';
-import { TiltPanel } from '@/lib/tilt';
 import { LoginForm } from './_components/login-form';
 
 /**
@@ -11,13 +11,10 @@ import { LoginForm } from './_components/login-form';
  * cookie, skip the form and redirect to the dashboard — saves a
  * roundtrip for already-authed sellers who bookmarked /login.
  *
- * ── The panel head is the console's SECTION BAND, in the login idiom ──
- * Inside the app a region is capped by `NN // NAME` with a quiet note
- * to its right. Here there is one region and no reading order to
- * number, so it is the accent dot, the name, and the note — the same
- * three parts, the same mono caps, no invented ordinal. Every page
- * under /auth wears it, which is what stops the front door reading as
- * a different product from the console behind it.
+ * The brand line ("Skydrop" + "seller portal"), the backdrop and the
+ * theme switch belong to the layout's `SignInFrame`; this page renders
+ * only its card. It must NOT repeat the wordmark — the login spec
+ * requires "Skydrop" exactly once on the page.
  */
 export default async function LoginPage(): Promise<ReactElement> {
   const jar = await cookies();
@@ -34,88 +31,38 @@ export default async function LoginPage(): Promise<ReactElement> {
   }
 
   return (
-    <>
-      <div className="boot-rise mb-6 text-center">
-        <div className="flex items-center justify-center gap-3">
-          {/* Decorative — the wordmark beside it already names the brand. */}
-          <img
-            src="/brand/skydrop-icon.svg"
-            alt=""
-            aria-hidden="true"
-            width={74}
-            height={36}
-            className="h-9 w-auto shrink-0 select-none"
-            draggable={false}
-          />
-          <span className="text-text-bright text-2xl font-semibold tracking-tight">Skydrop</span>
-          <span className="telemetry text-text-muted inline-flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className="status-dot inline-block h-1 w-1 rounded-full"
-              style={{ background: 'var(--green)' }}
-            />
-            sys online
-          </span>
-        </div>
-        <div className="telemetry text-text-muted mt-2">seller portal</div>
-      </div>
-
-      <TiltPanel max={3} className="boot-rise boot-rise-2">
-        <div className="border-border bg-surface ticks relative overflow-hidden rounded-[var(--radius-3)] border p-6 sm:p-7">
-          <div className="border-border mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b pb-3">
-            <span className="telemetry text-text-strong inline-flex items-center gap-2">
-              <span aria-hidden className="bg-accent h-1.5 w-1.5 shrink-0 rounded-full" />
-              access
-            </span>
-            <span className="telemetry text-text-faint">invite-only</span>
-          </div>
-          <h1 className="text-text-bright mb-1 text-lg font-semibold">Sign in</h1>
-          <p className="text-text-muted mb-6 text-sm">
-            Use the credentials from your Skydrop invitation.
+    <SignInCard
+      title="Sign in"
+      note="Use the credentials from your Skydrop invitation."
+      footer={
+        <>
+          <p>
+            Forgot your password? <a href="/password-reset">Reset it</a>
           </p>
-          <LoginForm />
-          <div aria-hidden className="glow-follow" />
-        </div>
-      </TiltPanel>
-
-      <div className="boot-rise boot-rise-3 telemetry text-text-muted mt-5 text-center">
-        forgot password?{' '}
-        <a
-          href="/password-reset"
-          className="hover:text-text-bright transition-colors"
-          style={{ color: 'var(--sky)' }}
-        >
-          reset
-        </a>
-      </div>
-
-      {/*
-       * The way OUT to the store portal.
-       *
-       * The two portals look near-identical now that both wear the
-       * corridor console, and the only thing telling them apart is the
-       * hostname — so somebody who bookmarked the wrong one, or was
-       * forwarded a colleague's link, meets a form that will never
-       * accept them and says "invalid credentials", which is true and
-       * useless. A store user is not a seller and never will be here.
-       *
-       * SAME TAB, no `target="_blank"`: they are going there to sign
-       * in, not to consult something, and a new tab would leave a dead
-       * login behind them. (`rel="noopener"` does nothing without a
-       * target, so it is not cargo-culted in.) Both /login pages bounce
-       * an already-authenticated visitor to their own dashboard, so
-       * this is safe in either direction and needs no query string.
-       */}
-      <div className="boot-rise boot-rise-3 telemetry text-text-faint mt-2 text-center">
-        run a store?{' '}
-        <a
-          href="https://reseller.skydrop.online/login"
-          className="hover:text-text-bright transition-colors"
-          style={{ color: 'var(--sky)' }}
-        >
-          store sign-in
-        </a>
-      </div>
-    </>
+          {/*
+           * The way OUT to the store portal.
+           *
+           * The two portals look near-identical, and the only thing
+           * telling them apart is the hostname — so somebody who
+           * bookmarked the wrong one, or was forwarded a colleague's
+           * link, meets a form that will never accept them and says
+           * "invalid credentials", which is true and useless. A store
+           * user is not a seller and never will be here.
+           *
+           * SAME TAB, no `target="_blank"`: they are going there to sign
+           * in, not to consult something, and a new tab would leave a dead
+           * login behind them. (`rel="noopener"` does nothing without a
+           * target, so it is not cargo-culted in.) Both /login pages bounce
+           * an already-authenticated visitor to their own dashboard, so
+           * this is safe in either direction and needs no query string.
+           */}
+          <p>
+            Run a store? <a href="https://reseller.skydrop.online/login">Store sign-in</a>
+          </p>
+        </>
+      }
+    >
+      <LoginForm />
+    </SignInCard>
   );
 }

@@ -142,6 +142,10 @@ function NavList({
   const baseId = useId();
   const listRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // The group a person has just OPENED — the only time its rows animate in.
+  // Never on mount: the nav re-mounts on every page, and chrome that
+  // replays an entrance on each navigation reads as flicker.
+  const [justOpened, setJustOpened] = useState<string | null>(null);
   const handleNavigate = onNavigate ?? ((): void => undefined);
 
   // Stored choices load after mount (storage is browser-only).
@@ -230,13 +234,19 @@ function NavList({
                   const next = open;
                   setCollapsed((prev) => ({ ...prev, [heading]: next }));
                   writeCollapsed(heading, next);
+                  setJustOpened(next ? null : heading);
                 }}
               >
                 <span className="sk-nav__heading-text">{heading}</span>
                 <ChevronDown size={14} className="sk-nav__heading-chev" aria-hidden />
               </button>
             )}
-            <div id={regionId} className="sk-nav__items" hidden={!open}>
+            <div
+              id={regionId}
+              className="sk-nav__items"
+              hidden={!open}
+              data-opened={heading !== undefined && heading === justOpened ? '1' : undefined}
+            >
               {group.items.map((item) => {
                 const active = item.href === activeHref;
                 const style = { '--i': rowIndex } as CSSProperties;
