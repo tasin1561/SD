@@ -2,33 +2,20 @@
 
 import Link from 'next/link';
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react';
-import { Pause, Store, UserCheck, Users } from 'lucide-react';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  EmptyState,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  MetaChip,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  ResellerStoreStatusBadge,
-  SectionBand,
-  Select,
-  Stat,
-  StripFact,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Pause, Plus, Store, UserCheck, Users } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
+import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCreateResellerStore,
@@ -36,6 +23,16 @@ import {
   type ResellerStoreView,
   type WalletManager,
 } from '@/lib/reseller-store-hooks';
+import {
+  RsError,
+  RsFact,
+  RsFacts,
+  RsLink,
+  RsSection,
+  RsStrip,
+  RsStripFact,
+  pendingPhase,
+} from './_components/rs-parts';
 
 function day(iso: string): string {
   return new Date(iso).toLocaleDateString('en-IN', { dateStyle: 'medium' });
@@ -72,29 +69,30 @@ export default function ResellerStoresPage(): ReactElement {
 
   const header = (
     <PageHeader
-      breadcrumb={
-        <Crumbs
-          items={[{ label: 'Seller console' }, { label: 'Reselling' }, { label: 'Stores' }]}
-          Link={Link}
-        />
-      }
+      breadcrumbs={[{ label: 'Seller console' }, { label: 'Reselling' }, { label: 'Stores' }]}
+      Link={Link}
       title="Reseller stores"
       subtitle="Other businesses that sell your stock under their own name, with their own login."
       meta={
         !loaded ? undefined : (
-          <>
-            <MetaChip tone={active > 0 ? 'good' : 'neutral'}>{active} active</MetaChip>
+          <RsFacts>
+            <RsFact tone={active > 0 ? 'good' : undefined}>{active} active</RsFact>
             {pending.length > 0 && (
-              <MetaChip tone="warn" dot>
+              <RsFact tone="warn" dot>
                 {pending.length} waiting for your approval
-              </MetaChip>
+              </RsFact>
             )}
-            {paused > 0 && <MetaChip>{paused} paused</MetaChip>}
-          </>
+            {paused > 0 && <RsFact>{paused} paused</RsFact>}
+          </RsFacts>
         )
       }
       action={
-        <Button variant="primary" size="md" onClick={() => setCreating(true)}>
+        <Button
+          variant="primary"
+          size="md"
+          icon={<Plus size={15} />}
+          onClick={() => setCreating(true)}
+        >
           Open a reseller store
         </Button>
       }
@@ -103,15 +101,20 @@ export default function ResellerStoresPage(): ReactElement {
 
   if (stores.isPending) {
     return (
-      <div>
+      <div className="rs-page">
         {header}
-        <LoadingState label="Loading reseller stores" rows={4} />
+        <div className="rs-kpis">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="rs-kpi-skel" height={104} rounded="md" />
+          ))}
+        </div>
+        <SkeletonRows rows={4} cols={6} label="Loading reseller stores" />
       </div>
     );
   }
   if (stores.isError) {
     return (
-      <div>
+      <div className="rs-page">
         {header}
         <ErrorState message={serverVerdict(stores.error)} retry={() => void stores.refetch()} />
       </div>
@@ -119,45 +122,46 @@ export default function ResellerStoresPage(): ReactElement {
   }
 
   return (
-    <div>
+    <div className="rs-page">
       {header}
 
       {/* ── Who is selling for you ──────────────────────────────────
-             Four tiles, every one counted off the list below. Nothing
-             here is money: what a store EARNED you needs a window, and
-             that lives on the reports page. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
+             Four cards, every one counted off the list below (plain
+             counts, so each rolls up once). Nothing here is money: what a
+             store EARNED you needs a window, and that lives on the
+             reports page. */}
+      <div className="rs-kpis">
+        <KpiCard
           label="Stores"
-          icon={<Store size={13} aria-hidden />}
+          icon={<Store size={14} />}
           value={all.length}
           unit={all.length === 1 ? 'store' : 'stores'}
           tone="neutral"
           hint="Every store on your account, whatever its state."
         />
-        <Stat
+        <KpiCard
           label="Selling now"
-          icon={<UserCheck size={13} aria-hidden />}
+          icon={<UserCheck size={14} />}
           value={active}
           unit="active"
-          tone={active > 0 ? 'good' : 'neutral'}
+          tone={active > 0 ? 'credit' : 'neutral'}
           hint="Taking orders against your stock."
         />
-        <Stat
+        <KpiCard
           label="Waiting for you"
-          icon={<Pause size={13} aria-hidden />}
+          icon={<Pause size={14} />}
           value={pending.length}
           unit={pending.length === 1 ? 'store' : 'stores'}
-          tone={pending.length > 0 ? 'warn' : 'neutral'}
+          tone={pending.length > 0 ? 'pending' : 'neutral'}
           hint={
             pending.length > 0
               ? 'Skydrop opened these. Nothing is live until you decide.'
               : 'Nothing needs approving.'
           }
         />
-        <Stat
+        <KpiCard
           label="People with a login"
-          icon={<Users size={13} aria-hidden />}
+          icon={<Users size={14} />}
           value={people}
           unit={people === 1 ? 'person' : 'people'}
           tone="neutral"
@@ -166,58 +170,52 @@ export default function ResellerStoresPage(): ReactElement {
       </div>
 
       {pending.length > 0 ? (
-        <>
-          <SectionBand
-            index="01"
-            title="Waiting for your approval"
-            note="Skydrop opened these for you. Nothing about them is live until you decide."
-          />
-          <BandBody flush className="mb-4">
-            <StoreTable stores={pending} />
-          </BandBody>
-        </>
+        <RsSection
+          title="Waiting for your approval"
+          note="Skydrop opened these for you. Nothing about them is live until you decide."
+          flush
+        >
+          <StoreTable stores={pending} caption="Stores waiting for your approval" />
+        </RsSection>
       ) : null}
 
-      <SectionBand
-        index={pending.length > 0 ? '02' : '01'}
+      <RsSection
         title="Your reseller stores"
         note={`${rest.length} ${rest.length === 1 ? 'store' : 'stores'}`}
-        action={
-          <Link
-            href="/reseller-stores/reports"
-            className="text-accent hover:text-text-bright text-xs transition-colors"
-          >
-            Reports →
-          </Link>
-        }
-      />
-      <BandBody flush>
+        action={<RsLink href="/reseller-stores/reports">Reports</RsLink>}
+        flush
+      >
         {rest.length === 0 ? (
           <EmptyState
             bare
             title="No reseller stores yet"
             description="Open one for a business that will resell your stock, and invite its first user."
             action={
-              <Button variant="primary" size="md" onClick={() => setCreating(true)}>
+              <Button
+                variant="primary"
+                size="md"
+                icon={<Plus size={15} />}
+                onClick={() => setCreating(true)}
+              >
                 Open a reseller store
               </Button>
             }
           />
         ) : (
-          <StoreTable stores={rest} />
+          <StoreTable stores={rest} caption="Your reseller stores" />
         )}
-      </BandBody>
+      </RsSection>
 
       {all.length > 0 && (
-        <div className="text-text-faint border-border mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3 font-mono text-[11px]">
-          <StripFact label="Active" value={active} tone={active > 0 ? 'good' : 'neutral'} />
-          <StripFact
+        <RsStrip>
+          <RsStripFact label="Active" value={active} tone={active > 0 ? 'good' : 'neutral'} />
+          <RsStripFact
             label="Waiting on you"
             value={pending.length}
             tone={pending.length > 0 ? 'warn' : 'neutral'}
           />
-          <StripFact label="Team" value={`${people} people`} />
-        </div>
+          <RsStripFact label="Team" value={`${people} people`} />
+        </RsStrip>
       )}
 
       <CreateModal open={creating} onOpenChange={setCreating} />
@@ -225,9 +223,15 @@ export default function ResellerStoresPage(): ReactElement {
   );
 }
 
-function StoreTable({ stores }: { stores: readonly ResellerStoreView[] }): ReactElement {
+function StoreTable({
+  stores,
+  caption,
+}: {
+  stores: readonly ResellerStoreView[];
+  caption: string;
+}): ReactElement {
   return (
-    <Table>
+    <Table caption={caption}>
       <THead>
         <Tr>
           <Th>Store</Th>
@@ -242,31 +246,26 @@ function StoreTable({ stores }: { stores: readonly ResellerStoreView[] }): React
         {stores.map((s) => (
           <Tr key={s.id}>
             <Td>
-              <Link
-                href={`/reseller-stores/${s.id}`}
-                className="text-text-bright font-medium hover:underline"
-              >
+              <Link href={`/reseller-stores/${s.id}`} className="rs-name-link">
                 {s.name}
               </Link>
               {s.displayName !== null ? (
-                <span className="text-text-faint mt-0.5 block truncate text-xs">
-                  Customers see {s.displayName}
-                </span>
+                <span className="rs-faint rs-block">Customers see {s.displayName}</span>
               ) : null}
             </Td>
             <Td>
-              <ResellerStoreStatusBadge status={s.status} />
+              <StatusChip
+                kind={resellerStoreStatusKind(s.status)}
+                label={resellerStoreStatusLabel(s.status)}
+                size="sm"
+              />
             </Td>
-            <Td className="text-text-muted text-xs">{s.origin === 'ADMIN' ? 'Skydrop' : 'You'}</Td>
-            <Td className="text-text-muted text-xs">
-              {s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'You'}
-            </Td>
-            <Td align="right" className="font-mono text-xs">
+            <Td className="rs-small">{s.origin === 'ADMIN' ? 'Skydrop' : 'You'}</Td>
+            <Td className="rs-small">{s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'You'}</Td>
+            <Td align="right" className="sk-figure">
               {s.memberCount}
             </Td>
-            <Td className="text-text-muted font-mono text-xs whitespace-nowrap">
-              {day(s.createdAt)}
-            </Td>
+            <Td className="rs-when sk-figure">{day(s.createdAt)}</Td>
           </Tr>
         ))}
       </TBody>
@@ -326,111 +325,103 @@ function CreateModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={onOpenChange}
       title="Open a reseller store"
       description="It is active as soon as you create it."
+      icon={<Store size={18} />}
       size="lg"
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <AsyncButton
+            type="submit"
+            form="rs-create-form"
+            variant="primary"
+            size="md"
+            state={pendingPhase(create.isPending)}
+            labels={{ idle: 'Open the store', busy: 'Opening…' }}
+          />
+        </DialogFooter>
+      }
     >
-      <form onSubmit={submit} className="space-y-4">
-        <FormField label="Store name" htmlFor="rs-name" hint="Unique among your stores." required>
-          <Input
-            id="rs-name"
-            required
-            maxLength={80}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </FormField>
-        <FormField
-          label="Name customers see"
-          htmlFor="rs-display"
-          hint="Leave empty to use the store name."
-        >
-          <Input
-            id="rs-display"
-            maxLength={80}
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-        </FormField>
-        <FormField label="Contact email" htmlFor="rs-email" required>
-          <Input
-            id="rs-email"
-            type="email"
-            required
-            value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
-          />
-        </FormField>
-        <FormField
-          label="Contact phone"
-          htmlFor="rs-phone"
-          hint="With the country code, e.g. +919812345678."
+      {/* The submit sits in the pinned footer, tied to this form by its
+          `form` attribute, so Enter in any field still submits and the
+          browser's own checks (the `required` fields) still run. */}
+      <form id="rs-create-form" onSubmit={submit} className="rs-form">
+        <TextField
+          id="rs-name"
+          label="Store name"
+          hint="Unique among your stores."
           required
+          maxLength={80}
+          showCount
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <TextField
+          id="rs-display"
+          label="Name customers see"
+          hint="Leave empty to use the store name."
+          maxLength={80}
+          showCount
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+        />
+        <TextField
+          id="rs-email"
+          label="Contact email"
+          type="email"
+          required
+          value={contactEmail}
+          onChange={(e) => setContactEmail(e.target.value)}
+        />
+        <TextField
+          id="rs-phone"
+          label="Contact phone"
+          hint="With the country code, e.g. +919812345678."
+          type="tel"
+          required
+          value={contactPhone}
+          onChange={(e) => setContactPhone(e.target.value)}
+        />
+        <Select
+          id="rs-wallet"
+          label="Who manages the store’s wallet"
+          value={walletManagedBy}
+          onChange={(e) => setWalletManagedBy(e.target.value as WalletManager)}
         >
-          <Input
-            id="rs-phone"
-            type="tel"
-            required
-            value={contactPhone}
-            onChange={(e) => setContactPhone(e.target.value)}
-          />
-        </FormField>
-        <FormField label="Who manages the store’s wallet" htmlFor="rs-wallet">
-          <Select
-            id="rs-wallet"
-            value={walletManagedBy}
-            onChange={(e) => setWalletManagedBy(e.target.value as WalletManager)}
-          >
-            <option value="SELLER">You — you top it up and pay it yourself</option>
-            <option value="SKYDROP">Skydrop — the store tops up and withdraws through us</option>
-          </Select>
-        </FormField>
-        <fieldset className="border-border space-y-3 rounded-[var(--radius-3)] border p-3">
-          <legend className="px-1 text-sm font-medium">Invite its first user</legend>
-          <p className="text-text-muted px-1 text-xs">
+          <option value="SELLER">You — you top it up and pay it yourself</option>
+          <option value="SKYDROP">Skydrop — the store tops up and withdraws through us</option>
+        </Select>
+        <fieldset className="rs-fieldset">
+          <legend>Invite its first user</legend>
+          <p className="rs-muted">
             A store opens with somebody able to sign in to it. They get the invitation by email and
             become the store’s owner.
           </p>
-          <FormField label="Their email" htmlFor="rs-invite-email" required>
-            <Input
-              id="rs-invite-email"
-              type="email"
-              required
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-            />
-          </FormField>
-          <FormField
+          <TextField
+            id="rs-invite-email"
+            label="Their email"
+            type="email"
+            required
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+          />
+          <TextField
+            id="rs-invite-name"
             label="Their name"
-            htmlFor="rs-invite-name"
             hint="They become the store’s owner."
             required
-          >
-            <Input
-              id="rs-invite-name"
-              required
-              value={inviteName}
-              onChange={(e) => setInviteName(e.target.value)}
-            />
-          </FormField>
+            value={inviteName}
+            onChange={(e) => setInviteName(e.target.value)}
+          />
         </fieldset>
-        {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
-        ) : null}
-        <ModalFooter>
-          <Button type="button" variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" size="md" disabled={create.isPending}>
-            {create.isPending ? 'Opening…' : 'Open the store'}
-          </Button>
-        </ModalFooter>
+        {error !== null ? <RsError>{error}</RsError> : null}
       </form>
-    </Modal>
+    </Dialog>
   );
 }

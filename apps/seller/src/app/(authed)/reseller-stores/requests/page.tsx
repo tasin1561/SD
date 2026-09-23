@@ -2,32 +2,19 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import { MapPin, MessageSquareWarning, Truck } from 'lucide-react';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  EmptyState,
-  ErrorState,
-  FormField,
-  LoadingState,
-  MetaChip,
-  Modal,
-  ModalFooter,
-  OrderStatusBadge,
-  PageHeader,
-  SectionBand,
-  Stat,
-  StripFact,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Textarea,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Check, MapPin, MessageSquareWarning, Truck, X } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
+import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useDecideStoreAction,
@@ -41,6 +28,16 @@ import {
   type StoreAddressChangeRow,
   type StoreOrderRequestRow,
 } from '@/lib/reseller-store-hooks';
+import {
+  RsError,
+  RsFact,
+  RsFacts,
+  RsLink,
+  RsSection,
+  RsStrip,
+  RsStripFact,
+  pendingPhase,
+} from '../_components/rs-parts';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -54,6 +51,19 @@ const ASKED_FOR: Record<StoreActionRequestRow['action'], string> = {
 };
 
 /**
+ * What approving a delivery ask DOES, per ask — the same words the
+ * store's "What they can do" screen uses for a direct action. Approving
+ * runs exactly that, so the confirmation says it before it happens.
+ */
+const APPROVE_DOES: Record<StoreActionRequestRow['action'], string> = {
+  RECALL:
+    'Approving runs it now: the call is queued with our call centre. The store is told either way.',
+  REATTEMPT:
+    'Approving runs it now: a ticket opens and Skydrop admin passes the request to the courier. The store is told either way.',
+  RTO: 'Approving runs it now: the courier is asked to return the parcel. The store is told either way.',
+};
+
+/**
  * 2026-09-16 — the one queue for everything your reseller stores are
  * waiting on: what they have asked to DO to a parcel, and what they have
  * asked to CHANGE on one.
@@ -62,7 +72,9 @@ const ASKED_FOR: Record<StoreActionRequestRow['action'], string> = {
  * you let through have already run. Nothing happens on any of them until
  * you answer, and the store has a customer waiting for that answer —
  * which is why a rejection needs a reason and the store is told either
- * way.
+ * way. Approving now asks first too (owner's decision), restating the
+ * store, the order and what approving will do; only the confirmation
+ * sends the SAME request as before.
  *
  * ── WHAT THE CONSOLE COMPS SHOW THAT IS NOT HERE ────────────────────
  *   TIME LEFT BEFORE IT EXPIRES   a request does close itself after
@@ -75,9 +87,9 @@ const ASKED_FOR: Record<StoreActionRequestRow['action'], string> = {
  *       nowhere else.
  */
 export default function StoreRequestsPage(): ReactElement {
-  // Asked here only to decide whether BOTH queues are empty; the two
-  // sections ask again and read the same cache entry, so this costs no
-  // extra request.
+  // Asked here only to decide whether ALL queues are empty; the sections
+  // ask again and read the same cache entry, so this costs no extra
+  // request.
   const requests = useStoreActionRequests();
   const addresses = useStoreAddressChanges();
   const orderRequests = useStoreOrderRequests();
@@ -91,76 +103,81 @@ export default function StoreRequestsPage(): ReactElement {
 
   const header = (
     <PageHeader
-      breadcrumb={
-        <Crumbs
-          items={[{ label: 'Seller console' }, { label: 'Reselling' }, { label: 'Waiting on you' }]}
-          Link={Link}
-        />
-      }
+      breadcrumbs={[
+        { label: 'Seller console' },
+        { label: 'Reselling' },
+        { label: 'Waiting on you' },
+      ]}
+      Link={Link}
       title="Waiting on you"
       subtitle="What your Reseller stores have asked Seller staff to approve. Until you answer, nothing happens — and a request nobody answers closes after a few days and the store is told."
       meta={
         !counted ? undefined : (
-          <MetaChip tone={total > 0 ? 'warn' : 'good'} dot={total > 0}>
-            {total === 0 ? 'Nothing waiting' : `${total} waiting`}
-          </MetaChip>
+          <RsFacts>
+            <RsFact tone={total > 0 ? 'warn' : 'good'} dot={total > 0}>
+              {total === 0 ? 'Nothing waiting' : `${total} waiting`}
+            </RsFact>
+          </RsFacts>
         )
       }
-      action={
-        <Link href="/reseller-stores" className="text-accent text-sm hover:underline">
-          All reseller stores →
-        </Link>
-      }
+      action={<RsLink href="/reseller-stores">All reseller stores</RsLink>}
     />
   );
 
   /*
-    One tile per QUEUE, each counting the rows its own section renders.
+    One card per QUEUE, each counting the rows its own section renders.
     A single "waiting" number would not say which desk the work is on,
     and the three want different answers: a cancel is a decision, an
-    order change is a comparison, a delivery ask spends money.
+    order change is a comparison, a delivery ask spends money. Plain
+    counts, so each rolls up once.
   */
   const tiles = counted ? (
-    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <Stat
+    <div className="rs-kpis">
+      <KpiCard
         label="Cancels, call questions, issues"
-        icon={<MessageSquareWarning size={13} aria-hidden />}
+        icon={<MessageSquareWarning size={14} />}
         value={orderCount ?? 0}
         unit={orderCount === 1 ? 'request' : 'requests'}
-        tone={(orderCount ?? 0) > 0 ? 'warn' : 'neutral'}
+        tone={(orderCount ?? 0) > 0 ? 'pending' : 'neutral'}
         hint="Approving runs it exactly as if the store had done it itself."
       />
-      <Stat
+      <KpiCard
         label="Delivery asks"
-        icon={<Truck size={13} aria-hidden />}
+        icon={<Truck size={14} />}
         value={actionCount ?? 0}
         unit={actionCount === 1 ? 'ask' : 'asks'}
-        tone={(actionCount ?? 0) > 0 ? 'warn' : 'neutral'}
+        tone={(actionCount ?? 0) > 0 ? 'pending' : 'neutral'}
         hint="Call again, deliver again, or send the parcel back."
       />
-      <Stat
+      <KpiCard
         label="Order and address changes"
-        icon={<MapPin size={13} aria-hidden />}
+        icon={<MapPin size={14} />}
         value={addressCount ?? 0}
         unit={addressCount === 1 ? 'change' : 'changes'}
-        tone={(addressCount ?? 0) > 0 ? 'warn' : 'neutral'}
+        tone={(addressCount ?? 0) > 0 ? 'pending' : 'neutral'}
         hint="Until you answer, the parcel keeps the details it has."
       />
     </div>
   ) : null;
 
-  // Both still loading: one skeleton rather than two stacked.
+  // All still loading: one skeleton rather than three stacked.
   if (requests.isPending && addresses.isPending && orderRequests.isPending) {
     return (
-      <div>
+      <div className="rs-page">
         {header}
-        <LoadingState label="Loading what your stores are waiting on" rows={4} />
+        <div className="rs-kpis">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="rs-kpi-skel" height={104} rounded="md" />
+          ))}
+        </div>
+        <SkeletonRows rows={4} cols={6} label="Loading what your stores are waiting on" />
       </div>
     );
   }
 
   // An empty queue is the ordinary state, and it reads far better as one
-  // sentence than as two empty tables.
+  // sentence than as three empty tables. It is the GOOD state, so it is
+  // drawn as the positive empty state.
   const allEmpty =
     requests.data !== undefined &&
     requests.data.length === 0 &&
@@ -170,18 +187,15 @@ export default function StoreRequestsPage(): ReactElement {
     orderRequests.data.length === 0;
 
   return (
-    <div>
+    <div className="rs-page">
       {header}
       {tiles}
       {allEmpty ? (
         <EmptyState
+          tone="positive"
           title="Nothing is waiting"
           description="When a reseller store asks for something you chose to approve yourself, it appears here. Anything you let them do on their own never stops here at all."
-          action={
-            <Link href="/reseller-stores" className="text-accent text-sm hover:underline">
-              Change what your stores can do
-            </Link>
-          }
+          action={<RsLink href="/reseller-stores">Change what your stores can do</RsLink>}
         />
       ) : (
         <>
@@ -189,16 +203,78 @@ export default function StoreRequestsPage(): ReactElement {
           <ActionRequestsSection />
           <AddressChangesSection />
           {counted && (
-            <div className="text-text-faint border-border mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3 font-mono text-[11px]">
-              <StripFact label="Waiting" value={total} tone={total > 0 ? 'warn' : 'good'} />
-              <StripFact label="Cancels & issues" value={orderCount ?? 0} />
-              <StripFact label="Delivery asks" value={actionCount ?? 0} />
-              <StripFact label="Changes" value={addressCount ?? 0} />
-            </div>
+            <RsStrip>
+              <RsStripFact label="Waiting" value={total} tone={total > 0 ? 'warn' : 'good'} />
+              <RsStripFact label="Cancels & issues" value={orderCount ?? 0} />
+              <RsStripFact label="Delivery asks" value={actionCount ?? 0} />
+              <RsStripFact label="Changes" value={addressCount ?? 0} />
+            </RsStrip>
           )}
         </>
       )}
     </div>
+  );
+}
+
+/** The two answer buttons and the row's verdict, shared by all three queues. */
+function AnswerCell({
+  busy,
+  onApprove,
+  onReject,
+  error,
+}: {
+  busy: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  error: string | null;
+}): ReactElement {
+  return (
+    <div className="rs-answer">
+      <div className="rs-actions">
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Check size={13} />}
+          disabled={busy}
+          onClick={onApprove}
+        >
+          Approve
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<X size={13} />}
+          disabled={busy}
+          onClick={onReject}
+        >
+          Reject
+        </Button>
+      </div>
+      {error !== null ? <RsError compact>{error}</RsError> : null}
+    </div>
+  );
+}
+
+/** An order number in the identifier face, with its status chip under it. */
+function OrderCell({
+  number,
+  status,
+  extra,
+}: {
+  number: string | null;
+  status?: Parameters<typeof orderStatusKind>[0] | undefined;
+  extra?: string | undefined;
+}): ReactElement {
+  return (
+    <>
+      <span className="sk-ident">{number ?? '—'}</span>
+      {status !== undefined ? (
+        <div className="rs-block">
+          <StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />
+        </div>
+      ) : null}
+      {extra !== undefined ? <div className="rs-small">{extra}</div> : null}
+    </>
   );
 }
 
@@ -213,45 +289,40 @@ function OrderRequestsSection(): ReactElement {
   const [rejecting, setRejecting] = useState<StoreOrderRequestRow | null>(null);
 
   return (
-    <>
-      <SectionBand
-        index="01"
-        title="Cancels, call questions and issues"
-        note="Call an order off, answer whether to keep calling, or raise an issue with Skydrop."
-      />
-      <BandBody flush className="mb-4">
-        {rows.isPending ? (
-          <div className="p-3">
-            <LoadingState label="Loading requests" rows={2} />
-          </div>
-        ) : rows.isError ? (
-          <div className="p-3">
-            <ErrorState message={serverVerdict(rows.error)} retry={() => void rows.refetch()} />
-          </div>
-        ) : rows.data.length === 0 ? (
-          <EmptyState bare title="Nothing to answer here" />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Store</Th>
-                <Th>Order</Th>
-                <Th>They asked to</Th>
-                <Th>What they said</Th>
-                <Th>Asked</Th>
-                <Th>Your answer</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.data.map((r) => (
-                <OrderRequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </BandBody>
+    <RsSection
+      title="Cancels, call questions and issues"
+      note="Call an order off, answer whether to keep calling, or raise an issue with Skydrop."
+      flush
+    >
+      {rows.isPending ? (
+        <SkeletonRows rows={2} cols={6} label="Loading requests" />
+      ) : rows.isError ? (
+        <div className="rs-card__pad">
+          <ErrorState message={serverVerdict(rows.error)} retry={() => void rows.refetch()} />
+        </div>
+      ) : rows.data.length === 0 ? (
+        <EmptyState bare tone="positive" title="Nothing to answer here" />
+      ) : (
+        <Table caption="Cancels, call questions and issues">
+          <THead>
+            <Tr>
+              <Th>Store</Th>
+              <Th>Order</Th>
+              <Th>They asked to</Th>
+              <Th>What they said</Th>
+              <Th>Asked</Th>
+              <Th>Your answer</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {rows.data.map((r) => (
+              <OrderRequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+            ))}
+          </TBody>
+        </Table>
+      )}
       <RejectOrderRequestModal request={rejecting} onClose={() => setRejecting(null)} />
-    </>
+    </RsSection>
   );
 }
 
@@ -265,6 +336,7 @@ function OrderRequestRow({
   const decide = useDecideStoreOrderRequest();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   async function approve(): Promise<void> {
     setError(null);
@@ -289,45 +361,111 @@ function OrderRequestRow({
   }
 
   const order = request.order;
+  const storeName = request.store?.displayName ?? request.store?.name ?? '—';
   return (
     <Tr>
-      <Td>{request.store?.displayName ?? request.store?.name ?? '—'}</Td>
+      <Td className="rs-strong">{storeName}</Td>
       <Td>
-        <span className="font-mono text-xs">{order?.orderNumber ?? '—'}</span>
-        {order === null ? null : (
-          <div className="mt-1">
-            <OrderStatusBadge status={order.status} />
-          </div>
-        )}
+        <OrderCell number={order?.orderNumber ?? null} status={order?.status} />
       </Td>
-      <Td className="max-w-xs">
-        <span className="text-text-body text-sm">{request.label}</span>
-      </Td>
-      <Td className="max-w-xs">
-        <span className="text-text-body text-xs">{request.note ?? '—'}</span>
-      </Td>
-      <Td className="text-text-muted text-xs">{when(request.createdAt)}</Td>
       <Td>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={decide.isPending}
-            onClick={() => void approve()}
-          >
-            Approve
-          </Button>
-          <Button variant="secondary" size="sm" disabled={decide.isPending} onClick={onReject}>
-            Reject
-          </Button>
-        </div>
-        {error !== null ? (
-          <p role="alert" className="text-critical mt-1 text-xs">
-            {error}
-          </p>
-        ) : null}
+        <span className="rs-body rs-wrap">{request.label}</span>
+      </Td>
+      <Td>
+        <span className="rs-small rs-wrap">{request.note ?? '—'}</span>
+      </Td>
+      <Td className="rs-when sk-figure">{when(request.createdAt)}</Td>
+      <Td>
+        <AnswerCell
+          busy={decide.isPending}
+          onApprove={() => setConfirming(true)}
+          onReject={onReject}
+          error={error}
+        />
+        <ConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          title={`Approve ${storeName}’s request?`}
+          entity={order?.orderNumber ?? 'this order'}
+          entityIsIdentifier={order !== null}
+          consequence="Approving runs it exactly as if the store had done it itself. The store is told either way."
+          confirmLabel="Approve"
+          onConfirm={approve}
+        >
+          <p className="rs-muted">They asked to: {request.label}</p>
+        </ConfirmDialog>
       </Td>
     </Tr>
+  );
+}
+
+/** The reason box every rejection needs, the same on all three queues. */
+function ReasonDialog({
+  open,
+  title,
+  description,
+  fieldId,
+  note,
+  setNote,
+  error,
+  pending,
+  onCancel,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  fieldId: string;
+  note: string;
+  setNote: (v: string) => void;
+  error: string | null;
+  pending: boolean;
+  onCancel: () => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}): ReactElement {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title={title}
+      description={description}
+      tone="critical"
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={onCancel}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="destructive"
+            size="md"
+            disabled={note.trim() === ''}
+            state={pendingPhase(pending)}
+            labels={{ idle: 'Turn it down', busy: 'Sending…' }}
+            onClick={onSubmit}
+          />
+        </DialogFooter>
+      }
+    >
+      <div className="rs-form">
+        <TextArea
+          id={fieldId}
+          label="Your reason"
+          rows={3}
+          maxLength={2000}
+          showCount
+          // The old FormField drew the asterisk; the reason is insisted on by
+          // the dialog's own check, never by a browser `required`.
+          requiredMark
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+        {error !== null ? <RsError>{error}</RsError> : null}
+      </div>
+    </Dialog>
   );
 }
 
@@ -357,53 +495,27 @@ function RejectOrderRequestModal({
   }
 
   return (
-    <Modal
+    <ReasonDialog
       open={request !== null}
-      onOpenChange={(open) => {
-        if (!open) {
-          setNote('');
-          setError(null);
-          onClose();
-        }
-      }}
       title={
         request === null
           ? 'Turn it down'
           : `Turn down “${request.label}” on ${request.order?.orderNumber ?? 'this order'}?`
       }
       description="The store reads this, and nothing is done. Say why."
-    >
-      <div className="space-y-4">
-        <FormField label="Your reason" htmlFor="reject-order-request-note" required>
-          <Textarea
-            id="reject-order-request-note"
-            rows={3}
-            maxLength={2000}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </FormField>
-        {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
-        ) : null}
-        <ModalFooter>
-          <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="md"
-            disabled={note.trim() === '' || decide.isPending}
-            onClick={() => void submit()}
-          >
-            {decide.isPending ? 'Sending…' : 'Turn it down'}
-          </Button>
-        </ModalFooter>
-      </div>
-    </Modal>
+      fieldId="reject-order-request-note"
+      note={note}
+      setNote={setNote}
+      error={error}
+      pending={decide.isPending}
+      onCancel={onClose}
+      onClose={() => {
+        setNote('');
+        setError(null);
+        onClose();
+      }}
+      onSubmit={() => void submit()}
+    />
   );
 }
 
@@ -412,48 +524,43 @@ function ActionRequestsSection(): ReactElement {
   const [rejecting, setRejecting] = useState<StoreActionRequestRow | null>(null);
 
   return (
-    <>
-      <SectionBand
-        index="02"
-        title="Delivery asks"
-        note="Call the customer again, try delivering again, or send the parcel back."
-      />
-      <BandBody flush className="mb-4">
-        {requests.isPending ? (
-          <div className="p-3">
-            <LoadingState label="Loading asks" rows={2} />
-          </div>
-        ) : requests.isError ? (
-          <div className="p-3">
-            <ErrorState
-              message={serverVerdict(requests.error)}
-              retry={() => void requests.refetch()}
-            />
-          </div>
-        ) : requests.data.length === 0 ? (
-          <EmptyState bare title="Nothing to answer here" />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Store</Th>
-                <Th>Order</Th>
-                <Th>They asked for</Th>
-                <Th>Why</Th>
-                <Th>Asked</Th>
-                <Th>Your answer</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {requests.data.map((r) => (
-                <RequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </BandBody>
+    <RsSection
+      title="Delivery asks"
+      note="Call the customer again, try delivering again, or send the parcel back."
+      flush
+    >
+      {requests.isPending ? (
+        <SkeletonRows rows={2} cols={6} label="Loading asks" />
+      ) : requests.isError ? (
+        <div className="rs-card__pad">
+          <ErrorState
+            message={serverVerdict(requests.error)}
+            retry={() => void requests.refetch()}
+          />
+        </div>
+      ) : requests.data.length === 0 ? (
+        <EmptyState bare tone="positive" title="Nothing to answer here" />
+      ) : (
+        <Table caption="Delivery asks">
+          <THead>
+            <Tr>
+              <Th>Store</Th>
+              <Th>Order</Th>
+              <Th>They asked for</Th>
+              <Th>Why</Th>
+              <Th>Asked</Th>
+              <Th>Your answer</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {requests.data.map((r) => (
+              <RequestRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+            ))}
+          </TBody>
+        </Table>
+      )}
       <RejectModal request={rejecting} onClose={() => setRejecting(null)} />
-    </>
+    </RsSection>
   );
 }
 
@@ -467,6 +574,7 @@ function RequestRow({
   const decide = useDecideStoreAction();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   async function approve(): Promise<void> {
     setError(null);
@@ -490,39 +598,40 @@ function RequestRow({
     }
   }
 
+  const storeName = request.resellerStore?.name ?? '—';
   return (
     <Tr>
-      <Td>{request.resellerStore?.name ?? '—'}</Td>
+      <Td className="rs-strong">{storeName}</Td>
       <Td>
-        <span className="font-mono text-xs">{request.order?.orderNumber ?? '—'}</span>
-        {request.order === null ? null : (
-          <div className="text-text-muted text-xs">{request.order.recipientName}</div>
-        )}
+        <OrderCell
+          number={request.order?.orderNumber ?? null}
+          extra={request.order === null ? undefined : request.order.recipientName}
+        />
       </Td>
-      <Td>{ASKED_FOR[request.action]}</Td>
-      <Td className="max-w-xs">
-        <span className="text-text-body text-xs">{request.reason}</span>
-      </Td>
-      <Td className="text-text-muted text-xs">{when(request.createdAt)}</Td>
+      <Td className="rs-body">{ASKED_FOR[request.action]}</Td>
       <Td>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={decide.isPending}
-            onClick={() => void approve()}
-          >
-            Approve
-          </Button>
-          <Button variant="secondary" size="sm" disabled={decide.isPending} onClick={onReject}>
-            Reject
-          </Button>
-        </div>
-        {error !== null ? (
-          <p role="alert" className="text-critical mt-1 text-xs">
-            {error}
-          </p>
-        ) : null}
+        <span className="rs-small rs-wrap">{request.reason}</span>
+      </Td>
+      <Td className="rs-when sk-figure">{when(request.createdAt)}</Td>
+      <Td>
+        <AnswerCell
+          busy={decide.isPending}
+          onApprove={() => setConfirming(true)}
+          onReject={onReject}
+          error={error}
+        />
+        <ConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          title={`Approve ${storeName}’s ask: ${ASKED_FOR[request.action]}?`}
+          entity={request.order?.orderNumber ?? 'this order'}
+          entityIsIdentifier={request.order !== null}
+          consequence={APPROVE_DOES[request.action]}
+          confirmLabel="Approve"
+          onConfirm={approve}
+        >
+          <p className="rs-muted">Why: {request.reason}</p>
+        </ConfirmDialog>
       </Td>
     </Tr>
   );
@@ -559,53 +668,27 @@ function RejectModal({
   }
 
   return (
-    <Modal
+    <ReasonDialog
       open={request !== null}
-      onOpenChange={(open) => {
-        if (!open) {
-          setNote('');
-          setError(null);
-          onClose();
-        }
-      }}
       title={
         request === null
           ? 'Turn it down'
           : `Turn down “${ASKED_FOR[request.action]}” on ${request.order?.orderNumber ?? 'this order'}?`
       }
       description="The store reads this. They have a customer waiting on the answer, so say why."
-    >
-      <div className="space-y-4">
-        <FormField label="Your reason" htmlFor="reject-note" required>
-          <Textarea
-            id="reject-note"
-            rows={3}
-            maxLength={2000}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </FormField>
-        {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
-        ) : null}
-        <ModalFooter>
-          <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="md"
-            disabled={note.trim() === '' || decide.isPending}
-            onClick={() => void submit()}
-          >
-            {decide.isPending ? 'Sending…' : 'Turn it down'}
-          </Button>
-        </ModalFooter>
-      </div>
-    </Modal>
+      fieldId="reject-note"
+      note={note}
+      setNote={setNote}
+      error={error}
+      pending={decide.isPending}
+      onCancel={onClose}
+      onClose={() => {
+        setNote('');
+        setError(null);
+        onClose();
+      }}
+      onSubmit={() => void submit()}
+    />
   );
 }
 
@@ -663,48 +746,43 @@ function AddressChangesSection(): ReactElement {
   const [rejecting, setRejecting] = useState<StoreAddressChangeRow | null>(null);
 
   return (
-    <>
-      <SectionBand
-        index="03"
-        title="Order and address changes"
-        note="Until you answer, the parcel keeps the details it has."
-      />
-      <BandBody flush>
-        {addresses.isPending ? (
-          <div className="p-3">
-            <LoadingState label="Loading corrections" rows={2} />
-          </div>
-        ) : addresses.isError ? (
-          <div className="p-3">
-            <ErrorState
-              message={serverVerdict(addresses.error)}
-              retry={() => void addresses.refetch()}
-            />
-          </div>
-        ) : addresses.data.length === 0 ? (
-          <EmptyState bare title="No corrections are waiting" />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Store</Th>
-                <Th>Order</Th>
-                <Th>What is changing</Th>
-                <Th>Why they say it is wrong</Th>
-                <Th>Asked</Th>
-                <Th>Your answer</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {addresses.data.map((r) => (
-                <AddressRow key={r.id} request={r} onReject={() => setRejecting(r)} />
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </BandBody>
+    <RsSection
+      title="Order and address changes"
+      note="Until you answer, the parcel keeps the details it has."
+      flush
+    >
+      {addresses.isPending ? (
+        <SkeletonRows rows={2} cols={6} label="Loading corrections" />
+      ) : addresses.isError ? (
+        <div className="rs-card__pad">
+          <ErrorState
+            message={serverVerdict(addresses.error)}
+            retry={() => void addresses.refetch()}
+          />
+        </div>
+      ) : addresses.data.length === 0 ? (
+        <EmptyState bare tone="positive" title="No corrections are waiting" />
+      ) : (
+        <Table caption="Order and address changes">
+          <THead>
+            <Tr>
+              <Th>Store</Th>
+              <Th>Order</Th>
+              <Th>What is changing</Th>
+              <Th>Why they say it is wrong</Th>
+              <Th>Asked</Th>
+              <Th>Your answer</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {addresses.data.map((r) => (
+              <AddressRow key={r.id} request={r} onReject={() => setRejecting(r)} />
+            ))}
+          </TBody>
+        </Table>
+      )}
       <RejectAddressModal request={rejecting} onClose={() => setRejecting(null)} />
-    </>
+    </RsSection>
   );
 }
 
@@ -718,6 +796,7 @@ function AddressRow({
   const decide = useDecideStoreAddressChange();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   async function approve(): Promise<void> {
     setError(null);
@@ -745,59 +824,60 @@ function AddressRow({
   }
 
   const order = request.order;
+  const storeName = request.store?.displayName ?? request.store?.name ?? '—';
+  const changes = ALL_FIELDS.filter((k) => request.fields[k] !== undefined);
+
+  // The comparison IS the decision — nobody can approve a correction they
+  // cannot check against what the parcel says now. The confirmation shows
+  // the same list, so the thing being approved is on screen at the moment
+  // of approving.
+  const changeList = (
+    <ul className="rs-changes">
+      {changes.map((k) => {
+        const now = order === null ? undefined : CURRENT_VALUE[k]?.(order);
+        return (
+          <li key={k}>
+            <span className="rs-changes__field">{FIELD_LABEL[k]}: </span>
+            {now === undefined || now === '' ? null : (
+              <span className="rs-changes__was">{now} → </span>
+            )}
+            <span className="rs-changes__now">{request.fields[k] ?? ''}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
     <Tr>
-      <Td>{request.store?.displayName ?? request.store?.name ?? '—'}</Td>
+      <Td className="rs-strong">{storeName}</Td>
       <Td>
-        <span className="font-mono text-xs">{order?.orderNumber ?? '—'}</span>
-        {order === null ? null : (
-          <div className="mt-1">
-            <OrderStatusBadge status={order.status} />
-          </div>
-        )}
+        <OrderCell number={order?.orderNumber ?? null} status={order?.status} />
       </Td>
-      {/* The comparison IS the decision — nobody can approve a correction
-          they cannot check against what the parcel says now. */}
+      <Td>{changeList}</Td>
       <Td>
-        <ul className="space-y-1">
-          {ALL_FIELDS.filter((k) => request.fields[k] !== undefined).map((k) => {
-            const now = order === null ? undefined : CURRENT_VALUE[k]?.(order);
-            return (
-              <li key={k} className="text-xs">
-                <span className="text-text-muted">{FIELD_LABEL[k]}: </span>
-                {now === undefined || now === '' ? null : (
-                  <span className="text-text-faint">{now} → </span>
-                )}
-                <span className="text-text-body">{request.fields[k] ?? ''}</span>
-              </li>
-            );
-          })}
-        </ul>
+        <span className="rs-small rs-wrap">{request.reason}</span>
       </Td>
-      <Td className="max-w-xs">
-        <span className="text-text-body text-xs">{request.reason}</span>
-      </Td>
-      <Td className="text-text-muted text-xs">{when(request.createdAt)}</Td>
+      <Td className="rs-when sk-figure">{when(request.createdAt)}</Td>
       <Td>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={decide.isPending}
-            onClick={() => void approve()}
-          >
-            Approve
-          </Button>
-          <Button variant="secondary" size="sm" disabled={decide.isPending} onClick={onReject}>
-            Reject
-          </Button>
-        </div>
-        {error !== null ? (
-          <p role="alert" className="text-critical mt-1 text-xs">
-            {error}
-          </p>
-        ) : null}
+        <AnswerCell
+          busy={decide.isPending}
+          onApprove={() => setConfirming(true)}
+          onReject={onReject}
+          error={error}
+        />
+        <ConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          title={`Approve ${storeName}’s change?`}
+          entity={order?.orderNumber ?? 'this order'}
+          entityIsIdentifier={order !== null}
+          consequence="Approving writes the new details onto the order, if it still can. The store is told either way."
+          confirmLabel="Approve"
+          onConfirm={approve}
+        >
+          {changeList}
+        </ConfirmDialog>
       </Td>
     </Tr>
   );
@@ -835,52 +915,26 @@ function RejectAddressModal({
   }
 
   return (
-    <Modal
+    <ReasonDialog
       open={request !== null}
-      onOpenChange={(open) => {
-        if (!open) {
-          setNote('');
-          setError(null);
-          onClose();
-        }
-      }}
       title={
         request === null
           ? 'Turn down the correction'
           : `Leave ${request.order?.orderNumber ?? 'this order'} going to the address it has?`
       }
       description="The store reads this. The parcel keeps its current address, so say why you are leaving it."
-    >
-      <div className="space-y-4">
-        <FormField label="Your reason" htmlFor="reject-address-note" required>
-          <Textarea
-            id="reject-address-note"
-            rows={3}
-            maxLength={2000}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </FormField>
-        {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
-        ) : null}
-        <ModalFooter>
-          <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="md"
-            disabled={note.trim() === '' || decide.isPending}
-            onClick={() => void submit()}
-          >
-            {decide.isPending ? 'Sending…' : 'Turn it down'}
-          </Button>
-        </ModalFooter>
-      </div>
-    </Modal>
+      fieldId="reject-address-note"
+      note={note}
+      setNote={setNote}
+      error={error}
+      pending={decide.isPending}
+      onCancel={onClose}
+      onClose={() => {
+        setNote('');
+        setError(null);
+        onClose();
+      }}
+      onSubmit={() => void submit()}
+    />
   );
 }

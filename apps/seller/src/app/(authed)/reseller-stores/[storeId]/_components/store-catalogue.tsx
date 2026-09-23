@@ -1,34 +1,21 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactElement } from 'react';
+import { PackageSearch, Pencil } from 'lucide-react';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import {
-  BandBody,
-  Button,
-  ConfirmDialog,
-  EmptyState,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  Money,
-  Num,
-  ProductThumb,
-  SectionBand,
-  Select,
-  Switch,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Textarea,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Money, Num, ProductThumb } from '@skydrop/ui/components';
+import { Table, TBody, THead, Td, Th, TableToolbar, Tr } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Switch } from '@skydrop/ui/app/switch';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { GlossaryTerm } from '@skydrop/ui/app/tooltip-card';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
@@ -41,6 +28,7 @@ import {
   type StoreTermsRow,
 } from '@/lib/reseller-catalogue-hooks';
 import { PriceFields, draftFrom, priceBody, type PriceDraft } from '../../_components/price-fields';
+import { RsError, RsLink, RsProduct, RsSection, pendingPhase } from '../../_components/rs-parts';
 
 const REASON_WORDS: Record<NotSellableReason, string> = {
   NOT_ENABLED: 'Not sold here',
@@ -51,6 +39,28 @@ const REASON_WORDS: Record<NotSellableReason, string> = {
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 }
+
+/**
+ * The three words a seller meets on this screen that mean something
+ * precise here. The definitions restate RS-3 — they add no rule.
+ */
+const GLOSSARY = {
+  transfer: {
+    title: 'Transfer price',
+    description:
+      'What the store pays you per unit. A store with no price of its own pays the one on your price list.',
+  },
+  setAside: {
+    title: 'Set aside',
+    description:
+      'Units kept for this store alone. When your stock falls below what you have set aside, the newest set-aside is reduced first.',
+  },
+  hidden: {
+    title: 'Hidden share',
+    description:
+      'A share of the stock the store is not shown, from 0 to 90%, so it sees less than you hold.',
+  },
+} as const;
 
 /**
  * RS-3 — one store's catalogue terms: which products it sells, at what
@@ -65,9 +75,11 @@ function when(iso: string): string {
  */
 export function StoreCatalogue({
   storeId,
+  storeName,
   final,
 }: {
   storeId: string;
+  storeName: string;
   final: boolean;
 }): ReactElement {
   const identity = useSellerIdentity();
@@ -88,7 +100,9 @@ export function StoreCatalogue({
     );
   }, [terms.data, search, onlySold]);
 
-  if (terms.isPending) return <LoadingState label="Loading the store’s catalogue" rows={5} />;
+  if (terms.isPending) {
+    return <SkeletonRows rows={5} cols={7} label="Loading the store’s catalogue" />;
+  }
   if (terms.isError) {
     return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
   }
@@ -98,34 +112,32 @@ export function StoreCatalogue({
       : (terms.data.rows.find((r) => r.variantId === editing.variantId) ?? editing);
 
   return (
-    <div>
-      <SectionBand
-        index="01"
+    <>
+      <RsSection
         title="What this store sells"
         note="A price with no override comes from your price list."
-        action={
-          <Link
-            href="/reseller-stores/price-list"
-            className="text-accent hover:text-text-bright text-xs transition-colors"
-          >
-            Your price list →
-          </Link>
-        }
-      />
-      <BandBody flush className="mb-4">
-        <div className="border-border flex flex-wrap items-center gap-3 border-b px-3 py-2.5">
-          <Input
-            aria-label="Search by product or SKU"
-            placeholder="Product or SKU…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:w-64"
-          />
-          <Switch checked={onlySold} onChange={setOnlySold} label="Only products sold here" />
-        </div>
+        action={<RsLink href="/reseller-stores/price-list">Your price list</RsLink>}
+        flush
+      >
+        <TableToolbar
+          search={{
+            value: search,
+            onChange: setSearch,
+            label: 'Search by product or SKU',
+            placeholder: 'Product or SKU…',
+          }}
+          filters={
+            <Switch
+              checked={onlySold}
+              onCheckedChange={setOnlySold}
+              label="Only products sold here"
+            />
+          }
+        />
         {rows.length === 0 ? (
           <EmptyState
             bare
+            icon={terms.data.rows.length === 0 ? undefined : <PackageSearch size={22} />}
             title={terms.data.rows.length === 0 ? 'No active products yet' : 'Nothing matches'}
             description={
               terms.data.rows.length === 0
@@ -134,15 +146,17 @@ export function StoreCatalogue({
             }
           />
         ) : (
-          <Table>
+          <Table caption="What this store sells">
             <THead>
               <Tr>
                 <Th>Product</Th>
                 <Th>Sold here</Th>
-                <Th>Transfer price</Th>
+                <Th>
+                  <GlossaryTerm {...GLOSSARY.transfer}>Transfer price</GlossaryTerm>
+                </Th>
                 <Th>Stock</Th>
-                <Th>Available (real)</Th>
-                <Th>Store sees</Th>
+                <Th align="right">Available (real)</Th>
+                <Th align="right">Store sees</Th>
                 <Th>Actions</Th>
               </Tr>
             </THead>
@@ -150,43 +164,52 @@ export function StoreCatalogue({
               {rows.map((r) => (
                 <Tr key={r.variantId}>
                   <Td>
-                    <div className="flex items-center gap-3">
-                      <ProductThumb src={r.thumbnailUrl} size={36} alt={r.productName} />
-                      <div>
-                        <div>{r.overlayTitle ?? r.productName}</div>
-                        <div className="text-text-muted text-xs">
-                          {r.skuCode}
-                          {r.variantLabel ? ` · ${r.variantLabel}` : ''}
-                        </div>
-                      </div>
-                    </div>
+                    <RsProduct
+                      thumb={<ProductThumb src={r.thumbnailUrl} size={36} alt={r.productName} />}
+                      name={r.overlayTitle ?? r.productName}
+                      sku={r.skuCode}
+                      extra={r.variantLabel ? ` · ${r.variantLabel}` : ''}
+                    />
                   </Td>
-                  <Td>{r.sellable ? 'Yes' : REASON_WORDS[r.notSellableReason ?? 'NOT_ENABLED']}</Td>
+                  <Td>
+                    <StatusChip
+                      kind={r.sellable ? 'confirmed' : 'neutral'}
+                      label={
+                        r.sellable ? 'Yes' : REASON_WORDS[r.notSellableReason ?? 'NOT_ENABLED']
+                      }
+                      size="sm"
+                    />
+                  </Td>
                   <Td>
                     {r.effective === null ? (
                       '—'
                     ) : (
-                      <span className="whitespace-nowrap">
+                      <span className="rs-nowrap">
                         <Money amount={r.effective.transferPriceInr} convert={false} />
-                        <span className="text-text-muted text-xs">
+                        <span className="rs-faint">
                           {r.priceSource === 'OVERRIDE' ? ' (own)' : ' (default)'}
                         </span>
                       </span>
                     )}
                   </Td>
-                  <Td>
+                  <Td className="rs-small">
                     {r.stockMode === 'SET_ASIDE' ? `Set aside ${r.setAsideQty ?? 0}` : 'Shared'}
                     {r.hiddenPercent > 0 ? ` · ${r.hiddenPercent}% hidden` : ''}
                   </Td>
-                  <Td>
+                  <Td align="right">
                     <Num value={r.realAvailable} />
                   </Td>
-                  <Td>
+                  <Td align="right">
                     <Num value={r.visibleQty} />
                   </Td>
                   <Td>
                     {mayEdit ? (
-                      <Button variant="secondary" size="sm" onClick={() => setEditing(r)}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<Pencil size={13} />}
+                        onClick={() => setEditing(r)}
+                      >
                         Edit
                       </Button>
                     ) : (
@@ -198,59 +221,65 @@ export function StoreCatalogue({
             </TBody>
           </Table>
         )}
-      </BandBody>
+      </RsSection>
 
       {terms.data.recentShrinks.length > 0 ? (
-        <>
-          <SectionBand
-            index="02"
-            title="Set-asides we reduced"
-            note="When stock fell below what you had set aside, the newest went first."
-          />
-          <BandBody flush>
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>When</Th>
-                  <Th>SKU</Th>
-                  <Th>Set aside</Th>
-                  <Th align="right">On hand then</Th>
+        <RsSection
+          title="Set-asides we reduced"
+          note="When stock fell below what you had set aside, the newest went first."
+          flush
+        >
+          <Table caption="Set-asides we reduced">
+            <THead>
+              <Tr>
+                <Th>When</Th>
+                <Th>SKU</Th>
+                <Th>
+                  <GlossaryTerm {...GLOSSARY.setAside}>Set aside</GlossaryTerm>
+                </Th>
+                <Th align="right">On hand then</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {terms.data.recentShrinks.map((s) => (
+                <Tr key={s.id}>
+                  <Td className="rs-when sk-figure">{when(s.createdAt)}</Td>
+                  <Td>
+                    <span className="sk-ident">{s.skuCode ?? '—'}</span>
+                  </Td>
+                  <Td className="sk-figure">
+                    {s.fromQty} → {s.toQty}
+                  </Td>
+                  <Td align="right">
+                    <Num value={s.onHand} />
+                  </Td>
                 </Tr>
-              </THead>
-              <TBody>
-                {terms.data.recentShrinks.map((s) => (
-                  <Tr key={s.id}>
-                    <Td className="text-text-muted font-mono text-xs whitespace-nowrap">
-                      {when(s.createdAt)}
-                    </Td>
-                    <Td className="font-mono text-xs">{s.skuCode ?? '—'}</Td>
-                    <Td className="font-mono text-xs">
-                      {s.fromQty} → {s.toQty}
-                    </Td>
-                    <Td align="right">
-                      <Num value={s.onHand} />
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-          </BandBody>
-        </>
+              ))}
+            </TBody>
+          </Table>
+        </RsSection>
       ) : null}
 
       {current !== null ? (
-        <EditTermsModal storeId={storeId} row={current} onClose={() => setEditing(null)} />
+        <EditTermsModal
+          storeId={storeId}
+          storeName={storeName}
+          row={current}
+          onClose={() => setEditing(null)}
+        />
       ) : null}
-    </div>
+    </>
   );
 }
 
 function EditTermsModal({
   storeId,
+  storeName,
   row,
   onClose,
 }: {
   storeId: string;
+  storeName: string;
   row: StoreTermsRow;
   onClose: () => void;
 }): ReactElement {
@@ -268,9 +297,21 @@ function EditTermsModal({
   const [title, setTitle] = useState(row.overlayTitle ?? '');
   const [description, setDescription] = useState(row.overlayDescription ?? '');
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The owner's rule: saving a product's terms for a store is confirmed
+   * on a second screen that restates the store, the SKU and what the
+   * store will now be offered — and only then does the SAME request fire.
+   * The form's own button opens that screen; it never sends anything.
+   */
+  const [confirming, setConfirming] = useState(false);
 
-  async function submit(e: FormEvent<HTMLFormElement>): Promise<void> {
+  function review(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
+    setError(null);
+    setConfirming(true);
+  }
+
+  async function submit(): Promise<void> {
     setError(null);
     try {
       await save.mutateAsync({
@@ -286,12 +327,14 @@ function EditTermsModal({
           overlayDescription: description.trim() === '' ? null : description.trim(),
         },
       });
-      toast.success(`Saved ${row.skuCode} for this store.`);
-      onClose();
     } catch (err) {
       // SET_ASIDE_EXCEEDS_STOCK says how many are free (FE-2: verbatim).
       setError(serverVerdict(err));
+      // Rethrown so the confirmation stays open with the verdict on it.
+      throw err;
     }
+    toast.success(`Saved ${row.skuCode} for this store.`);
+    onClose();
   }
 
   function addPicture(e: ChangeEvent<HTMLInputElement>): void {
@@ -308,112 +351,134 @@ function EditTermsModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       title={`${row.productName} — this store`}
       description={`${row.skuCode}. ${row.realAvailable} available now; ${row.freeToSetAside} could be set aside for this store.`}
+      icon={<Pencil size={18} />}
+      size="lg"
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={onClose}>
+            Cancel
+          </Button>
+          <AsyncButton
+            type="submit"
+            form="rs-terms-form"
+            variant="primary"
+            size="md"
+            state={pendingPhase(save.isPending)}
+            labels={{ idle: 'Save', busy: 'Saving…' }}
+          />
+        </DialogFooter>
+      }
     >
-      <form onSubmit={submit} className="space-y-4">
-        <Switch checked={enabled} onChange={setEnabled} label="This store may sell it" />
-
-        <Switch checked={ownPrice} onChange={setOwnPrice} label="Give this store its own price" />
+      <form id="rs-terms-form" onSubmit={review} className="rs-form">
+        <div className="rs-switches">
+          <Switch checked={enabled} onCheckedChange={setEnabled} label="This store may sell it" />
+          <Switch
+            checked={ownPrice}
+            onCheckedChange={setOwnPrice}
+            label="Give this store its own price"
+          />
+        </div>
         {ownPrice ? (
           <PriceFields idPrefix="own-price" value={price} onChange={setPrice} />
         ) : (
-          <p className="text-text-muted text-sm">
+          <p className="rs-muted">
             {row.defaultPrice === null
               ? 'This product has no default price yet — set one on your price list, or give this store its own.'
               : 'Uses your default price list.'}
           </p>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <FormField label="Stock" htmlFor="terms-mode">
-            <Select
-              id="terms-mode"
-              value={stockMode}
-              onChange={(e) => setStockMode(e.target.value as StockMode)}
-            >
-              <option value="SHARED">Shared with your other stores</option>
-              <option value="SET_ASIDE">A set-aside for this store</option>
-            </Select>
-          </FormField>
+        <div className="rs-grid-3">
+          <Select
+            id="terms-mode"
+            label="Stock"
+            value={stockMode}
+            onChange={(e) => setStockMode(e.target.value as StockMode)}
+          >
+            <option value="SHARED">Shared with your other stores</option>
+            <option value="SET_ASIDE">A set-aside for this store</option>
+          </Select>
           {stockMode === 'SET_ASIDE' ? (
-            <FormField
+            <TextField
+              id="terms-qty"
               label="Units set aside"
-              htmlFor="terms-qty"
               hint={`${row.freeToSetAside} free right now.`}
-            >
-              <Input
-                id="terms-qty"
-                inputMode="numeric"
-                value={setAside}
-                onChange={(e) => setSetAside(e.target.value)}
-              />
-            </FormField>
-          ) : null}
-          <FormField label="Hidden share (%)" htmlFor="terms-hidden" hint="0 to 90.">
-            <Input
-              id="terms-hidden"
               inputMode="numeric"
-              value={hidden}
-              onChange={(e) => setHidden(e.target.value)}
+              inputClassName="sk-figure"
+              value={setAside}
+              onChange={(e) => setSetAside(e.target.value)}
             />
-          </FormField>
-        </div>
-
-        <FormField
-          label="What the store calls it"
-          htmlFor="terms-title"
-          hint="Blank uses your product name."
-        >
-          <Input id="terms-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        </FormField>
-        <FormField
-          label="Description for the store"
-          htmlFor="terms-desc"
-          hint="Blank uses your product description."
-        >
-          <Textarea
-            id="terms-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+          ) : null}
+          <TextField
+            id="terms-hidden"
+            label="Hidden share (%)"
+            hint="0 to 90."
+            inputMode="numeric"
+            inputClassName="sk-figure"
+            value={hidden}
+            onChange={(e) => setHidden(e.target.value)}
           />
-        </FormField>
+        </div>
+        <p className="rs-faint">
+          <GlossaryTerm {...GLOSSARY.setAside}>Set aside</GlossaryTerm> and{' '}
+          <GlossaryTerm {...GLOSSARY.hidden}>hidden share</GlossaryTerm> decide what the store is
+          shown.
+        </p>
 
-        <div className="space-y-2">
-          <p className="text-sm">
+        <TextField
+          id="terms-title"
+          label="What the store calls it"
+          hint="Blank uses your product name."
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <TextArea
+          id="terms-desc"
+          label="Description for the store"
+          hint="Blank uses your product description."
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+
+        <div className="rs-stack rs-stack--tight">
+          <p className="rs-body">
             Pictures for this store (up to 5; none uses your product picture)
           </p>
-          <div className="flex flex-wrap gap-3">
-            {row.overlayImages.map((img) => (
-              <div key={img.id} className="flex flex-col items-center gap-1">
-                <ProductThumb src={img.url} size={56} alt={row.productName} />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={removeImage.isPending}
-                  onClick={() => setRemovingImageId(img.id)}
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
-          </div>
+          {row.overlayImages.length > 0 ? (
+            <div className="rs-pictures">
+              {row.overlayImages.map((img) => (
+                <div key={img.id} className="rs-picture">
+                  <ProductThumb src={img.url} size={56} alt={row.productName} />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={removeImage.isPending}
+                    onClick={() => setRemovingImageId(img.id)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <ConfirmDialog
             open={removingImageId !== null}
             onOpenChange={(o) => {
               if (!o) setRemovingImageId(null);
             }}
             title="Remove this picture?"
-            description="The store stops showing it straight away. You can add it again later."
+            entity={`${row.productName} · ${row.skuCode}`}
+            consequence="The store stops showing it straight away. You can add it again later."
             confirmLabel="Remove the picture"
-            confirmVariant="destructive"
-            disabled={removeImage.isPending}
+            destructive
+            closeOnSuccess={false}
             onConfirm={async () => {
               if (removingImageId === null) return;
               try {
@@ -429,35 +494,75 @@ function EditTermsModal({
               setRemovingImageId(null);
             }}
           />
-          <FormField
-            label="Add a picture"
-            htmlFor="terms-picture"
-            hint="JPG, PNG or WebP, at most 2 MB."
-          >
-            <Input
+          {/* A file picker stays a real file input — the text field
+              primitive draws a text box and would be wrong here. */}
+          <div className="rs-file">
+            <label className="rs-file__label" htmlFor="terms-picture">
+              Add a picture
+            </label>
+            <input
               id="terms-picture"
+              className="rs-file__input"
               type="file"
               accept="image/jpeg,image/png,image/webp"
               disabled={upload.isPending}
+              aria-describedby="terms-picture-hint"
               onChange={addPicture}
             />
-          </FormField>
+            <span id="terms-picture-hint" className="rs-file__hint">
+              JPG, PNG or WebP, at most 2 MB.
+            </span>
+          </div>
         </div>
 
-        {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
-        ) : null}
-        <ModalFooter>
-          <Button type="button" variant="secondary" size="md" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" size="md" disabled={save.isPending}>
-            {save.isPending ? 'Saving…' : 'Save'}
-          </Button>
-        </ModalFooter>
+        {error !== null && !confirming ? <RsError>{error}</RsError> : null}
       </form>
-    </Modal>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Save these terms for the store?"
+        entity={storeName}
+        consequence="The store sees the new terms straight away. Orders it has already placed keep the terms they were placed under."
+        confirmLabel="Save"
+        cancelLabel="Back"
+        onConfirm={submit}
+        error={error}
+      >
+        <ul className="rs-confirm-list">
+          <li>
+            <b>Product:</b> {row.productName} · <span className="sk-ident">{row.skuCode}</span>
+          </li>
+          <li>
+            <b>This store may sell it:</b> {enabled ? 'Yes' : 'No'}
+          </li>
+          <li>
+            <b>Price:</b>{' '}
+            {ownPrice ? (
+              <>
+                its own —{' '}
+                {price.transferPriceInr.trim() === '' ||
+                !Number.isFinite(Number(price.transferPriceInr.trim())) ? (
+                  price.transferPriceInr.trim()
+                ) : (
+                  <Money amount={price.transferPriceInr.trim()} convert={false} />
+                )}{' '}
+                a unit
+              </>
+            ) : (
+              'your default price list'
+            )}
+          </li>
+          <li>
+            <b>Stock:</b>{' '}
+            {stockMode === 'SET_ASIDE'
+              ? `A set-aside for this store (${setAside.trim()})`
+              : 'Shared with your other stores'}
+            {' · '}
+            {hidden.trim()}% hidden
+          </li>
+        </ul>
+      </ConfirmDialog>
+    </Dialog>
   );
 }
