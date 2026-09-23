@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, ErrorNote, Skeleton } from '@skydrop/ui/components';
 import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { MkAlert } from '../../seller-wallets/_components/money-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useRevealSellerBankAccount, useSellerDetail } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -79,44 +81,44 @@ export function PayoutInstructionPanel({
   const shortfall = haveWanted && accounts.length > 0 && covering.length === 0;
 
   return (
-    <div className="rounded-lg border border-border bg-surface-raised p-3 text-xs space-y-3">
-      <div>
-        <div className="text-text-faint uppercase tracking-wide text-[10px] mb-1">Send it to</div>
+    <div className="mk-panel">
+      <div className="mk-panel__part">
+        <p className="mk-panel__title">Send it to</p>
         {!mayReadSeller ? (
-          <div className="text-text-muted">
+          <p className="mk-muted">
             You do not have access to seller records, so the destination account is not shown. Ask
             someone who does for the payout details before sending.
-          </div>
+          </p>
         ) : seller.isLoading ? (
-          <Skeleton className="h-10 w-full" />
+          <Skeleton height={40} width="100%" />
         ) : bankMissing ? (
-          <div className="text-[var(--color-critical)]">
+          <p className="mk-text" data-tone="critical">
             This seller has no bank details on file. There is nowhere to send the money — ask them
             to add them on their profile before paying.
-          </div>
+          </p>
         ) : s === undefined ? (
-          <div className="text-text-muted">—</div>
+          <div className="mk-muted">—</div>
         ) : (
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-            <dt className="text-text-faint">Bank</dt>
-            <dd className="text-text-bright">{s.bankName}</dd>
-            <dt className="text-text-faint">Branch</dt>
+          <dl className="mk-kv">
+            <dt>Bank</dt>
+            <dd>{s.bankName}</dd>
+            <dt>Branch</dt>
             {/* Bangladeshi routing is branch-scoped: the same bank and
                 account number resolve differently per branch, so an
                 instruction without it is incomplete. */}
-            <dd className={s.bankBranchName === null ? 'text-[var(--color-warning)]' : ''}>
+            <dd className="mk-text" data-tone={s.bankBranchName === null ? 'warn' : undefined}>
               {s.bankBranchName ?? 'not on file — routing is branch-scoped, ask for it'}
             </dd>
-            <dt className="text-text-faint">Account name</dt>
-            <dd className="text-text-bright">{s.bankAccountName}</dd>
-            <dt className="text-text-faint">Account no.</dt>
-            <dd className="font-mono text-text-bright">
-              {revealed ?? s.bankAccountNumberMasked}
+            <dt>Account name</dt>
+            <dd>{s.bankAccountName}</dd>
+            <dt>Account no.</dt>
+            <dd>
+              <span className="sk-ident">{revealed ?? s.bankAccountNumberMasked}</span>
               {revealed === null && mayReveal && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="ml-2"
+                  loading={reveal.isPending}
                   disabled={reveal.isPending}
                   onClick={() => {
                     reveal.mutate('Recording a remittance to this seller', {
@@ -130,39 +132,37 @@ export function PayoutInstructionPanel({
             </dd>
             {s.bankRoutingNumber !== null && (
               <>
-                <dt className="text-text-faint">Routing</dt>
-                <dd className="font-mono">{s.bankRoutingNumber}</dd>
+                <dt>Routing</dt>
+                <dd className="sk-ident">{s.bankRoutingNumber}</dd>
               </>
             )}
             {s.bankSwiftCode !== null && (
               <>
-                <dt className="text-text-faint">SWIFT</dt>
-                <dd className="font-mono">{s.bankSwiftCode}</dd>
+                <dt>SWIFT</dt>
+                <dd className="sk-ident">{s.bankSwiftCode}</dd>
               </>
             )}
           </dl>
         )}
-        {reveal.isError && <ErrorNote className="mt-1" message={serverVerdict(reveal.error)} />}
+        {reveal.isError && <MkAlert>{serverVerdict(reveal.error)}</MkAlert>}
       </div>
 
       {mayReadTreasury && (
-        <div className="border-t border-border pt-2">
-          <div className="text-text-faint uppercase tracking-wide text-[10px] mb-1">
-            Of that, this seller&rsquo;s
-          </div>
+        <div className="mk-panel__part">
+          <p className="mk-panel__title">Of that, this seller&rsquo;s</p>
           {holdings.isLoading ? (
-            <Skeleton className="h-4 w-2/3" />
+            <Skeleton height={16} width="66%" />
           ) : (holdings.data ?? []).length === 0 ? (
-            <div className="text-text-muted">
+            <p className="mk-muted">
               None of our accounts holds cash attributed to this seller. That is normal for a wallet
               built from credits rather than transfers — the money to pay them is our capital, and
               paying it is what settles the liability.
-            </div>
+            </p>
           ) : (
-            <ul className="space-y-0.5">
+            <ul className="mk-list">
               {(holdings.data ?? []).map((h) => (
-                <li key={h.accountId} className="flex items-baseline justify-between gap-3">
-                  <span className="text-text-bright">{h.label}</span>
+                <li key={h.accountId} className="mk-list__row">
+                  <span className="mk-strong">{h.label}</span>
                   <span>
                     <Money amount={h.amount} currency={h.currency} convert={false} />
                   </span>
@@ -173,31 +173,29 @@ export function PayoutInstructionPanel({
         </div>
       )}
 
-      <div className="border-t border-border pt-2">
-        <div className="text-text-faint uppercase tracking-wide text-[10px] mb-1">
-          What we hold in {currency}
-        </div>
+      <div className="mk-panel__part">
+        <p className="mk-panel__title">What we hold in {currency}</p>
         {!mayReadTreasury ? (
-          <div className="text-text-muted">
+          <p className="mk-muted">
             You do not have treasury access, so balances are not shown — check with someone who does
             before sending, or the transfer may bounce.
-          </div>
+          </p>
         ) : treasury.isLoading ? (
-          <Skeleton className="h-8 w-full" />
+          <Skeleton height={32} width="100%" />
         ) : accounts.length === 0 ? (
-          <div className="text-[var(--color-critical)]">
+          <p className="mk-text" data-tone="critical">
             No {currency} account is set up, so this payout cannot leave from anywhere.
-          </div>
+          </p>
         ) : (
-          <ul className="space-y-0.5">
+          <ul className="mk-list">
             {accounts.map((a) => {
               const enough = !haveWanted || Number(a.total) >= wanted;
               return (
-                <li key={a.accountId} className="flex items-baseline justify-between gap-3">
-                  <span className={enough ? 'text-text-bright' : 'text-text-muted'}>
+                <li key={a.accountId} className="mk-list__row">
+                  <span className={enough ? 'mk-strong' : 'mk-small'}>
                     {a.label} · {a.bankName}
                   </span>
-                  <span className={enough ? '' : 'text-[var(--color-warning)]'}>
+                  <span className="mk-text" data-tone={enough ? undefined : 'warn'}>
                     <Money amount={a.total} currency={a.currency} convert={false} />
                   </span>
                 </li>
@@ -206,12 +204,12 @@ export function PayoutInstructionPanel({
           </ul>
         )}
         {mayReadTreasury && shortfall && (
-          <div className="mt-1.5 text-[var(--color-warning)]">
+          <p className="mk-text mk-small" data-tone="warn">
             No single {currency} account holds{' '}
             <Money amount={amount} currency={currency} convert={false} /> on its own. Move money
             between our accounts on Treasury first — a payout leaves ONE account, so the total
             across all of them is not the test.
-          </div>
+          </p>
         )}
       </div>
     </div>

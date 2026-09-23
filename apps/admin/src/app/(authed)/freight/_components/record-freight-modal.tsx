@@ -1,24 +1,21 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Info, TriangleAlert } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import { Currency, InboundFreightMode } from '@skydrop/db';
 import { freightModeWords } from '@skydrop/ui/status';
 import { useRecordFreight } from '@/lib/ops-hooks';
 import { useConsignmentFreightMode, useConsignmentsList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { MkAlert, MkCallout } from '../../seller-wallets/_components/money-parts';
 
 /**
  * What a freight rate may be AGREED in.
@@ -230,6 +227,7 @@ export function RecordFreightModal({
     setError(null);
   }
 
+  /** Rejects on a refusal (after setting the verdict) so the button shows it. */
   async function submit(): Promise<void> {
     setError(null);
     try {
@@ -255,139 +253,150 @@ export function RecordFreightModal({
       onOpenChange(false);
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
         if (!next) reset();
       }}
       size="xl"
+      locked={record.isPending}
       title="Record a freight bill"
       description="The BD→India cost for one arrival. Pay-now debits the seller's wallet immediately; pay-later leaves a receivable that amortises as the stock sells."
+      footer={
+        <DialogFooter>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => onOpenChange(false)}
+            disabled={record.isPending}
+          >
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            disabled={goodsReceiptId === '' || !allPriced}
+            labels={{ idle: 'Record bill', busy: 'Recording…', done: 'Recorded', error: 'Refused' }}
+            onAction={submit}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-3">
-        <FormField
-          label="Which stop is being billed"
-          htmlFor="freight-arrival"
-          hint="On pay-in-advance terms that is the BANGLADESH INTAKE — the count and weight the rate is applied to, billed before the goods fly. On pay-now and pay-later it is the INDIA ARRIVAL, which is what a forwarder invoices; a consignment landing in two shipments gets one bill each. Only counted stops on Bangladesh-routed consignments appear."
-          required
-        >
-          {maySeeConsignments ? (
-            <Select
-              id="freight-arrival"
-              /* max-w-none: `.sd-field` caps a control at 32rem so a
-                 full-width card cannot produce an absurd input. That cap
-                 lives in Tailwind's `base` layer precisely so a call site
-                 can beat it when a control needs the room — and this one
-                 sits above a full-width pricing table in an xl modal,
-                 where a half-width select reads as unfinished. */
-              className="max-w-none"
-              value={goodsReceiptId}
-              onChange={(e) => setGoodsReceiptId(e.target.value)}
-            >
-              <option value="">
-                {arrivals.length === 0 ? 'No counted India arrivals yet' : 'Select an arrival'}
+      <div className="mk-stack">
+        {maySeeConsignments ? (
+          <Select
+            id="freight-arrival"
+            label="Which stop is being billed"
+            hint="On pay-in-advance terms that is the BANGLADESH INTAKE — the count and weight the rate is applied to, billed before the goods fly. On pay-now and pay-later it is the INDIA ARRIVAL, which is what a forwarder invoices; a consignment landing in two shipments gets one bill each. Only counted stops on Bangladesh-routed consignments appear."
+            requiredMark
+            value={goodsReceiptId}
+            onChange={(e) => setGoodsReceiptId(e.target.value)}
+          >
+            <option value="">
+              {arrivals.length === 0 ? 'No counted India arrivals yet' : 'Select an arrival'}
+            </option>
+            {arrivals.map((a) => (
+              <option key={a.id} value={a.id} disabled={a.billed}>
+                {a.consignmentNumber} · {a.legWords} · {a.units} units — {a.company}
+                {a.billed ? ' (already billed)' : ''}
               </option>
-              {arrivals.map((a) => (
-                <option key={a.id} value={a.id} disabled={a.billed}>
-                  {a.consignmentNumber} · {a.legWords} · {a.units} units — {a.company}
-                  {a.billed ? ' (already billed)' : ''}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <Input
-              id="freight-arrival"
-              className="max-w-none"
-              value={goodsReceiptId}
-              onChange={(e) => setGoodsReceiptId(e.target.value)}
-              placeholder="0198f3c2-…"
-              autoComplete="off"
-            />
-          )}
-        </FormField>
+            ))}
+          </Select>
+        ) : (
+          <TextField
+            id="freight-arrival"
+            label="Which stop is being billed"
+            hint="On pay-in-advance terms that is the BANGLADESH INTAKE — the count and weight the rate is applied to, billed before the goods fly. On pay-now and pay-later it is the INDIA ARRIVAL, which is what a forwarder invoices; a consignment landing in two shipments gets one bill each. Only counted stops on Bangladesh-routed consignments appear."
+            requiredMark
+            value={goodsReceiptId}
+            onChange={(e) => setGoodsReceiptId(e.target.value)}
+            placeholder="0198f3c2-…"
+            autoComplete="off"
+            inputClassName="sk-ident"
+          />
+        )}
 
         {/* What is actually in force for this consignment, once one is
             picked. Convenience: the server refuses the wrong leg by name
             and that verdict is shown as-is (FE-2). */}
         {selectedLeg !== null && freightMode.data !== undefined && (
-          <p className={legDisagrees ? 'text-warning text-xs' : 'text-text-muted text-xs'}>
-            {freightModeWords(freightMode.data.mode, 'STAFF')} —{' '}
-            {SOURCE_WORDS[freightMode.data.source]}
-            {freightMode.data.locked ? ', and fixed now a bill exists' : ''}.{' '}
-            {legDisagrees
-              ? `That bills the ${legWords(expectedLeg).toLowerCase()}, and this is the ${legWords(selectedLeg).toLowerCase()}. Pin the mode below if this stop is the one you mean.`
-              : `This is the ${legWords(selectedLeg).toLowerCase()}, which is the stop that mode bills.`}
-          </p>
+          <MkCallout
+            tone={legDisagrees ? 'warn' : 'info'}
+            icon={legDisagrees ? <TriangleAlert size={16} /> : <Info size={16} />}
+          >
+            <p>
+              {freightModeWords(freightMode.data.mode, 'STAFF')} —{' '}
+              {SOURCE_WORDS[freightMode.data.source]}
+              {freightMode.data.locked ? ', and fixed now a bill exists' : ''}.{' '}
+              {legDisagrees
+                ? `That bills the ${legWords(expectedLeg).toLowerCase()}, and this is the ${legWords(selectedLeg).toLowerCase()}. Pin the mode below if this stop is the one you mean.`
+                : `This is the ${legWords(selectedLeg).toLowerCase()}, which is the stop that mode bills.`}
+            </p>
+          </MkCallout>
         )}
 
         {goodsReceiptId !== '' && (
-          <div>
-            <div className="mb-1 flex items-baseline justify-between">
-              <span className="text-text-secondary text-sm font-medium">
-                What the forwarder charged
-              </span>
-              <span className="text-text-faint text-xs">
+          <div className="mk-stack">
+            <h3 className="mk-form__heading">
+              What the forwarder charged
+              <span className="mk-faint">
                 {products.length} product{products.length === 1 ? '' : 's'}
               </span>
-            </div>
-            <p className="text-text-muted mb-2 text-xs">
+            </h3>
+            <p className="mk-small">
               Price each product the way the invoice does — per kg or per piece, at its own rate. A
               per-kg line needs the chargeable weight from the invoice, not one worked out from the
               catalogue: volumetric weight and rounding up to the next half-kilo are both normal.
               Every product must be priced.
             </p>
 
-            <div className="mb-2">
-              <FormField
+            <div className="mk-filters">
+              <Select
+                id="freight-currency"
                 label="Agreed in"
-                htmlFor="freight-currency"
                 hint="The currency the rate was agreed in on the phone — type the figures exactly as they are on the invoice. The bill is converted to rupees at the rate in force when it is recorded, and the seller is charged rupees either way."
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value as Currency)}
               >
-                <Select
-                  id="freight-currency"
-                  className="w-56"
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value as Currency)}
-                >
-                  {BILL_CURRENCIES.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
+                {BILL_CURRENCIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </Select>
             </div>
 
             {products.length === 0 ? (
-              <p className="text-text-muted text-sm">This arrival has no counted products.</p>
+              <p className="mk-muted">This arrival has no counted products.</p>
             ) : (
-              <div className="border-border overflow-x-auto rounded-lg border">
-                <table className="w-full min-w-[42rem] text-sm">
+              <div className="mk-scroll">
+                <table className="mk-grid-table">
                   {/* Explicit widths: without them the product column takes
                       whatever is left after the inputs, and the name wraps to
                       three lines while a <select> renders blank because its
                       label no longer fits. */}
                   <colgroup>
                     <col />
-                    <col className="w-16" />
-                    <col className="w-28" />
-                    <col className="w-28" />
-                    <col className="w-24" />
-                    <col className="w-28" />
+                    <col style={{ width: '4rem' }} />
+                    <col style={{ width: '8rem' }} />
+                    <col style={{ width: '8rem' }} />
+                    <col style={{ width: '7rem' }} />
+                    <col style={{ width: '8rem' }} />
                   </colgroup>
                   <thead>
-                    <tr className="border-border text-text-muted border-b text-left text-xs">
-                      <th className="px-2 py-1.5 font-medium">Product</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Units</th>
-                      <th className="px-2 py-1.5 font-medium">Priced</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Rate {symbol}</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Kg</th>
-                      <th className="px-2 py-1.5 text-right font-medium">Line {symbol}</th>
+                    <tr>
+                      <th>Product</th>
+                      <th data-align="right">Units</th>
+                      <th>Priced</th>
+                      <th data-align="right">Rate {symbol}</th>
+                      <th data-align="right">Kg</th>
+                      <th data-align="right">Line {symbol}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -395,21 +404,24 @@ export function RecordFreightModal({
                       const p = priceOf(l.id);
                       const perKg = p.basis === 'PER_KG';
                       return (
-                        <tr key={l.id} className="border-border/60 border-b last:border-0">
-                          <td className="px-2 py-1.5">
-                            <div className="text-text-primary">{l.variant.product.name}</div>
-                            <div className="text-text-faint truncate font-mono text-xs">
-                              {l.variant.skuCode}
-                              {l.variant.variantLabel === null
-                                ? ''
-                                : ` · ${l.variant.variantLabel}`}
+                        <tr key={l.id}>
+                          <td>
+                            <div className="mk-cell">
+                              <span className="mk-body">{l.variant.product.name}</span>
+                              <span className="mk-faint sk-ident mk-wrap">
+                                {l.variant.skuCode}
+                                {l.variant.variantLabel === null
+                                  ? ''
+                                  : ` · ${l.variant.variantLabel}`}
+                              </span>
                             </div>
                           </td>
-                          <td className="px-2 py-1.5 text-right tabular-nums">{l.receivedQty}</td>
-                          <td className="px-2 py-1.5">
+                          <td data-align="right" className="sk-figure">
+                            {l.receivedQty}
+                          </td>
+                          <td>
                             <Select
                               aria-label={`Basis for ${l.variant.skuCode}`}
-                              className="w-full"
                               value={p.basis}
                               onChange={(e) => setPrice(l.id, { basis: e.target.value })}
                             >
@@ -417,31 +429,29 @@ export function RecordFreightModal({
                               <option value="PER_PIECE">per pcs</option>
                             </Select>
                           </td>
-                          <td className="px-2 py-1.5">
-                            <Input
+                          <td>
+                            <TextField
                               aria-label={`Rate for ${l.variant.skuCode}`}
                               inputMode="decimal"
-                              className="w-full text-right"
                               value={p.rate}
                               onChange={(e) => setPrice(l.id, { rate: e.target.value })}
                               placeholder={perKg ? '300' : '40'}
                             />
                           </td>
-                          <td className="px-2 py-1.5">
+                          <td>
                             {perKg ? (
-                              <Input
+                              <TextField
                                 aria-label={`Chargeable weight for ${l.variant.skuCode}`}
                                 inputMode="decimal"
-                                className="w-full text-right"
                                 value={p.weightKg}
                                 onChange={(e) => setPrice(l.id, { weightKg: e.target.value })}
                                 placeholder="12.5"
                               />
                             ) : (
-                              <span className="text-text-faint block text-right">—</span>
+                              <span className="mk-faint">—</span>
                             )}
                           </td>
-                          <td className="px-2 py-1.5 text-right tabular-nums">
+                          <td data-align="right">
                             <Money amount={lineTotal(l)} currency={currency} convert={false} />
                           </td>
                         </tr>
@@ -449,14 +459,14 @@ export function RecordFreightModal({
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="border-border border-t">
-                      <td className="text-text-muted px-2 py-1.5 text-xs" colSpan={5}>
+                    <tr>
+                      <td className="mk-small" colSpan={5}>
                         Freight total, before any pay-later service charge
                         {currency === Currency.INR
                           ? ''
                           : ' — converted to rupees at the rate in force when this is recorded'}
                       </td>
-                      <td className="text-text-primary px-2 py-1.5 text-right font-medium tabular-nums">
+                      <td data-align="right" className="mk-strong">
                         <Money amount={grandTotal} currency={currency} convert={false} />
                       </td>
                     </tr>
@@ -467,56 +477,36 @@ export function RecordFreightModal({
           </div>
         )}
 
-        <FormField
+        <Select
+          id="freight-mode"
           label="Mode"
-          htmlFor="freight-mode"
           hint="Leave it alone unless this consignment is an exception — whatever is already in force applies. Choosing one here PINS the consignment to it, and it decides which stop the bill hangs on."
+          value={mode}
+          onChange={(e) => setMode(e.target.value)}
         >
-          <Select
-            id="freight-mode"
-            className="max-w-none"
-            value={mode}
-            onChange={(e) => setMode(e.target.value)}
-          >
-            <option value="">
-              {freightMode.data === undefined
-                ? 'Use whatever is already in force'
-                : `Use whatever is already in force (${freightModeWords(freightMode.data.mode, 'STAFF')}, ${SOURCE_WORDS[freightMode.data.source]})`}
+          <option value="">
+            {freightMode.data === undefined
+              ? 'Use whatever is already in force'
+              : `Use whatever is already in force (${freightModeWords(freightMode.data.mode, 'STAFF')}, ${SOURCE_WORDS[freightMode.data.source]})`}
+          </option>
+          {MODE_OPTIONS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
             </option>
-            {MODE_OPTIONS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
-        </FormField>
+          ))}
+        </Select>
 
-        <FormField label="Note" htmlFor="freight-note" hint="Optional.">
-          <Textarea
-            id="freight-note"
-            className="max-w-none"
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </FormField>
+        <TextArea
+          id="freight-note"
+          label="Note"
+          hint="Optional."
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
 
-        {error !== null && <ErrorNote message={error} />}
+        {error !== null && <MkAlert>{error}</MkAlert>}
       </div>
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={goodsReceiptId === '' || !allPriced || record.isPending}
-          onClick={() => void submit()}
-        >
-          {record.isPending ? 'Recording…' : 'Record bill'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

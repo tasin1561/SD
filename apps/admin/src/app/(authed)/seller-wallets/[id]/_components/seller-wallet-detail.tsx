@@ -2,23 +2,14 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  Stat,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { ArrowLeft, ArrowRight, Landmark, Scale } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import { Table, TableEmpty, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import {
   useSellerWalletDetail,
   useSellerWalletEntries,
@@ -31,6 +22,7 @@ import type { WalletEntryDirection } from '@skydrop/db';
 import { useInstantPayAdvances, useSellerHoldings } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { MoveSellerCashModal, type HoldingRef } from './move-seller-cash-modal';
+import { MkCard } from '../../_components/money-parts';
 
 /**
  * One seller's wallet, from our side — the same three views they have,
@@ -57,7 +49,19 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
   const advances = useInstantPayAdvances({ sellerId }, canReadTreasury);
   const [tab, setTab] = useState<'ledger' | 'topups' | 'withdrawals'>('ledger');
 
-  if (detail.isLoading) return <LoadingState />;
+  if (detail.isLoading) {
+    return (
+      <div className="mk-page">
+        <Skeleton height={56} rounded="md" />
+        <div className="mk-kpis">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} height={132} rounded="md" />
+          ))}
+        </div>
+        <SkeletonRows rows={6} cols={5} label="Loading wallet…" />
+      </div>
+    );
+  }
   if (detail.isError || detail.data === undefined) {
     return (
       <ErrorState
@@ -69,41 +73,41 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
   const d = detail.data;
 
   return (
-    <div className="space-y-4">
+    <div className="mk-page">
       <PageHeader
-        title={d.seller.companyName}
-        subtitle={`${d.seller.email} · ${d.seller.status}`}
-        action={
-          <Link href="/seller-wallets" className="text-accent text-sm hover:underline">
-            ← All wallets
+        breadcrumb={
+          <Link href="/seller-wallets" className="mk-link">
+            <ArrowLeft size={14} aria-hidden /> All wallets
           </Link>
         }
+        title={d.seller.companyName}
+        subtitle={`${d.seller.email} · ${d.seller.status}`}
       />
 
       {/* The figures that make each other up, rather than one number the
           reader has to trust. Balance is what the ledger says; available
           is what could actually leave today. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
+      <div className="mk-kpis">
+        <KpiCard
           label="Balance"
-          value={<Money amount={d.balanceInr} currency="INR" />}
+          figure={<Money amount={d.balanceInr} currency="INR" />}
           hint={Number(d.balanceInr) < 0 ? 'They owe us' : 'We owe them'}
-          tone={Number(d.balanceInr) < 0 ? 'bad' : 'neutral'}
+          tone={Number(d.balanceInr) < 0 ? 'debit' : 'neutral'}
         />
-        <Stat
+        <KpiCard
           label="Available to withdraw"
-          value={<Money amount={d.withdrawableInr} currency="INR" />}
+          figure={<Money amount={d.withdrawableInr} currency="INR" />}
           hint="Balance, less the floor and anything already requested"
         />
-        <Stat
+        <KpiCard
           label="Requested, not yet paid"
-          value={<Money amount={d.pendingWithdrawalInr} currency="INR" />}
+          figure={<Money amount={d.pendingWithdrawalInr} currency="INR" />}
           hint="Still in the balance — held, because a request is not a payment"
-          tone="warn"
+          tone="pending"
         />
-        <Stat
+        <KpiCard
           label="Top-ups awaiting review"
-          value={<Money amount={d.pendingTopupInr} currency="INR" />}
+          figure={<Money amount={d.pendingTopupInr} currency="INR" />}
           hint="Claimed, not matched to a statement — in no balance yet"
         />
       </div>
@@ -113,27 +117,29 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           the courier still owes it to US. */}
       {canReadTreasury &&
         (advances.isError ? (
-          <p className="text-text-muted text-sm">
+          <p className="mk-muted">
             Could not read Instant Pay advances.{' '}
             <button
               type="button"
-              className="text-accent hover:underline"
+              className="mk-inline-link"
               onClick={() => void advances.refetch()}
             >
               Retry
             </button>
           </p>
         ) : advances.data !== undefined ? (
-          <p className="text-sm">
-            <span className="text-text-muted">Advanced via Instant Pay, awaiting courier: </span>
-            <Money amount={advances.data.totalCodInr} currency="INR" convert={false} /> (
-            {advances.data.count} {advances.data.count === 1 ? 'order' : 'orders'})
+          <p className="mk-muted">
+            <span>Advanced via Instant Pay, awaiting courier: </span>
+            <span className="mk-body">
+              <Money amount={advances.data.totalCodInr} currency="INR" convert={false} />
+            </span>{' '}
+            ({advances.data.count} {advances.data.count === 1 ? 'order' : 'orders'})
             {advances.data.count > 0 && (
               <>
                 {' '}
                 <Link
                   href={`/liabilities/instant-pay?sellerId=${sellerId}`}
-                  className="text-accent hover:underline"
+                  className="mk-inline-link"
                 >
                   See orders →
                 </Link>
@@ -148,49 +154,44 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           answer before it can be made, because paying BDT out of an
           account holding only INR is not something a balance can warn
           you about. */}
-      <Card>
-        <CardHeader title="Where their money is held" />
-        <CardBody>
-          {holdings.isLoading ? (
-            <p className="text-text-muted text-sm">Reading the bank book…</p>
-          ) : holdings.isError || holdings.data === undefined ? (
-            <p className="text-text-muted text-sm">
-              Could not read the bank book. The balance above is unaffected.
-            </p>
-          ) : holdings.data.length === 0 ? (
-            <p className="text-text-muted text-sm">
-              No cash is recorded against this seller in any account. If they hold a balance, it was
-              credited before the bank book existed, or by a flow that has not been wired to it.
-            </p>
-          ) : (
-            <dl className="space-y-1.5">
-              {holdings.data.map((h) => (
-                <div key={`${h.accountId}-${h.currency}`} className="flex justify-between gap-4">
-                  <dt className="text-text-muted text-sm">
-                    {h.label} · {h.currency}
-                  </dt>
-                  <dd className="flex items-center gap-3 text-sm">
-                    <Money amount={h.amount} currency={h.currency} convert={false} />
-                    {canManageTreasury && (
-                      <button
-                        type="button"
-                        className="text-accent text-xs hover:underline"
-                        onClick={() => setMoving(h)}
-                      >
-                        Correct
-                      </button>
-                    )}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          )}
-        </CardBody>
-      </Card>
+      <MkCard title="Where their money is held" icon={<Landmark size={18} />}>
+        {holdings.isLoading ? (
+          <p className="mk-muted">Reading the bank book…</p>
+        ) : holdings.isError || holdings.data === undefined ? (
+          <p className="mk-muted">Could not read the bank book. The balance above is unaffected.</p>
+        ) : holdings.data.length === 0 ? (
+          <p className="mk-muted">
+            No cash is recorded against this seller in any account. If they hold a balance, it was
+            credited before the bank book existed, or by a flow that has not been wired to it.
+          </p>
+        ) : (
+          <dl className="mk-dl">
+            {holdings.data.map((h) => (
+              <div key={`${h.accountId}-${h.currency}`} className="mk-dl__row">
+                <dt>
+                  {h.label} · {h.currency}
+                </dt>
+                <dd>
+                  <Money amount={h.amount} currency={h.currency} convert={false} />
+                  {canManageTreasury && (
+                    <button
+                      type="button"
+                      className="mk-inline-link mk-small"
+                      onClick={() => setMoving(h)}
+                    >
+                      Correct
+                    </button>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </MkCard>
       <MoveSellerCashModal sellerId={sellerId} holding={moving} onClose={() => setMoving(null)} />
 
       {Number(d.minimumBalanceInr) > 0 && (
-        <p className="text-text-muted text-xs">
+        <p className="mk-small">
           This account must leave <Money amount={d.minimumBalanceInr} currency="INR" /> in the
           wallet — it is the only security we hold against an unpaid delivery fee.
         </p>
@@ -200,166 +201,154 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           number shown is the one being applied rather than the two
           places it might have come from (SET-1). Read-only: they are
           edited where they are owned. */}
-      <Card>
-        <CardHeader
-          title="Wallet rules for this seller"
-          subtitle="What is in force right now. A value marked OVERRIDE was set for them; the rest are the system default."
-          action={
-            <Link href="/settings" className="text-accent text-sm hover:underline">
-              Edit defaults →
-            </Link>
-          }
-        />
-        <CardBody>
-          <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {d.settings.map((st) => (
-              <div key={st.key} className="flex items-baseline justify-between gap-3 text-sm">
-                <div className="min-w-0">
-                  <div className="text-text-body">{st.label}</div>
-                  {st.hint !== '' && <div className="text-text-faint text-xs">{st.hint}</div>}
-                </div>
-                <div className="shrink-0 text-right">
-                  <span className="text-text-bright font-mono">{st.value}</span>
-                  {st.source === 'SELLER_OVERRIDE' && (
-                    <span className="text-pending ml-2 text-[11px] uppercase">override</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardBody>
-      </Card>
+      <MkCard
+        title="Wallet rules for this seller"
+        subtitle="What is in force right now. A value marked override was set for them; the rest are the system default."
+        icon={<Scale size={18} />}
+        aside={
+          <Link href="/settings" className="mk-link">
+            Edit defaults <ArrowRight size={14} aria-hidden />
+          </Link>
+        }
+      >
+        <dl className="mk-dl mk-dl--grid">
+          {d.settings.map((st) => (
+            <div key={st.key} className="mk-dl__row">
+              <dt>
+                <span className="mk-body">{st.label}</span>
+                {st.hint !== '' && <div className="mk-faint">{st.hint}</div>}
+              </dt>
+              <dd>
+                <span className="mk-strong sk-figure">{st.value}</span>
+                {st.source === 'SELLER_OVERRIDE' && <span className="mk-tag">override</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </MkCard>
 
-      <div className="border-border flex flex-wrap gap-1 border-b">
-        {(
-          [
-            ['ledger', 'Ledger'],
-            ['topups', 'Top-ups'],
-            ['withdrawals', 'Withdrawal requests'],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            aria-current={tab === key ? 'true' : undefined}
-            className={
-              'inline-flex min-h-[36px] items-center rounded-t-[4px] px-3 text-sm transition-colors ' +
-              (tab === key
-                ? 'border-accent text-text-bright border-b-2 font-medium'
-                : 'text-text-muted hover:text-text-body border-b-2 border-transparent')
-            }
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'ledger' && (
-        <Card>
-          <CardHeader
-            title="Ledger"
-            subtitle="Every entry, newest first. Only money that actually moved appears here."
-          />
-          <CardBody>
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>When</Th>
-                  <Th>Type</Th>
-                  <Th>Linked</Th>
-                  <Th align="right">Amount</Th>
-                  <Th align="right">Balance after</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {(entries.data?.items ?? []).length === 0 ? (
-                  <TableEmpty colSpan={5}>No entries yet.</TableEmpty>
-                ) : (
-                  (entries.data?.items ?? []).map((e: AdminWalletEntry) => (
-                    <Tr key={e.id}>
-                      <Td className="text-text-muted text-xs">
-                        {new Date(e.createdAt).toLocaleString()}
-                      </Td>
-                      <Td className="text-text-body text-xs">
-                        {/* The raw enum was on screen: ORDER_CHARGES,
-                            INSTANT_PAY_FEE. Staff answering "why is my
-                            balance this" were reading the column name
-                            out of the database. */}
-                        {walletDirectionLabel(e.direction as WalletEntryDirection)}
-                        {e.note !== null && <div className="text-text-faint italic">{e.note}</div>}
-                      </Td>
-                      {/* Staff reading a disputed balance had no route
-                          from an entry to what it charged for: the id was
-                          in the payload and nothing rendered it. */}
-                      <Td className="text-xs">
-                        {e.linkedOrderId !== null ? (
-                          <Link
-                            href={`/orders/${e.linkedOrderId}`}
-                            className="text-accent hover:underline font-mono"
-                          >
-                            {e.linkedOrderNumber ?? 'Order'} →
-                          </Link>
-                        ) : e.linkedConsignmentId !== null ? (
-                          <Link
-                            href={`/warehouse/consignments/${e.linkedConsignmentId}`}
-                            className="text-accent hover:underline font-mono"
-                          >
-                            {e.linkedConsignmentNumber ?? 'Consignment'} →
-                          </Link>
-                        ) : (
-                          <span className="text-text-faint">—</span>
-                        )}
-                      </Td>
-                      <Td align="right">
-                        {/* Without a direction every figure rendered the
-                            same, so a refund and a charge were
-                            indistinguishable on a money screen. The sign
-                            carries it as well as the colour — colour
-                            alone is not a difference everybody can see. */}
-                        <Money
-                          amount={e.amount}
-                          currency="INR"
-                          direction={
-                            isWalletCredit(e.direction as WalletEntryDirection) ? 'credit' : 'debit'
-                          }
-                        />
-                      </Td>
-                      <Td align="right" className="text-text-muted">
-                        <Money amount={e.runningBalanceAfter} currency="INR" />
-                      </Td>
+      <Tabs
+        label="Wallet history"
+        value={tab}
+        onChange={(id) => setTab(id as 'ledger' | 'topups' | 'withdrawals')}
+        items={[
+          {
+            id: 'ledger',
+            label: 'Ledger',
+            panel: (
+              <MkCard
+                flush
+                title="Ledger"
+                subtitle="Every entry, newest first. Only money that actually moved appears here."
+              >
+                <Table caption="Ledger">
+                  <THead>
+                    <Tr>
+                      <Th>When</Th>
+                      <Th>Type</Th>
+                      <Th>Linked</Th>
+                      <Th align="right">Amount</Th>
+                      <Th align="right">Balance after</Th>
                     </Tr>
-                  ))
-                )}
-              </TBody>
-            </Table>
-          </CardBody>
-        </Card>
-      )}
-
-      {tab === 'topups' && (
-        <Card>
-          <CardHeader
-            title="Top-ups"
-            subtitle="Every claim, whatever became of it. Only accepted ones reach the ledger."
-          />
-          <CardBody>
-            <RawList rows={topups.data ?? []} empty="No top-ups claimed." />
-          </CardBody>
-        </Card>
-      )}
-
-      {tab === 'withdrawals' && (
-        <Card>
-          <CardHeader
-            title="Withdrawal requests"
-            subtitle="A request never moves the balance — the remittance does."
-          />
-          <CardBody>
-            <RawList rows={withdrawals.data ?? []} empty="No withdrawal requests." />
-          </CardBody>
-        </Card>
-      )}
+                  </THead>
+                  <TBody>
+                    {(entries.data?.items ?? []).length === 0 ? (
+                      <TableEmpty colSpan={5}>No entries yet.</TableEmpty>
+                    ) : (
+                      (entries.data?.items ?? []).map((e: AdminWalletEntry) => (
+                        <Tr key={e.id}>
+                          <Td className="mk-when sk-figure">
+                            {new Date(e.createdAt).toLocaleString()}
+                          </Td>
+                          <Td>
+                            {/* The raw enum was on screen: ORDER_CHARGES,
+                                INSTANT_PAY_FEE. Staff answering "why is my
+                                balance this" were reading the column name
+                                out of the database. */}
+                            <div className="mk-cell">
+                              <span className="mk-body">
+                                {walletDirectionLabel(e.direction as WalletEntryDirection)}
+                              </span>
+                              {e.note !== null && <span className="mk-faint">{e.note}</span>}
+                            </div>
+                          </Td>
+                          {/* Staff reading a disputed balance had no route
+                              from an entry to what it charged for: the id was
+                              in the payload and nothing rendered it. */}
+                          <Td>
+                            {e.linkedOrderId !== null ? (
+                              <Link
+                                href={`/orders/${e.linkedOrderId}`}
+                                className="mk-inline-link sk-ident mk-small"
+                              >
+                                {e.linkedOrderNumber ?? 'Order'} →
+                              </Link>
+                            ) : e.linkedConsignmentId !== null ? (
+                              <Link
+                                href={`/warehouse/consignments/${e.linkedConsignmentId}`}
+                                className="mk-inline-link sk-ident mk-small"
+                              >
+                                {e.linkedConsignmentNumber ?? 'Consignment'} →
+                              </Link>
+                            ) : (
+                              <span className="mk-faint">—</span>
+                            )}
+                          </Td>
+                          <Td align="right">
+                            {/* Without a direction every figure rendered the
+                                same, so a refund and a charge were
+                                indistinguishable on a money screen. The sign
+                                carries it as well as the colour — colour
+                                alone is not a difference everybody can see. */}
+                            <Money
+                              amount={e.amount}
+                              currency="INR"
+                              direction={
+                                isWalletCredit(e.direction as WalletEntryDirection)
+                                  ? 'credit'
+                                  : 'debit'
+                              }
+                            />
+                          </Td>
+                          <Td align="right">
+                            <Money amount={e.runningBalanceAfter} currency="INR" />
+                          </Td>
+                        </Tr>
+                      ))
+                    )}
+                  </TBody>
+                </Table>
+              </MkCard>
+            ),
+          },
+          {
+            id: 'topups',
+            label: 'Top-ups',
+            panel: (
+              <MkCard
+                flush
+                title="Top-ups"
+                subtitle="Every claim, whatever became of it. Only accepted ones reach the ledger."
+              >
+                <RawList rows={topups.data ?? []} empty="No top-ups claimed." />
+              </MkCard>
+            ),
+          },
+          {
+            id: 'withdrawals',
+            label: 'Withdrawal requests',
+            panel: (
+              <MkCard
+                flush
+                title="Withdrawal requests"
+                subtitle="A request never moves the balance — the remittance does."
+              >
+                <RawList rows={withdrawals.data ?? []} empty="No withdrawal requests." />
+              </MkCard>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -378,7 +367,13 @@ function RawList({
   readonly rows: readonly unknown[];
   readonly empty: string;
 }): ReactElement {
-  if (rows.length === 0) return <p className="text-text-muted py-2 text-sm">{empty}</p>;
+  if (rows.length === 0) {
+    return (
+      <div className="mk-card__head">
+        <p className="mk-muted">{empty}</p>
+      </div>
+    );
+  }
   return (
     <Table>
       <THead>
@@ -403,7 +398,7 @@ function RawList({
           };
           return (
             <Tr key={r.id ?? String(i)}>
-              <Td className="text-text-muted text-xs">
+              <Td className="mk-when sk-figure">
                 {r.createdAt === undefined ? '—' : new Date(r.createdAt).toLocaleString()}
               </Td>
               <Td align="right">
@@ -413,8 +408,8 @@ function RawList({
                   convert={false}
                 />
               </Td>
-              <Td className="text-text-body text-xs">{r.status ?? '—'}</Td>
-              <Td className="text-text-faint text-xs">{r.reviewNote ?? r.note ?? '—'}</Td>
+              <Td className="mk-small mk-body">{r.status ?? '—'}</Td>
+              <Td className="mk-faint">{r.reviewNote ?? r.note ?? '—'}</Td>
             </Tr>
           );
         })}

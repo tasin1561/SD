@@ -2,29 +2,18 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement, type ReactNode } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Ident,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  StatusBadge,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Check, Landmark, X } from 'lucide-react';
+import { Ident } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button, buttonClassName } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import {
@@ -34,6 +23,7 @@ import {
   type BankChangeRequestView,
   type BankDetailsView,
 } from '@/lib/ops-hooks';
+import { MkAlert, MkCard } from '../../seller-wallets/_components/money-parts';
 
 /**
  * The review queue for a seller's withdrawal destination.
@@ -82,7 +72,7 @@ function changedKeys(req: BankChangeRequestView): ReadonlySet<keyof BankDetailsV
 }
 
 function renderValue(value: string, mono: boolean): ReactNode {
-  if (value === '') return <span className="text-text-faint">—</span>;
+  if (value === '') return <span className="mk-faint">—</span>;
   return mono ? <Ident value={value} /> : value;
 }
 
@@ -118,6 +108,7 @@ export function BankChangesIndex(): ReactElement {
     setError(null);
   }
 
+  /** Rejects on a refusal (after setting the verdict) so the button shows it. */
   async function onConfirm(): Promise<void> {
     if (reviewing === null || intent === null) return;
     setError(null);
@@ -136,6 +127,7 @@ export function BankChangesIndex(): ReactElement {
       // got to the same request first, and that is exactly what the
       // operator needs told.
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -148,33 +140,34 @@ export function BankChangesIndex(): ReactElement {
   const requests = list.data ?? [];
 
   return (
-    <div>
+    <div className="mk-page">
       <PageHeader
         title="Bank detail changes"
         subtitle="Sellers asking us to send their withdrawals somewhere new. Their money keeps going to the account already on file until you approve one."
       />
 
       {list.isLoading ? (
-        <LoadingState label="Loading bank change requests…" rows={3} />
+        <SkeletonRows rows={3} cols={3} label="Loading bank change requests…" />
       ) : list.isError ? (
-        <ErrorNote
+        <ErrorState
           message={serverVerdict(list.error, 'Failed to load bank change requests.')}
           retry={() => void list.refetch()}
         />
       ) : requests.length === 0 ? (
         <EmptyState
+          tone="positive"
           title="Nothing waiting"
           description="A request appears here when a seller edits bank details they already had on file. A seller adding theirs for the first time does not need approval — check their profile on the seller record instead."
           action={
             maySeeSellers ? (
-              <Link href="/sellers" className="text-accent text-xs hover:underline">
-                Open the seller records
+              <Link href="/sellers" className={buttonClassName('secondary', 'sm')}>
+                <span className="sk-btn__label">Open the seller records</span>
               </Link>
             ) : undefined
           }
         />
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="mk-stack">
           {requests.map((req) => {
             const changed = changedKeys(req);
             // Masking is applied to BOTH sides, and two different
@@ -185,154 +178,163 @@ export function BankChangesIndex(): ReactElement {
               req.current.bankAccountNumber === req.proposed.bankAccountNumber;
 
             return (
-              <Card key={req.id}>
-                <CardHeader
-                  title={req.companyName}
-                  subtitle={`Submitted ${new Date(req.submittedAt).toISOString().slice(0, 10)} · ${
-                    // Zero is possible and is NOT a no-op request: the
-                    // account number is shown in full on both sides, so a
-                    // change confined to it shows up as no visible
-                    // difference. Saying that is better than a bare
-                    // "0 of 6" the reader has to explain to themselves.
-                    changed.size === 0
-                      ? 'nothing visibly different — read the note below'
-                      : `${changed.size} of ${FIELDS.length} fields changed`
-                  }`}
-                  action={
-                    mayReview ? (
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button variant="primary" size="sm" onClick={() => open(req, 'APPROVE')}>
-                          Approve
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => open(req, 'REJECT')}>
-                          Reject
-                        </Button>
-                      </div>
-                    ) : undefined
-                  }
-                />
-                <CardBody className="p-0">
-                  <Table>
-                    <THead>
-                      <Tr>
-                        <Th>Field</Th>
-                        <Th>On file now</Th>
-                        <Th>Proposed</Th>
-                      </Tr>
-                    </THead>
-                    <TBody>
-                      {FIELDS.map(([key, label, mono]) => {
-                        const isChanged = changed.has(key);
-                        return (
-                          <Tr key={key}>
-                            <Td className={isChanged ? 'text-text-body' : 'text-text-faint'}>
-                              {label}
-                            </Td>
-                            <Td className={isChanged ? 'text-text-muted' : 'text-text-faint'}>
-                              {renderValue(req.current[key], mono)}
-                            </Td>
-                            <Td className={isChanged ? 'text-text-strong' : 'text-text-faint'}>
-                              <span className="flex flex-wrap items-center gap-2">
-                                {renderValue(req.proposed[key], mono)}
-                                {isChanged && <StatusBadge kind="pending" label="changed" />}
-                              </span>
-                            </Td>
-                          </Tr>
-                        );
-                      })}
-                    </TBody>
-                  </Table>
-                  {accountNumberUnchanged && (
-                    <p className="text-text-muted border-border border-t px-4 py-2 text-xs leading-relaxed">
-                      The account number is unchanged — this request moves something else. Check
-                      what is marked changed above.
-                    </p>
-                  )}
-                </CardBody>
-              </Card>
+              <MkCard
+                key={req.id}
+                flush
+                icon={<Landmark size={18} />}
+                title={req.companyName}
+                subtitle={`Submitted ${new Date(req.submittedAt).toISOString().slice(0, 10)} · ${
+                  // Zero is possible and is NOT a no-op request: the
+                  // account number is shown in full on both sides, so a
+                  // change confined to it shows up as no visible
+                  // difference. Saying that is better than a bare
+                  // "0 of 6" the reader has to explain to themselves.
+                  changed.size === 0
+                    ? 'nothing visibly different — read the note below'
+                    : `${changed.size} of ${FIELDS.length} fields changed`
+                }`}
+                aside={
+                  mayReview ? (
+                    <>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={<Check size={14} />}
+                        onClick={() => open(req, 'APPROVE')}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        icon={<X size={14} />}
+                        onClick={() => open(req, 'REJECT')}
+                      >
+                        Reject
+                      </Button>
+                    </>
+                  ) : undefined
+                }
+              >
+                <Table caption={`Bank details for ${req.companyName}`}>
+                  <THead>
+                    <Tr>
+                      <Th>Field</Th>
+                      <Th>On file now</Th>
+                      <Th>Proposed</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {FIELDS.map(([key, label, mono]) => {
+                      const isChanged = changed.has(key);
+                      return (
+                        <Tr key={key} className="mk-diff-row" data-changed={isChanged ? '1' : '0'}>
+                          <Td>{label}</Td>
+                          <Td>{renderValue(req.current[key], mono)}</Td>
+                          <Td>
+                            <span className="mk-balances">
+                              {renderValue(req.proposed[key], mono)}
+                              {isChanged && <StatusChip kind="pending" label="changed" size="sm" />}
+                            </span>
+                          </Td>
+                        </Tr>
+                      );
+                    })}
+                  </TBody>
+                </Table>
+                {accountNumberUnchanged && (
+                  <div className="mk-card__foot">
+                    The account number is unchanged — this request moves something else. Check what
+                    is marked changed above.
+                  </div>
+                )}
+              </MkCard>
             );
           })}
         </div>
       )}
 
-      <Modal
+      <Dialog
         open={reviewing !== null}
         onOpenChange={(next) => {
           if (!next) close();
         }}
         tone={intent === 'REJECT' ? 'critical' : 'default'}
+        locked={busy}
         title={
           intent === 'APPROVE'
             ? `Pay ${reviewing?.companyName ?? 'this seller'} into the new account?`
             : `Reject ${reviewing?.companyName ?? 'this'} bank change?`
         }
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={close} disabled={busy}>
+              Cancel
+            </Button>
+            <AsyncButton
+              variant={intent === 'REJECT' ? 'destructive' : 'primary'}
+              size="md"
+              disabled={reasonTooShort}
+              labels={{
+                idle: intent === 'APPROVE' ? 'Approve the new account' : 'Reject the change',
+                busy: 'Working…',
+                done: intent === 'APPROVE' ? 'Approved' : 'Rejected',
+                error: 'Refused',
+              }}
+              onAction={onConfirm}
+            />
+          </DialogFooter>
+        }
       >
-        {intent === 'APPROVE' ? (
-          <>
-            <p className="text-text-muted mb-3 text-sm leading-relaxed">
-              From this moment every withdrawal to {reviewing?.companyName ?? 'this seller'} goes to
-              the account below, and the one they had before stops receiving money. Undoing it takes
-              another change request and another approval — so approve it because you recognise the
-              account, not because the form was filled in.
-            </p>
-            {reviewing !== null && (
-              <div className="border-border mb-3 rounded-[7px] border px-3 py-2">
-                <div className="text-text-faint mb-1 text-xs">New destination</div>
-                <div className="text-text-strong text-sm">{reviewing.proposed.bankAccountName}</div>
-                <div className="mt-0.5">
-                  <Ident value={reviewing.proposed.bankAccountNumber} />
+        <div className="mk-stack">
+          {intent === 'APPROVE' ? (
+            <>
+              <p className="mk-muted">
+                From this moment every withdrawal to {reviewing?.companyName ?? 'this seller'} goes
+                to the account below, and the one they had before stops receiving money. Undoing it
+                takes another change request and another approval — so approve it because you
+                recognise the account, not because the form was filled in.
+              </p>
+              {reviewing !== null && (
+                <div className="mk-subject">
+                  <span className="mk-subject__label">New destination</span>
+                  <span className="mk-subject__main">{reviewing.proposed.bankAccountName}</span>
+                  <span>
+                    <Ident value={reviewing.proposed.bankAccountNumber} />
+                  </span>
+                  <span className="mk-small">
+                    {reviewing.proposed.bankName}
+                    {reviewing.proposed.bankBranchName !== ''
+                      ? ` · ${reviewing.proposed.bankBranchName}`
+                      : ''}
+                  </span>
                 </div>
-                <div className="text-text-muted mt-0.5 text-xs">
-                  {reviewing.proposed.bankName}
-                  {reviewing.proposed.bankBranchName !== ''
-                    ? ` · ${reviewing.proposed.bankBranchName}`
-                    : ''}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="text-text-muted mb-3 text-sm leading-relaxed">
-              Nothing moves — their withdrawals carry on to the account already on file. The seller
-              reads your reason word for word, so write what did not match or what you need from
-              them; “rejected” on its own just sends the same request back.
-            </p>
-            <FormField label="Reason the seller will read" required>
-              <Textarea
+              )}
+            </>
+          ) : (
+            <>
+              <p className="mk-muted">
+                Nothing moves — their withdrawals carry on to the account already on file. The
+                seller reads your reason word for word, so write what did not match or what you need
+                from them; “rejected” on its own just sends the same request back.
+              </p>
+              <TextArea
+                label="Reason the seller will read"
+                requiredMark
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={4}
                 maxLength={500}
+                showCount
+                hint="At least 10 characters."
                 placeholder="e.g. The account name does not match the business name we have on file. Send a bank statement header showing the account holder."
               />
-            </FormField>
-            <p className="text-text-faint mb-3 text-xs">
-              {trimmed.length}/500 · at least 10 characters
-            </p>
-          </>
-        )}
+            </>
+          )}
 
-        {error !== null && <ErrorNote message={error} className="mb-3" />}
-
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={close} disabled={busy}>
-            Cancel
-          </Button>
-          <Button
-            variant={intent === 'REJECT' ? 'destructive' : 'primary'}
-            size="md"
-            disabled={busy || reasonTooShort}
-            onClick={() => void onConfirm()}
-          >
-            {busy
-              ? 'Working…'
-              : intent === 'APPROVE'
-                ? 'Approve the new account'
-                : 'Reject the change'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+          {error !== null && <MkAlert>{error}</MkAlert>}
+        </div>
+      </Dialog>
     </div>
   );
 }

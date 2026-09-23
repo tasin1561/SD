@@ -2,28 +2,19 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  Ident,
-  Money,
-  PageHeader,
-  Section,
-  SkeletonRows,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Banknote, Plus } from 'lucide-react';
+import { Ident, Money } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Button } from '@skydrop/ui/app/button';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useRemittancesList } from '@/lib/api-hooks';
 import { useWithdrawalsList } from '@/lib/ops-hooks';
 import { RemittanceFormModal } from './remittance-form-modal';
 import { usePermission } from '@/lib/use-permission';
+import { MkCard, MkSection } from '../../seller-wallets/_components/money-parts';
 
 /**
  * Paginated list of recorded remittances. Each row links to the
@@ -61,13 +52,18 @@ export function RemittancesIndex(): ReactElement {
   const owedItems = owed.data?.items ?? [];
 
   return (
-    <div>
+    <div className="mk-page">
       <PageHeader
         title="Remittances"
         subtitle="Recorded withdrawals to sellers. Each entry debits the seller's wallet (and writes a paired FX credit for cross-currency)."
         action={
           canWrite ? (
-            <Button variant="primary" size="md" onClick={() => setCreating(true)}>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Plus size={15} />}
+              onClick={() => setCreating(true)}
+            >
               Record remittance
             </Button>
           ) : null
@@ -75,9 +71,10 @@ export function RemittancesIndex(): ReactElement {
       />
 
       {canPayApproved && owedItems.length > 0 && (
-        <Section title="Approved, waiting to be paid">
-          <Card>
-            <Table>
+        <MkSection>
+          <SectionHeading title="Approved, waiting to be paid" />
+          <MkCard flush>
+            <Table caption="Approved, waiting to be paid">
               <THead>
                 <Tr>
                   <Th>Seller</Th>
@@ -92,7 +89,7 @@ export function RemittancesIndex(): ReactElement {
                 {owedItems.map((w) => (
                   <Tr key={w.id}>
                     <Td>
-                      <Link href={`/sellers/${w.sellerId}`} className="text-accent hover:underline">
+                      <Link href={`/sellers/${w.sellerId}`} className="mk-name">
                         {w.sellerName ?? <Ident value={`${w.sellerId.slice(0, 8)}…`} />}
                       </Link>
                     </Td>
@@ -108,7 +105,7 @@ export function RemittancesIndex(): ReactElement {
                         nobody quoted. */}
                     <Td align="right">
                       {w.amountInHomeCurrency === null || w.homeCurrency === null ? (
-                        <span className="text-text-faint text-xs">—</span>
+                        <span className="mk-faint">—</span>
                       ) : (
                         <span
                           title={`At the rate when requested: 1 ${w.currency} = ${w.fxRateSnapshot ?? '?'} ${w.homeCurrency}`}
@@ -128,17 +125,14 @@ export function RemittancesIndex(): ReactElement {
                         left of its own name. */}
                     <Td align="right">
                       {w.sellerBalanceInr === null ? (
-                        <span className="text-text-faint text-xs">—</span>
+                        <span className="mk-faint">—</span>
                       ) : (
                         <Money amount={w.sellerBalanceInr} currency="INR" />
                       )}
                     </Td>
                     <Td
-                      className={
-                        w.slaBreached
-                          ? 'text-[var(--color-critical)] text-xs'
-                          : 'text-text-muted text-xs'
-                      }
+                      className="mk-text mk-small sk-figure"
+                      data-tone={w.slaBreached ? 'critical' : undefined}
                     >
                       {w.waitingHours ?? 0}h
                     </Td>
@@ -151,6 +145,7 @@ export function RemittancesIndex(): ReactElement {
                       <Button
                         variant="secondary"
                         size="sm"
+                        icon={<Banknote size={14} />}
                         onClick={() =>
                           setPaying({
                             sellerId: w.sellerId,
@@ -166,14 +161,12 @@ export function RemittancesIndex(): ReactElement {
                 ))}
               </TBody>
             </Table>
-          </Card>
-        </Section>
+          </MkCard>
+        </MkSection>
       )}
 
       {list.isLoading ? (
-        <Card>
-          <SkeletonRows rows={5} cols={6} />
-        </Card>
+        <SkeletonRows rows={5} cols={7} label="Loading remittances…" />
       ) : list.isError ? (
         <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
       ) : !list.data || list.data.items.length === 0 ? (
@@ -189,31 +182,29 @@ export function RemittancesIndex(): ReactElement {
           }
         />
       ) : (
-        <Card>
-          <Table wrapperClassName="rounded-none border-0 bg-transparent">
-            <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Paid at</th>
-                <th className="text-left px-3 py-2 font-medium">Seller</th>
-                <th className="text-right px-3 py-2 font-medium">Source</th>
-                <th className="text-right px-3 py-2 font-medium">Destination</th>
-                <th className="text-left px-3 py-2 font-medium">Paid from</th>
-                <th className="text-left px-3 py-2 font-medium">Bank ref</th>
-                <th className="text-right px-3 py-2 font-medium">FX</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+        <MkCard flush>
+          <Table caption="Recorded remittances">
+            <THead>
+              <Tr>
+                <Th>Paid at</Th>
+                <Th>Seller</Th>
+                <Th align="right">Source</Th>
+                <Th align="right">Destination</Th>
+                <Th>Paid from</Th>
+                <Th>Bank ref</Th>
+                <Th align="right">FX</Th>
+              </Tr>
+            </THead>
+            <TBody>
               {list.data.items.map((r) => (
-                <tr key={r.id}>
-                  <td className="px-3 py-2 text-text-body font-mono text-xs">
-                    {new Date(r.paidAt).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-text-body">
-                    <Link href={`/sellers/${r.sellerId}`} className="text-accent hover:underline">
+                <Tr key={r.id}>
+                  <Td className="mk-when sk-figure">{new Date(r.paidAt).toLocaleString()}</Td>
+                  <Td>
+                    <Link href={`/sellers/${r.sellerId}`} className="mk-name">
                       {r.sellerName ?? <Ident value={`${r.sellerId.slice(0, 8)}…`} />}
                     </Link>
-                  </td>
-                  <td className="px-3 py-2 text-right">
+                  </Td>
+                  <Td align="right">
                     {/* The seller's wallet is debited by this leg — sign AND
                         colour say so, never colour alone. */}
                     <Money
@@ -221,43 +212,45 @@ export function RemittancesIndex(): ReactElement {
                       currency={r.sourceCurrency === 'BDT' ? 'BDT' : 'INR'}
                       direction="debit"
                     />
-                  </td>
-                  <td className="px-3 py-2 text-right">
+                  </Td>
+                  <Td align="right">
                     <Money
                       amount={r.amount}
                       currency={r.currency === 'BDT' ? 'BDT' : 'INR'}
                       direction="credit"
                     />
-                  </td>
-                  <td className="px-3 py-2 text-text-body text-xs">
+                  </Td>
+                  <Td>
                     {/* Without this a payout says money went out and not
                         where from, which is the one thing needed to
                         match it against a statement. */}
                     {r.paidFromLabel === null ? (
-                      <span className="text-text-faint">Not recorded</span>
+                      <span className="mk-faint">Not recorded</span>
                     ) : (
-                      <>
-                        {r.paidFromLabel}
+                      <div className="mk-cell mk-small">
+                        <span className="mk-body">{r.paidFromLabel}</span>
                         {r.paidFromBank !== null && (
-                          <div className="text-text-faint">{r.paidFromBank}</div>
+                          <span className="mk-faint">{r.paidFromBank}</span>
                         )}
-                      </>
+                      </div>
                     )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Ident value={r.bankReference} />
-                    {r.recordedByName !== null && (
-                      <div className="text-text-faint mt-0.5 text-xs">by {r.recordedByName}</div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right text-text-muted skydrop-tabular text-xs">
+                  </Td>
+                  <Td>
+                    <div className="mk-cell">
+                      <Ident value={r.bankReference} />
+                      {r.recordedByName !== null && (
+                        <span className="mk-faint">by {r.recordedByName}</span>
+                      )}
+                    </div>
+                  </Td>
+                  <Td align="right" className="mk-small sk-figure">
                     {r.sourceCurrency === r.currency ? '—' : Number(r.fxRateSnapshot).toFixed(4)}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
-            </tbody>
+            </TBody>
           </Table>
-        </Card>
+        </MkCard>
       )}
 
       {creating && (

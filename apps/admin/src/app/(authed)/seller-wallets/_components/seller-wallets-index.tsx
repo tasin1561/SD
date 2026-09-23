@@ -10,27 +10,29 @@ import {
   ClipboardCheck,
   RefreshCw,
 } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  Input,
-  LoadingState,
-  Money,
-  PageHeader,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { useToast } from '@skydrop/ui/app/toast';
 import { isWalletCredit, walletDirectionLabel } from '@skydrop/ui/status';
 import { WalletEntryDirection } from '@skydrop/db';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import {
+  Table,
+  TableEmpty,
+  TableToolbar,
+  TBody,
+  Td,
+  Th,
+  THead,
+  Tr,
+} from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Button, buttonClassName } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { ParachuteProgress } from '@skydrop/ui/app/parachute-progress';
 import {
   useReconcileSellerWallets,
   useSellerWalletOverview,
@@ -39,6 +41,7 @@ import {
 import { usePermission } from '@/lib/use-permission';
 import { useFxRatesList } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { MkCard } from './money-parts';
 
 type Filter = 'all' | 'credit' | 'debt' | 'payout';
 
@@ -70,7 +73,7 @@ function Bdt({
 }): ReactElement | null {
   if (rate === null || !Number.isFinite(Number(amountInr))) return null;
   return (
-    <span className="text-text-faint text-xs">
+    <span className="mk-faint">
       ≈ <Money amount={(Number(amountInr) * rate).toFixed(2)} currency="BDT" convert={false} />
     </span>
   );
@@ -98,6 +101,7 @@ export function SellerWalletsIndex(): ReactElement {
   const reconcile = useReconcileSellerWallets();
   const [filter, setFilter] = useState<Filter>('all');
   const [term, setTerm] = useState('');
+  const [confirmingReconcile, setConfirmingReconcile] = useState(false);
   // Read unconditionally — `a && usePermission(b)` short-circuits,
   // which skips a hook call and changes the hook ORDER between renders.
   const canReadFx = usePermission('fx.view');
@@ -163,14 +167,12 @@ export function SellerWalletsIndex(): ReactElement {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="mk-page">
       <PageHeader
-        title={
-          <span className="flex flex-wrap items-center gap-3">
-            Seller wallets
-            <span className="border-border text-text-muted rounded-full border px-2.5 py-0.5 text-xs font-medium tracking-wide uppercase">
-              {counts.all} {counts.all === 1 ? 'account' : 'accounts'}
-            </span>
+        title="Seller wallets"
+        meta={
+          <span className="mk-count sk-figure">
+            {counts.all} {counts.all === 1 ? 'account' : 'accounts'}
           </span>
         }
         subtitle="What we owe sellers, what they owe us, and every ledger behind those two numbers."
@@ -179,19 +181,34 @@ export function SellerWalletsIndex(): ReactElement {
             <Button
               variant="secondary"
               size="md"
+              icon={<RefreshCw size={15} />}
+              loading={reconcile.isPending}
               disabled={reconcile.isPending}
-              onClick={() => void runReconcile()}
+              onClick={() => setConfirmingReconcile(true)}
               title="Re-check every wallet against its own ledger. Balances update as money moves, so this is a verification rather than a refresh."
             >
-              <RefreshCw className="size-4" />
               {reconcile.isPending ? 'Checking…' : 'Re-check ledgers'}
             </Button>
           ) : undefined
         }
       />
 
+      {reconcile.isPending && (
+        <ParachuteProgress
+          label="Re-checking every seller wallet against its ledger"
+          detail="Nothing is changed unless a cached balance drifted from its own entries."
+        />
+      )}
+
       {overview.isLoading ? (
-        <LoadingState />
+        <>
+          <div className="mk-kpis">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} height={148} rounded="md" />
+            ))}
+          </div>
+          <SkeletonRows rows={6} cols={7} label="Loading seller wallets…" />
+        </>
       ) : overview.isError || overview.data === undefined ? (
         <ErrorState
           message={overview.error?.message ?? 'Failed to load.'}
@@ -199,12 +216,12 @@ export function SellerWalletsIndex(): ReactElement {
         />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mk-kpis">
             <MoneyTile
               label="We owe sellers"
               caption="Payable on demand"
               amountInr={overview.data.totals.owedToSellersInr}
-              icon={<ArrowUpRight className="size-4" />}
+              icon={<ArrowUpRight size={16} />}
               footLeft={`${overview.data.totals.sellersInCredit} in credit`}
               footRight="OK"
               tone="ok"
@@ -214,11 +231,11 @@ export function SellerWalletsIndex(): ReactElement {
               label="Sellers owe us"
               caption="Negative balances and return charges"
               amountInr={overview.data.totals.owedBySellersInr}
-              icon={<AlertTriangle className="size-4" />}
+              icon={<AlertTriangle size={16} />}
               footLeft={`${overview.data.totals.sellersInDebt} account${
                 overview.data.totals.sellersInDebt === 1 ? '' : 's'
               } in debt`}
-              footRight={Number(overview.data.totals.owedBySellersInr) > 0 ? 'REVIEW' : '—'}
+              footRight={Number(overview.data.totals.owedBySellersInr) > 0 ? 'Review' : '—'}
               // Loud only when there is something to be loud about. A
               // permanently red tile is one nobody reads.
               tone={Number(overview.data.totals.owedBySellersInr) > 0 ? 'bad' : 'ok'}
@@ -228,9 +245,9 @@ export function SellerWalletsIndex(): ReactElement {
               label="Withdrawals held"
               caption="Asked for, already inside the balance above"
               amountInr={overview.data.totals.pendingWithdrawalInr}
-              icon={<ClipboardCheck className="size-4" />}
+              icon={<ClipboardCheck size={16} />}
               footLeft={`${counts.payout} awaiting payout`}
-              footRight={counts.payout > 0 ? 'PENDING' : '—'}
+              footRight={counts.payout > 0 ? 'Pending' : '—'}
               tone={counts.payout > 0 ? 'warn' : 'ok'}
               inrToBdt={inrToBdt}
             />
@@ -238,145 +255,104 @@ export function SellerWalletsIndex(): ReactElement {
               label="Top-ups in review"
               caption="Claimed, not yet matched to a statement — in no balance"
               amountInr={overview.data.totals.pendingTopupInr}
-              icon={<CheckCircle2 className="size-4" />}
+              icon={<CheckCircle2 size={16} />}
               footLeft={
                 Number(overview.data.totals.pendingTopupInr) > 0
                   ? 'Waiting on verification'
                   : 'All statements reconciled'
               }
-              footRight={Number(overview.data.totals.pendingTopupInr) > 0 ? 'QUEUED' : 'CLEAR'}
+              footRight={Number(overview.data.totals.pendingTopupInr) > 0 ? 'Queued' : 'Clear'}
               tone="ok"
               inrToBdt={inrToBdt}
             />
           </div>
 
-          <Card>
-            <CardBody className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-1">
-                <FilterTab
-                  active={filter === 'all'}
-                  n={counts.all}
-                  onClick={() => setFilter('all')}
-                >
-                  All wallets
-                </FilterTab>
-                <FilterTab
-                  active={filter === 'credit'}
-                  n={counts.credit}
-                  onClick={() => setFilter('credit')}
-                >
-                  In credit
-                </FilterTab>
-                <FilterTab
-                  active={filter === 'debt'}
-                  n={counts.debt}
-                  onClick={() => setFilter('debt')}
-                >
-                  In debt
-                </FilterTab>
-                <FilterTab
-                  active={filter === 'payout'}
-                  n={counts.payout}
-                  onClick={() => setFilter('payout')}
-                >
-                  Pending payout
-                </FilterTab>
-              </div>
-              <Input
-                className="w-full sm:w-72"
-                placeholder="Filter by company, email or id…"
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-                aria-label="Filter wallets"
+          <MkCard flush>
+            <div className="mk-card__head">
+              <Tabs
+                label="Which wallets"
+                size="sm"
+                value={filter}
+                onChange={(id) => setFilter(id as Filter)}
+                items={[
+                  { id: 'all', label: 'All wallets', count: counts.all },
+                  { id: 'credit', label: 'In credit', count: counts.credit },
+                  { id: 'debt', label: 'In debt', count: counts.debt },
+                  { id: 'payout', label: 'Pending payout', count: counts.payout },
+                ]}
               />
-            </CardBody>
-          </Card>
-
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Seller</Th>
-                <Th align="right">Available balance</Th>
-                <Th align="right">Requested out</Th>
-                <Th align="right">Awaiting review</Th>
-                <Th>Last movement</Th>
-                <Th>Status</Th>
-                <Th align="right">Actions</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {shown.length === 0 ? (
-                <TableEmpty colSpan={7}>
-                  {rows.length === 0
-                    ? 'No sellers yet. Every approved seller appears here, whether or not money has moved.'
-                    : 'No wallet matches that.'}
-                </TableEmpty>
-              ) : (
-                shown.map((r) => <WalletRow key={r.sellerId} row={r} inrToBdt={inrToBdt} />)
-              )}
-            </TBody>
-          </Table>
-
-          <Card>
-            <CardBody className="flex flex-wrap items-center justify-between gap-3 text-sm">
-              <span className="text-text-muted">
+            </div>
+            <TableToolbar
+              search={{
+                value: term,
+                onChange: setTerm,
+                label: 'Filter wallets',
+                placeholder: 'Filter by company, email or id…',
+              }}
+            />
+            <Table caption="Seller wallets">
+              <THead>
+                <Tr>
+                  <Th>Seller</Th>
+                  <Th align="right">Available balance</Th>
+                  <Th align="right">Requested out</Th>
+                  <Th align="right">Awaiting review</Th>
+                  <Th>Last movement</Th>
+                  <Th>Status</Th>
+                  <Th align="right">Actions</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {shown.length === 0 ? (
+                  <TableEmpty colSpan={7}>
+                    {rows.length === 0
+                      ? 'No sellers yet. Every approved seller appears here, whether or not money has moved.'
+                      : 'No wallet matches that.'}
+                  </TableEmpty>
+                ) : (
+                  shown.map((r) => <WalletRow key={r.sellerId} row={r} inrToBdt={inrToBdt} />)
+                )}
+              </TBody>
+            </Table>
+            <div className="mk-card__foot">
+              <span>
                 Showing {shown.length} of {rows.length} registered seller wallet
                 {rows.length === 1 ? '' : 's'}
               </span>
-              <span className="flex flex-wrap items-baseline gap-2">
-                <span className="text-text-muted text-xs tracking-wide uppercase">
-                  Net position
-                </span>
+              <span className="mk-balances">
+                <span className="mk-small">Net position</span>
                 <Money amount={overview.data.totals.netInr} currency="INR" convert={false} />
                 {/* The arithmetic, spelled out. A net figure with no
                     working is the one number on this page that could be
                     read as "nothing is outstanding". */}
-                <span className="text-text-faint text-xs">
+                <span className="mk-faint">
                   (owed to sellers {overview.data.totals.owedToSellersInr} − owed by them{' '}
                   {overview.data.totals.owedBySellersInr})
                 </span>
               </span>
-            </CardBody>
-          </Card>
+            </div>
+          </MkCard>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmingReconcile}
+        onOpenChange={setConfirmingReconcile}
+        title="Re-check every seller ledger?"
+        entity={`Every seller wallet · ${counts.all} ${counts.all === 1 ? 'account' : 'accounts'}`}
+        consequence="Each wallet's cached balance is checked against its own ledger entries. A cached balance that drifted is repaired; a ledger that disagrees with itself is reported and never changed."
+        confirmLabel="Re-check ledgers"
+        onConfirm={runReconcile}
+      />
     </div>
   );
 }
 
-function FilterTab({
-  active,
-  n,
-  onClick,
-  children,
-}: {
-  readonly active: boolean;
-  readonly n: number;
-  readonly onClick: () => void;
-  readonly children: string;
-}): ReactElement {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-        active
-          ? 'bg-surface-raised text-text-bright'
-          : 'text-text-muted hover:text-text hover:bg-surface-raised/60'
-      }`}
-    >
-      {children}
-      <span
-        className={`rounded px-1 text-xs tabular-nums ${
-          active ? 'bg-accent-fill text-accent-fg' : 'text-text-faint'
-        }`}
-      >
-        {n}
-      </span>
-    </button>
-  );
-}
+const TILE_TONE: Record<'ok' | 'warn' | 'bad', KpiTone> = {
+  ok: 'neutral',
+  warn: 'pending',
+  bad: 'debit',
+};
 
 /**
  * One headline figure, with what it stands on underneath it.
@@ -405,45 +381,21 @@ function MoneyTile({
   readonly tone: 'ok' | 'warn' | 'bad';
   readonly inrToBdt: number | null;
 }): ReactElement {
-  const accent =
-    tone === 'bad'
-      ? 'var(--status-failed-fg)'
-      : tone === 'warn'
-        ? 'var(--status-pending-fg)'
-        : 'var(--status-delivered-fg)';
   return (
-    <Card
-      // The border carries the tone. Tinting the whole tile makes four
-      // of them shout at once and none of them read.
-      style={{ borderColor: tone === 'ok' ? undefined : accent }}
-    >
-      <CardBody className="flex h-full flex-col gap-3">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="text-text-muted text-xs font-medium tracking-wide uppercase">
-              {label}
-            </div>
-            <div className="text-text-faint mt-0.5 text-xs">{caption}</div>
-          </div>
-          <span style={{ color: accent }}>{icon}</span>
-        </div>
-        <div className="text-2xl font-semibold tabular-nums">
-          <Money amount={amountInr} currency="INR" convert={false} />
-        </div>
-        {/* The taka equivalent, because half the people reading this
-            think in it. Absent entirely when no rate is posted — a
-            missing second figure is honest, a wrong one is not. */}
-        <div>
-          <Bdt amountInr={amountInr} rate={inrToBdt} />
-        </div>
-        <div className="border-border mt-auto flex items-center justify-between gap-2 border-t pt-2 text-xs">
-          <span className="text-text-muted">{footLeft}</span>
-          <span style={{ color: accent }} className="font-medium tracking-wide">
-            {footRight}
-          </span>
-        </div>
-      </CardBody>
-    </Card>
+    <KpiCard
+      label={label}
+      hint={caption}
+      icon={icon}
+      // The tone is carried by the glow and the footer word. Tinting all
+      // four at once makes them shout together and none of them read.
+      tone={TILE_TONE[tone]}
+      figure={<Money amount={amountInr} currency="INR" convert={false} />}
+      // The taka equivalent, because half the people reading this think
+      // in it. Absent entirely when no rate is posted — a missing second
+      // figure is honest, a wrong one is not.
+      secondary={<Bdt amountInr={amountInr} rate={inrToBdt} />}
+      foot={[{ label: footLeft, value: footRight }]}
+    />
   );
 }
 
@@ -484,99 +436,85 @@ function WalletRow({
   return (
     <Tr>
       <Td>
-        <div className="flex items-start gap-3">
-          <span
-            className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md text-xs font-semibold"
-            style={{
-              background: inDebt ? 'var(--status-failed-bg)' : 'var(--color-surface-raised)',
-              color: inDebt ? 'var(--status-failed-fg)' : 'var(--color-text-muted)',
-            }}
-            aria-hidden
-          >
+        <div className="mk-seller">
+          <span className="mk-initials" data-debt={inDebt ? '1' : undefined} aria-hidden>
             {initials(row.companyName)}
           </span>
-          <div className="min-w-0">
-            <Link
-              href={`/seller-wallets/${row.sellerId}`}
-              className="text-text-bright inline-flex items-center gap-1.5 font-medium hover:underline"
-            >
+          <div className="mk-cell">
+            <Link href={`/seller-wallets/${row.sellerId}`} className="mk-name mk-seller__name">
               {row.companyName}
               {inDebt ? (
-                <AlertTriangle className="text-status-failed-fg size-3.5" aria-hidden />
+                <AlertTriangle size={14} className="mk-seller__mark" data-tone="bad" aria-hidden />
               ) : row.status === 'APPROVED' ? (
-                <BadgeCheck className="text-status-delivered-fg size-3.5" aria-hidden />
+                <BadgeCheck size={14} className="mk-seller__mark" data-tone="good" aria-hidden />
               ) : null}
             </Link>
-            <div className="text-text-muted truncate text-xs">{row.email}</div>
-            <div className="text-text-faint font-mono text-[11px] break-all">{row.sellerId}</div>
+            <span className="mk-small mk-wrap">{row.email}</span>
+            <span className="mk-faint sk-ident mk-wrap">{row.sellerId}</span>
           </div>
         </div>
       </Td>
       <Td align="right">
-        <Money
-          amount={row.balanceInr}
-          currency="INR"
-          convert={false}
-          direction={inDebt ? 'debit' : balance > 0 ? 'credit' : 'neutral'}
-        />
-        <div>
+        <div className="mk-cell mk-cell--end">
+          <Money
+            amount={row.balanceInr}
+            currency="INR"
+            convert={false}
+            direction={inDebt ? 'debit' : balance > 0 ? 'credit' : 'neutral'}
+          />
           <Bdt amountInr={row.balanceInr} rate={inrToBdt} />
         </div>
       </Td>
-      <Td align="right" className="text-text-muted">
+      <Td align="right">
         {Number(row.pendingWithdrawalInr) > 0 ? (
           <Money amount={row.pendingWithdrawalInr} currency="INR" convert={false} />
         ) : (
-          <span className="text-text-faint">—</span>
+          <span className="mk-faint">—</span>
         )}
       </Td>
-      <Td align="right" className="text-text-muted">
+      <Td align="right">
         {Number(row.pendingTopupInr) > 0 ? (
           <Money amount={row.pendingTopupInr} currency="INR" convert={false} />
         ) : (
-          <span className="text-text-faint">—</span>
+          <span className="mk-faint">—</span>
         )}
       </Td>
-      <Td className="text-xs">
+      <Td>
         {row.lastMovementAt === null ? (
           // Not a date and not a dash: a wallet nothing has ever touched
           // is a real state, and saying so beats an empty cell that
           // reads as missing data.
-          <span className="text-text-faint">Nothing has moved yet</span>
+          <span className="mk-faint">Nothing has moved yet</span>
         ) : (
-          <>
-            <div className="text-text-muted">
+          <div className="mk-cell">
+            <span className="mk-when">
               {new Date(row.lastMovementAt).toLocaleDateString('en-IN', {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric',
               })}
-            </div>
+            </span>
             {direction !== null && (
-              <div
-                style={{
-                  color: isWalletCredit(direction)
-                    ? 'var(--status-delivered-fg)'
-                    : 'var(--status-failed-fg)',
-                }}
+              <span
+                className="mk-text mk-small"
+                data-tone={isWalletCredit(direction) ? 'good' : 'critical'}
               >
                 {walletDirectionLabel(direction)}
-              </div>
+              </span>
             )}
-          </>
+          </div>
         )}
       </Td>
       <Td>
-        <StatusBadge
+        <StatusChip
           kind={inDebt ? 'failed' : balance > 0 ? 'delivered' : 'draft'}
           label={inDebt ? 'In debit' : balance > 0 ? 'In credit' : 'Settled'}
+          size="sm"
         />
       </Td>
       <Td align="right">
-        <Link href={`/seller-wallets/${row.sellerId}`}>
-          <Button variant="ghost" size="sm">
-            Ledger →
-          </Button>
+        <Link href={`/seller-wallets/${row.sellerId}`} className={buttonClassName('ghost', 'sm')}>
+          <span className="sk-btn__label">Ledger →</span>
         </Link>
       </Td>
     </Tr>

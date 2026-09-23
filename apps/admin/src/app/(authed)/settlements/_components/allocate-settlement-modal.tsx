@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  useToast,
-} from '@skydrop/ui/components';
+import { Plus } from 'lucide-react';
+import { Ident, Money } from '@skydrop/ui/components';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
+import { MkAlert } from '../../seller-wallets/_components/money-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAllocateSettlement } from '@/lib/ops-hooks';
 
@@ -73,62 +71,82 @@ export function AllocateSettlementModal({
     } catch (err) {
       // FE-2 — the server owns the rules; show its refusal verbatim.
       toast.error(serverVerdict(err));
+      throw err;
     }
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={onOpenChange}
+      locked={allocate.isPending}
       title="Allocate more of this payout"
       description={`${reference} — name the orders it also covered. The payout total is not changed; this moves money already in the bank to the sellers it belongs to.`}
+      footer={
+        <DialogFooter>
+          <Button
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+            disabled={allocate.isPending}
+          >
+            Cancel
+          </Button>
+          <AsyncButton
+            labels={{ idle: 'Allocate', busy: 'Allocating…', done: 'Allocated', error: 'Refused' }}
+            disabled={filled.length === 0 || over}
+            onAction={submit}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="text-text-muted mb-3 text-xs">
-        Left to allocate: <Money amount={unallocatedInr} />
-      </div>
+      <div className="mk-stack">
+        <div className="mk-subject">
+          <span className="mk-subject__label">Payout</span>
+          <span className="mk-subject__main">
+            <Ident value={reference} />
+          </span>
+          <span className="mk-small">
+            Left to allocate: <Money amount={unallocatedInr} />
+          </span>
+        </div>
 
-      {lines.map((line, i) => (
-        <div key={i} className="mb-2 flex gap-2">
-          <FormField label={i === 0 ? 'Order ID' : ''} className="flex-1">
-            <Input
+        {lines.map((line, i) => (
+          <div key={i} className="mk-line mk-line--2">
+            <TextField
+              label="Order ID"
               value={line.orderId}
               onChange={(e) => set(i, 'orderId', e.target.value)}
               placeholder="Order UUID"
+              inputClassName="sk-ident"
             />
-          </FormField>
-          <FormField label={i === 0 ? 'Settled (INR)' : ''} className="w-40">
-            <Input
+            <TextField
+              label="Settled (INR)"
               value={line.settledInr}
               onChange={(e) => set(i, 'settledInr', e.target.value)}
               placeholder="0.00"
               inputMode="decimal"
             />
-          </FormField>
+          </div>
+        ))}
+
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Plus size={14} />}
+            onClick={() => setLines((prev) => [...prev, { orderId: '', settledInr: '' }])}
+          >
+            Add order
+          </Button>
         </div>
-      ))}
 
-      <Button
-        variant="ghost"
-        onClick={() => setLines((prev) => [...prev, { orderId: '', settledInr: '' }])}
-      >
-        + Add order
-      </Button>
-
-      {over && (
-        <ErrorNote message="You have named more than this payout has left. The server refuses this — record a separate payout for cash that landed separately." />
-      )}
-
-      <ModalFooter>
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          onClick={() => void submit()}
-          disabled={filled.length === 0 || over || allocate.isPending}
-        >
-          {allocate.isPending ? 'Allocating…' : 'Allocate'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {over && (
+          <MkAlert>
+            You have named more than this payout has left. The server refuses this — record a
+            separate payout for cash that landed separately.
+          </MkAlert>
+        )}
+      </div>
+    </Dialog>
   );
 }
