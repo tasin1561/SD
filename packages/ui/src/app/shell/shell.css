@@ -173,7 +173,7 @@
   display: grid;
   gap: 2px;
 }
-.sk-nav__heading + .sk-nav__items:not([hidden]) > .sk-nav__cell {
+.sk-nav__items[data-opened] > .sk-nav__cell {
   animation: sk-nav-in var(--dur) var(--ease-out) both;
 }
 .sk-nav__row {
@@ -183,7 +183,7 @@
   min-height: var(--tap);
   padding: 4px var(--sp-2) 4px var(--sp-3);
   border-radius: var(--r-sm);
-  color: var(--fg-muted);
+  color: var(--fg-body);
   font-size: var(--fs-sm);
   font-weight: var(--fw-medium);
   text-decoration: none;

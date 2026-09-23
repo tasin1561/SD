@@ -51,11 +51,19 @@
   max-width: 400px;
   animation: sk-signin-rise var(--dur-slow) var(--ease-out) both;
 }
+/* Movement only: the heading is the page's LCP, and text at opacity 0 is
+   not a paint (the track lesson). */
 @keyframes sk-signin-rise {
   from {
-    opacity: 0;
     transform: translateY(10px);
   }
+}
+.sk-signin__main[data-wide] {
+  max-width: 520px;
+}
+.sk-signin__card + .sk-signin__card,
+.sk-signin__footer + .sk-signin__card {
+  margin-top: var(--sp-4);
 }
 .sk-signin__brand {
   display: flex;

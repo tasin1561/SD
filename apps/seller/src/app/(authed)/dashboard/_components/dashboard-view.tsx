@@ -3,19 +3,16 @@
 import Link from 'next/link';
 import {
   AlertTriangle,
-  Check,
-  Circle,
   Hourglass,
   LifeBuoy,
   ListOrdered,
   Package,
   PhoneOff,
-  Plus,
   Ship,
   Truck,
   Wallet,
 } from 'lucide-react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { OrderStatus } from '@skydrop/db';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import {
@@ -26,27 +23,23 @@ import {
   useWalletBalances,
 } from '@/lib/api-hooks';
 import { useMyNsaOrders } from '@/lib/ops-hooks';
+import { Money } from '@skydrop/ui/components';
+import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ListRow, ListRows } from '@skydrop/ui/app/list-row';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import {
-  BandBody,
-  Crumbs,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  MetaChip,
-  Money,
-  OrderStatusBadge,
-  PageHeader,
-  SectionBand,
-  Skeleton,
-  SkeletonRows,
-  Stat,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+  CreateOrderLink,
+  DashSection,
+  MetaFact,
+  MoneyTile,
+  OnboardingSteps,
+  ShortcutCard,
+} from './dashboard-parts';
 import { can } from '@/lib/page-access';
 
 /**
@@ -77,6 +70,16 @@ import { can } from '@/lib/page-access';
  *     pages that exist; the readings inside them do not.
  *
  * Everything that remains is read from an endpoint.
+ *
+ * ── THE 2026-09-23 RESTYLE (the app primitives) ─────────────────────
+ * The same data, gates and words on `@skydrop/ui/app/*`: KPI cards for
+ * the balance and the money in flight (each figure is the SAME `<Money>`
+ * node, handed to the card as `figure`, so no amount is re-formatted),
+ * list rows with a severity stripe for what needs the seller, the data
+ * table for recent orders, and shortcut cards for where to go next.
+ * The numbered section bands and their "NN //" indexes are gone. The
+ * presentational pieces live in `dashboard-parts.tsx`; the decisions
+ * stay here.
  */
 
 /**
@@ -223,136 +226,97 @@ export function DashboardView(): ReactElement {
   const firstIncomplete = steps.findIndex((s) => !s.done);
 
   return (
-    <div>
+    <div className="db-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs items={[{ label: 'Seller console' }, { label: 'Dashboard' }]} Link={Link} />
-        }
+        breadcrumbs={[{ label: 'Seller console' }, { label: 'Dashboard' }]}
+        Link={Link}
         title={`Hello, ${companyName}`}
         subtitle="Your most recent orders, what you are owed, and where to go next."
         meta={
-          <>
-            <MetaChip tone="good" dot>
+          <span className="db-meta">
+            <MetaFact tone="good" dot>
               Account active
-            </MetaChip>
+            </MetaFact>
             {canWallet && canonicalCurrency !== null && (
-              <MetaChip tone="accent">{canonicalCurrency} wallet</MetaChip>
+              <MetaFact tone="accent">{canonicalCurrency} wallet</MetaFact>
             )}
             {canOrders && recent.data !== undefined && (
-              <MetaChip>
+              <MetaFact>
                 {recent.data.total} {recent.data.total === 1 ? 'order' : 'orders'} placed
-              </MetaChip>
+              </MetaFact>
             )}
-          </>
+          </span>
         }
-        action={
-          canOrders ? (
-            <Link
-              href="/orders/new"
-              className="bg-accent-fill text-accent-fg hover:bg-accent-fill-hover inline-flex items-center gap-1.5 rounded-[var(--radius-2)] px-3 py-2 text-sm font-semibold transition-colors"
-            >
-              <Plus size={15} aria-hidden /> Create order
-            </Link>
-          ) : undefined
-        }
+        action={canOrders ? <CreateOrderLink /> : undefined}
       />
 
       {/* ── What needs you, before anything that is merely true ──── */}
       {canOrders && needsYou && (
-        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ListRows label="Needs your attention">
           {awaitingCount > 0 && (
-            <Stat
-              label="Waiting on your decision"
-              icon={<PhoneOff size={13} aria-hidden />}
-              value={awaitingCount}
-              unit={awaitingCount === 1 ? 'order' : 'orders'}
-              tone="warn"
-              hint="We rang and nobody answered. Nothing happens to these until you say."
-              foot={[
-                {
-                  label: 'Open the list',
-                  value: (
-                    <Link href="/needs-attention" className="text-accent font-medium">
-                      Needs attention →
-                    </Link>
-                  ),
-                },
-              ]}
+            <ListRow
+              key="awaiting"
+              href="/needs-attention"
+              Link={Link}
+              severity="high"
+              icon={<PhoneOff size={16} />}
+              title="Waiting on your decision"
+              description={
+                <>
+                  We rang and nobody answered. Nothing happens to these until you say.
+                  <span className="db-row-cta">Open the list · Needs attention →</span>
+                </>
+              }
+              meta={
+                <span className="db-count sk-figure">
+                  {awaitingCount} {awaitingCount === 1 ? 'order' : 'orders'}
+                </span>
+              }
             />
           )}
           {stuckCount > 0 && (
-            <Stat
-              label="Out for delivery, not arrived"
-              icon={<AlertTriangle size={13} aria-hidden />}
-              value={stuckCount}
-              unit={stuckCount === 1 ? 'parcel' : 'parcels'}
-              tone="bad"
-              // We chase these; the seller does not have to. Saying so
-              // is what stops the tile reading as a task list.
-              hint="We are chasing the courier on these."
-              foot={[
-                {
-                  label: 'See where each one is',
-                  value: (
-                    <Link href="/needs-attention" className="text-accent font-medium">
-                      Needs attention →
-                    </Link>
-                  ),
-                },
-              ]}
+            <ListRow
+              key="stuck"
+              href="/needs-attention"
+              Link={Link}
+              severity="critical"
+              icon={<AlertTriangle size={16} />}
+              title="Out for delivery, not arrived"
+              description={
+                // We chase these; the seller does not have to. Saying so
+                // is what stops the row reading as a task list.
+                <>
+                  We are chasing the courier on these.
+                  <span className="db-row-cta">See where each one is · Needs attention →</span>
+                </>
+              }
+              meta={
+                <span className="db-count sk-figure">
+                  {stuckCount} {stuckCount === 1 ? 'parcel' : 'parcels'}
+                </span>
+              }
             />
           )}
-        </div>
+        </ListRows>
       )}
 
       {canProfile && canCatalog && onboardingVisible(onboardingKnown, steps) && (
-        <div className="mb-5">
-          <SectionBand
-            index="00"
-            title="Finish setting up"
-            note={`${completedSteps} of ${STEPS_TOTAL} done`}
+        <DashSection title="Finish setting up" note={`${completedSteps} of ${STEPS_TOTAL} done`}>
+          <OnboardingSteps
+            steps={steps}
+            completed={completedSteps}
+            firstIncomplete={firstIncomplete}
           />
-          <BandBody>
-            <ol className="space-y-1.5">
-              {steps.map((step, i) => (
-                <li key={step.label} className="flex items-center gap-2 text-sm">
-                  {step.done ? (
-                    <Check size={14} className="text-[var(--status-delivered-fg)] shrink-0" />
-                  ) : (
-                    <Circle size={14} className="text-text-faint shrink-0" />
-                  )}
-                  {step.done ? (
-                    <span className="text-text-muted line-through">{step.label}</span>
-                  ) : (
-                    <Link
-                      href={step.href}
-                      className={i === firstIncomplete ? 'text-accent font-medium' : ''}
-                    >
-                      {step.label}
-                    </Link>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </BandBody>
-        </div>
+        </DashSection>
       )}
 
-      {/* ── 01 // money ───────────────────────────────────────────────── */}
+      {/* ── Money ─────────────────────────────────────────────────────── */}
       {(canWallet || canOrders) && (
-        <div className="mb-5">
-          <SectionBand
-            index="01"
-            title="Treasury & liquidity"
-            action={
-              canWallet ? (
-                <Link href="/wallet" className="text-accent text-xs font-medium">
-                  Ledger and top-ups →
-                </Link>
-              ) : undefined
-            }
-          />
-          <BandBody className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <DashSection
+          title="Treasury & liquidity"
+          link={canWallet ? { href: '/wallet', label: 'Ledger and top-ups →' } : undefined}
+        >
+          <div className="db-kpis">
             {canWallet && <WalletBalanceCard query={balances} />}
             {canOrders && (
               <>
@@ -363,7 +327,8 @@ export function DashboardView(): ReactElement {
                     leaving somebody to discover at settlement. */}
                 <MoneyTile
                   label="On its way"
-                  icon={<Truck size={13} aria-hidden />}
+                  icon={<Truck size={14} />}
+                  tone="info"
                   amount={inFlight.data?.inTransit.codInr}
                   count={inFlight.data?.inTransit.count}
                   countLabel="orders dispatched"
@@ -372,8 +337,8 @@ export function DashboardView(): ReactElement {
                 />
                 <MoneyTile
                   label="Clearing"
-                  icon={<Hourglass size={13} aria-hidden />}
-                  tone="warn"
+                  icon={<Hourglass size={14} />}
+                  tone="pending"
                   amount={inFlight.data?.processing.codInr}
                   count={inFlight.data?.processing.count}
                   countLabel="delivered, unpaid"
@@ -382,101 +347,86 @@ export function DashboardView(): ReactElement {
                 />
               </>
             )}
-          </BandBody>
-        </div>
+          </div>
+        </DashSection>
       )}
 
-      {/* ── 02 // orders ──────────────────────────────────────────────── */}
+      {/* ── Recent orders ─────────────────────────────────────────────── */}
       {canOrders && (
-        <div className="mb-5">
-          <SectionBand
-            index="02"
-            title="Recent orders"
-            action={
-              <Link href="/orders" className="text-accent text-xs font-medium">
-                See all orders →
-              </Link>
-            }
-          />
+        <DashSection title="Recent orders" link={{ href: '/orders', label: 'See all orders →' }}>
           {recent.isLoading ? (
-            <BandBody>
-              <LoadingState label="Loading your orders…" />
-            </BandBody>
+            <SkeletonRows rows={5} cols={5} label="Loading your orders…" />
           ) : recent.isError ? (
-            <BandBody>
-              <ErrorState
-                message={recent.error?.message ?? 'Could not load your orders.'}
-                retry={() => void recent.refetch()}
-              />
-            </BandBody>
+            <ErrorState
+              message={recent.error?.message ?? 'Could not load your orders.'}
+              retry={() => void recent.refetch()}
+            />
           ) : (recent.data?.items ?? []).length === 0 ? (
-            <BandBody>
-              <EmptyState
-                title="No orders yet"
-                description="Your most recent orders appear here once you create one."
-                bare
-              />
-            </BandBody>
+            <EmptyState
+              title="No orders yet"
+              description="Your most recent orders appear here once you create one."
+            />
           ) : (
-            <BandBody flush>
-              <Table>
-                <THead>
-                  <Tr>
-                    <Th>Order</Th>
-                    <Th>Recipient</Th>
-                    <Th>Stage</Th>
-                    <Th align="right">COD</Th>
-                    <Th>Open</Th>
+            <Table caption="Recent orders">
+              <THead>
+                <Tr>
+                  <Th>Order</Th>
+                  <Th>Recipient</Th>
+                  <Th>Stage</Th>
+                  <Th align="right">COD</Th>
+                  <Th>Open</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {(recent.data?.items ?? []).map((o) => (
+                  <Tr key={o.id}>
+                    <Td>
+                      <Link href={`/orders/${o.id}`} className="db-order-link sk-ident">
+                        {o.orderNumber}
+                      </Link>
+                    </Td>
+                    <Td>
+                      <div className="db-recipient">{o.recipientName}</div>
+                      <div className="db-recipient-place">
+                        {o.recipientCity === ''
+                          ? (o.recipientStateProvince ?? '—')
+                          : o.recipientCity}
+                      </div>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        kind={orderStatusKind(o.status)}
+                        label={statusLabel(o.status)}
+                        size="sm"
+                      />
+                    </Td>
+                    <Td align="right">
+                      {o.codAmountInr === null ? (
+                        <span className="db-prepaid">Prepaid</span>
+                      ) : (
+                        <Money amount={o.codAmountInr} />
+                      )}
+                    </Td>
+                    <Td>
+                      <Link href={`/orders/${o.id}`} className="db-link">
+                        View →
+                      </Link>
+                    </Td>
                   </Tr>
-                </THead>
-                <TBody>
-                  {(recent.data?.items ?? []).map((o) => (
-                    <Tr key={o.id}>
-                      <Td>
-                        <Link href={`/orders/${o.id}`} className="text-accent font-mono text-xs">
-                          {o.orderNumber}
-                        </Link>
-                      </Td>
-                      <Td>
-                        <div className="truncate">{o.recipientName}</div>
-                        <div className="text-text-faint truncate font-mono text-xs">
-                          {o.recipientCity === ''
-                            ? (o.recipientStateProvince ?? '—')
-                            : o.recipientCity}
-                        </div>
-                      </Td>
-                      <Td>
-                        <OrderStatusBadge status={o.status} />
-                      </Td>
-                      <Td align="right">
-                        {o.codAmountInr === null ? (
-                          <span className="text-text-muted text-xs">Prepaid</span>
-                        ) : (
-                          <Money amount={o.codAmountInr} />
-                        )}
-                      </Td>
-                      <Td>
-                        <Link href={`/orders/${o.id}`} className="text-accent text-xs font-medium">
-                          View →
-                        </Link>
-                      </Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </Table>
-            </BandBody>
+                ))}
+              </TBody>
+            </Table>
           )}
-        </div>
+        </DashSection>
       )}
 
-      {/* ── 03 // where to go next ────────────────────────────────────── */}
-      <div>
-        <SectionBand index="03" title="Next steps" />
-        <BandBody className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* ── Where to go next ──────────────────────────────────────────── */}
+      <DashSection title="Next steps">
+        <ul className="db-shortcuts">
           {canCatalog && (
             <ShortcutCard
               href="/products"
-              icon={<Package size={16} aria-hidden />}
+              icon={<Package size={18} />}
               title="Manage catalogue"
               body="Products, variants, images and SKU codes."
               foot={
@@ -489,7 +439,7 @@ export function DashboardView(): ReactElement {
           {canOrders && (
             <ShortcutCard
               href="/orders"
-              icon={<ListOrdered size={16} aria-hidden />}
+              icon={<ListOrdered size={18} />}
               title="View orders"
               body="Full lifecycle, failed deliveries and the tracking timeline."
               foot={recent.data === undefined ? undefined : `${recent.data.total} in total`}
@@ -497,12 +447,12 @@ export function DashboardView(): ReactElement {
           )}
           {/* The page that answers "is anything of mine stuck". It had
               a nav row and no route in from here, so on a clean morning
-              — when the tiles above are correctly absent — nothing on
+              — when the rows above are correctly absent — nothing on
               the dashboard pointed at it at all. */}
           {canOrders && (
             <ShortcutCard
               href="/needs-attention"
-              icon={<AlertTriangle size={16} aria-hidden />}
+              icon={<AlertTriangle size={18} />}
               title="Needs attention"
               body="Orders we could not confirm, and parcels that never arrived."
               foot={
@@ -516,96 +466,19 @@ export function DashboardView(): ReactElement {
           )}
           <ShortcutCard
             href="/inbound"
-            icon={<Ship size={16} aria-hidden />}
+            icon={<Ship size={18} />}
             title="Inbound freight"
             body="Send stock to the warehouse and track what is on the water."
           />
           <ShortcutCard
             href="/tickets"
-            icon={<LifeBuoy size={16} aria-hidden />}
+            icon={<LifeBuoy size={18} />}
             title="Support tickets"
             body="Damage claims, missing items and anything that needs a person."
           />
-        </BandBody>
-      </div>
+        </ul>
+      </DashSection>
     </div>
-  );
-}
-
-/**
- * A figure that is MOVING — money out in the world rather than money in
- * the wallet.
- *
- * Built on the shared `Stat` rather than a second tile component: the
- * comps' tile is label + icon + figure + a hairline breakdown, which is
- * exactly what `Stat` grew `icon`, `unit` and `foot` for. A parallel
- * component here is how the two would come to disagree about padding.
- */
-function MoneyTile({
-  label,
-  icon,
-  tone = 'neutral',
-  amount,
-  count,
-  countLabel,
-  hint,
-  loading,
-}: {
-  readonly label: string;
-  readonly icon: ReactNode;
-  readonly tone?: 'neutral' | 'warn';
-  readonly amount: string | undefined;
-  readonly count: number | undefined;
-  readonly countLabel: string;
-  readonly hint: string;
-  readonly loading: boolean;
-}): ReactElement {
-  return (
-    <Stat
-      label={label}
-      icon={icon}
-      tone={tone}
-      value={
-        loading || amount === undefined ? (
-          <Skeleton className="h-6 w-28" />
-        ) : (
-          <Money amount={amount} size="md" />
-        )
-      }
-      hint={hint}
-      {...(count === undefined ? {} : { foot: [{ label: countLabel, value: count }] })}
-    />
-  );
-}
-
-function ShortcutCard({
-  href,
-  icon,
-  title,
-  body,
-  foot,
-}: {
-  href: string;
-  icon: ReactNode;
-  title: string;
-  body: string;
-  foot?: string | undefined;
-}): ReactElement {
-  return (
-    <Link
-      href={href}
-      className="border-border bg-surface hover:border-accent block rounded-[var(--radius-3)] border p-3 transition-colors"
-    >
-      <span className="bg-accent-tint text-accent grid h-8 w-8 place-items-center rounded-[var(--radius-2)]">
-        {icon}
-      </span>
-      <div className="text-text-strong mt-2.5 text-sm font-semibold">{title}</div>
-      <p className="text-text-muted mt-1 text-xs leading-snug">{body}</p>
-      <div className="border-border mt-2.5 flex items-center justify-between gap-2 border-t pt-2 text-xs">
-        <span className="text-text-faint font-mono">{foot ?? ''}</span>
-        <span className="text-accent font-medium">Go →</span>
-      </div>
-    </Link>
   );
 }
 
@@ -639,6 +512,9 @@ export function WalletBalanceCard({
 
   const value = Number(canonical.balance);
   const caption = value === 0 ? 'No activity yet' : value > 0 ? 'Owed to you' : 'You owe';
+  // Colour follows the same sign the caption states in words, so the
+  // tone is never the only signal.
+  const tone = value === 0 ? 'neutral' : value > 0 ? 'credit' : 'debit';
 
   // The restatement, when the API sent one. Its rate is what makes it
   // checkable rather than a second number to take on trust — and an
@@ -647,22 +523,17 @@ export function WalletBalanceCard({
   const restated = (query.data?.balances ?? []).find((b) => b.isConverted);
 
   /*
-    The shared `Stat`, not a hand-built card.
-
-    It sits in a row beside two `Stat` tiles, and a `Card` there was a
-    different padding, a different radius and a different label weight
-    from its neighbours — three tiles that are one row of the same
-    thing, drawn three ways. Every piece survives the move: the rupee
-    figure leads, the caption is the hint, and the taka restatement is
-    the hairline foot, which is exactly the "what this figure is made
-    of" slot.
+    The rupee figure leads, the caption is the hint, and the taka
+    restatement is the hairline foot — the "what this figure is made of"
+    slot. The figure is the same `<Money>` it always was, handed to the
+    card as a ready node: KpiCard draws it and never re-formats it.
   */
   return (
-    <Stat
+    <KpiCard
       label={`${canonical.currency} balance`}
-      icon={<Wallet size={13} aria-hidden />}
-      tone="neutral"
-      value={
+      icon={<Wallet size={14} />}
+      tone={tone}
+      figure={
         <Money
           amount={canonical.balance}
           currency={canonical.currency === 'BDT' ? 'BDT' : 'INR'}
@@ -677,23 +548,21 @@ export function WalletBalanceCard({
             foot: [
               {
                 label: (
-                  <span className="inline-flex flex-wrap items-baseline gap-x-1">
+                  <span className="db-restated">
                     <span aria-hidden>≈</span>
                     <Money
                       amount={restated.balance}
                       currency={restated.currency === 'BDT' ? 'BDT' : 'INR'}
                       convert={false}
                     />
-                    <span className="sr-only">the same balance in {restated.currency}</span>
+                    <span className="db-sr">the same balance in {restated.currency}</span>
                   </span>
                 ),
                 value:
                   restated.fxRate === null ? (
-                    <span className="text-text-faint">rate not recorded</span>
+                    <span className="db-faint">rate not recorded</span>
                   ) : (
-                    <span className="text-text-faint font-normal">
-                      ₹1 = ৳{Number(restated.fxRate).toFixed(2)}
-                    </span>
+                    <span className="db-faint">₹1 = ৳{Number(restated.fxRate).toFixed(2)}</span>
                   ),
               },
             ],

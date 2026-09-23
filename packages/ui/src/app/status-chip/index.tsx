@@ -12,7 +12,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import type { CSSProperties, ReactElement } from 'react';
+import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import type { StatusKind } from '../../status';
 import './status-chip.css';
 
@@ -45,6 +45,47 @@ const ICONS: Record<StatusChipKind, LucideIcon> = {
   held: PauseCircle,
   neutral: Circle,
 };
+
+/** Acronyms kept upper case when a label is shown in sentence case. */
+const ACRONYMS = new Set([
+  'RTO',
+  'NDR',
+  'AWB',
+  'COD',
+  'SKU',
+  'OTP',
+  'API',
+  'GST',
+  'FX',
+  'ETA',
+  'ID',
+  'BD',
+  'INR',
+  'BDT',
+  'UPI',
+  'CSV',
+]);
+
+/**
+ * The chip shows a status in SENTENCE case. The words are the vocabulary's
+ * own (`statusLabel` and friends in `@skydrop/ui/status`, unchanged); only
+ * the casing is presentation. The legacy badge hid the Title Case of those
+ * labels ("Rto In Transit") behind `text-transform: uppercase`; sentence
+ * case needs the acronyms kept, so "RTO in transit". A label that is not a
+ * plain string (a node) is left exactly as given.
+ */
+export function chipWords(label: ReactNode): ReactNode {
+  if (typeof label !== 'string') return label;
+  return label
+    .split(' ')
+    .map((word, i) => {
+      const upper = word.toUpperCase();
+      if (ACRONYMS.has(upper.replace(/[^A-Z]/g, ''))) return upper;
+      const lower = word.toLowerCase();
+      return i === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;
+    })
+    .join(' ');
+}
 
 export function StatusChip({
   kind,
@@ -83,7 +124,7 @@ export function StatusChip({
         strokeWidth={2.2}
         aria-hidden
       />
-      <span className="sk-chip__label">{label}</span>
+      <span className="sk-chip__label">{chipWords(label)}</span>
     </span>
   );
 }

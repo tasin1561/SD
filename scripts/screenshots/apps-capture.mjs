@@ -19,7 +19,7 @@
  *     [--only '/orders/[id],/wallet']   (re-take just these routes)
  */
 import { chromium } from '@playwright/test';
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 const args = Object.fromEntries(
@@ -126,7 +126,11 @@ async function main() {
   // throttles sign-ins (5 per 15 minutes per email), and three sign-ins per
   // run on top of any other local use trips it.
   let storageState;
-  if (args.email) {
+  // --state <file>: start from a saved session (and write the rotated one
+  // back at the end), so repeated partial re-takes cost no sign-in at all.
+  if (args.state && existsSync(args.state)) {
+    storageState = JSON.parse(readFileSync(args.state, 'utf8'));
+  } else if (args.email) {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
@@ -192,6 +196,7 @@ async function main() {
     await outCtx.close();
   }
   await browser.close();
+  if (args.state && storageState) writeFileSync(args.state, JSON.stringify(storageState));
   // A partial re-take (--only) leaves the full run's index alone.
   if (!only) {
     writeFileSync(join(OUT, 'index.json'), JSON.stringify({ app: APP, skipped, results }, null, 1));

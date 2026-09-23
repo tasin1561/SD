@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
+import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
+import { Button, ButtonLink } from '@skydrop/ui/app/button';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -15,13 +16,22 @@ import { serverVerdict } from '@/lib/server-verdict';
  * FE-2: server rejection ([INVALID_TOKEN], [TOKEN_EXPIRED], etc.)
  * surfaces verbatim.
  */
+/**
+ * What the meter shows is exactly what `handleSubmit` already checks
+ * (at least 10 characters; the two entries match) — display only, the
+ * rules themselves are unchanged and the server's verdict still wins
+ * (FE-2).
+ */
+const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
+  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
+];
+
 export function ResetPasswordForm({ token }: { readonly token: string }): ReactElement {
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const [showPw, setShowPw] = useState(false);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -58,81 +68,54 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
         <div className="rounded-[var(--radius-2)] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
           Password updated. Sign in with your new password to continue.
         </div>
-        <a
-          href="/login"
-          className="block text-center w-full mt-2 px-3 py-1.5 rounded-[var(--radius-2)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover transition-colors"
-        >
+        <ButtonLink href="/login" variant="primary" fullWidth>
           Sign in
-        </a>
+        </ButtonLink>
       </div>
     );
   }
 
-  const fieldClass =
-    'w-full px-3 py-1.5 rounded-[var(--radius-2)] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50';
-  // The console's micro-cap: mono, uppercase, widely tracked — the
-  // same face the app's column captions and section bands wear.
-  const labelClass = 'telemetry block text-text-muted mb-1.5';
+  const confirmCriteria: readonly PasswordCriterion[] = [
+    { id: 'match', label: 'Matches the password', test: (v) => v !== '' && v === pw },
+  ];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div>
-        <label htmlFor="pw" className={labelClass}>
-          New password
-        </label>
-        <div className="relative">
-          <input
-            id="pw"
-            type={showPw ? 'text' : 'password'}
-            autoComplete="new-password"
-            required
-            minLength={10}
-            maxLength={256}
-            value={pw}
-            onChange={(e) => setPw(e.target.value)}
-            disabled={submitting}
-            className={`${fieldClass} pr-9`}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPw((s) => !s)}
-            tabIndex={-1}
-            aria-label={showPw ? 'Hide password' : 'Show password'}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-body transition-colors p-1 rounded-[3px]"
-          >
-            {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
-      </div>
-      <div>
-        <label htmlFor="confirm" className={labelClass}>
-          Confirm password
-        </label>
-        <input
-          id="confirm"
-          type={showPw ? 'text' : 'password'}
-          autoComplete="new-password"
-          required
-          minLength={10}
-          maxLength={256}
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          disabled={submitting}
-          className={fieldClass}
-        />
-      </div>
+      <PasswordField
+        id="pw"
+        label="New password"
+        autoComplete="new-password"
+        required
+        minLength={10}
+        maxLength={256}
+        value={pw}
+        onChange={(e) => setPw(e.target.value)}
+        disabled={submitting}
+        showStrength
+        criteria={PASSWORD_CRITERIA}
+      />
+      <PasswordField
+        id="confirm"
+        toggleLabel="Show confirm password"
+        label="Confirm password"
+        autoComplete="new-password"
+        required
+        minLength={10}
+        maxLength={256}
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        disabled={submitting}
+        showStrength={false}
+        criteria={confirmCriteria}
+      />
       {error && (
         <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[var(--radius-2)]">
           {error}
         </div>
       )}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full mt-2 px-3 py-1.5 rounded-[var(--radius-2)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
-      >
+      <Button type="submit" fullWidth loading={submitting}>
         {submitting ? 'Saving…' : 'Save new password'}
-      </button>
+      </Button>
     </form>
   );
 }

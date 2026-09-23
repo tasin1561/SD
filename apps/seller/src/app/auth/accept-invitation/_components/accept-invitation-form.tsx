@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
+import { Button } from '@skydrop/ui/app/button';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -24,6 +26,16 @@ interface FormState {
   readonly confirmPassword: string;
 }
 
+/**
+ * What the meter shows is exactly what `handleSubmit` already checks
+ * (at least 10 characters; the two entries match) — display only, the
+ * rules themselves are unchanged and the server's verdict still wins
+ * (FE-2).
+ */
+const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
+  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
+];
+
 const INITIAL: FormState = {
   companyName: '',
   contactPersonName: '',
@@ -37,8 +49,6 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPw, setShowPw] = useState(false);
-  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -86,148 +96,101 @@ export function AcceptInvitationForm({ token }: { readonly token: string }): Rea
     }
   }
 
-  const fieldClass =
-    'w-full px-3 py-1.5 rounded-[var(--radius-2)] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50';
-  // The console's micro-cap: mono, uppercase, widely tracked — the
-  // same face the app's column captions and section bands wear.
-  const labelClass = 'telemetry block text-text-muted mb-1.5';
+  const confirmCriteria: readonly PasswordCriterion[] = [
+    { id: 'match', label: 'Matches the password', test: (v) => v !== '' && v === form.password },
+  ];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div>
-        <label htmlFor="company" className={labelClass}>
-          Company name
-        </label>
-        <input
-          id="company"
-          type="text"
-          required
-          minLength={2}
-          maxLength={120}
-          placeholder="Acme Trading Co."
-          value={form.companyName}
-          onChange={(e) => set('companyName', e.target.value)}
-          disabled={submitting}
-          className={fieldClass}
-        />
-      </div>
-      <div>
-        <label htmlFor="contact" className={labelClass}>
-          Contact person
-        </label>
-        <input
-          id="contact"
-          type="text"
-          required
-          minLength={2}
-          maxLength={120}
-          // Not "your" — this is the company's contact person, who is
-          // often not the person filling in the form (an owner sets the
-          // account up and names whoever answers the phone).
-          placeholder="Contact person's full name"
-          value={form.contactPersonName}
-          onChange={(e) => set('contactPersonName', e.target.value)}
-          disabled={submitting}
-          className={fieldClass}
-        />
-      </div>
-      <div>
-        <label htmlFor="phone" className={labelClass}>
-          Phone (E.164)
-        </label>
-        <input
-          id="phone"
-          type="tel"
-          required
-          placeholder="+8801712345678"
-          value={form.phone}
-          onChange={(e) => set('phone', e.target.value)}
-          disabled={submitting}
-          className={fieldClass}
-        />
-      </div>
-      <div>
-        <label htmlFor="whatsapp" className={labelClass}>
-          WhatsApp <span className="text-text-faint">(optional)</span>
-        </label>
-        <input
-          id="whatsapp"
-          type="tel"
-          placeholder="+8801712345678"
-          value={form.whatsapp}
-          onChange={(e) => set('whatsapp', e.target.value)}
-          disabled={submitting}
-          className={fieldClass}
-        />
-      </div>
-      <div>
-        <label htmlFor="password" className={labelClass}>
-          Password <span className="text-text-faint">(min 10 characters)</span>
-        </label>
-        <div className="relative">
-          <input
-            id="password"
-            type={showPw ? 'text' : 'password'}
-            autoComplete="new-password"
-            required
-            minLength={10}
-            maxLength={256}
-            value={form.password}
-            onChange={(e) => set('password', e.target.value)}
-            disabled={submitting}
-            className={`${fieldClass} pr-9`}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPw((s) => !s)}
-            tabIndex={-1}
-            aria-label={showPw ? 'Hide password' : 'Show password'}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-body transition-colors p-1 rounded-[3px]"
-          >
-            {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
-      </div>
-      <div>
-        <label htmlFor="confirm-password" className={labelClass}>
-          Confirm password
-        </label>
-        <div className="relative">
-          <input
-            id="confirm-password"
-            type={showConfirmPw ? 'text' : 'password'}
-            autoComplete="new-password"
-            required
-            minLength={10}
-            maxLength={256}
-            value={form.confirmPassword}
-            onChange={(e) => set('confirmPassword', e.target.value)}
-            disabled={submitting}
-            className={`${fieldClass} pr-9`}
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirmPw((s) => !s)}
-            tabIndex={-1}
-            aria-label={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-body transition-colors p-1 rounded-[3px]"
-          >
-            {showConfirmPw ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
-      </div>
+      <TextField
+        id="company"
+        type="text"
+        label="Company name"
+        required
+        minLength={2}
+        maxLength={120}
+        placeholder="Acme Trading Co."
+        value={form.companyName}
+        onChange={(e) => set('companyName', e.target.value)}
+        disabled={submitting}
+      />
+      <TextField
+        id="contact"
+        type="text"
+        label="Contact person"
+        required
+        minLength={2}
+        maxLength={120}
+        // Not "your" — this is the company's contact person, who is
+        // often not the person filling in the form (an owner sets the
+        // account up and names whoever answers the phone).
+        placeholder="Contact person's full name"
+        value={form.contactPersonName}
+        onChange={(e) => set('contactPersonName', e.target.value)}
+        disabled={submitting}
+      />
+      <TextField
+        id="phone"
+        type="tel"
+        label="Phone (E.164)"
+        required
+        placeholder="+8801712345678"
+        value={form.phone}
+        onChange={(e) => set('phone', e.target.value)}
+        disabled={submitting}
+      />
+      <TextField
+        id="whatsapp"
+        type="tel"
+        label={
+          <>
+            WhatsApp <span className="text-text-faint">(optional)</span>
+          </>
+        }
+        placeholder="+8801712345678"
+        value={form.whatsapp}
+        onChange={(e) => set('whatsapp', e.target.value)}
+        disabled={submitting}
+      />
+      <PasswordField
+        id="password"
+        label={
+          <>
+            Password <span className="text-text-faint">(min 10 characters)</span>
+          </>
+        }
+        autoComplete="new-password"
+        required
+        minLength={10}
+        maxLength={256}
+        value={form.password}
+        onChange={(e) => set('password', e.target.value)}
+        disabled={submitting}
+        showStrength
+        criteria={PASSWORD_CRITERIA}
+      />
+      <PasswordField
+        id="confirm-password"
+        toggleLabel="Show confirm password"
+        label="Confirm password"
+        autoComplete="new-password"
+        required
+        minLength={10}
+        maxLength={256}
+        value={form.confirmPassword}
+        onChange={(e) => set('confirmPassword', e.target.value)}
+        disabled={submitting}
+        showStrength={false}
+        criteria={confirmCriteria}
+      />
       {error && (
         <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[var(--radius-2)]">
           {error}
         </div>
       )}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full mt-2 px-3 py-1.5 rounded-[var(--radius-2)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
-      >
+      <Button type="submit" fullWidth loading={submitting}>
         {submitting ? 'Creating account…' : 'Create account'}
-      </button>
+      </Button>
     </form>
   );
 }

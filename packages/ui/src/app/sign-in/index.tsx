@@ -21,26 +21,21 @@ import './sign-in.css';
  * this screen, so mounting the theme switch here covers them all. The
  * content is a `<main>` landmark; the backdrop is `aria-hidden`.
  */
-export function SignInScreen({
+export function SignInFrame({
   portal,
-  title = 'Sign in',
-  note,
   children,
-  footer,
   themeControl,
   logoSrc = '/brand/skydrop-icon.svg',
+  wide = false,
 }: {
   /** "operations console" / "seller portal" / "store portal". */
   readonly portal: string;
-  readonly title?: string;
-  /** One line under the title — "Accounts are created by invitation." */
-  readonly note?: ReactNode;
-  /** The app's form, unchanged. */
+  /** One or more `SignInCard`s (and whatever sits under them). */
   readonly children: ReactNode;
-  /** Links under the card — "Forgot your password?". */
-  readonly footer?: ReactNode;
   readonly themeControl?: ReactNode;
   readonly logoSrc?: string;
+  /** A wider column, for the account-setup forms with two fields a row. */
+  readonly wide?: boolean;
 }): ReactElement {
   return (
     <div className="sk-signin">
@@ -50,7 +45,7 @@ export function SignInScreen({
         <span className="sk-signin__glow" />
       </div>
       {themeControl !== undefined && <div className="sk-signin__theme">{themeControl}</div>}
-      <main className="sk-signin__main">
+      <main className="sk-signin__main" data-wide={wide || undefined}>
         <div className="sk-signin__brand">
           <img
             src={logoSrc}
@@ -66,14 +61,66 @@ export function SignInScreen({
             <span className="sk-signin__portal">{portal}</span>
           </div>
         </div>
-        <div className="sk-signin__card">
-          <span className="sk-signin__edge" aria-hidden />
-          <h1 className="sk-signin__title">{title}</h1>
-          {note !== undefined && <div className="sk-signin__note">{note}</div>}
-          <div className="sk-signin__form">{children}</div>
-        </div>
-        {footer !== undefined && <div className="sk-signin__footer">{footer}</div>}
+        {children}
       </main>
     </div>
+  );
+}
+
+/**
+ * One card on the sign-in screen: the corridor edge, the heading, an
+ * optional note, the page's own content unchanged, and links under it.
+ */
+export function SignInCard({
+  title,
+  note,
+  children,
+  footer,
+}: {
+  readonly title: ReactNode;
+  readonly note?: ReactNode;
+  /** The page's own content; `null` for a card that is only a message. */
+  readonly children: ReactNode;
+  readonly footer?: ReactNode;
+}): ReactElement {
+  return (
+    <>
+      <div className="sk-signin__card">
+        <span className="sk-signin__edge" aria-hidden />
+        <h1 className="sk-signin__title">{title}</h1>
+        {note !== undefined && <div className="sk-signin__note">{note}</div>}
+        {children !== null && children !== undefined && children !== false && (
+          <div className="sk-signin__form">{children}</div>
+        )}
+      </div>
+      {footer !== undefined && <div className="sk-signin__footer">{footer}</div>}
+    </>
+  );
+}
+
+/** Frame + one card: the whole sign-in screen in one call. */
+export function SignInScreen({
+  portal,
+  title = 'Sign in',
+  note,
+  children,
+  footer,
+  themeControl,
+  logoSrc = '/brand/skydrop-icon.svg',
+}: {
+  readonly portal: string;
+  readonly title?: string;
+  readonly note?: ReactNode;
+  readonly children: ReactNode;
+  readonly footer?: ReactNode;
+  readonly themeControl?: ReactNode;
+  readonly logoSrc?: string;
+}): ReactElement {
+  return (
+    <SignInFrame portal={portal} themeControl={themeControl} logoSrc={logoSrc}>
+      <SignInCard title={title} note={note} footer={footer}>
+        {children}
+      </SignInCard>
+    </SignInFrame>
   );
 }

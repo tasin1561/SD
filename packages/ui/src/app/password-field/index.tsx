@@ -24,6 +24,9 @@ export type PasswordFieldProps = Omit<TextFieldProps, 'type' | 'trail'> & {
   readonly criteria?: readonly PasswordCriterion[] | undefined;
   /** Show the meter above the chips (default true when criteria exist). */
   readonly showStrength?: boolean | undefined;
+  /** The toggle's ONE stable accessible name. A second password field on
+   *  the same form passes its own ("Show confirm password"). */
+  readonly toggleLabel?: string | undefined;
 };
 
 const WORDS = ['Weak', 'Weak', 'Fair', 'Good', 'Strong'] as const;
@@ -34,6 +37,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
     {
       criteria,
       showStrength = true,
+      toggleLabel = 'Show password',
       value,
       defaultValue,
       onChange,
@@ -67,7 +71,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
         type="button"
         className="sk-field__btn sk-pw__toggle"
         aria-pressed={shown}
-        aria-label="Show password"
+        aria-label={toggleLabel}
         aria-controls={id}
         disabled={disabled}
         onMouseDown={(e) => e.preventDefault()}

@@ -1,0 +1,306 @@
+/* Seller dashboard — layout and the few dashboard-only pieces. Tokens only.
+   The primitives (KpiCard, ListRow, Table, PageHeader …) carry their own CSS;
+   this file only arranges them and draws the shortcut and checklist cards. */
+
+.db-page {
+  display: grid;
+  gap: var(--sp-8);
+  min-width: 0;
+}
+.db-page > .sk-ph {
+  margin-bottom: 0;
+}
+
+.db-section {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.db-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.db-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Header facts ─────────────────────────────────────────────────────── */
+.db-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.db-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.db-fact[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.db-fact[data-tone='accent'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.db-fact__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
+
+/* ── Grids ────────────────────────────────────────────────────────────── */
+.db-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.db-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── Needs you ────────────────────────────────────────────────────────── */
+.db-count {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+.db-row-cta {
+  display: block;
+  margin-top: 2px;
+  color: var(--sky);
+  font-weight: var(--fw-medium);
+}
+
+/* ── Money figure placeholder ─────────────────────────────────────────── */
+.db-figure-skel {
+  display: inline-block;
+  vertical-align: middle;
+}
+.db-restated {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 4px;
+}
+.db-faint {
+  color: var(--fg-faint);
+  font-weight: var(--fw-regular);
+}
+.db-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Card shell used by the checklist and the table's states ─────────── */
+.db-card {
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+
+/* ── Onboarding checklist ─────────────────────────────────────────────── */
+.db-progress {
+  position: relative;
+  height: 6px;
+  margin-bottom: var(--sp-3);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+}
+.db-progress__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--corridor-gradient);
+  transform-origin: left center;
+}
+.db-steps {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.db-step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  font-size: var(--fs-md);
+}
+.db-step__mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--border-control);
+  color: var(--fg-faint);
+}
+.db-step[data-done='1'] .db-step__mark {
+  border-color: transparent;
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.db-step__done {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+.db-step__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--fg-body);
+  text-decoration: none;
+}
+.db-step__link:hover {
+  color: var(--fg-strong);
+  text-decoration: underline;
+}
+.db-step__link[data-next='1'] {
+  color: var(--sky);
+  font-weight: var(--fw-semibold);
+}
+
+/* ── Shortcut cards (quick actions) ───────────────────────────────────── */
+.db-shortcut {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 44px;
+  padding: var(--sp-4);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  color: var(--fg-body);
+  text-decoration: none;
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+.db-shortcut:hover,
+.db-shortcut:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--accent-line);
+  box-shadow: var(--elev-2);
+}
+.db-shortcut__chip {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  color: var(--sky);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.db-shortcut:hover .db-shortcut__chip,
+.db-shortcut:focus-visible .db-shortcut__chip {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+}
+.db-shortcut__title {
+  display: block;
+  margin-top: var(--sp-3);
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.db-shortcut__body {
+  display: block;
+  margin: var(--sp-1) 0 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.db-shortcut__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: auto;
+  padding-top: var(--sp-3);
+  font-size: var(--fs-xs);
+}
+.db-shortcut__foot-text {
+  color: var(--fg-faint);
+}
+.db-shortcut__go {
+  display: inline-flex;
+  align-items: center;
+  color: var(--sky);
+  font-weight: var(--fw-medium);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.db-shortcut:hover .db-shortcut__go,
+.db-shortcut:focus-visible .db-shortcut__go {
+  transform: translateX(3px);
+}
+
+/* ── Recent orders cells ──────────────────────────────────────────────── */
+.db-order-link {
+  color: var(--sky);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.db-order-link:hover {
+  text-decoration: underline;
+}
+.db-recipient {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-recipient-place {
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-prepaid {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}

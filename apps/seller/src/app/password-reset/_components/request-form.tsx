@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Button } from '@skydrop/ui/app/button';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -55,33 +57,24 @@ export function PasswordResetRequestForm(): ReactElement {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div>
-        <label htmlFor="email" className="telemetry block text-text-muted mb-1.5">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={submitting}
-          className="w-full px-3 py-1.5 rounded-[var(--radius-2)] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50"
-        />
-      </div>
+      <TextField
+        id="email"
+        type="email"
+        label="Email"
+        autoComplete="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={submitting}
+      />
       {error && (
         <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[var(--radius-2)]">
           {error}
         </div>
       )}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full mt-2 px-3 py-1.5 rounded-[var(--radius-2)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
-      >
+      <Button type="submit" fullWidth loading={submitting}>
         {submitting ? 'Sending…' : 'Send reset link'}
-      </button>
+      </Button>
     </form>
   );
 }

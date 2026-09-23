@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
 import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { PasswordField } from '@skydrop/ui/app/password-field';
+import { Button } from '@skydrop/ui/app/button';
 
 /**
  * Login form. The login page isn't wrapped in an AuthProvider (the
@@ -22,11 +24,14 @@ import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
  * Identical shape to apps/admin's login form; the only difference is
  * `identityKind: 'seller'` — the FE-5 identity-parameterization in
  * practice.
+ *
+ * The submit button keeps the accessible name "Sign in" while the
+ * request runs (`loading` adds the spinner and `aria-busy`); the login
+ * spec finds it by that name.
  */
 export function LoginForm(): ReactElement {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPw, setShowPw] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,63 +65,33 @@ export function LoginForm(): ReactElement {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="email" className="telemetry block text-text-muted mb-2">
-          email
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={submitting}
-          className="w-full h-12 px-4 rounded-[var(--radius-3)] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50"
-        />
-      </div>
-      <div>
-        <label htmlFor="password" className="telemetry block text-text-muted mb-2">
-          password
-        </label>
-        <div className="relative">
-          <input
-            id="password"
-            type={showPw ? 'text' : 'password'}
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={submitting}
-            className="w-full h-12 pl-4 pr-12 rounded-[var(--radius-3)] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPw((v) => !v)}
-            tabIndex={-1}
-            aria-label={showPw ? 'Hide password' : 'Show password'}
-            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-10 h-10 rounded-[var(--radius-2)] text-text-muted hover:text-text-bright transition-colors"
-          >
-            {showPw ? (
-              <EyeOff size={16} aria-hidden="true" />
-            ) : (
-              <Eye size={16} aria-hidden="true" />
-            )}
-          </button>
-        </div>
-      </div>
+      <TextField
+        id="email"
+        type="email"
+        label="Email"
+        autoComplete="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={submitting}
+      />
+      <PasswordField
+        id="password"
+        label="Password"
+        autoComplete="current-password"
+        required
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        disabled={submitting}
+      />
       {error && (
         <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2.5 rounded-[var(--radius-2)]">
           {error}
         </div>
       )}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full h-12 mt-2 rounded-[var(--radius-3)] bg-accent-fill text-accent-fg text-sm font-medium hover:bg-accent-fill-hover disabled:opacity-50 transition-colors"
-      >
-        {submitting ? 'Signing in…' : 'Sign in'}
-      </button>
+      <Button type="submit" size="lg" fullWidth loading={submitting}>
+        Sign in
+      </Button>
     </form>
   );
 }
