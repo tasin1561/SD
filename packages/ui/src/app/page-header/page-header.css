@@ -1,0 +1,161 @@
+/* PageHeader (u30 condense) + Breadcrumbs + SectionHeading. */
+.sk-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+}
+.sk-crumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.sk-crumbs__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  color: var(--fg-muted);
+  text-decoration: none;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.sk-crumbs__link:hover {
+  color: var(--fg-strong);
+  background: var(--surface-3);
+}
+.sk-crumbs__here {
+  padding: 0 6px;
+  color: var(--fg-body);
+  font-weight: var(--fw-medium);
+}
+.sk-crumbs__sep {
+  color: var(--fg-faint);
+}
+
+.sk-ph {
+  display: block;
+  margin-bottom: var(--sp-6);
+}
+/* A sticky title bar must stick relative to the page, not to this
+   wrapper — so the wrapper generates no box of its own. */
+.sk-ph[data-sticky='1'] {
+  display: contents;
+}
+.sk-ph__crumbs {
+  margin: 0 0 var(--sp-2) -6px;
+}
+.sk-ph__sentinel {
+  height: 0;
+}
+.sk-ph__bar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3) var(--sp-4);
+  min-width: 0;
+}
+.sk-ph[data-sticky='1'] .sk-ph__bar {
+  position: sticky;
+  top: var(--sk-sticky-top, 0px);
+  z-index: 20;
+  padding: var(--sp-2) 0;
+}
+.sk-ph__backdrop {
+  position: absolute;
+  z-index: -1;
+  inset: 0 calc(var(--sp-3) * -1);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--elev-2);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-out);
+}
+.sk-ph__bar[data-condensed='1'] .sk-ph__backdrop {
+  opacity: 1;
+}
+.sk-ph__title {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.015em;
+  transform-origin: left center;
+  transition: transform var(--dur) var(--ease-out);
+}
+.sk-ph__bar[data-condensed='1'] .sk-ph__title {
+  transform: scale(0.8);
+}
+.sk-ph__action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.sk-ph__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--sp-2);
+}
+.sk-ph__subtitle {
+  max-width: 72ch;
+  margin-top: var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+}
+.sk-ph[data-sticky='1'] .sk-ph__subtitle,
+.sk-ph[data-sticky='1'] .sk-ph__meta:last-child {
+  margin-bottom: var(--sp-6);
+}
+@media (max-width: 639.98px) {
+  .sk-ph__title {
+    font-size: var(--fs-xl);
+  }
+  .sk-ph__action {
+    width: 100%;
+  }
+}
+
+.sk-sh {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.sk-sh__text {
+  min-width: 0;
+}
+.sk-sh__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+}
+.sk-sh__note {
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.sk-sh__action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}

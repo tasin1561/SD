@@ -1,0 +1,154 @@
+/* Tooltip card (u35). Closed = display:none, so a hidden card can never
+   widen the page; @starting-style gives it its rise-and-fade on open where
+   the browser supports it (elsewhere it simply appears). --tip-dx is the
+   sideways shift that keeps the card inside the viewport (set on open). */
+.sk-tipcard {
+  position: relative;
+  display: inline-block;
+}
+.sk-tipcard__card {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 50;
+  width: min(18rem, 80vw);
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  box-shadow:
+    var(--elev-3),
+    0 0 0 3px var(--blue-glow);
+  text-align: left;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-body);
+  white-space: normal;
+  margin-left: var(--tip-dx, 0px);
+  display: none;
+  opacity: 0;
+  transform: translate(-50%, 6px) scale(0.98);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur) var(--ease-out),
+    display var(--dur-fast) allow-discrete;
+}
+.sk-tipcard[data-below] .sk-tipcard__card {
+  bottom: auto;
+  top: calc(100% + 10px);
+  transform: translate(-50%, -6px) scale(0.98);
+}
+.sk-tipcard[data-open] .sk-tipcard__card {
+  display: grid;
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+@starting-style {
+  .sk-tipcard[data-open] .sk-tipcard__card {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.98);
+  }
+  .sk-tipcard[data-open][data-below] .sk-tipcard__card {
+    transform: translate(-50%, -6px) scale(0.98);
+  }
+}
+/* The gap between trigger and card stays hoverable. */
+.sk-tipcard__card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 12px;
+}
+.sk-tipcard[data-below] .sk-tipcard__card::before {
+  top: auto;
+  bottom: 100%;
+}
+.sk-tipcard__arrow {
+  position: absolute;
+  left: calc(50% - var(--tip-dx, 0px));
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: translateX(-50%) rotate(45deg);
+}
+.sk-tipcard[data-below] .sk-tipcard__arrow {
+  bottom: auto;
+  top: -6px;
+  transform: translateX(-50%) rotate(-135deg);
+}
+.sk-tipcard__top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sk-tipcard__chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  box-shadow: 0 6px 14px -8px var(--blue-glow);
+}
+.sk-tipcard__title {
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+}
+.sk-tipcard__desc {
+  color: var(--fg-muted);
+}
+.sk-tipcard__list {
+  display: grid;
+  gap: var(--sp-1);
+}
+.sk-tipcard__point {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  color: var(--fg-body);
+}
+.sk-tipcard__point svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--green-text);
+}
+.sk-tipcard__action {
+  display: grid;
+  margin-top: var(--sp-1);
+}
+
+/* GlossaryTerm: inline in a sentence, with a --tap tall hit area whose
+   extra height is taken back by negative margin so the line does not grow. */
+.sk-glossary {
+  display: inline;
+  padding: calc((var(--tap) - 1.5em) / 2) 1px;
+  margin: calc((var(--tap) - 1.5em) / -2) -1px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: help;
+  text-decoration: underline dotted var(--sky);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+.sk-glossary:hover {
+  color: var(--fg-strong);
+  text-decoration-style: solid;
+}
+.sk-glossary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

@@ -73,7 +73,7 @@ export function StatusBadge({ kind, label, variant = 'soft' }: StatusBadgeProps)
       : { background: tokens.fgVar, color: 'var(--color-bg)' };
   return (
     <span
-      className="inline-flex items-center px-1.5 py-0.5 rounded-[3px] text-xs font-medium tracking-wide uppercase whitespace-nowrap"
+      className="sd-badge inline-flex items-center px-1.5 py-0.5 rounded-[3px] text-xs font-medium tracking-wide uppercase whitespace-nowrap"
       style={baseStyle}
       data-status-kind={kind}
     >

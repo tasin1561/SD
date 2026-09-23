@@ -1,0 +1,280 @@
+/* DataTable (u07). The mobile card layout comes from `brand/legacy.css`
+   (`.sd-table-cards`), which these rules leave alone below `md`. */
+.sk-table-wrap {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.sk-table-wrap[data-scroll='1'] {
+  overflow: auto;
+}
+.sk-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.sk-table__caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* ── Header: accent-tinted, sticky inside a scrolling table ─────────── */
+.sk-thead .sk-th,
+.sk-thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--accent-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.sk-th[data-align='right'],
+.sk-td[data-align='right'] {
+  text-align: right;
+}
+.sk-th[data-align='center'],
+.sk-td[data-align='center'] {
+  text-align: center;
+}
+.sk-th--sort {
+  padding: 0;
+}
+.sk-th__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 36px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.sk-th--sort[data-align='right'] .sk-th__sort {
+  justify-content: flex-end;
+}
+.sk-th--sort[data-align='center'] .sk-th__sort {
+  justify-content: center;
+}
+.sk-th__sort-icon {
+  opacity: 0.45;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.sk-th__sort:hover .sk-th__sort-icon,
+.sk-th__sort[data-active='1'] .sk-th__sort-icon {
+  opacity: 1;
+}
+.sk-th__sort:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.sk-th--select,
+.sk-td--select {
+  width: 44px;
+  padding-right: 0;
+}
+
+/* ── Body ───────────────────────────────────────────────────────────── */
+.sk-td {
+  position: relative;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-body);
+  vertical-align: middle;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.sk-tbody > .sk-tr:last-child > .sk-td {
+  border-bottom: 0;
+}
+.sk-tr {
+  transition: transform var(--dur) var(--ease-out);
+}
+.sk-tr[data-clickable='1'] {
+  cursor: pointer;
+}
+/* The hover accent bar lives on the first cell (a <tr> cannot position a
+   pseudo-element reliably). ::after, because the card layout owns
+   ::before for its column labels. */
+.sk-tr > .sk-td:first-child::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent-fill);
+  transform: scaleY(0);
+  transition: transform var(--dur) var(--ease-spring);
+}
+@media (hover: hover) {
+  .sk-tbody > .sk-tr:hover {
+    transform: translateY(-1px);
+  }
+  .sk-tbody > .sk-tr:hover > .sk-td {
+    background: var(--surface-3);
+  }
+  .sk-tbody > .sk-tr:hover > .sk-td:first-child::after {
+    transform: scaleY(1);
+  }
+}
+.sk-tr[data-selected='1'] > .sk-td {
+  background: var(--accent-tint);
+}
+.sk-tr[data-selected='1'] > .sk-td:first-child::after {
+  transform: scaleY(1);
+}
+.sk-td--actions {
+  width: 1%;
+  white-space: nowrap;
+}
+.sk-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+.sk-td-empty {
+  padding: var(--sp-8) var(--sp-4);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+/* ── Card layout (below md): the legacy rules place the cards; these
+   only undo the desktop-only touches. ──────────────────────────────── */
+@media (max-width: 767.98px) {
+  .sd-table-cards .sk-td {
+    border-bottom: 0;
+  }
+  .sd-table-cards .sk-tr > .sk-td:first-child::after {
+    display: none;
+  }
+  .sd-table-cards tbody > .sk-tr {
+    border-color: var(--line);
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    box-shadow: var(--elev-1);
+  }
+  .sd-table-cards tbody > .sk-tr[data-selected='1'] {
+    border-color: var(--accent-line);
+    background: var(--accent-tint);
+  }
+  .sd-table-cards .sk-tr[data-selected='1'] > .sk-td {
+    background: transparent;
+  }
+  .sd-table-cards .sk-td--select {
+    width: 100%;
+  }
+  .sd-table-cards-wrap.sk-table-wrap {
+    box-shadow: none;
+  }
+}
+
+/* ── Toolbar ────────────────────────────────────────────────────────── */
+.sk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.sk-toolbar__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 16rem;
+  max-width: 26rem;
+  min-width: 0;
+}
+.sk-toolbar__search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--fg-faint);
+  pointer-events: none;
+}
+.sk-toolbar__search-input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--sp-3) 0 36px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-pill);
+  background: var(--surface-input);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-sm);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sk-toolbar__search-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-fill);
+  box-shadow: 0 0 0 3px var(--blue-glow);
+}
+@media (pointer: coarse) {
+  .sk-toolbar__search-input {
+    font-size: 16px;
+  }
+}
+.sk-toolbar__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.sk-toolbar__filters,
+.sk-toolbar__bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.sk-toolbar__bulk {
+  padding: 4px 4px 4px var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  animation: sk-toolbar-bulk var(--dur) var(--ease-out) both;
+}
+.sk-toolbar__bulk-count {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+@keyframes sk-toolbar-bulk {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.sk-toolbar__action {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: auto;
+}

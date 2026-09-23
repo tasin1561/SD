@@ -1,0 +1,172 @@
+/* Tabs (u09) with the liquid-bead pill (storytelling 08). */
+.sk-tabs {
+  min-width: 0;
+}
+.sk-tabs__list {
+  --bead-x: 0px;
+  --bead-w: 0px;
+  --bead-h: 0px;
+  --bead-mid: 0;
+  --t-h: var(--tap);
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  gap: 2px;
+  padding: 4px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  scrollbar-width: none;
+}
+.sk-tabs__list::-webkit-scrollbar {
+  display: none;
+}
+.sk-tabs__list--full {
+  display: flex;
+  width: 100%;
+}
+.sk-tabs__list--full .sk-tabs__tab {
+  flex: 1;
+  justify-content: center;
+}
+.sk-tabs__list--sm {
+  --t-h: var(--ctl-h-sm);
+}
+@media (pointer: coarse) {
+  .sk-tabs__list--sm {
+    --t-h: var(--tap);
+  }
+}
+.sk-tabs__tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: var(--t-h);
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease-out);
+}
+.sk-tabs__tab:hover {
+  color: var(--fg-strong);
+}
+.sk-tabs__tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.sk-tabs__tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.sk-tabs__tab[aria-selected='true'],
+.sk-tabs__tab[aria-current='page'] {
+  color: var(--accent-fg);
+}
+.sk-tabs__icon {
+  display: inline-grid;
+  place-items: center;
+}
+.sk-tabs__count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  line-height: 1.4;
+  text-align: center;
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.sk-tabs__tab[aria-selected='true'] .sk-tabs__count,
+.sk-tabs__tab[aria-current='page'] .sk-tabs__count {
+  background: var(--accent-fg);
+  color: var(--accent-fill);
+}
+
+/* The bead: a group positioned at the active tab, drawn as two round
+   caps and a middle strip. Everything moves by transform. */
+.sk-tabs__bead {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transform-origin: calc(var(--bead-x) + var(--bead-w) / 2) 50%;
+}
+.sk-tabs__list[data-none='1'] .sk-tabs__bead {
+  opacity: 0;
+}
+.sk-tabs__cap,
+.sk-tabs__mid {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: var(--bead-h);
+  background: var(--accent-fill);
+}
+.sk-tabs__cap {
+  width: var(--bead-h);
+  border-radius: var(--r-pill);
+}
+.sk-tabs__cap--l {
+  transform: translateX(var(--bead-x));
+}
+.sk-tabs__cap--r {
+  transform: translateX(calc(var(--bead-x) + var(--bead-w) - var(--bead-h)));
+}
+.sk-tabs__mid {
+  width: 1px;
+  transform-origin: left center;
+  transform: translateX(calc(var(--bead-x) + var(--bead-h) / 2)) scaleX(var(--bead-mid, 0));
+}
+.sk-tabs__list[data-ready='1'] .sk-tabs__cap,
+.sk-tabs__list[data-ready='1'] .sk-tabs__mid {
+  transition: transform var(--dur-slow) cubic-bezier(0.3, 1.15, 0.35, 1);
+}
+/* The liquid squash, on the whole bead, once per move. */
+.sk-tabs__list[data-moving='1'] .sk-tabs__bead {
+  animation: sk-tabs-squash var(--dur-slow) ease-in-out;
+}
+@keyframes sk-tabs-squash {
+  35% {
+    transform: scale(1.06, 0.8);
+  }
+  70% {
+    transform: scale(0.98, 1.06);
+  }
+}
+.sk-tabs__cap--l {
+  box-shadow: 0 8px 18px -10px var(--blue-glow);
+}
+
+.sk-tabs__panel {
+  margin-top: var(--sp-4);
+  animation: sk-tabs-panel var(--dur-slow) var(--ease-out) both;
+}
+.sk-tabs__panel:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+  border-radius: var(--r-sm);
+}
+@keyframes sk-tabs-panel {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

@@ -1,0 +1,798 @@
+/*
+ * PRECISION LOGISTICS — the apps/marketing token set.
+ * ═════════════════════════════════════════════════════════════════════
+ *
+ * ── WHY THIS FILE IS HERE AND NOT IN `packages/ui` ──────────────────
+ * `@skydrop/ui/corridor.css` WAS imported by apps/marketing and
+ * apps/track together, and every value in it is read by whoever imports
+ * it — so a palette edit there restyles the public tracking page, which
+ * is not in this brief. Three options were on the table, the same three
+ * `seller-theme.css` weighed:
+ *
+ *   (a) New token NAMES consumed only by marketing. Rejected: every
+ *       component here reads the existing names, so each of the ~20
+ *       would need editing for no gain in safety.
+ *   (b) Import corridor.css and REDEFINE the names after it. Rejected
+ *       *here* (though it is what seller-theme.css does) because
+ *       marketing is moving to a different palette WHOLESALE, not
+ *       layering over a shared one: a token this file forgot would
+ *       silently keep a corridor value and read as a stray cyan
+ *       hairline nobody could find.
+ *   (c) THIS — marketing OWNS its tokens outright and does not import
+ *       corridor.css at all.
+ *
+ * (c) makes the boundary provable by construction rather than by
+ * discipline: `globals.css` contains no reference to corridor.css, so
+ * not one declaration here can reach apps/track, and equally nothing
+ * in corridor.css can reach this page. apps/track renders exactly as
+ * it did. The cost is that this file must define EVERY variable the
+ * app consumes — an undefined one resolves to nothing rather than to a
+ * fallback, which is the failure mode (b) was rejected for and is why
+ * the list below is exhaustive rather than only the interesting half.
+ *
+ * ── COURIER REDESIGN (2026-09-21) ─────────────────────────────────────
+ * The raw scales live in `scales.css` (theme-invariant, declared once).
+ * This file chooses a step PER ROLE and PER THEME and names the result:
+ * `--{hue}-text`, `--{hue}-fill` + `--{hue}-on-fill`, `--{hue}-tint` +
+ * `--{hue}-on-tint`, `--{hue}-line`, `--{hue}-glow`. No component picks a
+ * raw step. `scripts/check-theme.mjs` fails the build when a semantic
+ * token is missing from any of the four blocks, when the two light copies
+ * or the two dark copies differ, or when `--page` disagrees with
+ * `src/lib/theme-colors.ts`. The FOUR blocks are GENERATED from one
+ * source per theme (see the header of each copy) so the pairs cannot
+ * drift by hand — edit both copies or regenerate; never one.
+ *
+ * ── FOUR BLOCKS, AND WHY ────────────────────────────────────────────
+ * DARK is the default (FE-7). Light is declared TWICE — once under the
+ * OS preference for a visitor who has never touched the toggle, once
+ * under the pinned attribute — because a selector list cannot contain
+ * an @media. The two copies MUST stay byte-identical: FE-6 records
+ * that drift between them means the theme changes when you touch the
+ * toggle, which reads as a broken site. Same for the two dark copies.
+ * Edit all four together or none.
+ *
+ * ── CONTRAST ────────────────────────────────────────────────────────
+ * Computed, not eyeballed (the FE-6 rule). Every text pairing that
+ * ships clears 4.5:1:
+ *
+ *   light  bright 16.3 on the page · body 8.9 · muted 7.6 · faint 5.7;
+ *          accent as a link 7.2; white on the accent fill 5.2; every
+ *          status colour ≥ 4.8 on the page and on its own tint.
+ *   dark   bright 18.6 · body 13.1 · muted 7.6 · faint 6.4; accent as
+ *          a link 11.5; white on the accent fill 5.2; status ≥ 6.2.
+ *
+ * Borders that are the SOLE identifier of a control (a field's bounds,
+ * the focus ring) carry 3:1 — `--border-control` is 4.5 light / 4.2
+ * dark. Hairlines BETWEEN surfaces deliberately do not: WCAG 1.4.11
+ * exempts them, and forcing 3:1 on every divider is what makes a dense
+ * page look like a spreadsheet with the gridlines turned up.
+ *
+ * The reference sheet's own amber (#d97706) is 3.03 on this page —
+ * below the floor for the 11px mono it carries — so the text amber is
+ * one step down the same ramp at #b45309 (4.78). The tint keeps the
+ * lighter value.
+ */
+
+/* ═════════════════════════════════════════════════════════════════════
+ * DARK — the default. COPY 1 of 2 (the other is `:root[data-theme='dark']`).
+ * ═════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces: page < band < card < raised. */
+  --page: #090d16;
+  --surface: #090d16;
+  --surface-2: #0f1623;
+  --surface-3: #1c2940;
+  --surface-band: #0c121d;
+  --surface-input: #070a11;
+  --page-top: #101a2b;
+  --page-bottom: #070a11;
+
+  --line: #1c283d;
+  --line-strong: #2e405e;
+  --border-control: #667c92;
+  --focus-ring: #7bafea;
+
+  --fg-strong: #f8fafc;
+  --fg-body: #cbd5e1;
+  --fg-muted: #94a3b8;
+  --fg-faint: #8296b0;
+
+  /* Brand accent — split: a link colour and a fill colour, because no
+     single blue reads as text on the page AND carries white on a fill. */
+  --sky: #b4c5ff;
+  --sky-deep: #dbe1ff;
+  --accent-fill: var(--blue-fill);
+  --accent-fill-hover: var(--blue-fill-hover);
+  --accent-fg: var(--blue-on-fill);
+  --accent-tint: rgba(37, 99, 235, 0.16);
+  --accent-line: rgba(37, 99, 235, 0.42);
+
+  /* Semantic tokens per hue. A component picks a ROLE here, never a raw
+     step — text / fill + on-fill / tint + on-tint / surface / line / glow.
+     `-tint` is for CHIPS; `-surface` is for a LARGE tinted area (a scene,
+     a section band): in dark it is the page navy mixed with the hue, so a
+     saffron scene is not a brown panel and the theme stays navy-based. The
+     steps behind them follow the rules of 2026-09-21: light text is 700
+     for saffron, green, teal, magenta and red and 600 for blue and violet;
+     dark text is 400 everywhere; primary fills are blue-600 + white;
+     green / teal / magenta / red solids are 700 + white; a saffron solid
+     is the BRIGHT 400 with dark text, never a brown carrying white. */
+  --blue-text: var(--blue-400);
+  --blue-fill: var(--blue-600);
+  --blue-fill-hover: var(--blue-700);
+  --blue-on-fill: #ffffff;
+  --blue-tint: var(--blue-950);
+  --blue-surface: color-mix(in oklab, var(--page) 92%, var(--blue-500) 8%);
+  --blue-on-tint: var(--blue-400);
+  --blue-line: var(--blue-800);
+  --blue-glow: rgba(123, 175, 234, 0.28);
+
+  --saffron-text: var(--saffron-400);
+  --saffron-fill: var(--saffron-400);
+  --saffron-fill-hover: var(--saffron-500);
+  --saffron-on-fill: #020617;
+  --saffron-tint: var(--saffron-950);
+  --saffron-surface: color-mix(in oklab, var(--page) 92%, var(--saffron-500) 8%);
+  --saffron-on-tint: var(--saffron-400);
+  --saffron-line: var(--saffron-800);
+  --saffron-glow: rgba(251, 191, 36, 0.28);
+
+  --green-text: var(--green-400);
+  --green-fill: var(--green-700);
+  --green-fill-hover: var(--green-800);
+  --green-on-fill: #ffffff;
+  --green-tint: var(--green-950);
+  --green-surface: color-mix(in oklab, var(--page) 92%, var(--green-500) 8%);
+  --green-on-tint: var(--green-400);
+  --green-line: var(--green-800);
+  --green-glow: rgba(52, 211, 153, 0.28);
+
+  --teal-text: var(--teal-400);
+  --teal-fill: var(--teal-700);
+  --teal-fill-hover: var(--teal-800);
+  --teal-on-fill: #ffffff;
+  --teal-tint: var(--teal-950);
+  --teal-surface: color-mix(in oklab, var(--page) 92%, var(--teal-500) 8%);
+  --teal-on-tint: var(--teal-400);
+  --teal-line: var(--teal-800);
+  --teal-glow: rgba(45, 212, 191, 0.28);
+
+  --violet-text: var(--violet-400);
+  --violet-fill: var(--violet-600);
+  --violet-fill-hover: var(--violet-700);
+  --violet-on-fill: #ffffff;
+  --violet-tint: var(--violet-950);
+  --violet-surface: color-mix(in oklab, var(--page) 92%, var(--violet-500) 8%);
+  --violet-on-tint: var(--violet-400);
+  --violet-line: var(--violet-800);
+  --violet-glow: rgba(167, 139, 250, 0.28);
+
+  --magenta-text: var(--magenta-400);
+  --magenta-fill: var(--magenta-700);
+  --magenta-fill-hover: var(--magenta-800);
+  --magenta-on-fill: #ffffff;
+  --magenta-tint: var(--magenta-950);
+  --magenta-surface: color-mix(in oklab, var(--page) 92%, var(--magenta-500) 8%);
+  --magenta-on-tint: var(--magenta-400);
+  --magenta-line: var(--magenta-800);
+  --magenta-glow: rgba(244, 114, 182, 0.28);
+
+  --red-text: var(--red-400);
+  --red-fill: var(--red-700);
+  --red-fill-hover: var(--red-800);
+  --red-on-fill: #ffffff;
+  --red-tint: var(--red-950);
+  --red-surface: color-mix(in oklab, var(--page) 92%, var(--red-500) 8%);
+  --red-on-tint: var(--red-400);
+  --red-line: var(--red-800);
+  --red-glow: rgba(248, 113, 113, 0.28);
+
+  /* Status aliases the pre-redesign components still read. Derived,
+     so they cannot disagree with the semantic tokens above. */
+  --green: var(--green-text);
+  --saffron: var(--saffron-text);
+  --red: var(--red-text);
+
+  /* The corridor gradient — Bangladesh's green to India's saffron, never
+     a flag. Text on it is ALWAYS slate-950, in both themes (7.95 at the
+     green end, 12.08 over the gold, 9.39 at the saffron end) — never white
+     (1.67 over the gold). A button on it is a slate-950 fill with white
+     text, or a white surface card. There is no "strong" variant: the
+     700-level stops ran through an olive midpoint to brown. */
+  --corridor-gradient: linear-gradient(
+    90deg,
+    var(--green-500),
+    var(--saffron-400) 60%,
+    var(--saffron-500)
+  );
+
+  /* Backdrops, glow, scrim, shadows. */
+  --grid: rgba(148, 163, 184, 0.07);
+  --dots: rgba(148, 163, 184, 0.16);
+  --glow: rgba(37, 99, 235, 0.22);
+  --scrim: rgba(4, 7, 13, 0.88);
+
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-hud: 0 20px 45px -15px rgba(0, 0, 0, 0.7);
+
+  /* Tier B art — three flat shades per solid (a gradient does not cross
+     the external-sprite boundary, a custom property does). */
+  --art-face-top: var(--blue-500);
+  --art-face-left: var(--blue-800);
+  --art-face-right: var(--blue-950);
+  --art-edge: var(--blue-200);
+  --art-shadow: rgba(0, 0, 0, 0.55);
+
+  /* Hero scene (Phase 3). Plain hex plus a SEPARATE alpha — THREE.Color
+     reads no rgba(). Direction arcs: out = to India (saffron), in = to
+     Bangladesh (green). */
+  --scene-land: #16223a;
+  --scene-land-alpha: 1;
+  --scene-bd: #b45309;
+  --scene-grid: rgba(180, 197, 255, 0.07);
+  --scene-pin: #7bafea;
+  --scene-arc-out: #fbbf24;
+  --scene-arc-in: #34d399;
+  --scene-haze: #090d16;
+  --scene-plate: #0f1729;
+  --scene-plane: #e8edf7;
+  --scene-van: #7bafea;
+  --scene-parcel: #fbbf24;
+  --scene-chute: #b4c5ff;
+
+  /* The 2D corridor canvas (kept until Phase 4). */
+  --map-land: rgba(180, 197, 255, 0.05);
+  --map-coast: rgba(180, 197, 255, 0.3);
+  --map-bd-fill: rgba(251, 191, 36, 0.1);
+  --map-bd-coast: rgba(251, 191, 36, 0.5);
+  --map-route: rgba(180, 197, 255, 0.18);
+  --map-halo: rgba(180, 197, 255, 0.34);
+  --map-trail: rgba(180, 197, 255, 0.58);
+  --map-blip: #b4c5ff;
+  --map-sweep-rgb: 180, 197, 255;
+}
+
+/* ═════════════════════════════════════════════════════════════════════
+ * LIGHT — COPY 1 of 2: the OS preference, for a visitor who has not
+ * pinned a theme. Byte-identical to copy 2 below.
+ * ═════════════════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+
+    /* Surfaces: page < band < card < raised. */
+    --page: #f8f9ff;
+    --surface: #f8f9ff;
+    --surface-2: #ffffff;
+    --surface-3: #e5eeff;
+    --surface-band: #eff4ff;
+    --surface-input: #ffffff;
+    --page-top: #e5eeff;
+    --page-bottom: #f8f9ff;
+
+    --line: #e2e8f0;
+    --line-strong: #c3c6d7;
+    --border-control: #737686;
+    --focus-ring: #004ac6;
+
+    --fg-strong: #0b1c30;
+    --fg-body: #434655;
+    --fg-muted: #4d5064;
+    --fg-faint: #5b6376;
+
+    /* Brand accent — split: a link colour and a fill colour, because no
+       single blue reads as text on the page AND carries white on a fill. */
+    --sky: #004ac6;
+    --sky-deep: #002870;
+    --accent-fill: var(--blue-fill);
+    --accent-fill-hover: var(--blue-fill-hover);
+    --accent-fg: var(--blue-on-fill);
+    --accent-tint: rgba(0, 74, 198, 0.07);
+    --accent-line: rgba(0, 74, 198, 0.3);
+
+    /* Semantic tokens per hue. A component picks a ROLE here, never a raw
+       step — text / fill + on-fill / tint + on-tint / line / glow. The
+       steps behind them follow the rules of 2026-09-21: light text is 700
+       for saffron, green, teal, magenta and red and 600 for blue and violet;
+       dark text is 400 everywhere; primary fills are blue-600 + white;
+       green / teal / magenta / red solids are 700 + white; a saffron solid
+       is the BRIGHT 400 with dark text, never a brown carrying white. */
+    --blue-text: var(--blue-600);
+    --blue-fill: var(--blue-600);
+    --blue-fill-hover: var(--blue-700);
+    --blue-on-fill: #ffffff;
+    --blue-tint: var(--blue-50);
+    --blue-surface: var(--blue-50);
+    --blue-on-tint: var(--blue-700);
+    --blue-line: var(--blue-200);
+    --blue-glow: rgba(59, 130, 246, 0.12);
+
+    --saffron-text: var(--saffron-700);
+    --saffron-fill: var(--saffron-400);
+    --saffron-fill-hover: var(--saffron-500);
+    --saffron-on-fill: #020617;
+    --saffron-tint: var(--saffron-50);
+    --saffron-surface: var(--saffron-50);
+    --saffron-on-tint: var(--saffron-700);
+    --saffron-line: var(--saffron-200);
+    --saffron-glow: rgba(245, 158, 11, 0.12);
+
+    --green-text: var(--green-700);
+    --green-fill: var(--green-700);
+    --green-fill-hover: var(--green-800);
+    --green-on-fill: #ffffff;
+    --green-tint: var(--green-50);
+    --green-surface: var(--green-50);
+    --green-on-tint: var(--green-700);
+    --green-line: var(--green-200);
+    --green-glow: rgba(16, 185, 129, 0.12);
+
+    --teal-text: var(--teal-700);
+    --teal-fill: var(--teal-700);
+    --teal-fill-hover: var(--teal-800);
+    --teal-on-fill: #ffffff;
+    --teal-tint: var(--teal-50);
+    --teal-surface: var(--teal-50);
+    --teal-on-tint: var(--teal-700);
+    --teal-line: var(--teal-200);
+    --teal-glow: rgba(20, 184, 166, 0.12);
+
+    --violet-text: var(--violet-600);
+    --violet-fill: var(--violet-600);
+    --violet-fill-hover: var(--violet-700);
+    --violet-on-fill: #ffffff;
+    --violet-tint: var(--violet-50);
+    --violet-surface: var(--violet-50);
+    --violet-on-tint: var(--violet-700);
+    --violet-line: var(--violet-200);
+    --violet-glow: rgba(139, 92, 246, 0.12);
+
+    --magenta-text: var(--magenta-700);
+    --magenta-fill: var(--magenta-700);
+    --magenta-fill-hover: var(--magenta-800);
+    --magenta-on-fill: #ffffff;
+    --magenta-tint: var(--magenta-50);
+    --magenta-surface: var(--magenta-50);
+    --magenta-on-tint: var(--magenta-800);
+    --magenta-line: var(--magenta-200);
+    --magenta-glow: rgba(236, 72, 153, 0.12);
+
+    --red-text: var(--red-700);
+    --red-fill: var(--red-700);
+    --red-fill-hover: var(--red-800);
+    --red-on-fill: #ffffff;
+    --red-tint: var(--red-50);
+    --red-surface: var(--red-50);
+    --red-on-tint: var(--red-700);
+    --red-line: var(--red-200);
+    --red-glow: rgba(239, 68, 68, 0.12);
+
+    /* Status aliases the pre-redesign components still read. Derived,
+       so they cannot disagree with the semantic tokens above. */
+    --green: var(--green-text);
+    --saffron: var(--saffron-text);
+    --red: var(--red-text);
+
+    /* The corridor gradient — Bangladesh's green to India's saffron, never
+       a flag. Text on it is ALWAYS slate-950, in both themes (7.95 at the
+       green end, 12.08 over the gold, 9.39 at the saffron end) — never white
+       (1.67 over the gold). A button on it is a slate-950 fill with white
+       text, or a white surface card. There is no "strong" variant: the
+       700-level stops ran through an olive midpoint to brown. */
+    --corridor-gradient: linear-gradient(
+      90deg,
+      var(--green-500),
+      var(--saffron-400) 60%,
+      var(--saffron-500)
+    );
+
+    /* Backdrops, glow, scrim, shadows. */
+    --grid: rgba(195, 198, 215, 0.34);
+    --dots: rgba(115, 118, 134, 0.3);
+    --glow: rgba(0, 74, 198, 0.1);
+    --scrim: rgba(11, 28, 48, 0.55);
+
+    --shadow-1: 0 1px 2px rgba(11, 28, 48, 0.05);
+    --shadow-2: 0 4px 20px -2px rgba(11, 28, 48, 0.05), 0 0 0 1px #e2e8f0;
+    --shadow-hud: 0 20px 45px -15px rgba(0, 53, 148, 0.12), 0 0 0 1px #e2e8f0;
+
+    /* Tier B art — three flat shades per solid (a gradient does not cross
+       the external-sprite boundary, a custom property does). */
+    --art-face-top: var(--blue-200);
+    --art-face-left: var(--blue-400);
+    --art-face-right: var(--blue-600);
+    --art-edge: var(--slate-900);
+    --art-shadow: rgba(11, 28, 48, 0.14);
+
+    /* Hero scene (Phase 3). Plain hex plus a SEPARATE alpha — THREE.Color
+       reads no rgba(). Direction arcs: out = to India (saffron), in = to
+       Bangladesh (green). */
+    --scene-land: #dbe5ff;
+    --scene-land-alpha: 1;
+    --scene-bd: #fcd34d;
+    --scene-grid: rgba(0, 74, 198, 0.08);
+    --scene-pin: #2563eb;
+    --scene-arc-out: #d97706;
+    --scene-arc-in: #059669;
+    --scene-haze: #f8f9ff;
+    --scene-plate: #eef2ff;
+    --scene-plane: #1e293b;
+    --scene-van: #2563eb;
+    --scene-parcel: #d97706;
+    --scene-chute: #004ac6;
+
+    /* The 2D corridor canvas (kept until Phase 4). */
+    --map-land: rgba(0, 74, 198, 0.06);
+    --map-coast: rgba(0, 74, 198, 0.4);
+    --map-bd-fill: rgba(180, 83, 9, 0.1);
+    --map-bd-coast: rgba(180, 83, 9, 0.55);
+    --map-route: rgba(0, 74, 198, 0.24);
+    --map-halo: rgba(0, 74, 198, 0.4);
+    --map-trail: rgba(0, 74, 198, 0.6);
+    --map-blip: #004ac6;
+    --map-sweep-rgb: 0, 74, 198;
+  }
+}
+
+/* COPY 2 of 2 for LIGHT — the pinned toggle. Byte-identical to copy 1. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Surfaces: page < band < card < raised. */
+  --page: #f8f9ff;
+  --surface: #f8f9ff;
+  --surface-2: #ffffff;
+  --surface-3: #e5eeff;
+  --surface-band: #eff4ff;
+  --surface-input: #ffffff;
+  --page-top: #e5eeff;
+  --page-bottom: #f8f9ff;
+
+  --line: #e2e8f0;
+  --line-strong: #c3c6d7;
+  --border-control: #737686;
+  --focus-ring: #004ac6;
+
+  --fg-strong: #0b1c30;
+  --fg-body: #434655;
+  --fg-muted: #4d5064;
+  --fg-faint: #5b6376;
+
+  /* Brand accent — split: a link colour and a fill colour, because no
+     single blue reads as text on the page AND carries white on a fill. */
+  --sky: #004ac6;
+  --sky-deep: #002870;
+  --accent-fill: var(--blue-fill);
+  --accent-fill-hover: var(--blue-fill-hover);
+  --accent-fg: var(--blue-on-fill);
+  --accent-tint: rgba(0, 74, 198, 0.07);
+  --accent-line: rgba(0, 74, 198, 0.3);
+
+  /* Semantic tokens per hue. A component picks a ROLE here, never a raw
+     step — text / fill + on-fill / tint + on-tint / surface / line / glow.
+     `-tint` is for CHIPS; `-surface` is for a LARGE tinted area (a scene,
+     a section band): in dark it is the page navy mixed with the hue, so a
+     saffron scene is not a brown panel and the theme stays navy-based. The
+     steps behind them follow the rules of 2026-09-21: light text is 700
+     for saffron, green, teal, magenta and red and 600 for blue and violet;
+     dark text is 400 everywhere; primary fills are blue-600 + white;
+     green / teal / magenta / red solids are 700 + white; a saffron solid
+     is the BRIGHT 400 with dark text, never a brown carrying white. */
+  --blue-text: var(--blue-600);
+  --blue-fill: var(--blue-600);
+  --blue-fill-hover: var(--blue-700);
+  --blue-on-fill: #ffffff;
+  --blue-tint: var(--blue-50);
+  --blue-surface: var(--blue-50);
+  --blue-on-tint: var(--blue-700);
+  --blue-line: var(--blue-200);
+  --blue-glow: rgba(59, 130, 246, 0.12);
+
+  --saffron-text: var(--saffron-700);
+  --saffron-fill: var(--saffron-400);
+  --saffron-fill-hover: var(--saffron-500);
+  --saffron-on-fill: #020617;
+  --saffron-tint: var(--saffron-50);
+  --saffron-surface: var(--saffron-50);
+  --saffron-on-tint: var(--saffron-700);
+  --saffron-line: var(--saffron-200);
+  --saffron-glow: rgba(245, 158, 11, 0.12);
+
+  --green-text: var(--green-700);
+  --green-fill: var(--green-700);
+  --green-fill-hover: var(--green-800);
+  --green-on-fill: #ffffff;
+  --green-tint: var(--green-50);
+  --green-surface: var(--green-50);
+  --green-on-tint: var(--green-700);
+  --green-line: var(--green-200);
+  --green-glow: rgba(16, 185, 129, 0.12);
+
+  --teal-text: var(--teal-700);
+  --teal-fill: var(--teal-700);
+  --teal-fill-hover: var(--teal-800);
+  --teal-on-fill: #ffffff;
+  --teal-tint: var(--teal-50);
+  --teal-surface: var(--teal-50);
+  --teal-on-tint: var(--teal-700);
+  --teal-line: var(--teal-200);
+  --teal-glow: rgba(20, 184, 166, 0.12);
+
+  --violet-text: var(--violet-600);
+  --violet-fill: var(--violet-600);
+  --violet-fill-hover: var(--violet-700);
+  --violet-on-fill: #ffffff;
+  --violet-tint: var(--violet-50);
+  --violet-surface: var(--violet-50);
+  --violet-on-tint: var(--violet-700);
+  --violet-line: var(--violet-200);
+  --violet-glow: rgba(139, 92, 246, 0.12);
+
+  --magenta-text: var(--magenta-700);
+  --magenta-fill: var(--magenta-700);
+  --magenta-fill-hover: var(--magenta-800);
+  --magenta-on-fill: #ffffff;
+  --magenta-tint: var(--magenta-50);
+  --magenta-surface: var(--magenta-50);
+  --magenta-on-tint: var(--magenta-800);
+  --magenta-line: var(--magenta-200);
+  --magenta-glow: rgba(236, 72, 153, 0.12);
+
+  --red-text: var(--red-700);
+  --red-fill: var(--red-700);
+  --red-fill-hover: var(--red-800);
+  --red-on-fill: #ffffff;
+  --red-tint: var(--red-50);
+  --red-surface: var(--red-50);
+  --red-on-tint: var(--red-700);
+  --red-line: var(--red-200);
+  --red-glow: rgba(239, 68, 68, 0.12);
+
+  /* Status aliases the pre-redesign components still read. Derived,
+     so they cannot disagree with the semantic tokens above. */
+  --green: var(--green-text);
+  --saffron: var(--saffron-text);
+  --red: var(--red-text);
+
+  /* The corridor gradient — Bangladesh's green to India's saffron, never
+     a flag. Text on it is ALWAYS slate-950, in both themes (7.95 at the
+     green end, 12.08 over the gold, 9.39 at the saffron end) — never white
+     (1.67 over the gold). A button on it is a slate-950 fill with white
+     text, or a white surface card. There is no "strong" variant: the
+     700-level stops ran through an olive midpoint to brown. */
+  --corridor-gradient: linear-gradient(
+    90deg,
+    var(--green-500),
+    var(--saffron-400) 60%,
+    var(--saffron-500)
+  );
+
+  /* Backdrops, glow, scrim, shadows. */
+  --grid: rgba(195, 198, 215, 0.34);
+  --dots: rgba(115, 118, 134, 0.3);
+  --glow: rgba(0, 74, 198, 0.1);
+  --scrim: rgba(11, 28, 48, 0.55);
+
+  --shadow-1: 0 1px 2px rgba(11, 28, 48, 0.05);
+  --shadow-2: 0 4px 20px -2px rgba(11, 28, 48, 0.05), 0 0 0 1px #e2e8f0;
+  --shadow-hud: 0 20px 45px -15px rgba(0, 53, 148, 0.12), 0 0 0 1px #e2e8f0;
+
+  /* Tier B art — three flat shades per solid (a gradient does not cross
+     the external-sprite boundary, a custom property does). */
+  --art-face-top: var(--blue-200);
+  --art-face-left: var(--blue-400);
+  --art-face-right: var(--blue-600);
+  --art-edge: var(--slate-900);
+  --art-shadow: rgba(11, 28, 48, 0.14);
+
+  /* Hero scene (Phase 3). Plain hex plus a SEPARATE alpha — THREE.Color
+     reads no rgba(). Direction arcs: out = to India (saffron), in = to
+     Bangladesh (green). */
+  --scene-land: #dbe5ff;
+  --scene-land-alpha: 1;
+  --scene-bd: #fcd34d;
+  --scene-grid: rgba(0, 74, 198, 0.08);
+  --scene-pin: #2563eb;
+  --scene-arc-out: #d97706;
+  --scene-arc-in: #059669;
+  --scene-haze: #f8f9ff;
+  --scene-plate: #eef2ff;
+  --scene-plane: #1e293b;
+  --scene-van: #2563eb;
+  --scene-parcel: #d97706;
+  --scene-chute: #004ac6;
+
+  /* The 2D corridor canvas (kept until Phase 4). */
+  --map-land: rgba(0, 74, 198, 0.06);
+  --map-coast: rgba(0, 74, 198, 0.4);
+  --map-bd-fill: rgba(180, 83, 9, 0.1);
+  --map-bd-coast: rgba(180, 83, 9, 0.55);
+  --map-route: rgba(0, 74, 198, 0.24);
+  --map-halo: rgba(0, 74, 198, 0.4);
+  --map-trail: rgba(0, 74, 198, 0.6);
+  --map-blip: #004ac6;
+  --map-sweep-rgb: 0, 74, 198;
+}
+
+/* COPY 2 of 2 for DARK — the pinned toggle. Byte-identical to `:root`. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces: page < band < card < raised. */
+  --page: #090d16;
+  --surface: #090d16;
+  --surface-2: #0f1623;
+  --surface-3: #1c2940;
+  --surface-band: #0c121d;
+  --surface-input: #070a11;
+  --page-top: #101a2b;
+  --page-bottom: #070a11;
+
+  --line: #1c283d;
+  --line-strong: #2e405e;
+  --border-control: #667c92;
+  --focus-ring: #7bafea;
+
+  --fg-strong: #f8fafc;
+  --fg-body: #cbd5e1;
+  --fg-muted: #94a3b8;
+  --fg-faint: #8296b0;
+
+  /* Brand accent — split: a link colour and a fill colour, because no
+     single blue reads as text on the page AND carries white on a fill. */
+  --sky: #b4c5ff;
+  --sky-deep: #dbe1ff;
+  --accent-fill: var(--blue-fill);
+  --accent-fill-hover: var(--blue-fill-hover);
+  --accent-fg: var(--blue-on-fill);
+  --accent-tint: rgba(37, 99, 235, 0.16);
+  --accent-line: rgba(37, 99, 235, 0.42);
+
+  /* Semantic tokens per hue. A component picks a ROLE here, never a raw
+     step — text / fill + on-fill / tint + on-tint / surface / line / glow.
+     `-tint` is for CHIPS; `-surface` is for a LARGE tinted area (a scene,
+     a section band): in dark it is the page navy mixed with the hue, so a
+     saffron scene is not a brown panel and the theme stays navy-based. The
+     steps behind them follow the rules of 2026-09-21: light text is 700
+     for saffron, green, teal, magenta and red and 600 for blue and violet;
+     dark text is 400 everywhere; primary fills are blue-600 + white;
+     green / teal / magenta / red solids are 700 + white; a saffron solid
+     is the BRIGHT 400 with dark text, never a brown carrying white. */
+  --blue-text: var(--blue-400);
+  --blue-fill: var(--blue-600);
+  --blue-fill-hover: var(--blue-700);
+  --blue-on-fill: #ffffff;
+  --blue-tint: var(--blue-950);
+  --blue-surface: color-mix(in oklab, var(--page) 92%, var(--blue-500) 8%);
+  --blue-on-tint: var(--blue-400);
+  --blue-line: var(--blue-800);
+  --blue-glow: rgba(123, 175, 234, 0.28);
+
+  --saffron-text: var(--saffron-400);
+  --saffron-fill: var(--saffron-400);
+  --saffron-fill-hover: var(--saffron-500);
+  --saffron-on-fill: #020617;
+  --saffron-tint: var(--saffron-950);
+  --saffron-surface: color-mix(in oklab, var(--page) 92%, var(--saffron-500) 8%);
+  --saffron-on-tint: var(--saffron-400);
+  --saffron-line: var(--saffron-800);
+  --saffron-glow: rgba(251, 191, 36, 0.28);
+
+  --green-text: var(--green-400);
+  --green-fill: var(--green-700);
+  --green-fill-hover: var(--green-800);
+  --green-on-fill: #ffffff;
+  --green-tint: var(--green-950);
+  --green-surface: color-mix(in oklab, var(--page) 92%, var(--green-500) 8%);
+  --green-on-tint: var(--green-400);
+  --green-line: var(--green-800);
+  --green-glow: rgba(52, 211, 153, 0.28);
+
+  --teal-text: var(--teal-400);
+  --teal-fill: var(--teal-700);
+  --teal-fill-hover: var(--teal-800);
+  --teal-on-fill: #ffffff;
+  --teal-tint: var(--teal-950);
+  --teal-surface: color-mix(in oklab, var(--page) 92%, var(--teal-500) 8%);
+  --teal-on-tint: var(--teal-400);
+  --teal-line: var(--teal-800);
+  --teal-glow: rgba(45, 212, 191, 0.28);
+
+  --violet-text: var(--violet-400);
+  --violet-fill: var(--violet-600);
+  --violet-fill-hover: var(--violet-700);
+  --violet-on-fill: #ffffff;
+  --violet-tint: var(--violet-950);
+  --violet-surface: color-mix(in oklab, var(--page) 92%, var(--violet-500) 8%);
+  --violet-on-tint: var(--violet-400);
+  --violet-line: var(--violet-800);
+  --violet-glow: rgba(167, 139, 250, 0.28);
+
+  --magenta-text: var(--magenta-400);
+  --magenta-fill: var(--magenta-700);
+  --magenta-fill-hover: var(--magenta-800);
+  --magenta-on-fill: #ffffff;
+  --magenta-tint: var(--magenta-950);
+  --magenta-surface: color-mix(in oklab, var(--page) 92%, var(--magenta-500) 8%);
+  --magenta-on-tint: var(--magenta-400);
+  --magenta-line: var(--magenta-800);
+  --magenta-glow: rgba(244, 114, 182, 0.28);
+
+  --red-text: var(--red-400);
+  --red-fill: var(--red-700);
+  --red-fill-hover: var(--red-800);
+  --red-on-fill: #ffffff;
+  --red-tint: var(--red-950);
+  --red-surface: color-mix(in oklab, var(--page) 92%, var(--red-500) 8%);
+  --red-on-tint: var(--red-400);
+  --red-line: var(--red-800);
+  --red-glow: rgba(248, 113, 113, 0.28);
+
+  /* Status aliases the pre-redesign components still read. Derived,
+     so they cannot disagree with the semantic tokens above. */
+  --green: var(--green-text);
+  --saffron: var(--saffron-text);
+  --red: var(--red-text);
+
+  /* The corridor gradient — Bangladesh's green to India's saffron, never
+     a flag. Text on it is ALWAYS slate-950, in both themes (7.95 at the
+     green end, 12.08 over the gold, 9.39 at the saffron end) — never white
+     (1.67 over the gold). A button on it is a slate-950 fill with white
+     text, or a white surface card. There is no "strong" variant: the
+     700-level stops ran through an olive midpoint to brown. */
+  --corridor-gradient: linear-gradient(
+    90deg,
+    var(--green-500),
+    var(--saffron-400) 60%,
+    var(--saffron-500)
+  );
+
+  /* Backdrops, glow, scrim, shadows. */
+  --grid: rgba(148, 163, 184, 0.07);
+  --dots: rgba(148, 163, 184, 0.16);
+  --glow: rgba(37, 99, 235, 0.22);
+  --scrim: rgba(4, 7, 13, 0.88);
+
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-hud: 0 20px 45px -15px rgba(0, 0, 0, 0.7);
+
+  /* Tier B art — three flat shades per solid (a gradient does not cross
+     the external-sprite boundary, a custom property does). */
+  --art-face-top: var(--blue-500);
+  --art-face-left: var(--blue-800);
+  --art-face-right: var(--blue-950);
+  --art-edge: var(--blue-200);
+  --art-shadow: rgba(0, 0, 0, 0.55);
+
+  /* Hero scene (Phase 3). Plain hex plus a SEPARATE alpha — THREE.Color
+     reads no rgba(). Direction arcs: out = to India (saffron), in = to
+     Bangladesh (green). */
+  --scene-land: #16223a;
+  --scene-land-alpha: 1;
+  --scene-bd: #b45309;
+  --scene-grid: rgba(180, 197, 255, 0.07);
+  --scene-pin: #7bafea;
+  --scene-arc-out: #fbbf24;
+  --scene-arc-in: #34d399;
+  --scene-haze: #090d16;
+  --scene-plate: #0f1729;
+  --scene-plane: #e8edf7;
+  --scene-van: #7bafea;
+  --scene-parcel: #fbbf24;
+  --scene-chute: #b4c5ff;
+
+  /* The 2D corridor canvas (kept until Phase 4). */
+  --map-land: rgba(180, 197, 255, 0.05);
+  --map-coast: rgba(180, 197, 255, 0.3);
+  --map-bd-fill: rgba(251, 191, 36, 0.1);
+  --map-bd-coast: rgba(251, 191, 36, 0.5);
+  --map-route: rgba(180, 197, 255, 0.18);
+  --map-halo: rgba(180, 197, 255, 0.34);
+  --map-trail: rgba(180, 197, 255, 0.58);
+  --map-blip: #b4c5ff;
+  --map-sweep-rgb: 180, 197, 255;
+}

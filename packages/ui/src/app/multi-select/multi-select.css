@@ -1,0 +1,77 @@
+/* Multi select (u24): chips wrap inside the field before the typing input;
+   a new chip scales in, and its remove button keeps a full tap target. */
+.sk-multi .sk-field__control {
+  flex-wrap: wrap;
+  row-gap: var(--sp-1);
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.sk-multi .sk-field__icon {
+  align-self: flex-start;
+  margin-top: calc((var(--f-h) - 12px - var(--f-chip)) / 2);
+}
+.sk-multi__input {
+  flex: 1 0 6rem;
+  min-height: calc(var(--f-h) - 12px);
+}
+.sk-multi__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 2px 0 var(--sp-2);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--blue-on-tint);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  animation: sk-multi-in var(--dur) var(--ease-spring) both;
+}
+@keyframes sk-multi-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.sk-multi__chip-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sk-multi__remove {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.sk-multi__remove::after {
+  content: '';
+  position: absolute;
+  inset: calc((22px - var(--tap)) / 2);
+}
+.sk-multi__remove:hover {
+  background: var(--surface-3);
+}
+.sk-multi__remove:active {
+  transform: scale(0.88);
+}
+.sk-multi__remove:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.sk-multi__remove:disabled {
+  cursor: not-allowed;
+}

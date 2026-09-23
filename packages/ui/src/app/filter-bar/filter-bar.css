@@ -1,0 +1,164 @@
+/* FilterBar (u04). */
+.sk-filter {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.sk-filter__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sk-filter__icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  color: var(--sky);
+}
+.sk-filter__title {
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+}
+.sk-filter__count {
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+}
+.sk-filter__count[data-zero='1'] {
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.sk-filter__head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+.sk-filter__reset {
+  min-height: var(--tap);
+  padding: 0 var(--sp-2);
+  border: 0;
+  background: none;
+  color: var(--sky);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color var(--dur-fast) var(--ease-out);
+}
+.sk-filter__reset:hover {
+  text-decoration-color: currentColor;
+}
+.sk-filter__reset:disabled {
+  color: var(--fg-faint);
+  cursor: default;
+}
+.sk-filter__controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: var(--sp-3);
+  align-items: end;
+}
+.sk-filter__field {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.sk-filter__field[data-wide='1'] {
+  grid-column: span 2;
+}
+@media (max-width: 479.98px) {
+  .sk-filter__field[data-wide='1'] {
+    grid-column: auto;
+  }
+}
+.sk-filter__field-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.sk-filter__field-control {
+  flex: 1;
+  min-width: 0;
+}
+.sk-filter__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: var(--sp-3) 0 0;
+  border-top: 1px dashed var(--line);
+  list-style: none;
+}
+.sk-filter__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 0 2px 0 10px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--fg-strong);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  animation: sk-filter-chip-in var(--dur) var(--ease-spring) both;
+}
+.sk-filter__chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sk-filter__chip-x {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+/* The hit area reaches --tap though the circle is 24px. */
+.sk-filter__chip-x::after {
+  content: '';
+  position: absolute;
+  inset: calc((24px - var(--tap)) / 2);
+}
+.sk-filter__chip-x:hover {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+}
+@keyframes sk-filter-chip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}

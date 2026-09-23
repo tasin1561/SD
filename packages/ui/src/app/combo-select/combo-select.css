@@ -1,0 +1,125 @@
+/* Combo select (u05 / u18) and the listbox it shares with MultiSelect. The
+   list hangs under the field, drops in on transform + opacity, and marks
+   the active row with a tint and the chosen one with a tick. */
+.sk-combo__toggle {
+  transition:
+    transform var(--dur) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.sk-combo__toggle[data-open] {
+  transform: rotate(180deg);
+  color: var(--blue-text);
+}
+
+.sk-lb {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -1px;
+  right: -1px;
+  z-index: 30;
+  max-height: min(18rem, 50vh);
+  margin: 0;
+  padding: var(--sp-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--elev-3);
+  transform-origin: top center;
+  animation: sk-lb-in var(--dur) var(--ease-out) both;
+}
+.sk-lb:not([data-open]) {
+  display: none;
+}
+@keyframes sk-lb-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+.sk-lb__opt {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--fg-body);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.sk-lb__opt:hover,
+.sk-lb__opt[data-active] {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.sk-lb__opt[data-active] {
+  box-shadow: inset 2px 0 0 var(--accent-fill);
+}
+.sk-lb__opt[aria-selected='true'] {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.sk-lb__opt[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sk-lb__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.sk-lb__opt[data-active] .sk-lb__icon,
+.sk-lb__opt[aria-selected='true'] .sk-lb__icon {
+  background: var(--accent-tint);
+  color: var(--blue-on-tint);
+}
+.sk-lb__icon svg {
+  width: 16px;
+  height: 16px;
+}
+.sk-lb__text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 1px;
+}
+.sk-lb__label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sk-lb__desc {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+.sk-lb__tick {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--blue-text);
+  opacity: 0;
+  transform: scale(0.5);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur) var(--ease-spring);
+}
+.sk-lb__opt[aria-selected='true'] .sk-lb__tick {
+  opacity: 1;
+  transform: none;
+}
+.sk-lb__empty {
+  padding: var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}

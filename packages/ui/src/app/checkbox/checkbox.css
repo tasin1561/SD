@@ -1,0 +1,124 @@
+/* Checkbox (u03). The box fills with the accent, then the tick draws itself
+   in with stroke-dashoffset; indeterminate draws a dash the same way. */
+.sk-check {
+  display: grid;
+  gap: var(--sp-1);
+}
+.sk-check__row {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-height: var(--tap);
+  padding: calc((var(--tap) - 20px) / 2) 0;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.sk-check:has(.sk-check__input:disabled) .sk-check__row {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.sk-check__box {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-control);
+  border-radius: 6px;
+  background: var(--surface-input);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.sk-check__row:hover .sk-check__box {
+  border-color: var(--blue-text);
+}
+.sk-check__row:active .sk-check__box {
+  transform: scale(0.9);
+}
+.sk-check__box:has(.sk-check__input:checked),
+.sk-check__box:has(.sk-check__input:indeterminate) {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+}
+.sk-check__box:has(.sk-check__input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-check[data-invalid] .sk-check__box {
+  border-color: var(--red-text);
+}
+.sk-check__input {
+  position: absolute;
+  inset: -2px;
+  width: calc(100% + 4px);
+  height: calc(100% + 4px);
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.sk-check__mark {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  overflow: visible;
+}
+.sk-check__tick,
+.sk-check__dash {
+  fill: none;
+  stroke: var(--accent-fg);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset var(--dur) var(--ease-out);
+}
+.sk-check__input:checked:not(:indeterminate) ~ .sk-check__mark .sk-check__tick {
+  stroke-dashoffset: 0;
+  transition-delay: calc(60ms * var(--motion-slow, 1));
+}
+.sk-check__input:indeterminate ~ .sk-check__mark .sk-check__dash {
+  stroke-dashoffset: 0;
+}
+.sk-check__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 1px;
+}
+.sk-check__label {
+  color: var(--fg-strong);
+  line-height: 1.35;
+}
+.sk-check__desc {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.sk-check__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  margin: 0;
+  padding-left: calc(20px + var(--sp-3));
+  color: var(--red-text);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.sk-check__error svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.sk-check__text--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

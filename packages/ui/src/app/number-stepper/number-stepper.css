@@ -1,0 +1,112 @@
+/* Number stepper (u12): a pill with round − and + ends that press in; the
+   number sits centred in tabular figures and stays typeable. */
+.sk-stepper {
+  display: inline-grid;
+  gap: var(--sp-1);
+}
+.sk-stepper__label {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.sk-stepper__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.sk-stepper__row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  height: calc(var(--tap) + 6px);
+  padding: 2px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-pill);
+  background: var(--surface-input);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sk-stepper__row:focus-within {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px var(--blue-glow);
+}
+.sk-stepper[data-invalid] .sk-stepper__row {
+  border-color: var(--red-text);
+}
+.sk-stepper__btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--fg-strong);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-spring);
+}
+.sk-stepper__btn:hover:not(:disabled) {
+  background: var(--accent-tint);
+  color: var(--blue-on-tint);
+}
+.sk-stepper__btn:active:not(:disabled) {
+  transform: scale(0.88);
+}
+.sk-stepper__btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.sk-stepper__btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.sk-stepper__input {
+  width: 4.5ch;
+  min-width: 3rem;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.sk-stepper__input::-webkit-outer-spin-button,
+.sk-stepper__input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+.sk-stepper__input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sk-stepper__msg {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.sk-stepper__msg[data-kind='error'] {
+  color: var(--red-text);
+  font-weight: var(--fw-medium);
+}
+.sk-stepper__msg svg {
+  flex: none;
+  margin-top: 1px;
+}

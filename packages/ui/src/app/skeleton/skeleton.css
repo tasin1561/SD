@@ -1,0 +1,56 @@
+/* Skeleton — a surface block with a highlight that travels across it.
+   The highlight is its own layer moved by transform, so the shimmer is
+   composited, not repainted. */
+.sk-skel {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  height: 14px;
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+}
+.sk-skel[data-rounded='md'] {
+  border-radius: var(--r-md);
+}
+.sk-skel[data-rounded='full'] {
+  border-radius: var(--r-pill);
+}
+.sk-skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--line), transparent);
+  transform: translateX(-100%);
+  animation: sk-skel-sweep calc(1400ms * var(--motion-slow)) var(--ease-out) infinite;
+}
+@keyframes sk-skel-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+/* Reduced motion: the global rule collapses the loop to one instant
+   frame, which would park the highlight off the block — fine, the block
+   is still there. Hide it outright so nothing flickers. */
+@media (prefers-reduced-motion: reduce) {
+  .sk-skel::after {
+    display: none;
+  }
+}
+:root[data-reduced='1'] .sk-skel::after {
+  display: none;
+}
+
+.sk-skel-rows {
+  display: grid;
+}
+.sk-skel-rows__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.sk-skel-rows__row:last-child {
+  border-bottom: 0;
+}

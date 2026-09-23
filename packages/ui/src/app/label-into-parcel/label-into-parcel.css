@@ -1,0 +1,85 @@
+/* Label-into-parcel (storytelling 06). Hover/focus plays once, ≤ 350 ms:
+   flaps open (0–30 %), the label drops into the box (30–60 %), flaps
+   close and the label is back (60–100 %). Nothing here touches the click. */
+.sk-lip {
+  display: inline-flex;
+}
+.sk-lip__box {
+  width: 1.35em;
+  height: 1.35em;
+  overflow: visible;
+}
+.sk-lip__body {
+  fill: currentColor;
+  opacity: 0.9;
+}
+.sk-lip__tape {
+  fill: var(--saffron-fill);
+}
+.sk-lip__flap {
+  fill: currentColor;
+  transform-box: fill-box;
+}
+.sk-lip__flap--l {
+  transform-origin: 0% 100%;
+}
+.sk-lip__flap--r {
+  transform-origin: 100% 100%;
+}
+.sk-lip .sk-btn__label {
+  display: inline-block;
+  transform-origin: 0% 50%;
+}
+.sk-lip :is(.sk-btn:hover, .sk-btn:focus-visible) .sk-lip__flap--l {
+  animation: sk-lip-flap-l calc(340ms * var(--motion-slow, 1)) var(--ease-out);
+}
+.sk-lip :is(.sk-btn:hover, .sk-btn:focus-visible) .sk-lip__flap--r {
+  animation: sk-lip-flap-r calc(340ms * var(--motion-slow, 1)) var(--ease-out);
+}
+.sk-lip :is(.sk-btn:hover, .sk-btn:focus-visible) .sk-btn__label {
+  animation: sk-lip-drop calc(340ms * var(--motion-slow, 1)) var(--ease-out);
+}
+.sk-lip :is(.sk-btn:hover, .sk-btn:focus-visible) .sk-lip__box {
+  animation: sk-lip-hop calc(340ms * var(--motion-slow, 1)) var(--ease-spring);
+}
+@keyframes sk-lip-flap-l {
+  25%,
+  55% {
+    transform: rotate(-120deg);
+  }
+}
+@keyframes sk-lip-flap-r {
+  25%,
+  55% {
+    transform: rotate(120deg);
+  }
+}
+@keyframes sk-lip-drop {
+  30% {
+    transform: none;
+    opacity: 1;
+  }
+  55% {
+    transform: translate(-1.6em, 0.35em) scale(0.3);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(0.25em);
+    opacity: 0;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes sk-lip-hop {
+  60% {
+    transform: none;
+  }
+  75% {
+    transform: translateY(-2px) scale(1.12);
+  }
+  100% {
+    transform: none;
+  }
+}

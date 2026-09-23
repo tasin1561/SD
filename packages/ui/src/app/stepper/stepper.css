@@ -1,0 +1,207 @@
+/* Stepper (u34). */
+.sk-stepper {
+  display: grid;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+.sk-stepper[data-sticky='1'] > .sk-stepper__rail {
+  position: sticky;
+  top: var(--sk-sticky-top, 0px);
+  z-index: 15;
+  padding: var(--sp-3) var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-2);
+}
+.sk-stepper__rail {
+  --n: 4;
+  --fill: 0;
+  --node: 40px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The connector: grey line behind the nodes, accent line scaled on X. */
+.sk-stepper__rail::before,
+.sk-stepper__rail::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--node) / 2 - 1.5px);
+  left: calc(100% / (2 * var(--n)));
+  right: calc(100% / (2 * var(--n)));
+  height: 3px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.sk-stepper[data-sticky='1'] > .sk-stepper__rail::before,
+.sk-stepper[data-sticky='1'] > .sk-stepper__rail::after {
+  top: calc(var(--sp-3) + var(--node) / 2 - 1.5px);
+}
+.sk-stepper__rail::after {
+  background: var(--corridor-gradient);
+  transform-origin: left center;
+  transform: scaleX(var(--fill));
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sk-stepper__step {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+.sk-stepper__hit {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  text-align: center;
+}
+button.sk-stepper__hit {
+  cursor: pointer;
+}
+button.sk-stepper__hit:focus-visible {
+  outline: none;
+}
+button.sk-stepper__hit:focus-visible .sk-stepper__node {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.sk-stepper__node {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--node);
+  height: var(--node);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  transition:
+    transform var(--dur) var(--ease-spring),
+    background-color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+button.sk-stepper__hit:hover .sk-stepper__node {
+  border-color: var(--accent-line);
+  transform: translateY(-1px);
+}
+.sk-stepper__ico,
+.sk-stepper__check {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-spring);
+}
+.sk-stepper__check {
+  opacity: 0;
+  transform: scale(0.4);
+}
+.sk-stepper__step[data-state='done'] .sk-stepper__node {
+  border-color: var(--green-fill);
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.sk-stepper__step[data-state='done'] .sk-stepper__ico {
+  opacity: 0;
+  transform: scale(0.4);
+}
+.sk-stepper__step[data-state='done'] .sk-stepper__check {
+  opacity: 1;
+  transform: scale(1);
+}
+.sk-stepper__step[data-state='current'] .sk-stepper__node {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  transform: scale(1.06);
+}
+/* The ring glow — a pre-painted halo, faded in. */
+.sk-stepper__node::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: var(--r-pill);
+  background: var(--blue-glow);
+  opacity: 0;
+  z-index: -1;
+  transition: opacity var(--dur) var(--ease-out);
+}
+.sk-stepper__step[data-state='current'] .sk-stepper__node::after {
+  opacity: 1;
+}
+.sk-stepper__text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.sk-stepper__label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+  transition: color var(--dur) var(--ease-out);
+}
+.sk-stepper__step[data-state='current'] .sk-stepper__label {
+  color: var(--fg-strong);
+}
+.sk-stepper__step[data-state='done'] .sk-stepper__label {
+  color: var(--green-text);
+}
+.sk-stepper__desc {
+  color: var(--fg-faint);
+  font-size: var(--fs-2xs);
+  line-height: var(--lh-snug);
+}
+.sk-stepper__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.sk-stepper__panel {
+  animation: sk-stepper-in var(--dur-slow) var(--ease-out) both;
+}
+@keyframes sk-stepper-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (max-width: 639.98px) {
+  .sk-stepper__rail {
+    --node: 34px;
+  }
+  .sk-stepper__label {
+    font-size: var(--fs-2xs);
+  }
+  .sk-stepper__desc {
+    display: none;
+  }
+  /* Only the current step keeps its words on a phone; the others are
+     still in the list and spoken. */
+  .sk-stepper__step:not([data-state='current']) .sk-stepper__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}

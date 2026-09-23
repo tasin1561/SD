@@ -1,0 +1,192 @@
+/* The /dev/ui gallery shell. Dev-only: never imported by a product page. */
+.sk-gallery {
+  min-height: 100dvh;
+  background: var(--page);
+  color: var(--fg-body);
+  font-family: var(--app-font);
+  font-size: var(--fs-md);
+}
+.sk-gallery__bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3) var(--sp-6);
+  padding: var(--sp-3) var(--sp-6);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--elev-1);
+}
+.sk-gallery__title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--fg-strong);
+}
+.sk-gallery__title small {
+  margin-left: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+.sk-gallery__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-left: auto;
+}
+.sk-gallery__seg {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.sk-gallery__seg legend {
+  float: left;
+  margin-right: var(--sp-2);
+  padding: 0;
+}
+.sk-gallery__opts {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+.sk-gallery__opt {
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-body);
+  font: inherit;
+  cursor: pointer;
+}
+.sk-gallery__opt[aria-pressed='true'] {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+}
+.sk-gallery__opt:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-gallery__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-8);
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--sp-6);
+}
+@media (min-width: 1024px) {
+  .sk-gallery__body {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+.sk-gallery__nav {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .sk-gallery__nav {
+    display: block;
+    position: sticky;
+    top: 80px;
+    align-self: start;
+    max-height: calc(100dvh - 100px);
+    overflow-y: auto;
+  }
+}
+.sk-gallery__nav h2 {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+}
+.sk-gallery__nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sk-gallery__nav a {
+  display: block;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  color: var(--fg-body);
+  text-decoration: none;
+  font-size: var(--fs-sm);
+}
+.sk-gallery__nav a:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.sk-gallery__group > h2 {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--fs-xl);
+  color: var(--fg-strong);
+}
+.sk-gallery__entry {
+  scroll-margin-top: 80px;
+  margin-bottom: var(--sp-8);
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.sk-gallery__entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.sk-gallery__entry-head h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  color: var(--fg-strong);
+}
+.sk-gallery__pattern {
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--blue-on-tint);
+  font-size: var(--fs-xs);
+  font-family: var(--app-mono);
+}
+.sk-gallery__used {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.sk-gallery__states {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--sp-4);
+}
+.sk-gallery__state {
+  min-width: 0;
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--page);
+  border: 1px dashed var(--line-strong);
+}
+.sk-gallery__state--wide {
+  grid-column: 1 / -1;
+}
+.sk-gallery__state-label {
+  margin: 0 0 var(--sp-3);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.sk-gallery__empty {
+  color: var(--fg-muted);
+}
+.sk-gallery__states[data-wide] {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr));
+}

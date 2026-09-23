@@ -1,0 +1,144 @@
+/* Snackbar (u22). The icon block is a full-height gradient column. */
+.sk-snack {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: calc(var(--sp-5) + env(safe-area-inset-bottom));
+  width: min(32rem, calc(100vw - 2 * var(--sp-4)));
+  translate: -50% 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-right: var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  box-shadow:
+    var(--elev-3),
+    0 18px 36px -22px var(--blue-glow);
+  animation: sk-snack-in var(--dur-slow) var(--ease-spring) both;
+}
+.sk-snack--inline {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  z-index: auto;
+  width: 100%;
+  max-width: 32rem;
+  translate: none;
+}
+@keyframes sk-snack-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+}
+.sk-snack__icon {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  min-height: 64px;
+  background: linear-gradient(160deg, var(--accent-fill), var(--violet-fill));
+  color: var(--accent-fg);
+}
+.sk-snack__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--sp-3) 0;
+}
+.sk-snack__title,
+.sk-snack__body {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sk-snack__title {
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+}
+.sk-snack__body {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+}
+.sk-snack__action,
+.sk-snack__close {
+  display: inline-grid;
+  place-items: center;
+  min-height: var(--tap);
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sk-snack__action {
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+}
+.sk-snack__action:hover {
+  background: var(--accent-fill-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -10px var(--blue-glow);
+}
+.sk-snack__close {
+  min-width: var(--tap);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+}
+.sk-snack__close:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.sk-snack__action:focus-visible,
+.sk-snack__close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-snack__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-fill), var(--violet-fill));
+  transform-origin: 0 50%;
+  animation: sk-snack-drain var(--snack-life) linear forwards;
+}
+.sk-snack[data-paused] .sk-snack__bar {
+  animation-play-state: paused;
+}
+@keyframes sk-snack-drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (max-width: 479px) {
+  .sk-snack {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .sk-snack__icon {
+    grid-row: 1 / span 2;
+  }
+  .sk-snack__action {
+    grid-column: 2 / -1;
+    justify-self: start;
+    margin-bottom: var(--sp-3);
+  }
+  .sk-snack__close {
+    grid-row: 1;
+    grid-column: 3;
+  }
+}

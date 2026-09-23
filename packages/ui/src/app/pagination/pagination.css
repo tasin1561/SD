@@ -1,0 +1,147 @@
+/* Pagination (u16). */
+.sk-pg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.sk-pg__strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.sk-pg__bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.sk-pg__arrow,
+.sk-pg__page {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  font: inherit;
+  cursor: pointer;
+}
+.sk-pg__arrow {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.sk-pg__arrow:not(:disabled):hover {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  transform: translateY(-1px);
+}
+.sk-pg__arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.sk-pg__pages {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.sk-pg__bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  box-shadow: 0 6px 16px -8px var(--blue-glow);
+  transform: translateX(var(--bub-x, 0px));
+  opacity: 0;
+  transition: transform var(--dur-slow) var(--ease-spring);
+}
+.sk-pg__pages[data-ready='1'] .sk-pg__bubble {
+  opacity: 1;
+}
+.sk-pg__page {
+  z-index: 1;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  transition: color var(--dur) var(--ease-out);
+}
+.sk-pg__page:hover {
+  color: var(--fg-strong);
+}
+.sk-pg__page[aria-current='page'] {
+  color: var(--accent-fg);
+}
+.sk-pg__gap {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  color: var(--fg-faint);
+}
+.sk-pg__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.sk-pg__size {
+  min-width: 9rem;
+}
+.sk-pg__jump {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sk-pg__jump-label {
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.sk-pg__jump-input {
+  width: 4.5rem;
+  min-height: var(--tap);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-pill);
+  background: var(--surface-input);
+  color: var(--fg-strong);
+  font: inherit;
+  text-align: center;
+}
+.sk-pg__jump-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.sk-pg__jump-max {
+  color: var(--fg-faint);
+  white-space: nowrap;
+}
+@media (max-width: 479.98px) {
+  /* Only first, current and last fit a phone; prev/next reach the rest. */
+  .sk-pg__page:not([data-edge='1']) {
+    display: none;
+  }
+  .sk-pg {
+    justify-content: center;
+  }
+  .sk-pg__summary {
+    width: 100%;
+    text-align: center;
+  }
+}

@@ -120,7 +120,7 @@ export function THead({
   return (
     <thead
       className={clsx(
-        'bg-surface-raised border-b border-border text-text-muted text-xs uppercase tracking-wide',
+        'sd-thead bg-surface-raised border-b border-border text-text-muted text-xs uppercase tracking-wide',
         className,
       )}
       {...rest}

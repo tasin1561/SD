@@ -1,0 +1,113 @@
+/* Switch (u08). The thumb springs across the track; the word it uncovers
+   ("On" / "Off") fades in on the other side, so the state reads in words. */
+.sk-switch {
+  --sw-w: 60px;
+  --sw-h: 30px;
+  --sw-thumb: 22px;
+  --sw-gap: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+.sk-switch__track {
+  position: relative;
+  flex: none;
+  width: var(--sw-w);
+  height: var(--sw-h);
+  margin-top: calc((var(--tap) - var(--sw-h)) / 2 - 5px);
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sk-switch__track::after {
+  content: '';
+  position: absolute;
+  inset: calc((var(--sw-h) - var(--tap)) / 2) -4px;
+}
+.sk-switch[data-on] .sk-switch__track {
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  box-shadow: 0 6px 16px -8px var(--blue-glow);
+}
+.sk-switch__track:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-switch__track:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.sk-switch__thumb {
+  position: absolute;
+  top: calc((var(--sw-h) - 2px - var(--sw-thumb)) / 2);
+  left: var(--sw-gap);
+  width: var(--sw-thumb);
+  height: var(--sw-thumb);
+  border-radius: 50%;
+  background: var(--fg-strong);
+  box-shadow: var(--elev-1);
+  transition: transform var(--dur-slow) var(--ease-spring);
+}
+.sk-switch[data-on] .sk-switch__thumb {
+  background: var(--accent-fg);
+  transform: translateX(calc(var(--sw-w) - 2px - var(--sw-thumb) - 2 * var(--sw-gap)));
+}
+.sk-switch__track:active:not(:disabled) .sk-switch__thumb {
+  transform: scale(0.9);
+}
+.sk-switch[data-on] .sk-switch__track:active:not(:disabled) .sk-switch__thumb {
+  transform: translateX(calc(var(--sw-w) - 2px - var(--sw-thumb) - 2 * var(--sw-gap))) scale(0.9);
+}
+.sk-switch__word {
+  position: absolute;
+  top: 50%;
+  line-height: 1;
+  transform: translateY(-50%);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+.sk-switch__word--on {
+  left: 9px;
+  opacity: 0;
+  transform: translate(-4px, -50%);
+}
+.sk-switch__word--off {
+  right: 8px;
+}
+.sk-switch[data-on] .sk-switch__word--on {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+.sk-switch[data-on] .sk-switch__word--off {
+  opacity: 0;
+  transform: translate(4px, -50%);
+}
+.sk-switch__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-top: calc((var(--tap) - 20px) / 2 - 5px);
+}
+.sk-switch__label {
+  color: var(--fg-strong);
+  line-height: 1.35;
+  cursor: pointer;
+}
+.sk-switch__desc {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}

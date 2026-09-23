@@ -1,0 +1,124 @@
+/*
+ * Raw colour scales — theme-INVARIANT, declared ONCE.
+ * ═════════════════════════════════════════════════════════════════════
+ * Eight hues × 11 steps. Nothing in a component reads these directly: a
+ * component reads a SEMANTIC token (`--green-text`, `--saffron-fill`,
+ * `--magenta-tint` …) from theme.css, which is where a step is chosen per
+ * theme and per role. The scales live in their own file so theme.css can
+ * stay exactly FOUR blocks (two light copies, two dark copies) that
+ * `check:theme` compares declaration for declaration — a fifth block in
+ * that file would have to be special-cased by the gate.
+ *
+ * Magenta is the one ramp that changes HUE as it darkens: pink to 700,
+ * then plum (hue ≈ 320°) from 800. Its dark-theme tint is a surface the
+ * Returns tab and the Sellers section paint whole panels with, and at
+ * pink-950 (#500724) that surface was a near-identical maroon to
+ * red-950 (#450a0a) — in dark mode both sections read as error zones.
+ * Plum separates them by hue, which is what a tint has left once
+ * luminance is pinned this low.
+ */
+:root {
+  /* blue */
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-200: #bfdbfe;
+  --blue-300: #93c5fd;
+  --blue-400: #7bafea;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --blue-700: #1d4ed8;
+  --blue-800: #1e40af;
+  --blue-900: #1e3a8a;
+  --blue-950: #172554;
+
+  /* saffron */
+  --saffron-50: #fffbeb;
+  --saffron-100: #fef3c7;
+  --saffron-200: #fde68a;
+  --saffron-300: #fcd34d;
+  --saffron-400: #fbbf24;
+  --saffron-500: #f59e0b;
+  --saffron-600: #d97706;
+  --saffron-700: #b45309;
+  --saffron-800: #92400e;
+  --saffron-900: #78350f;
+  --saffron-950: #451a03;
+
+  /* green */
+  --green-50: #ecfdf5;
+  --green-100: #d1fae5;
+  --green-200: #a7f3d0;
+  --green-300: #6ee7b7;
+  --green-400: #34d399;
+  --green-500: #10b981;
+  --green-600: #059669;
+  --green-700: #047857;
+  --green-800: #065f46;
+  --green-900: #064e3b;
+  --green-950: #022c22;
+
+  /* teal */
+  --teal-50: #f0fdfa;
+  --teal-100: #ccfbf1;
+  --teal-200: #99f6e4;
+  --teal-300: #5eead4;
+  --teal-400: #2dd4bf;
+  --teal-500: #14b8a6;
+  --teal-600: #0d9488;
+  --teal-700: #0f766e;
+  --teal-800: #115e59;
+  --teal-900: #134e4a;
+  --teal-950: #042f2e;
+
+  /* violet */
+  --violet-50: #f5f3ff;
+  --violet-100: #ede9fe;
+  --violet-200: #ddd6fe;
+  --violet-300: #c4b5fd;
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --violet-600: #7c3aed;
+  --violet-700: #6d28d9;
+  --violet-800: #5b21b6;
+  --violet-900: #4c1d95;
+  --violet-950: #2e1065;
+
+  /* magenta */
+  --magenta-50: #fdf2f8;
+  --magenta-100: #fce7f3;
+  --magenta-200: #fbcfe8;
+  --magenta-300: #f9a8d4;
+  --magenta-400: #f472b6;
+  --magenta-500: #ec4899;
+  --magenta-600: #db2777;
+  --magenta-700: #be185d;
+  --magenta-800: #8a1263;
+  --magenta-900: #611047;
+  --magenta-950: #42092f;
+
+  /* red */
+  --red-50: #fef2f2;
+  --red-100: #fee2e2;
+  --red-200: #fecaca;
+  --red-300: #fca5a5;
+  --red-400: #f87171;
+  --red-500: #ef4444;
+  --red-600: #dc2626;
+  --red-700: #ba1a1a;
+  --red-800: #991b1b;
+  --red-900: #7f1d1d;
+  --red-950: #450a0a;
+
+  /* slate */
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+  --slate-950: #020617;
+}
