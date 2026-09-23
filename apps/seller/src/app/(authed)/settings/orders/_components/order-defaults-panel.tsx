@@ -1,20 +1,17 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import {
-  BandBody,
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  LoadingState,
-  SectionBand,
-  useToast,
-} from '@skydrop/ui/components';
+import { CircleAlert, IndianRupee } from 'lucide-react';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useCustomerDeliveryFee, useSetCustomerDeliveryFee } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
+import { SetCallout, SetFact } from '../../_components/settings-parts';
 
 /**
  * The delivery fee a new order starts with.
@@ -37,6 +34,8 @@ export function OrderDefaultsPanel(): ReactElement {
     if (current.data !== undefined) setValue(current.data.amountInr);
   }, [current.data]);
 
+  // Rethrows after recording the verdict so the button shows the failure
+  // on itself; nothing else calls this.
   async function onSave(): Promise<void> {
     setError(null);
     try {
@@ -44,74 +43,76 @@ export function OrderDefaultsPanel(): ReactElement {
       toast.success(`New orders will start at ₹${saved.amountInr} delivery.`);
     } catch (e) {
       setError(serverVerdict(e));
+      throw e;
     }
   }
 
   return (
-    <div>
-      <SectionBand
-        index="01"
+    <section className="set-section">
+      <SectionHeading
         title="Delivery fee"
         /*
-          The band's note says WHOSE figure this currently is. It is the
-          one thing about the field that a glance cannot tell you: an
-          inherited default and a number somebody chose look identical
-          in the box.
+          The note says WHOSE figure this currently is. It is the one
+          thing about the field that a glance cannot tell you: an
+          inherited default and a number somebody chose look identical in
+          the box.
         */
         note={
-          current.data === undefined
-            ? undefined
-            : current.data.isOwnValue
-              ? 'Your own figure'
-              : 'Skydrop default'
+          current.data === undefined ? undefined : current.data.isOwnValue ? (
+            <SetFact tone="accent">Your own figure</SetFact>
+          ) : (
+            <SetFact>Skydrop default</SetFact>
+          )
         }
       />
-      <BandBody>
+      <div className="set-card">
         {current.isLoading ? (
-          <LoadingState rows={2} />
+          <div className="set-skel-pair">
+            <Skeleton width={260} height={40} />
+            <Skeleton width={120} height={40} />
+          </div>
         ) : (
           <>
             {error !== null && (
-              <div className="mb-3">
-                <ErrorNote message={error} />
-              </div>
+              <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+                <p>{error}</p>
+              </SetCallout>
             )}
-            <div className="max-w-sm">
-              <FormField
+            <div className="set-form-grid set-form-narrow">
+              <TextField
                 label="Delivery fee charged to your customer (₹)"
+                icon={<IndianRupee size={15} />}
                 hint={
                   current.data?.isOwnValue === true
                     ? 'Your own figure. Pre-filled on every new order, and editable there.'
                     : 'Currently the Skydrop default. Set your own and new orders will start with it.'
                 }
-              >
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  disabled={!mayEdit}
-                />
-              </FormField>
-              <p className="text-text-muted mt-2 text-xs leading-relaxed">
+                type="number"
+                min={0}
+                step="0.01"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                disabled={!mayEdit}
+                inputClassName="sk-figure"
+              />
+              <p className="set-muted">
                 This is what you add to the customer&apos;s collectable amount. It is not what
                 Skydrop charges you to deliver — that is separate and unaffected by this.
               </p>
               {mayEdit && (
-                <Button
-                  variant="primary"
-                  className="mt-3"
-                  onClick={() => void onSave()}
-                  disabled={save.isPending || value.trim() === ''}
-                >
-                  {save.isPending ? 'Saving…' : 'Save'}
-                </Button>
+                <div className="set-buttons" data-align="start">
+                  <AsyncButton
+                    variant="primary"
+                    labels={{ idle: 'Save', busy: 'Saving…', done: 'Saved', error: 'Not saved' }}
+                    disabled={save.isPending || value.trim() === ''}
+                    onAction={onSave}
+                  />
+                </div>
               )}
             </div>
           </>
         )}
-      </BandBody>
-    </div>
+      </div>
+    </section>
   );
 }

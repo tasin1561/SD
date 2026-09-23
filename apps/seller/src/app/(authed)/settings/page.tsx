@@ -1,6 +1,4 @@
 import type { ReactElement } from 'react';
-import Link from 'next/link';
-import { Crumbs, PageHeader } from '@skydrop/ui/components';
 import {
   Webhook,
   Bell,
@@ -12,6 +10,7 @@ import {
   Store,
 } from 'lucide-react';
 import { SettingsHub, type SettingsTile } from './_components/settings-hub';
+import { SetPageHeader } from './_components/settings-parts';
 
 /**
  * Settings hub — links into each settings sub-area.
@@ -26,28 +25,32 @@ export default function SettingsPage(): ReactElement {
       // First, and deliberately: it is the tile somebody comes looking
       // for in a hurry, and it is the only one every role may open.
       href: '/settings/security',
-      icon: <ShieldCheck size={20} />,
+      group: 'account',
+      icon: <ShieldCheck size={16} />,
       title: 'Sign-in & sessions',
       description:
         'Who this browser is signed in as, and a way to end every session for the account at once — for a device you no longer control.',
     },
     {
       href: '/settings/stores',
-      icon: <Store size={20} />,
+      group: 'account',
+      icon: <Store size={16} />,
       title: 'Stores',
       description:
         'The shopfronts you sell under. A store decides which brand an order belongs to — products, stock, wallet and couriers are shared across all of them.',
     },
     {
       href: '/settings/orders',
-      icon: <ReceiptText size={20} />,
+      group: 'defaults',
+      icon: <ReceiptText size={16} />,
       title: 'Order defaults',
       description:
         'What a new order starts with — the delivery fee you charge your customer, pre-filled into the collectable amount.',
     },
     {
       href: '/settings/stock',
-      icon: <PackageSearch size={20} />,
+      group: 'defaults',
+      icon: <PackageSearch size={16} />,
       title: 'Stock alerts',
       description:
         'The quantity at which we warn you a SKU is running out. A SKU with its own threshold ignores it.',
@@ -62,14 +65,16 @@ export default function SettingsPage(): ReactElement {
       // just refused, and from here when somebody is working through
       // what their account is set to.
       href: '/wallet/limits',
-      icon: <Wallet size={20} />,
+      group: 'money',
+      icon: <Wallet size={16} />,
       title: 'Wallet limits and settings',
       description:
         'Withdrawal limits, when COD reaches you, and what is charged. Set by Skydrop and shown read-only, so a limit is never a surprise.',
     },
     {
       href: '/settings/webhooks',
-      icon: <Webhook size={20} />,
+      group: 'integrations',
+      icon: <Webhook size={16} />,
       title: 'Outbound webhooks',
       description:
         'Configure HTTPS endpoints to receive event POSTs from Skydrop. Each gets a unique HMAC secret.',
@@ -81,27 +86,24 @@ export default function SettingsPage(): ReactElement {
       // other. Both grains now live on one page, in sections that each
       // say whose decision they are.
       href: '/notifications/settings',
-      icon: <Bell size={20} />,
+      group: 'notifications',
+      icon: <Bell size={16} />,
       title: 'Notification settings',
       description:
         'What reaches YOUR inbox, topic by topic — and, if it is yours to set, what this COMPANY is emailed about.',
     },
     {
       href: '/settings/api-keys',
-      icon: <Key size={20} />,
+      group: 'integrations',
+      icon: <Key size={16} />,
       title: 'API keys',
       description: 'Programmatic access to the Skydrop seller API. Create, label, and revoke keys.',
     },
   ];
   return (
-    <div className="space-y-4">
-      <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Settings' }]}
-            Link={Link}
-          />
-        }
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Settings' }]}
         title="Settings"
         subtitle="Sign-in and sessions, order and stock defaults, wallet limits, webhooks, notifications, API keys."
       />

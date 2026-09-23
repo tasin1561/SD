@@ -1,32 +1,21 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import Link from 'next/link';
-import { Copy, KeyRound } from 'lucide-react';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { CalendarClock, CircleAlert, KeyRound, Tag } from 'lucide-react';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { Table, TBody, THead, Td, Th, Tr, TableEmpty } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import type { CreatedSellerApiKey } from '@skydrop/api-client';
 import { useApiKeysList, useCreateApiKey, useRevokeApiKey } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { RevealCard, SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
 
 const CRUMBS = [
   { label: 'Seller console' },
@@ -67,6 +56,12 @@ function stateKind(state: KeyState): 'delivered' | 'pending' | 'cancelled' {
   }
 }
 
+/**
+ * API keys. Creating one and revoking one both ask first: a new key is a
+ * credential that works the moment it exists, and a revoked one stops
+ * every integration using it at once. The confirmation restates the key
+ * and sends exactly the request the form (or the row) used to send.
+ */
 export function ApiKeysIndex(): ReactElement {
   const list = useApiKeysList();
   const create = useCreateApiKey();
@@ -76,14 +71,24 @@ export function ApiKeysIndex(): ReactElement {
   const [ttlDays, setTtlDays] = useState('');
   const [revealed, setRevealed] = useState<CreatedSellerApiKey | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pendingRevoke, setPendingRevoke] = useState<string | null>(null);
+  const [confirmCreate, setConfirmCreate] = useState(false);
+  const [pendingRevoke, setPendingRevoke] = useState<{
+    readonly id: string;
+    readonly name: string;
+    readonly prefix: string;
+  } | null>(null);
 
   function fmtError(e: unknown): string {
     return serverVerdict(e, 'Action failed');
   }
 
-  async function onCreate(e: FormEvent): Promise<void> {
+  function onCreate(e: FormEvent): void {
     e.preventDefault();
+    setError(null);
+    setConfirmCreate(true);
+  }
+
+  async function doCreate(): Promise<void> {
     setError(null);
     try {
       const res = await create.mutateAsync({
@@ -114,90 +119,112 @@ export function ApiKeysIndex(): ReactElement {
   const active = rows.filter((k) => keyState(k) === 'ACTIVE');
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        breadcrumb={<Crumbs items={CRUMBS} Link={Link} />}
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={CRUMBS}
         title="API keys"
         subtitle="Programmatic access. Plaintext is shown ONCE on create — copy it immediately."
         /*
           The comps put a request count and a rate-limit headroom bar
           here. Neither is stored per key — `lastUsedAt` is the whole
-          usage record — so these chips say what the register knows.
+          usage record — so these facts say what the register knows.
         */
         meta={
           list.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">
+            <span className="set-meta">
+              <SetFact tone="accent">
                 {rows.length} {rows.length === 1 ? 'key' : 'keys'}
-              </MetaChip>
-              <MetaChip tone={active.length === 0 ? 'neutral' : 'good'} dot>
+              </SetFact>
+              <SetFact tone={active.length === 0 ? undefined : 'good'} dot>
                 {active.length} active
-              </MetaChip>
-            </>
+              </SetFact>
+            </span>
           )
         }
       />
 
-      {revealed && <KeyRevealPanel created={revealed} onDismiss={() => setRevealed(null)} />}
-
-      {error && (
-        <div className="text-critical border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] rounded-[var(--radius-2)] border px-3 py-2 text-xs">
-          {error}
-        </div>
+      {revealed && (
+        <RevealCard
+          icon={<KeyRound size={15} />}
+          title="New API key — copy it now"
+          note={revealed.name}
+          body={
+            <>
+              This is the only time we&apos;ll show the plaintext.{' '}
+              {revealed.expiresAt !== null
+                ? `Expires ${new Date(revealed.expiresAt).toLocaleDateString()}.`
+                : 'No expiry set.'}
+            </>
+          }
+          value={revealed.plaintext}
+          valueLabel="API key plaintext"
+          dismissLabel="I've copied it"
+          onDismiss={() => setRevealed(null)}
+        />
       )}
 
-      <div>
-        <SectionBand index="01" title="Issue a key" note="The plaintext is shown once." />
-        <BandBody>
-          <form
-            onSubmit={(e) => void onCreate(e)}
-            className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_140px_auto]"
-          >
-            <FormField label="Key name" required>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={100}
-                required
-                placeholder="e.g. Production CRM"
-              />
-            </FormField>
-            <FormField label="Expires in days" hint="Blank = no expiry">
-              <Input
-                type="number"
-                min={1}
-                max={730}
-                value={ttlDays}
-                onChange={(e) => setTtlDays(e.target.value)}
-              />
-            </FormField>
-            <Button type="submit" variant="primary" size="md" disabled={create.isPending}>
-              {create.isPending ? 'Creating…' : 'Create key'}
-            </Button>
-          </form>
-        </BandBody>
-      </div>
+      {error && (
+        <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+          <p>{error}</p>
+        </SetCallout>
+      )}
 
-      <div>
-        <SectionBand
-          index="02"
-          title="Key register"
+      <section className="set-section">
+        <SectionHeading title="Issue a key" note="The plaintext is shown once." />
+        <div className="set-card">
+          <form onSubmit={onCreate} className="set-inline">
+            <TextField
+              label="Key name"
+              icon={<Tag size={15} />}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+              showCount
+              required
+              placeholder="e.g. Production CRM"
+              className="set-grow"
+            />
+            <TextField
+              label="Expires in days"
+              icon={<CalendarClock size={15} />}
+              hint="Blank = no expiry"
+              type="number"
+              min={1}
+              max={730}
+              value={ttlDays}
+              onChange={(e) => setTtlDays(e.target.value)}
+              inputClassName="sk-figure"
+              className="set-narrow"
+            />
+            <div className="set-buttons" data-align="start">
+              <AsyncButton
+                type="submit"
+                variant="primary"
+                icon={<KeyRound size={15} />}
+                labels={{ idle: 'Create key', busy: 'Creating…', error: 'Not created' }}
+                state={create.isPending ? 'busy' : 'idle'}
+                disabled={create.isPending}
+              />
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section className="set-section">
+        <SectionHeading
+          title="Your keys"
           note={rows.length === 0 ? undefined : `${rows.length} issued`}
         />
-        <BandBody flush>
+        <div className="set-card" data-flush>
           {list.isLoading ? (
-            <div className="p-3">
-              <LoadingState label="Loading keys…" />
-            </div>
+            <SkeletonRows rows={3} cols={6} label="Loading keys…" />
           ) : list.isError ? (
-            <div className="p-3">
-              <ErrorState
-                message={list.error?.message ?? 'Failed.'}
-                retry={() => void list.refetch()}
-              />
-            </div>
+            <ErrorState
+              message={list.error?.message ?? 'Failed.'}
+              retry={() => void list.refetch()}
+            />
           ) : (
-            <Table wrapperClassName="rounded-none border-0 bg-transparent">
+            <Table caption="API keys">
               <THead>
                 <Tr>
                   <Th>Name</Th>
@@ -216,51 +243,38 @@ export function ApiKeysIndex(): ReactElement {
                     const state = keyState(k);
                     const dead = state !== 'ACTIVE';
                     return (
-                      <Tr key={k.id} className={dead ? 'opacity-60' : undefined}>
-                        <Td className="text-text-bright">{k.name}</Td>
-                        <Td className="text-text-muted font-mono text-xs">{k.keyPrefix}…</Td>
-                        <Td className="text-text-muted font-mono text-xs">
+                      <Tr key={k.id} data-dead={dead ? '1' : undefined}>
+                        <Td className="set-cell-strong">{k.name}</Td>
+                        <Td>
+                          <span className="sk-ident">{k.keyPrefix}…</span>
+                        </Td>
+                        <Td className="set-cell-muted">
                           {k.lastUsedAt !== null ? new Date(k.lastUsedAt).toLocaleString() : '—'}
                         </Td>
-                        <Td className="text-text-muted font-mono text-xs">
+                        <Td className="set-cell-muted">
                           {k.expiresAt !== null
                             ? new Date(k.expiresAt).toLocaleDateString()
                             : 'No expiry'}
                         </Td>
                         <Td>
-                          <StatusBadge
+                          <StatusChip
                             kind={stateKind(state)}
                             label={state.charAt(0) + state.slice(1).toLowerCase()}
+                            size="sm"
                           />
                         </Td>
                         <Td align="right">
-                          {!dead &&
-                            (pendingRevoke === k.id ? (
-                              <div className="flex justify-end gap-1.5">
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => void onRevoke(k.id)}
-                                >
-                                  Confirm
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setPendingRevoke(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setPendingRevoke(k.id)}
-                              >
-                                Revoke
-                              </Button>
-                            ))}
+                          {!dead && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setPendingRevoke({ id: k.id, name: k.name, prefix: k.keyPrefix })
+                              }
+                            >
+                              Revoke
+                            </Button>
+                          )}
                         </Td>
                       </Tr>
                     );
@@ -269,66 +283,35 @@ export function ApiKeysIndex(): ReactElement {
               </TBody>
             </Table>
           )}
-        </BandBody>
-      </div>
-    </div>
-  );
-}
-
-function KeyRevealPanel({
-  created,
-  onDismiss,
-}: {
-  readonly created: CreatedSellerApiKey;
-  readonly onDismiss: () => void;
-}): ReactElement {
-  const [copied, setCopied] = useState(false);
-
-  async function copy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(created.plaintext);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2_500);
-    } catch {
-      /* clipboard may fail in insecure context */
-    }
-  }
-
-  return (
-    <div>
-      <SectionBand
-        title={
-          <span className="inline-flex items-center gap-1.5">
-            <KeyRound size={12} aria-hidden /> New API key — copy it now
-          </span>
-        }
-        note={created.name}
-        action={
-          <Button variant="ghost" size="sm" onClick={onDismiss}>
-            I&apos;ve copied it
-          </Button>
-        }
-      />
-      <BandBody>
-        <p className="text-text-muted text-xs leading-relaxed">
-          This is the only time we&apos;ll show the plaintext.{' '}
-          {created.expiresAt !== null
-            ? `Expires ${new Date(created.expiresAt).toLocaleDateString()}.`
-            : 'No expiry set.'}
-        </p>
-        <div className="mt-3 flex items-stretch gap-2">
-          <Input
-            readOnly
-            aria-label="API key plaintext"
-            value={created.plaintext}
-            onFocus={(e) => e.currentTarget.select()}
-            className="min-w-0 flex-1 font-mono"
-          />
-          <Button type="button" variant="primary" size="md" onClick={() => void copy()}>
-            <Copy size={12} aria-hidden /> {copied ? 'Copied!' : 'Copy'}
-          </Button>
         </div>
-      </BandBody>
+      </section>
+
+      <ConfirmDialog
+        open={confirmCreate}
+        onOpenChange={setConfirmCreate}
+        title="Create this API key?"
+        entity={name.trim()}
+        consequence={`A new key that can call the seller API for this company the moment it exists. ${
+          ttlDays
+            ? `It expires in ${ttlDays} ${ttlDays === '1' ? 'day' : 'days'}.`
+            : 'It never expires.'
+        } The plaintext is shown once, straight after — copy it then.`}
+        confirmLabel="Create key"
+        onConfirm={doCreate}
+      />
+
+      <ConfirmDialog
+        open={pendingRevoke !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingRevoke(null);
+        }}
+        title="Revoke this API key?"
+        entity={pendingRevoke === null ? '' : `${pendingRevoke.name} · ${pendingRevoke.prefix}…`}
+        consequence="Every integration using this key stops working at once. A revoked key cannot be brought back — you would issue a new one."
+        confirmLabel="Revoke key"
+        destructive
+        onConfirm={() => (pendingRevoke === null ? undefined : onRevoke(pendingRevoke.id))}
+      />
     </div>
   );
 }

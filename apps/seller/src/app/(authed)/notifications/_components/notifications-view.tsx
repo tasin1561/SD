@@ -1,24 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Search, Settings2, Trash2 } from 'lucide-react';
-import { clsx } from 'clsx';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  EmptyState,
-  FilterChip,
-  Input,
-  LoadingState,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  agoLabel,
-  humaniseTopic,
-  notificationKindStyle,
-} from '@skydrop/ui/components';
+import { ArrowRight, BellOff, Settings2, Trash2 } from 'lucide-react';
+import { agoLabel, humaniseTopic, notificationKindStyle } from '@skydrop/ui/components';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { Button, buttonClassName } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import { TableToolbar } from '@skydrop/ui/app/data-table';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import {
   useMarkAllNotificationsRead,
   useDismissAllNotifications,
@@ -29,6 +22,11 @@ import {
   useNotificationTopics,
   type FeedItem,
 } from '@/lib/notification-hooks';
+import { SetFact, SetPageHeader } from '../../settings/_components/settings-parts';
+import './notifications.css';
+
+/** The tab id that means "every group" — a group name is never empty. */
+const ALL_GROUPS = '__all';
 
 /**
  * Everything that has been sent to this person.
@@ -89,6 +87,9 @@ export function NotificationsView(): ReactElement {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  // Dismissing asks first — one message, or the whole inbox.
+  const [pendingDismiss, setPendingDismiss] = useState<FeedItem | null>(null);
+  const [confirmDismissAll, setConfirmDismissAll] = useState(false);
 
   // The catalogue gives a topic its GROUP and its name for a person
   // (NOTIF-17). Read from that one declared list rather than by
@@ -146,302 +147,242 @@ export function NotificationsView(): ReactElement {
   const filtering = query.trim() !== '' || tab !== '' || unreadOnly;
   const hasMore = feed.data?.nextCursor != null;
 
+  function resetFilters(): void {
+    setQuery('');
+    setTab('');
+    setUnreadOnly(false);
+  }
+
   return (
-    <div>
-      <PageHeader
-        breadcrumb={
-          <Crumbs items={[{ label: 'Seller console' }, { label: 'Notifications' }]} Link={Link} />
-        }
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={[{ label: 'Seller console' }, { label: 'Notifications' }]}
         title="Notifications"
         subtitle="Everything sent to you — what a courier did, what the warehouse checked in, and what moved in your wallet."
         meta={
           feed.data === undefined ? undefined : (
-            <>
+            <span className="set-meta">
               {unread > 0 ? (
-                <MetaChip tone="accent">{unread} unread</MetaChip>
+                <SetFact tone="accent">{unread} unread</SetFact>
               ) : (
-                <MetaChip tone="good" dot>
+                <SetFact tone="good" dot>
                   All read
-                </MetaChip>
+                </SetFact>
               )}
-              <MetaChip>{items.length} loaded</MetaChip>
-              {hasMore && <MetaChip dot>More further back</MetaChip>}
-            </>
+              <SetFact>{items.length} loaded</SetFact>
+              {hasMore && <SetFact dot>More further back</SetFact>}
+            </span>
           )
         }
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="set-actions">
             {unread > 0 && (
-              <Button variant="secondary" onClick={() => markAll.mutate()}>
-                Mark all read
-              </Button>
+              <AsyncButton
+                variant="secondary"
+                labels={{ idle: 'Mark all read', busy: 'Marking…', done: 'All read' }}
+                onAction={() => markAll.mutateAsync()}
+              />
             )}
             {items.length > 0 && (
-              <Button variant="ghost" onClick={() => dismissAll.mutate()}>
-                <Trash2 size={13} aria-hidden />
+              <Button
+                variant="ghost"
+                icon={<Trash2 size={14} />}
+                onClick={() => setConfirmDismissAll(true)}
+              >
                 Clear all
               </Button>
             )}
-            <Link
-              href="/notifications/settings"
-              className="skydrop-hit border-border bg-surface text-text-body hover:border-border-strong hover:text-text-bright inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-2)] border px-3.5 text-sm font-medium transition-colors"
-            >
-              <Settings2 size={14} aria-hidden />
-              Settings
+            <Link href="/notifications/settings" className={buttonClassName('secondary', 'md')}>
+              <span className="sk-btn__fx" aria-hidden />
+              <span className="sk-btn__icon" aria-hidden>
+                <Settings2 size={15} />
+              </span>
+              <span className="sk-btn__label">Settings</span>
             </Link>
           </div>
         }
       />
 
-      <SectionBand
-        index="01"
-        title="Inbox"
-        note={
-          shown.length === items.length
-            ? `${items.length} ${items.length === 1 ? 'message' : 'messages'}`
-            : `${shown.length} of ${items.length} loaded`
-        }
-        action={
-          <>
-            <div className="relative min-w-0 basis-[14rem]">
-              <Search
-                size={15}
-                aria-hidden
-                className="text-text-faint pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2"
-              />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Order, AWB or wording…"
-                aria-label="Filter notifications"
-                className="pl-8"
-              />
-            </div>
-            {filtering && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery('');
-                  setTab('');
-                  setUnreadOnly(false);
-                }}
-                className="text-text-faint hover:text-text-body px-1 text-xs transition-colors"
-              >
-                Reset
-              </button>
-            )}
-          </>
-        }
-      />
+      <section className="set-section">
+        <SectionHeading
+          title="Inbox"
+          note={
+            shown.length === items.length
+              ? `${items.length} ${items.length === 1 ? 'message' : 'messages'}`
+              : `${shown.length} of ${items.length} loaded`
+          }
+        />
 
-      <BandBody flush>
-        {/* Read/unread and the kind tabs in ONE chip row — they filter
-            the same list and splitting them over two bars made the
-            second read as a heading for what was below it. */}
-        <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-3 py-2.5">
-          <FilterChip label="All" active={!unreadOnly} onClick={() => setUnreadOnly(false)} />
-          <FilterChip
-            label="Unread"
-            count={unread}
-            active={unreadOnly}
-            onClick={() => setUnreadOnly(true)}
+        <TableToolbar
+          search={{
+            value: query,
+            onChange: setQuery,
+            label: 'Filter notifications',
+            placeholder: 'Order, AWB or wording…',
+          }}
+          action={
+            filtering ? (
+              <Button variant="ghost" size="sm" onClick={resetFilters}>
+                Reset
+              </Button>
+            ) : undefined
+          }
+        />
+
+        {/* Read/unread, then the kind tabs. They filter the same list;
+            the kind tabs only appear when there is more than one kind. */}
+        <div className="ntf-filters">
+          <Tabs
+            label="Read state"
+            size="sm"
+            items={[
+              { id: 'all', label: 'All' },
+              { id: 'unread', label: 'Unread', count: unread },
+            ]}
+            value={unreadOnly ? 'unread' : 'all'}
+            onChange={(id) => setUnreadOnly(id === 'unread')}
           />
           {tabs.length > 1 && (
-            <>
-              <span aria-hidden className="bg-border mx-1 h-4 w-px" />
-              <FilterChip
-                label="Everything"
-                count={items.length}
-                active={tab === ''}
-                onClick={() => setTab('')}
-              />
-              {tabs.map(([group, count]) => (
-                <FilterChip
-                  key={group}
-                  label={group}
-                  count={count}
-                  active={tab === group}
-                  onClick={() => setTab(group)}
-                />
-              ))}
-            </>
+            <Tabs
+              label="Kind of notification"
+              size="sm"
+              items={[
+                { id: ALL_GROUPS, label: 'Everything', count: items.length },
+                ...tabs.map(([group, count]) => ({ id: group, label: group, count })),
+              ]}
+              value={tab === '' ? ALL_GROUPS : tab}
+              onChange={(id) => setTab(id === ALL_GROUPS ? '' : id)}
+            />
           )}
         </div>
 
         {feed.isLoading && items.length === 0 ? (
-          <div className="p-3">
-            <LoadingState label="Loading notifications…" rows={4} />
+          <div className="set-card" data-flush>
+            <SkeletonRows rows={4} cols={2} label="Loading notifications…" />
           </div>
         ) : shown.length === 0 ? (
-          <div className="p-3">
-            <EmptyState
-              title={filtering ? 'Nothing matches' : 'Nothing yet'}
-              description={
-                filtering
-                  ? hasMore
-                    ? 'Nothing in what is loaded so far. Load earlier notifications to look further back.'
-                    : 'Nothing here matches. Clear the filter to see everything again.'
-                  : 'Anything needing you will appear here — a delivery that failed, a parcel coming back, money that moved.'
-              }
-              bare
-              {...(filtering
-                ? {
-                    action: (
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          setQuery('');
-                          setTab('');
-                          setUnreadOnly(false);
-                        }}
-                      >
-                        Clear filter
-                      </Button>
-                    ),
-                  }
-                : {})}
-            />
-          </div>
+          <EmptyState
+            {...(filtering ? {} : { icon: <BellOff size={22} /> })}
+            title={filtering ? 'Nothing matches' : 'Nothing yet'}
+            description={
+              filtering
+                ? hasMore
+                  ? 'Nothing in what is loaded so far. Load earlier notifications to look further back.'
+                  : 'Nothing here matches. Clear the filter to see everything again.'
+                : 'Anything needing you will appear here — a delivery that failed, a parcel coming back, money that moved.'
+            }
+            {...(filtering
+              ? {
+                  action: (
+                    <Button variant="secondary" onClick={resetFilters}>
+                      Clear filter
+                    </Button>
+                  ),
+                }
+              : {})}
+          />
         ) : (
-          <ul className="divide-border divide-y">
+          <ul className="ntf-list">
             {shown.map((n) => {
               const meta = byTopic.get(n.topic);
               const { Icon, tone } = notificationKindStyle(meta?.group ?? null);
               const open = expanded === n.id;
               const isUnread = n.readAt === null;
+              // The kind's colours, read from the status tokens by name —
+              // never a hex (FE-6).
+              const toneVars = {
+                '--ntf-fg': `var(--st-${tone}-fg)`,
+                '--ntf-bg': `var(--st-${tone}-bg)`,
+                '--ntf-line': `var(--st-${tone}-line)`,
+              } as CSSProperties;
               return (
                 <li
                   key={n.id}
                   id={n.id}
-                  className={clsx(
-                    'relative px-3 py-3 pl-5',
-                    isUnread && 'bg-[var(--color-accent-tint)]',
-                  )}
+                  className="ntf-item"
+                  data-unread={isUnread ? '1' : undefined}
+                  style={toneVars}
                 >
                   {/*
                     A coloured edge, keyed on the KIND rather than on
                     unread. It is what lets somebody find the returns in
-                    a list of thirty without reading a word — which is
-                    the whole reason the comp put a stripe there.
+                    a list of thirty without reading a word.
                   */}
-                  <span
-                    aria-hidden
-                    className="absolute inset-y-0 left-0 w-[3px]"
-                    style={{ background: `var(--status-${tone}-fg)` }}
-                  />
-                  <div className="flex items-start gap-3">
-                    <span
-                      aria-hidden
-                      className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-2)]"
-                      style={{
-                        background: `var(--status-${tone}-bg)`,
-                        color: `var(--status-${tone}-fg)`,
+                  <span className="ntf-item__edge" aria-hidden />
+                  <span className="ntf-item__icon" aria-hidden>
+                    <Icon size={16} />
+                  </span>
+
+                  <div className="ntf-item__body">
+                    <div className="ntf-item__top">
+                      <span className="ntf-item__tags">
+                        <span className="ntf-item__kind">
+                          {meta?.label ?? humaniseTopic(n.topic)}
+                        </span>
+                        {isUnread && <span className="ntf-item__new">New</span>}
+                      </span>
+                      <span className="ntf-item__when sk-figure">
+                        {agoLabel(n.createdAt, now)}
+                        <span className="ntf-item__abs">
+                          {' · '}
+                          {new Date(n.createdAt).toLocaleString('en-IN')}
+                        </span>
+                      </span>
+                    </div>
+
+                    {/*
+                      The whole block opens it. A notification is a
+                      paragraph, not a document — it does not earn a
+                      page of its own, and truncating it with no way to
+                      read the rest is the thing this fixes. Opening
+                      also marks it read, which is what reading
+                      something means.
+                    */}
+                    <button
+                      type="button"
+                      className="ntf-item__open"
+                      aria-expanded={open}
+                      onClick={() => {
+                        setExpanded(open ? null : n.id);
+                        if (!open && isUnread) markRead.mutate(n.id);
                       }}
                     >
-                      <Icon size={16} />
-                    </span>
+                      {n.title !== null && (
+                        <span className="ntf-item__title" data-unread={isUnread ? '1' : undefined}>
+                          {n.title}
+                        </span>
+                      )}
+                      <span className="ntf-item__text" data-open={open ? '1' : undefined}>
+                        {n.body}
+                      </span>
+                      {!open && <span className="ntf-item__more">Click to read it all</span>}
+                    </button>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span
-                            className="truncate rounded-[var(--radius-1)] px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-[0.06em] uppercase"
-                            style={{
-                              background: `var(--status-${tone}-bg)`,
-                              color: `var(--status-${tone}-fg)`,
-                            }}
-                          >
-                            {meta?.label ?? humaniseTopic(n.topic)}
-                          </span>
-                          {isUnread && (
-                            <span className="bg-accent-fill text-accent-fg shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-[0.06em] uppercase">
-                              New
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-text-faint shrink-0 font-mono text-xs whitespace-nowrap">
-                          {agoLabel(n.createdAt, now)}
-                          <span className="max-sm:hidden">
-                            {' · '}
-                            {new Date(n.createdAt).toLocaleString('en-IN')}
-                          </span>
-                        </span>
-                      </div>
-
-                      {/*
-                        The whole block opens it. A notification is a
-                        paragraph, not a document — it does not earn a
-                        page of its own, and truncating it with no way
-                        to read the rest is the thing this fixes.
-                        Opening also marks it read, which is what
-                        reading something means.
-                      */}
-                      <button
-                        type="button"
-                        className="mt-1 block w-full text-left"
-                        aria-expanded={open}
-                        onClick={() => {
-                          setExpanded(open ? null : n.id);
-                          if (!open && isUnread) markRead.mutate(n.id);
-                        }}
-                      >
-                        {n.title !== null && (
-                          <span
-                            className={clsx(
-                              'text-text-bright block text-sm leading-snug',
-                              isUnread ? 'font-semibold' : 'font-medium',
-                            )}
-                          >
-                            {n.title}
-                          </span>
-                        )}
-                        <span
-                          className={clsx(
-                            'text-text-muted mt-1 block text-sm leading-relaxed whitespace-pre-line',
-                            !open && 'line-clamp-2',
-                          )}
-                        >
-                          {n.body}
-                        </span>
-                        {!open && (
-                          <span className="text-text-faint mt-1 block text-xs">
-                            Click to read it all
-                          </span>
-                        )}
-                      </button>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        {/* The one action a person actually wants
-                            next, and the only one we can honour from
-                            here: the order it is about. */}
-                        {n.orderId !== null && (
-                          <Link
-                            href={`/orders/${n.orderId}`}
-                            className="text-accent inline-flex items-center gap-1 text-xs font-medium"
-                          >
-                            View order <ArrowRight size={12} aria-hidden />
-                          </Link>
-                        )}
-                        <button
-                          type="button"
-                          className="text-text-muted hover:text-text-bright text-xs"
-                          onClick={() =>
-                            isUnread ? markRead.mutate(n.id) : markUnread.mutate(n.id)
-                          }
-                        >
-                          {isUnread ? 'Mark read' : 'Mark unread'}
-                        </button>
-                        <button
-                          type="button"
-                          className="text-text-faint hover:text-critical text-xs"
-                          onClick={() => dismiss.mutate(n.id)}
-                        >
-                          Dismiss
-                        </button>
-                        <span className="text-text-faint ml-auto font-mono text-[11px]">
-                          {n.topic}
-                        </span>
-                      </div>
+                    <div className="ntf-item__actions">
+                      {/* The one action a person actually wants next,
+                          and the only one we can honour from here: the
+                          order it is about. */}
+                      {n.orderId !== null && (
+                        <Link href={`/orders/${n.orderId}`} className="ntf-item__order">
+                          View order <ArrowRight size={12} aria-hidden />
+                        </Link>
+                      )}
+                      <AsyncButton
+                        variant="ghost"
+                        size="sm"
+                        labels={
+                          isUnread
+                            ? { idle: 'Mark read', busy: 'Marking…', done: 'Read' }
+                            : { idle: 'Mark unread', busy: 'Marking…', done: 'Unread' }
+                        }
+                        onAction={() =>
+                          isUnread ? markRead.mutateAsync(n.id) : markUnread.mutateAsync(n.id)
+                        }
+                      />
+                      <Button variant="ghost" size="sm" onClick={() => setPendingDismiss(n)}>
+                        Dismiss
+                      </Button>
+                      <span className="ntf-item__topic sk-ident">{n.topic}</span>
                     </div>
                   </div>
                 </li>
@@ -451,8 +392,8 @@ export function NotificationsView(): ReactElement {
         )}
 
         {hasMore && (
-          <div className="border-border flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2.5">
-            <span className="text-text-faint font-mono text-xs">
+          <div className="ntf-more">
+            <span className="set-faint sk-figure">
               Showing {shown.length} of {items.length} loaded
             </span>
             <Button
@@ -470,7 +411,50 @@ export function NotificationsView(): ReactElement {
             </Button>
           </div>
         )}
-      </BandBody>
+      </section>
+
+      <ConfirmDialog
+        open={pendingDismiss !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingDismiss(null);
+        }}
+        title="Dismiss this notification?"
+        entity={
+          pendingDismiss === null
+            ? ''
+            : (pendingDismiss.title ??
+              byTopic.get(pendingDismiss.topic)?.label ??
+              humaniseTopic(pendingDismiss.topic))
+        }
+        consequence="It leaves your inbox. Anybody else who was sent the same message keeps their copy."
+        confirmLabel="Dismiss"
+        onConfirm={() =>
+          pendingDismiss === null
+            ? undefined
+            : // A failure is not reported here, exactly as before: the row
+              // simply stays in the inbox.
+              dismiss.mutateAsync(pendingDismiss.id).then(
+                () => undefined,
+                () => undefined,
+              )
+        }
+      />
+
+      <ConfirmDialog
+        open={confirmDismissAll}
+        onOpenChange={setConfirmDismissAll}
+        title="Clear your whole inbox?"
+        entity={`Your inbox · ${items.length} loaded${hasMore ? ', more further back' : ''}`}
+        consequence="Every notification in your inbox is dismissed. Anybody else who was sent the same messages keeps their copies."
+        confirmLabel="Clear all"
+        destructive
+        onConfirm={() =>
+          dismissAll.mutateAsync().then(
+            () => undefined,
+            () => undefined,
+          )
+        }
+      />
     </div>
   );
 }

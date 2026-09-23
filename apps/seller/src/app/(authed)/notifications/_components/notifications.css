@@ -1,0 +1,271 @@
+/* Notifications — the inbox rows and the settings page's own pieces.
+   Tokens only. A row's kind colours arrive as `--ntf-fg/-bg/-line`, set
+   from the status tokens by name (`var(--st-<kind>-fg)`), never a hex. */
+
+.ntf-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+.ntf-filters > .sk-tabs {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* ── Inbox rows ───────────────────────────────────────────────────────── */
+.ntf-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.ntf-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 96px;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.ntf-item:first-child {
+  border-top: 0;
+}
+.ntf-item[data-unread] {
+  background: var(--accent-tint);
+}
+@media (hover: hover) {
+  .ntf-item:hover {
+    background: var(--surface-3);
+  }
+}
+.ntf-item:target {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+.ntf-item__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--ntf-fg);
+}
+.ntf-item__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-top: 2px;
+  border: 1px solid var(--ntf-line);
+  border-radius: var(--r-sm);
+  background: var(--ntf-bg);
+  color: var(--ntf-fg);
+}
+.ntf-item__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ntf-item__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px var(--sp-3);
+}
+.ntf-item__tags {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ntf-item__kind {
+  overflow: hidden;
+  padding: 1px var(--sp-2);
+  border: 1px solid var(--ntf-line);
+  border-radius: var(--r-pill);
+  background: var(--ntf-bg);
+  color: var(--ntf-fg);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ntf-item__new {
+  flex: none;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+}
+.ntf-item__when {
+  flex: none;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+@media (max-width: 639px) {
+  .ntf-item__abs {
+    display: none;
+  }
+}
+.ntf-item__open {
+  display: block;
+  width: 100%;
+  margin-top: var(--sp-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ntf-item__open:focus-visible {
+  border-radius: var(--r-xs);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.ntf-item__title {
+  display: block;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+}
+.ntf-item__title[data-unread] {
+  font-weight: var(--fw-semibold);
+}
+.ntf-item__text {
+  display: -webkit-box;
+  margin-top: var(--sp-1);
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.ntf-item__text[data-open] {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+.ntf-item__more {
+  display: block;
+  margin-top: var(--sp-1);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.ntf-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.ntf-item__order {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.ntf-item__order:hover {
+  text-decoration: underline;
+}
+.ntf-item__topic {
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: var(--fs-2xs);
+  overflow-wrap: anywhere;
+}
+.ntf-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+/* ── Settings: the timezone card ──────────────────────────────────────── */
+.ntf-clock {
+  color: var(--fg-strong);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+}
+.ntf-window {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--st-delivered-line);
+  border-radius: var(--r-md);
+  background: var(--st-delivered-bg);
+  color: var(--st-delivered-fg);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.ntf-window[data-inside] {
+  border-color: var(--st-pending-line);
+  background: var(--st-pending-bg);
+  color: var(--st-pending-fg);
+}
+
+/* ── Settings: the "cannot be switched off" list ──────────────────────── */
+.ntf-always {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ntf-always__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+.ntf-always__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.ntf-always__title {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+/* ── Settings: quiet-hour inputs in the category table ────────────────── */
+.ntf-quiet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ntf-quiet__time {
+  width: 8.5rem;
+  max-width: 100%;
+}
