@@ -1,20 +1,13 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import {
-  EmptyState,
-  ErrorNote,
-  Num,
-  SkeletonRows,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Num } from '@skydrop/ui/components';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useRecipientAddresses } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import './customers.css';
 
 /**
  * Where this customer has actually taken delivery.
@@ -32,9 +25,9 @@ export function AddressHistory({ customerId }: { readonly customerId: string }):
   const list = useRecipientAddresses({ customerId });
   const items = list.data ?? [];
 
-  if (list.isLoading) return <SkeletonRows rows={2} />;
+  if (list.isLoading) return <SkeletonRows rows={2} label="Loading delivery history…" />;
   if (list.isError) {
-    return <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />;
+    return <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />;
   }
   if (items.length === 0) {
     return (
@@ -47,7 +40,7 @@ export function AddressHistory({ customerId }: { readonly customerId: string }):
   }
 
   return (
-    <Table>
+    <Table caption="Where this customer has taken delivery">
       <THead>
         <Tr>
           <Th>Address</Th>
@@ -65,8 +58,10 @@ export function AddressHistory({ customerId }: { readonly customerId: string }):
           return (
             <Tr key={a.id}>
               <Td>
-                <div className={suspect ? 'text-[var(--color-bad)]' : ''}>{a.line1}</div>
-                <div className="text-text-faint text-xs">
+                <div className="cst-addr-line" data-suspect={suspect ? '1' : undefined}>
+                  {a.line1}
+                </div>
+                <div className="cst-addr-place">
                   {a.city}, {a.stateProvince} {a.postalCode}
                 </div>
               </Td>
@@ -78,12 +73,16 @@ export function AddressHistory({ customerId }: { readonly customerId: string }):
               </Td>
               <Td align="right">
                 {a.rtoCountAtAddress === 0 ? (
-                  <span className="text-text-faint">0</span>
+                  <span className="cst-faint sk-figure">0</span>
                 ) : (
-                  <span className="text-[var(--color-bad)]">{a.rtoCountAtAddress}</span>
+                  <span className="cst-bad sk-figure">{a.rtoCountAtAddress}</span>
                 )}
               </Td>
-              <Td>{new Date(a.lastSeenAt).toLocaleDateString('en-IN')}</Td>
+              <Td>
+                <span className="cst-date sk-figure">
+                  {new Date(a.lastSeenAt).toLocaleDateString('en-IN')}
+                </span>
+              </Td>
             </Tr>
           );
         })}

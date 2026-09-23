@@ -1,19 +1,17 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { LifeBuoy } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useCreateTicket, useIssueCategories } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import './tickets.css';
 
 const MIN_DESCRIPTION = 3;
 /** Their form's own limit. Matching it means nothing is truncated on the way. */
@@ -80,6 +78,7 @@ export function RaiseTicketModal({
     setError(null);
   }
 
+  /** Rejects after showing the verdict, so the button shows the failure it really had. */
   async function submit(): Promise<void> {
     setError(null);
     const order = fixedOrderId ?? (orderId.trim() === '' ? undefined : orderId.trim());
@@ -96,111 +95,117 @@ export function RaiseTicketModal({
       onOpenChange(false);
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
         if (!next) reset();
       }}
       size="md"
+      icon={<LifeBuoy size={18} />}
       title="Raise an issue"
       description="Tell us what is wrong. We take it up with the courier and reply on the ticket."
-    >
-      <div className="space-y-3">
-        <FormField label="What is the problem" htmlFor="ticket-category" required>
-          <Select
-            id="ticket-category"
-            value={categoryId}
-            onChange={(e) => {
-              setCategoryId(e.target.value);
-              // A subcategory from the previous category is not a valid
-              // answer to this one.
-              setSubcategoryId('');
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            disabled={!ready || create.isPending}
+            labels={{
+              idle: 'Raise issue',
+              busy: 'Raising…',
+              done: 'Raised',
+              error: 'Not raised',
             }}
+            onAction={submit}
+          />
+        </DialogFooter>
+      }
+    >
+      <div className="tkt-form">
+        <Select
+          id="ticket-category"
+          label="What is the problem"
+          required
+          value={categoryId}
+          onChange={(e) => {
+            setCategoryId(e.target.value);
+            // A subcategory from the previous category is not a valid
+            // answer to this one.
+            setSubcategoryId('');
+          }}
+        >
+          <option value="">Choose…</option>
+          {(categories.data ?? []).map((c) => (
+            <option key={c.externalId} value={c.externalId}>
+              {c.label}
+            </option>
+          ))}
+        </Select>
+
+        {needsSub ? (
+          <Select
+            id="ticket-subcategory"
+            label="Which one"
+            required
+            value={subcategoryId}
+            onChange={(e) => setSubcategoryId(e.target.value)}
           >
             <option value="">Choose…</option>
-            {(categories.data ?? []).map((c) => (
-              <option key={c.externalId} value={c.externalId}>
-                {c.label}
+            {subs.map((sc) => (
+              <option key={sc.externalId} value={sc.externalId}>
+                {sc.label}
               </option>
             ))}
           </Select>
-        </FormField>
-
-        {needsSub ? (
-          <FormField label="Which one" htmlFor="ticket-subcategory" required>
-            <Select
-              id="ticket-subcategory"
-              value={subcategoryId}
-              onChange={(e) => setSubcategoryId(e.target.value)}
-            >
-              <option value="">Choose…</option>
-              {subs.map((sc) => (
-                <option key={sc.externalId} value={sc.externalId}>
-                  {sc.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
         ) : null}
 
         {fixedOrderId === undefined ? (
-          <FormField
+          <TextField
+            id="ticket-order"
             label="Order"
-            htmlFor="ticket-order"
             hint="Optional, but including it gets you an answer far faster. Copy the ID from the order page."
-          >
-            <Input
-              id="ticket-order"
-              value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
-              placeholder="0198f3c2-…"
-              autoComplete="off"
-            />
-          </FormField>
+            value={orderId}
+            onChange={(e) => setOrderId(e.target.value)}
+            placeholder="0198f3c2-…"
+            autoComplete="off"
+          />
         ) : null}
 
-        <FormField
+        {/* The counter under the box is the same `n/300` the hint used
+            to spell out, drawn by the field itself. */}
+        <TextArea
+          id="ticket-description"
           label="What happened"
-          htmlFor="ticket-description"
           required
-          hint={`What you expected, what actually happened, and anything the customer told you. ${description.length}/${MAX_DESCRIPTION}`}
-        >
-          <Textarea
-            id="ticket-description"
-            rows={4}
-            maxLength={MAX_DESCRIPTION}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </FormField>
+          hint="What you expected, what actually happened, and anything the customer told you."
+          rows={4}
+          maxLength={MAX_DESCRIPTION}
+          showCount
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
 
         {categories.isError ? (
-          <ErrorNote
+          <ErrorState
             message={serverVerdict(categories.error)}
             retry={() => void categories.refetch()}
           />
         ) : null}
-        {error !== null && <ErrorNote message={error} />}
+        {error !== null && (
+          <p className="tkt-error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={!ready || create.isPending}
-          onClick={() => void submit()}
-        >
-          {create.isPending ? 'Raising…' : 'Raise issue'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

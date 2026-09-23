@@ -2,9 +2,12 @@
 
 import type { ReactElement } from 'react';
 import { MessageSquare } from 'lucide-react';
-import { Card, CardBody, ErrorNote, SkeletonRows, StatusBadge } from '@skydrop/ui/components';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useCourierThreadForTicket, type CourierThreadMessage } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import './tickets.css';
 
 /**
  * The seller's conversation with the courier.
@@ -44,9 +47,11 @@ import { serverVerdict } from '@/lib/server-verdict';
 export function CourierThread({ ticketId }: { readonly ticketId: string }): ReactElement | null {
   const thread = useCourierThreadForTicket(ticketId);
 
-  if (thread.isLoading) return <SkeletonRows rows={3} cols={1} />;
+  if (thread.isLoading) {
+    return <SkeletonRows rows={3} cols={1} label="Loading the courier conversation…" />;
+  }
   if (thread.isError) {
-    return <ErrorNote message={serverVerdict(thread.error)} retry={() => void thread.refetch()} />;
+    return <ErrorState message={serverVerdict(thread.error)} retry={() => void thread.refetch()} />;
   }
 
   const data = thread.data;
@@ -55,76 +60,66 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
     // wondering whether anyone has contacted the courier deserves an
     // answer, and "not yet" is an answer.
     return (
-      <Card>
-        <CardBody>
-          <div className="flex items-start gap-3">
-            <MessageSquare size={18} className="mt-0.5 shrink-0" />
-            <div className="text-sm">
-              <p className="font-medium">No courier conversation yet</p>
-              <p className="text-text-muted mt-1">
-                Our team opens one with the courier when a delivery needs chasing. Anything they say
-                will appear here, in their words.
-              </p>
-            </div>
+      <div className="tkt-card">
+        <div className="tkt-courier__empty">
+          <span className="tkt-courier__icon" aria-hidden>
+            <MessageSquare size={16} />
+          </span>
+          <div>
+            <p className="tkt-courier__lead">No courier conversation yet</p>
+            <p className="tkt-courier__body">
+              Our team opens one with the courier when a delivery needs chasing. Anything they say
+              will appear here, in their words.
+            </p>
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardBody>
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <h3 className="text-sm font-medium">Message the courier</h3>
-          {data.state !== null ? (
-            <StatusBadge kind={badgeKind(data.state)} label={humanise(data.state)} />
-          ) : null}
-          {data.awbNumber !== null ? (
-            <span className="text-text-muted text-xs">AWB {data.awbNumber}</span>
-          ) : null}
-          {data.pendingOutbound > 0 ? (
-            <span className="text-text-muted text-xs">
-              {data.pendingOutbound} message{data.pendingOutbound === 1 ? '' : 's'} queued to send
-            </span>
-          ) : null}
-        </div>
+    <div className="tkt-card">
+      <div className="tkt-courier__head">
+        <h3 className="tkt-courier__title">Message the courier</h3>
+        {data.state !== null ? (
+          <StatusChip kind={badgeKind(data.state)} label={humanise(data.state)} size="sm" />
+        ) : null}
+        {data.awbNumber !== null ? (
+          <span className="tkt-muted">
+            AWB <span className="sk-ident">{data.awbNumber}</span>
+          </span>
+        ) : null}
+        {data.pendingOutbound > 0 ? (
+          <span className="tkt-muted">
+            {data.pendingOutbound} message{data.pendingOutbound === 1 ? '' : 's'} queued to send
+          </span>
+        ) : null}
+      </div>
 
-        <div className="flex flex-col gap-3">
-          {data.messages.length === 0 ? (
-            <p className="text-text-muted text-sm">
-              The conversation is open; nothing has been said yet.
-            </p>
-          ) : (
-            data.messages.map((m) => <Message key={m.id} message={m} />)
-          )}
-        </div>
-      </CardBody>
-    </Card>
+      <div className="tkt-courier__list">
+        {data.messages.length === 0 ? (
+          <p className="tkt-courier__body">The conversation is open; nothing has been said yet.</p>
+        ) : (
+          data.messages.map((m) => <Message key={m.id} message={m} />)
+        )}
+      </div>
+    </div>
   );
 }
 
 function Message({ message }: { readonly message: CourierThreadMessage }): ReactElement {
   const fromCourier = message.direction === 'INBOUND';
   return (
-    <div className={fromCourier ? '' : 'sm:pl-8'}>
-      <div className="mb-1 flex items-center gap-2">
-        <span className="text-xs font-medium">{fromCourier ? 'Delhivery' : 'You'}</span>
-        <span className="text-text-muted text-xs">
-          {new Date(message.occurredAt).toLocaleString('en-IN')}
-        </span>
+    <div className="tkt-courier__msg" data-ours={fromCourier ? undefined : '1'}>
+      <div className="tkt-courier__who">
+        <strong>{fromCourier ? 'Delhivery' : 'You'}</strong>
+        <span className="sk-figure">{new Date(message.occurredAt).toLocaleString('en-IN')}</span>
         {message.state !== null ? (
-          <StatusBadge kind={badgeKind(message.state)} label={humanise(message.state)} />
+          <StatusChip kind={badgeKind(message.state)} label={humanise(message.state)} size="sm" />
         ) : null}
       </div>
       {/* VERBATIM: pre-wrap, no truncation, no tidying. */}
-      <pre
-        className={`whitespace-pre-wrap rounded p-3 text-sm ${
-          fromCourier ? 'bg-surface-2' : 'bg-surface-3'
-        }`}
-      >
-        {message.body}
-      </pre>
+      <pre className="tkt-courier__text">{message.body}</pre>
     </div>
   );
 }

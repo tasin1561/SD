@@ -1,0 +1,496 @@
+/* Tickets — layout and the few page-only pieces: the thread, its reply
+   box, the refund card. Tokens only. The primitives carry their own CSS. */
+
+.tkt-page {
+  display: grid;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.tkt-page > .sk-ph {
+  margin-bottom: 0;
+}
+
+.tkt-section {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.tkt-section > .sk-toolbar {
+  margin-bottom: 0;
+}
+
+.tkt-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.tkt-card {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  min-width: 0;
+}
+
+/* ── Header facts ─────────────────────────────────────────────────────── */
+.tkt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.tkt-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.tkt-fact[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.tkt-fact[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.tkt-fact[data-tone='accent'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.tkt-fact__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
+
+/* ── Register ─────────────────────────────────────────────────────────── */
+.tkt-faint {
+  color: var(--fg-faint);
+}
+.tkt-muted {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.tkt-number {
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.tkt-subject {
+  display: block;
+  max-width: 20rem;
+  overflow: hidden;
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tkt-subject:hover {
+  color: var(--sky);
+}
+.tkt-subject-note {
+  display: block;
+  max-width: 20rem;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tkt-link {
+  color: var(--sky);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.tkt-link:hover {
+  text-decoration: underline;
+}
+
+.tkt-expanded > .sk-td {
+  padding: 0;
+  background: var(--surface-band);
+}
+.tkt-well {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  min-width: 0;
+}
+
+.tkt-note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+
+/* The standing totals under the register. */
+.tkt-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  margin: 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.tkt-strip__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.tkt-strip__item dd {
+  margin: 0;
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.tkt-strip__item[data-tone='warn'] dd {
+  color: var(--saffron-text);
+}
+.tkt-strip__item[data-tone='good'] dd {
+  color: var(--green-text);
+}
+
+/* ── Updates (list's opened row) ──────────────────────────────────────── */
+.tkt-updates {
+  display: grid;
+  gap: var(--sp-2);
+}
+.tkt-updates__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* ── Courier thread (list's opened row) ───────────────────────────────── */
+.tkt-courier__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+}
+.tkt-courier__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.tkt-courier__empty {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+.tkt-courier__icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.tkt-courier__lead {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.tkt-courier__body {
+  margin: 4px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.tkt-courier__list {
+  display: grid;
+  gap: var(--sp-3);
+}
+.tkt-courier__msg[data-ours='1'] {
+  padding-left: 0;
+}
+@media (min-width: 640px) {
+  .tkt-courier__msg[data-ours='1'] {
+    padding-left: var(--sp-8);
+  }
+}
+.tkt-courier__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: 4px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.tkt-courier__who strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+/* VERBATIM: pre-wrap, no truncation, no tidying. */
+.tkt-courier__text {
+  margin: 0;
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font: inherit;
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tkt-courier__msg[data-ours='1'] .tkt-courier__text {
+  background: var(--surface-band);
+}
+
+/* ── Detail ───────────────────────────────────────────────────────────── */
+.tkt-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.tkt-back:hover {
+  color: var(--fg-strong);
+}
+.tkt-title {
+  min-width: 0;
+}
+.tkt-title__sep {
+  color: var(--fg-muted);
+}
+.tkt-tile-text {
+  font-size: var(--fs-md);
+}
+.tkt-tile-link {
+  color: var(--sky);
+  font-size: var(--fs-md);
+  text-decoration: none;
+}
+.tkt-tile-link:hover {
+  text-decoration: underline;
+}
+
+.tkt-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--sp-3) var(--sp-4);
+  margin: 0;
+}
+.tkt-facts__item {
+  min-width: 0;
+}
+.tkt-facts__item dt {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.tkt-facts__item dd {
+  margin: 4px 0 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.tkt-small {
+  font-size: var(--fs-xs);
+}
+
+.tkt-refund {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border: 1px solid var(--green-line);
+  border-radius: var(--r-md);
+  background: var(--green-tint);
+  box-shadow:
+    0 0 0 1px var(--green-line),
+    0 8px 24px -12px var(--green-glow);
+}
+.tkt-refund__label {
+  margin: 0;
+  color: var(--green-on-tint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.tkt-refund__figure {
+  display: block;
+  margin-top: 4px;
+}
+.tkt-refund__body {
+  margin: var(--sp-2) 0 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.tkt-refund__entry {
+  margin: 4px 0 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.tkt-refund__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.tkt-refund__link:hover {
+  text-decoration: underline;
+}
+
+.tkt-help {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.tkt-skel {
+  display: grid;
+  gap: var(--sp-4);
+}
+.tkt-skel__head {
+  display: grid;
+  gap: var(--sp-2);
+}
+.tkt-skel__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: var(--sp-4);
+}
+.tkt-skel__cell {
+  display: grid;
+  gap: 6px;
+}
+
+/* ── Conversation ─────────────────────────────────────────────────────── */
+.tkt-thread {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tkt-thread__row {
+  display: flex;
+  justify-content: flex-start;
+}
+.tkt-thread__row[data-mine='1'] {
+  justify-content: flex-end;
+}
+.tkt-bubble {
+  max-width: 85%;
+  min-width: 0;
+}
+.tkt-bubble__who {
+  margin: 0 0 4px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-align: left;
+}
+.tkt-bubble[data-side='SELLER'] .tkt-bubble__who {
+  text-align: right;
+}
+.tkt-bubble__text {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  border-top-left-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tkt-bubble[data-side='SELLER'] .tkt-bubble__text {
+  border-color: var(--accent-line);
+  border-top-left-radius: var(--r-md);
+  border-top-right-radius: var(--r-xs);
+  background: var(--accent-tint);
+  color: var(--fg-strong);
+}
+.tkt-bubble[data-side='COURIER'] .tkt-bubble__text {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.tkt-bubble__relay {
+  margin: 4px 0 0;
+  text-align: right;
+}
+
+.tkt-empty-thread {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.tkt-reply {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+}
+.tkt-reply__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.tkt-closed {
+  margin: var(--sp-4) 0 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+/* ── Raise dialog ─────────────────────────────────────────────────────── */
+.tkt-form {
+  display: grid;
+  gap: var(--sp-4);
+}
+.tkt-error {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-sm);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+}
+
+/* The view/hide control in a row: the chevron turns with the row. */
+.tkt-toggle .tkt-toggle__chev {
+  transition: transform var(--dur) var(--ease-out);
+}
+.tkt-toggle[aria-expanded='true'] .tkt-toggle__chev {
+  transform: rotate(180deg);
+}
+
+.tkt-type {
+  display: block;
+}
