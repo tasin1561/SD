@@ -1,27 +1,18 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import Link from 'next/link';
 import { Lock } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  PageHeader,
-  Section,
-  SkeletonRows,
-  Input,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useCourierPortalRuns,
   useCourierTaxonomy,
@@ -30,7 +21,9 @@ import {
   type PortalMode,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AfCard, AfSection, Notice } from '@/app/(authed)/system/_components/af-parts';
 import { EscalationTabs } from '../../_components/escalation-tabs';
+import '../../_components/escalation.css';
 import { usePermission } from '@/lib/use-permission';
 
 /**
@@ -64,8 +57,10 @@ export function CourierPortalIndex(): ReactElement {
   const failures = rows.filter((r) => r.outcome === 'FAILED' || r.outcome === 'CHALLENGED').length;
 
   return (
-    <div>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Network' }, { label: 'Courier escalation' }]}
+        Link={Link}
         title="Portal worker"
         subtitle="The browser tier. It runs in a separate process from the API, and in SHADOW it reads and decides without writing anything."
       />
@@ -73,39 +68,48 @@ export function CourierPortalIndex(): ReactElement {
 
       <PortalModeSwitch current={channel.data?.settings.portalMode ?? null} />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Stat
+      <div className="af-kpis">
+        <KpiCard
           label="Portal mode"
-          value={channel.data?.settings.portalMode ?? '—'}
+          figure={channel.data?.settings.portalMode ?? '—'}
           hint="SHADOW reads and decides but never writes. Separate from the send-queue write mode."
         />
-        <Stat
-          label="Shadow runs recorded"
-          value={String(shadow)}
-          hint="Each one is a decision that was made and deliberately not acted on."
-        />
-        <Stat
-          label="Failed or challenged"
-          value={String(failures)}
-          hint="A challenge freezes the worker rather than retrying — a login loop against a courier's portal is how an account gets locked."
-        />
+        {runs.isLoading ? (
+          <KpiCard label="Shadow runs recorded" figure="—" hint="Loading" />
+        ) : (
+          <KpiCard
+            label="Shadow runs recorded"
+            value={shadow}
+            hint="Each one is a decision that was made and deliberately not acted on."
+          />
+        )}
+        {runs.isLoading ? (
+          <KpiCard label="Failed or challenged" figure="—" hint="Loading" />
+        ) : (
+          <KpiCard
+            label="Failed or challenged"
+            value={failures}
+            tone={failures > 0 ? 'debit' : 'neutral'}
+            hint="A challenge freezes the worker rather than retrying — a login loop against a courier's portal is how an account gets locked."
+          />
+        )}
       </div>
 
-      <Section
+      <AfSection
         title="Recent runs"
-        subtitle="Newest first. A run is one visit with one purpose; the detail is what it saw or what it would have written."
+        note="Newest first. A run is one visit with one purpose; the detail is what it saw or what it would have written."
       >
         {runs.isLoading ? (
-          <SkeletonRows rows={4} cols={5} />
+          <AfCard flush>
+            <SkeletonRows rows={4} cols={5} label="Loading runs" />
+          </AfCard>
         ) : runs.isError ? (
-          <ErrorNote message={serverVerdict(runs.error)} retry={() => void runs.refetch()} />
+          <ErrorState message={serverVerdict(runs.error)} retry={() => void runs.refetch()} />
         ) : rows.length === 0 ? (
-          <Card>
-            <EmptyState
-              title="The worker has not run"
-              description="Expected: it is deployed inert and the nightly canary only runs once the portal credential exists. Nothing here is a fault yet."
-            />
-          </Card>
+          <EmptyState
+            title="The worker has not run"
+            description="Expected: it is deployed inert and the nightly canary only runs once the portal credential exists. Nothing here is a fault yet."
+          />
         ) : (
           <Table>
             <THead>
@@ -120,23 +124,32 @@ export function CourierPortalIndex(): ReactElement {
             <TBody>
               {rows.map((r) => (
                 <Tr key={r.id}>
-                  <Td className="text-text-muted whitespace-nowrap">
-                    {new Date(r.startedAt).toLocaleString('en-IN')}
-                  </Td>
-                  <Td className="whitespace-nowrap">{humanise(r.kind)}</Td>
                   <Td>
-                    <StatusBadge
+                    <span className="af-small af-nowrap">
+                      {new Date(r.startedAt).toLocaleString('en-IN')}
+                    </span>
+                  </Td>
+                  <Td>
+                    <span className="af-nowrap">{humanise(r.kind)}</span>
+                  </Td>
+                  <Td>
+                    <StatusChip
+                      size="sm"
                       kind={r.mode === 'LIVE' ? 'in-transit' : 'draft'}
                       label={r.mode.toLowerCase()}
                     />
                   </Td>
                   <Td>
-                    <StatusBadge kind={outcomeKind(r.outcome)} label={humanise(r.outcome)} />
+                    <StatusChip
+                      size="sm"
+                      kind={outcomeKind(r.outcome)}
+                      label={humanise(r.outcome)}
+                    />
                   </Td>
-                  <Td className="max-w-lg">
+                  <Td>
                     {/* Verbatim, wrapped: a truncated failure detail is a
                         failure nobody can diagnose. */}
-                    <pre className="text-text-muted whitespace-pre-wrap text-xs">
+                    <pre className="af-pre ce-message" data-dense="1">
                       {r.detail ?? '—'}
                     </pre>
                   </Td>
@@ -145,30 +158,29 @@ export function CourierPortalIndex(): ReactElement {
             </TBody>
           </Table>
         )}
-      </Section>
+      </AfSection>
 
-      <Section
+      <AfSection
         title="Delhivery's categories"
-        subtitle="Fetched from their portal and kept by their own IDs. Two are locked to humans permanently — a claim and a paid-protection case are money, and no mode unlocks them."
+        note="Fetched from their portal and kept by their own IDs. Two are locked to humans permanently — a claim and a paid-protection case are money, and no mode unlocks them."
       >
         {taxonomy.isLoading ? (
-          <SkeletonRows rows={3} cols={4} />
+          <AfCard flush>
+            <SkeletonRows rows={3} cols={4} label="Loading categories" />
+          </AfCard>
         ) : taxonomy.isError ? (
-          <ErrorNote
+          <ErrorState
             message={serverVerdict(taxonomy.error)}
             retry={() => void taxonomy.refetch()}
           />
         ) : cats.length === 0 ? (
-          <Card>
-            <CardBody>
-              <p className="text-sm font-medium">Not fetched yet</p>
-              <p className="text-text-muted mt-1 text-sm">
-                This is why unattended action is refused: with no category IDs on file, none can be
-                checked against the locked list, so the safe answer to &ldquo;may the worker file
-                this?&rdquo; is no. The list fills on the worker&apos;s first successful visit.
-              </p>
-            </CardBody>
-          </Card>
+          <Notice tone="warn" title="Not fetched yet">
+            <p>
+              This is why unattended action is refused: with no category IDs on file, none can be
+              checked against the locked list, so the safe answer to &ldquo;may the worker file
+              this?&rdquo; is no. The list fills on the worker&apos;s first successful visit.
+            </p>
+          </Notice>
         ) : (
           <Table>
             <THead>
@@ -182,26 +194,30 @@ export function CourierPortalIndex(): ReactElement {
             <TBody>
               {cats.map((c) => (
                 <Tr key={c.externalId}>
-                  <Td className="whitespace-nowrap font-mono text-xs">{c.externalId}</Td>
+                  <Td>
+                    <span className="sk-ident af-nowrap">{c.externalId}</span>
+                  </Td>
                   <Td>{c.label}</Td>
                   <Td>
                     {c.isHumanOnly ? (
-                      <span className="text-warning inline-flex items-center gap-1 text-xs">
-                        <Lock size={12} /> human only
+                      <span className="ce-lock-chip">
+                        <Lock size={12} aria-hidden /> human only
                       </span>
                     ) : (
-                      <span className="text-text-muted text-xs">allowed if listed</span>
+                      <span className="af-small">allowed if listed</span>
                     )}
                   </Td>
-                  <Td className="text-text-muted whitespace-nowrap">
-                    {new Date(c.lastSeenAt).toLocaleDateString('en-IN')}
+                  <Td>
+                    <span className="af-small af-nowrap">
+                      {new Date(c.lastSeenAt).toLocaleDateString('en-IN')}
+                    </span>
                   </Td>
                 </Tr>
               ))}
             </TBody>
           </Table>
         )}
-      </Section>
+      </AfSection>
     </div>
   );
 }
@@ -245,65 +261,124 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
   const toast = useToast();
   const canManage = usePermission('courier.accounts.manage');
   const [reason, setReason] = useState('');
+  // Going LIVE is the moment software starts typing into a courier's
+  // support desk in our name, so it asks first. Stopping stays one click.
+  const [confirmLive, setConfirmLive] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
   const live = current === 'LIVE';
   const off = current === 'OFF';
 
   if (!canManage || current === null) return <></>;
 
+  const change = async (portalMode: PortalMode, why: string): Promise<void> => {
+    await setMode.mutateAsync({ portalMode, reason: why });
+    toast.success(
+      portalMode === 'LIVE'
+        ? 'Portal is LIVE'
+        : portalMode === 'OFF'
+          ? 'Portal automation is OFF — nothing will open a browser'
+          : 'Portal is back in SHADOW',
+    );
+    setReason('');
+  };
+
   const go = (portalMode: PortalMode, why: string): void => {
     void (async () => {
       try {
-        await setMode.mutateAsync({ portalMode, reason: why });
-        toast.success(
-          portalMode === 'LIVE'
-            ? 'Portal is LIVE'
-            : portalMode === 'OFF'
-              ? 'Portal automation is OFF — nothing will open a browser'
-              : 'Portal is back in SHADOW',
-        );
-        setReason('');
+        await change(portalMode, why);
       } catch (err) {
         toast.error(serverVerdict(err));
       }
     })();
   };
 
+  async function goLive(): Promise<void> {
+    setLiveError(null);
+    try {
+      await change('LIVE', reason.trim());
+    } catch (err) {
+      // FE-2: verbatim, in the dialog, which stays open to retry.
+      setLiveError(serverVerdict(err));
+      throw err;
+    }
+  }
+
   return (
-    <Card className="mb-4">
-      <CardBody>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-text-strong text-sm font-medium">
-              Browser channel:{' '}
-              {live
-                ? 'LIVE — it clicks'
-                : off
-                  ? 'OFF — nothing runs at all'
-                  : 'SHADOW — it withholds every click'}
-            </p>
-            <p className="text-text-muted mt-0.5 text-xs">
-              {live
-                ? 'Software is raising tickets on the courier’s portal in our name.'
-                : off
-                  ? // The distinction people get wrong: SHADOW still signs in
-                    // and reads, and can still fail at 3am about work nobody
-                    // is waiting for. OFF is the one that means stop.
-                    'No browser is opened and no session is established. Escalations are handled by hand on the courier’s own site and recorded here afterwards.'
-                  : 'Everything up to the click happens and is recorded. Nothing reaches the courier.'}
-            </p>
+    <AfCard tone={live ? 'critical' : undefined}>
+      <div className="af-card__head">
+        <div className="af-grow af-stack af-stack--tight">
+          <p className="af-title">
+            Browser channel:{' '}
+            {live
+              ? 'LIVE — it clicks'
+              : off
+                ? 'OFF — nothing runs at all'
+                : 'SHADOW — it withholds every click'}
+          </p>
+          <p className="af-small">
+            {live
+              ? 'Software is raising tickets on the courier’s portal in our name.'
+              : off
+                ? // The distinction people get wrong: SHADOW still signs in
+                  // and reads, and can still fail at 3am about work nobody
+                  // is waiting for. OFF is the one that means stop.
+                  'No browser is opened and no session is established. Escalations are handled by hand on the courier’s own site and recorded here afterwards.'
+                : 'Everything up to the click happens and is recorded. Nothing reaches the courier.'}
+          </p>
+        </div>
+        {live ? (
+          <div className="af-row">
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={setMode.isPending}
+              onClick={() => go('SHADOW', 'Stopping the browser channel from the portal page')}
+            >
+              Stop — back to SHADOW
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={setMode.isPending}
+              onClick={() => go('OFF', 'Standing the portal automation down from the portal page')}
+            >
+              Turn it OFF
+            </Button>
           </div>
-          {live ? (
-            <div className="flex items-center gap-2">
+        ) : (
+          <div className="af-row af-row--bottom">
+            <div className="ce-reason">
+              <TextField
+                label="Reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Why (10+ chars)"
+                aria-label="Reason for going live"
+              />
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={reason.trim().length < 10 || setMode.isPending}
+              onClick={() => {
+                setLiveError(null);
+                setConfirmLive(true);
+              }}
+            >
+              Go LIVE
+            </Button>
+            {off ? (
               <Button
-                variant="destructive"
+                variant="secondary"
                 size="sm"
-                disabled={setMode.isPending}
-                onClick={() => go('SHADOW', 'Stopping the browser channel from the portal page')}
+                disabled={reason.trim().length < 10 || setMode.isPending}
+                onClick={() => go('SHADOW', reason.trim())}
               >
-                Stop — back to SHADOW
+                Back to SHADOW
               </Button>
+            ) : (
               <Button
-                variant="destructive"
+                variant="secondary"
                 size="sm"
                 disabled={setMode.isPending}
                 onClick={() =>
@@ -312,49 +387,25 @@ function PortalModeSwitch({ current }: { readonly current: string | null }): Rea
               >
                 Turn it OFF
               </Button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Input
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Why (10+ chars)"
-                aria-label="Reason for going live"
-                className="w-56"
-              />
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={reason.trim().length < 10 || setMode.isPending}
-                onClick={() => go('LIVE', reason.trim())}
-              >
-                Go LIVE
-              </Button>
-              {off ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={reason.trim().length < 10 || setMode.isPending}
-                  onClick={() => go('SHADOW', reason.trim())}
-                >
-                  Back to SHADOW
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={setMode.isPending}
-                  onClick={() =>
-                    go('OFF', 'Standing the portal automation down from the portal page')
-                  }
-                >
-                  Turn it OFF
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-      </CardBody>
-    </Card>
+            )}
+          </div>
+        )}
+      </div>
+      <ConfirmDialog
+        open={confirmLive}
+        onOpenChange={setConfirmLive}
+        title="Let the browser channel click?"
+        entity="Courier portal worker"
+        consequence="From the next run, software raises tickets on the courier's own portal in our name; Stop — back to SHADOW undoes it with one click."
+        confirmLabel="Go LIVE"
+        destructive
+        error={liveError}
+        onConfirm={goLive}
+      >
+        <Notice tone="info">
+          <p>Reason recorded: {reason.trim()}</p>
+        </Notice>
+      </ConfirmDialog>
+    </AfCard>
   );
 }

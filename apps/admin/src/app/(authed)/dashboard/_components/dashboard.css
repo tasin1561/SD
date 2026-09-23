@@ -1,0 +1,295 @@
+/* The staff landing page. Tokens only. The attention cards are LOUD when
+   they carry work and quiet at zero — that asymmetry is the design. */
+
+.db-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.db-head__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.db-head__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  background: var(--blue-tint);
+  color: var(--blue-text);
+}
+.db-head__icon[data-tone='accent'] {
+  background: var(--blue-tint);
+  color: var(--blue-text);
+}
+.db-head__icon[data-tone='warn'] {
+  background: var(--saffron-tint);
+  color: var(--saffron-text);
+}
+.db-head__icon[data-tone='good'] {
+  background: var(--green-tint);
+  color: var(--green-text);
+}
+
+.db-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.db-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.db-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+}
+.db-legend__dot[data-tone='good'] {
+  background: var(--green-fill);
+}
+.db-legend__dot[data-tone='bad'] {
+  background: var(--red-fill);
+}
+
+/* ── Attention queue ──────────────────────────────────────────────────── */
+.db-attn-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .db-attn-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1280px) {
+  .db-attn-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1536px) {
+  .db-attn-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+.db-attn {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: var(--elev-1);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.db-attn:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+}
+.db-attn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.db-attn[data-tone='neutral'] {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+}
+.db-attn[data-tone='warn'] {
+  border-color: var(--st-pending-line);
+  background: var(--st-pending-bg);
+}
+.db-attn[data-tone='bad'] {
+  border-color: var(--st-failed-line);
+  background: var(--st-failed-bg);
+}
+.db-attn[data-tone='info'] {
+  border-color: var(--st-confirmed-line);
+  background: var(--st-confirmed-bg);
+}
+.db-attn__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.db-attn__area {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.db-attn__badge {
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+.db-attn[data-tone='warn'] .db-attn__badge {
+  background: var(--saffron-fill);
+  color: var(--saffron-on-fill);
+}
+.db-attn[data-tone='bad'] .db-attn__badge {
+  background: var(--red-fill);
+  color: var(--red-on-fill);
+}
+.db-attn__dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: var(--r-pill);
+  background: var(--green-fill);
+}
+.db-attn__dot[data-on='1'] {
+  background: var(--saffron-fill);
+}
+.db-attn__figure-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 2.25rem;
+  margin-top: var(--sp-1);
+}
+.db-attn__figure {
+  color: var(--fg-faint);
+  font-size: 1.875rem;
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+.db-attn[data-active='1'] .db-attn__figure {
+  color: var(--blue-text);
+}
+.db-attn[data-tone='warn'] .db-attn__figure,
+.db-attn[data-tone='warn'] .db-attn__open {
+  color: var(--st-pending-fg);
+}
+.db-attn[data-tone='bad'] .db-attn__figure,
+.db-attn[data-tone='bad'] .db-attn__open {
+  color: var(--st-failed-fg);
+}
+.db-attn[data-tone='info'] .db-attn__figure,
+.db-attn[data-tone='info'] .db-attn__open {
+  color: var(--st-confirmed-fg);
+}
+.db-attn__unit {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.db-attn__label {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.db-attn__hint {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+.db-attn__cta {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.db-attn__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sky);
+}
+.db-attn__clear {
+  color: var(--fg-faint);
+}
+
+/* ── Performance ──────────────────────────────────────────────────────── */
+.db-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .db-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1280px) {
+  .db-metric-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.db-metric__hint {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+}
+.db-chip {
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+.db-chip[data-tone='good'] {
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+}
+.db-chip[data-tone='warn'] {
+  background: var(--saffron-fill);
+  color: var(--saffron-on-fill);
+}
+.db-chip[data-tone='bad'] {
+  background: var(--red-fill);
+  color: var(--red-on-fill);
+}
+.db-chip[data-tone='info'] {
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+}
+
+/* ── Money ────────────────────────────────────────────────────────────── */
+.db-money-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .db-money-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1280px) {
+  .db-money-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.db-money--emphasis {
+  border-color: var(--accent-line);
+}
+
+.db-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}

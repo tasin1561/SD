@@ -2,17 +2,15 @@
 
 import { useState, type ReactElement } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Notice } from '@/app/(authed)/system/_components/af-parts';
+import './courier-accounts.css';
 import { CredentialEnvironment } from '@skydrop/db';
 import { useCouriers, useCreateCourierAccount } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -129,7 +127,7 @@ export function CreateCourierAccountModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -138,72 +136,90 @@ export function CreateCourierAccountModal({
       size="md"
       title="Add a courier account"
       description="Credentials are encrypted at rest with a key held in the environment. They are never returned by any endpoint, so keep your own copy."
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            loading={create.isPending}
+            disabled={
+              courierCode.trim() === '' ||
+              label.trim() === '' ||
+              (!credentialless && filled.length === 0) ||
+              create.isPending
+            }
+            onClick={() => void submit()}
+          >
+            Add account
+          </Button>
+        </DialogFooter>
+      }
     >
-      <div className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField label="Courier code" htmlFor="ca-courier" required>
-            <Input
-              id="ca-courier"
-              value={courierCode}
-              onChange={(e) => {
-                const next = e.target.value;
-                setCourierCode(next);
-                // Re-seed the field NAMES for the courier just chosen.
-                // Only when nothing has been typed yet: silently
-                // discarding a password somebody pasted would be worse
-                // than leaving them to rename a field.
-                setFields((prev) => (prev.every((f) => f.value === '') ? fieldsFor(next) : prev));
-              }}
-              autoComplete="off"
-            />
-          </FormField>
-
-          <FormField label="Environment" htmlFor="ca-env" required>
-            <Select
-              id="ca-env"
-              value={environment}
-              onChange={(e) => setEnvironment(e.target.value)}
-            >
-              {Object.values(CredentialEnvironment).map((env) => (
-                <option key={env} value={env}>
-                  {env.toLowerCase()}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        </div>
-
-        <FormField
-          label="Label"
-          htmlFor="ca-label"
-          hint="How an operator will tell this account apart from the others."
-          required
-        >
-          <Input
-            id="ca-label"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Delhivery — primary"
+      <div className="af-form">
+        <div className="af-grid-2">
+          <TextField
+            id="ca-courier"
+            label="Courier code"
+            requiredMark
+            value={courierCode}
+            onChange={(e) => {
+              const next = e.target.value;
+              setCourierCode(next);
+              // Re-seed the field NAMES for the courier just chosen.
+              // Only when nothing has been typed yet: silently
+              // discarding a password somebody pasted would be worse
+              // than leaving them to rename a field.
+              setFields((prev) => (prev.every((f) => f.value === '') ? fieldsFor(next) : prev));
+            }}
             autoComplete="off"
           />
-        </FormField>
+
+          <Select
+            id="ca-env"
+            label="Environment"
+            requiredMark
+            value={environment}
+            onChange={(e) => setEnvironment(e.target.value)}
+          >
+            {Object.values(CredentialEnvironment).map((env) => (
+              <option key={env} value={env}>
+                {env.toLowerCase()}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <TextField
+          id="ca-label"
+          label="Label"
+          requiredMark
+          hint="How an operator will tell this account apart from the others."
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Delhivery — primary"
+          autoComplete="off"
+        />
 
         {credentialless && (
-          <div className="border-border text-text-muted rounded-[10px] border border-dashed p-3 text-xs">
-            A manual courier has no API, so there is nothing to authenticate — this account exists
-            so its payouts can be recorded and settled like any other.
-          </div>
+          <Notice tone="info">
+            <p>
+              A manual courier has no API, so there is nothing to authenticate — this account exists
+              so its payouts can be recorded and settled like any other.
+            </p>
+          </Notice>
         )}
 
         {/* ── credentials ── */}
-        <div className={credentialless ? 'hidden' : 'border-border border-t pt-3'}>
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-text-muted text-xs font-medium tracking-wide uppercase">
-              Credentials
-            </h3>
+        <div className={credentialless ? 'ca-hidden' : 'af-divider af-stack'}>
+          <div className="af-row af-row--between">
+            <h3 className="af-title">Credentials</h3>
             <Button
               variant="ghost"
               size="sm"
+              icon={<Plus size={13} />}
               onClick={() =>
                 setFields((prev) => [
                   ...prev,
@@ -211,14 +227,15 @@ export function CreateCourierAccountModal({
                 ])
               }
             >
-              <Plus size={13} aria-hidden /> Add field
+              Add field
             </Button>
           </div>
 
-          <div className="space-y-2">
+          <div className="af-stack af-stack--tight">
             {fields.map((f) => (
-              <div key={f.key} className="flex items-center gap-2">
-                <Input
+              <div key={f.key} className="af-cred-row">
+                <TextField
+                  label="Field name"
                   aria-label="Credential field name"
                   value={f.name}
                   onChange={(e) =>
@@ -228,9 +245,9 @@ export function CreateCourierAccountModal({
                   }
                   placeholder="apiToken"
                   autoComplete="off"
-                  className="w-44"
                 />
-                <Input
+                <TextField
+                  label="Value"
                   aria-label="Credential value"
                   type="password"
                   value={f.value}
@@ -242,7 +259,6 @@ export function CreateCourierAccountModal({
                   placeholder="••••••••••••"
                   autoComplete="off"
                   spellCheck={false}
-                  className="flex-1"
                 />
                 <button
                   type="button"
@@ -253,7 +269,7 @@ export function CreateCourierAccountModal({
                     )
                   }
                   disabled={fields.length === 1}
-                  className="text-text-faint hover:text-[var(--color-critical)] disabled:opacity-30 shrink-0 rounded-[4px] p-1.5 transition-colors"
+                  className="af-icon-btn"
                 >
                   <Trash2 size={14} aria-hidden />
                 </button>
@@ -262,68 +278,37 @@ export function CreateCourierAccountModal({
           </div>
         </div>
 
-        <label className="text-text-body flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={isDefault}
-            onChange={(e) => setIsDefault(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>
-            Make this the default for its courier and environment
-            <span className="text-text-faint block text-xs">
-              Sellers with no explicit link route here. At most one default per pair.
-            </span>
-          </span>
-        </label>
+        <Checkbox
+          checked={isDefault}
+          onChange={(e) => setIsDefault(e.target.checked)}
+          label="Make this the default for its courier and environment"
+          description="Sellers with no explicit link route here. At most one default per pair."
+        />
 
-        <FormField
+        <TextField
+          id="ca-pickup"
           label="Pickup location name"
-          htmlFor="ca-pickup"
           hint="The warehouse name registered with THIS account at Delhivery. Blank uses the global setting — fine for one account, wrong as soon as there are two."
           error={
             pickupLocationName !== pickupLocationName.trim() && pickupLocationName !== ''
               ? 'Leading or trailing space. Delhivery matches this exactly, so this would not match the registration.'
               : undefined
           }
-        >
-          <Input
-            id="ca-pickup"
-            value={pickupLocationName}
-            onChange={(e) => setPickupLocationName(e.target.value)}
-          />
-        </FormField>
+          value={pickupLocationName}
+          onChange={(e) => setPickupLocationName(e.target.value)}
+        />
 
-        <FormField label="Notes" htmlFor="ca-notes" hint="Optional.">
-          <Textarea
-            id="ca-notes"
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </FormField>
+        <TextArea
+          id="ca-notes"
+          label="Notes"
+          hint="Optional."
+          rows={2}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
 
-        {error !== null && <ErrorNote message={error} />}
+        {error !== null && <ErrorState title="Not added" message={error} />}
       </div>
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={
-            courierCode.trim() === '' ||
-            label.trim() === '' ||
-            (!credentialless && filled.length === 0) ||
-            create.isPending
-          }
-          onClick={() => void submit()}
-        >
-          {create.isPending ? 'Adding…' : 'Add account'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

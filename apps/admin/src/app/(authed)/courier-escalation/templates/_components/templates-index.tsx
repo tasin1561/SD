@@ -1,27 +1,19 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import Link from 'next/link';
 import { CheckCircle2, XCircle } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Input,
-  PageHeader,
-  Section,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+// The legacy `useToast` stays: the FE-2 test mounts this page under the
+// legacy Toaster only.
+import { useToast } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import {
   useCourierTemplateCandidates,
   useCourierTemplates,
@@ -31,7 +23,9 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { AfCard, AfSection } from '@/app/(authed)/system/_components/af-parts';
 import { EscalationTabs } from '../../_components/escalation-tabs';
+import '../../_components/escalation.css';
 
 /**
  * The promotion queue: unmatched courier messages becoming patterns.
@@ -66,48 +60,51 @@ export function CourierTemplatesIndex(): ReactElement {
   const reviewed = (candidates.data ?? []).filter((c) => c.status !== 'PENDING');
 
   return (
-    <div>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Network' }, { label: 'Courier escalation' }]}
+        Link={Link}
         title="Message patterns"
         subtitle="Courier messages the library could not classify, and the live patterns it matches with. A pattern decides what a seller is told a message means."
       />
       <EscalationTabs />
 
-      <Section
+      <AfSection
         title="Awaiting review"
-        subtitle="Most-repeated first — the pattern worth writing next is at the top."
+        note="Most-repeated first — the pattern worth writing next is at the top."
       >
         {candidates.isLoading ? (
-          <SkeletonRows rows={3} cols={1} />
+          <SkeletonRows rows={3} cols={1} label="Loading candidates" />
         ) : candidates.isError ? (
-          <ErrorNote
+          <ErrorState
             message={serverVerdict(candidates.error)}
             retry={() => void candidates.refetch()}
           />
         ) : pending.length === 0 ? (
-          <Card>
-            <EmptyState
-              title="Nothing unmatched"
-              description="Either every message so far matched a pattern, or none have arrived yet. Both are fine; this queue fills itself."
-            />
-          </Card>
+          <EmptyState
+            tone="positive"
+            title="Nothing unmatched"
+            description="Either every message so far matched a pattern, or none have arrived yet. Both are fine; this queue fills itself."
+          />
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="af-stack">
             {pending.map((c) => (
               <CandidateCard key={c.id} candidate={c} canWrite={canWrite} />
             ))}
           </div>
         )}
-      </Section>
+      </AfSection>
 
-      <Section
+      <AfSection
         title="The live library"
-        subtitle="Checked in this order — the first match wins, so a broad pattern with a low number can shadow a precise one below it."
+        note="Checked in this order — the first match wins, so a broad pattern with a low number can shadow a precise one below it."
       >
         {templates.isLoading ? (
-          <SkeletonRows rows={4} cols={5} />
+          <AfCard flush>
+            <SkeletonRows rows={4} cols={5} label="Loading patterns" />
+          </AfCard>
         ) : templates.isError ? (
-          <ErrorNote
+          <ErrorState
             message={serverVerdict(templates.error)}
             retry={() => void templates.refetch()}
           />
@@ -126,17 +123,26 @@ export function CourierTemplatesIndex(): ReactElement {
             <TBody>
               {(templates.data ?? []).map((t) => (
                 <Tr key={t.id}>
-                  <Td align="right">{t.priority}</Td>
-                  <Td className="whitespace-nowrap font-medium">{t.code}</Td>
-                  <Td>
-                    <code className="text-text-muted break-all text-xs">{t.pattern}</code>
-                  </Td>
-                  <Td className="whitespace-nowrap">{humanise(t.state)}</Td>
-                  <Td className="text-text-muted whitespace-nowrap text-xs">
-                    {t.action === null ? '—' : humanise(t.action)}
+                  <Td align="right">
+                    <span className="sk-figure">{t.priority}</span>
                   </Td>
                   <Td>
-                    <StatusBadge
+                    <span className="af-strong sk-ident af-nowrap">{t.code}</span>
+                  </Td>
+                  <Td>
+                    <code className="af-code">{t.pattern}</code>
+                  </Td>
+                  <Td>
+                    <span className="af-nowrap">{humanise(t.state)}</span>
+                  </Td>
+                  <Td>
+                    <span className="af-small af-nowrap">
+                      {t.action === null ? '—' : humanise(t.action)}
+                    </span>
+                  </Td>
+                  <Td>
+                    <StatusChip
+                      size="sm"
                       kind={t.isActive ? 'delivered' : 'draft'}
                       label={t.isActive ? 'active' : 'off'}
                     />
@@ -146,12 +152,12 @@ export function CourierTemplatesIndex(): ReactElement {
             </TBody>
           </Table>
         )}
-      </Section>
+      </AfSection>
 
       {reviewed.length > 0 ? (
-        <Section
+        <AfSection
           title="Already decided"
-          subtitle="Kept rather than deleted: the body is the evidence for why a pattern exists, and a pattern whose origin was thrown away is one nobody can safely change later."
+          note="Kept rather than deleted: the body is the evidence for why a pattern exists, and a pattern whose origin was thrown away is one nobody can safely change later."
         >
           <Table>
             <THead>
@@ -164,12 +170,17 @@ export function CourierTemplatesIndex(): ReactElement {
             <TBody>
               {reviewed.map((c) => (
                 <Tr key={c.id}>
-                  <Td className="max-w-xl">
-                    <div className="truncate text-xs">{c.body}</div>
-                  </Td>
-                  <Td align="right">{c.seenCount}</Td>
                   <Td>
-                    <StatusBadge
+                    <span className="af-clip af-small" title={c.body}>
+                      {c.body}
+                    </span>
+                  </Td>
+                  <Td align="right">
+                    <span className="sk-figure">{c.seenCount}</span>
+                  </Td>
+                  <Td>
+                    <StatusChip
+                      size="sm"
                       kind={c.status === 'PROMOTED' ? 'delivered' : 'cancelled'}
                       label={c.status.toLowerCase()}
                     />
@@ -178,7 +189,7 @@ export function CourierTemplatesIndex(): ReactElement {
               ))}
             </TBody>
           </Table>
-        </Section>
+        </AfSection>
       ) : null}
     </div>
   );
@@ -204,133 +215,129 @@ function CandidateCard({
   // id="code" would point every label at the first card's input.
   const fid = (name: string): string => `${candidate.id}-${name}`;
 
-  const submit = (): void => {
-    void (async () => {
-      try {
-        await promote.mutateAsync({
-          candidateId: candidate.id,
-          code: code.trim(),
-          pattern,
-          state: state.trim(),
-          ...(action.trim() === '' ? {} : { action: action.trim() }),
-          ...(Number.isFinite(Number(priority)) ? { priority: Number(priority) } : {}),
-        });
-        toast.success('Pattern is live');
-        setOpen(false);
-      } catch (err) {
-        // FE-2: PATTERN_DOES_NOT_MATCH and PATTERN_INVALID arrive from the
-        // server and are shown as they came.
-        toast.error(serverVerdict(err));
-      }
-    })();
+  const submit = async (): Promise<void> => {
+    try {
+      await promote.mutateAsync({
+        candidateId: candidate.id,
+        code: code.trim(),
+        pattern,
+        state: state.trim(),
+        ...(action.trim() === '' ? {} : { action: action.trim() }),
+        ...(Number.isFinite(Number(priority)) ? { priority: Number(priority) } : {}),
+      });
+      toast.success('Pattern is live');
+      setOpen(false);
+    } catch (err) {
+      // FE-2: PATTERN_DOES_NOT_MATCH and PATTERN_INVALID arrive from the
+      // server and are shown as they came.
+      toast.error(serverVerdict(err));
+      throw err;
+    }
   };
 
-  const dismiss = (): void => {
-    void (async () => {
-      try {
-        await reject.mutateAsync({ candidateId: candidate.id });
-        toast.success('Left out of the library');
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      }
-    })();
+  const dismiss = async (): Promise<void> => {
+    try {
+      await reject.mutateAsync({ candidateId: candidate.id });
+      toast.success('Left out of the library');
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      throw err;
+    }
   };
 
   return (
-    <Card>
-      <CardBody>
-        <div className="mb-2 flex flex-wrap items-center gap-3 text-xs">
-          <span className="font-medium">
-            seen {candidate.seenCount} {candidate.seenCount === 1 ? 'time' : 'times'}
-          </span>
-          <span className="text-text-muted">
-            first {new Date(candidate.firstSeenAt).toLocaleDateString('en-IN')}, last{' '}
-            {new Date(candidate.lastSeenAt).toLocaleDateString('en-IN')}
-          </span>
-        </div>
+    <AfCard>
+      <div className="ce-candidate__meta">
+        <span className="af-strong">
+          seen {candidate.seenCount} {candidate.seenCount === 1 ? 'time' : 'times'}
+        </span>
+        <span className="af-small">
+          first {new Date(candidate.firstSeenAt).toLocaleDateString('en-IN')}, last{' '}
+          {new Date(candidate.lastSeenAt).toLocaleDateString('en-IN')}
+        </span>
+      </div>
 
-        {/* The body a pattern must match, shown in full and verbatim —
-            a truncated body is one you cannot write a regex against. */}
-        <pre className="bg-surface-2 mb-3 whitespace-pre-wrap rounded p-3 text-sm">
-          {candidate.body}
-        </pre>
+      {/* The body a pattern must match, shown in full and verbatim —
+          a truncated body is one you cannot write a regex against. */}
+      <pre className="af-pre">{candidate.body}</pre>
 
-        {canWrite ? (
-          open ? (
-            <div className="border-border flex flex-col gap-3 border-t pt-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <FormField label="Code" hint="Stable, e.g. NDR_ACK_24_48." htmlFor={fid('code')}>
-                  <Input id={fid('code')} value={code} onChange={(e) => setCode(e.target.value)} />
-                </FormField>
-                <FormField
-                  label="Means"
-                  hint="The state this implies, e.g. ACKNOWLEDGED."
-                  htmlFor={fid('state')}
-                >
-                  <Input
-                    id={fid('state')}
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                  />
-                </FormField>
-                <FormField
-                  label="Action"
-                  hint="Optional, e.g. ASK_SELLER_ALT_PHONE."
-                  htmlFor={fid('action')}
-                >
-                  <Input
-                    id={fid('action')}
-                    value={action}
-                    onChange={(e) => setAction(e.target.value)}
-                  />
-                </FormField>
-                <FormField label="Order" hint="Lower is checked first." htmlFor={fid('priority')}>
-                  <Input
-                    id={fid('priority')}
-                    inputMode="numeric"
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value)}
-                  />
-                </FormField>
-              </div>
-              <FormField
-                label="Pattern"
-                hint="A regular expression without delimiters, matched case-insensitively. The server refuses one that does not match the message above."
-                htmlFor={fid('pattern')}
-              >
-                <Input
-                  id={fid('pattern')}
-                  value={pattern}
-                  onChange={(e) => setPattern(e.target.value)}
-                />
-              </FormField>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={submit}
-                  disabled={code.trim() === '' || pattern.trim() === '' || state.trim() === ''}
-                >
-                  <CheckCircle2 size={14} /> Make it live
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
+      {canWrite ? (
+        open ? (
+          <div className="af-divider af-form">
+            <div className="af-grid-2">
+              <TextField
+                id={fid('code')}
+                label="Code"
+                hint="Stable, e.g. NDR_ACK_24_48."
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+              <TextField
+                id={fid('state')}
+                label="Means"
+                hint="The state this implies, e.g. ACKNOWLEDGED."
+                value={state}
+                onChange={(e) => setState(e.target.value)}
+              />
+              <TextField
+                id={fid('action')}
+                label="Action"
+                hint="Optional, e.g. ASK_SELLER_ALT_PHONE."
+                value={action}
+                onChange={(e) => setAction(e.target.value)}
+              />
+              <TextField
+                id={fid('priority')}
+                label="Order"
+                hint="Lower is checked first."
+                inputMode="numeric"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+              />
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-                Write a pattern
-              </Button>
-              <Button variant="ghost" size="sm" onClick={dismiss}>
-                <XCircle size={14} /> Not worth one
+            <TextField
+              id={fid('pattern')}
+              label="Pattern"
+              hint="A regular expression without delimiters, matched case-insensitively. The server refuses one that does not match the message above."
+              inputClassName="af-code"
+              value={pattern}
+              onChange={(e) => setPattern(e.target.value)}
+            />
+            <div className="af-row">
+              <AsyncButton
+                variant="primary"
+                size="sm"
+                icon={<CheckCircle2 size={14} />}
+                labels={{
+                  idle: 'Make it live',
+                  busy: 'Promoting…',
+                  done: 'Live',
+                  error: 'Refused',
+                }}
+                disabled={code.trim() === '' || pattern.trim() === '' || state.trim() === ''}
+                onAction={submit}
+              />
+              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                Cancel
               </Button>
             </div>
-          )
-        ) : null}
-      </CardBody>
-    </Card>
+          </div>
+        ) : (
+          <div className="af-row">
+            <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+              Write a pattern
+            </Button>
+            <AsyncButton
+              variant="ghost"
+              size="sm"
+              icon={<XCircle size={14} />}
+              labels={{ idle: 'Not worth one', busy: 'Leaving out…', done: 'Left out' }}
+              onAction={dismiss}
+            />
+          </div>
+        )
+      ) : null}
+    </AfCard>
   );
 }
 

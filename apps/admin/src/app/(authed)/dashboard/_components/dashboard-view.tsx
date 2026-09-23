@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   Banknote,
   Landmark,
   Receipt,
@@ -12,10 +13,16 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
-import { Card, CardBody, ErrorState, Money, PageHeader, Skeleton } from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard, Odometer, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { useOrdersList, useReportSummary } from '@/lib/api-hooks';
 import { useTicketsList, useWithdrawalsList } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { AfCard, MetaFact, Meter } from '@/app/(authed)/system/_components/af-parts';
+import './dashboard.css';
 
 /**
  * The admin landing page — the operations cockpit.
@@ -48,42 +55,35 @@ const COUNT_ONLY = { page: 1, pageSize: 1 } as const;
 
 // ── section chrome ────────────────────────────────────────────────────
 
+/** A plain sentence-case heading with its icon; no index, no eyebrow. */
 function SectionHead({
-  index,
   title,
   icon,
   iconTone = 'accent',
   note,
 }: {
-  index: string;
   title: string;
   icon: ReactNode;
   iconTone?: 'accent' | 'warn' | 'good';
   note?: ReactNode;
 }): ReactElement {
-  const toneClass = {
-    accent: 'text-accent',
-    warn: 'text-status-pending-fg',
-    good: 'text-status-delivered-fg',
-  }[iconTone];
   return (
-    <div className="mt-7 mb-3 flex flex-wrap items-center justify-between gap-2 first:mt-0">
-      <div className="text-text-muted flex items-center gap-2">
-        <span className={toneClass}>{icon}</span>
-        {/* The eyebrow is a real heading for a screen reader; the
-            numbering is decoration and is hidden from one, because
-            "section zero one" read aloud is noise. */}
-        <h2 className="text-xs font-semibold tracking-[0.09em] uppercase">
-          <span aria-hidden="true">{`${index} // `}</span>
+    <SectionHeading
+      className="db-head"
+      title={
+        <span className="db-head__title">
+          <span className="db-head__icon" data-tone={iconTone} aria-hidden>
+            {icon}
+          </span>
           {title}
-        </h2>
-      </div>
-      {note !== undefined && <div className="text-text-faint text-xs">{note}</div>}
-    </div>
+        </span>
+      }
+      note={note}
+    />
   );
 }
 
-// ── section 01: the attention queue ───────────────────────────────────
+// ── the attention queue ───────────────────────────────────────────────
 
 function AttentionCard({
   href,
@@ -114,88 +114,67 @@ function AttentionCard({
   //
   // A card at zero keeps every one of them at neutral and goes quiet.
   // Two loud layers cancel; seven do nothing at all.
-  const skin = !active
-    ? { card: 'border-border bg-surface', num: 'text-text-faint', chip: '' }
-    : {
-        warn: {
-          card: 'border-status-pending-ring/60 bg-status-pending-bg',
-          num: 'text-status-pending-fg',
-          chip: 'bg-status-pending-fg text-[color:var(--color-bg)]',
-        },
-        bad: {
-          card: 'border-status-failed-ring/60 bg-status-failed-bg',
-          num: 'text-status-failed-fg',
-          chip: 'bg-status-failed-fg text-[color:var(--color-bg)]',
-        },
-        info: {
-          card: 'border-status-confirmed-ring/60 bg-status-confirmed-bg',
-          num: 'text-status-confirmed-fg',
-          chip: 'bg-status-confirmed-fg text-[color:var(--color-bg)]',
-        },
-        neutral: {
-          card: 'border-accent-ring bg-accent-tint',
-          num: 'text-accent',
-          chip: 'bg-accent-fill text-accent-fg',
-        },
-      }[tone];
-
   return (
     <Link
       href={href}
-      className={`block rounded-lg border p-3 transition-colors hover:border-border-strong ${skin.card}`}
+      className="db-attn"
+      data-tone={active ? tone : undefined}
+      data-active={active ? '1' : undefined}
       aria-label={`${area}: ${label}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-text-muted text-[11px] font-semibold tracking-[0.08em] uppercase">
-          {area}
-        </span>
+      <div className="db-attn__top">
+        <span className="db-attn__area">{area}</span>
         {active && badge !== undefined ? (
-          <span
-            className={`rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ${skin.chip}`}
-          >
-            {badge}
-          </span>
+          <span className="db-attn__badge">{badge}</span>
         ) : (
-          <span
-            className={
-              active
-                ? 'bg-status-pending-fg h-1.5 w-1.5 rounded-full'
-                : 'bg-status-delivered-fg h-1.5 w-1.5 rounded-full'
-            }
-            aria-hidden="true"
-          />
+          <span className="db-attn__dot" data-on={active ? '1' : undefined} aria-hidden="true" />
         )}
       </div>
 
-      <div className="mt-2 flex items-baseline gap-1.5">
+      <div className="db-attn__figure-row">
         {loading ? (
-          <Skeleton className="h-8 w-10" />
+          <Skeleton width="2.5rem" height="2rem" />
         ) : (
-          <span className={`text-3xl leading-none font-bold tabular-nums ${skin.num}`}>
-            {count ?? 0}
-          </span>
+          // A plain count rolls up once, on first mount; a refetch just
+          // shows the new number.
+          <Odometer value={count ?? 0} className="db-attn__figure" />
         )}
-        <span className="text-text-muted text-xs">{label.toLowerCase()}</span>
+        <span className="db-attn__unit">{label.toLowerCase()}</span>
       </div>
 
-      <div className="text-text-strong mt-1.5 text-sm font-semibold">{label}</div>
-      <p className="text-text-muted mt-0.5 text-xs leading-snug">{hint}</p>
-      <div className="mt-2 text-xs font-semibold">
+      <div className="db-attn__label">{label}</div>
+      <p className="db-attn__hint">{hint}</p>
+      <div className="db-attn__cta">
         {active ? (
-          <span className={skin.num}>Open →</span>
+          <span className="db-attn__open">
+            Open <ArrowRight size={13} aria-hidden />
+          </span>
         ) : (
-          <span className="text-text-faint">Clear</span>
+          <span className="db-attn__clear">Clear</span>
         )}
       </div>
     </Link>
   );
 }
 
-// ── section 02: performance ───────────────────────────────────────────
+// ── performance ───────────────────────────────────────────────────────
+
+type ChipTone = 'neutral' | 'good' | 'warn' | 'bad' | 'info';
+type BarTone = 'accent' | 'good' | 'warn' | 'bad';
+type ValueTone = 'default' | 'good' | 'warn' | 'bad' | 'accent';
+
+const VALUE_KPI_TONE: Record<ValueTone, KpiTone> = {
+  default: 'neutral',
+  good: 'credit',
+  warn: 'pending',
+  bad: 'debit',
+  accent: 'info',
+};
 
 function MetricCard({
   label,
   value,
+  count,
   chip,
   chipTone = 'neutral',
   hint,
@@ -205,65 +184,75 @@ function MetricCard({
   loading,
 }: {
   label: string;
-  value: string;
+  /** A ready string (a rate). */
+  value?: string;
+  /** A plain count — rolled once by the odometer. */
+  count?: number | undefined;
   chip?: string | undefined;
-  chipTone?: 'neutral' | 'good' | 'warn' | 'bad' | 'info';
+  chipTone?: ChipTone;
   hint: string;
   bar?: number | undefined;
-  barTone?: 'accent' | 'good' | 'warn' | 'bad';
-  valueTone?: 'default' | 'good' | 'warn' | 'bad' | 'accent';
+  barTone?: BarTone;
+  valueTone?: ValueTone;
   loading: boolean;
 }): ReactElement {
-  // Filled chips, not outlines. A pale outline on a dark card is
-  // invisible at a glance, and the chip is the fastest read on the card
-  // — it says whether the number is good news before the number is.
-  const chipClass = {
-    neutral: 'bg-surface-hover text-text-body',
-    good: 'bg-status-delivered-fg text-[color:var(--color-bg)]',
-    warn: 'bg-status-pending-fg text-[color:var(--color-bg)]',
-    bad: 'bg-status-failed-fg text-[color:var(--color-bg)]',
-    info: 'bg-status-confirmed-fg text-[color:var(--color-bg)]',
-  }[chipTone];
-  const barClass = {
-    accent: 'bg-accent-fill',
-    good: 'bg-status-delivered-fg',
-    warn: 'bg-status-pending-fg',
-    bad: 'bg-status-failed-fg',
-  }[barTone];
-  const valueClass = {
-    default: 'text-text-bright',
-    good: 'text-status-delivered-fg',
-    warn: 'text-status-pending-fg',
-    bad: 'text-status-failed-fg',
-    accent: 'text-accent',
-  }[valueTone];
-
+  // Filled chips, not outlines. A pale outline on a card is invisible at
+  // a glance, and the chip is the fastest read on the card — it says
+  // whether the number is good news before the number is.
+  const chipNode =
+    chip === undefined ? undefined : (
+      <span className="db-chip" data-tone={chipTone}>
+        {chip}
+      </span>
+    );
+  const hintNode = (
+    <span className="db-metric__hint">
+      <span>{hint}</span>
+      {bar !== undefined && <Meter value={Math.max(0.02, Math.min(1, bar))} tone={barTone} />}
+    </span>
+  );
+  const tone = VALUE_KPI_TONE[valueTone];
+  if (loading) {
+    return (
+      <KpiCard
+        label={label}
+        figure={<Skeleton width="4rem" height="1.75rem" />}
+        chip={chipNode}
+        hint={hintNode}
+        tone={tone}
+      />
+    );
+  }
+  if (count !== undefined) {
+    return (
+      <KpiCard
+        label={label}
+        value={count}
+        format={(n) => n.toLocaleString('en-IN')}
+        chip={chipNode}
+        hint={hintNode}
+        tone={tone}
+      />
+    );
+  }
   return (
-    <div className="border-border bg-surface rounded-lg border p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-text-muted text-xs font-medium">{label}</div>
-        {chip !== undefined && (
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${chipClass}`}>{chip}</span>
-        )}
-      </div>
-      <div className={`mt-2 text-2xl leading-none font-bold tabular-nums ${valueClass}`}>
-        {loading ? <Skeleton className="h-7 w-16" /> : value}
-      </div>
-      <p className="text-text-muted mt-1.5 text-xs">{hint}</p>
-      {bar !== undefined && (
-        <div className="bg-surface-hover mt-2.5 h-1.5 w-full overflow-hidden rounded-full">
-          <div
-            className={`h-full rounded-full ${barClass}`}
-            style={{ width: `${Math.max(2, Math.min(100, bar * 100))}%` }}
-          />
-        </div>
-      )}
-    </div>
+    <KpiCard label={label} figure={value ?? '—'} chip={chipNode} hint={hintNode} tone={tone} />
   );
 }
 
-// ── section 03: money ─────────────────────────────────────────────────
+// ── money ─────────────────────────────────────────────────────────────
 
+const MONEY_TONE: Record<'good' | 'bad' | 'info' | 'accent', KpiTone> = {
+  good: 'credit',
+  bad: 'debit',
+  info: 'info',
+  accent: 'pending',
+};
+
+/**
+ * A money tile. The figure is the caller's own `<Money>` node, exactly as
+ * before; the KPI card only draws around it.
+ */
 function MoneyCard({
   label,
   amount,
@@ -285,41 +274,26 @@ function MoneyCard({
   loading: boolean;
   emphasis?: boolean;
 }): ReactElement {
-  // The icon is the only colour on a money card, and it is doing real
-  // work: four cards of identical shape are told apart by it before any
-  // of the labels are read. Money IN is green, money OUT is red, money
-  // MOVED is blue, money we still HOLD is the accent.
-  const iconClass = {
-    good: 'text-status-delivered-fg bg-status-delivered-bg',
-    bad: 'text-status-failed-fg bg-status-failed-bg',
-    info: 'text-status-confirmed-fg bg-status-confirmed-bg',
-    accent: 'text-accent bg-accent-tint',
-  }[iconTone];
-
+  // The icon is doing real work: four cards of identical shape are told
+  // apart by it before any of the labels are read. Money IN is green,
+  // money OUT is red, money MOVED is blue, money we still HOLD is the
+  // accent.
   return (
-    <div
-      className={[
-        'rounded-lg border p-3',
-        emphasis ? 'border-accent-ring bg-accent-tint' : 'border-border bg-surface',
-      ].join(' ')}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-text-strong text-sm font-semibold">{label}</div>
-        <span className={`grid h-6 w-6 place-items-center rounded ${iconClass}`}>{icon}</span>
-      </div>
-      <div className="text-text-bright mt-2 text-2xl font-bold">
-        {loading || amount === undefined ? (
-          <Skeleton className="h-7 w-28" />
+    <KpiCard
+      className={emphasis ? 'db-money db-money--emphasis' : 'db-money'}
+      label={label}
+      icon={icon}
+      tone={MONEY_TONE[iconTone]}
+      figure={
+        loading || amount === undefined ? (
+          <Skeleton width="7rem" height="1.75rem" />
         ) : (
           <Money amount={amount} size="md" />
-        )}
-      </div>
-      <p className="text-text-muted mt-1.5 text-xs leading-snug">{hint}</p>
-      <div className="border-border mt-2.5 flex items-center justify-between gap-2 border-t pt-2 text-xs">
-        <span className="text-text-muted">{footLeft}</span>
-        {footRight}
-      </div>
-    </div>
+        )
+      }
+      hint={hint}
+      foot={[{ label: footLeft, value: footRight ?? '' }]}
+    />
   );
 }
 
@@ -364,33 +338,29 @@ export function DashboardView(): ReactElement {
   ].reduce<number>((n, c) => n + ((c ?? 0) > 0 ? 1 : 0), 0);
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-2.5">
-        <PageHeader
-          title="Overview"
-          subtitle="What is waiting on someone right now, and how the last 30 days have gone."
-        />
-        <span className="bg-status-delivered-bg text-status-delivered-fg mt-0.5 flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">
-          <span className="bg-status-delivered-fg h-1.5 w-1.5 rounded-full" aria-hidden="true" />
-          Live operations
-        </span>
-      </div>
+    <div className="af-page">
+      <PageHeader
+        title="Overview"
+        subtitle="What is waiting on someone right now, and how the last 30 days have gone."
+        meta={
+          <MetaFact tone="good" dot>
+            Live operations
+          </MetaFact>
+        }
+      />
 
       {nothingToShow && (
-        <Card>
-          <CardBody>
-            <p className="text-text-body text-sm">
-              Your account has no permissions that show anything here yet. Ask a super admin to
-              grant the areas you work in.
-            </p>
-          </CardBody>
-        </Card>
+        <AfCard>
+          <p className="af-body">
+            Your account has no permissions that show anything here yet. Ask a super admin to grant
+            the areas you work in.
+          </p>
+        </AfCard>
       )}
 
       {(canOrders || canTickets || canMoney) && (
-        <>
+        <section className="db-section">
           <SectionHead
-            index="SECTION 01"
             title="Operations attention queue"
             icon={<AlertTriangle size={14} />}
             iconTone="warn"
@@ -400,7 +370,7 @@ export function DashboardView(): ReactElement {
                 : `${needingAttention} ${needingAttention === 1 ? 'queue needs' : 'queues need'} staff attention`
             }
           />
-          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+          <div className="db-attn-grid">
             {canOrders && (
               <>
                 <AttentionCard
@@ -478,27 +448,26 @@ export function DashboardView(): ReactElement {
               />
             )}
           </div>
-        </>
+        </section>
       )}
 
       {canReports && (
-        <>
+        <section className="db-section">
           <SectionHead
-            index="SECTION 02"
             title="Performance & fulfilment (last 30 days)"
             icon={<TrendingUp size={14} />}
             iconTone="good"
             note={
-              <span className="flex flex-wrap items-center gap-3">
+              <span className="db-legend">
                 {(
                   [
-                    ['bg-accent-fill', 'Confirmed'],
-                    ['bg-status-delivered-fg', 'Delivered'],
-                    ['bg-status-failed-fg', 'Returned'],
+                    ['accent', 'Confirmed'],
+                    ['good', 'Delivered'],
+                    ['bad', 'Returned'],
                   ] as ReadonlyArray<[string, string]>
                 ).map(([dot, name]) => (
-                  <span key={name} className="flex items-center gap-1.5">
-                    <span className={`h-2 w-2 rounded-full ${dot}`} aria-hidden="true" />
+                  <span key={name} className="db-legend__item">
+                    <span className="db-legend__dot" data-tone={dot} aria-hidden="true" />
                     {name}
                   </span>
                 ))}
@@ -511,10 +480,10 @@ export function DashboardView(): ReactElement {
               retry={() => void summary.refetch()}
             />
           ) : (
-            <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
+            <div className="db-metric-grid">
               <MetricCard
                 label="Orders created"
-                value={summary.data?.orders.created.toLocaleString('en-IN') ?? '—'}
+                count={summary.data?.orders.created}
                 hint="Total pipeline orders."
                 loading={summary.isLoading}
               />
@@ -567,7 +536,7 @@ export function DashboardView(): ReactElement {
               />
               <MetricCard
                 label="Dispatched"
-                value={summary.data?.shipments.dispatched.toLocaleString('en-IN') ?? '—'}
+                count={summary.data?.shipments.dispatched}
                 hint="Parcels handed to a courier."
                 chip="In transit"
                 chipTone="info"
@@ -576,22 +545,21 @@ export function DashboardView(): ReactElement {
               />
             </div>
           )}
-        </>
+        </section>
       )}
 
       {canReports && canMoney && (
-        <>
+        <section className="db-section">
           <SectionHead
-            index="SECTION 03"
             title="Financial treasury & settlements"
             icon={<Landmark size={14} />}
             note={
-              <Link href="/treasury" className="text-accent font-medium">
+              <Link href="/treasury" className="af-link">
                 Complete ledger →
               </Link>
             }
           />
-          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="db-money-grid">
             <MoneyCard
               label="COD collected"
               amount={summary.data?.wallet.codCollected}
@@ -627,7 +595,7 @@ export function DashboardView(): ReactElement {
               iconTone="accent"
               footLeft="Wallet liability"
               footRight={
-                <Link href="/what-we-owe" className="text-accent font-medium">
+                <Link href="/what-we-owe" className="af-link">
                   View ledger →
                 </Link>
               }
@@ -635,11 +603,11 @@ export function DashboardView(): ReactElement {
               emphasis
             />
           </div>
-        </>
+        </section>
       )}
 
-      <div className="text-text-faint mt-8 flex items-center gap-1.5 text-xs">
-        <Activity size={12} />
+      <div className="db-foot">
+        <Activity size={12} aria-hidden />
         Figures cover the last 30 days and refresh when you reload.
       </div>
     </div>

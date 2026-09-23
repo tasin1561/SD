@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  MessageRelayStatus,
-  SkeletonRows,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Send } from 'lucide-react';
+// The legacy `useToast` stays: the conversation test mounts this under the
+// legacy Toaster only. `MessageRelayStatus` has no app equivalent.
+import { MessageRelayStatus, useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { PaperPlaneSendButton } from '@skydrop/ui/app/paper-plane-send';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import {
   useCourierThread,
   useCourierThreadForTicket,
@@ -18,6 +19,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import '@/app/(authed)/system/_components/af.css';
 
 type Side = 'SELLER' | 'US' | 'COURIER';
 
@@ -150,40 +152,47 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     })();
   };
 
-  const send = (): void => {
+  /*
+    Returns the real request, so the send button's paper plane flies only
+    after the reply has actually been saved; a refusal rejects, the plane
+    stays put, and the server's verdict is toasted verbatim.
+  */
+  const send = async (): Promise<void> => {
     const note = draft.trim();
     if (note === '') return;
-    void (async () => {
-      try {
-        await reply.mutateAsync({ ticketId: ticket.id, note });
-        setDraft('');
-        toast.success('Sent — the seller can see it');
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      }
-    })();
+    try {
+      await reply.mutateAsync({ ticketId: ticket.id, note });
+      setDraft('');
+      toast.success('Sent — the seller can see it');
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      throw err;
+    }
   };
 
-  if (events.isLoading) return <SkeletonRows rows={3} cols={1} />;
+  if (events.isLoading) return <SkeletonRows rows={3} cols={1} label="Loading the conversation" />;
 
   return (
     <>
       {bubbles.length === 0 ? (
-        <p className="text-text-muted text-sm">Nothing said yet.</p>
+        <p className="af-muted">Nothing said yet.</p>
       ) : (
-        <ol className="space-y-3">
+        <ol className="af-thread">
           {bubbles.map((b) => {
             /*
               The SELLER sits on the right, here and on their own ticket
               page. Everything used to be left-aligned, so two voices in
               one thread were told apart only by a small grey label —
               which is not how anybody reads a conversation.
-              
+
               Right for the seller rather than for US, deliberately: the
               seller app already puts their words on the right, so the
               thread has the same shape whichever side you read it from.
               A thread that mirrors depending on who is logged in is one
               nobody can screenshot and discuss.
+
+              `justify-end` / `justify-start` stay on the row: the
+              conversation test reads them.
             */
             const sellerSide = b.side === 'SELLER';
             // Hoisted so the closure below keeps the narrowing — a
@@ -191,14 +200,16 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
             // rendering the button.
             const eventId = b.eventId;
             return (
-              <li key={b.key} className={sellerSide ? 'flex justify-end' : 'flex justify-start'}>
-                <div className="max-w-[85%]">
-                  <p
-                    className={[
-                      'text-text-muted mb-1 text-xs',
-                      sellerSide ? 'text-right' : 'text-left',
-                    ].join(' ')}
-                  >
+              <li
+                key={b.key}
+                className={
+                  sellerSide
+                    ? 'af-thread__row flex justify-end'
+                    : 'af-thread__row flex justify-start'
+                }
+              >
+                <div className="af-bubble" data-side={b.side}>
+                  <p className="af-bubble__who">
                     {b.who} ·{' '}
                     {new Date(b.at).toLocaleString('en-IN', {
                       day: 'numeric',
@@ -207,19 +218,9 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
                       minute: '2-digit',
                     })}
                   </p>
-                  <div
-                    className={
-                      sellerSide
-                        ? 'bg-accent/10 border-accent/30 rounded-lg rounded-tr-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                        : b.side === 'COURIER'
-                          ? 'bg-warning/10 border-warning/30 rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                          : 'bg-surface-raised border-border rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                    }
-                  >
-                    {b.body}
-                  </div>
+                  <div className="af-bubble__text">{b.body}</div>
                   {b.relayedAt === undefined ? null : (
-                    <div className="mt-1 flex items-center justify-end gap-2">
+                    <div className="af-bubble__relay">
                       <MessageRelayStatus relayedAt={b.relayedAt} />
                       {b.relayedAt === null && canReply && eventId !== undefined ? (
                         <Button
@@ -241,23 +242,28 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
       )}
 
       {ticket.resolvedAt === null && canReply ? (
-        <div className="border-border mt-4 border-t pt-3">
-          <Textarea
+        <div className="af-reply">
+          <TextArea
+            label="Reply to the seller"
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Reply to the seller — they read this on their own ticket."
-            aria-label="Reply to the seller"
+            // Display only: the server's limit on a note (AddTicketNoteDto,
+            // 2000), shown so a long reply is not a surprise — never enforced.
+            countMax={2000}
           />
-          <div className="mt-2 flex justify-end">
-            <Button
-              variant="primary"
+          <div className="af-row af-row--end">
+            <PaperPlaneSendButton
+              label="Reply to seller"
+              busyLabel="Sending…"
+              doneLabel="Sent"
+              errorLabel="Not sent"
               size="sm"
+              icon={<Send size={14} />}
               disabled={draft.trim() === '' || reply.isPending}
-              onClick={send}
-            >
-              {reply.isPending ? 'Sending…' : 'Reply to seller'}
-            </Button>
+              onAction={send}
+            />
           </div>
         </div>
       ) : null}

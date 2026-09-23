@@ -1,18 +1,13 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  useToast,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { useToast } from '@skydrop/ui/app/toast';
+import { AfCard, AfSection } from '@/app/(authed)/system/_components/af-parts';
+import './delhivery.css';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import {
@@ -163,42 +158,43 @@ export function AccountSetupPanel(): ReactElement | null {
   const result = probe.data;
 
   return (
-    <Card className="mt-4">
-      <CardHeader
-        title="Account setup"
-        subtitle="What has to be true before a real parcel can move. Neither of these creates a shipment."
-      />
-      <CardBody>
-        {error !== null && <ErrorNote message={error} />}
+    <AfSection
+      title="Account setup"
+      note="What has to be true before a real parcel can move. Neither of these creates a shipment."
+    >
+      {error !== null && !open && <ErrorState title="Refused" message={error} />}
 
-        <div className="border-border mb-4 rounded-md border p-3">
-          <div className="mb-2 text-sm font-medium">Reachability</div>
-          <p className="text-text-muted mb-3 text-sm">
+      <div className="af-grid-2">
+        <AfCard>
+          <h3 className="af-card__title">Reachability</h3>
+          <p className="af-muted">
             One live serviceability lookup using the stored credential. Creates nothing. In stub
             mode it reports that it did not reach anything — a cached answer would look exactly like
             proof.
           </p>
-          <div className="flex flex-wrap items-end gap-2">
-            <FormField label="Pincode" hint="Blank uses our own dispatch origin.">
-              <Input
+          <div className="af-row af-row--bottom">
+            <div className="af-grow">
+              <TextField
+                label="Pincode"
+                hint="Blank uses our own dispatch origin."
                 inputMode="numeric"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 placeholder="110001"
               />
-            </FormField>
+            </div>
             <Button
               variant="secondary"
               size="md"
-              disabled={probe.isPending}
+              loading={probe.isPending}
               onClick={() => void onProbe()}
             >
-              {probe.isPending ? 'Checking…' : 'Check connection'}
+              Check connection
             </Button>
           </div>
 
           {result !== undefined && (
-            <div className="text-text-muted mt-3 text-sm">
+            <div className="af-body">
               {result.stubMode ? (
                 <span>
                   Stub mode: the call never left the box. This says nothing about the real account.
@@ -213,24 +209,22 @@ export function AccountSetupPanel(): ReactElement | null {
                   .
                 </span>
               ) : (
-                <span className="text-critical">
-                  {result.error ?? 'Did not reach the live API.'}
-                </span>
+                <span className="af-bad">{result.error ?? 'Did not reach the live API.'}</span>
               )}
             </div>
           )}
-        </div>
+        </AfCard>
 
-        <div className="border-border rounded-md border p-3">
-          <div className="mb-2 text-sm font-medium">Pickup location</div>
-          <p className="text-text-muted mb-3 text-sm">
+        <AfCard>
+          <h3 className="af-card__title">Pickup location</h3>
+          <p className="af-muted">
             Every shipment sends this warehouse&apos;s name and Delhivery matches it exactly — case
             and spaces included. A warehouse that is not registered, or whose name differs by one
             character, fails every AWB. Delhivery offers no way to list what is already registered,
             so this cannot show you; the audit log is the record.
           </p>
           {mayRegister ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="af-row">
               <Button variant="primary" size="md" onClick={() => openFor('REGISTER')}>
                 Register a warehouse
               </Button>
@@ -239,126 +233,128 @@ export function AccountSetupPanel(): ReactElement | null {
               </Button>
             </div>
           ) : (
-            <p className="text-text-faint text-sm">
-              Registering needs the courier-accounts permission.
-            </p>
+            <p className="af-faint">Registering needs the courier-accounts permission.</p>
           )}
-        </div>
-      </CardBody>
+        </AfCard>
+      </div>
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next) setOpen(false);
         }}
+        size="lg"
+        tone={mode === 'REGISTER' ? 'critical' : 'default'}
         title={mode === 'REGISTER' ? 'Register a pickup location' : 'Update a pickup location'}
-      >
-        <p className="text-text-muted mb-3 text-sm">
-          {mode === 'REGISTER'
+        description={
+          mode === 'REGISTER'
             ? 'The name cannot be changed afterwards, and it is what every shipment is matched on. Everything else can be corrected later.'
-            : 'The name identifies which location to change, so it must match what was registered exactly. Everything else here replaces what is stored.'}
-        </p>
-
-        <div className="space-y-3">
-          <FormField
+            : 'The name identifies which location to change, so it must match what was registered exactly. Everything else here replaces what is stored.'
+        }
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant={mode === 'REGISTER' ? 'destructive' : 'primary'}
+              size="md"
+              loading={register.isPending || update.isPending}
+              disabled={!complete || register.isPending || update.isPending}
+              onClick={() => void onSubmit()}
+            >
+              {mode === 'REGISTER' ? 'Register permanently' : 'Update'}
+            </Button>
+          </DialogFooter>
+        }
+      >
+        <div className="af-form">
+          {error !== null && <ErrorState title="Refused" message={error} />}
+          <TextField
             label="Warehouse name"
-            required
+            requiredMark
             hint="Exactly as it will be sent on every shipment."
             error={
               nameHasEdgeSpace
                 ? 'This has a leading or trailing space. Delhivery would treat it as a different name — and it cannot be corrected.'
                 : undefined
             }
-          >
-            <Input value={form.name} onChange={(e) => set('name', e.target.value)} />
-          </FormField>
+            value={form.name}
+            onChange={(e) => set('name', e.target.value)}
+          />
 
           {mode === 'REGISTER' && (
-            <FormField
+            <TextField
               label="Type the name again"
-              required
+              requiredMark
               hint="It is the one field nobody can fix later."
-            >
-              <Input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} />
-            </FormField>
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+            />
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Phone" required>
-              <Input value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-            </FormField>
-            <FormField label="Pincode" required hint="Six digits.">
-              <Input
-                inputMode="numeric"
-                value={form.pin}
-                onChange={(e) => set('pin', e.target.value)}
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Address">
-            <Input value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="City">
-              <Input value={form.city ?? ''} onChange={(e) => set('city', e.target.value)} />
-            </FormField>
-            <FormField label="Email">
-              <Input value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} />
-            </FormField>
-          </div>
-
-          <FormField
-            label="Return address"
-            required
-            hint="Where undelivered parcels come back to. May be the same address."
-          >
-            <Input
-              value={form.returnAddress}
-              onChange={(e) => set('returnAddress', e.target.value)}
+          <div className="af-grid-2">
+            <TextField
+              label="Phone"
+              requiredMark
+              value={form.phone}
+              onChange={(e) => set('phone', e.target.value)}
             />
-          </FormField>
-          <div className="grid grid-cols-3 gap-3">
-            <FormField label="Return city">
-              <Input
-                value={form.returnCity ?? ''}
-                onChange={(e) => set('returnCity', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Return pincode">
-              <Input
-                inputMode="numeric"
-                value={form.returnPin ?? ''}
-                onChange={(e) => set('returnPin', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Return state">
-              <Input
-                value={form.returnState ?? ''}
-                onChange={(e) => set('returnState', e.target.value)}
-              />
-            </FormField>
+            <TextField
+              label="Pincode"
+              requiredMark
+              hint="Six digits."
+              inputMode="numeric"
+              value={form.pin}
+              onChange={(e) => set('pin', e.target.value)}
+            />
+          </div>
+
+          <TextField
+            label="Address"
+            value={form.address ?? ''}
+            onChange={(e) => set('address', e.target.value)}
+          />
+          <div className="af-grid-2">
+            <TextField
+              label="City"
+              value={form.city ?? ''}
+              onChange={(e) => set('city', e.target.value)}
+            />
+            <TextField
+              label="Email"
+              value={form.email ?? ''}
+              onChange={(e) => set('email', e.target.value)}
+            />
+          </div>
+
+          <TextField
+            label="Return address"
+            requiredMark
+            hint="Where undelivered parcels come back to. May be the same address."
+            value={form.returnAddress}
+            onChange={(e) => set('returnAddress', e.target.value)}
+          />
+          <div className="af-grid-3">
+            <TextField
+              label="Return city"
+              value={form.returnCity ?? ''}
+              onChange={(e) => set('returnCity', e.target.value)}
+            />
+            <TextField
+              label="Return pincode"
+              inputMode="numeric"
+              value={form.returnPin ?? ''}
+              onChange={(e) => set('returnPin', e.target.value)}
+            />
+            <TextField
+              label="Return state"
+              value={form.returnState ?? ''}
+              onChange={(e) => set('returnState', e.target.value)}
+            />
           </div>
         </div>
-
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={!complete || register.isPending || update.isPending}
-            onClick={() => void onSubmit()}
-          >
-            {register.isPending || update.isPending
-              ? 'Sending…'
-              : mode === 'REGISTER'
-                ? 'Register permanently'
-                : 'Update'}
-          </Button>
-        </ModalFooter>
-      </Modal>
-    </Card>
+      </Dialog>
+    </AfSection>
   );
 }

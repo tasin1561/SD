@@ -1,27 +1,18 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, ChevronRight, PauseCircle, RefreshCw } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  Section,
-  Stat,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TableEmpty, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useRunWalletSync,
   useWalletSyncPanel,
@@ -31,7 +22,9 @@ import {
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AfCard, AfSection } from '@/app/(authed)/system/_components/af-parts';
 import { ShiprocketCostSection } from './shiprocket-cost-section';
+import './cost-sync.css';
 
 /**
  * Is the nightly courier-cost sync actually working?
@@ -82,68 +75,74 @@ function runLabel(run: WalletSyncRun): string {
   return run.wrote ? 'Worked' : 'Worked (dry run)';
 }
 
+/** The legacy Stat tones, mapped onto the KPI card's. */
+const STAT_TONE: Record<'good' | 'warn' | 'bad' | 'neutral', KpiTone> = {
+  good: 'credit',
+  warn: 'pending',
+  bad: 'debit',
+  neutral: 'neutral',
+};
+
 /** The last run, in full — the one somebody actually reads. */
 function LastRun({ run }: { readonly run: WalletSyncRun }): ReactElement {
   return (
-    <Card className="mb-4">
-      <CardBody>
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <StatusBadge kind={runTone(run)} label={runLabel(run)} />
-          <span className="text-sm">{fmtWhen(run.at)}</span>
-          {!run.wrote && run.skipped === null && (
-            // Worth its own line: a dry run reads the real file and
-            // records nothing, so "it worked" and "the costs moved" are
-            // different statements.
-            <span className="text-text-muted text-xs">
-              Writes are off — it parsed the real file and changed nothing.
-            </span>
-          )}
-        </div>
-
-        {run.accounts.length === 0 ? (
-          <p className="text-text-muted text-sm">
-            {run.skipped === 'DISABLED'
-              ? 'The sync is switched off, so it did nothing. No courier costs are being recorded.'
-              : 'No courier accounts were eligible, so there was nothing to read.'}
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {run.accounts.map((a) => (
-              <AccountResult key={a.courierAccountId || a.label} account={a} />
-            ))}
-          </div>
+    <AfCard>
+      <div className="af-row">
+        <StatusChip kind={runTone(run)} label={runLabel(run)} />
+        <span className="af-body">{fmtWhen(run.at)}</span>
+        {!run.wrote && run.skipped === null && (
+          // Worth its own line: a dry run reads the real file and
+          // records nothing, so "it worked" and "the costs moved" are
+          // different statements.
+          <span className="af-small">
+            Writes are off — it parsed the real file and changed nothing.
+          </span>
         )}
-      </CardBody>
-    </Card>
+      </div>
+
+      {run.accounts.length === 0 ? (
+        <p className="af-muted">
+          {run.skipped === 'DISABLED'
+            ? 'The sync is switched off, so it did nothing. No courier costs are being recorded.'
+            : 'No courier accounts were eligible, so there was nothing to read.'}
+        </p>
+      ) : (
+        <div className="af-stack">
+          {run.accounts.map((a) => (
+            <AccountResult key={a.courierAccountId || a.label} account={a} />
+          ))}
+        </div>
+      )}
+    </AfCard>
   );
 }
 
 function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount }): ReactElement {
   if (a.error !== null) {
     return (
-      <div className="border-status-failed/40 rounded-md border p-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <AlertTriangle size={14} className="text-status-failed" />
+      <div className="af-inner" data-tone="bad">
+        <p className="af-title cs-with-icon">
+          <AlertTriangle size={14} aria-hidden className="af-bad" />
           {a.label}
-        </div>
+        </p>
         {/* The courier's own words, verbatim — a paraphrase loses the
             only part that says what to check. */}
-        <p className="text-text-muted mt-1 text-xs">{a.error}</p>
+        <p className="af-small">{a.error}</p>
       </div>
     );
   }
 
   const matched = (a.awbsInFile ?? 0) - (a.unknownAwbs ?? 0);
   return (
-    <div className="border-border rounded-md border p-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-sm font-medium">{a.label}</span>
-        <span className="text-text-muted text-xs">
+    <div className="af-inner">
+      <div className="af-row af-row--between">
+        <span className="af-title">{a.label}</span>
+        <span className="af-small">
           {fmtDay(a.periodFrom)} → {fmtDay(a.periodTo)}
           {a.coveredDays !== null && ` · ${a.coveredDays} days`}
         </span>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+      <div className="cs-facts">
         <Fact label="Rows read" value={a.rowsRead === null ? '—' : String(a.rowsRead)} />
         <Fact
           label="Our parcels"
@@ -160,29 +159,33 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
         // somebody reads first — sending them to a table row to find out
         // what the run they are looking at actually did would be a
         // strange piece of hide-and-seek.
-        <div className="border-border mt-2 border-t pt-2">
+        <div className="af-divider">
           <WrittenParcels writes={a.writes} truncated={a.writesTruncated} />
         </div>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+      <div className="af-row">
         {a.sumInr !== null && (
-          <span className="text-text-muted">
+          <span className="af-small">
             Export total <Money amount={a.sumInr} />
           </span>
         )}
         {a.totalsAgree === false && (
           // Their file disagreeing with itself is a real signal about
           // the export, not about us.
-          <StatusBadge kind="failed" label="Their stated total does not match the rows" />
+          <StatusChip size="sm" kind="failed" label="Their stated total does not match the rows" />
         )}
         {a.rangeApplied === false && (
-          <StatusBadge kind="pending" label="Date filter was not applied" />
+          <StatusChip size="sm" kind="pending" label="Date filter was not applied" />
         )}
         {a.txnsMissing > 0 && (
           // Their ledger dropped transactions we held for dates this file
           // covers. Not a parse problem — a history change, and a system
           // issue says which ones.
-          <StatusBadge kind="failed" label={`${a.txnsMissing} vanished from their ledger`} />
+          <StatusChip
+            size="sm"
+            kind="failed"
+            label={`${a.txnsMissing} vanished from their ledger`}
+          />
         )}
       </div>
     </div>
@@ -191,9 +194,9 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
 
 function Fact({ label, value }: { readonly label: string; readonly value: string }): ReactElement {
   return (
-    <div>
-      <div className="text-text-muted">{label}</div>
-      <div className="tabular-nums">{value}</div>
+    <div className="af-mini">
+      <span className="af-mini__label">{label}</span>
+      <span className="af-mini__value sk-figure">{value}</span>
     </div>
   );
 }
@@ -227,26 +230,26 @@ function HistoryRow({ run }: { readonly run: WalletSyncRun }): ReactElement {
   return (
     <>
       <Tr>
-        <Td>{fmtWhen(run.at)}</Td>
         <Td>
-          <StatusBadge kind={runTone(run)} label={runLabel(run)} />
+          <span className="af-nowrap">{fmtWhen(run.at)}</span>
         </Td>
-        <Td className="tabular-nums">{run.windowDays === null ? '—' : `${run.windowDays}d`}</Td>
+        <Td>
+          <StatusChip size="sm" kind={runTone(run)} label={runLabel(run)} />
+        </Td>
+        <Td>
+          <span className="sk-figure">{run.windowDays === null ? '—' : `${run.windowDays}d`}</span>
+        </Td>
         <Td>
           {written === 0 ? (
-            <span className="tabular-nums">0</span>
+            <span className="sk-figure">0</span>
           ) : (
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
               aria-expanded={open}
-              className="hover:text-accent inline-flex items-center gap-1 tabular-nums"
+              className="af-disclose sk-figure"
             >
-              <ChevronRight
-                size={13}
-                className={open ? 'rotate-90 transition-transform' : 'transition-transform'}
-                aria-hidden
-              />
+              <ChevronRight size={13} className="af-disclose__chev" aria-hidden />
               {written}
             </button>
           )}
@@ -257,7 +260,7 @@ function HistoryRow({ run }: { readonly run: WalletSyncRun }): ReactElement {
         <Tr>
           <Td colSpan={5}>
             {detailUnavailable ? (
-              <p className="text-text-muted py-1 text-xs">
+              <p className="af-small">
                 This run predates us recording which parcels were written, so only the count is
                 known. Runs from here on list them.
               </p>
@@ -279,40 +282,36 @@ function WrittenParcels({
   readonly truncated: number;
 }): ReactElement {
   return (
-    <div className="py-1">
-      <div className="flex flex-col gap-1">
+    <div className="af-stack af-stack--tight">
+      <ul className="af-list">
         {writes.map((w) => (
-          <div
-            key={`${w.leg}:${w.awbNumber}`}
-            className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs"
-          >
+          <li key={`${w.leg}:${w.awbNumber}`} className="cs-write">
             {/* The order number first — it is what somebody recognises.
                 The AWB is what the courier charged against, so both are
                 here and the AWB is the one that pastes into search. */}
-            <span className="font-medium">{w.orderNumber ?? 'No order linked'}</span>
-            <span className="text-text-muted tabular-nums">{w.awbNumber}</span>
-            <span className="tabular-nums">
+            <span className="af-strong sk-ident">{w.orderNumber ?? 'No order linked'}</span>
+            <span className="af-small sk-ident">{w.awbNumber}</span>
+            <span className="sk-figure">
               <Money amount={w.amountInr} />
             </span>
-            {w.leg === 'rto' && <StatusBadge kind="rto" label="return leg" />}
+            {w.leg === 'rto' && <StatusChip size="sm" kind="rto" label="return leg" />}
             {w.revised && (
               // A figure that MOVED is the normal case on a later export
               // and a different fact from a first reading — worth telling
               // apart when a margin changes under somebody. The previous
               // figure is shown because "revised" alone does not say by
               // how much, or in which direction.
-              <StatusBadge
+              <StatusChip
+                size="sm"
                 kind="pending"
                 label={w.previousInr === null ? 'revised' : `was ₹${w.previousInr}`}
               />
             )}
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
       {truncated > 0 && (
-        <p className="text-text-muted mt-1.5 text-xs">
-          …and {truncated} more, not listed. The count above is exact.
-        </p>
+        <p className="af-small">…and {truncated} more, not listed. The count above is exact.</p>
       )}
     </div>
   );
@@ -324,38 +323,43 @@ export function CostSyncIndex(): ReactElement {
   const canRun = usePermission('courier.accounts.manage');
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  // A run is a real browser session against a courier login, so the
+  // button asks first. Confirm sends the same request as before.
+  const [confirming, setConfirming] = useState(false);
 
-  const go = (): void => {
+  const go = async (): Promise<void> => {
     setBusy(true);
-    void (async () => {
-      try {
-        await run.mutateAsync();
-        // QUEUED, not finished. The work happens in the portal worker
-        // and takes a minute or two; saying "finished" here would be a
-        // straightforward lie, and the person would refresh, see the
-        // old run, and conclude the button was broken.
-        toast.success('Queued. It runs in the portal worker — refresh in a minute or two.');
-      } catch (err) {
-        // FE-2: the server's verdict verbatim.
-        toast.error(serverVerdict(err));
-      } finally {
-        setBusy(false);
-      }
-    })();
+    try {
+      await run.mutateAsync();
+      // QUEUED, not finished. The work happens in the portal worker
+      // and takes a minute or two; saying "finished" here would be a
+      // straightforward lie, and the person would refresh, see the
+      // old run, and conclude the button was broken.
+      toast.success('Queued. It runs in the portal worker — refresh in a minute or two.');
+    } catch (err) {
+      // FE-2: the server's verdict verbatim.
+      toast.error(serverVerdict(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const d = panel.data;
   const forwardGap = d === undefined ? 0 : d.cost.dispatched - d.cost.withForwardCost;
 
   return (
-    <Section>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Network' }, { label: 'Courier cost sync' }]}
+        Link={Link}
         title="Courier cost sync"
         subtitle="Every night we sign in to the courier’s portal, download their wallet export and record what each parcel actually cost us. Without it every margin figure is a guess — and the way this fails is silence, so this page exists to be looked at."
       />
 
       {panel.isLoading ? (
-        <LoadingState label="Loading the sync…" />
+        <AfCard flush>
+          <SkeletonRows rows={4} cols={4} label="Loading the sync…" />
+        </AfCard>
       ) : panel.isError || d === undefined ? (
         <ErrorState
           message={panel.error?.message ?? 'Could not load the sync.'}
@@ -363,105 +367,111 @@ export function CostSyncIndex(): ReactElement {
         />
       ) : (
         <>
-          <Card className="mb-4">
-            <CardBody>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-text-strong flex items-center gap-2 text-sm font-medium">
-                    {d.enabled ? (
-                      <CheckCircle2 size={15} className="text-status-delivered" />
-                    ) : (
-                      <PauseCircle size={15} className="text-status-failed" />
-                    )}
-                    {d.enabled
-                      ? d.writesEnabled
-                        ? 'On — reading and recording costs'
-                        : 'On, but not recording — it reads the file and writes nothing'
-                      : 'Switched off — no courier costs are being recorded at all'}
-                  </p>
-                  <p className="text-text-muted mt-0.5 text-xs">
-                    {d.schedule} · asks for the last {d.windowDays} days each time
-                  </p>
-                </div>
-                {canRun && (
-                  <Button variant="secondary" size="sm" disabled={busy} onClick={go}>
-                    <RefreshCw size={14} className={busy ? 'animate-spin' : undefined} />
-                    {busy ? 'Running…' : 'Run it now'}
-                  </Button>
-                )}
+          <AfCard tone={d.enabled ? undefined : 'critical'}>
+            <div className="af-card__head">
+              <div className="af-grow af-stack af-stack--tight">
+                <p className="af-title cs-with-icon">
+                  {d.enabled ? (
+                    <CheckCircle2 size={15} aria-hidden className="af-good" />
+                  ) : (
+                    <PauseCircle size={15} aria-hidden className="af-bad" />
+                  )}
+                  {d.enabled
+                    ? d.writesEnabled
+                      ? 'On — reading and recording costs'
+                      : 'On, but not recording — it reads the file and writes nothing'
+                    : 'Switched off — no courier costs are being recorded at all'}
+                </p>
+                <p className="af-small">
+                  {d.schedule} · asks for the last {d.windowDays} days each time
+                </p>
               </div>
               {canRun && (
-                <p className="text-text-muted mt-2 text-xs">
-                  This queues the job for the portal worker, which is the process that owns the
-                  browser — so the run starts in the background and takes a minute or two. Running
-                  it twice is harmless: the second import sees the same figures and records them as
-                  unchanged.
-                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<RefreshCw size={14} />}
+                  loading={busy}
+                  onClick={() => setConfirming(true)}
+                >
+                  Run it now
+                </Button>
               )}
-            </CardBody>
-          </Card>
+            </div>
+            {canRun && (
+              <p className="af-small">
+                This queues the job for the portal worker, which is the process that owns the
+                browser — so the run starts in the background and takes a minute or two. Running it
+                twice is harmless: the second import sees the same figures and records them as
+                unchanged.
+              </p>
+            )}
+          </AfCard>
 
-          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat
+          <div className="af-kpis">
+            <KpiCard
               label="Parcels with a real cost"
-              value={`${d.cost.withForwardCost} / ${d.cost.dispatched}`}
-              tone={forwardGap === 0 ? 'good' : forwardGap > d.cost.dispatched / 2 ? 'bad' : 'warn'}
+              figure={`${d.cost.withForwardCost} / ${d.cost.dispatched}`}
+              tone={
+                STAT_TONE[
+                  forwardGap === 0 ? 'good' : forwardGap > d.cost.dispatched / 2 ? 'bad' : 'warn'
+                ]
+              }
               // TRE-6: a missing cost is UNCOVERED, never zero. Zero
               // would report the whole of that revenue as profit.
               hint="Dispatched parcels whose courier charge we have actually read. The rest are uncovered — their margin is unknown, not zero."
             />
-            <Stat
+            <KpiCard
               label="Returns with a real cost"
-              value={`${d.cost.withRtoCost} / ${d.cost.returned}`}
+              figure={`${d.cost.withRtoCost} / ${d.cost.returned}`}
               tone={
-                d.cost.returned === 0 || d.cost.withRtoCost === d.cost.returned ? 'good' : 'warn'
+                STAT_TONE[
+                  d.cost.returned === 0 || d.cost.withRtoCost === d.cost.returned ? 'good' : 'warn'
+                ]
               }
               hint="Returns are billed separately from the delivery leg, so they are counted separately."
             />
-            <Stat
+            <KpiCard
               label="Forward cost recorded"
-              value={<Money amount={d.cost.forwardTotalInr} />}
+              figure={<Money amount={d.cost.forwardTotalInr} />}
               hint="The sum of what the courier actually charged us to deliver."
             />
-            <Stat
+            <KpiCard
               label="Return cost recorded"
-              value={<Money amount={d.cost.rtoTotalInr} />}
+              figure={<Money amount={d.cost.rtoTotalInr} />}
               hint="The sum of what the courier actually charged us to bring parcels back."
             />
           </div>
 
           {d.last !== null && <LastRun run={d.last} />}
 
-          <Card>
-            <CardBody>
-              <h2 className="mb-3 text-sm font-medium">Recent runs</h2>
-              <Table>
-                <THead>
-                  <Tr>
-                    <Th>When</Th>
-                    <Th>Result</Th>
-                    <Th>Window</Th>
-                    <Th>Costs written</Th>
-                    <Th>Export total</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {d.history.length === 0 ? (
-                    <TableEmpty colSpan={5}>
-                      <div className="flex flex-col items-center gap-1.5 py-2">
-                        <div className="font-medium">No runs recorded</div>
-                        <div className="text-text-muted text-xs">
-                          Either it has never run, or it has never finished far enough to say so.
-                        </div>
-                      </div>
-                    </TableEmpty>
-                  ) : (
-                    d.history.map((r) => <HistoryRow key={r.at} run={r} />)
-                  )}
-                </TBody>
-              </Table>
-            </CardBody>
-          </Card>
+          <AfSection title="Recent runs">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>When</Th>
+                  <Th>Result</Th>
+                  <Th>Window</Th>
+                  <Th>Costs written</Th>
+                  <Th>Export total</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {d.history.length === 0 ? (
+                  <TableEmpty colSpan={5}>
+                    <div className="af-stack af-stack--tight cs-empty">
+                      <span className="af-strong">No runs recorded</span>
+                      <span className="af-small">
+                        Either it has never run, or it has never finished far enough to say so.
+                      </span>
+                    </div>
+                  </TableEmpty>
+                ) : (
+                  d.history.map((r) => <HistoryRow key={r.at} run={r} />)
+                )}
+              </TBody>
+            </Table>
+          </AfSection>
         </>
       )}
 
@@ -469,6 +479,16 @@ export function CostSyncIndex(): ReactElement {
           from their API by a different job, and a Delhivery panel that
           fails to load must not hide it. */}
       <ShiprocketCostSection />
-    </Section>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Run the Delhivery cost sync now?"
+        entity="Delhivery wallet export"
+        consequence="The portal worker signs in to the courier's own website with our stored login and reads their wallet export; it takes a minute or two."
+        confirmLabel="Run it now"
+        onConfirm={go}
+      />
+    </div>
   );
 }

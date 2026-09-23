@@ -2,23 +2,16 @@
 
 import { useState, type ReactElement } from 'react';
 import { CheckCircle2, PauseCircle, RefreshCw } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Money,
-  Stat,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { Table, TableEmpty, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useRunShiprocketCost,
   useRunShiprocketInvoiceCheck,
@@ -34,6 +27,43 @@ import {
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AfCard } from '@/app/(authed)/system/_components/af-parts';
+import './cost-sync.css';
+
+/** The legacy Stat tones, mapped onto the KPI card's. */
+const STAT_TONE: Record<'good' | 'warn' | 'bad' | 'neutral', KpiTone> = {
+  good: 'credit',
+  warn: 'pending',
+  bad: 'debit',
+  neutral: 'neutral',
+};
+
+type RunKind = 'bills' | 'wallet' | 'probe' | 'invoices';
+
+/** What each browser-driven run is, restated in its confirm. */
+const BROWSER_RUNS: Record<
+  Exclude<RunKind, 'bills'>,
+  { title: string; entity: string; label: string; done: string }
+> = {
+  wallet: {
+    title: 'Run the Shiprocket wallet sync now?',
+    entity: 'Shiprocket passbook, recharges and ledger',
+    label: 'Run wallet sync now',
+    done: 'Queued. It signs in and reads about 70 pages — refresh in five minutes.',
+  },
+  invoices: {
+    title: 'Check Shiprocket invoices now?',
+    entity: 'Shiprocket freight and VAS invoices',
+    label: 'Check invoices now',
+    done: 'Queued. It signs in and opens each invoice — refresh in three minutes.',
+  },
+  probe: {
+    title: 'Check Shiprocket website access now?',
+    entity: 'Shiprocket website login',
+    label: 'Check website access',
+    done: 'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
+  },
+};
 
 function fmtWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', {
@@ -75,16 +105,14 @@ function invoiceRunLabel(run: ShiprocketInvoiceRunView): string {
 /** One invoice's verdict, in words. */
 function InvoiceResult({ r }: { readonly r: ShiprocketInvoiceRowView }): ReactElement {
   if (r.status === 'MATCHES') {
-    return <span className="text-status-delivered">Matches the wallet</span>;
+    return <span className="af-good">Matches the wallet</span>;
   }
   if (r.status === 'NOT_ITEMIZED') {
-    return <span className="text-text-muted">No itemized file to check</span>;
+    return <span className="af-small">No itemized file to check</span>;
   }
   if (r.status === 'UNREADABLE') {
     return (
-      <span className="text-status-failed">
-        Could not be read{r.problem !== null && ` — ${r.problem}`}
-      </span>
+      <span className="af-bad">Could not be read{r.problem !== null && ` — ${r.problem}`}</span>
     );
   }
   const parts: string[] = [];
@@ -93,7 +121,7 @@ function InvoiceResult({ r }: { readonly r: ShiprocketInvoiceRowView }): ReactEl
     parts.push(`${r.differenceCount} order(s) billed differently (net ₹${r.differenceInr})`);
   }
   if (r.unknownServices.length > 0) parts.push(`unknown service: ${r.unknownServices.join(', ')}`);
-  return <span className="text-status-failed">{parts.join(' · ')}</span>;
+  return <span className="af-bad">{parts.join(' · ')}</span>;
 }
 
 /** One account's invoices: a line each, then what no invoice has billed. */
@@ -102,13 +130,13 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
   const rows =
     res === null ? [] : [...res.rows].sort((x, y) => y.invoiceDate.localeCompare(x.invoiceDate));
   return (
-    <div className="mt-3 space-y-2 text-xs">
-      <div>
-        <span className="font-medium">{a.label}</span> ·{' '}
+    <div className="cs-account">
+      <div className="af-small">
+        <span className="af-strong">{a.label}</span> ·{' '}
         {a.outcome === 'CHECKED'
           ? `${a.invoicesRead} invoice(s) read`
           : (OUTCOME_WORDS[a.outcome] ?? a.outcome)}
-        {a.detail !== null && <span className="text-text-muted"> — {a.detail}</span>}
+        {a.detail !== null && <span> — {a.detail}</span>}
       </div>
       {res !== null && (
         <>
@@ -130,7 +158,7 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
                 rows.map((r) => (
                   <Tr key={r.invoiceId}>
                     <Td>
-                      <span className="font-mono">{r.invoiceId}</span>
+                      <span className="sk-ident">{r.invoiceId}</span>
                     </Td>
                     <Td>{r.serviceType}</Td>
                     <Td>{r.invoiceDate}</Td>
@@ -140,16 +168,16 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
                     <Td>
                       <InvoiceResult r={r} />
                       {r.beforeRecords > 0 && (
-                        <span className="text-text-muted block">
+                        <span className="af-small cs-block">
                           {r.beforeRecords} line(s) older than our records, not compared
                         </span>
                       )}
                     </Td>
                     <Td>
                       {r.status === 'DIFFERS' && r.disputeOpen ? (
-                        <span className="text-status-failed font-medium">{r.disputeBy}</span>
+                        <span className="af-bad af-strong">{r.disputeBy}</span>
                       ) : (
-                        <span className="text-text-muted">{r.disputeBy}</span>
+                        <span className="af-small">{r.disputeBy}</span>
                       )}
                     </Td>
                   </Tr>
@@ -157,7 +185,7 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
               )}
             </TBody>
           </Table>
-          <p className="text-text-muted">
+          <p className="af-small">
             VAS charged but never invoiced:{' '}
             {res.vasUninvoiced.count === 0 ? (
               'none'
@@ -194,13 +222,13 @@ function WalletAccountLine({ a }: { readonly a: ShiprocketWalletAccountView }): 
   const i = a.import;
   const written = i === null ? 0 : i.forwardWritten + i.rtoWritten;
   return (
-    <li className="space-y-0.5">
+    <li className="af-stack af-stack--tight af-small">
       <div>
-        <span className="font-medium">{a.label}</span> · {OUTCOME_WORDS[a.outcome] ?? a.outcome}
-        {a.detail !== null && <span className="text-text-muted"> — {a.detail}</span>}
+        <span className="af-strong">{a.label}</span> · {OUTCOME_WORDS[a.outcome] ?? a.outcome}
+        {a.detail !== null && <span> — {a.detail}</span>}
       </div>
       {a.outcome === 'READ' && i !== null && (
-        <div className="text-text-muted">
+        <div>
           {a.passbookRows.toLocaleString('en-IN')} movements read, balances add up ·{' '}
           {i.txnsNew.toLocaleString('en-IN')} new, {i.txnsAlreadyHeld.toLocaleString('en-IN')}{' '}
           already held · {i.dryRun ? 'would write' : 'wrote'} {written} parcel cost(s)
@@ -212,7 +240,7 @@ function WalletAccountLine({ a }: { readonly a: ShiprocketWalletAccountView }): 
         </div>
       )}
       {a.recharges !== null && (
-        <div className="text-text-muted">
+        <div>
           Recharges: {a.recharges.matched} of {a.recharges.seen} matched to our bank book
           {a.recharges.unrecorded > 0 && `, ${a.recharges.unrecorded} not in our books`}
           {a.recharges.amountMismatched > 0 &&
@@ -220,7 +248,7 @@ function WalletAccountLine({ a }: { readonly a: ShiprocketWalletAccountView }): 
         </div>
       )}
       {a.ledger !== null && (
-        <div className="text-text-muted">
+        <div>
           Ledger: {a.ledger.checked - a.ledger.uncovered.length} of {a.ledger.checked} credits found
           in the passbook
           {a.ledger.uncovered.length > 0 && ' — the rest are named on /system-issues'} ·{' '}
@@ -248,23 +276,27 @@ export function ShiprocketCostSection(): ReactElement {
   const invoices = useRunShiprocketInvoiceCheck();
   const canRun = usePermission('courier.accounts.manage');
   const toast = useToast();
-  const [busy, setBusy] = useState<'bills' | 'wallet' | 'probe' | 'invoices' | null>(null);
+  const [busy, setBusy] = useState<RunKind | null>(null);
+  // Wallet sync, invoice check and the website probe each sign in to the
+  // courier's own website with our stored login, so each asks first. The
+  // final-bill check reads their API and stays one click.
+  const [confirming, setConfirming] = useState<Exclude<RunKind, 'bills'> | null>(null);
 
-  const queue = (which: 'bills' | 'wallet' | 'probe' | 'invoices', done: string): void => {
+  const queue = async (which: RunKind, done: string): Promise<void> => {
     setBusy(which);
-    void (async () => {
-      try {
-        if (which === 'bills') await run.mutateAsync();
-        else if (which === 'wallet') await wallet.mutateAsync();
-        else if (which === 'invoices') await invoices.mutateAsync();
-        else await probe.mutateAsync();
-        toast.success(done);
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      } finally {
-        setBusy(null);
-      }
-    })();
+    try {
+      if (which === 'bills') await run.mutateAsync();
+      else if (which === 'wallet') await wallet.mutateAsync();
+      else if (which === 'invoices') await invoices.mutateAsync();
+      else await probe.mutateAsync();
+      toast.success(done);
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      // Rejects so a rolling-label button shows the refusal.
+      throw err;
+    } finally {
+      setBusy(null);
+    }
   };
 
   const d = panel.data;
@@ -276,11 +308,26 @@ export function ShiprocketCostSection(): ReactElement {
     d?.parcels.filter((p) => p.recordedForwardInr !== null || p.recordedRtoInr !== null).length ??
     0;
 
+  const runButton = (which: Exclude<RunKind, 'bills'>): ReactElement => (
+    <Button
+      variant="secondary"
+      size="sm"
+      icon={<RefreshCw size={14} />}
+      loading={busy === which}
+      disabled={busy !== null}
+      onClick={() => setConfirming(which)}
+    >
+      {BROWSER_RUNS[which].label}
+    </Button>
+  );
+
   return (
-    <div className="mt-8">
-      <h2 className="text-text-strong mb-3 text-base font-semibold">Shiprocket</h2>
+    <section className="af-section">
+      <SectionHeading title="Shiprocket" />
       {panel.isLoading ? (
-        <LoadingState label="Loading Shiprocket costs…" />
+        <AfCard flush>
+          <SkeletonRows rows={4} cols={4} label="Loading Shiprocket costs…" />
+        </AfCard>
       ) : panel.isError || d === undefined ? (
         <ErrorState
           message={panel.error?.message ?? 'Could not load Shiprocket costs.'}
@@ -288,123 +335,82 @@ export function ShiprocketCostSection(): ReactElement {
         />
       ) : (
         <>
-          <Card className="mb-4">
-            <CardBody>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-text-strong flex items-center gap-2 text-sm font-medium">
-                    {lastWallet !== null && lastWallet.ok && d.writesEnabled ? (
-                      <CheckCircle2 size={15} className="text-status-delivered" />
-                    ) : (
-                      <PauseCircle size={15} className="text-status-failed" />
-                    )}
-                    Wallet sync —{' '}
-                    {lastWallet === null ? 'has not run yet' : walletLabel(lastWallet)}
-                  </p>
-                  <p className="text-text-muted mt-0.5 text-xs">
-                    Every night at 03:50 IST · their Passbook, Recharge History and Ledger, read
-                    from app.shiprocket.in through Bangalore. Each movement is stored once and each
-                    parcel&rsquo;s cost netted from them, the way Delhivery&rsquo;s are.
-                    {!d.writesEnabled && ' Not recording: it reads and reports only.'}
-                  </p>
-                </div>
-                {canRun && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      queue(
-                        'wallet',
-                        'Queued. It signs in and reads about 70 pages — refresh in five minutes.',
-                      )
-                    }
-                  >
-                    <RefreshCw
-                      size={14}
-                      className={busy === 'wallet' ? 'animate-spin' : undefined}
-                    />
-                    {busy === 'wallet' ? 'Queuing…' : 'Run wallet sync now'}
-                  </Button>
-                )}
+          <AfCard>
+            <div className="af-card__head">
+              <div className="af-grow af-stack af-stack--tight">
+                <p className="af-title cs-with-icon">
+                  {lastWallet !== null && lastWallet.ok && d.writesEnabled ? (
+                    <CheckCircle2 size={15} aria-hidden className="af-good" />
+                  ) : (
+                    <PauseCircle size={15} aria-hidden className="af-bad" />
+                  )}
+                  Wallet sync — {lastWallet === null ? 'has not run yet' : walletLabel(lastWallet)}
+                </p>
+                <p className="af-small">
+                  Every night at 03:50 IST · their Passbook, Recharge History and Ledger, read from
+                  app.shiprocket.in through Bangalore. Each movement is stored once and each
+                  parcel&rsquo;s cost netted from them, the way Delhivery&rsquo;s are.
+                  {!d.writesEnabled && ' Not recording: it reads and reports only.'}
+                </p>
               </div>
-              {lastWallet !== null && (
-                <ul className="mt-3 space-y-2 text-xs">
-                  {lastWallet.accounts.map((a) => (
-                    <WalletAccountLine key={a.courierAccountId} a={a} />
-                  ))}
-                  <li className="text-text-muted">
-                    {lastWallet.trigger === 'MANUAL' ? 'Run by hand' : 'Nightly run'} ·{' '}
-                    {fmtWhen(lastWallet.at)}
-                    {lastWallet.windowDays !== null && ` · last ${lastWallet.windowDays} days`}
-                  </li>
-                </ul>
-              )}
-            </CardBody>
-          </Card>
+              {canRun && runButton('wallet')}
+            </div>
+            {lastWallet !== null && (
+              <ul className="af-list af-stack">
+                {lastWallet.accounts.map((a) => (
+                  <WalletAccountLine key={a.courierAccountId} a={a} />
+                ))}
+                <li className="af-small">
+                  {lastWallet.trigger === 'MANUAL' ? 'Run by hand' : 'Nightly run'} ·{' '}
+                  {fmtWhen(lastWallet.at)}
+                  {lastWallet.windowDays !== null && ` · last ${lastWallet.windowDays} days`}
+                </li>
+              </ul>
+            )}
+          </AfCard>
 
-          <Card className="mb-4">
-            <CardBody>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-text-strong flex items-center gap-2 text-sm font-medium">
-                    {lastInvoices !== null &&
-                    lastInvoices.ok &&
-                    invoiceRunLabel(lastInvoices) === 'every invoice matches the wallet' ? (
-                      <CheckCircle2 size={15} className="text-status-delivered" />
-                    ) : (
-                      <PauseCircle size={15} className="text-status-failed" />
-                    )}
-                    Invoice check —{' '}
-                    {lastInvoices === null ? 'has not run yet' : invoiceRunLabel(lastInvoices)}
-                  </p>
-                  <p className="text-text-muted mt-0.5 text-xs">
-                    Every night at 04:30 IST · each Freight and VAS invoice&rsquo;s itemized file,
-                    compared line by line with what their wallet charged. Shiprocket settles a
-                    discrepancy only if it is raised within 15 days of the invoice, so a
-                    disagreement inside that window is raised as HIGH.
-                  </p>
-                </div>
-                {canRun && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      queue(
-                        'invoices',
-                        'Queued. It signs in and opens each invoice — refresh in three minutes.',
-                      )
-                    }
-                  >
-                    <RefreshCw
-                      size={14}
-                      className={busy === 'invoices' ? 'animate-spin' : undefined}
-                    />
-                    {busy === 'invoices' ? 'Queuing…' : 'Check invoices now'}
-                  </Button>
-                )}
+          <AfCard>
+            <div className="af-card__head">
+              <div className="af-grow af-stack af-stack--tight">
+                <p className="af-title cs-with-icon">
+                  {lastInvoices !== null &&
+                  lastInvoices.ok &&
+                  invoiceRunLabel(lastInvoices) === 'every invoice matches the wallet' ? (
+                    <CheckCircle2 size={15} aria-hidden className="af-good" />
+                  ) : (
+                    <PauseCircle size={15} aria-hidden className="af-bad" />
+                  )}
+                  Invoice check —{' '}
+                  {lastInvoices === null ? 'has not run yet' : invoiceRunLabel(lastInvoices)}
+                </p>
+                <p className="af-small">
+                  Every night at 04:30 IST · each Freight and VAS invoice&rsquo;s itemized file,
+                  compared line by line with what their wallet charged. Shiprocket settles a
+                  discrepancy only if it is raised within 15 days of the invoice, so a disagreement
+                  inside that window is raised as HIGH.
+                </p>
               </div>
-              {lastInvoices !== null && (
-                <>
-                  {lastInvoices.accounts.map((a) => (
-                    <InvoiceAccountBlock key={a.courierAccountId} a={a} />
-                  ))}
-                  <p className="text-text-muted mt-2 text-xs">
-                    {lastInvoices.trigger === 'MANUAL' ? 'Run by hand' : 'Nightly run'} ·{' '}
-                    {fmtWhen(lastInvoices.at)}
-                    {lastInvoices.windowDays !== null &&
-                      ` · invoices from the last ${lastInvoices.windowDays} days`}
-                  </p>
-                </>
-              )}
-            </CardBody>
-          </Card>
+              {canRun && runButton('invoices')}
+            </div>
+            {lastInvoices !== null && (
+              <>
+                {lastInvoices.accounts.map((a) => (
+                  <InvoiceAccountBlock key={a.courierAccountId} a={a} />
+                ))}
+                <p className="af-small">
+                  {lastInvoices.trigger === 'MANUAL' ? 'Run by hand' : 'Nightly run'} ·{' '}
+                  {fmtWhen(lastInvoices.at)}
+                  {lastInvoices.windowDays !== null &&
+                    ` · invoices from the last ${lastInvoices.windowDays} days`}
+                </p>
+              </>
+            )}
+          </AfCard>
 
-          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat
+          <div className="af-kpis">
+            <KpiCard
               label="Wallet balance"
-              value={
+              figure={
                 d.balances[0] === undefined ? '—' : <Money amount={d.balances[0].balanceInr} />
               }
               hint={
@@ -413,206 +419,206 @@ export function ShiprocketCostSection(): ReactElement {
                   : `As read ${fmtWhen(d.balances[0].capturedAt)}.`
               }
             />
-            <Stat
+            <KpiCard
               label="Parcels with a recorded cost"
-              value={`${recorded} / ${d.parcels.length}`}
-              tone={d.parcels.length === 0 || recorded === d.parcels.length ? 'good' : 'warn'}
+              figure={`${recorded} / ${d.parcels.length}`}
+              tone={
+                STAT_TONE[d.parcels.length === 0 || recorded === d.parcels.length ? 'good' : 'warn']
+              }
               hint="Netted from their passbook. A parcel with no movement yet is uncovered, not free."
             />
-            <Stat
-              label="Final bills that disagree"
-              value={lastBills === null ? '—' : String(disagree)}
-              tone={lastBills === null ? 'neutral' : disagree === 0 ? 'good' : 'bad'}
-              hint="Their final billed amount against what their wallet charged for the same parcel. The wallet figure is what the P&L uses."
-            />
-            <Stat
+            {lastBills === null ? (
+              <KpiCard
+                label="Final bills that disagree"
+                figure="—"
+                tone={STAT_TONE.neutral}
+                hint="Their final billed amount against what their wallet charged for the same parcel. The wallet figure is what the P&L uses."
+              />
+            ) : (
+              <KpiCard
+                label="Final bills that disagree"
+                value={disagree}
+                tone={STAT_TONE[disagree === 0 ? 'good' : 'bad']}
+                hint="Their final billed amount against what their wallet charged for the same parcel. The wallet figure is what the P&L uses."
+              />
+            )}
+            <KpiCard
               label="Last bill check"
-              value={lastBills === null ? 'Never' : billCheckLabel(lastBills)}
-              tone={lastBills === null || !lastBills.ok ? 'bad' : 'good'}
+              figure={lastBills === null ? 'Never' : billCheckLabel(lastBills)}
+              tone={STAT_TONE[lastBills === null || !lastBills.ok ? 'bad' : 'good']}
               hint={lastBills === null ? 'It has not run yet.' : fmtWhen(lastBills.at)}
             />
           </div>
 
-          <Card className="mb-4">
-            <CardBody>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-text-strong flex items-center gap-2 text-sm font-medium">
-                    {d.enabled && !d.stubMode ? (
-                      <CheckCircle2 size={15} className="text-status-delivered" />
-                    ) : (
-                      <PauseCircle size={15} className="text-status-failed" />
-                    )}
-                    Final-bill check —{' '}
-                    {d.stubMode
-                      ? 'not running, Shiprocket is in stub mode'
-                      : !d.enabled
-                        ? 'switched off'
-                        : 'on'}
-                  </p>
-                  <p className="text-text-muted mt-0.5 text-xs">
-                    {d.schedule} · reads each order&rsquo;s charges from Shiprocket&rsquo;s API and
-                    checks their final bill against the wallet. It records nothing as a cost.
-                  </p>
-                </div>
-                {canRun && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      queue(
-                        'bills',
-                        'Queued. It reads every Shiprocket parcel — refresh in a minute.',
-                      )
-                    }
-                  >
-                    <RefreshCw
-                      size={14}
-                      className={busy === 'bills' ? 'animate-spin' : undefined}
-                    />
-                    {busy === 'bills' ? 'Queuing…' : 'Check bills now'}
-                  </Button>
-                )}
-              </div>
-            </CardBody>
-          </Card>
-
-          <Card className="mb-4">
-            <CardBody>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-medium">Shiprocket website access</h3>
-                  <p className="text-text-muted mt-0.5 text-xs">
-                    Signs in and saves what the three wallet pages show, without storing anything. A
-                    sign-in challenge stops every website run until someone resolves the issue — it
-                    never retries on its own.
-                  </p>
-                </div>
-                {canRun && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      queue(
-                        'probe',
-                        'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
-                      )
-                    }
-                  >
-                    <RefreshCw
-                      size={14}
-                      className={busy === 'probe' ? 'animate-spin' : undefined}
-                    />
-                    {busy === 'probe' ? 'Queuing…' : 'Check website access'}
-                  </Button>
-                )}
-              </div>
-              {d.portalProbe === null ? (
-                <p className="text-text-muted mt-3 text-xs">Never checked.</p>
-              ) : (
-                <ul className="mt-3 space-y-1 text-xs">
-                  {d.portalProbe.accounts.map((a) => (
-                    <li key={a.courierAccountId}>
-                      <span className="font-medium">{a.label}</span> · {a.outcome}
-                      {a.pages.length > 0 &&
-                        ` · ${a.pages
-                          .map((p) => `${p.tab}${p.landedOnLogin ? ' (bounced to login)' : ''}`)
-                          .join(', ')}`}
-                      {a.detail !== null && <span className="text-text-muted"> — {a.detail}</span>}
-                    </li>
-                  ))}
-                  <li className="text-text-muted">Checked {fmtWhen(d.portalProbe.at)}</li>
-                </ul>
-              )}
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardBody>
-              <h3 className="mb-3 text-sm font-medium">Our Shiprocket parcels</h3>
-              <Table>
-                <THead>
-                  <Tr>
-                    <Th>Order</Th>
-                    <Th>AWB</Th>
-                    <Th>Their status</Th>
-                    <Th>Charged so far (estimate)</Th>
-                    <Th>Final bill</Th>
-                    <Th>Recorded cost (wallet)</Th>
-                    <Th>Last read</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {d.parcels.length === 0 ? (
-                    <TableEmpty colSpan={7}>
-                      <div className="flex flex-col items-center gap-1.5 py-2">
-                        <div className="font-medium">No Shiprocket parcels read yet</div>
-                        <div className="text-text-muted text-xs">
-                          Parcels appear here after the first run that finds them.
-                        </div>
-                      </div>
-                    </TableEmpty>
+          <AfCard>
+            <div className="af-card__head">
+              <div className="af-grow af-stack af-stack--tight">
+                <p className="af-title cs-with-icon">
+                  {d.enabled && !d.stubMode ? (
+                    <CheckCircle2 size={15} aria-hidden className="af-good" />
                   ) : (
-                    d.parcels.map((p) => {
-                      const fwd =
-                        p.recordedForwardInr === null ? null : Number(p.recordedForwardInr);
-                      const rto = p.recordedRtoInr === null ? null : Number(p.recordedRtoInr);
-                      const cost = fwd === null && rto === null ? null : (fwd ?? 0) + (rto ?? 0);
-                      const differs =
-                        cost !== null &&
-                        p.billedInr !== null &&
-                        Math.abs(cost - Number(p.billedInr)) > 0.004;
-                      return (
-                        <Tr key={p.shipmentId}>
-                          <Td>{p.orderNumber ?? '—'}</Td>
-                          <Td>
-                            <span className="font-mono text-xs">{p.awbNumber ?? '—'}</span>
-                          </Td>
-                          <Td>{p.theirStatus}</Td>
-                          <Td>
-                            {p.provisionalInr === null ? '—' : <Money amount={p.provisionalInr} />}
-                          </Td>
-                          <Td>
-                            {p.billedInr === null ? (
-                              <span className="text-text-muted text-xs">not billed yet</span>
-                            ) : (
-                              <Money amount={p.billedInr} />
-                            )}
-                          </Td>
-                          <Td>
-                            {cost === null ? (
-                              <span className="text-text-muted text-xs">uncovered</span>
-                            ) : (
-                              <>
-                                <Money amount={cost.toFixed(2)} />
-                                {differs && (
-                                  <span className="text-status-failed block text-xs">
-                                    differs from their bill
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </Td>
-                          <Td>
-                            <span className="text-xs">{fmtWhen(p.readAt)}</span>
-                            {p.readings > 1 && (
-                              <span className="text-text-muted block text-xs">
-                                {p.readings} readings — it moved
-                              </span>
-                            )}
-                          </Td>
-                        </Tr>
-                      );
-                    })
+                    <PauseCircle size={15} aria-hidden className="af-bad" />
                   )}
-                </TBody>
-              </Table>
-            </CardBody>
-          </Card>
+                  Final-bill check —{' '}
+                  {d.stubMode
+                    ? 'not running, Shiprocket is in stub mode'
+                    : !d.enabled
+                      ? 'switched off'
+                      : 'on'}
+                </p>
+                <p className="af-small">
+                  {d.schedule} · reads each order&rsquo;s charges from Shiprocket&rsquo;s API and
+                  checks their final bill against the wallet. It records nothing as a cost.
+                </p>
+              </div>
+              {canRun && (
+                <AsyncButton
+                  variant="secondary"
+                  size="sm"
+                  icon={<RefreshCw size={14} />}
+                  labels={{ idle: 'Check bills now', busy: 'Queuing…', done: 'Queued' }}
+                  disabled={busy !== null}
+                  onAction={() =>
+                    queue(
+                      'bills',
+                      'Queued. It reads every Shiprocket parcel — refresh in a minute.',
+                    )
+                  }
+                />
+              )}
+            </div>
+          </AfCard>
+
+          <AfCard>
+            <div className="af-card__head">
+              <div className="af-grow af-stack af-stack--tight">
+                <h3 className="af-title">Shiprocket website access</h3>
+                <p className="af-small">
+                  Signs in and saves what the three wallet pages show, without storing anything. A
+                  sign-in challenge stops every website run until someone resolves the issue — it
+                  never retries on its own.
+                </p>
+              </div>
+              {canRun && runButton('probe')}
+            </div>
+            {d.portalProbe === null ? (
+              <p className="af-small">Never checked.</p>
+            ) : (
+              <ul className="af-list af-small">
+                {d.portalProbe.accounts.map((a) => (
+                  <li key={a.courierAccountId}>
+                    <span className="af-strong">{a.label}</span> · {a.outcome}
+                    {a.pages.length > 0 &&
+                      ` · ${a.pages
+                        .map((p) => `${p.tab}${p.landedOnLogin ? ' (bounced to login)' : ''}`)
+                        .join(', ')}`}
+                    {a.detail !== null && <span> — {a.detail}</span>}
+                  </li>
+                ))}
+                <li>Checked {fmtWhen(d.portalProbe.at)}</li>
+              </ul>
+            )}
+          </AfCard>
+
+          <div className="af-section">
+            <SectionHeading title="Our Shiprocket parcels" as="h3" />
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Order</Th>
+                  <Th>AWB</Th>
+                  <Th>Their status</Th>
+                  <Th>Charged so far (estimate)</Th>
+                  <Th>Final bill</Th>
+                  <Th>Recorded cost (wallet)</Th>
+                  <Th>Last read</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {d.parcels.length === 0 ? (
+                  <TableEmpty colSpan={7}>
+                    <div className="af-stack af-stack--tight cs-empty">
+                      <span className="af-strong">No Shiprocket parcels read yet</span>
+                      <span className="af-small">
+                        Parcels appear here after the first run that finds them.
+                      </span>
+                    </div>
+                  </TableEmpty>
+                ) : (
+                  d.parcels.map((p) => {
+                    const fwd = p.recordedForwardInr === null ? null : Number(p.recordedForwardInr);
+                    const rto = p.recordedRtoInr === null ? null : Number(p.recordedRtoInr);
+                    const cost = fwd === null && rto === null ? null : (fwd ?? 0) + (rto ?? 0);
+                    const differs =
+                      cost !== null &&
+                      p.billedInr !== null &&
+                      Math.abs(cost - Number(p.billedInr)) > 0.004;
+                    return (
+                      <Tr key={p.shipmentId}>
+                        <Td>
+                          <span className="sk-ident">{p.orderNumber ?? '—'}</span>
+                        </Td>
+                        <Td>
+                          <span className="sk-ident">{p.awbNumber ?? '—'}</span>
+                        </Td>
+                        <Td>{p.theirStatus}</Td>
+                        <Td>
+                          {p.provisionalInr === null ? '—' : <Money amount={p.provisionalInr} />}
+                        </Td>
+                        <Td>
+                          {p.billedInr === null ? (
+                            <span className="af-small">not billed yet</span>
+                          ) : (
+                            <Money amount={p.billedInr} />
+                          )}
+                        </Td>
+                        <Td>
+                          {cost === null ? (
+                            <span className="af-small">uncovered</span>
+                          ) : (
+                            <span className="af-stack af-stack--tight">
+                              <Money amount={cost.toFixed(2)} />
+                              {differs && (
+                                <span className="af-small af-bad">differs from their bill</span>
+                              )}
+                            </span>
+                          )}
+                        </Td>
+                        <Td>
+                          <span className="af-stack af-stack--tight">
+                            <span className="af-small af-nowrap">{fmtWhen(p.readAt)}</span>
+                            {p.readings > 1 && (
+                              <span className="af-small">{p.readings} readings — it moved</span>
+                            )}
+                          </span>
+                        </Td>
+                      </Tr>
+                    );
+                  })
+                )}
+              </TBody>
+            </Table>
+          </div>
         </>
       )}
-    </div>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        onOpenChange={(o) => {
+          if (!o) setConfirming(null);
+        }}
+        title={confirming === null ? 'Run now?' : BROWSER_RUNS[confirming].title}
+        entity={confirming === null ? 'Shiprocket' : BROWSER_RUNS[confirming].entity}
+        consequence="The portal worker signs in to Shiprocket's own website with our stored login and runs in the background; it is queued, not finished, when this closes."
+        confirmLabel="Run it now"
+        onConfirm={() => {
+          if (confirming === null) return;
+          const which = confirming;
+          // Queued in the background: the dialog closes at once and the
+          // button beside the card shows it busy, exactly as before.
+          void queue(which, BROWSER_RUNS[which].done).catch(() => undefined);
+        }}
+      />
+    </section>
   );
 }

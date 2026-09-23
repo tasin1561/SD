@@ -1,15 +1,11 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  useToast,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useMergeCredentialFields } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -79,7 +75,7 @@ export function PortalLoginModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(o) => {
         if (!o) onClose();
@@ -90,61 +86,62 @@ export function PortalLoginModal({
           ? 'Delhivery has no billing API, so the nightly cost sync signs into their panel. Stored encrypted; never shown again.'
           : 'Shiprocket has no API for its passbook, ledger or recharges, so the automation signs into app.shiprocket.in through the Bangalore tunnel. Stored encrypted; never shown again.'
       }
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={merge.isPending}
+            disabled={incomplete || merge.isPending}
+            onClick={() => void save()}
+          >
+            Save login
+          </Button>
+        </DialogFooter>
+      }
     >
-      <FormField
-        label="Email"
-        required
-        hint={
-          needsCompany
-            ? 'The address you use at one.delhivery.com.'
-            : 'The address you use at app.shiprocket.in — the website login, not the API user.'
-        }
-      >
-        <Input
+      <div className="af-form">
+        <TextField
+          label="Email"
+          requiredMark
+          hint={
+            needsCompany
+              ? 'The address you use at one.delhivery.com.'
+              : 'The address you use at app.shiprocket.in — the website login, not the API user.'
+          }
           type="email"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoComplete="off"
         />
-      </FormField>
-      <FormField label="Password" required>
-        <Input
+        <TextField
+          label="Password"
+          requiredMark
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
         />
-      </FormField>
-      {needsCompany && (
-        <FormField
-          label="Company"
-          required
-          hint="Exactly as it appears in their login dropdown — e.g. MS EXPORTS. One login reaches several companies and each has its own wallet, so this decides which one is read."
-        >
-          <Input value={company} onChange={(e) => setCompany(e.target.value)} />
-        </FormField>
-      )}
+        {needsCompany && (
+          <TextField
+            label="Company"
+            requiredMark
+            hint="Exactly as it appears in their login dropdown — e.g. MS EXPORTS. One login reaches several companies and each has its own wallet, so this decides which one is read."
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+          />
+        )}
 
-      <p className="text-text-muted text-xs">
-        The API token on this account is left exactly as it is — this adds to the credential rather
-        than replacing it.
-      </p>
+        <p className="af-small">
+          The API token on this account is left exactly as it is — this adds to the credential
+          rather than replacing it.
+        </p>
 
-      {error !== null && <ErrorNote message={error} />}
-
-      <ModalFooter>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={incomplete || merge.isPending}
-          onClick={() => void save()}
-        >
-          {merge.isPending ? 'Saving…' : 'Save login'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {error !== null && <ErrorState title="Not saved" message={error} />}
+      </div>
+    </Dialog>
   );
 }

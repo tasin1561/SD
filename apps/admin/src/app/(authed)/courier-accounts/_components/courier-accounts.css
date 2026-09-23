@@ -1,0 +1,70 @@
+/* Courier accounts. Tokens only; shared pieces in system/_components/af.css. */
+.ca-shield {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: 0;
+}
+.ca-shield svg {
+  flex: none;
+  margin-top: 3px;
+}
+.ca-notes {
+  max-width: 28rem;
+  overflow-wrap: anywhere;
+}
+.ca-env {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.ca-env[data-prod='1'] {
+  color: var(--saffron-text);
+  font-weight: var(--fw-semibold);
+}
+.ca-switch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: center;
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+@media (min-width: 640px) {
+  .ca-switch {
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+  }
+}
+.ca-switch__name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.ca-switch__name svg {
+  flex: none;
+  color: var(--fg-faint);
+}
+.ca-switch__text {
+  display: grid;
+  min-width: 0;
+}
+.ca-switch__title {
+  overflow: hidden;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ca-switch__side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ca-hidden {
+  display: none;
+}

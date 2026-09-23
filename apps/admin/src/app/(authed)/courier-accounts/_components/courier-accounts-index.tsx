@@ -1,34 +1,29 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { ShieldCheck } from 'lucide-react';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  PageHeader,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import Link from 'next/link';
+import { Plus, ShieldCheck } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useCourierAccounts,
   useUpdateCourierAccount,
   type CourierAccountView,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AfCard, Notice } from '@/app/(authed)/system/_components/af-parts';
 import { EditCourierAccountModal } from './edit-courier-account-modal';
 import { PortalLoginModal } from './portal-login-modal';
 import { CreateCourierAccountModal } from './create-courier-account-modal';
 import { CourierMasterSwitches } from './courier-master-switches';
 import { usePermission } from '@/lib/use-permission';
+import './courier-accounts.css';
 
 /**
  * Courier accounts (R1).
@@ -50,43 +45,50 @@ export function CourierAccountsIndex(): ReactElement {
   const list = useCourierAccounts();
 
   return (
-    <div>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Network' }, { label: 'Courier accounts' }]}
+        Link={Link}
         title="Courier accounts"
         subtitle="Multiple accounts per courier. Route a seller to specific accounts, by weight, from that seller's page; every shipment records the account that carried it."
         action={
           canWrite ? (
-            <Button variant="primary" size="md" onClick={() => setCreating(true)}>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Plus size={16} />}
+              onClick={() => setCreating(true)}
+            >
               Add account
             </Button>
           ) : null
         }
       />
 
-      <p className="text-text-muted border-border bg-surface-raised mb-4 flex items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2 text-xs leading-relaxed">
-        <ShieldCheck size={14} className="mt-0.5 shrink-0" aria-hidden />
-        <span>
-          API credentials are encrypted at rest with a key held in the environment, never in the
-          database. They are never returned by any endpoint — to change one, add a new account and
-          deactivate the old.
-        </span>
-      </p>
+      <Notice tone="info">
+        <p className="ca-shield">
+          <ShieldCheck size={14} aria-hidden />
+          <span>
+            API credentials are encrypted at rest with a key held in the environment, never in the
+            database. They are never returned by any endpoint — to change one, add a new account and
+            deactivate the old.
+          </span>
+        </p>
+      </Notice>
 
       {/* Above the accounts, because it decides whether any of them are
           used at all. */}
-      <div className="mb-4">
-        <CourierMasterSwitches />
-      </div>
+      <CourierMasterSwitches />
 
       {list.isError ? (
-        <ErrorNote
+        <ErrorState
           message={list.error?.message ?? 'Failed to load courier accounts.'}
           retry={() => void list.refetch()}
         />
       ) : list.isLoading ? (
-        <Card>
-          <SkeletonRows rows={3} cols={5} />
-        </Card>
+        <AfCard flush>
+          <SkeletonRows rows={3} cols={5} label="Loading courier accounts" />
+        </AfCard>
       ) : (list.data?.length ?? 0) === 0 ? (
         <EmptyState
           title="No courier accounts yet"
@@ -96,7 +98,7 @@ export function CourierAccountsIndex(): ReactElement {
               <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
                 Add account
               </Button>
-            ) : null
+            ) : undefined
           }
         />
       ) : (
@@ -124,70 +126,92 @@ export function CourierAccountsIndex(): ReactElement {
   );
 }
 
+type RowAct = 'default' | 'active';
+
 function AccountRow({ account }: { readonly account: CourierAccountView }): ReactElement {
   const toast = useToast();
   const update = useUpdateCourierAccount();
   const [editing, setEditing] = useState(false);
   const [portalLogin, setPortalLogin] = useState(false);
+  // "Make default" re-routes every unlinked seller and "Deactivate" stops
+  // an account being used; both ask first and then send the same PATCH.
+  const [confirming, setConfirming] = useState<RowAct | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function run(
     patch: { isActive?: boolean; isDefault?: boolean },
     success: string,
   ): Promise<void> {
+    setError(null);
     try {
       await update.mutateAsync({ accountId: account.id, ...patch });
       toast.success(success);
     } catch (err) {
       // FE-2 — the server owns "at most one default per pair" and
       // whatever else it enforces; show its refusal as written.
-      toast.error(serverVerdict(err));
+      const verdict = serverVerdict(err);
+      toast.error(verdict);
+      setError(verdict);
+      throw err;
     }
   }
+
+  const deactivating = account.isActive;
 
   return (
     <Tr>
       <Td>
-        <span className="text-text-strong">{account.label}</span>
-        {account.notes !== null && account.notes !== '' && (
-          <div className="text-text-faint mt-0.5 max-w-md text-xs">{account.notes}</div>
-        )}
+        <span className="af-stack af-stack--tight">
+          <span className="af-strong">{account.label}</span>
+          {account.notes !== null && account.notes !== '' && (
+            <span className="af-faint ca-notes">{account.notes}</span>
+          )}
+        </span>
       </Td>
-      <Td className="text-text-body">{account.courierCode}</Td>
-      <Td className="text-text-muted text-xs">
+      <Td>
+        <span className="sk-ident">{account.courierCode}</span>
+      </Td>
+      <Td>
         {account.environment === 'PRODUCTION' ? (
-          <span className="text-[var(--status-pending-fg)]">Production</span>
+          <span className="ca-env" data-prod="1">
+            Production
+          </span>
         ) : (
-          'Sandbox'
+          <span className="ca-env">Sandbox</span>
         )}
       </Td>
-      <Td className="text-xs">
+      <Td>
         {account.pickupLocationName === null ? (
           // Worth calling out rather than showing a dash: with one
           // account the global setting is correct, and with two it is
           // the thing that silently sends parcels from the wrong
           // registration.
-          <span className="text-text-faint">global setting</span>
+          <span className="af-faint">global setting</span>
         ) : (
-          <span className="font-mono">{account.pickupLocationName}</span>
+          <span className="sk-ident af-small">{account.pickupLocationName}</span>
         )}
       </Td>
       <Td>
-        <div className="flex items-center gap-1.5">
-          <StatusBadge
+        <span className="af-row">
+          <StatusChip
+            size="sm"
             kind={account.isActive ? 'confirmed' : 'cancelled'}
             label={account.isActive ? 'Active' : 'Inactive'}
           />
-          {account.isDefault && <StatusBadge kind="delivered" label="Default" />}
-        </div>
+          {account.isDefault && <StatusChip size="sm" kind="delivered" label="Default" />}
+        </span>
       </Td>
       <Td align="right">
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="af-row af-row--end">
           {!account.isDefault && account.isActive && (
             <Button
               variant="ghost"
               size="sm"
               disabled={update.isPending}
-              onClick={() => void run({ isDefault: true }, `${account.label} is now the default.`)}
+              onClick={() => {
+                setError(null);
+                setConfirming('default');
+              }}
             >
               Make default
             </Button>
@@ -208,14 +232,16 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
             variant="secondary"
             size="sm"
             disabled={update.isPending}
-            onClick={() =>
-              void run(
-                { isActive: !account.isActive },
-                account.isActive
-                  ? `${account.label} deactivated.`
-                  : `${account.label} reactivated.`,
-              )
-            }
+            onClick={() => {
+              setError(null);
+              if (deactivating) {
+                setConfirming('active');
+              } else {
+                void run({ isActive: true }, `${account.label} reactivated.`).catch(
+                  () => undefined,
+                );
+              }
+            }}
           >
             {account.isActive ? 'Deactivate' : 'Reactivate'}
           </Button>
@@ -229,6 +255,31 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
             onClose={() => setPortalLogin(false)}
           />
         )}
+        <ConfirmDialog
+          open={confirming !== null}
+          onOpenChange={(o) => {
+            if (!o) setConfirming(null);
+          }}
+          title={
+            confirming === 'default'
+              ? 'Make this the default account?'
+              : 'Deactivate this courier account?'
+          }
+          entity={`${account.label} · ${account.courierCode} · ${account.environment.toLowerCase()}`}
+          consequence={
+            confirming === 'default'
+              ? 'Every seller with no explicit link to this courier routes their new parcels through this account from now on.'
+              : 'No new parcel is booked on this account; parcels it already carried keep their record of it.'
+          }
+          confirmLabel={confirming === 'default' ? 'Make default' : 'Deactivate'}
+          destructive={confirming === 'active'}
+          error={error}
+          onConfirm={() =>
+            confirming === 'default'
+              ? run({ isDefault: true }, `${account.label} is now the default.`)
+              : run({ isActive: false }, `${account.label} deactivated.`)
+          }
+        />
       </Td>
     </Tr>
   );

@@ -2,30 +2,19 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Lock, Unlock } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorNote,
-  FormField,
-  Input,
-  Money,
-  Num,
-  PageHeader,
-  Section,
-  Skeleton,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-  TableEmpty,
-} from '@skydrop/ui/components';
+import { Lock, Unlock } from 'lucide-react';
+import { Money, Num } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TableEmpty, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { useShiprocketConnectivity, useShiprocketStatus } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AfCard, AfSection, Notice } from '@/app/(authed)/system/_components/af-parts';
+import './shiprocket.css';
 
 function when(iso: string | null): string {
   return iso === null ? '—' : new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
@@ -57,22 +46,24 @@ export function ShiprocketOpsIndex(): ReactElement {
   const stubbedButLive = d?.liveMode === false && d?.intakeEnabled === true;
 
   return (
-    <div>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Network' }, { label: 'Shiprocket' }]}
+        Link={Link}
         title="Shiprocket"
         subtitle="Whether this courier is answering from its live API or from a stub, whether writes are armed, and what it has booked. Refreshes every 30 seconds."
       />
 
       {status.isError ? (
-        <ErrorNote
+        <ErrorState
           message={status.error?.message ?? 'Could not read Shiprocket status.'}
           retry={() => void status.refetch()}
         />
       ) : status.isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
+        <div className="af-grid-3">
+          <Skeleton height="6rem" rounded="md" />
+          <Skeleton height="6rem" rounded="md" />
+          <Skeleton height="6rem" rounded="md" />
         </div>
       ) : (
         <>
@@ -87,107 +78,83 @@ export function ShiprocketOpsIndex(): ReactElement {
             "intake on, answering from a stub" is exactly the shape.
           */}
           {stubbedButLive === true && (
-            <div
-              role="alert"
-              className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] mb-4 flex items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2"
-            >
-              <AlertTriangle
-                size={14}
-                className="text-[var(--color-critical)] mt-0.5 shrink-0"
-                aria-hidden
-              />
-              <p className="text-[var(--color-critical)] text-xs leading-relaxed">
+            <Notice tone="bad" role="alert">
+              <p>
                 Shiprocket is taking new parcels but answering from a STUB. A booking here would
                 come back with a waybill nobody issued. Either set
-                <code className="mx-1">courier.shiprocket_api_base_url</code>, or switch the courier
-                off for new parcels on /courier-accounts.
+                <code className="af-code sr-inline-code">courier.shiprocket_api_base_url</code>, or
+                switch the courier off for new parcels on /courier-accounts.
               </p>
-            </div>
+            </Notice>
           )}
 
           {/* ── mode + the two switches ── */}
-          <Section
+          <AfSection
             title="Connection"
-            subtitle="Stub mode means no network call ever leaves this process. The write guard and the intake switch are two further, independent gates."
+            note="Stub mode means no network call ever leaves this process. The write guard and the intake switch are two further, independent gates."
           >
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Card>
-                <CardBody>
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <StatusBadge
-                      kind={d?.liveMode === true ? 'in-transit' : 'draft'}
-                      label={d?.liveMode === true ? 'Live API' : 'Stub mode'}
-                    />
-                  </div>
-                  <p className="text-text-muted text-xs leading-relaxed">
-                    {d?.liveMode === true
-                      ? 'Calls go to the real Shiprocket API. There is no sandbox, so every request counts against production.'
-                      : 'No base URL configured, so the adapter answers from deterministic stubs — including a FABRICATED waybill on a booking. Safe alone; dangerous beside a live courier.'}
-                  </p>
-                </CardBody>
-              </Card>
+            <div className="af-grid-3">
+              <AfCard>
+                <div>
+                  <StatusChip
+                    kind={d?.liveMode === true ? 'in-transit' : 'draft'}
+                    label={d?.liveMode === true ? 'Live API' : 'Stub mode'}
+                  />
+                </div>
+                <p className="af-small">
+                  {d?.liveMode === true
+                    ? 'Calls go to the real Shiprocket API. There is no sandbox, so every request counts against production.'
+                    : 'No base URL configured, so the adapter answers from deterministic stubs — including a FABRICATED waybill on a booking. Safe alone; dangerous beside a live courier.'}
+                </p>
+              </AfCard>
 
-              <Card tone={d?.liveWritesEnabled === true ? 'critical' : 'default'}>
-                <CardBody>
-                  <div className="mb-1.5 flex items-center gap-2">
-                    {d?.liveWritesEnabled === true ? (
-                      <>
-                        <Unlock size={14} className="text-[var(--color-critical)]" aria-hidden />
-                        <span className="text-[var(--color-critical)] text-sm font-medium">
-                          Live writes ENABLED
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Lock size={14} className="text-text-muted" aria-hidden />
-                        <span className="text-text-body text-sm font-medium">
-                          Live writes blocked
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <p className="text-text-muted text-xs leading-relaxed">
-                    {d?.liveWritesEnabled === true
-                      ? 'Bookings, returns, pickups, cancels and NDR actions reach the real account.'
-                      : 'Bookings, returns, pickups, cancels and NDR actions are refused. This is the safe state.'}
-                  </p>
-                  <Link
-                    href="/settings"
-                    className="text-accent mt-2 inline-block text-xs hover:underline"
-                  >
-                    Change in system settings →
-                  </Link>
-                </CardBody>
-              </Card>
+              <AfCard tone={d?.liveWritesEnabled === true ? 'critical' : undefined}>
+                <p className="af-title sr-guard">
+                  {d?.liveWritesEnabled === true ? (
+                    <>
+                      <Unlock size={14} aria-hidden className="af-bad" />
+                      <span className="af-bad">Live writes enabled</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={14} aria-hidden />
+                      <span>Live writes blocked</span>
+                    </>
+                  )}
+                </p>
+                <p className="af-small">
+                  {d?.liveWritesEnabled === true
+                    ? 'Bookings, returns, pickups, cancels and NDR actions reach the real account.'
+                    : 'Bookings, returns, pickups, cancels and NDR actions are refused. This is the safe state.'}
+                </p>
+                <Link href="/settings" className="af-link af-small af-inline-link">
+                  Change in system settings →
+                </Link>
+              </AfCard>
 
-              <Card>
-                <CardBody>
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <StatusBadge
-                      kind={d?.intakeEnabled === true ? 'confirmed' : 'cancelled'}
-                      label={d?.intakeEnabled === true ? 'Taking new parcels' : 'No new parcels'}
-                    />
-                  </div>
-                  <p className="text-text-muted text-xs leading-relaxed">
-                    {d?.intakeEnabled === true
-                      ? 'New parcels can be booked here, including by failover from another courier.'
-                      : 'No NEW parcels — in-flight ones are still tracked, cancelled and costed (CUR-16).'}
-                  </p>
-                  <Link
-                    href="/courier-accounts"
-                    className="text-accent mt-2 inline-block text-xs hover:underline"
-                  >
-                    Change on courier accounts →
-                  </Link>
-                </CardBody>
-              </Card>
+              <AfCard>
+                <div>
+                  <StatusChip
+                    kind={d?.intakeEnabled === true ? 'confirmed' : 'cancelled'}
+                    label={d?.intakeEnabled === true ? 'Taking new parcels' : 'No new parcels'}
+                  />
+                </div>
+                <p className="af-small">
+                  {d?.intakeEnabled === true
+                    ? 'New parcels can be booked here, including by failover from another courier.'
+                    : 'No NEW parcels — in-flight ones are still tracked, cancelled and costed (CUR-16).'}
+                </p>
+                <Link href="/courier-accounts" className="af-link af-small af-inline-link">
+                  Change on courier accounts →
+                </Link>
+              </AfCard>
             </div>
-          </Section>
+          </AfSection>
 
           {/* ── accounts ── */}
-          <Section
+          <AfSection
             title="Accounts"
-            subtitle="The pickup location name is matched byte for byte on every booking; without one, bookings are refused. The balance is what the nightly wallet sync last read."
+            note="The pickup location name is matched byte for byte on every booking; without one, bookings are refused. The balance is what the nightly wallet sync last read."
           >
             <Table>
               <THead>
@@ -205,142 +172,125 @@ export function ShiprocketOpsIndex(): ReactElement {
                   d?.accounts.map((a) => (
                     <Tr key={a.courierAccountId}>
                       <Td>
-                        <span className="text-text-body">{a.label}</span>
-                        {!a.isActive && (
-                          <span className="text-text-faint ml-2 text-xs">(inactive)</span>
-                        )}
+                        <span>{a.label}</span>
+                        {!a.isActive && <span className="af-faint"> (inactive)</span>}
                       </Td>
                       <Td>
-                        {a.pickupLocationName ?? (
-                          <span className="text-[var(--color-critical)] text-xs">
-                            not set — bookings refuse
-                          </span>
+                        {a.pickupLocationName === null ? (
+                          <span className="af-small af-bad">not set — bookings refuse</span>
+                        ) : (
+                          <span className="sk-ident af-small">{a.pickupLocationName}</span>
                         )}
                       </Td>
                       <Td align="right">
                         {a.walletBalanceInr === null ? (
-                          <span className="text-text-faint">—</span>
+                          <span className="af-faint">—</span>
                         ) : (
                           <Money amount={a.walletBalanceInr} />
                         )}
                       </Td>
-                      <Td className="text-text-faint text-xs">{when(a.walletBalanceAt)}</Td>
+                      <Td>
+                        <span className="af-faint sk-figure">{when(a.walletBalanceAt)}</span>
+                      </Td>
                     </Tr>
                   ))
                 )}
               </TBody>
             </Table>
 
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <Card>
-                <CardBody>
-                  <div className="text-text-faint text-xs">Last wallet sync</div>
-                  <div className="text-text-body mt-1 text-sm">
-                    {when(d?.lastWalletSync?.at ?? null)}
+            <div className="af-grid-3">
+              <AfCard>
+                <div className="af-mini">
+                  <span className="af-mini__label">Last wallet sync</span>
+                  <span className="af-body">
+                    <span className="sk-figure">{when(d?.lastWalletSync?.at ?? null)}</span>
                     {d?.lastWalletSync !== null && d?.lastWalletSync !== undefined && (
-                      <span
-                        className={
-                          d.lastWalletSync.ok
-                            ? 'text-text-faint ml-2 text-xs'
-                            : 'text-[var(--color-critical)] ml-2 text-xs'
-                        }
-                      >
+                      <span className={d.lastWalletSync.ok ? 'af-faint' : 'af-small af-bad'}>
+                        {' '}
                         {d.lastWalletSync.ok ? 'ok' : 'FAILED'}
                       </span>
                     )}
-                  </div>
-                </CardBody>
-              </Card>
-              <Card>
-                <CardBody>
-                  <div className="text-text-faint text-xs">Last invoice check</div>
-                  <div className="text-text-body mt-1 text-sm">
-                    {when(d?.lastInvoiceCheck?.at ?? null)}
+                  </span>
+                </div>
+              </AfCard>
+              <AfCard>
+                <div className="af-mini">
+                  <span className="af-mini__label">Last invoice check</span>
+                  <span className="af-body">
+                    <span className="sk-figure">{when(d?.lastInvoiceCheck?.at ?? null)}</span>
                     {d?.lastInvoiceCheck !== null && d?.lastInvoiceCheck !== undefined && (
-                      <span
-                        className={
-                          d.lastInvoiceCheck.ok
-                            ? 'text-text-faint ml-2 text-xs'
-                            : 'text-[var(--color-critical)] ml-2 text-xs'
-                        }
-                      >
+                      <span className={d.lastInvoiceCheck.ok ? 'af-faint' : 'af-small af-bad'}>
+                        {' '}
                         {d.lastInvoiceCheck.ok ? 'ok' : 'FAILED'}
                       </span>
                     )}
-                  </div>
-                  <Link
-                    href="/cost-sync"
-                    className="text-accent mt-2 inline-block text-xs hover:underline"
-                  >
-                    Every run, in detail →
-                  </Link>
-                </CardBody>
-              </Card>
-              <Card>
-                <CardBody>
-                  <div className="text-text-faint text-xs">Return address</div>
-                  <div className="text-text-body mt-1 text-sm">
+                  </span>
+                </div>
+                <Link href="/cost-sync" className="af-link af-small af-inline-link">
+                  Every run, in detail →
+                </Link>
+              </AfCard>
+              <AfCard>
+                <div className="af-mini">
+                  <span className="af-mini__label">Return address</span>
+                  <span className="af-body">
                     {d?.returnAddressConfigured === true ? (
                       'Set'
                     ) : (
-                      <span className="text-[var(--color-critical)]">Not set</span>
+                      <span className="af-bad">Not set</span>
                     )}
-                  </div>
-                  <p className="text-text-muted mt-1 text-xs leading-relaxed">
-                    Their return booking spells out BOTH ends, so a customer collection needs the
-                    address it comes back to. Without it, returns are refused by name.
-                  </p>
-                </CardBody>
-              </Card>
+                  </span>
+                </div>
+                <p className="af-small">
+                  Their return booking spells out BOTH ends, so a customer collection needs the
+                  address it comes back to. Without it, returns are refused by name.
+                </p>
+              </AfCard>
             </div>
-          </Section>
+          </AfSection>
 
           {/* ── connectivity ── */}
-          <Section
+          <AfSection
             title="Reachability"
-            subtitle="One serviceability lookup on a lane. It creates nothing, and it is the only way to prove the stored credential still works without booking a parcel."
+            note="One serviceability lookup on a lane. It creates nothing, and it is the only way to prove the stored credential still works without booking a parcel."
           >
-            <div className="flex flex-wrap items-end gap-3">
-              <FormField label="From pincode" htmlFor="sr-from">
-                <Input
+            <AfCard>
+              <div className="sr-lane">
+                <TextField
                   id="sr-from"
+                  label="From pincode"
                   value={from}
                   onChange={(e) => setFrom(e.target.value)}
                   inputMode="numeric"
                 />
-              </FormField>
-              <FormField label="To pincode" htmlFor="sr-to">
-                <Input
+                <TextField
                   id="sr-to"
+                  label="To pincode"
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
                   inputMode="numeric"
                 />
-              </FormField>
-              <Button
-                variant="secondary"
-                size="md"
-                disabled={connectivity.isPending || from.trim() === '' || to.trim() === ''}
-                onClick={() => void connectivity.mutateAsync({ from, to }).catch(() => undefined)}
-              >
-                {connectivity.isPending ? 'Checking…' : 'Check'}
-              </Button>
-            </div>
+                <AsyncButton
+                  variant="secondary"
+                  size="md"
+                  labels={{ idle: 'Check', busy: 'Checking…', done: 'Checked', error: 'Failed' }}
+                  disabled={connectivity.isPending || from.trim() === '' || to.trim() === ''}
+                  onAction={() => connectivity.mutateAsync({ from, to })}
+                />
+              </div>
 
-            {connectivity.isError && (
-              <p className="text-[var(--color-critical)] mt-3 text-xs">
-                {serverVerdict(connectivity.error)}
-              </p>
-            )}
-            {connectivity.data !== undefined && (
-              <Card className="mt-3">
-                <CardBody>
+              {connectivity.isError && (
+                <p className="af-error">{serverVerdict(connectivity.error)}</p>
+              )}
+              {connectivity.data !== undefined && (
+                <div
+                  className="af-inner"
+                  data-tone={connectivity.data.error !== null ? 'bad' : undefined}
+                >
                   {connectivity.data.error !== null ? (
-                    <p className="text-[var(--color-critical)] text-xs leading-relaxed">
-                      {connectivity.data.error}
-                    </p>
+                    <p className="af-small af-bad">{connectivity.data.error}</p>
                   ) : (
-                    <p className="text-text-muted text-xs leading-relaxed">
+                    <p className="af-small">
                       {connectivity.data.reachedLiveApi
                         ? 'Reached the live API.'
                         : 'Answered WITHOUT reaching them (stub mode) — this proves nothing about the credential.'}{' '}
@@ -355,15 +305,15 @@ export function ShiprocketOpsIndex(): ReactElement {
                       )}
                     </p>
                   )}
-                </CardBody>
-              </Card>
-            )}
-          </Section>
+                </div>
+              )}
+            </AfCard>
+          </AfSection>
 
           {/* ── bookings ── */}
-          <Section
+          <AfSection
             title="Recent parcels"
-            subtitle="The twenty most recent Shiprocket shipments. A row with no waybill never got one — the AWB-less sweep chases those."
+            note="The twenty most recent Shiprocket shipments. A row with no waybill never got one — the AWB-less sweep chases those."
           >
             <Table>
               <THead>
@@ -381,24 +331,34 @@ export function ShiprocketOpsIndex(): ReactElement {
                 ) : (
                   d?.recentBookings.map((b) => (
                     <Tr key={b.shipmentId}>
-                      <Td className="font-mono text-xs">{b.shipmentNumber}</Td>
-                      <Td className="font-mono text-xs">
-                        {b.awbNumber ?? (
-                          <span className="text-[var(--color-critical)] font-sans">none</span>
+                      <Td>
+                        <span className="sk-ident af-small">{b.shipmentNumber}</span>
+                      </Td>
+                      <Td>
+                        {b.awbNumber === null ? (
+                          <span className="af-small af-bad">none</span>
+                        ) : (
+                          <span className="sk-ident af-small">{b.awbNumber}</span>
                         )}
                       </Td>
                       {/* WHICH carrier their ranking gave us. Blank on a
                           parcel booked before we recorded it — their
                           reply is not stored, so it cannot be filled in. */}
-                      <Td className="text-text-muted text-xs">{b.carrierName ?? '—'}</Td>
-                      <Td className="text-text-muted text-xs">{b.status}</Td>
-                      <Td className="text-text-faint text-xs">{when(b.bookedAt)}</Td>
+                      <Td>
+                        <span className="af-small">{b.carrierName ?? '—'}</span>
+                      </Td>
+                      <Td>
+                        <span className="af-small">{b.status}</span>
+                      </Td>
+                      <Td>
+                        <span className="af-faint sk-figure">{when(b.bookedAt)}</span>
+                      </Td>
                     </Tr>
                   ))
                 )}
               </TBody>
             </Table>
-          </Section>
+          </AfSection>
         </>
       )}
     </div>

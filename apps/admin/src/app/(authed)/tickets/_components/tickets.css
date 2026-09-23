@@ -1,0 +1,118 @@
+/* Tickets (admin) — the queue and one ticket. Tokens only; the shared
+   area pieces live in system/_components/af.css. */
+
+.tk-handling {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+.tk-handling[data-manual='1'] {
+  min-height: 22px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--st-pending-line);
+  border-radius: var(--r-pill);
+  background: var(--st-pending-bg);
+  color: var(--st-pending-fg);
+}
+
+.tk-number {
+  color: var(--fg-strong);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.tk-subject {
+  display: block;
+  max-width: 22rem;
+  overflow: hidden;
+  color: var(--fg-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tk-type {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+.tk-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .tk-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1100px) {
+  .tk-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.6fr);
+  }
+}
+
+/* The move-on row: fields grow sideways as the decision narrows. */
+.tk-move {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: end;
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .tk-move {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  }
+  .tk-move__notes {
+    grid-column: span 2;
+  }
+}
+
+.tk-history {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tk-history__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding-left: var(--sp-3);
+  border-left: 2px solid var(--line-strong);
+  font-size: var(--fs-sm);
+}
+.tk-history__when {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.tk-history__what {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.tk-history__note {
+  margin: 0;
+  color: var(--fg-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tk-figures {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+  color: var(--fg-body);
+}
+.tk-type-cell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}

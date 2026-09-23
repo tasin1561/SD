@@ -2,16 +2,13 @@
 
 import type { ReactElement } from 'react';
 import { Activity, AlertTriangle } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorNote,
-  Section,
-  Skeleton,
-  StatusBadge,
-  useToast,
-} from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
+import { AfCard, AfSection } from '@/app/(authed)/system/_components/af-parts';
+import './delhivery.css';
 import { useRunTrackingPoll, useTrackingPollHealth } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -55,62 +52,65 @@ export function TrackingPollPanel(): ReactElement | null {
       );
     } catch (err) {
       toast.error(serverVerdict(err));
+      throw err;
     }
   }
 
   return (
-    <Section
+    <AfSection
       title="Tracking"
-      subtitle="Delhivery sends us no webhooks, so a scheduled poll is what moves every order to delivered. If this stops, nothing else fails — parcels simply stop updating."
+      note="Delhivery sends us no webhooks, so a scheduled poll is what moves every order to delivered. If this stops, nothing else fails — parcels simply stop updating."
     >
       {health.isError ? (
-        <ErrorNote
+        <ErrorState
           message={health.error?.message ?? 'Could not read tracking health.'}
           retry={() => void health.refetch()}
         />
       ) : health.isLoading ? (
-        <Skeleton className="h-24" />
+        <Skeleton height="6rem" rounded="md" />
       ) : (
-        <Card>
-          <CardBody>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="mb-1.5 flex items-center gap-2">
-                  {stale ? (
-                    <AlertTriangle className="h-4 w-4 text-[var(--color-danger)]" aria-hidden />
-                  ) : (
-                    <Activity className="h-4 w-4 text-[var(--color-success)]" aria-hidden />
-                  )}
-                  <StatusBadge
-                    kind={stale ? 'failed' : 'delivered'}
-                    label={stale ? 'Not running' : 'Running'}
-                  />
-                </div>
-                <p className="text-sm text-[var(--color-text-secondary)]">
-                  {minutes === null
-                    ? 'No cycle has ever completed. Either the poller has not run since this was added, or it is not running at all.'
-                    : `Last cycle ${minutes === 0 ? 'less than a minute' : `${minutes} minute${minutes === 1 ? '' : 's'}`} ago. Scheduled ${health.data?.cronPattern ?? ''}.`}
-                </p>
+        <AfCard tone={stale ? 'critical' : undefined}>
+          <div className="af-card__head">
+            <div className="af-grow af-stack af-stack--tight">
+              <div className="af-row">
                 {stale ? (
-                  <p className="mt-1.5 text-sm text-[var(--color-text-secondary)]">
-                    Orders will not reach delivered while this is stopped, which also means COD is
-                    not being credited. Run a cycle below, then check the API process is up and that
-                    the Delhivery base URL is still set.
-                  </p>
-                ) : null}
+                  <AlertTriangle size={16} aria-hidden className="af-bad" />
+                ) : (
+                  <Activity size={16} aria-hidden className="af-good" />
+                )}
+                <StatusChip
+                  kind={stale ? 'failed' : 'delivered'}
+                  label={stale ? 'Not running' : 'Running'}
+                />
               </div>
-              <Button
-                variant="secondary"
-                size="md"
-                disabled={run.isPending}
-                onClick={() => void runNow()}
-              >
-                {run.isPending ? 'Running…' : 'Run a cycle now'}
-              </Button>
+              <p className="af-muted">
+                {minutes === null
+                  ? 'No cycle has ever completed. Either the poller has not run since this was added, or it is not running at all.'
+                  : `Last cycle ${minutes === 0 ? 'less than a minute' : `${minutes} minute${minutes === 1 ? '' : 's'}`} ago. Scheduled ${health.data?.cronPattern ?? ''}.`}
+              </p>
+              {stale ? (
+                <p className="af-muted">
+                  Orders will not reach delivered while this is stopped, which also means COD is not
+                  being credited. Run a cycle below, then check the API process is up and that the
+                  Delhivery base URL is still set.
+                </p>
+              ) : null}
             </div>
-          </CardBody>
-        </Card>
+            <AsyncButton
+              variant="secondary"
+              size="md"
+              labels={{
+                idle: 'Run a cycle now',
+                busy: 'Running…',
+                done: 'Cycle ran',
+                error: 'Did not run',
+              }}
+              disabled={run.isPending}
+              onAction={runNow}
+            />
+          </div>
+        </AfCard>
       )}
-    </Section>
+    </AfSection>
   );
 }

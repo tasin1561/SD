@@ -1,0 +1,40 @@
+/* Delhivery console. Tokens only; shared pieces in system/_components/af.css. */
+.dl-guard {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.dl-headroom {
+  display: grid;
+  grid-template-columns: minmax(0, 6rem) minmax(0, max-content);
+  align-items: center;
+  gap: var(--sp-2);
+}
+.dl-lookup-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.dl-awbs .sk-field__input {
+  font-family: var(--app-mono);
+}
+.dl-result {
+  display: grid;
+  grid-template-columns: minmax(auto, max-content) minmax(0, 1fr);
+  gap: 2px var(--sp-3);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.dl-result dt {
+  color: var(--fg-faint);
+}
+.dl-result dd {
+  margin: 0;
+  color: var(--fg-body);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dl-result-head {
+  padding: var(--sp-3) var(--sp-4);
+}

@@ -1,0 +1,54 @@
+/* System limits. Tokens only; shared pieces in system/_components/af.css. */
+.cap-status {
+  color: var(--green-text);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.cap-status--lead {
+  font-size: var(--fs-sm);
+}
+.cap-status[data-tone='warn'] {
+  color: var(--saffron-text);
+}
+.cap-status[data-tone='bad'],
+.cap-status[data-tone='critical'] {
+  color: var(--red-text);
+}
+.cap-figure-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.cap-figure {
+  color: var(--green-text);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  line-height: 1.1;
+}
+.cap-figure[data-tone='warn'] {
+  color: var(--saffron-text);
+}
+.cap-figure[data-tone='bad'],
+.cap-figure[data-tone='critical'] {
+  color: var(--red-text);
+}
+.cap-pct {
+  margin-left: auto;
+}
+/* An unknown ceiling: hatched, never an empty (roomy-looking) bar. */
+.cap-unknown {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: repeating-linear-gradient(45deg, var(--line-strong) 0 4px, transparent 4px 8px);
+  opacity: 0.5;
+}
+.cap-explain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  padding-left: var(--sp-3);
+  border-left: 2px solid var(--line-strong);
+}
