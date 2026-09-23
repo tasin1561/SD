@@ -307,7 +307,7 @@ function RequestWithdrawalModal({
           <TextField
             id="wd-amount"
             label="Amount (₹)"
-            required
+            requiredMark
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
