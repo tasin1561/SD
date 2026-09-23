@@ -125,3 +125,6 @@ __pycache__/
 # Owner-supplied motion reference clips — ideas only, never shipped
 reference/
 .claude/skills/premium-ui-motion/
+
+# ----- Apps restyle before/after screenshots (local only, large) -----
+screenshots/apps-restyle/
