@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => {
@@ -38,7 +38,7 @@ for (const route of ROUTES) {
   const name = route === '/' ? 'root' : route.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
   const runs = [];
   for (let i = 0, tries = 0; i < RUNS; i += 1) {
-    const path = join(OUT, `${name}-${i + 1}`);
+    const path = join(resolve(OUT), `${name}-${i + 1}`);
     try {
       execFileSync(
         'npx',
@@ -56,13 +56,10 @@ for (const route of ROUTES) {
           '--output=html',
           `--output-path=${path}`,
         ],
-        // chrome-launcher builds its profile dir from TEMP/TMP; under WSL
-        // those can hold a Windows path, which lands as a folder named
-        // "C:\Users\…" in the current directory. Pin them to the OS tmp.
-        {
-          env: { ...process.env, CHROME_PATH: chrome, TEMP: tmpdir(), TMP: tmpdir() },
-          stdio: 'ignore',
-        },
+        // chrome-launcher detects WSL and names its profile dir with a
+        // Windows path RELATIVE TO THE CWD ("C:\\Users\\…\\lighthouse.N"),
+        // whatever TEMP says — so run it from the OS tmp dir.
+        { env: { ...process.env, CHROME_PATH: chrome }, cwd: tmpdir(), stdio: 'ignore' },
       );
     } catch {
       // Lighthouse exits non-zero on some audits; the report is still written.

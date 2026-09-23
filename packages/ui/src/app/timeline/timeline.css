@@ -288,3 +288,35 @@
   color: var(--fg-strong);
   font-weight: var(--fw-bold);
 }
+
+/* The fold row: "Show n earlier scans". A real button, full --tap tall. */
+.sk-tl__fold-btn {
+  justify-self: start;
+  min-height: var(--tap);
+  margin-top: -8px;
+  padding: 0 var(--sp-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--sky);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.sk-tl__fold-btn:hover {
+  background: var(--accent-tint);
+}
+.sk-tl__fold-btn:active {
+  transform: scale(0.98);
+}
+.sk-tl__fold-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-tl__fold > .sk-tl__fold-btn {
+  grid-column: 2 / -1;
+}

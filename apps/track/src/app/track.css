@@ -26,20 +26,23 @@ body {
   inset: 0;
   z-index: -2;
   display: block;
-  opacity: 0.9;
+  opacity: 1;
   pointer-events: none;
 }
 .tr-map--soft {
-  opacity: 0.5;
+  opacity: 0.8;
 }
-/* A soft clearing so the map never fights the cards. */
+/* The map is a background but clearly a map (drawn at emphasis 2). Text
+   that sits directly on it — the top bar and the eyebrow — gets a band of
+   page colour behind it, so it keeps AA contrast over a coastline; every
+   other word is on an opaque card. */
 .tr-veil {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(60% 55% at 50% 32%, var(--page) 25%, transparent 100%);
-  opacity: 0.75;
+  background: linear-gradient(to bottom, var(--page) 0, var(--page) 96px, transparent 220px);
+  opacity: 0.92;
 }
 .tr-wrap {
   width: min(100% - 2 * var(--sp-4), 44rem);
@@ -164,11 +167,17 @@ body {
   padding-top: clamp(var(--sp-4), 8vh, var(--sp-12));
 }
 .tr-home__eyebrow {
-  margin: 0 0 var(--sp-3);
+  /* A pill with its own surface: it sits where the map shows through, and
+     a coastline crossing behind bare text broke AA contrast. */
+  display: table;
+  margin: 0 auto var(--sp-3);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent-line);
+  background: var(--surface-2);
   color: var(--sky);
   font-size: var(--fs-sm);
   font-weight: 600;
-  text-align: center;
 }
 .tr-lookup {
   padding: var(--sp-8) var(--sp-6);

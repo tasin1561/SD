@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { Check, MapPin, Package, RotateCcw, X } from 'lucide-react';
+import { Check, Ellipsis, MapPin, Package, RotateCcw, X } from 'lucide-react';
 import {
   useEffect,
   useLayoutEffect,
@@ -76,6 +76,7 @@ export function Timeline({
   expected,
   label = 'Journey',
   stateWords,
+  collapseEarlier,
   className,
 }: {
   readonly steps: readonly TimelineStep[];
@@ -88,6 +89,16 @@ export function Timeline({
   readonly label?: string;
   /** The spoken state words, translated ("Completed" → "पूरा हुआ"). */
   readonly stateWords?: Partial<Record<TimelineStepState, string>> | undefined;
+  /**
+   * Fold the steps before the last `keep` ones that lead up to the current
+   * step behind one button, so on a long journey the current step is on
+   * screen without scrolling. `{n}` in the labels is the hidden count. The
+   * button stays where it is after expanding (as `hideLabel`), so focus is
+   * never lost. Omit to show every step.
+   */
+  readonly collapseEarlier?:
+    | { readonly keep: number; readonly showLabel: string; readonly hideLabel: string }
+    | undefined;
   readonly className?: string | undefined;
 }): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -101,6 +112,15 @@ export function Timeline({
   });
   const reachStep = reach >= 0 ? steps[reach] : undefined;
   const fillTone = reachStep?.tone ?? 'default';
+
+  const [expanded, setExpanded] = useState(false);
+  const foldable = collapseEarlier === undefined ? 0 : Math.max(0, reach - collapseEarlier.keep);
+  // Folding a single step saves nothing: it would swap one row for a button.
+  const canFold = foldable >= 2;
+  const hidden = canFold && !expanded ? foldable : 0;
+  const shown = hidden > 0 ? steps.slice(hidden) : steps;
+  // The fold row carries a dot too, so the rail stays continuous.
+  const domReach = reach < 0 ? -1 : reach - hidden + (canFold ? 1 : 0);
 
   useIsoLayoutEffect(() => {
     const list = listRef.current;
@@ -117,7 +137,7 @@ export function Timeline({
       };
       const top = center(first);
       const height = Math.max(0, center(last) - top);
-      const target = reach >= 0 ? dots[reach] : undefined;
+      const target = domReach >= 0 ? dots[domReach] : undefined;
       const fill = target === undefined || height === 0 ? 0 : (center(target) - top) / height;
       list.style.setProperty('--rail-top', `${top}px`);
       list.style.setProperty('--rail-h', `${height}px`);
@@ -127,7 +147,7 @@ export function Timeline({
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     ro?.observe(list);
     return () => ro?.disconnect();
-  }, [steps, reach]);
+  }, [steps, domReach, hidden]);
 
   // Grow the fill once, after the first measurement.
   useEffect(() => {
@@ -165,7 +185,25 @@ export function Timeline({
         </div>
       )}
       <ol ref={listRef} className="sk-tl__steps" aria-label={label}>
-        {steps.map((s) => {
+        {canFold && collapseEarlier !== undefined && (
+          <li className="sk-tl__step sk-tl__fold" data-state="done" data-tone="default">
+            <span className="sk-tl__dot" aria-hidden>
+              <Ellipsis size={12} strokeWidth={3} />
+            </span>
+            <button
+              type="button"
+              className="sk-tl__fold-btn"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((e) => !e)}
+            >
+              {(expanded ? collapseEarlier.hideLabel : collapseEarlier.showLabel).replace(
+                '{n}',
+                String(foldable),
+              )}
+            </button>
+          </li>
+        )}
+        {shown.map((s) => {
           const tone = s.tone ?? 'default';
           const glyph =
             s.icon ??

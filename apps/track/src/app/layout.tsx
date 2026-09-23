@@ -10,7 +10,7 @@ import './globals.css';
  * on a font CDN answering). Plus Jakarta Sans everywhere, JetBrains Mono for
  * the AWB only.
  *
- * Hindi: a Devanagari face (Poppins Devanagari 400, 39.7 KB, OFL) whose
+ * Hindi: a Devanagari face (Poppins Devanagari 400 + 600, 39.7 + 39.3 KB, OFL) whose
  * @font-face is declared on every page but which is only NAMED in the font
  * stack when Hindi is active (`data-lang="hi"` → `--app-font` in
  * track.css). A browser downloads a web font only for text that asks for
@@ -45,7 +45,11 @@ const mono = localFont({
 });
 
 const devanagari = localFont({
-  src: './fonts/poppins-devanagari-400.woff2',
+  src: [
+    { path: './fonts/poppins-devanagari-400.woff2', weight: '400', style: 'normal' },
+    // A real 600 (39.3 KB) so Hindi headings are not synthesised bold.
+    { path: './fonts/poppins-devanagari-600.woff2', weight: '600', style: 'normal' },
+  ],
   variable: '--font-deva-face',
   display: 'swap',
   preload: false,
@@ -59,9 +63,19 @@ const devanagari = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://track.skydrop.online'),
   title: 'Skydrop tracking',
   description: 'Track your Skydrop parcel by AWB number.',
   robots: { index: true, follow: true },
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: 'Skydrop',
+    title: 'Skydrop tracking',
+    description: 'Track your Skydrop parcel by AWB number.',
+    url: '/',
+    images: [{ url: '/og.png' }],
+  },
 };
 
 export default async function RootLayout({

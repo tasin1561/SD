@@ -28,6 +28,11 @@ const nextConfig = {
   experimental: {
     inlineCss: true,
   },
+  // Next 15 streams <head> metadata into the body for browsers it does not
+  // recognise as crawlers, so a real browser (and Lighthouse) saw a head
+  // with no description. Render it in the head for everyone: the parcel
+  // page already waits for its lookup before sending a byte.
+  htmlLimitedBots: /.*/,
 };
 
 export default nextConfig;

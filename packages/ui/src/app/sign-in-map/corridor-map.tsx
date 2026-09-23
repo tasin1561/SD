@@ -114,7 +114,20 @@ interface Pulse {
   alpha: number;
 }
 
-export function CorridorMap({ className }: { readonly className?: string }): ReactElement {
+export function CorridorMap({
+  className,
+  emphasis = 1,
+}: {
+  readonly className?: string;
+  /**
+   * How many times the static layer (grid, land, coast, routes, nodes) is
+   * laid down per frame. 1 is the calm sign-in background; 2 roughly
+   * doubles its translucent strength for a page where the map should read
+   * as a map (track). The brand `--map-*` tokens are marketing's and stay
+   * untouched — this compounds their alpha instead of inventing colours.
+   */
+  readonly emphasis?: 1 | 2 | 3;
+}): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -281,8 +294,9 @@ export function CorridorMap({ className }: { readonly className?: string }): Rea
     const drawStatic = (): void => {
       if (W === 0 || H === 0) return;
       ctx.clearRect(0, 0, W, H);
-      if (base !== null) ctx.drawImage(base, 0, 0, W, H);
-      else drawBase(ctx);
+      if (base !== null) {
+        for (let k = 0; k < emphasis; k += 1) ctx.drawImage(base, 0, 0, W, H);
+      } else drawBase(ctx);
     };
 
     const drawFrame = (): void => {
@@ -441,7 +455,7 @@ export function CorridorMap({ className }: { readonly className?: string }): Rea
       motion.removeEventListener('change', repaint);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, []);
+  }, [emphasis]);
 
   return (
     <canvas

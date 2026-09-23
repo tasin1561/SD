@@ -15,7 +15,7 @@ export default async function Home(): Promise<ReactElement> {
   const locale = await getActiveLocale();
   return (
     <div className="tr-page">
-      <LazyCorridorMap className="tr-map" />
+      <LazyCorridorMap className="tr-map" emphasis={2} />
       <div aria-hidden className="tr-veil" />
       <div className="tr-wrap tr-wrap--narrow">
         <TopBar locale={locale} />
