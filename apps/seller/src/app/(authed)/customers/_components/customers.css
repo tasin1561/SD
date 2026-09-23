@@ -1,0 +1,200 @@
+/* Customers — layout and the few page-only pieces. Tokens only. The
+   primitives (PageHeader, KpiCard, Table, Dialog …) carry their own CSS;
+   this file arranges them and draws the expanded record's well. */
+
+.cst-page {
+  display: grid;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.cst-page > .sk-ph {
+  margin-bottom: 0;
+}
+
+.cst-section {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.cst-section > .sk-toolbar {
+  margin-bottom: 0;
+}
+
+.cst-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* ── Header facts ─────────────────────────────────────────────────────── */
+.cst-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.cst-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.cst-fact[data-tone='accent'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.cst-fact[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.cst-fact__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
+
+/* ── Table cells ──────────────────────────────────────────────────────── */
+.cst-faint {
+  color: var(--fg-faint);
+}
+.cst-phone {
+  color: var(--fg-strong);
+  font-size: var(--fs-xs);
+}
+.cst-date {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.cst-rto {
+  color: var(--st-rto-fg);
+  font-weight: var(--fw-semibold);
+}
+.cst-bad {
+  color: var(--red-text);
+  font-weight: var(--fw-semibold);
+}
+
+/* The open/hide control: the chevron turns with the row. */
+.cst-toggle .cst-toggle__chev {
+  transition: transform var(--dur) var(--ease-out);
+}
+.cst-toggle[aria-expanded='true'] .cst-toggle__chev {
+  transform: rotate(180deg);
+}
+
+/* The opened record sits in an inset well under its row. */
+.cst-expanded > .sk-td {
+  padding: 0;
+  background: var(--surface-band);
+}
+.cst-well {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  min-width: 0;
+}
+
+.cst-reset {
+  min-height: var(--tap);
+}
+
+/* ── Detail card ──────────────────────────────────────────────────────── */
+.cst-card {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  min-width: 0;
+}
+.cst-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.cst-card__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+.cst-card__sub {
+  margin: 2px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.cst-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.cst-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: var(--sp-3) var(--sp-4);
+  margin: 0;
+}
+.cst-facts__item {
+  min-width: 0;
+}
+.cst-facts__item dt {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.cst-facts__item dd {
+  margin: 2px 0 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.cst-fixed {
+  margin-left: var(--sp-2);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+
+/* ── Dialog body ──────────────────────────────────────────────────────── */
+.cst-form {
+  display: grid;
+  gap: var(--sp-4);
+}
+.cst-lede {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.cst-error {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-sm);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+}
+
+/* ── Address history ──────────────────────────────────────────────────── */
+.cst-addr-line[data-suspect='1'] {
+  color: var(--red-text);
+}
+.cst-addr-place {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}

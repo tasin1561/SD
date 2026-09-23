@@ -3,23 +3,17 @@
 import type { ReactElement, ReactNode } from 'react';
 import Link from 'next/link';
 import { PhoneOff, Truck } from 'lucide-react';
-import {
-  BandBody,
-  Crumbs,
-  EmptyState,
-  ErrorNote,
-  Ident,
-  MetaChip,
-  Money,
-  PageHeader,
-  SectionBand,
-  SkeletonRows,
-  Stat,
-} from '@skydrop/ui/components';
+import { Ident, Money } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { ListRow, ListRows, type ListRowSeverity } from '@skydrop/ui/app/list-row';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { OrderStatus } from '@skydrop/db';
 import { useMyNsaOrders } from '@/lib/ops-hooks';
 import { useOrdersList } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import './needs-attention.css';
 
 /**
  * THE SELLER'S side of the NSA worklist.
@@ -101,287 +95,291 @@ export function NeedsAttentionIndex(): ReactElement {
   const overdue = rows.filter((r) => r.dayCount >= 3).length;
 
   return (
-    <div>
+    <div className="nat-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Selling' },
-              { label: 'Needs attention' },
-            ]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Selling' },
+          { label: 'Needs attention' },
+        ]}
+        Link={Link}
         title="Needs attention"
         subtitle="Orders we could not confirm on the phone, and parcels that went out for delivery and never arrived."
         /*
-          EVERY non-empty case gets a chip, or the row goes blank while
+          EVERY non-empty case gets a fact, or the row goes blank while
           the page below it is full.
 
-          The first cut only had chips for "waiting on you" and "stuck
+          The first cut only had facts for "waiting on you" and "stuck
           with a courier", so an account whose single unconfirmed order
-          had already been LET GO rendered an empty chip row above a
-          page listing that order — which reads as a header that failed
-          to load rather than as one with nothing to say.
+          had already been LET GO rendered an empty row above a page
+          listing that order — which reads as a header that failed to
+          load rather than as one with nothing to say.
         */
         meta={
           answered ? (
-            unconfirmed.length === 0 && rows.length === 0 ? (
-              <MetaChip tone="good" dot>
-                Nothing needs you
-              </MetaChip>
-            ) : (
-              <>
-                {waitingOnYou > 0 && (
-                  <MetaChip tone="warn">{waitingOnYou} waiting on your decision</MetaChip>
-                )}
-                {letGo > 0 && <MetaChip dot>{letGo} let go after the last attempt</MetaChip>}
-                {rows.length > 0 && (
-                  <MetaChip tone="bad">{rows.length} stuck with a courier</MetaChip>
-                )}
-              </>
-            )
+            <span className="nat-meta">
+              {unconfirmed.length === 0 && rows.length === 0 ? (
+                <Fact tone="good" dot>
+                  Nothing needs you
+                </Fact>
+              ) : (
+                <>
+                  {waitingOnYou > 0 && (
+                    <Fact tone="warn">{waitingOnYou} waiting on your decision</Fact>
+                  )}
+                  {letGo > 0 && <Fact dot>{letGo} let go after the last attempt</Fact>}
+                  {rows.length > 0 && <Fact tone="bad">{rows.length} stuck with a courier</Fact>}
+                </>
+              )}
+            </span>
           ) : undefined
         }
       />
 
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Stat
-          label="We could not reach the customer"
-          icon={<PhoneOff size={13} aria-hidden />}
-          // BOTH queries, not either: this figure is their sum, and
-          // showing it when only one has landed is a number that then
-          // changes under the reader.
-          value={answered ? unconfirmed.length : <span className="text-text-faint">—</span>}
-          unit={!answered || unconfirmed.length === 0 ? undefined : 'orders'}
-          tone={waitingOnYou > 0 ? 'warn' : 'neutral'}
-          {...(answered
-            ? {
-                hint:
-                  unconfirmed.length === 0
-                    ? 'Every order our agents rang was answered.'
-                    : 'You know your customer better than we do.',
-              }
-            : {})}
-          {...(unconfirmed.length > 0
-            ? {
-                foot: [
-                  { label: 'Waiting on your decision', value: waitingOnYou },
-                  { label: 'Already let go', value: letGo },
-                ],
-              }
-            : {})}
-        />
-        <Stat
-          label="Out for delivery, never arrived"
-          icon={<Truck size={13} aria-hidden />}
-          value={list.data === undefined ? <span className="text-text-faint">—</span> : rows.length}
-          unit={rows.length === 0 ? undefined : 'parcels'}
-          tone={overdue > 0 ? 'bad' : rows.length > 0 ? 'warn' : 'neutral'}
-          {...(answered
-            ? {
-                hint:
-                  rows.length === 0
-                    ? 'This list fills in the evening, so it is normally empty during the day.'
-                    : 'We chase the courier on these. You do not have to.',
-              }
-            : {})}
-          {...(rows.length > 0
-            ? { foot: [{ label: 'Out three nights or more', value: overdue }] }
-            : {})}
-        />
+      <div className="nat-kpis">
+        {/* Counts roll once on mount and land on exactly the string they
+            always showed (`String`, no digit grouping). */}
+        {/* BOTH queries, not either: this figure is their sum, and
+            showing it when only one has landed is a number that then
+            changes under the reader. */}
+        {answered ? (
+          <KpiCard
+            label="We could not reach the customer"
+            icon={<PhoneOff size={14} />}
+            value={unconfirmed.length}
+            format={String}
+            unit={unconfirmed.length === 0 ? undefined : 'orders'}
+            tone={waitingOnYou > 0 ? 'pending' : 'neutral'}
+            hint={
+              unconfirmed.length === 0
+                ? 'Every order our agents rang was answered.'
+                : 'You know your customer better than we do.'
+            }
+            foot={
+              unconfirmed.length > 0
+                ? [
+                    { label: 'Waiting on your decision', value: waitingOnYou },
+                    { label: 'Already let go', value: letGo },
+                  ]
+                : undefined
+            }
+          />
+        ) : (
+          <KpiCard
+            label="We could not reach the customer"
+            icon={<PhoneOff size={14} />}
+            figure={<span className="nat-faint">—</span>}
+            tone={waitingOnYou > 0 ? 'pending' : 'neutral'}
+            foot={
+              unconfirmed.length > 0
+                ? [
+                    { label: 'Waiting on your decision', value: waitingOnYou },
+                    { label: 'Already let go', value: letGo },
+                  ]
+                : undefined
+            }
+          />
+        )}
+        {list.data === undefined ? (
+          <KpiCard
+            label="Out for delivery, never arrived"
+            icon={<Truck size={14} />}
+            figure={<span className="nat-faint">—</span>}
+            unit={rows.length === 0 ? undefined : 'parcels'}
+            tone={overdue > 0 ? 'debit' : rows.length > 0 ? 'pending' : 'neutral'}
+            hint={answered ? overdueHint(rows.length) : undefined}
+          />
+        ) : (
+          <KpiCard
+            label="Out for delivery, never arrived"
+            icon={<Truck size={14} />}
+            value={rows.length}
+            format={String}
+            unit={rows.length === 0 ? undefined : 'parcels'}
+            tone={overdue > 0 ? 'debit' : rows.length > 0 ? 'pending' : 'neutral'}
+            hint={answered ? overdueHint(rows.length) : undefined}
+            foot={
+              rows.length > 0 ? [{ label: 'Out three nights or more', value: overdue }] : undefined
+            }
+          />
+        )}
       </div>
 
       {unconfirmed.length > 0 && (
-        <div className="mb-4">
-          {/* A BAND TITLE IS A LABEL, NOT A SENTENCE. It shares one row
-              with the index and truncates, so at 360 — the width most of
-              these sellers are on — "We could not reach this customer"
-              rendered as "OUT FOR DELIVERY AND STILL NOT…". About twenty
-              characters fit; the rest belongs in the note, which wraps. */}
-          <SectionBand
-            index="01"
+        <section className="nat-section">
+          {/* A SECTION TITLE IS A LABEL, NOT A SENTENCE. At 360 — the
+              width most of these sellers are on — a long title wraps
+              into the note beside it; the sentence belongs in the note. */}
+          <SectionHeading
             title="Could not reach"
             note="Our agents rang and nobody answered. Open one to ask us to try again, or leave it."
           />
-          <BandBody flush>
-            <ul className="divide-border divide-y">
-              {unconfirmed.map((o) => (
-                <li key={o.id} className="px-3 py-3">
-                  <Row
-                    left={
-                      <>
-                        <Link
-                          href={`/orders/${o.id}`}
-                          className="text-accent font-mono text-sm hover:underline"
-                        >
-                          {o.orderNumber}
-                        </Link>
-                        <div className="text-text-body mt-1 text-sm">
-                          {o.recipientName}
-                          <span className="text-text-faint font-mono">
-                            {' '}
-                            · {o.recipientPhoneE164}
-                          </span>
-                        </div>
-                        <div className="text-text-faint mt-0.5 font-mono text-xs">
-                          Placed {new Date(o.placedAt).toLocaleDateString('en-IN')}
-                        </div>
-                      </>
-                    }
-                    right={
-                      <>
-                        <div
-                          className={
-                            o.status === OrderStatus.AWAITING_SELLER_DECISION
-                              ? 'text-[var(--status-pending-fg)] text-sm font-medium'
-                              : 'text-text-bright text-sm font-medium'
-                          }
-                        >
-                          {o.status === OrderStatus.AWAITING_SELLER_DECISION
-                            ? 'Waiting on your decision'
-                            : 'Let go after the last attempt'}
-                        </div>
-                        {o.codAmountInr !== null && (
-                          <div className="text-text-faint mt-0.5 text-xs">
-                            COD <Money amount={o.codAmountInr} currency="INR" convert={false} />
-                          </div>
-                        )}
-                      </>
-                    }
-                  />
-                  <p className="border-border mt-2.5 border-t pt-2 text-xs">
-                    <Link href={`/orders/${o.id}`} className="text-accent hover:underline">
-                      Open the order
-                    </Link>
-                    <span className="text-text-muted">
-                      {' '}
-                      — from there you can ask us to call again, or raise an issue.
+          <ListRows label="Orders we could not confirm">
+            {unconfirmed.map((o) => {
+              const waiting = o.status === OrderStatus.AWAITING_SELLER_DECISION;
+              return (
+                <ListRow
+                  key={o.id}
+                  href={`/orders/${o.id}`}
+                  Link={Link}
+                  severity={waiting ? 'high' : 'medium'}
+                  icon={<PhoneOff size={16} />}
+                  title={<span className="sk-ident">{o.orderNumber}</span>}
+                  description={
+                    <>
+                      <span className="nat-line">
+                        {o.recipientName}
+                        <span className="nat-faint sk-ident"> · {o.recipientPhoneE164}</span>
+                      </span>
+                      <span className="nat-line nat-faint">
+                        Placed {new Date(o.placedAt).toLocaleDateString('en-IN')}
+                      </span>
+                      <span className="nat-next">
+                        <span className="nat-next__lead">Open the order</span> — from there you can
+                        ask us to call again, or raise an issue.
+                      </span>
+                    </>
+                  }
+                  status={
+                    <span className="nat-state" data-tone={waiting ? 'pending' : undefined}>
+                      {waiting ? 'Waiting on your decision' : 'Let go after the last attempt'}
                     </span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </BandBody>
-        </div>
+                  }
+                  meta={
+                    o.codAmountInr !== null ? (
+                      <span className="nat-cod">
+                        COD <Money amount={o.codAmountInr} currency="INR" convert={false} />
+                      </span>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </ListRows>
+        </section>
       )}
 
-      <SectionBand
-        index={unconfirmed.length > 0 ? '02' : '01'}
-        title="Overdue parcels"
-        note="Out for delivery and still not arrived. We chase the courier; this says how far we have got."
-      />
-      <BandBody flush={!list.isLoading && !list.isError && rows.length > 0}>
+      <section className="nat-section">
+        <SectionHeading
+          title="Overdue parcels"
+          note="Out for delivery and still not arrived. We chase the courier; this says how far we have got."
+        />
         {list.isLoading ? (
-          <SkeletonRows rows={3} />
+          <SkeletonRows rows={3} label="Loading overdue parcels…" />
         ) : list.isError ? (
-          <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
         ) : rows.length === 0 ? (
           unconfirmed.length > 0 ? (
             // The page is NOT empty — saying "nothing of yours is stuck"
             // directly under a list of orders that need them reads as a
             // page arguing with itself.
-            <p className="text-text-muted text-sm">
-              Nothing of yours is out for delivery and overdue.
-            </p>
+            <p className="nat-quiet">Nothing of yours is out for delivery and overdue.</p>
           ) : (
             <EmptyState
+              tone="positive"
               title="Nothing of yours needs you"
               description="No order is waiting on a decision, and every parcel out for delivery has either arrived or been scanned as a failed attempt. This page fills in the evening, so it is normally empty during the day."
-              bare
             />
           )
         ) : (
-          <ul className="divide-border divide-y">
+          <ListRows label="Overdue parcels">
             {rows.map((r) => (
-              <li key={r.orderId} className="px-3 py-3">
-                <Row
-                  left={
-                    <>
-                      <Link
-                        href={`/orders/${r.orderId}`}
-                        className="text-accent font-mono text-sm hover:underline"
-                      >
-                        {r.orderNumber}
-                      </Link>
-                      <div className="text-text-body mt-1 text-sm">
-                        {r.recipientName}
-                        <span className="text-text-faint"> · {r.recipientCity}</span>
-                      </div>
-                      {r.awbNumber !== null && (
-                        <div className="text-text-faint mt-0.5 text-xs">
-                          <Ident value={r.awbNumber} /> · {r.courierCode}
-                        </div>
-                      )}
-                    </>
-                  }
-                  right={
-                    <>
-                      {/* The number of nights, in words, because "3" on its
-                          own does not say what it counts. */}
-                      <div
-                        className={
-                          r.dayCount >= 3
-                            ? 'text-[var(--color-critical)] text-sm font-medium'
-                            : r.dayCount === 2
-                              ? 'text-[var(--status-pending-fg)] text-sm font-medium'
-                              : 'text-text-bright text-sm font-medium'
-                        }
-                      >
-                        {r.dayCount === 1 ? 'Out since yesterday' : `Out for ${r.dayCount} days`}
-                      </div>
-                      {r.codAmountInr !== null && (
-                        <div className="text-text-faint mt-0.5 text-xs">
-                          COD <Money amount={r.codAmountInr} currency="INR" convert={false} />
-                        </div>
-                      )}
-                    </>
-                  }
-                />
-                <p className="border-border mt-2.5 border-t pt-2 text-xs">
-                  {r.acknowledgedAt === null ? (
-                    // Said plainly rather than left blank: "nobody has
-                    // picked this up yet" is the thing worth knowing, and
-                    // an empty space reads as a page that failed to load.
-                    <span className="text-text-muted">
-                      We have flagged this and will chase the courier. Nobody has picked it up yet.
+              <ListRow
+                key={r.orderId}
+                href={`/orders/${r.orderId}`}
+                Link={Link}
+                severity={nightsSeverity(r.dayCount)}
+                icon={<Truck size={16} />}
+                title={<span className="sk-ident">{r.orderNumber}</span>}
+                description={
+                  <>
+                    <span className="nat-line">
+                      {r.recipientName}
+                      <span className="nat-faint"> · {r.recipientCity}</span>
                     </span>
-                  ) : (
-                    <span className="text-text-body">
-                      We are chasing this — picked up{' '}
-                      {new Date(r.acknowledgedAt).toLocaleString('en-IN')}
-                      {r.note !== null && <span className="text-text-muted"> · {r.note}</span>}
+                    {r.awbNumber !== null && (
+                      <span className="nat-line nat-faint">
+                        <Ident value={r.awbNumber} /> · {r.courierCode}
+                      </span>
+                    )}
+                    {r.acknowledgedAt === null ? (
+                      // Said plainly rather than left blank: "nobody has
+                      // picked this up yet" is the thing worth knowing,
+                      // and an empty space reads as a page that failed
+                      // to load.
+                      <span className="nat-next">
+                        We have flagged this and will chase the courier. Nobody has picked it up
+                        yet.
+                      </span>
+                    ) : (
+                      <span className="nat-next" data-picked="1">
+                        We are chasing this — picked up{' '}
+                        {new Date(r.acknowledgedAt).toLocaleString('en-IN')}
+                        {r.note !== null && <span className="nat-faint"> · {r.note}</span>}
+                      </span>
+                    )}
+                  </>
+                }
+                status={
+                  // The number of nights, in words, because "3" on its
+                  // own does not say what it counts.
+                  <span
+                    className="nat-state"
+                    data-tone={
+                      r.dayCount >= 3 ? 'critical' : r.dayCount === 2 ? 'pending' : undefined
+                    }
+                  >
+                    {r.dayCount === 1 ? 'Out since yesterday' : `Out for ${r.dayCount} days`}
+                  </span>
+                }
+                meta={
+                  r.codAmountInr !== null ? (
+                    <span className="nat-cod">
+                      COD <Money amount={r.codAmountInr} currency="INR" convert={false} />
                     </span>
-                  )}
-                </p>
-              </li>
+                  ) : undefined
+                }
+              />
             ))}
-          </ul>
+          </ListRows>
         )}
-      </BandBody>
+      </section>
     </div>
   );
 }
 
+/** The hint under the overdue tile — only said once all three have answered. */
+function overdueHint(count: number): string {
+  return count === 0
+    ? 'This list fills in the evening, so it is normally empty during the day.'
+    : 'We chase the courier on these. You do not have to.';
+}
+
 /**
- * One parcel or order, as two columns that stack on a phone.
- *
- * Shared between the two lists rather than written twice: they carry
- * different facts and the same shape, and the shape is what makes them
- * scannable as one page.
+ * How loud a stuck parcel's row is, by the nights it has been out. Three
+ * nights is where our own worklist stops treating a parcel as "still
+ * moving" — the same threshold the tile above counts.
  */
-function Row({
-  left,
-  right,
+function nightsSeverity(dayCount: number): ListRowSeverity {
+  if (dayCount >= 3) return 'critical';
+  if (dayCount === 2) return 'high';
+  return 'medium';
+}
+
+/** A standing fact under the page title — never an action. */
+function Fact({
+  tone,
+  dot = false,
+  children,
 }: {
-  readonly left: ReactNode;
-  readonly right: ReactNode;
+  readonly tone?: 'good' | 'warn' | 'bad' | undefined;
+  readonly dot?: boolean;
+  readonly children: ReactNode;
 }): ReactElement {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">{left}</div>
-      <div className="min-w-0 sm:text-right">{right}</div>
-    </div>
+    <span className="nat-fact" data-tone={tone}>
+      {dot && <span className="nat-fact__dot" aria-hidden />}
+      {children}
+    </span>
   );
 }

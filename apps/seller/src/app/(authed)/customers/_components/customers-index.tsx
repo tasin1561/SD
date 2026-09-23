@@ -1,34 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { Fragment, useState, type ReactElement } from 'react';
-import { PackageCheck, RotateCcw, ShieldAlert, Users } from 'lucide-react';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  EmptyState,
-  ErrorNote,
-  Input,
-  MetaChip,
-  Num,
-  PageHeader,
-  SectionBand,
-  SkeletonRows,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  TablePaginator,
-  Td,
-  THead,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Fragment, useState, type ReactElement, type ReactNode } from 'react';
+import { ChevronDown, PackageCheck, RotateCcw, ShieldAlert, Users } from 'lucide-react';
+import { Num } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TableToolbar, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button } from '@skydrop/ui/app/button';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useCustomers, type CustomerView } from '@/lib/account-hooks';
 import { AddressHistory } from './address-history';
 import { CustomerDetailPanel } from './customer-detail-panel';
 import { serverVerdict } from '@/lib/server-verdict';
+import './customers.css';
 
 const PAGE_SIZE = 25;
 
@@ -93,261 +81,297 @@ export function CustomersIndex(): ReactElement {
   const flagged = items.filter((c) => isFlagged(c.riskLevel));
   const searching = search.trim() !== '';
 
+  const clearSearch = (): void => {
+    setSearch('');
+    setPage(1);
+  };
+
   return (
-    <div>
+    <div className="cst-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Selling' }, { label: 'Customers' }]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[{ label: 'Seller console' }, { label: 'Selling' }, { label: 'Customers' }]}
+        Link={Link}
         title="Customers"
         subtitle="Everyone you have shipped to, and how those orders ended."
         meta={
           list.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">
+            <span className="cst-meta">
+              <Fact tone="accent">
                 {total} {total === 1 ? 'customer' : 'customers'}
-              </MetaChip>
-              {flagged.length > 0 && (
-                <MetaChip tone="warn">{flagged.length} flagged on this page</MetaChip>
-              )}
-              <MetaChip dot>Scoped to you</MetaChip>
-            </>
+              </Fact>
+              {flagged.length > 0 && <Fact tone="warn">{flagged.length} flagged on this page</Fact>}
+              <Fact dot>Scoped to you</Fact>
+            </span>
           )
         }
       />
 
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Customers"
-          icon={<Users size={13} aria-hidden />}
-          value={list.data === undefined ? <span className="text-text-faint">—</span> : total}
-          unit={list.data === undefined ? undefined : 'people'}
-          tone="neutral"
-          hint="Every phone number you have ever shipped to."
-        />
-        <Stat
-          label="Orders on this page"
-          icon={<PackageCheck size={13} aria-hidden />}
-          value={loaded ? orderTotal : <span className="text-text-faint">—</span>}
-          unit={loaded ? 'orders' : undefined}
-          tone="neutral"
-          {...(loaded
-            ? {
-                foot: [
-                  { label: 'Delivered', value: deliveredTotal },
-                  { label: 'Customers shown', value: items.length },
-                ],
-              }
-            : {})}
-        />
-        <Stat
-          label="Came back on this page"
-          icon={<RotateCcw size={13} aria-hidden />}
-          value={loaded ? rtoTotal : <span className="text-text-faint">—</span>}
-          unit={loaded ? 'orders' : undefined}
-          tone={rtoTotal > 0 ? 'warn' : 'neutral'}
-          {...(answered
-            ? {
-                hint:
-                  rtoTotal > 0
-                    ? 'You pay the courier both ways on each of these.'
-                    : 'Nothing from these customers has been returned.',
-              }
-            : {})}
-          {...(loaded && refusedTotal > 0
-            ? { foot: [{ label: 'Refused at the door', value: refusedTotal }] }
-            : {})}
-        />
-        <Stat
-          label="Flagged on this page"
-          icon={<ShieldAlert size={13} aria-hidden />}
-          value={loaded ? flagged.length : <span className="text-text-faint">—</span>}
-          unit={loaded ? 'people' : undefined}
-          tone={flagged.length > 0 ? 'bad' : 'neutral'}
-          {...(answered
-            ? {
-                hint:
-                  flagged.length > 0
-                    ? 'Rated medium risk or worse. Worth a call before you ship again.'
-                    : 'Nobody on this page has been rated a risk.',
-              }
-            : {})}
-        />
+      <div className="cst-kpis">
+        {/* Counts roll once on mount and land on exactly the string they
+            always showed (`String`, no digit grouping). */}
+        {list.data === undefined ? (
+          <KpiCard
+            label="Customers"
+            icon={<Users size={14} />}
+            figure={<span className="cst-faint">—</span>}
+            tone="neutral"
+            hint="Every phone number you have ever shipped to."
+          />
+        ) : (
+          <KpiCard
+            label="Customers"
+            icon={<Users size={14} />}
+            value={total}
+            format={String}
+            unit="people"
+            tone="neutral"
+            hint="Every phone number you have ever shipped to."
+          />
+        )}
+        {loaded ? (
+          <KpiCard
+            label="Orders on this page"
+            icon={<PackageCheck size={14} />}
+            value={orderTotal}
+            format={String}
+            unit="orders"
+            tone="neutral"
+            foot={[
+              { label: 'Delivered', value: deliveredTotal },
+              { label: 'Customers shown', value: items.length },
+            ]}
+          />
+        ) : (
+          <KpiCard
+            label="Orders on this page"
+            icon={<PackageCheck size={14} />}
+            figure={<span className="cst-faint">—</span>}
+            tone="neutral"
+          />
+        )}
+        {loaded ? (
+          <KpiCard
+            label="Came back on this page"
+            icon={<RotateCcw size={14} />}
+            value={rtoTotal}
+            format={String}
+            unit="orders"
+            tone={rtoTotal > 0 ? 'pending' : 'neutral'}
+            hint={answered ? rtoHint(rtoTotal) : undefined}
+            foot={
+              refusedTotal > 0 ? [{ label: 'Refused at the door', value: refusedTotal }] : undefined
+            }
+          />
+        ) : (
+          <KpiCard
+            label="Came back on this page"
+            icon={<RotateCcw size={14} />}
+            figure={<span className="cst-faint">—</span>}
+            tone={rtoTotal > 0 ? 'pending' : 'neutral'}
+            hint={answered ? rtoHint(rtoTotal) : undefined}
+          />
+        )}
+        {loaded ? (
+          <KpiCard
+            label="Flagged on this page"
+            icon={<ShieldAlert size={14} />}
+            value={flagged.length}
+            format={String}
+            unit="people"
+            tone={flagged.length > 0 ? 'debit' : 'neutral'}
+            hint={answered ? flaggedHint(flagged.length) : undefined}
+          />
+        ) : (
+          <KpiCard
+            label="Flagged on this page"
+            icon={<ShieldAlert size={14} />}
+            figure={<span className="cst-faint">—</span>}
+            tone={flagged.length > 0 ? 'debit' : 'neutral'}
+            hint={answered ? flaggedHint(flagged.length) : undefined}
+          />
+        )}
       </div>
 
-      <SectionBand
-        index="01"
-        title="Customer register"
-        note={
-          list.data === undefined
-            ? undefined
-            : `${total} ${total === 1 ? 'customer' : 'customers'}${searching ? ' matching' : ''}`
-        }
-        action={
-          <>
-            <Input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Phone or name…"
-              className="w-full sm:w-64"
-              aria-label="Search customers"
-            />
-            {searching && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch('');
-                  setPage(1);
-                }}
-                className="text-text-faint hover:text-text-body px-1 text-xs transition-colors"
-              >
-                Reset
-              </button>
-            )}
-          </>
-        }
-      />
+      <section className="cst-section">
+        <SectionHeading
+          title="Customer register"
+          note={
+            list.data === undefined
+              ? undefined
+              : `${total} ${total === 1 ? 'customer' : 'customers'}${searching ? ' matching' : ''}`
+          }
+        />
+        <TableToolbar
+          search={{
+            value: search,
+            onChange: (next) => {
+              setSearch(next);
+              setPage(1);
+            },
+            label: 'Search customers',
+            placeholder: 'Phone or name…',
+          }}
+        >
+          {searching && (
+            <Button variant="ghost" size="sm" className="cst-reset" onClick={clearSearch}>
+              Reset
+            </Button>
+          )}
+        </TableToolbar>
 
-      <BandBody flush>
         {list.isLoading ? (
-          <div className="p-3">
-            <SkeletonRows rows={6} />
-          </div>
+          <SkeletonRows rows={6} label="Loading your customers…" />
         ) : list.isError ? (
-          <div className="p-3">
-            <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
-          </div>
+          <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
         ) : items.length === 0 ? (
-          <div className="p-3">
-            <EmptyState
-              title={searching ? 'Nobody matches that' : 'No customers yet'}
-              description={
-                searching
-                  ? 'Try the full phone number including the country code.'
-                  : 'A customer record appears the first time you place an order for a phone number.'
-              }
-              action={
-                searching ? (
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    onClick={() => {
-                      setSearch('');
-                      setPage(1);
-                    }}
-                  >
-                    Clear search
-                  </Button>
-                ) : undefined
-              }
-              bare
-            />
-          </div>
+          <EmptyState
+            title={searching ? 'Nobody matches that' : 'No customers yet'}
+            description={
+              searching
+                ? 'Try the full phone number including the country code.'
+                : 'A customer record appears the first time you place an order for a phone number.'
+            }
+            action={
+              searching ? (
+                <Button variant="secondary" size="md" onClick={clearSearch}>
+                  Clear search
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Phone</Th>
-                <Th>Name</Th>
-                <Th align="right">Orders</Th>
-                <Th align="right">Delivered</Th>
-                <Th align="right">RTO</Th>
-                <Th align="right">Refused</Th>
-                <Th>Risk</Th>
-                <Th>Last order</Th>
-                <Th align="right" aria-label="Open" />
-              </Tr>
-            </THead>
-            <TBody>
-              {items.map((c) => (
-                <Fragment key={c.id}>
-                  <Tr>
-                    <Td>
-                      <span className="text-text-bright font-mono text-xs">{c.phoneE164}</span>
-                    </Td>
-                    <Td>{c.name ?? <span className="text-text-faint">—</span>}</Td>
-                    <Td align="right">
-                      <Num value={c.totalOrdersCount} />
-                    </Td>
-                    <Td align="right">
-                      <Num value={c.successfulOrdersCount} />
-                    </Td>
-                    <Td align="right">
-                      {c.rtoCount === 0 ? (
-                        <span className="text-text-faint">0</span>
-                      ) : (
-                        <span className="text-[var(--status-rto-fg)]">{c.rtoCount}</span>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      {c.refusedCount === 0 ? (
-                        <span className="text-text-faint">0</span>
-                      ) : (
-                        <span className="text-[var(--color-critical)]">{c.refusedCount}</span>
-                      )}
-                    </Td>
-                    <Td>
-                      {isRated(c.riskLevel) ? (
-                        <StatusBadge
-                          kind={riskKind(c.riskLevel)}
-                          label={c.riskLevel.toLowerCase()}
-                        />
-                      ) : (
-                        <span className="text-text-faint">—</span>
-                      )}
-                    </Td>
-                    <Td className="text-text-muted font-mono text-xs">
-                      {c.lastOrderAt === null
-                        ? '—'
-                        : new Date(c.lastOrderAt).toLocaleDateString('en-IN')}
-                    </Td>
-                    <Td align="right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-expanded={expanded === c.id}
-                        onClick={() => setExpanded(expanded === c.id ? null : c.id)}
-                      >
-                        {expanded === c.id ? 'Hide' : 'Open'}
-                      </Button>
-                    </Td>
-                  </Tr>
-                  {expanded === c.id && (
-                    <Tr>
-                      <Td colSpan={9}>
-                        <CustomerDetailPanel
-                          customerId={c.id}
-                          onDeleted={() => setExpanded(null)}
-                        />
-                        <AddressHistory customerId={c.id} />
+          <>
+            <Table caption="Customer register">
+              <THead>
+                <Tr>
+                  <Th>Phone</Th>
+                  <Th>Name</Th>
+                  <Th align="right">Orders</Th>
+                  <Th align="right">Delivered</Th>
+                  <Th align="right">RTO</Th>
+                  <Th align="right">Refused</Th>
+                  <Th>Risk</Th>
+                  <Th>Last order</Th>
+                  <Th align="right" aria-label="Open" />
+                </Tr>
+              </THead>
+              <TBody>
+                {items.map((c) => (
+                  <Fragment key={c.id}>
+                    <Tr selected={expanded === c.id}>
+                      <Td>
+                        <span className="cst-phone sk-ident">{c.phoneE164}</span>
+                      </Td>
+                      <Td>{c.name ?? <span className="cst-faint">—</span>}</Td>
+                      <Td align="right">
+                        <Num value={c.totalOrdersCount} />
+                      </Td>
+                      <Td align="right">
+                        <Num value={c.successfulOrdersCount} />
+                      </Td>
+                      <Td align="right">
+                        {c.rtoCount === 0 ? (
+                          <span className="cst-faint sk-figure">0</span>
+                        ) : (
+                          <span className="cst-rto sk-figure">{c.rtoCount}</span>
+                        )}
+                      </Td>
+                      <Td align="right">
+                        {c.refusedCount === 0 ? (
+                          <span className="cst-faint sk-figure">0</span>
+                        ) : (
+                          <span className="cst-bad sk-figure">{c.refusedCount}</span>
+                        )}
+                      </Td>
+                      <Td>
+                        {isRated(c.riskLevel) ? (
+                          <StatusChip
+                            kind={riskKind(c.riskLevel)}
+                            label={c.riskLevel.toLowerCase()}
+                            size="sm"
+                          />
+                        ) : (
+                          <span className="cst-faint">—</span>
+                        )}
+                      </Td>
+                      <Td>
+                        <span className="cst-date sk-figure">
+                          {c.lastOrderAt === null
+                            ? '—'
+                            : new Date(c.lastOrderAt).toLocaleDateString('en-IN')}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="cst-toggle"
+                          aria-expanded={expanded === c.id}
+                          iconRight={<ChevronDown size={14} className="cst-toggle__chev" />}
+                          onClick={() => setExpanded(expanded === c.id ? null : c.id)}
+                        >
+                          {expanded === c.id ? 'Hide' : 'Open'}
+                        </Button>
                       </Td>
                     </Tr>
-                  )}
-                </Fragment>
-              ))}
-            </TBody>
-            <tfoot>
-              <tr>
-                <td colSpan={9} className="p-0">
-                  <TablePaginator
-                    page={page}
-                    pageSize={PAGE_SIZE}
-                    total={total}
-                    onPageChange={setPage}
-                  />
-                </td>
-              </tr>
-            </tfoot>
-          </Table>
+                    {expanded === c.id && (
+                      <Tr className="cst-expanded">
+                        <Td colSpan={9}>
+                          <div className="cst-well">
+                            <CustomerDetailPanel
+                              customerId={c.id}
+                              onDeleted={() => setExpanded(null)}
+                            />
+                            <AddressHistory customerId={c.id} />
+                          </div>
+                        </Td>
+                      </Tr>
+                    )}
+                  </Fragment>
+                ))}
+              </TBody>
+            </Table>
+            <Pagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={total}
+              onPageChange={setPage}
+              label="Customer pages"
+            />
+          </>
         )}
-      </BandBody>
+      </section>
     </div>
+  );
+}
+
+function rtoHint(rtoTotal: number): string {
+  return rtoTotal > 0
+    ? 'You pay the courier both ways on each of these.'
+    : 'Nothing from these customers has been returned.';
+}
+
+function flaggedHint(flaggedCount: number): string {
+  return flaggedCount > 0
+    ? 'Rated medium risk or worse. Worth a call before you ship again.'
+    : 'Nobody on this page has been rated a risk.';
+}
+
+/** A standing fact under the page title — never an action. */
+function Fact({
+  tone,
+  dot = false,
+  children,
+}: {
+  readonly tone?: 'accent' | 'warn' | undefined;
+  readonly dot?: boolean;
+  readonly children: ReactNode;
+}): ReactElement {
+  return (
+    <span className="cst-fact" data-tone={tone}>
+      {dot && <span className="cst-fact__dot" aria-hidden />}
+      {children}
+    </span>
   );
 }
 

@@ -2,13 +2,16 @@
 
 import type { ReactElement } from 'react';
 import { useState } from 'react';
-import {
-  Button,
-  MessageRelayStatus,
-  SkeletonRows,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Send } from 'lucide-react';
+// The toast stays on the legacy provider for now: `ticket-conversation.test.tsx`
+// mounts only the legacy `<Toaster>`, and the app `useToast` throws outside
+// its own provider. The authed shell mounts both, so the page itself works
+// with either; moving this one is a one-line change once the test mounts
+// the app `ToastProvider` too.
+import { MessageRelayStatus, useToast } from '@skydrop/ui/components';
+import { PaperPlaneSendButton } from '@skydrop/ui/app/paper-plane-send';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCourierThreadForTicket,
@@ -16,6 +19,7 @@ import {
   useTicketTimeline,
   type TicketView,
 } from '@/lib/ops-hooks';
+import './tickets.css';
 
 type Side = 'SELLER' | 'US' | 'COURIER';
 
@@ -62,17 +66,21 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
   // write a paragraph to find that out.
   const isOpen = ticket.resolvedAt === null;
 
-  const send = (): void => {
+  /**
+   * The real request. It rejects on a refusal (after showing the server's
+   * verdict) so the send button shows the failure it really had and the
+   * paper plane flies only after a real success.
+   */
+  const send = async (): Promise<void> => {
     const note = draft.trim();
     if (note === '') return;
-    void (async () => {
-      try {
-        await reply.mutateAsync({ ticketId: ticket.id, note });
-        setDraft('');
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      }
-    })();
+    try {
+      await reply.mutateAsync({ ticketId: ticket.id, note });
+      setDraft('');
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      throw err;
+    }
   };
 
   const bubbles: Bubble[] = [];
@@ -165,7 +173,9 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
 
   bubbles.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
-  if (timeline.isLoading || courier.isLoading) return <SkeletonRows rows={3} cols={1} />;
+  if (timeline.isLoading || courier.isLoading) {
+    return <SkeletonRows rows={3} cols={1} label="Loading the conversation…" />;
+  }
 
   return (
     <>
@@ -176,17 +186,23 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
         no way to say anything themselves.
       */}
       {bubbles.length === 0 ? (
-        <p className="text-text-muted text-sm">
+        <p className="tkt-empty-thread">
           Nothing said yet. We reply here once we have looked into it.
         </p>
       ) : null}
-      <ol className="space-y-3">
+      <ol className="tkt-thread">
         {bubbles.map((b) => {
           const mine = b.side === 'SELLER';
           return (
-            <li key={b.key} className={mine ? 'flex justify-end' : 'flex justify-start'}>
-              <div className="max-w-[85%]">
-                <p className={`text-text-muted mb-1 text-xs ${mine ? 'text-right' : 'text-left'}`}>
+            <li
+              key={b.key}
+              className={
+                mine ? 'tkt-thread__row flex justify-end' : 'tkt-thread__row flex justify-start'
+              }
+              data-mine={mine ? '1' : undefined}
+            >
+              <div className="tkt-bubble" data-side={b.side}>
+                <p className="tkt-bubble__who">
                   {b.who} ·{' '}
                   {new Date(b.at).toLocaleString('en-IN', {
                     day: 'numeric',
@@ -195,19 +211,9 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
                     minute: '2-digit',
                   })}
                 </p>
-                <div
-                  className={
-                    mine
-                      ? 'bg-accent/10 border-accent/30 rounded-lg rounded-tr-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                      : b.side === 'COURIER'
-                        ? 'bg-warning/10 border-warning/30 rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                        : 'bg-surface-raised border-border rounded-lg rounded-tl-sm border px-3 py-2 text-sm whitespace-pre-wrap'
-                  }
-                >
-                  {b.body}
-                </div>
+                <div className="tkt-bubble__text">{b.body}</div>
                 {b.relayedAt === undefined ? null : (
-                  <p className="mt-1 text-right">
+                  <p className="mt-1 tkt-bubble__relay">
                     <MessageRelayStatus relayedAt={b.relayedAt} />
                   </p>
                 )}
@@ -218,7 +224,7 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
       </ol>
 
       {isOpen ? (
-        <div className="border-border mt-4 border-t pt-3">
+        <div className="tkt-reply">
           {/*
             ONE box, and it reaches US.
 
@@ -234,26 +240,31 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
             are merged into the timeline above. What they no longer have
             is a way to write to them, which is ours to do.
           */}
-          <Textarea
+          <TextArea
+            label="Reply on this ticket"
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Anything that helps — we take it to the courier for you."
-            aria-label="Reply on this ticket"
+            // Display only: the server's limit on a note (AddTicketNoteDto),
+            // shown so a long reply is not a surprise, never enforced here.
+            countMax={2000}
           />
-          <div className="mt-2 flex justify-end">
-            <Button
-              variant="primary"
+          <div className="tkt-reply__actions">
+            <PaperPlaneSendButton
+              label="Send"
+              busyLabel="Sending…"
+              doneLabel="Sent"
+              errorLabel="Not sent"
               size="sm"
+              icon={<Send size={14} />}
               disabled={draft.trim() === '' || reply.isPending}
-              onClick={send}
-            >
-              {reply.isPending ? 'Sending…' : 'Send'}
-            </Button>
+              onAction={send}
+            />
           </div>
         </div>
       ) : (
-        <p className="text-text-muted border-border mt-4 border-t pt-3 text-xs">
+        <p className="tkt-closed">
           This ticket is closed. If something is still wrong, raise a new issue and we will pick it
           up.
         </p>

@@ -1,27 +1,21 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  DescriptionList,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Num,
-  Select,
-  SkeletonRows,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { useState, type ReactElement, type ReactNode } from 'react';
+import { PencilLine, Trash2 } from 'lucide-react';
+import { Num } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useCustomer, useDeleteCustomer, useUpdateCustomer } from '@/lib/account-hooks';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
+import './customers.css';
 
 /**
  * One customer record, and the two things you can do to it.
@@ -97,6 +91,11 @@ export function CustomerDetailPanel({
     setEditing(true);
   }
 
+  /**
+   * The save. Rejects after recording the server's verdict, so the
+   * button beside it shows the failure it really had — the verdict
+   * itself is shown verbatim above the fields (FE-2).
+   */
   async function onSave(): Promise<void> {
     if (c === undefined) return;
     setError(null);
@@ -126,9 +125,11 @@ export function CustomerDetailPanel({
       toast.success('Customer updated.');
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
+  /** The remove. Rejects on a refusal so the confirm stays open with the verdict. */
   async function onRemove(): Promise<void> {
     setError(null);
     try {
@@ -138,6 +139,7 @@ export function CustomerDetailPanel({
       onDeleted?.();
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -146,100 +148,85 @@ export function CustomerDetailPanel({
   const altPhoneMalformed = altPhone.trim() !== '' && !/^\+[1-9]\d{6,14}$/.test(altPhone.trim());
 
   return (
-    <Card>
-      <CardHeader
-        title={c?.name ?? c?.phoneE164 ?? 'Customer'}
-        subtitle={c === undefined ? undefined : c.phoneE164}
-        action={
-          mayManage ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={c === undefined}
-                onClick={() => openEditor()}
-              >
-                Correct details
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={c === undefined}
-                onClick={() => {
-                  setError(null);
-                  setRemoving(true);
-                }}
-              >
-                Remove
-              </Button>
-            </div>
-          ) : undefined
-        }
-      />
-      <CardBody>
-        {detail.isLoading ? (
-          <SkeletonRows rows={3} cols={2} />
-        ) : detail.isError ? (
-          <ErrorNote message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
-        ) : c === undefined ? null : (
-          <DescriptionList
-            columns={3}
-            items={[
-              {
-                label: 'Phone',
-                value: (
-                  <>
-                    <span className="font-mono text-xs">{c.phoneE164}</span>
-                    <span className="text-text-faint ml-2 text-xs">fixed</span>
-                  </>
-                ),
-              },
-              { label: 'Name', value: c.name ?? '—' },
-              { label: 'Email', value: c.email ?? '—' },
-              {
-                label: 'Alternate phone',
-                value:
-                  c.altPhoneE164 === null ? (
-                    '—'
-                  ) : (
-                    <span className="font-mono text-xs">{c.altPhoneE164}</span>
-                  ),
-              },
-              { label: 'Call language', value: c.preferredLanguage === 'hi' ? 'Hindi' : 'English' },
-              { label: 'Risk', value: c.riskLevel === null ? '—' : c.riskLevel.toLowerCase() },
-              { label: 'Orders', value: <Num value={c.totalOrdersCount} /> },
-              { label: 'Delivered', value: <Num value={c.successfulOrdersCount} /> },
-              {
-                label: 'Returned',
-                value:
-                  c.rtoCount === 0 ? (
-                    <span className="text-text-faint">0</span>
-                  ) : (
-                    <span className="text-[var(--color-bad)]">{c.rtoCount}</span>
-                  ),
-              },
-              {
-                label: 'First order',
-                value:
-                  c.firstOrderAt === null
-                    ? '—'
-                    : new Date(c.firstOrderAt).toLocaleDateString('en-IN'),
-              },
-              {
-                label: 'Last order',
-                value:
-                  c.lastOrderAt === null
-                    ? '—'
-                    : new Date(c.lastOrderAt).toLocaleDateString('en-IN'),
-              },
-              { label: 'Notes', value: c.riskNotes ?? '—' },
-            ]}
-          />
-        )}
-      </CardBody>
+    <div className="cst-card">
+      <div className="cst-card__head">
+        <div>
+          <h3 className="cst-card__title">{c?.name ?? c?.phoneE164 ?? 'Customer'}</h3>
+          {c !== undefined && <p className="cst-card__sub sk-ident">{c.phoneE164}</p>}
+        </div>
+        {mayManage ? (
+          <div className="cst-card__actions">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<PencilLine size={14} />}
+              disabled={c === undefined}
+              onClick={() => openEditor()}
+            >
+              Correct details
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              icon={<Trash2 size={14} />}
+              disabled={c === undefined}
+              onClick={() => {
+                setError(null);
+                setRemoving(true);
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {detail.isLoading ? (
+        <SkeletonRows rows={3} cols={2} label="Loading this customer…" />
+      ) : detail.isError ? (
+        <ErrorState message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
+      ) : c === undefined ? null : (
+        <dl className="cst-facts">
+          <Fact label="Phone">
+            <span className="sk-ident">{c.phoneE164}</span>
+            <span className="cst-fixed">fixed</span>
+          </Fact>
+          <Fact label="Name">{c.name ?? '—'}</Fact>
+          <Fact label="Email">{c.email ?? '—'}</Fact>
+          <Fact label="Alternate phone">
+            {c.altPhoneE164 === null ? '—' : <span className="sk-ident">{c.altPhoneE164}</span>}
+          </Fact>
+          <Fact label="Call language">{c.preferredLanguage === 'hi' ? 'Hindi' : 'English'}</Fact>
+          <Fact label="Risk">{c.riskLevel === null ? '—' : c.riskLevel.toLowerCase()}</Fact>
+          <Fact label="Orders">
+            <Num value={c.totalOrdersCount} />
+          </Fact>
+          <Fact label="Delivered">
+            <Num value={c.successfulOrdersCount} />
+          </Fact>
+          <Fact label="Returned">
+            {c.rtoCount === 0 ? (
+              <span className="cst-faint sk-figure">0</span>
+            ) : (
+              <span className="cst-bad sk-figure">{c.rtoCount}</span>
+            )}
+          </Fact>
+          <Fact label="First order">
+            <span className="sk-figure">
+              {c.firstOrderAt === null ? '—' : new Date(c.firstOrderAt).toLocaleDateString('en-IN')}
+            </span>
+          </Fact>
+          <Fact label="Last order">
+            <span className="sk-figure">
+              {c.lastOrderAt === null ? '—' : new Date(c.lastOrderAt).toLocaleDateString('en-IN')}
+            </span>
+          </Fact>
+          <Fact label="Notes">{c.riskNotes ?? '—'}</Fact>
+        </dl>
+      )}
 
       {/* ── Correct ───────────────────────────────────────────────── */}
-      <Modal
+      <Dialog
         open={editing}
         onOpenChange={(next) => {
           if (!next) {
@@ -249,78 +236,86 @@ export function CustomerDetailPanel({
         }}
         title="Correct customer details"
         description={c?.phoneE164}
+        icon={<PencilLine size={18} />}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <AsyncButton
+              variant="primary"
+              size="md"
+              disabled={altPhoneMalformed || update.isPending}
+              labels={{
+                idle: 'Save corrections',
+                busy: 'Saving…',
+                done: 'Saved',
+                error: 'Not saved',
+              }}
+              onAction={onSave}
+            />
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          These are the details used when we call to confirm an order and when we email this
-          customer. The phone number is their identity here and cannot be changed — a different
-          number is a different customer.
-        </p>
+        <div className="cst-form">
+          <p className="cst-lede">
+            These are the details used when we call to confirm an order and when we email this
+            customer. The phone number is their identity here and cannot be changed — a different
+            number is a different customer.
+          </p>
 
-        {error !== null && <ErrorNote message={error} />}
+          {error !== null && (
+            <p className="cst-error" role="alert">
+              {error}
+            </p>
+          )}
 
-        <div className="space-y-3">
-          <FormField label="Name" hint="What the call centre will greet them by.">
-            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={160} />
-          </FormField>
-          <FormField
+          <TextField
+            label="Name"
+            hint="What the call centre will greet them by."
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={160}
+          />
+          <TextField
             label="Email"
             hint="Where order updates go. Leave blank if you do not have it."
-          >
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              maxLength={254}
-            />
-          </FormField>
-          <FormField
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            maxLength={254}
+          />
+          <TextField
             label="Alternate phone"
             hint="Full international form, e.g. +919812345678. Tried when the main number does not answer."
             error={altPhoneMalformed ? 'Must start with + and the country code.' : undefined}
+            value={altPhone}
+            onChange={(e) => setAltPhone(e.target.value)}
+            placeholder="+919812345678"
+            maxLength={16}
+          />
+          <Select
+            label="Call language"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
           >
-            <Input
-              value={altPhone}
-              onChange={(e) => setAltPhone(e.target.value)}
-              placeholder="+919812345678"
-              maxLength={16}
-            />
-          </FormField>
-          <FormField label="Call language">
-            <Select value={language} onChange={(e) => setLanguage(e.target.value)}>
-              <option value="en">English</option>
-              <option value="hi">Hindi</option>
-            </Select>
-          </FormField>
-          <FormField
+            <option value="en">English</option>
+            <option value="hi">Hindi</option>
+          </Select>
+          <TextArea
             label="Notes"
             hint="Anything the agent should know before dialling. Visible to Skydrop staff handling your orders."
-          >
-            <Textarea
-              value={riskNotes}
-              onChange={(e) => setRiskNotes(e.target.value)}
-              maxLength={2000}
-              rows={3}
-            />
-          </FormField>
+            value={riskNotes}
+            onChange={(e) => setRiskNotes(e.target.value)}
+            maxLength={2000}
+            showCount
+            rows={3}
+          />
         </div>
-
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={() => setEditing(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={altPhoneMalformed || update.isPending}
-            onClick={() => void onSave()}
-          >
-            {update.isPending ? 'Saving…' : 'Save corrections'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+      </Dialog>
 
       {/* ── Remove ────────────────────────────────────────────────── */}
-      <Modal
+      <ConfirmDialog
         open={removing}
         onOpenChange={(next) => {
           if (!next) {
@@ -328,34 +323,33 @@ export function CustomerDetailPanel({
             setError(null);
           }
         }}
-        title="Remove this customer"
-        description={c?.phoneE164}
-        tone="critical"
-        size="sm"
-      >
-        <p className="text-text-muted mb-3 text-sm">
-          The record disappears from your customer list. Their past orders are untouched, and if you
-          ship to this number again the record comes back with its history intact — so this hides a
-          contact, it does not erase what happened.
-        </p>
+        title="Remove this customer?"
+        entity={c?.phoneE164 ?? 'This customer'}
+        entityIsIdentifier={c !== undefined}
+        consequence="The record disappears from your customer list. Their past orders are untouched, and if you ship to this number again the record comes back with its history intact — so this hides a contact, it does not erase what happened."
+        confirmLabel="Remove customer"
+        cancelLabel="Keep it"
+        destructive
+        onConfirm={onRemove}
+        error={error ?? undefined}
+      />
+    </div>
+  );
+}
 
-        {error !== null && <ErrorNote message={error} />}
-
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={() => setRemoving(false)}>
-            Keep it
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={remove.isPending}
-            onClick={() => void onRemove()}
-          >
-            {remove.isPending ? 'Removing…' : 'Remove customer'}
-          </Button>
-        </ModalFooter>
-      </Modal>
-    </Card>
+/** One label/value pair in the record's facts. */
+function Fact({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+}): ReactElement {
+  return (
+    <div className="cst-facts__item">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }
 

@@ -1,31 +1,21 @@
 'use client';
 
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CalendarClock, CircleDot, PackageSearch, Wallet } from 'lucide-react';
-import {
-  BandBody,
-  Card,
-  CardBody,
-  Crumbs,
-  DescriptionList,
-  ErrorNote,
-  Ident,
-  IssueCategoryLine,
-  MetaChip,
-  Money,
-  PageHeader,
-  SectionBand,
-  Skeleton,
-  Stat,
-  TicketStatusBadge,
-} from '@skydrop/ui/components';
+import { Ident, IssueCategoryLine, Money } from '@skydrop/ui/components';
 import type { TicketStatus } from '@skydrop/db';
-import { ticketStatusLabel } from '@skydrop/ui/status';
+import { ticketStatusKind, ticketStatusLabel } from '@skydrop/ui/status';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
 import type { TicketView } from '@/lib/ops-hooks';
 import { useSellerTicket } from '@/lib/ticket-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { TicketConversation } from './ticket-conversation';
+import './tickets.css';
 
 /**
  * One ticket, opened.
@@ -52,24 +42,24 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
 
   if (query.isError || query.data === undefined) {
     return (
-      <div>
-        <BackLink />
-        <PageHeader title="Ticket" />
-        <Card>
-          <CardBody>
-            {/* FE-2 — the server's verdict verbatim. A wrong id and
-                another seller's ticket both come back TICKET_NOT_FOUND,
-                which is the whole message worth showing. */}
-            <ErrorNote
-              message={serverVerdict(query.error, 'Could not load this ticket.')}
-              retry={() => void query.refetch()}
-            />
-            <p className="text-text-muted mt-3 text-xs">
-              If this ticket was raised from another account in your company, ask them to open it —
-              tickets are scoped to the seller they belong to.
-            </p>
-          </CardBody>
-        </Card>
+      <div className="tkt-page">
+        <div>
+          <BackLink />
+          <PageHeader title="Ticket" />
+        </div>
+        <div className="tkt-card">
+          {/* FE-2 — the server's verdict verbatim. A wrong id and
+              another seller's ticket both come back TICKET_NOT_FOUND,
+              which is the whole message worth showing. */}
+          <ErrorState
+            message={serverVerdict(query.error, 'Could not load this ticket.')}
+            retry={() => void query.refetch()}
+          />
+          <p className="tkt-help">
+            If this ticket was raised from another account in your company, ask them to open it —
+            tickets are scoped to the seller they belong to.
+          </p>
+        </div>
       </div>
     );
   }
@@ -79,113 +69,115 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
   const raisedByUs = ticket.openedBy !== 'SELLER';
 
   return (
-    <div>
-      <BackLink />
+    <div className="tkt-page">
+      <div>
+        <BackLink />
 
-      <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Support', href: '/tickets' },
-              { label: ticket.ticketNumber },
-            ]}
-            Link={Link}
-          />
-        }
-        // The NUMBER leads: it is what you quote to us about this ticket.
-        title={
-          <span className="min-w-0">
-            <span className="font-mono">{ticket.ticketNumber}</span>
-            <span className="text-text-muted"> · </span>
-            {ticket.subject}
-          </span>
-        }
-        subtitle={`${raisedByUs ? 'Raised by Skydrop' : 'Raised by you'} on ${formatDateTime(ticket.createdAt)}`}
-        /*
-          Standing facts about THIS ticket, under its number.
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Seller console' },
+            { label: 'Support', href: '/tickets' },
+            { label: ticket.ticketNumber },
+          ]}
+          Link={Link}
+          // The NUMBER leads: it is what you quote to us about this ticket.
+          title={
+            <span className="tkt-title">
+              <span className="sk-ident">{ticket.ticketNumber}</span>
+              <span className="tkt-title__sep"> · </span>
+              {ticket.subject}
+            </span>
+          }
+          subtitle={`${raisedByUs ? 'Raised by Skydrop' : 'Raised by you'} on ${formatDateTime(ticket.createdAt)}`}
+          /*
+            Standing facts about THIS ticket, under its number.
 
-          The comp's chip row here carries an SLA clock, a "CCTV
-          audited" seal and an escrow protocol. None of the three
-          exists: nothing measures a triage SLA per ticket, there is no
-          camera evidence store, and no money is held in escrow against
-          a dispute. What IS real is what kind of issue it is and who
-          the courier was, so that is what the row says.
-        */
-        meta={
-          <>
-            <MetaChip tone="accent">{humanise(ticket.ticketType)}</MetaChip>
-            {ticket.courierCode !== null && <MetaChip>{ticket.courierCode}</MetaChip>}
-            {raisedByUs && <MetaChip dot>Opened for you</MetaChip>}
-          </>
-        }
-        action={<TicketStatusBadge status={ticket.status} />}
-      />
+            The comp's chip row here carries an SLA clock, a "CCTV
+            audited" seal and an escrow protocol. None of the three
+            exists: nothing measures a triage SLA per ticket, there is no
+            camera evidence store, and no money is held in escrow against
+            a dispute. What IS real is what kind of issue it is and who
+            the courier was, so that is what the row says.
+          */
+          meta={
+            <span className="tkt-meta">
+              <Fact tone="accent">{humanise(ticket.ticketType)}</Fact>
+              {ticket.courierCode !== null && <Fact>{ticket.courierCode}</Fact>}
+              {raisedByUs && <Fact dot>Opened for you</Fact>}
+            </span>
+          }
+          action={
+            <StatusChip
+              kind={ticketStatusKind(ticket.status)}
+              label={ticketStatusLabel(ticket.status)}
+            />
+          }
+        />
+      </div>
 
       {/* ── Where this ticket has got to ────────────────────────────
-             Four standing facts, on the shared `Stat`. Every one is a
-             column on the ticket, not a derivation: a tile that needed
-             arithmetic to exist would be a claim rather than a record.
-             A refund reads "—" until it is paid, never ₹0 — nothing
-             having been decided and nothing being owed look the same
-             at a glance otherwise. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
+             Four standing facts. Every one is a column on the ticket,
+             not a derivation: a tile that needed arithmetic to exist
+             would be a claim rather than a record. A refund reads "—"
+             until it is paid, never ₹0 — nothing having been decided
+             and nothing being owed look the same at a glance otherwise. */}
+      <div className="tkt-kpis">
+        <KpiCard
           label="Status"
-          icon={<CircleDot size={13} aria-hidden />}
+          icon={<CircleDot size={14} />}
           /*
             `ticketStatusLabel`, NOT a local `humanise` of the enum.
-            The badge beside this tile reads NEGOTIATING as "Reviewing";
+            The chip beside this tile reads NEGOTIATING as "Reviewing";
             spelling the raw value put two different words for one
             status on the same screen, three centimetres apart, which
             reads as two different things having happened. The words
             live in `@skydrop/ui/status` (FE-6) — a second vocabulary
             here is the drift that rule exists to prevent.
           */
-          value={<span className="text-base">{ticketStatusLabel(ticket.status)}</span>}
-          tone={statTone(ticket.status)}
+          figure={<span className="tkt-tile-text">{ticketStatusLabel(ticket.status)}</span>}
+          tone={kpiTone(statTone(ticket.status))}
         />
-        <Stat
+        <KpiCard
           label="Refunded to you"
-          icon={<Wallet size={13} aria-hidden />}
-          value={
+          icon={<Wallet size={14} />}
+          figure={
             ticket.resolutionAmountInr === null ? (
-              <span className="text-text-faint">—</span>
+              <span className="tkt-faint">—</span>
             ) : (
               <Money amount={ticket.resolutionAmountInr} direction="credit" />
             )
           }
-          tone={ticket.resolutionAmountInr === null ? 'neutral' : 'good'}
+          tone={ticket.resolutionAmountInr === null ? 'neutral' : 'credit'}
           hint={
             ticket.resolutionAmountInr === null
               ? 'Nothing credited yet.'
               : 'In your wallet balance.'
           }
         />
-        <Stat
+        <KpiCard
           label="Raised"
-          icon={<CalendarClock size={13} aria-hidden />}
-          value={<span className="text-base">{formatDate(ticket.createdAt)}</span>}
+          icon={<CalendarClock size={14} />}
+          figure={<span className="tkt-tile-text">{formatDate(ticket.createdAt)}</span>}
           tone="neutral"
           hint={
             ticket.resolvedAt === null ? 'Still open.' : `Closed ${formatDate(ticket.resolvedAt)}.`
           }
         />
-        <Stat
+        <KpiCard
           label="About"
-          icon={<PackageSearch size={13} aria-hidden />}
-          value={
+          icon={<PackageSearch size={14} />}
+          figure={
             ticket.orderNumber !== null ? (
               <Link
                 href={ticket.orderId === null ? '/orders' : `/orders/${ticket.orderId}`}
-                className="text-accent font-mono text-base hover:underline"
+                className="tkt-tile-link sk-ident"
               >
                 {ticket.orderNumber}
               </Link>
             ) : ticket.receiptNumber !== null ? (
-              <span className="font-mono text-base">{ticket.receiptNumber}</span>
+              <span className="tkt-tile-text sk-ident">{ticket.receiptNumber}</span>
             ) : (
-              <span className="text-text-faint">—</span>
+              <span className="tkt-faint">—</span>
             )
           }
           tone="neutral"
@@ -201,95 +193,81 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
 
       {ticket.resolutionAmountInr !== null && <RefundBanner ticket={ticket} />}
 
-      <SectionBand index="01" title="Ticket" note="The facts we hold about it." />
-      {/* No <Card> inside: `BandBody` IS the bordered surface the band
-          caps, and nesting one drew a second border a hair inside the
-          first. */}
-      <BandBody className="mb-4">
-        <DescriptionList
-          columns={3}
-          items={[
-            {
-              label: 'Type',
-              // Who is asking, then what about. The category the
-              // seller picked is the fastest thing on the page for
-              // recognising their own ticket in a list of four.
-              value: (
-                <span className="block">
-                  {humanise(ticket.ticketType)}
-                  <IssueCategoryLine
-                    categoryLabel={ticket.issueCategoryLabel}
-                    subcategoryLabel={ticket.issueSubcategoryLabel}
-                  />
+      <section className="tkt-section">
+        <SectionHeading title="Ticket" note="The facts we hold about it." />
+        <div className="tkt-card">
+          <dl className="tkt-facts">
+            <FactItem label="Type">
+              {/* Who is asking, then what about. The category the
+                  seller picked is the fastest thing on the page for
+                  recognising their own ticket in a list of four. */}
+              <span className="tkt-type">
+                {humanise(ticket.ticketType)}
+                <IssueCategoryLine
+                  categoryLabel={ticket.issueCategoryLabel}
+                  subcategoryLabel={ticket.issueSubcategoryLabel}
+                />
+              </span>
+            </FactItem>
+            <FactItem label="Status">
+              <StatusChip
+                kind={ticketStatusKind(ticket.status)}
+                label={ticketStatusLabel(ticket.status)}
+                size="sm"
+              />
+            </FactItem>
+            <FactItem label="Courier">{ticket.courierCode ?? <Dash />}</FactItem>
+            {ticket.receiptNumber == null ? null : (
+              // A short count at the warehouse (TKT-3): the receipt and
+              // the consignment it belongs to.
+              <FactItem label="Goods receipt">
+                <span className="tkt-small sk-ident">
+                  {ticket.receiptNumber}
+                  {ticket.consignmentNumber == null ? '' : ` · ${ticket.consignmentNumber}`}
                 </span>
-              ),
-            },
-            { label: 'Status', value: <TicketStatusBadge status={ticket.status} /> },
-            { label: 'Courier', value: ticket.courierCode ?? <Dash /> },
-            ...(ticket.receiptNumber == null
-              ? []
-              : [
-                  {
-                    // A short count at the warehouse (TKT-3): the
-                    // receipt and the consignment it belongs to.
-                    label: 'Goods receipt',
-                    value: (
-                      <span className="font-mono text-xs">
-                        {ticket.receiptNumber}
-                        {ticket.consignmentNumber == null ? '' : ` · ${ticket.consignmentNumber}`}
-                      </span>
-                    ),
-                  },
-                ]),
-            {
-              label: 'Order',
-              // The NUMBER, not the uuid. A uuid cannot be read
-              // aloud, repeated down a phone, or matched against
-              // the order list; the id is still what the link uses.
-              value:
-                ticket.orderId === null ? (
-                  <Dash />
-                ) : (
-                  <Link
-                    href={`/orders/${ticket.orderId}`}
-                    className="text-accent font-mono hover:underline"
-                  >
-                    {ticket.orderNumber ?? <Ident value={ticket.orderId} />}
-                  </Link>
-                ),
-            },
-            {
-              label: 'Parcel',
-              // A seller has no shipment page — parcels are shown on
-              // the order — so the id is evidence to quote at us, not
-              // a link to nowhere.
-              value:
-                ticket.shipmentId === null ? (
-                  <Dash />
-                ) : ticket.shipmentNumber !== null ? (
-                  <span className="font-mono text-xs">{ticket.shipmentNumber}</span>
-                ) : (
-                  <Ident value={ticket.shipmentId} />
-                ),
-            },
-            {
-              label: 'Closed',
-              value: ticket.resolvedAt === null ? <Dash /> : formatDateTime(ticket.resolvedAt),
-            },
-          ]}
-        />
+              </FactItem>
+            )}
+            <FactItem label="Order">
+              {/* The NUMBER, not the uuid. A uuid cannot be read aloud,
+                  repeated down a phone, or matched against the order
+                  list; the id is still what the link uses. */}
+              {ticket.orderId === null ? (
+                <Dash />
+              ) : (
+                <Link href={`/orders/${ticket.orderId}`} className="tkt-tile-link sk-ident">
+                  {ticket.orderNumber ?? <Ident value={ticket.orderId} />}
+                </Link>
+              )}
+            </FactItem>
+            <FactItem label="Parcel">
+              {/* A seller has no shipment page — parcels are shown on the
+                  order — so the id is evidence to quote at us, not a link
+                  to nowhere. */}
+              {ticket.shipmentId === null ? (
+                <Dash />
+              ) : ticket.shipmentNumber !== null ? (
+                <span className="tkt-small sk-ident">{ticket.shipmentNumber}</span>
+              ) : (
+                <Ident value={ticket.shipmentId} />
+              )}
+            </FactItem>
+            <FactItem label="Closed">
+              {ticket.resolvedAt === null ? <Dash /> : formatDateTime(ticket.resolvedAt)}
+            </FactItem>
+          </dl>
 
-        {/*
-              The description is NOT repeated here.
+          {/*
+            The description is NOT repeated here.
 
-              It is the first thing the seller said, and the conversation
-              below opens with exactly that message — so printing it in
-              the facts card too showed the same sentence twice, a few
-              centimetres apart, with nothing to say why. This card is
-              for the facts ABOUT the ticket; what was said belongs in
-              the thread, in order, with a time against it.
-        */}
-      </BandBody>
+            It is the first thing the seller said, and the conversation
+            below opens with exactly that message — so printing it in the
+            facts card too showed the same sentence twice, a few
+            centimetres apart, with nothing to say why. This card is for
+            the facts ABOUT the ticket; what was said belongs in the
+            thread, in order, with a time against it.
+          */}
+        </div>
+      </section>
 
       {/*
         ONE thread, not a status log above a separate courier box. Our
@@ -299,14 +277,15 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
         Negotiating" is bookkeeping, and putting it in a chat makes the
         messages harder to find rather than the history clearer.
       */}
-      <SectionBand
-        index="02"
-        title="Conversation"
-        note="What you told us, what we found out, and anything the courier said."
-      />
-      <BandBody>
-        <TicketConversation ticket={ticket} />
-      </BandBody>
+      <section className="tkt-section">
+        <SectionHeading
+          title="Conversation"
+          note="What you told us, what we found out, and anything the courier said."
+        />
+        <div className="tkt-card">
+          <TicketConversation ticket={ticket} />
+        </div>
+      </section>
     </div>
   );
 }
@@ -322,49 +301,39 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
  */
 function RefundBanner({ ticket }: { readonly ticket: TicketView }): ReactElement {
   return (
-    <Card className="mb-6">
-      <CardBody>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-text-muted text-xs">Refunded to you</p>
-            <Money
-              amount={ticket.resolutionAmountInr ?? '0'}
-              direction="credit"
-              size="lg"
-              className="mt-1 block"
-            />
-            <p className="text-text-body mt-2 text-sm">
-              {ticket.resolvedAt === null
-                ? 'Credited to your Skydrop wallet.'
-                : `Credited to your Skydrop wallet on ${formatDateTime(ticket.resolvedAt)}.`}{' '}
-              It is part of your balance now and goes out with your next withdrawal.
-            </p>
-            {ticket.resolutionWalletEntryId !== null && (
-              <p className="text-text-faint mt-1 text-xs">
-                Ledger entry <Ident value={ticket.resolutionWalletEntryId} />
-              </p>
-            )}
-          </div>
-          <Link
-            href="/wallet"
-            className="text-accent inline-flex items-center gap-1.5 text-sm hover:underline"
-          >
-            <Wallet size={14} />
-            View it in your wallet
-          </Link>
-        </div>
-      </CardBody>
-    </Card>
+    <div className="tkt-refund">
+      <div>
+        <p className="tkt-refund__label">Refunded to you</p>
+        <Money
+          amount={ticket.resolutionAmountInr ?? '0'}
+          direction="credit"
+          size="lg"
+          className="tkt-refund__figure"
+        />
+        <p className="tkt-refund__body">
+          {ticket.resolvedAt === null
+            ? 'Credited to your Skydrop wallet.'
+            : `Credited to your Skydrop wallet on ${formatDateTime(ticket.resolvedAt)}.`}{' '}
+          It is part of your balance now and goes out with your next withdrawal.
+        </p>
+        {ticket.resolutionWalletEntryId !== null && (
+          <p className="tkt-refund__entry">
+            Ledger entry <Ident value={ticket.resolutionWalletEntryId} />
+          </p>
+        )}
+      </div>
+      <Link href="/wallet" className="tkt-refund__link">
+        <Wallet size={14} aria-hidden />
+        View it in your wallet
+      </Link>
+    </div>
   );
 }
 
 function BackLink(): ReactElement {
   return (
-    <Link
-      href="/tickets"
-      className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs"
-    >
-      <ArrowLeft size={13} />
+    <Link href="/tickets" className="tkt-back">
+      <ArrowLeft size={13} aria-hidden />
       All tickets
     </Link>
   );
@@ -372,38 +341,86 @@ function BackLink(): ReactElement {
 
 function DetailSkeleton(): ReactElement {
   return (
-    <div>
-      <BackLink />
-      <div className="mb-6 space-y-2">
-        <Skeleton className="h-6 w-2/3 max-w-sm" />
-        <Skeleton className="h-3.5 w-1/3 max-w-[14rem]" />
+    <div className="tkt-page" aria-busy="true">
+      <div>
+        <BackLink />
+        <div className="tkt-skel__head">
+          <Skeleton height={24} width="66%" />
+          <Skeleton height={14} width="33%" />
+        </div>
       </div>
-      <Card className="mb-6">
-        <CardBody>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="space-y-1.5">
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-4 w-28" />
-              </div>
-            ))}
-          </div>
-        </CardBody>
-      </Card>
-      <Card>
-        <CardBody>
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
-        </CardBody>
-      </Card>
+      <div className="tkt-card">
+        <div className="tkt-skel__grid">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="tkt-skel__cell">
+              <Skeleton height={12} width={64} />
+              <Skeleton height={16} width={112} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="tkt-card">
+        <Skeleton height={16} width="50%" />
+        <Skeleton height={16} width="66%" />
+      </div>
     </div>
   );
 }
 
 function Dash(): ReactElement {
-  return <span className="text-text-faint">—</span>;
+  return <span className="tkt-faint">—</span>;
+}
+
+/** A standing fact under the page title — never an action. */
+function Fact({
+  tone,
+  dot = false,
+  children,
+}: {
+  readonly tone?: 'accent' | undefined;
+  readonly dot?: boolean;
+  readonly children: ReactNode;
+}): ReactElement {
+  return (
+    <span className="tkt-fact" data-tone={tone}>
+      {dot && <span className="tkt-fact__dot" aria-hidden />}
+      {children}
+    </span>
+  );
+}
+
+/** One label/value pair in the ticket's facts. */
+function FactItem({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+}): ReactElement {
+  return (
+    <div className="tkt-facts__item">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+/** The status tile's tone, in the KPI card's vocabulary. */
+function kpiTone(tone: 'neutral' | 'warn' | 'bad' | 'good'): KpiTone {
+  switch (tone) {
+    case 'good':
+      return 'credit';
+    case 'warn':
+      return 'pending';
+    case 'bad':
+      return 'debit';
+    case 'neutral':
+      return 'neutral';
+    default: {
+      const exhaustive: never = tone;
+      return exhaustive;
+    }
+  }
 }
 
 function formatDateTime(value: string): string {

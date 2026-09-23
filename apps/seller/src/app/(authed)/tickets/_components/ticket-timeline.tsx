@@ -1,7 +1,9 @@
 'use client';
 
 import type { ReactElement } from 'react';
+import { Timeline } from '@skydrop/ui/app/timeline';
 import { useTicketTimeline } from '@/lib/ops-hooks';
+import './tickets.css';
 
 /**
  * What has happened on a ticket, in the order it happened.
@@ -22,23 +24,24 @@ export function TicketTimeline({ ticketId }: { readonly ticketId: string }): Rea
   if (entries.length <= 1) return null;
 
   return (
-    <div className="border-border mt-3 border-t pt-3">
-      <p className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">Updates</p>
-      <ol className="space-y-2">
-        {entries.map((e, i) => (
-          <li key={`${e.at}-${i}`} className="text-sm">
-            <span className="text-text-muted mr-2 text-xs tabular-nums">
-              {new Date(e.at).toLocaleString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-            <span>{e.note}</span>
-          </li>
-        ))}
-      </ol>
+    <div className="tkt-updates">
+      <h4 className="tkt-updates__title">Updates</h4>
+      {/* Every entry has happened, so every step is done; the order is the
+          server's, unchanged. */}
+      <Timeline
+        label="Updates"
+        steps={entries.map((e, i) => ({
+          id: `${e.at}-${i}`,
+          label: e.note,
+          state: 'done' as const,
+          time: new Date(e.at).toLocaleString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        }))}
+      />
     </div>
   );
 }
