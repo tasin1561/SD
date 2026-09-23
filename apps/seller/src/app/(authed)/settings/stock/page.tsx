@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react';
-import Link from 'next/link';
-import { Crumbs, PageHeader } from '@skydrop/ui/components';
+import { SetPageHeader } from '../_components/settings-parts';
 import { AlertConfigPanel } from './_components/alert-config-panel';
 
 /**
@@ -18,19 +17,14 @@ import { AlertConfigPanel } from './_components/alert-config-panel';
  */
 export default function StockSettingsPage(): ReactElement {
   return (
-    <div className="space-y-4">
-      <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Account' },
-              { label: 'Settings', href: '/settings' },
-              { label: 'Stock alerts' },
-            ]}
-            Link={Link}
-          />
-        }
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={[
+          { label: 'Seller console' },
+          { label: 'Account' },
+          { label: 'Settings', href: '/settings' },
+          { label: 'Stock alerts' },
+        ]}
         title="Stock alerts"
         subtitle="When we warn you that a SKU is running out. A SKU with its own threshold ignores this one."
       />

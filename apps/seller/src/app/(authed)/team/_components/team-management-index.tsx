@@ -1,30 +1,28 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import Link from 'next/link';
-import { MailPlus, UserPlus, Users } from 'lucide-react';
 import {
-  BandBody,
-  Button,
-  Crumbs,
-  ErrorState,
-  LoadingState,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  Select,
-  Stat,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
-import type { CreatedTeamInvitation } from '@skydrop/api-client';
+  CircleAlert,
+  MailPlus,
+  RefreshCw,
+  ShieldCheck,
+  User,
+  UserMinus,
+  UserPlus,
+  Users,
+} from 'lucide-react';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, THead, Td, Th, Tr, TableEmpty } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
+import type { CreatedTeamInvitation, TeamMemberRow } from '@skydrop/api-client';
 import {
   useDeactivateTeamMember,
   useResendTeamInvitation,
@@ -39,6 +37,8 @@ import { useRoles } from '@/lib/rbac-hooks';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { serverVerdict } from '@/lib/server-verdict';
+import { SetCallout, SetFact, SetPageHeader } from '../../settings/_components/settings-parts';
+import './team.css';
 
 // The hardcoded six are gone: roles are rows now, so the options come
 // from the server and include anything created under Team → Roles.
@@ -84,8 +84,18 @@ export function TeamManagementIndex(): ReactElement {
 
   const [inviting, setInviting] = useState(false);
   const [revealed, setRevealed] = useState<CreatedTeamInvitation | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-  const [pendingRevoke, setPendingRevoke] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<TeamMemberRow | null>(null);
+  const [pendingRevoke, setPendingRevoke] = useState<{
+    readonly id: string;
+    readonly email: string;
+    readonly role: string;
+  } | null>(null);
+  // A role change waits here until it is confirmed; the select keeps
+  // showing the member's current role until then.
+  const [pendingRole, setPendingRole] = useState<{
+    readonly member: TeamMemberRow;
+    readonly roleId: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
@@ -121,6 +131,8 @@ export function TeamManagementIndex(): ReactElement {
       toast.success('Invitation re-issued — copy the new link below.');
     } catch (e) {
       setError(fmtError(e));
+      // Rethrown so the Resend button shows the failure on itself.
+      throw e;
     }
   }
 
@@ -140,70 +152,113 @@ export function TeamManagementIndex(): ReactElement {
   const inviteRows = invitations.data?.items ?? [];
   const openInvites = inviteRows.filter((inv) => inviteState(inv) === 'PENDING');
 
+  const pendingRoleName =
+    pendingRole === null
+      ? ''
+      : ((roles.data ?? []).find((r) => r.id === pendingRole.roleId)?.name ?? '');
+
   return (
-    <div className="space-y-4">
-      <PageHeader
-        breadcrumb={<Crumbs items={CRUMBS} Link={Link} />}
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={CRUMBS}
         title="Team"
         subtitle="Invite + manage your team. Owners and admins can change roles or remove members."
         meta={
           members.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">
+            <span className="set-meta">
+              <SetFact tone="accent">
                 {activeMembers.length} active {activeMembers.length === 1 ? 'member' : 'members'}
-              </MetaChip>
+              </SetFact>
               {openInvites.length > 0 && (
-                <MetaChip tone="warn" dot>
+                <SetFact tone="warn" dot>
                   {openInvites.length} invitation{openInvites.length === 1 ? '' : 's'} outstanding
-                </MetaChip>
+                </SetFact>
               )}
-            </>
+            </span>
           )
         }
         action={
           canWrite ? (
-            <Button variant="primary" size="md" onClick={() => setInviting(true)}>
-              <UserPlus size={14} aria-hidden /> Invite member
+            <Button
+              variant="primary"
+              size="md"
+              icon={<UserPlus size={15} />}
+              onClick={() => setInviting(true)}
+            >
+              Invite member
             </Button>
           ) : null
         }
       />
 
       {/* ── The team at a glance ─────────────────────────────────────
-             Three standing facts, all read off the two registers below.
+             Three standing facts, all read off the two lists below.
              The comps put a last-active column and a per-person action
              count here; neither is stored — `lastLoginAt` is the whole
-             activity record, and it is in the register where the person
-             it belongs to is. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat
-          label="Active members"
-          icon={<Users size={13} aria-hidden />}
-          value={members.data === undefined ? '—' : activeMembers.length}
-          unit={activeMembers.length === 1 ? 'person' : 'people'}
-          tone="neutral"
-          hint={
-            memberRows.length === activeMembers.length
-              ? 'Nobody deactivated.'
-              : `${memberRows.length - activeMembers.length} deactivated.`
-          }
-        />
-        <Stat
-          label="Invitations outstanding"
-          icon={<MailPlus size={13} aria-hidden />}
-          value={invitations.data === undefined ? '—' : openInvites.length}
-          unit={openInvites.length === 1 ? 'invite' : 'invites'}
-          tone={openInvites.length > 0 ? 'warn' : 'neutral'}
-          hint="Sent, not yet accepted, not yet expired."
-        />
-        <Stat
-          label="Roles defined"
-          icon={<Users size={13} aria-hidden />}
-          value={roles.data === undefined ? '—' : roles.data.length}
-          unit={roles.data?.length === 1 ? 'role' : 'roles'}
-          tone="neutral"
-          hint="Edit what each one covers under Roles."
-        />
+             activity record, and it is in the list where the person it
+             belongs to is. */}
+      <div className="set-kpis">
+        {members.data === undefined ? (
+          <KpiCard
+            label="Active members"
+            icon={<Users size={14} />}
+            figure="—"
+            tone="neutral"
+            hint="Nobody deactivated."
+          />
+        ) : (
+          <KpiCard
+            label="Active members"
+            icon={<Users size={14} />}
+            value={activeMembers.length}
+            format={String}
+            unit={activeMembers.length === 1 ? 'person' : 'people'}
+            tone="neutral"
+            hint={
+              memberRows.length === activeMembers.length
+                ? 'Nobody deactivated.'
+                : `${memberRows.length - activeMembers.length} deactivated.`
+            }
+          />
+        )}
+        {invitations.data === undefined ? (
+          <KpiCard
+            label="Invitations outstanding"
+            icon={<MailPlus size={14} />}
+            figure="—"
+            tone="neutral"
+            hint="Sent, not yet accepted, not yet expired."
+          />
+        ) : (
+          <KpiCard
+            label="Invitations outstanding"
+            icon={<MailPlus size={14} />}
+            value={openInvites.length}
+            format={String}
+            unit={openInvites.length === 1 ? 'invite' : 'invites'}
+            tone={openInvites.length > 0 ? 'pending' : 'neutral'}
+            hint="Sent, not yet accepted, not yet expired."
+          />
+        )}
+        {roles.data === undefined ? (
+          <KpiCard
+            label="Roles defined"
+            icon={<ShieldCheck size={14} />}
+            figure="—"
+            tone="neutral"
+            hint="Edit what each one covers under Roles."
+          />
+        ) : (
+          <KpiCard
+            label="Roles defined"
+            icon={<ShieldCheck size={14} />}
+            value={roles.data.length}
+            format={String}
+            unit={roles.data.length === 1 ? 'role' : 'roles'}
+            tone="neutral"
+            hint="Edit what each one covers under Roles."
+          />
+        )}
       </div>
 
       {revealed && (
@@ -211,73 +266,89 @@ export function TeamManagementIndex(): ReactElement {
       )}
 
       {error && (
-        <div className="text-critical border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] rounded-[var(--radius-2)] border px-3 py-2 text-xs">
-          {error}
-        </div>
+        <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+          <p>{error}</p>
+        </SetCallout>
       )}
 
-      <div>
-        <SectionBand
-          index="01"
-          title="Member register"
+      <section className="set-section">
+        <SectionHeading
+          title="Members"
           note={
             members.data === undefined
               ? undefined
               : `${memberRows.length} ${memberRows.length === 1 ? 'person' : 'people'}`
           }
         />
-        <BandBody flush>
+        <div className="set-card" data-flush>
           {members.isLoading ? (
-            <div className="p-3">
-              <LoadingState label="Loading members…" />
-            </div>
+            <SkeletonRows rows={3} cols={3} label="Loading members…" />
           ) : members.isError ? (
-            <div className="p-3">
-              <ErrorState
-                message={members.error?.message ?? 'Failed.'}
-                retry={() => void members.refetch()}
-              />
-            </div>
+            <ErrorState
+              message={members.error?.message ?? 'Failed.'}
+              retry={() => void members.refetch()}
+            />
+          ) : memberRows.length === 0 ? (
+            <EmptyState bare title="No members yet." />
           ) : (
-            <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <THead>
-                <Tr>
-                  <Th>Name</Th>
-                  <Th>Email</Th>
-                  <Th>Role</Th>
-                  <Th>Last login</Th>
-                  <Th>Joined</Th>
-                  <Th align="right">Actions</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {memberRows.length === 0 ? (
-                  <TableEmpty colSpan={6}>No members yet.</TableEmpty>
-                ) : (
-                  memberRows.map((m) => (
-                    <Tr key={m.id} className={m.deletedAt !== null ? 'opacity-60' : undefined}>
-                      <Td>
-                        <span className="text-text-bright">{m.fullName}</span>
-                        {m.isYou && (
-                          <span className="text-accent ml-2 font-mono text-[11px] tracking-[0.08em] uppercase">
-                            You
-                          </span>
-                        )}
+            <ul className="team-members" aria-label="Team members">
+              {memberRows.map((m) => {
+                const locked = m.deletedAt !== null || m.isYou;
+                return (
+                  <li
+                    key={m.id}
+                    className="team-member"
+                    data-dead={m.deletedAt !== null ? '1' : undefined}
+                  >
+                    <span className="team-member__avatar" aria-hidden>
+                      <User size={16} />
+                    </span>
+                    <div className="team-member__text">
+                      <div className="team-member__name">
+                        <span>{m.fullName}</span>
+                        {m.isYou && <StatusChip kind="confirmed" label="You" size="sm" />}
                         {m.deletedAt !== null && (
-                          <span className="text-critical ml-2 font-mono text-[11px] tracking-[0.08em] uppercase">
-                            Deactivated
-                          </span>
+                          <StatusChip kind="cancelled" label="Deactivated" size="sm" />
                         )}
-                      </Td>
-                      <Td className="text-text-muted font-mono text-xs">{m.emailDisplay}</Td>
-                      <Td>
+                      </div>
+                      <span className="team-member__email sk-ident">{m.emailDisplay}</span>
+                      <span className="team-member__times">
+                        <span>
+                          Last login{' '}
+                          <span className="sk-figure">
+                            {m.lastLoginAt !== null
+                              ? new Date(m.lastLoginAt).toLocaleString()
+                              : '—'}
+                          </span>
+                        </span>
+                        <span>
+                          Joined{' '}
+                          <span className="sk-figure">
+                            {new Date(m.createdAt).toLocaleDateString()}
+                          </span>
+                        </span>
+                      </span>
+                    </div>
+                    <div className="team-member__side">
+                      {locked ? (
+                        // Nobody may change their own role, and a
+                        // deactivated member has none to change: a chip
+                        // says what it is without a control that refuses.
+                        <span title={m.isYou ? 'You cannot change your own role.' : undefined}>
+                          <StatusChip kind="neutral" label={m.roleName} />
+                        </span>
+                      ) : (
                         <Select
+                          className="team-member__role"
+                          icon={<ShieldCheck size={15} />}
                           value={m.roleId}
                           aria-label={`Role for ${m.fullName}`}
-                          disabled={m.deletedAt !== null || m.isYou || roles.data === undefined}
-                          onChange={(e) => void onRoleChange(m.id, e.target.value)}
-                          className="text-xs"
-                          title={m.isYou ? 'You cannot change your own role.' : undefined}
+                          disabled={roles.data === undefined}
+                          onChange={(e) => {
+                            setError(null);
+                            if (e.target.value !== m.roleId)
+                              setPendingRole({ member: m, roleId: e.target.value });
+                          }}
                         >
                           {(roles.data ?? []).map((r) => (
                             <option key={r.id} value={r.id}>
@@ -285,51 +356,28 @@ export function TeamManagementIndex(): ReactElement {
                             </option>
                           ))}
                         </Select>
-                      </Td>
-                      <Td className="text-text-muted font-mono text-xs">
-                        {m.lastLoginAt !== null ? new Date(m.lastLoginAt).toLocaleString() : '—'}
-                      </Td>
-                      <Td className="text-text-muted font-mono text-xs">
-                        {new Date(m.createdAt).toLocaleDateString()}
-                      </Td>
-                      <Td align="right">
-                        {m.deletedAt !== null || m.isYou ? (
-                          <span className="text-text-faint text-xs">—</span>
-                        ) : pendingDelete === m.id ? (
-                          <div className="flex justify-end gap-1.5">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => void onDeactivate(m.id)}
-                            >
-                              Confirm
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setPendingDelete(null)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button variant="ghost" size="sm" onClick={() => setPendingDelete(m.id)}>
-                            Deactivate
-                          </Button>
-                        )}
-                      </Td>
-                    </Tr>
-                  ))
-                )}
-              </TBody>
-            </Table>
+                      )}
+                      {locked ? null : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={<UserMinus size={14} />}
+                          onClick={() => setPendingDelete(m)}
+                        >
+                          Deactivate
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
-        </BandBody>
-      </div>
+        </div>
+      </section>
 
-      <div>
-        <SectionBand
-          index="02"
+      <section className="set-section">
+        <SectionHeading
           title="Invitations"
           note={
             invitations.data === undefined
@@ -337,20 +385,16 @@ export function TeamManagementIndex(): ReactElement {
               : `${openInvites.length} outstanding of ${inviteRows.length}`
           }
         />
-        <BandBody flush>
+        <div className="set-card" data-flush>
           {invitations.isLoading ? (
-            <div className="p-3">
-              <LoadingState label="Loading…" />
-            </div>
+            <SkeletonRows rows={3} cols={5} label="Loading…" />
           ) : invitations.isError ? (
-            <div className="p-3">
-              <ErrorState
-                message={invitations.error?.message ?? 'Failed.'}
-                retry={() => void invitations.refetch()}
-              />
-            </div>
+            <ErrorState
+              message={invitations.error?.message ?? 'Failed.'}
+              retry={() => void invitations.refetch()}
+            />
           ) : (
-            <Table wrapperClassName="rounded-none border-0 bg-transparent">
+            <Table caption="Invitations">
               <THead>
                 <Tr>
                   <Th>Email</Th>
@@ -368,53 +412,47 @@ export function TeamManagementIndex(): ReactElement {
                     const state = inviteState(inv);
                     return (
                       <Tr key={inv.id}>
-                        <Td className="text-text-body font-mono text-xs">{inv.email}</Td>
-                        <Td className="text-text-body font-mono text-xs">{inv.role}</Td>
                         <Td>
-                          <StatusBadge
+                          <span className="sk-ident">{inv.email}</span>
+                        </Td>
+                        <Td>
+                          <StatusChip kind="neutral" label={inv.role} size="sm" />
+                        </Td>
+                        <Td>
+                          <StatusChip
                             kind={inviteKind(state)}
                             label={state.charAt(0) + state.slice(1).toLowerCase()}
+                            size="sm"
                           />
                         </Td>
-                        <Td className="text-text-muted font-mono text-xs">
+                        <Td className="set-cell-muted">
                           {new Date(inv.expiresAt).toLocaleDateString()}
                         </Td>
                         <Td align="right">
                           {state !== 'USED' && (
-                            <div className="flex justify-end gap-1.5">
+                            <div className="set-row-actions">
+                              <AsyncButton
+                                variant="ghost"
+                                size="sm"
+                                icon={<RefreshCw size={13} />}
+                                labels={{
+                                  idle: 'Resend',
+                                  busy: 'Resending…',
+                                  done: 'Resent',
+                                  error: 'Not resent',
+                                }}
+                                aria-label={`Resend invitation to ${inv.email}`}
+                                onAction={() => onResend(inv.id)}
+                              />
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => void onResend(inv.id)}
+                                onClick={() =>
+                                  setPendingRevoke({ id: inv.id, email: inv.email, role: inv.role })
+                                }
                               >
-                                Resend
+                                Revoke
                               </Button>
-                              {pendingRevoke === inv.id ? (
-                                <>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => void onRevoke(inv.id)}
-                                  >
-                                    Confirm
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setPendingRevoke(null)}
-                                  >
-                                    Cancel
-                                  </Button>
-                                </>
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setPendingRevoke(inv.id)}
-                                >
-                                  Revoke
-                                </Button>
-                              )}
                             </div>
                           )}
                         </Td>
@@ -425,8 +463,8 @@ export function TeamManagementIndex(): ReactElement {
               </TBody>
             </Table>
           )}
-        </BandBody>
-      </div>
+        </div>
+      </section>
 
       {inviting && (
         <InviteMemberModal
@@ -438,6 +476,57 @@ export function TeamManagementIndex(): ReactElement {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingRole !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingRole(null);
+        }}
+        title="Change this person's role?"
+        entity={
+          pendingRole === null
+            ? ''
+            : `${pendingRole.member.fullName} · ${pendingRole.member.emailDisplay}`
+        }
+        consequence={
+          pendingRole === null
+            ? ''
+            : `${pendingRole.member.fullName} moves from ${pendingRole.member.roleName} to ${pendingRoleName}. What they can see and change follows the new role.`
+        }
+        confirmLabel="Change role"
+        onConfirm={async () => {
+          if (pendingRole === null) return;
+          await onRoleChange(pendingRole.member.id, pendingRole.roleId);
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingDelete(null);
+        }}
+        title="Deactivate this team member?"
+        entity={
+          pendingDelete === null ? '' : `${pendingDelete.fullName} · ${pendingDelete.emailDisplay}`
+        }
+        consequence="They lose access to this company's console."
+        confirmLabel="Deactivate"
+        destructive
+        onConfirm={() => (pendingDelete === null ? undefined : onDeactivate(pendingDelete.id))}
+      />
+
+      <ConfirmDialog
+        open={pendingRevoke !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingRevoke(null);
+        }}
+        title="Revoke this invitation?"
+        entity={pendingRevoke === null ? '' : `${pendingRevoke.email} · ${pendingRevoke.role}`}
+        consequence="The invitation link stops working."
+        confirmLabel="Revoke invitation"
+        destructive
+        onConfirm={() => (pendingRevoke === null ? undefined : onRevoke(pendingRevoke.id))}
+      />
     </div>
   );
 }

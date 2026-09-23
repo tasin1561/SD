@@ -1,21 +1,15 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import Link from 'next/link';
-import { Plus } from 'lucide-react';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  StatusBadge,
-  useToast,
-} from '@skydrop/ui/components';
+import { CircleAlert, KeyRound, Pencil, Plus, Trash2, Webhook } from 'lucide-react';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { Switch } from '@skydrop/ui/app/switch';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import type { WebhookEndpointView, WebhookEndpointWithSecret } from '@skydrop/api-client';
 import {
   useDeleteWebhookEndpoint,
@@ -26,6 +20,7 @@ import {
 import { WebhookFormModal } from './webhook-form-modal';
 import { SecretRevealCard } from './secret-reveal-card';
 import { serverVerdict } from '@/lib/server-verdict';
+import { SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
 
 const CRUMBS = [
   { label: 'Seller console' },
@@ -36,7 +31,11 @@ const CRUMBS = [
 
 /**
  * Seller webhook endpoint list. Inline status (active / disabled /
- * auto-disabled), failure-count badge, last success / failure time.
+ * auto-disabled), failure count, last success / failure time.
+ *
+ * Rotating a secret and deleting an endpoint both ask first, restating
+ * the endpoint and what changes, then send exactly the request the row
+ * used to send.
  *
  * FE-2 discipline: server rejection on rotate / delete / update
  * surfaces `[code] message` verbatim from ApiError.body.
@@ -48,7 +47,7 @@ export function WebhooksIndex(): ReactElement {
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<WebhookEndpointView | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<WebhookEndpointView | null>(null);
   const [newlyRevealed, setNewlyRevealed] = useState<WebhookEndpointWithSecret | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,33 +71,38 @@ export function WebhooksIndex(): ReactElement {
   const failing = rows.filter((ep) => ep.consecutiveFailureCount > 0);
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        breadcrumb={<Crumbs items={CRUMBS} Link={Link} />}
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={CRUMBS}
         title="Outbound webhooks"
         subtitle="Wire Skydrop events into your own systems via HMAC-signed HTTPS POSTs. Configure here; the delivery worker will fire once it ships in Phase 1B."
         /*
           The comps show a delivery success rate and a p95 latency. We
           store neither — `consecutiveFailureCount` and the two last-*
-          timestamps are the whole record, so these chips say that and
-          the register below says the rest.
+          timestamps are the whole record, so these facts say that and
+          the list below says the rest.
         */
         meta={
           list.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">
+            <span className="set-meta">
+              <SetFact tone="accent">
                 {rows.length} {rows.length === 1 ? 'endpoint' : 'endpoints'}
-              </MetaChip>
-              <MetaChip tone={live.length === 0 ? 'neutral' : 'good'} dot>
+              </SetFact>
+              <SetFact tone={live.length === 0 ? undefined : 'good'} dot>
                 {live.length} receiving
-              </MetaChip>
-              {failing.length > 0 && <MetaChip tone="bad">{failing.length} failing</MetaChip>}
-            </>
+              </SetFact>
+              {failing.length > 0 && <SetFact tone="bad">{failing.length} failing</SetFact>}
+            </span>
           )
         }
         action={
-          <Button variant="primary" size="md" onClick={() => setCreating(true)}>
-            <Plus size={14} aria-hidden /> New endpoint
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Plus size={15} />}
+            onClick={() => setCreating(true)}
+          >
+            New endpoint
           </Button>
         }
       />
@@ -108,59 +112,59 @@ export function WebhooksIndex(): ReactElement {
       )}
 
       {error && (
-        <div className="text-critical border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] rounded-[var(--radius-2)] border px-3 py-2 text-xs">
-          {error}
-        </div>
+        <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+          <p>{error}</p>
+        </SetCallout>
       )}
 
-      <div>
-        <SectionBand
-          index="01"
-          title="Endpoint register"
+      <section className="set-section">
+        <SectionHeading
+          title="Your endpoints"
           note={rows.length === 0 ? undefined : `${rows.length} configured`}
         />
-        <BandBody flush>
-          {list.isLoading ? (
-            <div className="p-3">
-              <LoadingState label="Loading endpoints…" />
-            </div>
-          ) : list.isError ? (
-            <div className="p-3">
-              <ErrorState
-                message={list.error?.message ?? 'Failed to load.'}
-                retry={() => void list.refetch()}
+        {list.isLoading ? (
+          <div className="set-card" aria-busy="true">
+            <span className="set-sr">Loading endpoints…</span>
+            <Skeleton width="40%" height={16} />
+            <Skeleton width="70%" height={12} />
+            <Skeleton width="100%" height={48} />
+          </div>
+        ) : list.isError ? (
+          <ErrorState
+            message={list.error?.message ?? 'Failed to load.'}
+            retry={() => void list.refetch()}
+          />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={<Webhook size={22} />}
+            title="No endpoints yet"
+            description="Add an HTTPS URL we should POST events to. Each endpoint gets a unique HMAC secret you verify on receipt."
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus size={14} />}
+                onClick={() => setCreating(true)}
+              >
+                New endpoint
+              </Button>
+            }
+          />
+        ) : (
+          <ul className="set-endpoints">
+            {rows.map((ep) => (
+              <EndpointRow
+                key={ep.id}
+                endpoint={ep}
+                onEdit={() => setEditing(ep)}
+                onRevealSecret={(reveal) => setNewlyRevealed(reveal)}
+                onDeleteIntent={() => setPendingDelete(ep)}
+                onError={setError}
               />
-            </div>
-          ) : rows.length === 0 ? (
-            <EmptyState
-              bare
-              title="No endpoints yet"
-              description="Add an HTTPS URL we should POST events to. Each endpoint gets a unique HMAC secret you verify on receipt."
-              action={
-                <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
-                  New endpoint
-                </Button>
-              }
-            />
-          ) : (
-            <div className="divide-border divide-y">
-              {rows.map((ep) => (
-                <EndpointRow
-                  key={ep.id}
-                  endpoint={ep}
-                  onEdit={() => setEditing(ep)}
-                  onRevealSecret={(reveal) => setNewlyRevealed(reveal)}
-                  pendingDelete={pendingDelete === ep.id}
-                  onDeleteIntent={() => setPendingDelete(ep.id)}
-                  onDeleteConfirm={() => void onDelete(ep.id)}
-                  onDeleteCancel={() => setPendingDelete(null)}
-                  onError={setError}
-                />
-              ))}
-            </div>
-          )}
-        </BandBody>
-      </div>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {creating && (
         <WebhookFormModal
@@ -181,15 +185,19 @@ export function WebhooksIndex(): ReactElement {
           onSuccess={() => setEditing(null)}
         />
       )}
-    </div>
-  );
-}
 
-/** A quiet caption over a fact, in the register's own mono ruler face. */
-function Caption({ children }: { readonly children: string }): ReactElement {
-  return (
-    <div className="text-text-faint mb-1 font-mono text-[11px] tracking-[0.08em] uppercase">
-      {children}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingDelete(null);
+        }}
+        title="Delete this endpoint?"
+        entity={pendingDelete === null ? '' : (pendingDelete.name ?? pendingDelete.url)}
+        consequence={`We stop sending events to ${pendingDelete?.url ?? 'this URL'}, and its signing secret stops working. This cannot be undone — you would add the endpoint again and get a new secret.`}
+        confirmLabel="Delete endpoint"
+        destructive
+        onConfirm={() => (pendingDelete === null ? undefined : onDelete(pendingDelete.id))}
+      />
     </div>
   );
 }
@@ -198,24 +206,19 @@ function EndpointRow({
   endpoint,
   onEdit,
   onRevealSecret,
-  pendingDelete,
   onDeleteIntent,
-  onDeleteConfirm,
-  onDeleteCancel,
   onError,
 }: {
   readonly endpoint: WebhookEndpointView;
   readonly onEdit: () => void;
   readonly onRevealSecret: (r: WebhookEndpointWithSecret) => void;
-  readonly pendingDelete: boolean;
   readonly onDeleteIntent: () => void;
-  readonly onDeleteConfirm: () => void;
-  readonly onDeleteCancel: () => void;
   readonly onError: (s: string) => void;
 }): ReactElement {
   const rotate = useRotateWebhookSecret(endpoint.id);
   const update = useUpdateWebhookEndpoint(endpoint.id);
   const [busy, setBusy] = useState<'rotate' | 'toggle' | null>(null);
+  const [confirmRotate, setConfirmRotate] = useState(false);
   const toast = useToast();
 
   function fmtError(e: unknown): string {
@@ -247,114 +250,109 @@ function EndpointRow({
     }
   }
 
+  const displayName = endpoint.name ?? 'Untitled endpoint';
+
   return (
-    <div className="px-3 py-3">
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-text-bright text-sm font-medium">
-              {endpoint.name ?? 'Untitled endpoint'}
-            </span>
+    <li className="set-endpoint">
+      <div className="set-endpoint__head">
+        <div className="set-endpoint__main">
+          <div className="set-endpoint__name">
+            <span>{displayName}</span>
             {endpoint.autoDisabledAt !== null ? (
-              <StatusBadge kind="failed" label="Auto-disabled" />
+              <StatusChip kind="failed" label="Auto-disabled" size="sm" />
             ) : endpoint.isActive ? (
-              <StatusBadge kind="delivered" label="Active" />
+              <StatusChip kind="delivered" label="Active" size="sm" />
             ) : (
-              <StatusBadge kind="cancelled" label="Disabled" />
+              <StatusChip kind="cancelled" label="Disabled" size="sm" />
             )}
           </div>
-          <div className="text-text-muted mt-1 truncate font-mono text-xs">{endpoint.url}</div>
+          <span className="set-endpoint__url sk-ident">{endpoint.url}</span>
           {endpoint.description !== null && endpoint.description !== '' && (
-            <div className="text-text-faint mt-1 text-xs">{endpoint.description}</div>
+            <p className="set-endpoint__desc">{endpoint.description}</p>
           )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
+        <div className="set-endpoint__controls">
+          <Switch
+            checked={endpoint.isActive}
             disabled={busy !== null}
-            onClick={() => void onToggle()}
-          >
-            {endpoint.isActive ? 'Disable' : 'Enable'}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onEdit}>
+            aria-label={`${endpoint.isActive ? 'Disable' : 'Enable'} ${displayName}`}
+            onCheckedChange={() => void onToggle()}
+          />
+          <Button variant="ghost" size="sm" icon={<Pencil size={13} />} onClick={onEdit}>
             Edit
           </Button>
           <Button
             variant="ghost"
             size="sm"
+            icon={<KeyRound size={13} />}
+            loading={busy === 'rotate'}
             disabled={busy !== null}
-            onClick={() => void onRotate()}
+            onClick={() => setConfirmRotate(true)}
           >
             {busy === 'rotate' ? 'Rotating…' : 'Rotate secret'}
           </Button>
-          {pendingDelete ? (
-            <>
-              <Button variant="destructive" size="sm" onClick={onDeleteConfirm}>
-                Confirm
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onDeleteCancel}>
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={onDeleteIntent}>
-              Delete
-            </Button>
-          )}
+          <Button variant="ghost" size="sm" icon={<Trash2 size={13} />} onClick={onDeleteIntent}>
+            Delete
+          </Button>
         </div>
       </div>
 
-      <div className="border-border mt-3 grid grid-cols-1 gap-3 border-t pt-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
-        <div className="min-w-0">
-          <Caption>Subscribed events</Caption>
-          <div className="text-text-body font-mono break-words">
+      <dl className="set-endpoint__facts">
+        <div>
+          <dt>Subscribed events</dt>
+          <dd className="sk-ident">
             {endpoint.subscribedEvents.length === 0 ? (
-              <span className="text-text-faint">none</span>
+              <span className="set-faint">none</span>
             ) : (
               endpoint.subscribedEvents.join(', ')
             )}
-          </div>
+          </dd>
         </div>
         <div>
-          <Caption>Last success</Caption>
-          <div className="text-text-body font-mono">
+          <dt>Last success</dt>
+          <dd className="sk-figure">
             {endpoint.lastSuccessAt !== null ? (
               new Date(endpoint.lastSuccessAt).toLocaleString()
             ) : (
-              <span className="text-text-faint">—</span>
+              <span className="set-faint">—</span>
             )}
-          </div>
+          </dd>
         </div>
         <div>
-          <Caption>Last failure</Caption>
-          <div className="text-text-body font-mono">
+          <dt>Last failure</dt>
+          <dd className="sk-figure">
             {endpoint.lastFailureAt !== null ? (
               new Date(endpoint.lastFailureAt).toLocaleString()
             ) : (
-              <span className="text-text-faint">—</span>
+              <span className="set-faint">—</span>
             )}
-          </div>
+          </dd>
         </div>
         <div>
-          <Caption>Failures (consec.)</Caption>
-          <div
-            className={
-              endpoint.consecutiveFailureCount > 0
-                ? 'text-critical font-mono'
-                : 'text-text-body font-mono'
-            }
+          <dt>Failures (consec.)</dt>
+          <dd
+            className="sk-figure"
+            data-tone={endpoint.consecutiveFailureCount > 0 ? 'bad' : undefined}
           >
             {endpoint.consecutiveFailureCount}
-          </div>
+          </dd>
         </div>
-      </div>
+      </dl>
 
       {endpoint.autoDisabledReason !== null && endpoint.autoDisabledReason !== '' && (
-        <div className="border-border text-critical mt-3 border-t pt-3 text-xs">
-          Auto-disabled: {endpoint.autoDisabledReason}
-        </div>
+        <p className="set-endpoint__warn">Auto-disabled: {endpoint.autoDisabledReason}</p>
       )}
-    </div>
+
+      <ConfirmDialog
+        open={confirmRotate}
+        onOpenChange={setConfirmRotate}
+        title="Rotate this signing secret?"
+        entity={endpoint.url}
+        entityIsIdentifier
+        consequence={`We issue a new HMAC secret for ${displayName} and show it once. The current secret keeps working for 24 hours, so switch your integration over before then.`}
+        confirmLabel="Rotate secret"
+        onConfirm={onRotate}
+      />
+    </li>
   );
 }

@@ -1,28 +1,17 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import Link from 'next/link';
-import { Lock, Plus, Users } from 'lucide-react';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  ErrorState,
-  LoadingState,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Lock, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { Table, TBody, THead, Td, Th, Tr, TableEmpty } from '@skydrop/ui/app/data-table';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useDeleteRole, usePermissionCatalogue, useRoles, type RoleView } from '@/lib/rbac-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { SetFact, SetPageHeader } from '../../../settings/_components/settings-parts';
 import { RoleEditor } from './role-editor';
 
 const CRUMBS = [
@@ -51,9 +40,11 @@ export function RolesIndex(): ReactElement {
   const remove = useDeleteRole();
   const [editing, setEditing] = useState<RoleView | null>(null);
   const [open, setOpen] = useState(false);
+  // Deleting a role asks first, in a dialog that restates the role — it
+  // replaced a browser `confirm()` with the same question.
+  const [pendingDelete, setPendingDelete] = useState<RoleView | null>(null);
 
   async function onDelete(role: RoleView): Promise<void> {
-    if (!window.confirm(`Delete ${role.name}? This cannot be undone.`)) return;
     try {
       await remove.mutateAsync({ id: role.id });
       toast.success(`${role.name} deleted`);
@@ -69,68 +60,62 @@ export function RolesIndex(): ReactElement {
   const unused = rows.filter((r) => !r.isOwner && r.memberCount === 0);
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        breadcrumb={<Crumbs items={CRUMBS} Link={Link} />}
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={CRUMBS}
         title="Roles"
         subtitle="A role is a set of permissions. Create as many as your team needs — the permissions themselves are fixed by the system."
         meta={
           roles.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">
+            <span className="set-meta">
+              <SetFact tone="accent">
                 {rows.length} {rows.length === 1 ? 'role' : 'roles'}
-              </MetaChip>
-              <MetaChip dot>
+              </SetFact>
+              <SetFact dot>
                 {assigned} {assigned === 1 ? 'person' : 'people'} covered
-              </MetaChip>
-              {unused.length > 0 && <MetaChip>{unused.length} held by nobody</MetaChip>}
-            </>
+              </SetFact>
+              {unused.length > 0 && <SetFact>{unused.length} held by nobody</SetFact>}
+            </span>
           )
         }
         action={
           <Button
             variant="primary"
             size="md"
+            icon={<Plus size={15} />}
             disabled={catalogue.data === undefined}
             onClick={() => {
               setEditing(null);
               setOpen(true);
             }}
           >
-            <Plus size={14} aria-hidden /> New role
+            New role
           </Button>
         }
       />
 
-      <div>
-        <SectionBand
-          index="01"
-          title="Role register"
+      <section className="set-section">
+        <SectionHeading
+          title="Your roles"
           note={
             roles.data === undefined
               ? undefined
               : `${rows.length} ${rows.length === 1 ? 'role' : 'roles'}`
           }
         />
-        <BandBody flush>
+        <div className="set-card" data-flush>
           {roles.isLoading || catalogue.isLoading ? (
-            <div className="p-3">
-              <LoadingState label="Loading roles…" />
-            </div>
+            <SkeletonRows rows={4} cols={4} label="Loading roles…" />
           ) : roles.isError || catalogue.isError ? (
-            <div className="p-3">
-              <ErrorState
-                message={
-                  roles.error?.message ?? catalogue.error?.message ?? 'Could not load roles.'
-                }
-                retry={() => {
-                  void roles.refetch();
-                  void catalogue.refetch();
-                }}
-              />
-            </div>
+            <ErrorState
+              message={roles.error?.message ?? catalogue.error?.message ?? 'Could not load roles.'}
+              retry={() => {
+                void roles.refetch();
+                void catalogue.refetch();
+              }}
+            />
           ) : (
-            <Table wrapperClassName="rounded-none border-0 bg-transparent">
+            <Table caption="Roles">
               <THead>
                 <Tr>
                   <Th>Role</Th>
@@ -146,36 +131,33 @@ export function RolesIndex(): ReactElement {
                   rows.map((role) => (
                     <Tr key={role.id}>
                       <Td>
-                        <span className="text-text-bright flex items-center gap-1.5">
+                        <span className="set-cell-strong set-chips">
                           {role.name}
                           {role.isOwner && (
-                            <Lock
-                              size={12}
-                              className="text-text-faint"
-                              aria-label="Cannot be edited"
-                            />
+                            <Lock size={12} className="set-faint" aria-label="Cannot be edited" />
                           )}
                         </span>
-                        <span className="text-text-faint block font-mono text-xs">
-                          {role.description ?? role.key}
+                        <span className="set-cell-sub">
+                          {role.description ?? <span className="sk-ident">{role.key}</span>}
                         </span>
                       </Td>
-                      <Td className="text-text-muted">
+                      <Td className="set-cell-muted">
                         {role.isOwner
                           ? 'Everything, including permissions added later'
                           : `${role.permissions.length} permission${role.permissions.length === 1 ? '' : 's'}`}
                       </Td>
-                      <Td align="right" className="text-text-muted tabular-nums">
-                        <span className="inline-flex items-center gap-1.5">
+                      <Td align="right">
+                        <span className="set-chips sk-figure" data-end="1">
                           <Users size={12} aria-hidden />
                           {role.memberCount}
                         </span>
                       </Td>
                       <Td align="right">
-                        <div className="flex justify-end gap-1.5">
+                        <div className="set-row-actions">
                           <Button
                             variant="ghost"
                             size="sm"
+                            icon={<Pencil size={13} />}
                             disabled={role.isOwner}
                             onClick={() => {
                               setEditing(role);
@@ -187,8 +169,9 @@ export function RolesIndex(): ReactElement {
                           <Button
                             variant="ghost"
                             size="sm"
+                            icon={<Trash2 size={13} />}
                             disabled={role.isOwner || role.isSystem || role.memberCount > 0}
-                            onClick={() => void onDelete(role)}
+                            onClick={() => setPendingDelete(role)}
                           >
                             Delete
                           </Button>
@@ -200,8 +183,8 @@ export function RolesIndex(): ReactElement {
               </TBody>
             </Table>
           )}
-        </BandBody>
-      </div>
+        </div>
+      </section>
 
       {catalogue.data !== undefined && (
         <RoleEditor
@@ -211,6 +194,19 @@ export function RolesIndex(): ReactElement {
           onClose={() => setOpen(false)}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingDelete(null);
+        }}
+        title="Delete this role?"
+        entity={pendingDelete?.name ?? ''}
+        consequence="The role is removed for good. This cannot be undone."
+        confirmLabel="Delete role"
+        destructive
+        onConfirm={() => (pendingDelete === null ? undefined : onDelete(pendingDelete))}
+      />
     </div>
   );
 }

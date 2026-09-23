@@ -1,30 +1,42 @@
 'use client';
 
-import Link from 'next/link';
 import { Fragment, useEffect, useState, type FormEvent, type ReactElement } from 'react';
-import { BadgeCheck, Banknote, Coins, Mail, Pencil } from 'lucide-react';
+import {
+  BadgeCheck,
+  Banknote,
+  Building2,
+  CircleAlert,
+  Clock,
+  Coins,
+  Hash,
+  ImageUp,
+  Landmark,
+  Languages,
+  Mail,
+  MessageCircle,
+  Pencil,
+  Phone,
+  Trash2,
+  User,
+  XCircle,
+} from 'lucide-react';
 import type {
   SellerStatusValue,
   SellerProfileView,
   UpdateSellerBankDetailsRequest,
   UpdateSellerProfileRequest,
 } from '@skydrop/api-client';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  Select,
-  Stat,
-  StatusBadge,
-  useToast,
-} from '@skydrop/ui/components';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button, buttonClassName } from '@skydrop/ui/app/button';
+import { AsyncButton, useAsyncState } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   usePresignLogo,
   useRegisterLogo,
@@ -37,82 +49,73 @@ import {
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useSellerIdentity } from '@skydrop/auth/client';
+import {
+  SetCallout,
+  SetFact,
+  SetPageHeader,
+  phaseOf,
+} from '../settings/_components/settings-parts';
+
+const CRUMBS = [{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }];
 
 /**
  * Seller profile — Phase 1B M19+M20.
  *
- * Two cards: Company info (editable in place) + Bank details (also
- * editable; flagged as Phase 1B). FE-2: server rejection surfaces
- * `[CODE] message` VERBATIM. View ↔ edit toggle per section so the
- * seller can update one card without scrolling the other.
+ * Three sections: Company info (editable in place), Company logo, and
+ * Bank details (editable; an edit to an account on file goes to an admin
+ * for approval). FE-2: server rejection surfaces `[CODE] message`
+ * VERBATIM. View ↔ edit toggle per section so the seller can update one
+ * without scrolling the other.
+ *
+ * Saving bank details asks first, restating the account and what the
+ * save does, then sends exactly the request the form always sent. So
+ * does removing the logo.
  */
 export default function ProfilePage(): ReactElement {
   const detail = useSellerProfile();
 
   if (detail.isLoading) {
     return (
-      <>
-        <PageHeader
-          breadcrumb={
-            <Crumbs
-              items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }]}
-              Link={Link}
-            />
-          }
-          title="Profile"
-          subtitle="Company info + bank details."
-        />
-        <LoadingState label="Loading profile…" />
-      </>
+      <div className="set-page">
+        <SetPageHeader crumbs={CRUMBS} title="Profile" subtitle="Company info + bank details." />
+        <div className="set-kpis" aria-busy="true">
+          <span className="set-sr">Loading profile…</span>
+          {Array.from({ length: 4 }, (_, i) => (
+            <Skeleton key={i} height={112} />
+          ))}
+        </div>
+        <div className="set-card">
+          <Skeleton width="30%" height={16} />
+          <Skeleton width="60%" height={14} />
+          <Skeleton width="45%" height={14} />
+        </div>
+      </div>
     );
   }
   if (detail.isError) {
     return (
-      <>
-        <PageHeader
-          breadcrumb={
-            <Crumbs
-              items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }]}
-              Link={Link}
-            />
-          }
-          title="Profile"
-          subtitle="Company info + bank details."
-        />
+      <div className="set-page">
+        <SetPageHeader crumbs={CRUMBS} title="Profile" subtitle="Company info + bank details." />
         <ErrorState
           message={detail.error?.message ?? 'Failed to load profile.'}
           retry={() => void detail.refetch()}
         />
-      </>
+      </div>
     );
   }
   if (!detail.data) {
     return (
-      <>
-        <PageHeader
-          breadcrumb={
-            <Crumbs
-              items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }]}
-              Link={Link}
-            />
-          }
-          title="Profile"
-          subtitle="Company info + bank details."
-        />
+      <div className="set-page">
+        <SetPageHeader crumbs={CRUMBS} title="Profile" subtitle="Company info + bank details." />
         <ErrorState message="Profile not loaded." />
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }]}
-            Link={Link}
-          />
-        }
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={CRUMBS}
         title="Profile"
         subtitle="Your company as we hold it, and where your money goes."
         /*
@@ -125,15 +128,15 @@ export default function ProfilePage(): ReactElement {
           account is approved, and which currency they read in.
         */
         meta={
-          <>
-            <MetaChip tone={detail.data.status === 'APPROVED' ? 'good' : 'warn'}>
+          <span className="set-meta">
+            <SetFact tone={detail.data.status === 'APPROVED' ? 'good' : 'warn'}>
               {humaniseStatus(detail.data.status)}
-            </MetaChip>
-            <MetaChip>Reads in {detail.data.displayCurrency}</MetaChip>
+            </SetFact>
+            <SetFact>Reads in {detail.data.displayCurrency}</SetFact>
             {detail.data.emailVerifiedAt === null && (
-              <MetaChip tone="warn">Email not verified</MetaChip>
+              <SetFact tone="warn">Email not verified</SetFact>
             )}
-          </>
+          </span>
         }
       />
 
@@ -142,22 +145,22 @@ export default function ProfilePage(): ReactElement {
              comp puts KYC tier, an FX spread model, a SOC-2 grade and
              an escrow protocol here; none of the four exists, so these
              are the four that do. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
+      <div className="set-kpis">
+        <KpiCard
           label="Account status"
-          icon={<BadgeCheck size={13} aria-hidden />}
-          value={<span className="text-base">{humaniseStatus(detail.data.status)}</span>}
-          tone={statusTone(detail.data.status)}
+          icon={<BadgeCheck size={14} />}
+          figure={<span className="set-kpi-text">{humaniseStatus(detail.data.status)}</span>}
+          tone={kpiTone(statusTone(detail.data.status))}
           hint={
             detail.data.approvedAt === null
               ? 'Not approved yet.'
               : `Approved ${new Date(detail.data.approvedAt).toLocaleDateString()}.`
           }
         />
-        <Stat
+        <KpiCard
           label="You read amounts in"
-          icon={<Coins size={13} aria-hidden />}
-          value={<span className="text-base">{detail.data.displayCurrency}</span>}
+          icon={<Coins size={14} />}
+          figure={<span className="set-kpi-text">{detail.data.displayCurrency}</span>}
           tone="neutral"
           // INR is the canonical currency everything is STORED in; BDT
           // is a display conversion. Saying so here stops "my wallet is
@@ -168,17 +171,19 @@ export default function ProfilePage(): ReactElement {
               : 'Converted for display; balances are held in rupees.'
           }
         />
-        <Stat
+        <KpiCard
           label="Payouts go to"
-          icon={<Banknote size={13} aria-hidden />}
-          value={
+          icon={<Banknote size={14} />}
+          figure={
             detail.data.bankName === null || detail.data.bankName === '' ? (
-              <span className="text-text-faint text-base">Not set</span>
+              <span className="set-kpi-text set-kpi-faint">Not set</span>
             ) : (
-              <span className="text-base">{detail.data.bankName}</span>
+              <span className="set-kpi-text">{detail.data.bankName}</span>
             )
           }
-          tone={detail.data.bankName === null || detail.data.bankName === '' ? 'warn' : 'neutral'}
+          tone={
+            detail.data.bankName === null || detail.data.bankName === '' ? 'pending' : 'neutral'
+          }
           // Last four only. The full number is on the card below, where
           // you went looking for it — a tile is read over a shoulder.
           hint={
@@ -186,11 +191,11 @@ export default function ProfilePage(): ReactElement {
             'Add one so withdrawals have somewhere to land.'
           }
         />
-        <Stat
+        <KpiCard
           label="Sign-in email"
-          icon={<Mail size={13} aria-hidden />}
-          value={<span className="text-base break-all">{detail.data.emailDisplay}</span>}
-          tone={detail.data.emailVerifiedAt === null ? 'warn' : 'neutral'}
+          icon={<Mail size={14} />}
+          figure={<span className="set-kpi-text sk-ident">{detail.data.emailDisplay}</span>}
+          tone={detail.data.emailVerifiedAt === null ? 'pending' : 'neutral'}
           hint={detail.data.emailVerifiedAt === null ? 'Not verified yet.' : 'Verified.'}
         />
       </div>
@@ -204,6 +209,24 @@ export default function ProfilePage(): ReactElement {
 
 function fmtError(e: unknown): string {
   return serverVerdict(e, 'Action failed');
+}
+
+/** The status tone, as the glow a figure card takes. Display only. */
+function kpiTone(tone: 'neutral' | 'warn' | 'bad' | 'good'): KpiTone {
+  switch (tone) {
+    case 'good':
+      return 'credit';
+    case 'warn':
+      return 'pending';
+    case 'bad':
+      return 'debit';
+    case 'neutral':
+      return 'neutral';
+    default: {
+      const exhaustive: never = tone;
+      return exhaustive;
+    }
+  }
 }
 
 /**
@@ -322,9 +345,8 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
   }
 
   return (
-    <div>
-      <SectionBand
-        index="01"
+    <section className="set-section">
+      <SectionHeading
         title="Company info"
         note="What we call you, and who we ring."
         action={
@@ -333,38 +355,39 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
             <Button
               variant="ghost"
               size="sm"
+              icon={<Pencil size={13} />}
               onClick={() => {
                 setError(null);
                 setEditing(true);
               }}
             >
-              <Pencil size={12} /> Edit
+              Edit
             </Button>
           )
         }
       />
-      <BandBody>
+      <div className="set-card">
         {!editing ? (
-          <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[180px_1fr] gap-x-3 sm:gap-x-6 gap-y-2 text-sm">
-            <dt className="text-text-muted">Company</dt>
-            <dd className="text-text-body">{profile.companyName}</dd>
-            <dt className="text-text-muted">Contact person</dt>
-            <dd className="text-text-body">{profile.contactPersonName}</dd>
-            <dt className="text-text-muted">Email</dt>
-            <dd className="text-text-body font-mono text-xs">{profile.emailDisplay}</dd>
-            <dt className="text-text-muted">Phone</dt>
-            <dd className="text-text-body font-mono text-xs">{profile.phone}</dd>
-            <dt className="text-text-muted">WhatsApp</dt>
-            <dd className="text-text-body font-mono text-xs">{profile.whatsapp ?? '—'}</dd>
-            <dt className="text-text-muted">Country</dt>
-            <dd className="text-text-body">{profile.countryCode}</dd>
-            <dt className="text-text-muted">Display currency</dt>
-            <dd className="text-text-body">{profile.displayCurrency}</dd>
-            <dt className="text-text-muted">Display language</dt>
-            <dd className="text-text-body uppercase">{profile.displayLanguage}</dd>
+          <dl className="set-dl">
+            <dt>Company</dt>
+            <dd>{profile.companyName}</dd>
+            <dt>Contact person</dt>
+            <dd>{profile.contactPersonName}</dd>
+            <dt>Email</dt>
+            <dd className="sk-ident">{profile.emailDisplay}</dd>
+            <dt>Phone</dt>
+            <dd className="sk-ident">{profile.phone}</dd>
+            <dt>WhatsApp</dt>
+            <dd className="sk-ident">{profile.whatsapp ?? '—'}</dd>
+            <dt>Country</dt>
+            <dd>{profile.countryCode}</dd>
+            <dt>Display currency</dt>
+            <dd>{profile.displayCurrency}</dd>
+            <dt>Display language</dt>
+            <dd>{profile.displayLanguage.toUpperCase()}</dd>
           </dl>
         ) : (
-          <form className="space-y-3" onSubmit={(e) => void onSubmit(e)}>
+          <form className="set-form-grid" onSubmit={(e) => void onSubmit(e)}>
             {/*
              * Company name and phone are FIXED. They are the identity
              * the account was approved on, so they are shown here as
@@ -372,69 +395,80 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
              * the update DTO and rejects a request carrying either, so
              * an editable box would only ever produce a refusal.
              */}
-            <FormField label="Company name" hint="Fixed — contact support to change it.">
-              <Input value={profile.companyName} disabled readOnly />
-            </FormField>
-            <FormField label="Contact person" required>
-              <Input
-                value={form.contactPersonName}
-                onChange={(e) => setForm({ ...form, contactPersonName: e.target.value })}
-                minLength={2}
-                maxLength={120}
-                required
-              />
-            </FormField>
-            <FormField
+            <TextField
+              label="Company name"
+              icon={<Building2 size={15} />}
+              hint="Fixed — contact support to change it."
+              value={profile.companyName}
+              disabled
+              readOnly
+            />
+            <TextField
+              label="Contact person"
+              icon={<User size={15} />}
+              value={form.contactPersonName}
+              onChange={(e) => setForm({ ...form, contactPersonName: e.target.value })}
+              minLength={2}
+              maxLength={120}
+              showCount
+              required
+            />
+            <TextField
               label="Phone (E.164 BD)"
+              icon={<Phone size={15} />}
               hint="Fixed — it is how the call centre reaches you. Contact support to change it."
-            >
-              <Input value={profile.phone} disabled readOnly />
-            </FormField>
-            <FormField label="WhatsApp" hint="Leave blank to remove">
-              <Input
-                value={form.whatsapp}
-                onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-                placeholder="+8801712345678"
-              />
-            </FormField>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FormField label="Display currency">
-                <Select
-                  value={form.displayCurrency}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      displayCurrency: e.target.value as 'INR' | 'BDT',
-                    })
-                  }
-                >
-                  <option value="INR">INR</option>
-                  <option value="BDT">BDT</option>
-                </Select>
-              </FormField>
-              <FormField label="Display language">
-                <Select
-                  value={form.displayLanguage}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      displayLanguage: e.target.value as 'en' | 'bn',
-                    })
-                  }
-                >
-                  <option value="en">English</option>
-                  <option value="bn">বাংলা</option>
-                </Select>
-              </FormField>
+              value={profile.phone}
+              disabled
+              readOnly
+              inputClassName="sk-ident"
+            />
+            <TextField
+              label="WhatsApp"
+              icon={<MessageCircle size={15} />}
+              hint="Leave blank to remove"
+              value={form.whatsapp}
+              onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
+              placeholder="+8801712345678"
+              inputClassName="sk-ident"
+            />
+            <div className="set-form-grid" data-cols="2">
+              <Select
+                label="Display currency"
+                icon={<Coins size={15} />}
+                value={form.displayCurrency}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    displayCurrency: e.target.value as 'INR' | 'BDT',
+                  })
+                }
+              >
+                <option value="INR">INR</option>
+                <option value="BDT">BDT</option>
+              </Select>
+              <Select
+                label="Display language"
+                icon={<Languages size={15} />}
+                value={form.displayLanguage}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    displayLanguage: e.target.value as 'en' | 'bn',
+                  })
+                }
+              >
+                <option value="en">English</option>
+                <option value="bn">বাংলা</option>
+              </Select>
             </div>
 
             {error && (
-              <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-                {error}
-              </div>
+              <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+                <p>{error}</p>
+              </SetCallout>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-1">
+            <div className="set-buttons">
               <Button
                 type="button"
                 variant="ghost"
@@ -444,14 +478,19 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" size="md" disabled={busy}>
-                {busy ? 'Saving…' : 'Save changes'}
-              </Button>
+              <AsyncButton
+                type="submit"
+                variant="primary"
+                size="md"
+                labels={{ idle: 'Save changes', busy: 'Saving…', error: 'Not saved' }}
+                state={phaseOf(busy, error)}
+                disabled={busy}
+              />
             </div>
           </form>
         )}
-      </BandBody>
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -534,20 +573,18 @@ function BankValuesList({
   readonly compareTo?: BankValues;
 }): ReactElement {
   return (
-    <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[180px_1fr] gap-x-3 sm:gap-x-6 gap-y-2 text-sm">
+    <dl className="set-dl">
       {BANK_FIELDS.map((f) => {
         const value = values[f.key];
         const changed = compareTo !== undefined && (compareTo[f.key] ?? '') !== (value ?? '');
         return (
           <Fragment key={f.key}>
-            <dt className="text-text-muted">{f.label}</dt>
-            <dd className={f.mono ? 'text-text-body font-mono text-xs' : 'text-text-body'}>
-              {value === null || value === '' ? '—' : value}
-              {changed && (
-                <span className="ml-2 font-sans text-[10px] uppercase tracking-wide text-accent">
-                  changed
-                </span>
-              )}
+            <dt>{f.label}</dt>
+            <dd>
+              <span className={f.mono ? 'sk-ident' : undefined}>
+                {value === null || value === '' ? '—' : value}
+              </span>
+              {changed && <span className="set-changed">Changed</span>}
             </dd>
           </Fragment>
         );
@@ -566,6 +603,9 @@ function BankDetailsSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(() => bankFormFrom(profile));
+  // The change waiting on its confirmation — exactly the body the form
+  // will send once confirmed.
+  const [pendingBody, setPendingBody] = useState<Record<string, unknown> | null>(null);
   const update = useUpdateSellerBankDetails();
   const toast = useToast();
 
@@ -602,21 +642,26 @@ function BankDetailsSection({
   const missing = BANK_FIELDS.filter((f) => !satisfied(f.key));
   const incomplete = filled.length > 0 && missing.length > 0;
 
-  async function onSubmit(e: FormEvent): Promise<void> {
+  function onSubmit(e: FormEvent): void {
     e.preventDefault();
+    setError(null);
+    const body: Record<string, unknown> = {};
+    for (const f of BANK_FIELDS) {
+      const next = form[f.key].trim();
+      if (next === (profile[f.key] ?? '')) continue;
+      body[f.key] = next === '' ? null : next;
+    }
+    if (Object.keys(body).length === 0) {
+      setEditing(false);
+      return;
+    }
+    setPendingBody(body);
+  }
+
+  async function send(body: Record<string, unknown>): Promise<void> {
     setError(null);
     setBusy(true);
     try {
-      const body: Record<string, unknown> = {};
-      for (const f of BANK_FIELDS) {
-        const next = form[f.key].trim();
-        if (next === (profile[f.key] ?? '')) continue;
-        body[f.key] = next === '' ? null : next;
-      }
-      if (Object.keys(body).length === 0) {
-        setEditing(false);
-        return;
-      }
       const result = await update.mutateAsync(body as UpdateSellerBankDetailsRequest);
       setEditing(false);
       // Whether this saved or merely asked is the SERVER's answer, read
@@ -634,10 +679,17 @@ function BankDetailsSection({
     }
   }
 
+  // What the confirmation restates: the account as it will read after
+  // the save, and which of the six fields the save touches.
+  const nextName = form.bankName.trim() === '' ? live.bankName : form.bankName.trim();
+  const nextNumber =
+    form.bankAccountNumber.trim() === '' ? live.bankAccountNumber : form.bankAccountNumber.trim();
+  const changedLabels =
+    pendingBody === null ? [] : BANK_FIELDS.filter((f) => f.key in pendingBody).map((f) => f.label);
+
   return (
-    <div>
-      <SectionBand
-        index="03"
+    <section className="set-section">
+      <SectionHeading
         title="Bank details"
         note="Where a withdrawal actually lands."
         action={
@@ -649,84 +701,87 @@ function BankDetailsSection({
             <Button
               variant="ghost"
               size="sm"
+              icon={<Pencil size={13} />}
               onClick={() => {
                 setError(null);
                 setEditing(true);
               }}
             >
-              <Pencil size={12} /> Edit
+              Edit
             </Button>
           )
         }
       />
-      <BandBody>
+      <div className="set-card">
         {!editing ? (
           !hasAccountOnFile && !pending ? (
-            <div className="text-text-muted text-sm py-2">
+            <p className="set-text">
               No bank details captured yet. Remittance requires this; add them before your first
               delivered order.
-            </div>
+            </p>
           ) : (
-            <div className="space-y-4">
+            <div className="set-form-grid">
               {change !== null && change.status === 'REJECTED' && (
-                <div
+                <SetCallout
+                  tone="critical"
+                  icon={<XCircle size={15} />}
                   role="status"
-                  className="rounded-[5px] px-3 py-2 space-y-1.5 bg-[var(--status-failed-bg)] text-[var(--status-failed-fg)] border border-[var(--status-failed-ring)]"
+                  title={
+                    <span className="set-chips">
+                      <StatusChip kind="failed" label="Change rejected" size="sm" />
+                      {change.decidedAt !== null && (
+                        <span className="set-callout__aside">{whenLabel(change.decidedAt)}</span>
+                      )}
+                    </span>
+                  }
                 >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge kind="failed" label="Change rejected" />
-                    {change.decidedAt !== null && (
-                      <span className="text-xs opacity-80">{whenLabel(change.decidedAt)}</span>
-                    )}
-                  </div>
                   {/* The admin's own words, verbatim — it is the whole
                       point of asking them for a reason. */}
-                  <p className="text-xs">
-                    {change.decisionReason ?? 'No reason was recorded with the rejection.'}
-                  </p>
-                  <p className="text-xs opacity-80">
+                  <p>{change.decisionReason ?? 'No reason was recorded with the rejection.'}</p>
+                  <p className="set-callout__aside">
                     Nothing changed — withdrawals still go to the account below. Edit it to send a
                     new request.
                   </p>
-                </div>
+                </SetCallout>
               )}
 
-              <section className="space-y-2">
-                {pending && (
-                  <h3 className="text-text-muted text-xs uppercase tracking-wide">
-                    Current account · withdrawals go here
-                  </h3>
-                )}
+              <div className="set-form-grid">
+                {pending && <h3 className="set-heading">Current account · withdrawals go here</h3>}
                 <BankValuesList values={live} />
-              </section>
+              </div>
 
               {pending && change !== null && (
-                <section className="rounded-[6px] px-3 py-3 space-y-3 bg-[var(--status-pending-bg)] border border-[var(--status-pending-ring)]">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge kind="pending" label="Awaiting approval" />
-                    <span className="text-xs text-[var(--status-pending-fg)] opacity-80">
-                      Sent {whenLabel(change.submittedAt)}
+                <SetCallout
+                  tone="warn"
+                  icon={<Clock size={15} />}
+                  title={
+                    <span className="set-chips">
+                      <StatusChip kind="pending" label="Awaiting approval" size="sm" />
+                      <span className="set-callout__aside">
+                        Sent {whenLabel(change.submittedAt)}
+                      </span>
                     </span>
-                  </div>
-                  <p className="text-sm text-[var(--status-pending-fg)]">
+                  }
+                >
+                  <p>
                     These are the details you asked us to switch to. They are not live yet — an
                     admin has to approve them, and{' '}
                     <strong>withdrawals continue to the current account above until they do</strong>
                     .
                   </p>
                   <BankValuesList values={change.proposed} compareTo={live} />
-                  <p className="text-xs text-[var(--status-pending-fg)] opacity-80">
+                  <p className="set-callout__aside">
                     Account numbers are only ever shown as their last four digits. One change can be
                     in review at a time, so these fields stay locked until this one is approved or
                     rejected.
                   </p>
-                </section>
+                </SetCallout>
               )}
             </div>
           )
         ) : (
-          <form className="space-y-3" onSubmit={(e) => void onSubmit(e)}>
-            <p className="text-text-muted text-xs mb-1">
+          <form className="set-form-grid" onSubmit={onSubmit}>
+            <p className="set-muted">
               {hasAccountOnFile ? (
                 <>
                   Changing a payable account does not take effect on save — it goes to an admin for
@@ -740,85 +795,85 @@ function BankDetailsSection({
                 </>
               )}
             </p>
-            <FormField label="Bank name">
-              <Input
-                value={form.bankName}
-                onChange={(e) => setForm({ ...form, bankName: e.target.value })}
-                maxLength={120}
-                placeholder="e.g. Dutch-Bangla Bank Ltd."
-              />
-            </FormField>
-            <FormField label="Branch name">
-              <Input
-                value={form.bankBranchName}
-                onChange={(e) => setForm({ ...form, bankBranchName: e.target.value })}
-                maxLength={120}
-                placeholder="e.g. Gulshan Circle-1 Branch"
-              />
-            </FormField>
-            <FormField label="Account holder name">
-              <Input
-                value={form.bankAccountName}
-                onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })}
-                maxLength={120}
-                placeholder="As it appears on the bank statement"
-              />
-            </FormField>
-            <FormField
+            <TextField
+              label="Bank name"
+              icon={<Landmark size={15} />}
+              value={form.bankName}
+              onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+              maxLength={120}
+              placeholder="e.g. Dutch-Bangla Bank Ltd."
+            />
+            <TextField
+              label="Branch name"
+              icon={<Building2 size={15} />}
+              value={form.bankBranchName}
+              onChange={(e) => setForm({ ...form, bankBranchName: e.target.value })}
+              maxLength={120}
+              placeholder="e.g. Gulshan Circle-1 Branch"
+            />
+            <TextField
+              label="Account holder name"
+              icon={<User size={15} />}
+              value={form.bankAccountName}
+              onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })}
+              maxLength={120}
+              placeholder="As it appears on the bank statement"
+            />
+            <TextField
               label="Account number"
+              icon={<Hash size={15} />}
               hint={
                 storedAccountNumber
                   ? 'The account your withdrawals are sent to. Changing it goes to an admin for approval.'
                   : undefined
               }
-            >
-              <Input
-                value={form.bankAccountNumber}
-                onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
-                maxLength={64}
-                placeholder={
-                  storedAccountNumber ? 'Blank keeps the current number' : '123-4567-890123'
-                }
+              value={form.bankAccountNumber}
+              onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
+              maxLength={64}
+              placeholder={
+                storedAccountNumber ? 'Blank keeps the current number' : '123-4567-890123'
+              }
+              inputClassName="sk-ident"
+            />
+            <div className="set-form-grid" data-cols="2">
+              <TextField
+                label="Routing number"
+                icon={<Hash size={15} />}
+                value={form.bankRoutingNumber}
+                onChange={(e) => setForm({ ...form, bankRoutingNumber: e.target.value })}
+                maxLength={32}
+                placeholder="9-digit routing"
+                inputClassName="sk-ident"
               />
-            </FormField>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FormField label="Routing number">
-                <Input
-                  value={form.bankRoutingNumber}
-                  onChange={(e) => setForm({ ...form, bankRoutingNumber: e.target.value })}
-                  maxLength={32}
-                  placeholder="9-digit routing"
-                />
-              </FormField>
-              <FormField label="SWIFT code">
-                <Input
-                  value={form.bankSwiftCode}
-                  onChange={(e) => setForm({ ...form, bankSwiftCode: e.target.value })}
-                  maxLength={16}
-                  placeholder="DBBLBDDH"
-                />
-              </FormField>
+              <TextField
+                label="SWIFT code"
+                icon={<Hash size={15} />}
+                value={form.bankSwiftCode}
+                onChange={(e) => setForm({ ...form, bankSwiftCode: e.target.value })}
+                maxLength={16}
+                placeholder="DBBLBDDH"
+                inputClassName="sk-ident"
+              />
             </div>
 
             {incomplete && (
-              <div
-                className="text-xs px-3 py-2 rounded-[5px] bg-[var(--status-pending-bg)] text-[var(--status-pending-fg)] border border-[var(--status-pending-ring)]"
-                // Advisory, not a gate — the submit stays enabled and the
-                // server's refusal is what the seller is finally shown.
-                role="status"
-              >
-                Still needed: {missing.map((f) => f.serverLabel).join(', ')}. Submitting without
-                these will be refused — a withdrawal needs the whole account.
-              </div>
+              // Advisory, not a gate — the submit stays enabled and the
+              // server's refusal is what the seller is finally shown.
+              <SetCallout tone="warn" icon={<CircleAlert size={15} />} role="status">
+                <p>
+                  Still needed: {missing.map((f) => f.serverLabel).join(', ')}. Submitting without
+                  these will be refused — a withdrawal needs the whole account.
+                </p>
+              </SetCallout>
             )}
 
             {error && (
-              <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-                {error}
-              </div>
+              <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+                <p>{error}</p>
+              </SetCallout>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-1">
+            <div className="set-buttons">
               <Button
                 type="button"
                 variant="ghost"
@@ -830,20 +885,46 @@ function BankDetailsSection({
               </Button>
               {/* The button says what the click actually does: an edit
                   raises a request for review, it does not save. */}
-              <Button type="submit" variant="primary" size="md" disabled={busy}>
-                {hasAccountOnFile
-                  ? busy
-                    ? 'Sending…'
-                    : 'Send for approval'
-                  : busy
-                    ? 'Saving…'
-                    : 'Save details'}
-              </Button>
+              <AsyncButton
+                type="submit"
+                variant="primary"
+                size="md"
+                labels={
+                  hasAccountOnFile
+                    ? { idle: 'Send for approval', busy: 'Sending…', error: 'Not sent' }
+                    : { idle: 'Save details', busy: 'Saving…', error: 'Not saved' }
+                }
+                state={phaseOf(busy, error)}
+                disabled={busy}
+              />
             </div>
           </form>
         )}
-      </BandBody>
-    </div>
+      </div>
+
+      <ConfirmDialog
+        open={pendingBody !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingBody(null);
+        }}
+        title={
+          hasAccountOnFile ? 'Send this bank change for approval?' : 'Save these bank details?'
+        }
+        entity={`${nextName ?? 'Bank not named'} · ${maskedAccount(nextNumber) ?? 'no account number'}`}
+        entityIsIdentifier
+        consequence={
+          hasAccountOnFile
+            ? 'An admin checks it before it goes live. Withdrawals keep going to your current account until it is approved.'
+            : 'Your withdrawals will be paid into this account.'
+        }
+        confirmLabel={hasAccountOnFile ? 'Send for approval' : 'Save details'}
+        onConfirm={() => (pendingBody === null ? undefined : send(pendingBody))}
+      >
+        {changedLabels.length > 0 && (
+          <p className="set-muted">Changing: {changedLabels.join(', ')}.</p>
+        )}
+      </ConfirmDialog>
+    </section>
   );
 }
 
@@ -856,6 +937,7 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const upload = useAsyncState();
 
   function fmtErr(e: unknown): string {
     return serverVerdict(e, 'Action failed');
@@ -863,13 +945,15 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
 
   async function onPick(file: File): Promise<void> {
     setError(null);
+    // A refusal here is thrown after it is shown, so the upload control
+    // reports the failure on itself rather than a success.
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       setError('Logo must be JPG, PNG, or WEBP');
-      return;
+      throw new Error('Logo must be JPG, PNG, or WEBP');
     }
     if (file.size > 1_048_576) {
       setError('Logo must be under 1 MB');
-      return;
+      throw new Error('Logo must be under 1 MB');
     }
     setBusy(true);
     try {
@@ -893,6 +977,8 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
       toast.success('Logo updated.');
     } catch (e) {
       setError(fmtErr(e));
+      // Rethrown so the upload control shows the failure on itself.
+      throw e;
     } finally {
       setBusy(false);
     }
@@ -912,86 +998,104 @@ function LogoSection({ profile }: { readonly profile: SellerProfileView }): Reac
     }
   }
 
-  return (
-    <div>
-      <SectionBand index="02" title="Company logo" note="Shown to your customers." />
-      <BandBody>
-        {canManage ? (
-          <>
-            {/* Uploading or removing a logo is `profile.manage`; without it
-            the card shows the logo and no controls, rather than buttons
-            that refuse. */}
-            <div className="flex items-start gap-4">
-              {profile.logoUrl ? (
-                <div className="w-24 h-24 rounded-[6px] border border-border bg-bg overflow-hidden shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={profile.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-                </div>
-              ) : (
-                <div className="w-24 h-24 rounded-[6px] border border-dashed border-border-strong bg-surface flex items-center justify-center text-text-faint text-xs shrink-0">
-                  No logo
-                </div>
-              )}
+  const uploadLabel =
+    upload.phase === 'busy'
+      ? 'Uploading…'
+      : upload.phase === 'success'
+        ? 'Logo updated'
+        : upload.phase === 'error'
+          ? 'Not uploaded'
+          : busy
+            ? 'Uploading…'
+            : 'Choose file';
 
-              <div className="flex-1 space-y-2">
-                <div className="text-text-muted text-xs">
-                  JPG, PNG, or WEBP. Up to 1 MB. Recommended 256×256, square.
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="inline-flex items-center gap-2 cursor-pointer">
-                    <span className="px-3 py-1.5 rounded-[5px] text-sm bg-accent-fill text-accent-fg hover:bg-accent-fill-hover transition-colors">
-                      {busy ? 'Uploading…' : 'Choose file'}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      disabled={busy}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void onPick(f);
-                        e.target.value = '';
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                  {profile.logoUrl && !confirmRemove && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => setConfirmRemove(true)}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                  {confirmRemove && (
-                    <>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => void onRemove()}
-                      >
-                        Confirm remove
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setConfirmRemove(false)}>
-                        Cancel
-                      </Button>
-                    </>
-                  )}
-                </div>
-                {error && (
-                  <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-                    {error}
-                  </div>
+  return (
+    <section className="set-section">
+      <SectionHeading title="Company logo" note="Shown to your customers." />
+      <div className="set-card">
+        {canManage ? (
+          // Uploading or removing a logo is `profile.manage`; without it
+          // the card says so and shows no controls, rather than buttons
+          // that refuse.
+          <div className="set-logo">
+            {profile.logoUrl ? (
+              <div className="set-logo__frame">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={profile.logoUrl} alt="Logo" />
+              </div>
+            ) : (
+              <div className="set-logo__frame" data-empty="1">
+                No logo
+              </div>
+            )}
+
+            <div className="set-logo__body">
+              <p className="set-muted">
+                JPG, PNG, or WEBP. Up to 1 MB. Recommended 256×256, square.
+              </p>
+              <div className="set-buttons" data-align="start">
+                <label
+                  className={`set-file ${buttonClassName('primary', 'md')}`}
+                  data-disabled={busy ? '1' : undefined}
+                  aria-busy={upload.phase === 'busy' || undefined}
+                >
+                  <span className="sk-btn__fx" aria-hidden />
+                  <span className="sk-btn__icon" aria-hidden>
+                    <ImageUp size={15} />
+                  </span>
+                  <span className="sk-btn__label">{uploadLabel}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={busy}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void upload.run(() => onPick(f));
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {profile.logoUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Trash2 size={13} />}
+                    disabled={busy}
+                    onClick={() => setConfirmRemove(true)}
+                  >
+                    Remove
+                  </Button>
                 )}
               </div>
+              <span className="set-sr" aria-live="polite">
+                {upload.phase === 'busy'
+                  ? 'Uploading…'
+                  : upload.phase === 'success'
+                    ? 'Logo updated.'
+                    : ''}
+              </span>
+              {error && (
+                <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+                  <p>{error}</p>
+                </SetCallout>
+              )}
             </div>
-          </>
+          </div>
         ) : (
-          <p className="text-text-muted text-xs">Your role cannot change the company logo.</p>
+          <p className="set-muted">Your role cannot change the company logo.</p>
         )}
-      </BandBody>
-    </div>
+      </div>
+
+      <ConfirmDialog
+        open={confirmRemove}
+        onOpenChange={setConfirmRemove}
+        title="Remove the company logo?"
+        entity={profile.companyName}
+        consequence="Your customers stop seeing it. You can upload a logo again at any time."
+        confirmLabel="Confirm remove"
+        destructive
+        onConfirm={onRemove}
+      />
+    </section>
   );
 }

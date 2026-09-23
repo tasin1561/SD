@@ -1,0 +1,80 @@
+/* Team — the member rows. Tokens only. Everything else on the page is the
+   shared settings layout (settings.css) and the app primitives. */
+
+.team-members {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.team-member {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--line);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.team-member:first-child {
+  border-top: 0;
+}
+@media (hover: hover) {
+  .team-member:hover {
+    background: var(--surface-3);
+  }
+}
+.team-member[data-dead] {
+  opacity: 0.6;
+}
+.team-member__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-pill);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.team-member__text {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.team-member__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--sp-2);
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+}
+.team-member__email {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.team-member__times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--sp-3);
+  margin-top: 2px;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.team-member__side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.team-member__role {
+  width: 12rem;
+  max-width: 100%;
+}

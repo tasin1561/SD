@@ -1,0 +1,56 @@
+/* Roles — the permission picker inside the role editor. Tokens only. */
+
+.role-perms {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.role-perms__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px var(--sp-3);
+}
+.role-perms__hidden {
+  color: var(--saffron-text);
+}
+.role-perms__sensitive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--red-text);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.role-perms__list {
+  max-height: 46vh;
+  overflow-y: auto;
+  min-width: 0;
+  padding: var(--sp-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.role-perms__none {
+  padding: var(--sp-6) var(--sp-3);
+  text-align: center;
+}
+.role-perm__label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.role-perm__flag {
+  display: inline-flex;
+  color: var(--red-text);
+}
+.role-removed {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: var(--sp-5);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}

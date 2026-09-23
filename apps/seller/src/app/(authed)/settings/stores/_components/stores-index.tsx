@@ -1,34 +1,19 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import Link from 'next/link';
-import { PackageCheck, Star, Store as StoreIcon } from 'lucide-react';
+import { CircleAlert, PackageCheck, Star, Store as StoreIcon } from 'lucide-react';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  MetaChip,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  SectionBand,
-  Stat,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Textarea,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, THead, Td, Th, Tr, TableEmpty } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter, ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
@@ -39,6 +24,7 @@ import {
   useUpdateStore,
   type StoreView,
 } from '@/lib/store-hooks';
+import { SetCallout, SetFact, SetPageHeader, phaseOf } from '../../_components/settings-parts';
 
 const CRUMBS = [
   { label: 'Seller console' },
@@ -46,6 +32,11 @@ const CRUMBS = [
   { label: 'Settings', href: '/settings' },
   { label: 'Stores' },
 ];
+
+/** A store action waiting on its confirmation. */
+type PendingStoreAction =
+  | { readonly kind: 'default'; readonly store: StoreView }
+  | { readonly kind: 'active'; readonly store: StoreView };
 
 /**
  * Your shopfronts.
@@ -59,6 +50,9 @@ const CRUMBS = [
  *
  * Said plainly on the page, because "store" is a word that invites the
  * opposite assumption.
+ *
+ * Close, reopen and make-default each ask first, restating the store and
+ * what changes, then send exactly the request the row used to send.
  */
 export function StoresIndex(): ReactElement {
   const identity = useSellerIdentity();
@@ -68,6 +62,7 @@ export function StoresIndex(): ReactElement {
 
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<StoreView | null>(null);
+  const [pending, setPending] = useState<PendingStoreAction | null>(null);
 
   const makeDefault = useMakeStoreDefault();
   const setActive = useSetStoreActive();
@@ -84,41 +79,86 @@ export function StoresIndex(): ReactElement {
     }
   }
 
+  function confirmPending(): Promise<void> {
+    if (pending === null) return Promise.resolve();
+    const s = pending.store;
+    if (pending.kind === 'default') {
+      return run(
+        () => makeDefault.mutateAsync({ storeId: s.id }),
+        `New orders will be filed under “${s.name}”.`,
+      );
+    }
+    return run(
+      () =>
+        setActive.mutateAsync({
+          storeId: s.id,
+          isActive: !s.isActive,
+        }),
+      s.isActive ? `“${s.name}” is closed.` : `“${s.name}” is open.`,
+    );
+  }
+
   const rows = stores.data ?? [];
   const open = rows.filter((s) => s.isActive);
   const defaultStore = rows.find((s) => s.isDefault);
   const totalOrders = rows.reduce((sum, s) => sum + s.orderCount, 0);
 
+  const confirmCopy =
+    pending === null
+      ? null
+      : pending.kind === 'default'
+        ? {
+            title: 'Make this the default store?',
+            consequence: `New orders — including every CSV row that names no store — will be filed under “${pending.store.name}”${defaultStore === undefined ? '' : ` instead of “${defaultStore.name}”`}. Orders already placed stay where they are.`,
+            confirm: 'Make default',
+            destructive: false,
+          }
+        : pending.store.isActive
+          ? {
+              title: 'Close this store?',
+              consequence: `New orders stop being filed under “${pending.store.name}”. The ${pending.store.orderCount} ${pending.store.orderCount === 1 ? 'order' : 'orders'} already there are untouched, and you can reopen it later.`,
+              confirm: 'Close store',
+              destructive: true,
+            }
+          : {
+              title: 'Reopen this store?',
+              consequence: `New orders can be filed under “${pending.store.name}” again. It does not become the default.`,
+              confirm: 'Reopen store',
+              destructive: false,
+            };
+
   return (
-    <div className="space-y-4">
-      <PageHeader
-        breadcrumb={<Crumbs items={CRUMBS} Link={Link} />}
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={CRUMBS}
         title="Stores"
         subtitle="The shopfronts you sell under. A store decides which brand an order belongs to — your products, stock, wallet and couriers are shared across all of them."
         meta={
           stores.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">
+            <span className="set-meta">
+              <SetFact tone="accent">
                 {rows.length} {rows.length === 1 ? 'store' : 'stores'}
-              </MetaChip>
-              <MetaChip tone={open.length === 0 ? 'warn' : 'good'} dot>
+              </SetFact>
+              <SetFact tone={open.length === 0 ? 'warn' : 'good'} dot>
                 {open.length} open
-              </MetaChip>
-              {defaultStore !== undefined && <MetaChip>Default · {defaultStore.name}</MetaChip>}
-            </>
+              </SetFact>
+              {defaultStore !== undefined && <SetFact>Default · {defaultStore.name}</SetFact>}
+            </span>
           )
         }
         action={
           canManage ? (
-            <Button size="md" onClick={() => setAdding(true)}>
-              <StoreIcon size={14} aria-hidden /> Add a store
+            <Button size="md" icon={<StoreIcon size={15} />} onClick={() => setAdding(true)}>
+              Add a store
             </Button>
           ) : undefined
         }
       />
 
       {stores.isLoading ? (
-        <LoadingState label="Loading your stores…" />
+        <div className="set-card" data-flush>
+          <SkeletonRows rows={3} cols={4} label="Loading your stores…" />
+        </div>
       ) : stores.isError || stores.data === undefined ? (
         <ErrorState
           message={stores.error?.message ?? 'Could not load your stores.'}
@@ -131,52 +171,53 @@ export function StoresIndex(): ReactElement {
                 The comps put a per-store conversion rate and a channel
                 mix here; neither exists — `orderCount` is what the API
                 returns, so it is what these say. */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Stat
+          <div className="set-kpis">
+            <KpiCard
               label="Shopfronts"
-              icon={<StoreIcon size={13} aria-hidden />}
+              icon={<StoreIcon size={14} />}
               value={rows.length}
+              format={String}
               unit={rows.length === 1 ? 'store' : 'stores'}
               tone="neutral"
               hint={`${open.length} open, ${rows.length - open.length} closed.`}
             />
-            <Stat
+            <KpiCard
               label="Filed under a store"
-              icon={<PackageCheck size={13} aria-hidden />}
+              icon={<PackageCheck size={14} />}
               value={totalOrders}
+              format={String}
               unit={totalOrders === 1 ? 'order' : 'orders'}
               tone="neutral"
               hint="Every order you have placed, across all of them."
             />
-            <Stat
+            <KpiCard
               label="New orders go to"
-              icon={<Star size={13} aria-hidden />}
-              value={
+              icon={<Star size={14} />}
+              figure={
                 defaultStore === undefined ? (
-                  <span className="text-text-faint text-base">None set</span>
+                  <span className="set-kpi-text set-kpi-faint">None set</span>
                 ) : (
-                  <span className="text-base">{defaultStore.name}</span>
+                  <span className="set-kpi-text">{defaultStore.name}</span>
                 )
               }
-              tone={defaultStore === undefined ? 'warn' : 'neutral'}
+              tone={defaultStore === undefined ? 'pending' : 'neutral'}
               hint="Including every CSV row that names no store."
             />
           </div>
 
-          <div>
-            <SectionBand
-              index="01"
-              title="Shopfront register"
+          <section className="set-section">
+            <SectionHeading
+              title="Your shopfronts"
               note={`${rows.length} ${rows.length === 1 ? 'store' : 'stores'}`}
             />
-            <BandBody flush>
-              <p className="border-border text-text-muted border-b px-3 py-2.5 text-xs leading-relaxed">
-                New orders are filed under the <strong className="text-text-body">default</strong>{' '}
-                store unless you pick another — including every row of a CSV upload that names no
-                store. Closing a store stops new orders being filed under it; the orders already
-                there are untouched.
+            <div className="set-card" data-flush>
+              <p className="set-card__lead">
+                New orders are filed under the <strong className="set-strong">default</strong> store
+                unless you pick another — including every row of a CSV upload that names no store.
+                Closing a store stops new orders being filed under it; the orders already there are
+                untouched.
               </p>
-              <Table wrapperClassName="rounded-none border-0 bg-transparent">
+              <Table caption="Your stores">
                 <THead>
                   <Tr>
                     <Th>Store</Th>
@@ -192,28 +233,29 @@ export function StoresIndex(): ReactElement {
                     rows.map((s) => (
                       <Tr key={s.id}>
                         <Td>
-                          <div className="text-text-bright font-medium">{s.name}</div>
-                          {s.note !== null && (
-                            <div className="text-text-faint mt-0.5 text-xs">{s.note}</div>
-                          )}
+                          <span className="set-cell-strong">{s.name}</span>
+                          {s.note !== null && <span className="set-cell-sub">{s.note}</span>}
                         </Td>
-                        <Td align="right" className="tabular-nums">
+                        <Td align="right" className="sk-figure">
                           {/* Shown because it is what makes closing one a
                               decision rather than a tidy-up. */}
                           {s.orderCount}
                         </Td>
                         <Td>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {s.isDefault && <StatusBadge kind="confirmed" label="Default" />}
-                            <StatusBadge
+                          <span className="set-chips">
+                            {s.isDefault && (
+                              <StatusChip kind="confirmed" label="Default" size="sm" />
+                            )}
+                            <StatusChip
                               kind={s.isActive ? 'delivered' : 'cancelled'}
                               label={s.isActive ? 'Open' : 'Closed'}
+                              size="sm"
                             />
-                          </div>
+                          </span>
                         </Td>
                         <Td align="right">
                           {canManage ? (
-                            <div className="flex flex-wrap justify-end gap-1.5">
+                            <div className="set-row-actions">
                               <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>
                                 Rename
                               </Button>
@@ -222,12 +264,7 @@ export function StoresIndex(): ReactElement {
                                   variant="ghost"
                                   size="sm"
                                   disabled={makeDefault.isPending}
-                                  onClick={() =>
-                                    void run(
-                                      () => makeDefault.mutateAsync({ storeId: s.id }),
-                                      `New orders will be filed under “${s.name}”.`,
-                                    )
-                                  }
+                                  onClick={() => setPending({ kind: 'default', store: s })}
                                 >
                                   Make default
                                 </Button>
@@ -237,25 +274,14 @@ export function StoresIndex(): ReactElement {
                                   variant="ghost"
                                   size="sm"
                                   disabled={setActive.isPending}
-                                  onClick={() =>
-                                    void run(
-                                      () =>
-                                        setActive.mutateAsync({
-                                          storeId: s.id,
-                                          isActive: !s.isActive,
-                                        }),
-                                      s.isActive
-                                        ? `“${s.name}” is closed.`
-                                        : `“${s.name}” is open.`,
-                                    )
-                                  }
+                                  onClick={() => setPending({ kind: 'active', store: s })}
                                 >
                                   {s.isActive ? 'Close' : 'Reopen'}
                                 </Button>
                               )}
                             </div>
                           ) : (
-                            <span className="text-text-faint">—</span>
+                            <span className="set-faint">—</span>
                           )}
                         </Td>
                       </Tr>
@@ -263,13 +289,26 @@ export function StoresIndex(): ReactElement {
                   )}
                 </TBody>
               </Table>
-            </BandBody>
-          </div>
+            </div>
+          </section>
         </>
       )}
 
       {adding && <StoreModal onClose={() => setAdding(false)} />}
       {editing !== null && <StoreModal store={editing} onClose={() => setEditing(null)} />}
+
+      <ConfirmDialog
+        open={pending !== null}
+        onOpenChange={(next) => {
+          if (!next) setPending(null);
+        }}
+        title={confirmCopy?.title ?? ''}
+        entity={pending?.store.name ?? ''}
+        consequence={confirmCopy?.consequence ?? ''}
+        confirmLabel={confirmCopy?.confirm ?? 'Confirm'}
+        destructive={confirmCopy?.destructive ?? false}
+        onConfirm={confirmPending}
+      />
     </div>
   );
 }
@@ -308,39 +347,59 @@ function StoreModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
+      icon={<StoreIcon size={18} />}
       title={editing ? 'Rename this store' : 'Add a store'}
       description={
         editing
           ? 'Orders already placed keep the name they were placed under — renaming will not rewrite what a past customer was told.'
           : 'A new store never becomes the default, so adding one cannot move where your orders are filed. Make it the default afterwards if that is what you want.'
       }
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <AsyncButton
+            labels={{
+              idle: editing ? 'Save' : 'Add store',
+              busy: 'Saving…',
+              error: 'Not saved',
+            }}
+            state={phaseOf(busy, error)}
+            disabled={busy}
+            onClick={() => void save()}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-4">
-        <FormField label="Name" required>
-          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus />
-        </FormField>
-        <FormField label="Note" hint="A reminder to yourself about which channel this is">
-          <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-        </FormField>
+      <div className="set-form-grid">
+        <TextField
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+          showCount
+          autoFocus
+          requiredMark
+        />
+        <TextArea
+          label="Note"
+          hint="A reminder to yourself about which channel this is"
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
         {error !== null && (
-          <p className="text-critical bg-[var(--color-critical-tint)] border-[var(--color-critical-ring)] rounded-[var(--radius-2)] border px-3 py-2 text-xs">
-            {error}
-          </p>
+          <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+            <p>{error}</p>
+          </SetCallout>
         )}
       </div>
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button disabled={busy} onClick={() => void save()}>
-          {busy ? 'Saving…' : editing ? 'Save' : 'Add store'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

@@ -1,40 +1,29 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import Link from 'next/link';
 import {
-  ArrowLeft,
   Banknote,
   BellOff,
   BellRing,
+  CircleAlert,
   Clock,
   Landmark,
+  Lock,
   Package,
   PackageCheck,
   RotateCcw,
   ShieldCheck,
   Warehouse,
 } from 'lucide-react';
-import { clsx } from 'clsx';
-import {
-  BandBody,
-  Crumbs,
-  ErrorState,
-  Input,
-  LoadingState,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  Stat,
-  Switch,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Switch } from '@skydrop/ui/app/switch';
+import { Accordion, AccordionItem } from '@skydrop/ui/app/accordion';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import type { NotificationPreferenceView } from '@skydrop/api-client';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
@@ -47,6 +36,8 @@ import {
   type TopicDef,
 } from '@/lib/notification-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { SetCallout, SetFact, SetPageHeader } from '../../../settings/_components/settings-parts';
+import '../../_components/notifications.css';
 
 /**
  * Everything about what Skydrop sends you, on one page.
@@ -127,53 +118,41 @@ export function NotificationSettingsView(): ReactElement {
   const quiet = useMemo(() => summariseQuietHours(rows), [rows]);
 
   return (
-    <div>
-      <Link
-        href="/notifications"
-        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs transition-colors"
-      >
-        <ArrowLeft size={13} /> Back to notifications
-      </Link>
-
-      <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Notifications', href: '/notifications' },
-              { label: 'Settings' },
-            ]}
-            Link={Link}
-          />
-        }
+    <div className="set-page">
+      <SetPageHeader
+        crumbs={[
+          { label: 'Seller console' },
+          { label: 'Notifications', href: '/notifications' },
+          { label: 'Settings' },
+        ]}
         title="Notification settings"
         subtitle={
           mayManageCompany
             ? 'Two separate choices: what reaches YOU, and what this COMPANY is emailed about. Both only ever remove a message — neither can turn one on that the other switched off. Messages about your account and credentials are in neither list: they always go to your email and cannot be silenced.'
             : 'What reaches YOUR inbox. Messages about your account and credentials are not listed — they only ever go to your email, and cannot be silenced.'
         }
-        // WHOSE decision each half is, said in the chip row rather than
+        // WHOSE decision each half is, said in the fact row rather than
         // only in the prose — it is the distinction the merge of these
         // two screens exists to keep visible.
         meta={
-          <>
-            <MetaChip tone="accent">Yours</MetaChip>
-            {mayManageCompany && <MetaChip>The company&apos;s</MetaChip>}
-          </>
+          <span className="set-meta">
+            <SetFact tone="accent">Yours</SetFact>
+            {mayManageCompany && <SetFact>The company&apos;s</SetFact>}
+          </span>
         }
       />
 
       {/* ── The four figures. Every one is read from real state; the
              comp's telemetry tiles are not here for that reason. ─── */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
+      <div className="set-kpis">
+        <KpiCard
           label="Your alerts"
-          icon={<BellRing size={13} aria-hidden />}
-          value={
+          icon={<BellRing size={14} />}
+          figure={
             topics.isLoading ? (
-              <span className="text-text-faint">—</span>
+              <span className="set-kpi-faint">—</span>
             ) : (
-              <span className="text-base">
+              <span className="set-kpi-text sk-figure">
                 {onCount} of {allTopics.length}
               </span>
             )
@@ -181,34 +160,44 @@ export function NotificationSettingsView(): ReactElement {
           tone="neutral"
           hint="Topics reaching your inbox."
         />
-        {mayManageCompany && (
-          <Stat
-            label="Company categories"
-            icon={<Landmark size={13} aria-hidden />}
-            value={prefs.isLoading ? <span className="text-text-faint">—</span> : rows.length}
-            unit={prefs.isLoading ? undefined : 'categories'}
-            tone="neutral"
-            hint="Email + in-app, set for everyone here."
-          />
-        )}
-        <Stat
+        {mayManageCompany &&
+          (prefs.isLoading ? (
+            <KpiCard
+              label="Company categories"
+              icon={<Landmark size={14} />}
+              figure={<span className="set-kpi-faint">—</span>}
+              tone="neutral"
+              hint="Email + in-app, set for everyone here."
+            />
+          ) : (
+            <KpiCard
+              label="Company categories"
+              icon={<Landmark size={14} />}
+              value={rows.length}
+              format={String}
+              unit="categories"
+              tone="neutral"
+              hint="Email + in-app, set for everyone here."
+            />
+          ))}
+        <KpiCard
           label="Quiet hours"
-          icon={<Clock size={13} aria-hidden />}
-          value={<span className="text-base">{quiet.label}</span>}
-          tone={quiet.set ? 'warn' : 'neutral'}
+          icon={<Clock size={14} />}
+          figure={<span className="set-kpi-text">{quiet.label}</span>}
+          tone={quiet.set ? 'pending' : 'neutral'}
           hint={quiet.note}
         />
-        <Stat
+        <KpiCard
           label="Never silenced"
-          icon={<ShieldCheck size={13} aria-hidden />}
-          value={<span className="text-base">Account &amp; security</span>}
+          icon={<ShieldCheck size={14} />}
+          figure={<span className="set-kpi-text">Account &amp; security</span>}
           tone="neutral"
           hint="Sign-in, password, invites."
         />
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="flex flex-col gap-4">
+      <div className="set-split">
+        <div className="set-stack">
           <YourTopics
             topics={topics.data ?? []}
             loading={topics.isLoading}
@@ -218,7 +207,7 @@ export function NotificationSettingsView(): ReactElement {
           {mayManageCompany && <CompanyCategories />}
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="set-stack">
           <AlwaysOn />
           {quiet.timezone !== null && <TimezoneCard timezone={quiet.timezone} quiet={quiet} />}
         </div>
@@ -257,91 +246,104 @@ function YourTopics({
     (acc[t.group] ??= []).push(t);
     return acc;
   }, {});
+  const groupNames = Object.keys(grouped);
+
+  // Every group starts open; closing one is remembered for this visit.
+  const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
 
   return (
-    <div>
-      <SectionBand
-        index="01"
-        title="What reaches you"
-        note="Your own choices, for your own inbox."
-      />
-      <BandBody>
-        <p className="text-text-muted mb-3 text-xs leading-relaxed">
-          Nobody else at this company sees them, and changing one here does not change what anybody
-          else receives.
-        </p>
-        {error !== null && <p className="text-critical mb-3 text-sm">{error}</p>}
-        {loading ? (
-          <LoadingState label="Loading topics…" rows={3} />
-        ) : (
-          Object.entries(grouped).map(([group, defs]) => {
+    <section className="set-section">
+      <SectionHeading title="What reaches you" note="Your own choices, for your own inbox." />
+      <p className="set-muted">
+        Nobody else at this company sees them, and changing one here does not change what anybody
+        else receives.
+      </p>
+      {error !== null && (
+        <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+          <p>{error}</p>
+        </SetCallout>
+      )}
+      {loading ? (
+        <div className="set-card" data-flush>
+          <SkeletonRows rows={3} cols={2} label="Loading topics…" />
+        </div>
+      ) : (
+        <Accordion
+          type="multiple"
+          value={groupNames.filter((g) => !closed.has(g))}
+          onValueChange={(next) => setClosed(new Set(groupNames.filter((g) => !next.includes(g))))}
+        >
+          {Object.entries(grouped).map(([group, defs]) => {
             const Icon = GROUP_ICON[group] ?? ShieldCheck;
             const on = defs.filter((d) => !muted.has(d.topic)).length;
             return (
-              <div key={group} className="mt-5 first:mt-0">
-                <div className="border-border-subtle mb-1 flex items-center justify-between gap-3 border-b pb-1.5">
-                  <span className="text-accent inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase">
-                    <Icon size={14} aria-hidden />
-                    {group}
-                  </span>
-                  <span className="text-text-faint text-xs tabular-nums">
+              <AccordionItem
+                key={group}
+                value={group}
+                icon={<Icon size={15} />}
+                title={group}
+                meta={
+                  <span className="sk-figure">
                     {on} of {defs.length} on
                   </span>
-                </div>
-                <ul className="divide-border-subtle divide-y">
+                }
+              >
+                <ul className="set-rows">
                   {defs.map((d) => {
                     const isOn = !muted.has(d.topic);
                     return (
-                      <li key={d.topic} className="flex items-start justify-between gap-4 py-2.5">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-baseline gap-x-2">
-                            <span className="text-text-bright text-sm font-medium">{d.label}</span>
+                      <li key={d.topic} className="set-row">
+                        <div className="set-row__text">
+                          <div className="set-row__title">
+                            <span>{d.label}</span>
                             {/* The REAL topic key, not an invented event
                                 code. It is what a support conversation
                                 needs to name, and what the mute is
                                 actually stored against. */}
-                            <span className="text-text-faint font-mono text-[11px]">{d.topic}</span>
+                            <span className="set-code sk-ident">{d.topic}</span>
                           </div>
-                          <div className="text-text-muted mt-0.5 text-xs">{d.description}</div>
+                          <p className="set-row__desc">{d.description}</p>
                           {d.mutable === false ? (
                             /* A switch that always refuses teaches people
                                to ignore refusals, so it is locked ON with
                                the server's OWN reason beside it. Cosmetic
                                — the API refuses the mute either way
                                (FE-2). */
-                            <div className="text-warning mt-1 text-xs">
-                              Always on. {d.immutableReason ?? ''}
-                            </div>
+                            <p className="set-row__note">
+                              <Lock size={11} aria-hidden /> Always on. {d.immutableReason ?? ''}
+                            </p>
                           ) : null}
                         </div>
-                        <Switch
-                          checked={isOn}
-                          disabled={d.mutable === false}
-                          label={`Notify me about: ${d.label}`}
-                          onChange={() => {
-                            setError(null);
-                            if (isOn) {
-                              setSub.mutate(
-                                { topic: d.topic, mode: 'MUTED' },
-                                { onError: (e) => setError(serverVerdict(e)) },
-                              );
-                            } else {
-                              clearSub.mutate(d.topic, {
-                                onError: (e) => setError(serverVerdict(e)),
-                              });
-                            }
-                          }}
-                        />
+                        <div className="set-row__control">
+                          <Switch
+                            checked={isOn}
+                            disabled={d.mutable === false}
+                            aria-label={`Notify me about: ${d.label}`}
+                            onCheckedChange={() => {
+                              setError(null);
+                              if (isOn) {
+                                setSub.mutate(
+                                  { topic: d.topic, mode: 'MUTED' },
+                                  { onError: (e) => setError(serverVerdict(e)) },
+                                );
+                              } else {
+                                clearSub.mutate(d.topic, {
+                                  onError: (e) => setError(serverVerdict(e)),
+                                });
+                              }
+                            }}
+                          />
+                        </div>
                       </li>
                     );
                   })}
                 </ul>
-              </div>
+              </AccordionItem>
             );
-          })
-        )}
-      </BandBody>
-    </div>
+          })}
+        </Accordion>
+      )}
+    </section>
   );
 }
 
@@ -377,40 +379,30 @@ function CompanyCategories(): ReactElement {
   const toast = useToast();
 
   return (
-    <div>
-      {/* Short enough to survive 360px, where a band title truncates
-          against its own index. The sentence lives in the note. */}
-      <SectionBand
-        index="02"
+    <section className="set-section">
+      <SectionHeading
         title="The company's email"
         note="What this company is emailed about — applies to everyone here, not only you."
       />
       {list.isLoading ? (
-        <BandBody>
-          <LoadingState label="Loading preferences…" rows={3} />
-        </BandBody>
+        <div className="set-card" data-flush>
+          <SkeletonRows rows={3} cols={5} label="Loading preferences…" />
+        </div>
       ) : list.isError ? (
-        <BandBody>
-          <ErrorState
-            message={list.error?.message ?? 'Failed.'}
-            retry={() => void list.refetch()}
-          />
-        </BandBody>
+        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
       ) : list.data === undefined || list.data.length === 0 ? (
-        <BandBody>
-          <p className="text-text-muted text-sm">No preferences yet.</p>
-        </BandBody>
+        <EmptyState title="No preferences yet." />
       ) : (
-        <BandBody flush>
-          <p className="border-border text-text-muted border-b px-3 py-2.5 text-xs leading-relaxed">
+        <div className="set-card" data-flush>
+          <p className="set-card__lead">
             Switching a category off stops that email reaching your colleagues too. Changes save
             instantly.
           </p>
           {/* A TABLE, not seven stacked cards. Seven categories × four
               controls is a grid of the same question asked seven times,
               and a column is how you compare them. The `Table` primitive
-              turns each row into a labelled card below `md` (FE-7). */}
-          <Table>
+              turns each row into a labelled card on a phone. */}
+          <Table caption="The company's email, by category">
             <THead>
               <Tr>
                 <Th>Category</Th>
@@ -431,24 +423,22 @@ function CompanyCategories(): ReactElement {
               ))}
             </TBody>
           </Table>
-          <div className="border-border border-t px-3 py-2.5">
-            <p className="text-text-faint text-xs leading-relaxed">
-              {/*
-                Two switches, not six. SMS, Webhook and Frequency were on
-                this screen and could not be honoured by anything: there
-                is no SMS sender in Phase-1A, outbound webhooks are
-                configured per endpoint and never read this toggle, and
-                DAILY_DIGEST needs a scheduler that does not exist. A
-                control that does nothing is worse than no control.
-              */}
-              Quiet hours hold the EMAIL only, in the company timezone. An email that arrives inside
-              the window waits until it ends rather than being dropped — and an inbox line is never
-              held, because nothing pings and the row itself is the delivery.
-            </p>
-          </div>
-        </BandBody>
+          <p className="set-card__foot">
+            {/*
+              Two switches, not six. SMS, Webhook and Frequency were on
+              this screen and could not be honoured by anything: there
+              is no SMS sender in Phase-1A, outbound webhooks are
+              configured per endpoint and never read this toggle, and
+              DAILY_DIGEST needs a scheduler that does not exist. A
+              control that does nothing is worse than no control.
+            */}
+            Quiet hours hold the EMAIL only, in the company timezone. An email that arrives inside
+            the window waits until it ends rather than being dropped — and an inbox line is never
+            held, because nothing pings and the row itself is the delivery.
+          </p>
+        </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -485,31 +475,33 @@ function PreferenceRow({
   return (
     <Tr>
       <Td>
-        <div className="text-text-bright text-sm font-medium">{label.title}</div>
-        <div className="text-text-muted text-xs">{label.description}</div>
+        <span className="set-cell-strong">{label.title}</span>
+        <span className="set-cell-sub">{label.description}</span>
       </Td>
       <Td>
         <Switch
           checked={row.emailEnabled}
           disabled={busy}
-          label={`Email ${label.title}`}
-          onChange={(v) => void patch({ emailEnabled: v }, 'Saved.')}
+          aria-label={`Email ${label.title}`}
+          onCheckedChange={(v) => void patch({ emailEnabled: v }, 'Saved.')}
         />
       </Td>
       <Td>
         <Switch
           checked={row.inAppEnabled}
           disabled={busy}
-          label={`In-app ${label.title}`}
-          onChange={(v) => void patch({ inAppEnabled: v }, 'Saved.')}
+          aria-label={`In-app ${label.title}`}
+          onCheckedChange={(v) => void patch({ inAppEnabled: v }, 'Saved.')}
         />
       </Td>
       <Td>
-        <div className="flex items-center gap-1.5">
-          <Input
+        <div className="ntf-quiet">
+          <TextField
             type="time"
             aria-label={`Quiet hours start for ${label.title}`}
-            className="w-[6.5rem]"
+            className="ntf-quiet__time"
+            inputClassName="sk-figure"
+            icon={<Clock size={14} />}
             defaultValue={row.quietHoursStart ?? ''}
             disabled={busy}
             onBlur={(e) =>
@@ -519,11 +511,13 @@ function PreferenceRow({
               )
             }
           />
-          <span className="text-text-faint text-xs">to</span>
-          <Input
+          <span className="set-faint">to</span>
+          <TextField
             type="time"
             aria-label={`Quiet hours end for ${label.title}`}
-            className="w-[6.5rem]"
+            className="ntf-quiet__time"
+            inputClassName="sk-figure"
+            icon={<Clock size={14} />}
             defaultValue={row.quietHoursEnd ?? ''}
             disabled={busy}
             onBlur={(e) =>
@@ -538,11 +532,11 @@ function PreferenceRow({
       <Td>
         {/* Derived, never typed: what the two times above actually do. */}
         {!row.emailEnabled ? (
-          <span className="text-text-faint text-xs">No email at all</span>
+          <span className="set-faint">No email at all</span>
         ) : held ? (
-          <span className="text-text-muted text-xs">Held till {row.quietHoursEnd}</span>
+          <span className="set-cell-muted">Held till {row.quietHoursEnd}</span>
         ) : (
-          <span className="text-text-muted text-xs">Sent straight away</span>
+          <span className="set-cell-muted">Sent straight away</span>
         )}
       </Td>
     </Tr>
@@ -573,34 +567,35 @@ function AlwaysOn(): ReactElement {
     },
   ];
   return (
-    <div>
-      <SectionBand
-        index="03"
+    <section className="set-section">
+      <SectionHeading
         title={
-          <span className="inline-flex items-center gap-2">
-            <BellOff size={13} aria-hidden />
+          <span className="set-chips">
+            <BellOff size={15} aria-hidden />
             Cannot be switched off
           </span>
         }
       />
-      <BandBody className="flex flex-col gap-3">
-        <p className="text-text-muted text-xs leading-relaxed">
+      <div className="set-card">
+        <p className="set-muted">
           These go to your email whatever is set above. A warning you can silence is one you find
           out about too late.
         </p>
-        {items.map(({ Icon, title, body }) => (
-          <div key={title} className="flex items-start gap-2.5">
-            <span className="text-text-muted mt-0.5 shrink-0">
-              <Icon size={15} aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <div className="text-text-body text-sm font-medium">{title}</div>
-              <div className="text-text-muted text-xs leading-relaxed">{body}</div>
-            </div>
-          </div>
-        ))}
-      </BandBody>
-    </div>
+        <ul className="ntf-always">
+          {items.map(({ Icon, title, body }) => (
+            <li key={title} className="ntf-always__item">
+              <span className="ntf-always__icon" aria-hidden>
+                <Icon size={15} />
+              </span>
+              <div>
+                <div className="ntf-always__title">{title}</div>
+                <p className="set-muted">{body}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
@@ -682,40 +677,34 @@ function TimezoneCard({
   const inside = quiet.window !== null && isInsideWindow(local, quiet.window);
 
   return (
-    <div>
-      <SectionBand
-        index="04"
+    <section className="set-section">
+      <SectionHeading
         title={
-          <span className="inline-flex items-center gap-2">
-            <Clock size={13} aria-hidden />
+          <span className="set-chips">
+            <Clock size={15} aria-hidden />
             Your timezone
           </span>
         }
       />
-      <BandBody>
-        <div className="text-text-bright font-mono text-lg tabular-nums">{local}</div>
-        <div className="text-text-muted mt-0.5 font-mono text-xs">{timezone}</div>
-        <p className="text-text-muted mt-2 text-xs leading-relaxed">
+      <div className="set-card">
+        <div>
+          <div className="ntf-clock sk-figure">{local}</div>
+          <div className="set-faint sk-ident">{timezone}</div>
+        </div>
+        <p className="set-muted">
           Quiet hours are read in this zone, from the company profile — never a stored offset, which
           drifts an hour twice a year.
         </p>
         {quiet.window !== null && (
-          <div
-            className={clsx(
-              'mt-3 rounded-[var(--radius-2)] px-2 py-1.5 text-xs font-medium',
-              inside ? 'text-[var(--status-pending-fg)]' : 'text-[var(--status-delivered-fg)]',
-            )}
-            style={{
-              background: inside ? 'var(--status-pending-bg)' : 'var(--status-delivered-bg)',
-            }}
-          >
+          <div className="ntf-window" data-inside={inside ? '1' : undefined}>
+            {inside ? <BellOff size={14} aria-hidden /> : <BellRing size={14} aria-hidden />}
             {inside
               ? `Inside quiet hours — email is waiting until ${quiet.window.end}`
               : 'Outside quiet hours — email is going out now'}
           </div>
         )}
-      </BandBody>
-    </div>
+      </div>
+    </section>
   );
 }
 
