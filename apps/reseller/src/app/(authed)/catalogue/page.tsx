@@ -1,33 +1,25 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
+import { PackageOpen, SearchX } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
-import {
-  EmptyState,
-  ErrorState,
-  Input,
-  LoadingState,
-  Money,
-  Num,
-  PageHeader,
-  ProductThumb,
-  Section,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money, Num, ProductThumb } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Table, TableToolbar, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { GlossaryTerm } from '@skydrop/ui/app/tooltip-card';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useStoreCatalogue, type StoreCatalogueItem } from '@/lib/catalogue-hooks';
+import { RmSection } from '../wallet/_components/rm-parts';
 
 /**
  * RS-3 — the products this store may sell: what it pays the seller for
  * each (the transfer price), the retail range it may sell at, the
  * seller's suggestion, and how many are available to it. Only what the
  * seller turned on for this store; nothing about the seller's own cost
- * or stock.
+ * or stock — those columns are not in the response, so they are simply
+ * absent here.
  */
 export default function CataloguePage(): ReactElement {
   const me = useStoreIdentity();
@@ -52,15 +44,15 @@ export default function CataloguePage(): ReactElement {
 
   if (catalogue.isPending) {
     return (
-      <div className="space-y-6">
+      <div className="rm-page">
         {header}
-        <LoadingState label="Loading the catalogue" rows={6} />
+        <SkeletonRows rows={6} cols={5} label="Loading the catalogue" />
       </div>
     );
   }
   if (catalogue.isError) {
     return (
-      <div className="space-y-6">
+      <div className="rm-page">
         {header}
         <ErrorState
           message={serverVerdict(catalogue.error)}
@@ -71,21 +63,22 @@ export default function CataloguePage(): ReactElement {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="rm-page">
       {header}
-      <Section
-        title="Products"
-        action={
-          <Input
-            aria-label="Search by name or SKU"
-            placeholder="Search name or SKU"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        }
-      >
+      <RmSection>
+        <TableToolbar
+          search={{
+            value: search,
+            onChange: setSearch,
+            label: 'Search by name or SKU',
+            placeholder: 'Search name or SKU',
+          }}
+        />
         {items.length === 0 ? (
           <EmptyState
+            icon={
+              catalogue.data.items.length === 0 ? <PackageOpen size={22} /> : <SearchX size={22} />
+            }
             title={
               catalogue.data.items.length === 0 ? 'No products yet' : 'Nothing matches that search'
             }
@@ -96,11 +89,21 @@ export default function CataloguePage(): ReactElement {
             }
           />
         ) : (
-          <Table>
+          <Table caption="Products">
             <THead>
               <Tr>
                 <Th>Product</Th>
-                <Th>You pay</Th>
+                {/* The header carries its own label: the tooltip card's text sits
+                    inside the <th>, and the mobile card layout stamps each
+                    column's header onto its cells. */}
+                <Th data-label="You pay">
+                  <GlossaryTerm
+                    title="Transfer price"
+                    description={`What your store pays ${seller} for each unit you sell. The difference between it and the retail price you charge is yours, before your share of Skydrop’s fees.`}
+                  >
+                    You pay
+                  </GlossaryTerm>
+                </Th>
                 <Th>Sell between</Th>
                 <Th>Suggested</Th>
                 <Th>Available</Th>
@@ -113,7 +116,7 @@ export default function CataloguePage(): ReactElement {
             </TBody>
           </Table>
         )}
-      </Section>
+      </RmSection>
     </div>
   );
 }
@@ -122,17 +125,15 @@ function ItemRow({ item: i }: { item: StoreCatalogueItem }): ReactElement {
   return (
     <Tr>
       <Td>
-        <div className="flex items-start gap-3">
+        <div className="rm-product">
           <ProductThumb src={i.imageUrls[0] ?? null} size={44} alt={i.title} />
-          <div>
-            <div>{i.title}</div>
-            <div className="text-text-muted text-xs">
-              {i.skuCode}
+          <div className="rm-product__text">
+            <div className="rm-product__title">{i.title}</div>
+            <div className="rm-faint">
+              <span className="sk-ident">{i.skuCode}</span>
               {i.variantLabel ? ` · ${i.variantLabel}` : ''}
             </div>
-            {i.description ? (
-              <div className="text-text-muted mt-1 line-clamp-2 text-xs">{i.description}</div>
-            ) : null}
+            {i.description ? <div className="rm-product__desc">{i.description}</div> : null}
           </div>
         </div>
       </Td>
@@ -143,7 +144,7 @@ function ItemRow({ item: i }: { item: StoreCatalogueItem }): ReactElement {
         {i.minRetailInr === null && i.maxRetailInr === null ? (
           'Any price'
         ) : (
-          <span className="whitespace-nowrap">
+          <span className="rm-range">
             {i.minRetailInr === null ? 'up to ' : <Money amount={i.minRetailInr} convert={false} />}
             {i.minRetailInr !== null && i.maxRetailInr !== null ? ' – ' : null}
             {i.maxRetailInr === null ? (

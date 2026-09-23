@@ -1,30 +1,21 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { Check, FileSignature, History, Quote, TriangleAlert } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ConfirmDialog,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  Section,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAcceptTerms, useStoreTerms, type StoreTermsView } from '@/lib/terms-hooks';
+import { RmAlert, RmCallout, RmSection } from '../wallet/_components/rm-parts';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -41,13 +32,16 @@ export default function TermsPage(): ReactElement {
 
   if (terms.isPending || terms.isError) {
     return (
-      <div className="space-y-6">
+      <div className="rm-page">
         <PageHeader
           title="Terms"
           subtitle="Who pays which Skydrop fee on your orders, and when you and your seller are paid."
         />
         {terms.isPending ? (
-          <LoadingState label="Loading the terms" rows={4} />
+          <>
+            <Skeleton className="rm-kpi-skel" height={180} rounded="md" />
+            <SkeletonRows rows={3} cols={3} label="Loading the terms" />
+          </>
         ) : (
           <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />
         )}
@@ -56,13 +50,14 @@ export default function TermsPage(): ReactElement {
   }
   const t = terms.data;
   return (
-    <div className="space-y-6">
+    <div className="rm-page">
       <PageHeader
         title="Terms"
         subtitle={`What ${t.sellerCompanyName} and ${t.storeName} have agreed about Skydrop’s fees and when each of you is paid.`}
       />
       {t.current === null ? (
         <EmptyState
+          icon={<FileSignature size={22} />}
           title="No terms yet"
           description={`${t.sellerCompanyName} has not published terms for your store. You can place orders once they have, and you have accepted them.`}
         />
@@ -101,114 +96,142 @@ function CurrentCard({
   }
 
   return (
-    <Card>
-      <CardHeader
-        title={`Version ${c.version}`}
-        subtitle={
-          c.acceptance === null
-            ? `Published by ${terms.sellerCompanyName} on ${when(c.publishedAt)} — not accepted yet. Your store cannot place new orders until it is.`
-            : `Accepted by ${c.acceptance.acceptedByName} on ${when(c.acceptance.acceptedAt)}.`
-        }
-      />
-      <CardBody>
-        <div className="space-y-4">
-          {terms.needsRevision !== null ? (
-            <p
-              role="alert"
-              className="border-border bg-surface-raised text-critical rounded-lg border px-3 py-2 text-sm"
-            >
-              {terms.needsRevision}
-            </p>
-          ) : null}
-          <div>
-            <h3 className="mb-1 text-sm font-medium">Who pays which fee</h3>
-            <ul className="space-y-1 text-sm">
-              {c.shares.map((s) => (
-                <li key={s.feeType}>{s.words}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h3 className="mb-1 text-sm font-medium">When each of you is credited</h3>
-            <ul className="space-y-1 text-sm">
-              <li>{c.storeCredit.words}</li>
-              <li>{c.sellerCredit.words}</li>
-            </ul>
-          </div>
-          {c.note !== null ? (
-            <p className="text-sm">
-              <span className="font-medium">{terms.sellerCompanyName} says:</span> {c.note}
-            </p>
-          ) : null}
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Fee</Th>
-                <Th>For example</Th>
-                <Th>You pay</Th>
-                <Th>{terms.sellerCompanyName} pays</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {terms.examples.map((e) => (
-                <Tr key={e.feeType}>
-                  <Td>{e.label}</Td>
-                  <Td>
-                    {e.basis} (<Money amount={e.feeInr} convert={false} />)
-                  </Td>
-                  <Td>
-                    <Money amount={e.storeInr} convert={false} />
-                  </Td>
-                  <Td>
-                    <Money amount={e.sellerInr} convert={false} />
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-          <p className="text-text-muted text-xs">{terms.rounding}</p>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
-          ) : null}
-          {c.acceptance === null ? (
-            canAccept ? (
-              <Button variant="primary" size="md" onClick={() => setConfirming(true)}>
-                Accept version {c.version}
-              </Button>
-            ) : (
-              <p className="text-text-muted text-sm">
-                Somebody at your store who may accept terms (an owner or admin) needs to accept this
-                version.
-              </p>
-            )
-          ) : null}
+    <section className="rm-card" aria-labelledby="terms-current">
+      <div className="rm-card__head">
+        <span className="rm-card__chip" aria-hidden>
+          <FileSignature size={18} />
+        </span>
+        <div className="rm-card__titles">
+          <h2 id="terms-current" className="rm-card__title">
+            {`Version ${c.version}`}
+          </h2>
+          <p className="rm-card__sub">
+            {c.acceptance === null
+              ? `Published by ${terms.sellerCompanyName} on ${when(c.publishedAt)} — not accepted yet. Your store cannot place new orders until it is.`
+              : `Accepted by ${c.acceptance.acceptedByName} on ${when(c.acceptance.acceptedAt)}.`}
+          </p>
         </div>
-      </CardBody>
+        <div className="rm-card__aside">
+          {c.acceptance === null ? (
+            <StatusChip kind="pending" label="Not accepted yet" size="sm" />
+          ) : (
+            <StatusChip kind="confirmed" label="Accepted" size="sm" />
+          )}
+        </div>
+      </div>
+
+      {terms.needsRevision !== null ? (
+        <RmCallout tone="critical" icon={<TriangleAlert size={16} />} role="alert">
+          <p>{terms.needsRevision}</p>
+        </RmCallout>
+      ) : null}
+
+      <div className="rm-terms">
+        <div className="rm-terms__block">
+          <h3 className="rm-terms__heading">Who pays which fee</h3>
+          <ul className="rm-terms__list">
+            {c.shares.map((s) => (
+              <li key={s.feeType} className="rm-terms__item">
+                <Check size={14} className="rm-terms__tick" aria-hidden />
+                <span>{s.words}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rm-terms__block">
+          <h3 className="rm-terms__heading">When each of you is credited</h3>
+          <ul className="rm-terms__list">
+            <li className="rm-terms__item">
+              <Check size={14} className="rm-terms__tick" aria-hidden />
+              <span>{c.storeCredit.words}</span>
+            </li>
+            <li className="rm-terms__item">
+              <Check size={14} className="rm-terms__tick" aria-hidden />
+              <span>{c.sellerCredit.words}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {c.note !== null ? (
+        <RmCallout tone="info" icon={<Quote size={16} />}>
+          <p>
+            <span className="rm-strong">{terms.sellerCompanyName} says:</span> {c.note}
+          </p>
+        </RmCallout>
+      ) : null}
+
+      <Table caption="What each fee would cost, for example">
+        <THead>
+          <Tr>
+            <Th>Fee</Th>
+            <Th>For example</Th>
+            <Th>You pay</Th>
+            <Th>{terms.sellerCompanyName} pays</Th>
+          </Tr>
+        </THead>
+        <TBody>
+          {terms.examples.map((e) => (
+            <Tr key={e.feeType}>
+              <Td>{e.label}</Td>
+              <Td>
+                {e.basis} (<Money amount={e.feeInr} convert={false} />)
+              </Td>
+              <Td>
+                <Money amount={e.storeInr} convert={false} />
+              </Td>
+              <Td>
+                <Money amount={e.sellerInr} convert={false} />
+              </Td>
+            </Tr>
+          ))}
+        </TBody>
+      </Table>
+      <p className="rm-muted rm-faint">{terms.rounding}</p>
+      {error !== null ? <RmAlert>{error}</RmAlert> : null}
+      {c.acceptance === null ? (
+        canAccept ? (
+          <div className="rm-form__actions">
+            <Button
+              variant="primary"
+              size="md"
+              icon={<FileSignature size={15} />}
+              onClick={() => setConfirming(true)}
+            >
+              Accept version {c.version}
+            </Button>
+          </div>
+        ) : (
+          <p className="rm-muted">
+            Somebody at your store who may accept terms (an owner or admin) needs to accept this
+            version.
+          </p>
+        )
+      ) : null}
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
         title={`Accept version ${c.version} for ${terms.storeName}?`}
-        description="Every order your store places from now on is priced and paid under these terms. Your name, the time and where you accepted from are recorded."
+        entity={`${terms.storeName} · version ${c.version} from ${terms.sellerCompanyName}`}
+        consequence="Every order your store places from now on is priced and paid under these terms. Your name, the time and where you accepted from are recorded."
         confirmLabel="Accept"
-        disabled={accept.isPending}
-        onConfirm={() => void doAccept(c.id, c.version)}
+        onConfirm={() => doAccept(c.id, c.version)}
       />
-    </Card>
+    </section>
   );
 }
 
 function HistorySection({ terms }: { terms: StoreTermsView }): ReactElement {
   return (
-    <Section
-      title="Every version"
-      subtitle="Newest first. A version is never changed once published."
-    >
+    <RmSection>
+      <SectionHeading
+        title="Every version"
+        note="Newest first. A version is never changed once published."
+      />
       {terms.history.length === 0 ? (
-        <EmptyState title="Nothing yet" />
+        <EmptyState icon={<History size={22} />} title="Nothing yet" />
       ) : (
-        <Table>
+        <Table caption="Every version">
           <THead>
             <Tr>
               <Th>Version</Th>
@@ -219,8 +242,8 @@ function HistorySection({ terms }: { terms: StoreTermsView }): ReactElement {
           <TBody>
             {terms.history.map((v) => (
               <Tr key={v.id}>
-                <Td>{v.version}</Td>
-                <Td>{when(v.publishedAt)}</Td>
+                <Td className="sk-figure">{v.version}</Td>
+                <Td className="rm-when sk-figure">{when(v.publishedAt)}</Td>
                 <Td>
                   {v.acceptance === null
                     ? '—'
@@ -231,6 +254,6 @@ function HistorySection({ terms }: { terms: StoreTermsView }): ReactElement {
           </TBody>
         </Table>
       )}
-    </Section>
+    </RmSection>
   );
 }
