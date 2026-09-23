@@ -65,6 +65,9 @@ type Dict = {
   readonly stepCurrent: string;
   readonly stepTodo: string;
   readonly stepSkipped: string;
+  /** The long-journey fold; `{n}` is the number of hidden scans. */
+  readonly earlierShow: string;
+  readonly earlierHide: string;
 
   // Status labels (one per PublicShipmentDisplayStatus value)
   readonly s_processing: string;
@@ -116,6 +119,8 @@ const EN: Dict = {
   stepCurrent: 'Current step',
   stepTodo: 'Still to come',
   stepSkipped: 'Skipped',
+  earlierShow: 'Show {n} earlier scans',
+  earlierHide: 'Hide earlier scans',
   s_processing: 'Processing',
   s_dispatched: 'Dispatched',
   s_in_transit: 'In transit',
@@ -163,6 +168,8 @@ const HI: Dict = {
   stepCurrent: 'मौजूदा चरण',
   stepTodo: 'आगे होना है',
   stepSkipped: 'छोड़ा गया',
+  earlierShow: '{n} पुराने स्कैन दिखाएँ',
+  earlierHide: 'पुराने स्कैन छिपाएँ',
   s_processing: 'प्रक्रियाधीन',
   s_dispatched: 'डिस्पैच',
   s_in_transit: 'रास्ते में',

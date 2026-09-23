@@ -1,4 +1,5 @@
-import type { ReactElement, ReactNode } from 'react';
+import { cache, type ReactElement, type ReactNode } from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Package, RefreshCw } from 'lucide-react';
 import { buttonClassName } from '@skydrop/ui/app/button';
@@ -37,7 +38,7 @@ type TrackingLookup =
  *  answers the customer instead of spinning until the proxy gives up. */
 const LOOKUP_TIMEOUT_MS = 10_000;
 
-async function fetchTracking(awb: string): Promise<TrackingLookup> {
+async function lookupTracking(awb: string): Promise<TrackingLookup> {
   const url = `${apiOrigin()}/public/tracking/${encodeURIComponent(awb)}`;
   try {
     const res = await fetch(url, {
@@ -60,11 +61,46 @@ async function fetchTracking(awb: string): Promise<TrackingLookup> {
   }
 }
 
+/**
+ * One lookup per request: `generateMetadata` and the page both ask, and
+ * React's `cache` hands the second caller the first one's promise — the
+ * API is called exactly once, as before metadata existed.
+ */
+const fetchTracking = cache(lookupTracking);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ awb: string }>;
+}): Promise<Metadata> {
+  const { awb } = await params;
+  const decoded = decodeURIComponent(awb);
+  const locale = await getActiveLocale();
+  const lookup = await fetchTracking(decoded);
+  const path = `/${encodeURIComponent(decoded)}`;
+  if (lookup.kind === 'found') {
+    // A parcel page is one customer's delivery: useful to them, useless in
+    // a search index.
+    return {
+      title: `${humanizeStatus(lookup.data.currentStatus, locale)} · ${decoded} — Skydrop tracking`,
+      description: t(locale, 'landingSubtitle'),
+      alternates: { canonical: path },
+      robots: { index: false, follow: true },
+    };
+  }
+  const title = t(locale, lookup.kind === 'not_found' ? 'notFoundTitle' : 'unavailableTitle');
+  return {
+    title: `${title} — Skydrop tracking`,
+    description: t(locale, lookup.kind === 'not_found' ? 'notFoundBody' : 'unavailableBody'),
+    alternates: { canonical: path },
+  };
+}
+
 /** The frame shared by the two "no parcel to show" states. */
 function MissShell({ locale, children }: { locale: Locale; children: ReactNode }): ReactElement {
   return (
     <div className="tr-page">
-      <LazyCorridorMap className="tr-map" />
+      <LazyCorridorMap className="tr-map" emphasis={2} />
       <div aria-hidden className="tr-veil" />
       <div className="tr-wrap tr-wrap--narrow">
         <TopBar locale={locale} />
@@ -151,7 +187,7 @@ export default async function AwbPage({
 
   return (
     <div className="tr-page">
-      <LazyCorridorMap className="tr-map tr-map--soft" />
+      <LazyCorridorMap className="tr-map tr-map--soft" emphasis={2} />
       <div aria-hidden className="tr-veil" />
       <div className="tr-wrap">
         <TopBar locale={locale} trackAnother />
@@ -227,6 +263,18 @@ export default async function AwbPage({
                 : {})}
               {...(eta !== null
                 ? { expected: { label: t(locale, 'estimatedDelivery'), day: eta } }
+                : {})}
+              // A long journey folds its older scans so the current step is
+              // on screen without scrolling (more than 8 scans; the last 3
+              // before the current one stay visible).
+              {...(data.timeline.length > 8
+                ? {
+                    collapseEarlier: {
+                      keep: 3,
+                      showLabel: t(locale, 'earlierShow'),
+                      hideLabel: t(locale, 'earlierHide'),
+                    },
+                  }
                 : {})}
               stateWords={{
                 done: t(locale, 'stepDone'),

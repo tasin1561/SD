@@ -17,9 +17,16 @@ import './sign-in-map.css';
  * 3 KB per-primitive budget on purpose — full detail kept, cost moved off
  * the critical path.
  */
-type MapComponent = ComponentType<{ readonly className?: string }>;
+type MapComponent = ComponentType<{ readonly className?: string; readonly emphasis?: 1 | 2 | 3 }>;
 
-export function LazyCorridorMap({ className }: { readonly className?: string }): ReactElement {
+export function LazyCorridorMap({
+  className,
+  emphasis = 1,
+}: {
+  readonly className?: string;
+  /** See `CorridorMap`: 2 for a page where the map should read as a map. */
+  readonly emphasis?: 1 | 2 | 3;
+}): ReactElement {
   const [Map, setMap] = useState<MapComponent | null>(null);
 
   useEffect(() => {
@@ -49,7 +56,7 @@ export function LazyCorridorMap({ className }: { readonly className?: string }):
 
   return (
     <span className={className} data-map-ready={Map !== null || undefined} aria-hidden="true">
-      {Map !== null ? <Map className="sk-lazymap__canvas" /> : null}
+      {Map !== null ? <Map className="sk-lazymap__canvas" emphasis={emphasis} /> : null}
     </span>
   );
 }
