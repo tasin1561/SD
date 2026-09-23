@@ -306,3 +306,215 @@ Dense T + F + Ch + Sk + toasts + CD everywhere; queues (calls to make, units to 
 - **Counters show, never enforce** (`countMax`), unless the field already
   enforced the limit. No new `required`, `maxLength`, `pattern` or `min`/
   `max`; a visual-only asterisk is `requiredMark`.
+
+## 9. Status after Phase 7 (2026-09-24)
+
+Every page of the four product apps is on the brand skin and the `@skydrop/ui/app` primitives. **done** = restyled, its patterns applied as listed in that app's motion-coverage document (per page, pattern by pattern, with the reason for every n/a). **n/a** marks the patterns that do not apply on a page by design. Verified: typecheck, lint, format and the two route/permission checks across the repo; 433 admin, 313 seller, 37 reseller unit tests; 37 Playwright tests (login, nonce CSP and the 320/360/414/768 no-overflow check) across the four apps; every signed-in admin page at 320/360/390 with no sideways scroll; reduced motion (OS setting and the per-user switch) leaves nothing animating on any page of admin, seller and reseller, and on track under the OS setting (track has no per-user switch); focus visible at every stop on 25 sampled pages; interaction latency at 4× CPU with 200 bulk orders and 150 top-ups ≤ 120 ms on every measured page.
+
+### apps/track (Phase 2) — 3 pages, all done · detail: `docs/apps-restyle/MOTION-COVERAGE-track.md`
+
+| Page | Status | Not applicable here |
+|---|---|---|
+| `/` | done | — |
+| `/[awb]` | done | — |
+| `/[awb] (not found)` | done | — |
+
+### apps/seller (Phase 3) — 53 pages, all done · detail: `docs/apps-restyle/MOTION-COVERAGE-seller.md`
+
+| Page | Status | Not applicable here |
+|---|---|---|
+| `/auth/accept-invitation` | done | tables, KPI, tabs (sign-in card only) |
+| `/auth/accept-team-invitation` | done | tables, KPI, tabs (sign-in card only) |
+| `/auth/reset-password` | done | tables, KPI, tabs (sign-in card only) |
+| `/auth/verify-email` | done | tables, KPI, tabs (sign-in card only) |
+| `/customers` | done | — |
+| `/dashboard` | done | — |
+| `/freight` | done | — |
+| `/holds` | done | — |
+| `/inbound` | done | — |
+| `/inbound/[id]` | done | — |
+| `/inventory` | done | — |
+| `/inventory/units` | done | — |
+| `/login` | done | tables, KPI, tabs (sign-in card only) |
+| `/needs-attention` | done | — |
+| `/notifications` | done | — |
+| `/notifications/settings` | done | — |
+| `/orders` | done | — |
+| `/orders/[id]` | done | — |
+| `/orders/[id]/edit` | done | — |
+| `/orders/import` | done | — |
+| `/orders/import/[id]` | done | — |
+| `/orders/new` | done | — |
+| `/orders/pending` | done | — |
+| `/password-reset` | done | tables, KPI, tabs (sign-in card only) |
+| `/products` | done | — |
+| `/products/[id]` | done | — |
+| `/products/[id]/variants/[variantId]` | done | — |
+| `/products/import` | done | — |
+| `/products/import/jobs` | done | — |
+| `/products/import/jobs/[id]` | done | — |
+| `/products/new` | done | — |
+| `/profile` | done | — |
+| `/reseller-stores` | done | — |
+| `/reseller-stores/[storeId]` | done | — |
+| `/reseller-stores/price-list` | done | — |
+| `/reseller-stores/reports` | done | — |
+| `/reseller-stores/requests` | done | — |
+| `/reseller-stores/stock-forecast` | done | — |
+| `/settings` | done | — |
+| `/settings/api-keys` | done | — |
+| `/settings/notifications` | done | — |
+| `/settings/orders` | done | — |
+| `/settings/security` | done | — |
+| `/settings/stock` | done | — |
+| `/settings/stores` | done | — |
+| `/settings/webhooks` | done | — |
+| `/team` | done | — |
+| `/team/roles` | done | — |
+| `/tickets` | done | — |
+| `/tickets/[id]` | done | — |
+| `/tracking` | done | — |
+| `/wallet` | done | — |
+| `/wallet/limits` | done | — |
+
+### apps/reseller (Phase 4) — 28 pages, all done · detail: `docs/apps-restyle/MOTION-COVERAGE-reseller.md`
+
+| Page | Status | Not applicable here |
+|---|---|---|
+| `/account` | done | — |
+| `/auth/accept-invitation` | done | tables, KPI, tabs (sign-in card only) |
+| `/auth/reset-password` | done | tables, KPI, tabs (sign-in card only) |
+| `/auth/verify-email` | done | tables, KPI, tabs (sign-in card only) |
+| `/catalogue` | done | — |
+| `/customers` | done | — |
+| `/customers/[id]` | done | — |
+| `/dashboard` | done | — |
+| `/expenses` | done | — |
+| `/integrations` | done | — |
+| `/login` | done | tables, KPI, tabs (sign-in card only) |
+| `/notifications` | done | — |
+| `/notifications/settings` | done | — |
+| `/orders` | done | — |
+| `/orders/[id]` | done | — |
+| `/orders/call-reviews` | done | — |
+| `/orders/import` | done | — |
+| `/orders/new` | done | — |
+| `/password-reset` | done | tables, KPI, tabs (sign-in card only) |
+| `/reports` | done | — |
+| `/reports/analysis` | done | — |
+| `/settings` | done | — |
+| `/team` | done | — |
+| `/terms` | done | — |
+| `/tickets` | done | — |
+| `/tickets/[id]` | done | — |
+| `/tickets/new` | done | — |
+| `/wallet` | done | — |
+
+### apps/admin (Phase 5) — 89 pages, all done · detail: `docs/apps-restyle/MOTION-COVERAGE-admin.md`
+
+| Page | Status | Not applicable here |
+|---|---|---|
+| `/account` | done | — |
+| `/auth/accept-invitation` | done | tables, KPI, tabs (sign-in card only) |
+| `/auth/forgot-password` | done | tables, KPI, tabs (sign-in card only) |
+| `/auth/reset-password` | done | tables, KPI, tabs (sign-in card only) |
+| `/auth/verify-email` | done | tables, KPI, tabs (sign-in card only) |
+| `/bank-accounts` | done | — |
+| `/bank-accounts/history` | done | — |
+| `/bank-changes` | done | — |
+| `/call-center` | done | — |
+| `/call-center/agents` | done | — |
+| `/call-center/queue` | done | — |
+| `/cost-sync` | done | — |
+| `/courier-accounts` | done | — |
+| `/courier-decisions` | done | — |
+| `/courier-escalation` | done | — |
+| `/courier-escalation/portal` | done | — |
+| `/courier-escalation/templates` | done | — |
+| `/courier-escalation/threads` | done | — |
+| `/courier-wallet` | done | — |
+| `/dashboard` | done | — |
+| `/delhivery` | done | — |
+| `/delivery-actions` | done | — |
+| `/expenses` | done | — |
+| `/expenses/categories` | done | — |
+| `/freight` | done | — |
+| `/fx` | done | — |
+| `/holds` | done | — |
+| `/inventory` | done | — |
+| `/inventory-units` | done | — |
+| `/inventory/adjustments` | done | — |
+| `/inventory/cycle-counts` | done | — |
+| `/inventory/movements` | done | — |
+| `/inventory/transfers` | done | — |
+| `/leads` | done | — |
+| `/liabilities` | done | — |
+| `/liabilities/instant-pay` | done | — |
+| `/login` | done | tables, KPI, tabs (sign-in card only) |
+| `/manual-placement` | done | — |
+| `/margin` | done | — |
+| `/notifications` | done | — |
+| `/notifications/broadcasts` | done | — |
+| `/notifications/settings` | done | — |
+| `/nsa` | done | — |
+| `/orders` | done | van (admin creates no orders) |
+| `/orders/[id]` | done | van (admin creates no orders) |
+| `/pnl` | done | — |
+| `/pnl/carry-forward` | done | — |
+| `/pricing` | done | — |
+| `/reattempt-requests` | done | — |
+| `/remittances` | done | — |
+| `/reports` | done | — |
+| `/reseller-store-wallets` | done | — |
+| `/reseller-stores` | done | — |
+| `/reseller-stores/[storeId]` | done | — |
+| `/reseller-stores/analysis` | done | — |
+| `/roles` | done | — |
+| `/seller-wallets` | done | — |
+| `/seller-wallets/[id]` | done | — |
+| `/sellers` | done | — |
+| `/sellers/[id]` | done | — |
+| `/settings` | done | — |
+| `/settlements` | done | — |
+| `/shiprocket` | done | — |
+| `/staff` | done | — |
+| `/stores` | done | — |
+| `/system-issues` | done | — |
+| `/system/capacity` | done | — |
+| `/tickets` | done | — |
+| `/tickets/[id]` | done | — |
+| `/topups` | done | — |
+| `/treasury` | done | — |
+| `/wallet-transfers` | done | — |
+| `/warehouse` | done | — |
+| `/warehouse/bins` | done | — |
+| `/warehouse/bins/[binId]` | done | — |
+| `/warehouse/consignments` | done | — |
+| `/warehouse/consignments/[id]` | done | — |
+| `/warehouse/handover` | done | — |
+| `/warehouse/manifests` | done | — |
+| `/warehouse/manifests/[id]` | done | — |
+| `/warehouse/pack` | done | — |
+| `/warehouse/pick` | done | — |
+| `/warehouse/pickups` | done | — |
+| `/warehouse/printing` | done | — |
+| `/warehouse/receive` | done | — |
+| `/warehouse/receive/[id]` | done | — |
+| `/warehouse/rto` | done | — |
+| `/webhooks` | done | — |
+| `/withdrawals` | done | — |
+
+### Deliberate exceptions (kept so a pinned test keeps passing, or by decision)
+
+- **Reseller — call-review release** has no second confirm: `call-review-decision.test.tsx` pins one click → PATCH, and its dialog already restates the order, units held and the consequence.
+- **Admin — printing label quantity** stays a `window.prompt` (`scan-printing-quantity.test.tsx` pins the prompt).
+- **Admin — label reprint REQUEST** stays one click (`scan-consignment-serials.test.tsx` pins the direct POST); approve / reject / print confirm.
+- **Admin — printing view buttons** stay `aria-pressed` buttons, not tabs (a spec clicks them by `role=button`).
+- **Admin — warehouse benches** keep the legacy toast and no AsyncButton (specs mount the legacy Toaster and pin a single `role=status`).
+- **Admin — bin collapse** has no screen, so the segmented code has no home there; the escalation six-digit code uses it (the field was free text; the code is always six digits).
+- **Track** has no per-user motion switch (no settings, no login); the OS setting applies.
+- **Van drive-off** is used on seller and reseller order creation only (while-busy); admin creates no orders.
+
+### Legacy removed in Phase 7
+
+`packages/ui/src/{tokens,corridor,seller-theme}.css` and `components/{app-shell,modal,switch,ticket-handling-badge}` — nothing imported them. `brand/legacy.css` and the rest of `@skydrop/ui/components` stay while pages render `Money`, `Num`, `Ident`, `ProductThumb`, `JourneyTimeline` and the other legacy pieces it styles.
