@@ -25,7 +25,13 @@
  *
  * Run from packages/db (where tsx, argon2 and @skydrop/db resolve):
  *   set -a; . ../../apps/api/.env; set +a
- *   SKYDROP_UI_FIXTURES=1 npx tsx ../../scripts/ui-fixtures.ts
+ *   SKYDROP_UI_FIXTURES=1 npx tsx ../../scripts/ui-fixtures.ts [--bulk]
+ *
+ * `--bulk` (Phase 6 — interaction-latency checks on long lists) also adds
+ * 200 orders (`UI-BULK-nnn`, a quarter of them spread across the lifecycle
+ * by god mode) and 150 accepted top-ups, so the order list, the wallet
+ * ledger and the admin queues have enough rows to measure INP against.
+ * Idempotent the same way: it tops up to the counts, never past them.
  */
 import argon2 from 'argon2';
 import { prisma } from '@skydrop/db';
@@ -320,9 +326,122 @@ async function main(): Promise<void> {
     });
   });
 
+  if (process.argv.includes('--bulk')) await bulk(seller, staff, sellerRow.id, variants, bank);
+
   console.log(
     '\nSTORE   http://localhost:3005   ' + STORE_USER.email + ' / ' + STORE_USER.password,
   );
+}
+
+const BULK_ORDERS = 200;
+const BULK_TOPUPS = 150;
+const BULK_TARGETS = ['CONFIRMED', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'] as const;
+
+/** The API rate-limits a burst; wait it out and try the same row again. */
+async function paced<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= 6 || !(e as Error).message.includes('→ 429')) throw e;
+      await new Promise((r) => setTimeout(r, 20_000));
+    }
+  }
+}
+
+/** Phase 6: enough rows to measure long lists. Tops up to the counts. */
+async function bulk(
+  seller: string,
+  staff: string,
+  sellerId: string,
+  variants: ReadonlyArray<{ id: string }>,
+  bank: { id: string } | null,
+): Promise<void> {
+  const have = await prisma.order.count({
+    where: { sellerId, sellerOrderRef: { startsWith: 'UI-BULK-' } },
+  });
+  let failed = 0;
+  for (let i = have; i < BULK_ORDERS; i++) {
+    const ref = `UI-BULK-${String(i + 1).padStart(3, '0')}`;
+    const c = CUSTOMERS[i % CUSTOMERS.length];
+    const v = variants[i % variants.length];
+    if (!c || !v) break;
+    const [name, landmark, line1, pin] = c;
+    try {
+      const created = await paced(() =>
+        call('/seller/orders', {
+          method: 'POST',
+          token: seller,
+          body: {
+            sellerOrderRef: ref,
+            recipientName: name,
+            recipientPhoneE164: `+919000000${String(100 + (i % 800)).padStart(3, '0')}`,
+            recipientAddressLine1: line1,
+            recipientAddressLine2: landmark,
+            recipientPostalCode: pin,
+            paymentMode: 'COD',
+            codAmountInr: 300 + (i % 17) * 55,
+            declaredValueInr: 600,
+            totalWeightGrams: 400,
+            acknowledgeDuplicate: true,
+            items: [{ variantId: v.id, quantity: 1 }],
+          },
+        }),
+      );
+      const id = created['id'] as string;
+      if ((created['status'] as string) === 'DRAFT') {
+        await paced(() => call(`/seller/orders/${id}/submit`, { method: 'POST', token: seller }));
+      }
+      if (i % 4 === 0) {
+        await call(`/admin/orders/${id}/force-mutation`, {
+          method: 'POST',
+          token: staff,
+          body: {
+            targetStatus: BULK_TARGETS[(i / 4) % BULK_TARGETS.length],
+            reason: 'Local bulk fixture for the apps restyle INP checks — not a real order.',
+            acknowledgeDataIntegrityRisk: true,
+          },
+        });
+      }
+    } catch (e) {
+      failed++;
+      if (failed <= 3) console.log(`  FAIL bulk order ${ref}: ${(e as Error).message}`);
+    }
+  }
+  console.log(`  ok   bulk orders (${BULK_ORDERS - have - failed} added, ${failed} failed)`);
+
+  if (!bank) {
+    console.log('  FAIL bulk top-ups: no active INR platform bank account');
+    return;
+  }
+  const topups = await prisma.walletTopupRequest.count({
+    where: { sellerId, transactionRef: { startsWith: 'UIBULK-' } },
+  });
+  failed = 0;
+  for (let i = topups; i < BULK_TOPUPS; i++) {
+    try {
+      const claim = await paced(() =>
+        call('/seller/wallet/topups', {
+          method: 'POST',
+          token: seller,
+          body: {
+            bankAccountId: bank.id,
+            amount: 100 + (i % 9) * 25,
+            transactionRef: `UIBULK-${String(i + 1).padStart(4, '0')}`,
+          },
+        }),
+      );
+      await call(`/admin/wallet/topups/${claim['id'] as string}/accept`, {
+        method: 'POST',
+        token: staff,
+        body: { note: 'Seen on the statement (bulk fixture).' },
+      });
+    } catch (e) {
+      failed++;
+      if (failed <= 3) console.log(`  FAIL bulk top-up ${i + 1}: ${(e as Error).message}`);
+    }
+  }
+  console.log(`  ok   bulk top-ups (${BULK_TOPUPS - topups - failed} added, ${failed} failed)`);
 }
 
 main()
