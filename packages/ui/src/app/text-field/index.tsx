@@ -52,6 +52,12 @@ interface FieldExtras extends FieldMessages {
    * blocked client-side that was not blocked before (owner's rule).
    */
   readonly countMax?: number | undefined;
+  /**
+   * Draw the required asterisk WITHOUT the native `required` attribute —
+   * for a field the page already insists on through its own logic, where
+   * adding the browser check would change behaviour.
+   */
+  readonly requiredMark?: boolean | undefined;
   /** An inline valid/invalid icon at the end of the field. */
   readonly status?: FieldStatus | undefined;
   /** Keep the label floated even when empty. */
@@ -80,6 +86,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     icon,
     showCount = false,
     countMax,
+    requiredMark = false,
     status,
     floatLabel = false,
     lead,
@@ -123,7 +130,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       notice={notice}
       error={error}
       icon={icon}
-      required={required}
+      required={required === true || requiredMark}
       disabled={disabled}
       float={floatLabel || placeholder !== undefined || text !== ''}
       status={status}
@@ -176,6 +183,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
     icon,
     showCount = false,
     countMax,
+    requiredMark = false,
     floatLabel = false,
     after,
     variant,
@@ -216,7 +224,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
       notice={notice}
       error={error}
       icon={icon}
-      required={required}
+      required={required === true || requiredMark}
       disabled={disabled}
       float={floatLabel || placeholder !== undefined || text !== ''}
       counter={
