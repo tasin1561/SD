@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { startTransition, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Landmark, Scale } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
@@ -230,7 +230,11 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
       <Tabs
         label="Wallet history"
         value={tab}
-        onChange={(id) => setTab(id as 'ledger' | 'topups' | 'withdrawals')}
+        onChange={(id) =>
+          // A transition: the tab answers the click at once and the
+          // hundred-row ledger re-renders just after (INP, Phase 6).
+          startTransition(() => setTab(id as 'ledger' | 'topups' | 'withdrawals'))
+        }
         items={[
           {
             id: 'ledger',

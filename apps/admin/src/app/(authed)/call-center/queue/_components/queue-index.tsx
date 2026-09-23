@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { startTransition, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Ident, Num } from '@skydrop/ui/components';
 import { ArrowLeftRight, Clock3, Headset, PhoneCall, Users } from 'lucide-react';
@@ -269,7 +269,7 @@ export function QueueIndex(): ReactElement {
             page={page}
             pageSize={PAGE_SIZE}
             total={total}
-            onPageChange={setPage}
+            onPageChange={(n) => startTransition(() => setPage(n))}
           />
         </OoCard>
       )}
