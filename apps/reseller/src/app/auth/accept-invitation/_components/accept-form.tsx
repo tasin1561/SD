@@ -2,9 +2,14 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { User, UserCheck } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
-import { Button, DescriptionList, FormField, Input, Skeleton } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AuthNotice } from '../../../login/_components/rd-auth-notice';
 
 interface Preview {
   readonly email: string;
@@ -13,6 +18,15 @@ interface Preview {
   readonly roleName: string;
   readonly expiresAt: string;
 }
+
+/**
+ * DISPLAY ONLY: the rule the field's hint already states ("At least 10
+ * characters."), ticking off as it is typed. Nothing here refuses a
+ * submit; the server's verdict still decides (FE-2).
+ */
+const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
+  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
+];
 
 /**
  * Accept an invitation: say what it is for FIRST (the store, the role,
@@ -63,57 +77,68 @@ export function AcceptForm(): ReactElement {
     }
   }
 
-  if (token === '') return <p className="text-sm">This link is missing its token.</p>;
+  if (token === '') return <AuthNotice tone="neutral">This link is missing its token.</AuthNotice>;
   if (loadError !== null) {
     return (
-      <p role="alert" className="text-critical text-sm">
+      <AuthNotice tone="critical" role="alert">
         {loadError}
-      </p>
+      </AuthNotice>
     );
   }
-  if (preview === null) return <Skeleton className="h-24 w-full" />;
+  if (preview === null) {
+    return (
+      <div className="rd-auth-skel" role="status" aria-label="Loading the invitation">
+        <Skeleton height={88} rounded="md" />
+        <Skeleton height={48} rounded="md" />
+        <Skeleton height={48} rounded="md" />
+      </div>
+    );
+  }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <DescriptionList
-        columns={1}
-        items={[
-          { label: 'Store', value: preview.storeName },
-          { label: 'Your role', value: preview.roleName },
-          { label: 'Email', value: preview.email },
-        ]}
-      />
-      <FormField label="Your name" htmlFor="fullName" required>
-        <Input
-          id="fullName"
-          required
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-        />
-      </FormField>
-      <FormField
-        label="Choose a password"
-        htmlFor="password"
-        hint="At least 10 characters."
+    <form onSubmit={submit} className="rd-auth-form">
+      <dl className="rd-auth-facts">
+        <dt>Store</dt>
+        <dd>{preview.storeName}</dd>
+        <dt>Your role</dt>
+        <dd>{preview.roleName}</dd>
+        <dt>Email</dt>
+        <dd>{preview.email}</dd>
+      </dl>
+      <TextField
+        id="fullName"
+        label="Your name"
+        icon={<User size={15} />}
         required
-      >
-        <Input
-          id="password"
-          type="password"
-          autoComplete="new-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </FormField>
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+      />
+      <PasswordField
+        id="password"
+        label="Choose a password"
+        hint="At least 10 characters."
+        autoComplete="new-password"
+        required
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        showStrength
+        criteria={PASSWORD_CRITERIA}
+      />
       {error !== null ? (
-        <p role="alert" className="text-critical text-sm">
+        <AuthNotice tone="critical" role="alert">
           {error}
-        </p>
+        </AuthNotice>
       ) : null}
-      <Button type="submit" variant="primary" size="md" disabled={submitting} className="w-full">
-        {submitting ? 'Setting up…' : 'Join the store'}
-      </Button>
+      <AsyncButton
+        type="submit"
+        variant="primary"
+        size="lg"
+        fullWidth
+        icon={<UserCheck size={15} />}
+        labels={{ idle: 'Join the store', busy: 'Setting up…', error: 'Try again' }}
+        state={submitting ? 'busy' : error !== null ? 'error' : 'idle'}
+        disabled={submitting}
+      />
     </form>
   );
 }

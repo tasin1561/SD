@@ -2,7 +2,11 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactElement, ReactNode } from 'react';
-import { Button, EmptyState, PageHeader } from '@skydrop/ui/components';
+import { LayoutDashboard } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import '../settings/_components/rd.css';
 import { canSeePath, FALLBACK_PATH, permissionForPath } from '@/lib/page-access';
 
 /**
@@ -23,13 +27,18 @@ export function RoleBoundary({
   if (canSeePath({ permissions }, pathname)) return <>{children}</>;
   const needed = permissionForPath(pathname);
   return (
-    <div className="max-w-2xl">
+    <div className="rd-page" data-width="narrow">
       <PageHeader title="Not available" />
       <EmptyState
         title="This section is not part of your access"
         description={`This page needs the “${needed ?? 'unknown'}” permission and your role does not have it. An owner of your store can change your role under Team.`}
         action={
-          <Button variant="primary" size="md" onClick={() => router.push(FALLBACK_PATH)}>
+          <Button
+            variant="primary"
+            size="md"
+            icon={<LayoutDashboard size={15} />}
+            onClick={() => router.push(FALLBACK_PATH)}
+          >
             Go to the dashboard
           </Button>
         }

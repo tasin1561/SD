@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
+import { Mail } from 'lucide-react';
 import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
-import { Button, FormField, Input } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { PasswordField } from '@skydrop/ui/app/password-field';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AuthNotice } from './rd-auth-notice';
 
 /**
  * The login form. The page has no AuthProvider (that mounts under the
@@ -12,6 +16,9 @@ import { serverVerdict } from '@/lib/server-verdict';
  * the authed layout re-resolves identity from the cookie, and the first
  * authenticated request mints the in-memory access token (FE-1 / FE-4).
  * The access token from this response is deliberately not carried over.
+ *
+ * The submit button keeps the accessible name "Sign in" while the request
+ * runs (the rolling label is visual; the login spec finds it by that name).
  */
 export function LoginForm(): ReactElement {
   const [email, setEmail] = useState('');
@@ -43,37 +50,41 @@ export function LoginForm(): ReactElement {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-      <FormField label="Email" htmlFor="email" required>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={submitting}
-        />
-      </FormField>
-      <FormField label="Password" htmlFor="password" required>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={submitting}
-        />
-      </FormField>
+    <form onSubmit={handleSubmit} className="rd-auth-form" noValidate>
+      <TextField
+        id="email"
+        type="email"
+        label="Email"
+        icon={<Mail size={15} />}
+        autoComplete="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={submitting}
+      />
+      <PasswordField
+        id="password"
+        label="Password"
+        autoComplete="current-password"
+        required
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        disabled={submitting}
+      />
       {error !== null ? (
-        <p role="alert" className="text-critical text-sm">
+        <AuthNotice tone="critical" role="alert">
           {error}
-        </p>
+        </AuthNotice>
       ) : null}
-      <Button type="submit" variant="primary" size="md" disabled={submitting} className="w-full">
-        {submitting ? 'Signing in…' : 'Sign in'}
-      </Button>
+      <AsyncButton
+        type="submit"
+        variant="primary"
+        size="lg"
+        fullWidth
+        labels={{ idle: 'Sign in', busy: 'Signing in…', error: 'Try again' }}
+        state={submitting ? 'busy' : error !== null ? 'error' : 'idle'}
+        disabled={submitting}
+      />
     </form>
   );
 }

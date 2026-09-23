@@ -2,9 +2,11 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
+import { MailCheck } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
-import { Button } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AuthNotice } from '../../../login/_components/rd-auth-notice';
 
 /**
  * Confirming is a BUTTON, not an effect on load: mail scanners open links
@@ -33,35 +35,33 @@ export function VerifyPanel(): ReactElement {
   }
 
   if (token === '') {
-    return <p className="text-sm">This link is missing its token.</p>;
+    return <AuthNotice tone="neutral">This link is missing its token.</AuthNotice>;
   }
   if (state === 'done') {
     return (
-      <p className="text-sm" role="status">
-        Your email is confirmed.{' '}
-        <a href="/dashboard" className="text-accent hover:text-accent-hover">
-          Go to your store
-        </a>
-        .
-      </p>
+      <AuthNotice tone="good" role="status">
+        Your email is confirmed. <a href="/dashboard">Go to your store</a>.
+      </AuthNotice>
     );
   }
   return (
-    <div className="space-y-4">
-      <p className="text-sm">Confirm that this email address is yours.</p>
+    <div className="rd-auth-form">
+      <p className="rd-auth-text">Confirm that this email address is yours.</p>
       {error !== null ? (
-        <p role="alert" className="text-critical text-sm">
+        <AuthNotice tone="critical" role="alert">
           {error}
-        </p>
+        </AuthNotice>
       ) : null}
-      <Button
+      <AsyncButton
         variant="primary"
-        size="md"
-        onClick={() => void confirm()}
+        size="lg"
+        fullWidth
+        icon={<MailCheck size={15} />}
+        labels={{ idle: 'Confirm my email', busy: 'Confirming…', error: 'Not confirmed' }}
+        state={state === 'working' ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={state === 'working'}
-      >
-        {state === 'working' ? 'Confirming…' : 'Confirm my email'}
-      </Button>
+        onClick={() => void confirm()}
+      />
     </div>
   );
 }

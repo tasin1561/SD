@@ -2,28 +2,29 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import {
-  Button,
-  Card,
-  CardBody,
-  ConfirmDialog,
-  EmptyState,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  PageHeader,
-  Section,
-  Select,
-  Switch,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Textarea,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+  CircleAlert,
+  Clock,
+  FileText,
+  KeyRound,
+  Link2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Tag,
+  Trash2,
+} from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Switch } from '@skydrop/ui/app/switch';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCreateStoreApiKey,
@@ -36,6 +37,13 @@ import {
   useUpdateStoreWebhook,
   type StoreWebhook,
 } from '@/lib/order-hooks';
+import {
+  RdCallout,
+  RdCard,
+  RdOneTimeSecret,
+  RdSection,
+  phaseOf,
+} from '../settings/_components/rd-parts';
 import { DEFAULT_EVENTS, EditWebhookModal, EventPicker } from './_components/webhook-form';
 
 function when(iso: string | null): string {
@@ -54,31 +62,6 @@ const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
   { value: '730', label: '2 years' },
 ];
 
-/** A secret shown ONCE, with a way to copy it before it is gone. */
-function OneTimeSecret({ label, value }: { label: string; value: string }): ReactElement {
-  const toast = useToast();
-  return (
-    <div className="border-border bg-surface-raised rounded-lg border p-3 text-sm">
-      <p className="text-text-body mb-1 font-medium">{label}</p>
-      <p className="text-text-muted mb-2 text-xs">
-        Copy it now — it is shown only this once. We keep only a fingerprint of it.
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <code className="bg-surface rounded px-2 py-1 font-mono text-xs break-all">{value}</code>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            void navigator.clipboard.writeText(value).then(() => toast.success('Copied.'));
-          }}
-        >
-          Copy
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 /**
  * RS-5 — connect the store's own systems: API keys that place and read
  * this store's orders (`/store-api/v1/orders`), and webhooks that tell
@@ -87,7 +70,7 @@ function OneTimeSecret({ label, value }: { label: string; value: string }): Reac
  */
 export default function IntegrationsPage(): ReactElement {
   return (
-    <div className="space-y-6">
+    <div className="rd-page">
       <PageHeader
         title="Integrations"
         subtitle="Let your own systems place orders and hear when they move."
@@ -106,11 +89,25 @@ function ApiKeysSection(): ReactElement {
   const [expiry, setExpiry] = useState('');
   const [shown, setShown] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
+  const [revokeOpen, setRevokeOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  // What the confirmation restates, fixed when it opens.
+  const [asked, setAsked] = useState({ name: '', works: '' });
   const [error, setError] = useState<string | null>(null);
+  const expiryLabel = EXPIRY_CHOICES.find((c) => c.value === expiry)?.label ?? '';
 
-  async function add(e: FormEvent): Promise<void> {
+  // The form submit only ASKS; the key is made from the confirmation.
+  function add(e: FormEvent): void {
     e.preventDefault();
     setError(null);
+    setAsked({
+      name: name.trim(),
+      works: expiry === '' ? 'until you revoke it' : `for ${expiryLabel}`,
+    });
+    setCreating(true);
+  }
+
+  async function createKey(): Promise<void> {
     try {
       const created = await create.mutateAsync({
         name: name.trim(),
@@ -124,121 +121,138 @@ function ApiKeysSection(): ReactElement {
   }
 
   return (
-    <Section
+    <RdSection
       title="API keys"
-      subtitle="A key places and reads this store’s orders — POST /store-api/v1/orders with “Authorization: Bearer sks_…”. Every rule the portal applies (your catalogue, the retail range, what is available) applies to it too."
+      note="A key places and reads this store’s orders — POST /store-api/v1/orders with “Authorization: Bearer sks_…”. Every rule the portal applies (your catalogue, the retail range, what is available) applies to it too."
     >
-      <Card>
-        <CardBody>
-          <form
-            onSubmit={(e) => void add(e)}
-            className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_200px_auto] sm:items-end"
+      <RdCard>
+        <form onSubmit={add} className="rd-form-grid" data-cols="key">
+          <TextField
+            id="key-name"
+            label="Name the key"
+            icon={<Tag size={15} />}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Shopify connector"
+            maxLength={80}
+            showCount
+          />
+          <Select
+            id="key-expiry"
+            label="Works for"
+            icon={<Clock size={15} />}
+            value={expiry}
+            onChange={(e) => setExpiry(e.target.value)}
           >
-            <FormField label="Name the key" htmlFor="key-name">
-              <Input
-                id="key-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Shopify connector"
-                maxLength={80}
-              />
-            </FormField>
-            <FormField label="Works for" htmlFor="key-expiry">
-              <Select id="key-expiry" value={expiry} onChange={(e) => setExpiry(e.target.value)}>
-                {EXPIRY_CHOICES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              disabled={create.isPending || name.trim() === ''}
-            >
-              Create key
-            </Button>
-          </form>
-          {shown !== null ? (
-            <div className="mt-3">
-              <OneTimeSecret label="Your new API key" value={shown} />
-            </div>
-          ) : null}
-          {error !== null ? (
-            <p role="alert" className="text-critical mt-2 text-sm">
-              {error}
-            </p>
-          ) : null}
-        </CardBody>
-      </Card>
-      <div className="mt-3">
-        {keys.isPending ? (
-          <LoadingState label="Loading keys" rows={2} />
-        ) : keys.isError ? (
-          <ErrorState message={serverVerdict(keys.error)} retry={() => void keys.refetch()} />
-        ) : keys.data.length === 0 ? (
-          <EmptyState title="No keys yet" description="Create one when you connect a system." />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Name</Th>
-                <Th>Key</Th>
-                <Th>Last used</Th>
-                <Th>Expires</Th>
-                <Th>State</Th>
-                <Th />
-              </Tr>
-            </THead>
-            <TBody>
-              {keys.data.map((k) => {
-                const expired =
-                  k.expiresAt !== null && new Date(k.expiresAt).getTime() < Date.now();
-                return (
-                  <Tr key={k.id}>
-                    <Td>{k.name}</Td>
-                    <Td className="font-mono text-xs">{k.keyPrefix}…</Td>
-                    <Td className="text-text-muted text-xs">{when(k.lastUsedAt)}</Td>
-                    <Td className="text-text-muted text-xs">
-                      {k.expiresAt === null ? 'Never' : when(k.expiresAt)}
-                    </Td>
-                    <Td className="text-xs">
-                      {k.revokedAt !== null
-                        ? `Revoked ${when(k.revokedAt)}`
-                        : expired
-                          ? 'Expired'
-                          : 'Live'}
-                    </Td>
-                    <Td align="right">
-                      {k.revokedAt === null ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setRevoking({ id: k.id, name: k.name })}
-                        >
-                          Revoke
-                        </Button>
-                      ) : null}
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
-        )}
-      </div>
+            {EXPIRY_CHOICES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </Select>
+          <AsyncButton
+            type="submit"
+            variant="primary"
+            size="md"
+            icon={<KeyRound size={15} />}
+            labels={{ idle: 'Create key', busy: 'Creating…', error: 'Not created' }}
+            state={phaseOf(create.isPending, create.isError ? error : null)}
+            disabled={create.isPending || name.trim() === ''}
+          />
+        </form>
+        {shown !== null ? <RdOneTimeSecret label="Your new API key" value={shown} /> : null}
+        {error !== null ? (
+          <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+            <p>{error}</p>
+          </RdCallout>
+        ) : null}
+      </RdCard>
+      {keys.isPending ? (
+        <SkeletonRows label="Loading keys" rows={2} cols={6} />
+      ) : keys.isError ? (
+        <ErrorState message={serverVerdict(keys.error)} retry={() => void keys.refetch()} />
+      ) : keys.data.length === 0 ? (
+        <EmptyState title="No keys yet" description="Create one when you connect a system." />
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Name</Th>
+              <Th>Key</Th>
+              <Th>Last used</Th>
+              <Th>Expires</Th>
+              <Th>State</Th>
+              <Th align="right">
+                <span className="rd-sr">Actions</span>
+              </Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {keys.data.map((k) => {
+              const expired = k.expiresAt !== null && new Date(k.expiresAt).getTime() < Date.now();
+              return (
+                <Tr key={k.id}>
+                  <Td>
+                    <span className="rd-cell-strong">{k.name}</span>
+                  </Td>
+                  <Td className="rd-cell-ident sk-ident">{k.keyPrefix}…</Td>
+                  <Td className="rd-cell-muted">{when(k.lastUsedAt)}</Td>
+                  <Td className="rd-cell-muted">
+                    {k.expiresAt === null ? 'Never' : when(k.expiresAt)}
+                  </Td>
+                  <Td>
+                    {k.revokedAt !== null ? (
+                      <>
+                        <StatusChip kind="cancelled" size="sm" label="Revoked" />{' '}
+                        <span className="rd-cell-sub">{when(k.revokedAt)}</span>
+                      </>
+                    ) : expired ? (
+                      <StatusChip kind="failed" size="sm" label="Expired" />
+                    ) : (
+                      <StatusChip kind="delivered" size="sm" label="Live" />
+                    )}
+                  </Td>
+                  <Td align="right">
+                    {k.revokedAt === null ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Trash2 size={14} />}
+                        onClick={() => {
+                          setRevoking({ id: k.id, name: k.name });
+                          setRevokeOpen(true);
+                        }}
+                      >
+                        Revoke
+                      </Button>
+                    ) : null}
+                  </Td>
+                </Tr>
+              );
+            })}
+          </TBody>
+        </Table>
+      )}
       <ConfirmDialog
-        open={revoking !== null}
-        onOpenChange={(open) => {
-          if (!open) setRevoking(null);
+        open={creating}
+        onOpenChange={setCreating}
+        title="Create this API key?"
+        entity={asked.name}
+        consequence={`It works ${asked.works} and can place and read this store’s orders. The key is shown once, straight after — copy it then.`}
+        confirmLabel="Create key"
+        onConfirm={async () => {
+          await createKey();
+          setCreating(false);
         }}
+      />
+      <ConfirmDialog
+        open={revokeOpen}
+        onOpenChange={setRevokeOpen}
         title={`Revoke “${revoking?.name ?? ''}”?`}
-        description="Anything still using this key stops working at once. This cannot be undone."
+        entity={revoking?.name ?? ''}
+        consequence="Anything still using this key stops working at once. This cannot be undone."
         confirmLabel="Revoke"
-        confirmVariant="destructive"
-        disabled={revoke.isPending}
+        destructive
         onConfirm={async () => {
           if (revoking === null) return;
           try {
@@ -246,10 +260,10 @@ function ApiKeysSection(): ReactElement {
           } catch (err) {
             setError(serverVerdict(err));
           }
-          setRevoking(null);
+          setRevokeOpen(false);
         }}
       />
-    </Section>
+    </RdSection>
   );
 }
 
@@ -267,8 +281,14 @@ function WebhooksSection(): ReactElement {
   const [secret, setSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<StoreWebhook | null>(null);
+  // Each confirmation keeps the endpoint it names after closing, so its
+  // words do not blank while it animates out; `open` is separate.
   const [rotating, setRotating] = useState<StoreWebhook | null>(null);
+  const [rotateOpen, setRotateOpen] = useState(false);
   const [removing, setRemoving] = useState<StoreWebhook | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [switching, setSwitching] = useState<{ hook: StoreWebhook; next: boolean } | null>(null);
+  const [switchOpen, setSwitchOpen] = useState(false);
 
   async function add(e: FormEvent): Promise<void> {
     e.preventDefault();
@@ -289,156 +309,203 @@ function WebhooksSection(): ReactElement {
     }
   }
 
+  // The switch only ASKS; the change is sent from the confirmation.
   function toggle(h: StoreWebhook, next: boolean): void {
-    setError(null);
-    update.mutate(
-      { id: h.id, isActive: next },
-      {
-        onSuccess: () => toast.success(next ? 'Webhook switched on.' : 'Webhook switched off.'),
-        onError: (err) => setError(serverVerdict(err)),
-      },
-    );
+    setSwitching({ hook: h, next });
+    setSwitchOpen(true);
   }
 
+  async function applyToggle(h: StoreWebhook, next: boolean): Promise<void> {
+    setError(null);
+    try {
+      await update.mutateAsync({ id: h.id, isActive: next });
+      toast.success(next ? 'Webhook switched on.' : 'Webhook switched off.');
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  }
+
+  const label = (h: StoreWebhook): string => h.name ?? h.url;
+
   return (
-    <Section
+    <RdSection
       title="Webhooks"
-      subtitle="We POST a signed message (HMAC-SHA256 with the endpoint’s secret) to your URL when one of your orders moves. Only your store’s orders are sent."
+      note="We POST a signed message (HMAC-SHA256 with the endpoint’s secret) to your URL when one of your orders moves. Only your store’s orders are sent."
     >
-      <Card>
-        <CardBody>
-          <form onSubmit={(e) => void add(e)} className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FormField label="Your https URL" htmlFor="wh-url" required>
-                <Input
-                  id="wh-url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://example.com/skydrop"
-                  inputMode="url"
-                />
-              </FormField>
-              <FormField label="Name (optional)" htmlFor="wh-name">
-                <Input
-                  id="wh-name"
-                  value={name}
-                  maxLength={160}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Order sync"
-                />
-              </FormField>
-            </div>
-            <FormField label="Description (optional)" htmlFor="wh-description">
-              <Textarea
-                id="wh-description"
-                value={description}
-                maxLength={2000}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </FormField>
-            <EventPicker value={events} onChange={setEvents} />
-            <Button
+      <RdCard>
+        <form onSubmit={(e) => void add(e)} className="rd-form">
+          <div className="rd-form-grid" data-cols="2">
+            <TextField
+              id="wh-url"
+              label="Your https URL"
+              icon={<Link2 size={15} />}
+              requiredMark
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://example.com/skydrop"
+              inputMode="url"
+              inputClassName="sk-ident"
+            />
+            <TextField
+              id="wh-name"
+              label="Name (optional)"
+              icon={<Tag size={15} />}
+              value={name}
+              maxLength={160}
+              showCount
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Order sync"
+            />
+          </div>
+          <TextArea
+            id="wh-description"
+            label="Description (optional)"
+            icon={<FileText size={15} />}
+            value={description}
+            maxLength={2000}
+            showCount
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <EventPicker value={events} onChange={setEvents} />
+          <div className="rd-buttons" data-align="start">
+            <AsyncButton
               type="submit"
               variant="primary"
               size="md"
+              icon={<Plus size={15} />}
+              labels={{ idle: 'Add webhook', busy: 'Adding…', error: 'Not added' }}
+              state={phaseOf(create.isPending, create.isError ? error : null)}
               disabled={create.isPending || url.trim() === '' || events.length === 0}
-            >
-              Add webhook
-            </Button>
-          </form>
-          {secret !== null ? (
-            <div className="mt-3">
-              <OneTimeSecret label="Signing secret" value={secret} />
-            </div>
-          ) : null}
-          {error !== null ? (
-            <p role="alert" className="text-critical mt-2 text-sm">
-              {error}
-            </p>
-          ) : null}
-        </CardBody>
-      </Card>
-      <div className="mt-3">
-        {hooks.isPending ? (
-          <LoadingState label="Loading webhooks" rows={2} />
-        ) : hooks.isError ? (
-          <ErrorState message={serverVerdict(hooks.error)} retry={() => void hooks.refetch()} />
-        ) : hooks.data.length === 0 ? (
-          <EmptyState
-            title="No webhooks yet"
-            description="Add one to hear about your orders as they move."
-          />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Endpoint</Th>
-                <Th>Events</Th>
-                <Th>Last delivered</Th>
-                <Th>On</Th>
-                <Th />
+            />
+          </div>
+        </form>
+        {secret !== null ? <RdOneTimeSecret label="Signing secret" value={secret} /> : null}
+        {error !== null ? (
+          <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+            <p>{error}</p>
+          </RdCallout>
+        ) : null}
+      </RdCard>
+      {hooks.isPending ? (
+        <SkeletonRows label="Loading webhooks" rows={2} cols={5} />
+      ) : hooks.isError ? (
+        <ErrorState message={serverVerdict(hooks.error)} retry={() => void hooks.refetch()} />
+      ) : hooks.data.length === 0 ? (
+        <EmptyState
+          title="No webhooks yet"
+          description="Add one to hear about your orders as they move."
+        />
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Endpoint</Th>
+              <Th>Events</Th>
+              <Th>Last delivered</Th>
+              <Th>On</Th>
+              <Th align="right">
+                <span className="rd-sr">Actions</span>
+              </Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {hooks.data.map((h) => (
+              <Tr key={h.id}>
+                <Td>
+                  {h.name !== null && h.name !== '' ? (
+                    <span className="rd-cell-strong">{h.name}</span>
+                  ) : null}
+                  <span className="rd-cell-sub rd-cell-ident sk-ident">{h.url}</span>
+                </Td>
+                <Td className="rd-cell-ident sk-ident">{h.subscribedEvents.join(', ')}</Td>
+                <Td className="rd-cell-muted">
+                  {h.autoDisabledAt !== null ? (
+                    <span className="rd-cell-warn">
+                      Switched off after repeated failures
+                      {h.autoDisabledReason !== null ? ` — ${h.autoDisabledReason}` : ''}. Fix the
+                      endpoint, then switch it back on.
+                    </span>
+                  ) : (
+                    when(h.lastSuccessAt)
+                  )}
+                </Td>
+                <Td>
+                  <Switch
+                    checked={h.isActive && h.autoDisabledAt === null}
+                    onCheckedChange={(next) => toggle(h, next)}
+                    aria-label={`Deliver to ${h.name ?? h.url}`}
+                    disabled={update.isPending}
+                  />
+                </Td>
+                <Td align="right">
+                  <div className="rd-row-actions">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Pencil size={14} />}
+                      onClick={() => setEditing(h)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<RefreshCw size={14} />}
+                      onClick={() => {
+                        setRotating(h);
+                        setRotateOpen(true);
+                      }}
+                    >
+                      New secret
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Trash2 size={14} />}
+                      onClick={() => {
+                        setRemoving(h);
+                        setRemoveOpen(true);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </Td>
               </Tr>
-            </THead>
-            <TBody>
-              {hooks.data.map((h) => (
-                <Tr key={h.id}>
-                  <Td>
-                    {h.name !== null && h.name !== '' ? (
-                      <div className="text-text-body text-sm">{h.name}</div>
-                    ) : null}
-                    <div className="font-mono text-xs break-all">{h.url}</div>
-                  </Td>
-                  <Td className="text-xs">{h.subscribedEvents.join(', ')}</Td>
-                  <Td className="text-text-muted text-xs">
-                    {h.autoDisabledAt !== null ? (
-                      <span className="text-critical">
-                        Switched off after repeated failures
-                        {h.autoDisabledReason !== null ? ` — ${h.autoDisabledReason}` : ''}. Fix the
-                        endpoint, then switch it back on.
-                      </span>
-                    ) : (
-                      when(h.lastSuccessAt)
-                    )}
-                  </Td>
-                  <Td>
-                    <Switch
-                      checked={h.isActive && h.autoDisabledAt === null}
-                      onChange={(next) => toggle(h, next)}
-                      label={`Deliver to ${h.name ?? h.url}`}
-                      disabled={update.isPending}
-                    />
-                  </Td>
-                  <Td align="right">
-                    <div className="flex flex-wrap justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(h)}>
-                        Edit
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setRotating(h)}>
-                        New secret
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setRemoving(h)}>
-                        Remove
-                      </Button>
-                    </div>
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </div>
+            ))}
+          </TBody>
+        </Table>
+      )}
       {editing !== null ? (
         <EditWebhookModal webhook={editing} onClose={() => setEditing(null)} />
       ) : null}
       <ConfirmDialog
-        open={rotating !== null}
-        onOpenChange={(open) => {
-          if (!open) setRotating(null);
+        open={switchOpen}
+        onOpenChange={setSwitchOpen}
+        title={switching?.next === true ? 'Switch this webhook on?' : 'Switch this webhook off?'}
+        entity={switching === null ? '' : label(switching.hook)}
+        entityIsIdentifier={switching !== null && switching.hook.name === null}
+        consequence={
+          switching?.next === true
+            ? `Your order updates are sent to ${switching.hook.url} again.`
+            : `Nothing more is sent to ${switching?.hook.url ?? ''} until you switch it back on.`
+        }
+        confirmLabel={switching?.next === true ? 'Switch on' : 'Switch off'}
+        destructive={switching?.next === false}
+        onConfirm={async () => {
+          if (switching === null) return;
+          await applyToggle(switching.hook, switching.next);
+          setSwitchOpen(false);
         }}
+      />
+      <ConfirmDialog
+        open={rotateOpen}
+        onOpenChange={setRotateOpen}
         title="Make a new signing secret?"
-        description="The old secret keeps working for 24 hours, then only the new one does. Update your system before then."
+        entity={rotating === null ? '' : label(rotating)}
+        entityIsIdentifier={rotating !== null && rotating.name === null}
+        consequence="The old secret keeps working for 24 hours, then only the new one does. Update your system before then."
         confirmLabel="Make a new secret"
-        disabled={rotate.isPending}
         onConfirm={async () => {
           if (rotating === null) return;
           setError(null);
@@ -448,19 +515,18 @@ function WebhooksSection(): ReactElement {
           } catch (err) {
             setError(serverVerdict(err));
           }
-          setRotating(null);
+          setRotateOpen(false);
         }}
       />
       <ConfirmDialog
-        open={removing !== null}
-        onOpenChange={(open) => {
-          if (!open) setRemoving(null);
-        }}
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
         title="Remove this webhook?"
-        description={`Nothing more is sent to ${removing?.url ?? ''}. This cannot be undone — add it again to start over.`}
+        entity={removing === null ? '' : label(removing)}
+        entityIsIdentifier={removing !== null && removing.name === null}
+        consequence={`Nothing more is sent to ${removing?.url ?? ''}. This cannot be undone — add it again to start over.`}
         confirmLabel="Remove"
-        confirmVariant="destructive"
-        disabled={remove.isPending}
+        destructive
         onConfirm={async () => {
           if (removing === null) return;
           setError(null);
@@ -469,9 +535,9 @@ function WebhooksSection(): ReactElement {
           } catch (err) {
             setError(serverVerdict(err));
           }
-          setRemoving(null);
+          setRemoveOpen(false);
         }}
       />
-    </Section>
+    </RdSection>
   );
 }

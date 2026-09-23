@@ -2,9 +2,22 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useState, type FormEvent, type ReactElement } from 'react';
+import { KeyRound } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
-import { Button, FormField, Input } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AuthNotice } from '../../../login/_components/rd-auth-notice';
+
+/**
+ * DISPLAY ONLY: the rule the page already states ("At least 10
+ * characters.") shown ticking off as it is typed. Nothing here refuses a
+ * submit — the server's own verdict is what counts, shown verbatim
+ * (FE-2), exactly as before.
+ */
+const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
+  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
+];
 
 export function ResetForm(): ReactElement {
   const token = useSearchParams().get('token') ?? '';
@@ -33,48 +46,45 @@ export function ResetForm(): ReactElement {
 
   if (token === '') {
     return (
-      <p className="text-sm">
+      <AuthNotice tone="neutral">
         This link is missing its token. Ask for a new one from the sign-in page.
-      </p>
+      </AuthNotice>
     );
   }
   if (state === 'done') {
     return (
-      <p className="text-sm" role="status">
-        Your password is set, and every signed-in session was ended.{' '}
-        <a href="/login" className="text-accent hover:text-accent-hover">
-          Sign in
-        </a>
-        .
-      </p>
+      <AuthNotice tone="good" role="status">
+        Your password is set, and every signed-in session was ended. <a href="/login">Sign in</a>.
+      </AuthNotice>
     );
   }
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <FormField label="New password" htmlFor="password" required>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="new-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </FormField>
+    <form onSubmit={submit} className="rd-auth-form">
+      <PasswordField
+        id="password"
+        label="New password"
+        autoComplete="new-password"
+        required
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        showStrength
+        criteria={PASSWORD_CRITERIA}
+      />
       {error !== null ? (
-        <p role="alert" className="text-critical text-sm">
+        <AuthNotice tone="critical" role="alert">
           {error}
-        </p>
+        </AuthNotice>
       ) : null}
-      <Button
+      <AsyncButton
         type="submit"
         variant="primary"
-        size="md"
+        size="lg"
+        fullWidth
+        icon={<KeyRound size={15} />}
+        labels={{ idle: 'Set password', busy: 'Saving…', error: 'Not saved' }}
+        state={state === 'saving' ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={state === 'saving'}
-        className="w-full"
-      >
-        {state === 'saving' ? 'Saving…' : 'Set password'}
-      </Button>
+      />
     </form>
   );
 }

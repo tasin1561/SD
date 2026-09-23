@@ -1,0 +1,399 @@
+/* Reseller setup pages — store settings, my account, team, integrations,
+   and the shell's two notices (terms banner, role boundary). Tokens only.
+   The primitives (PageHeader, Table, Switch, Dialog …) carry their own CSS;
+   this file arranges them and draws the cards, callouts, description lists,
+   the one-time secret and the logo frame. */
+
+.rd-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.rd-page[data-width='narrow'] {
+  max-width: 48rem;
+}
+.rd-page > .sk-ph {
+  margin-bottom: 0;
+}
+.rd-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+.rd-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+@media (min-width: 640px) {
+  .rd-card {
+    padding: var(--sp-5);
+  }
+}
+.rd-card[data-tone='danger'] {
+  border-color: var(--red-line);
+}
+.rd-card > .sk-sh {
+  margin: 0;
+}
+
+.rd-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.rd-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .rd-form-grid[data-cols='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rd-form-grid[data-cols='key'] {
+    grid-template-columns: minmax(0, 1fr) 13rem auto;
+    align-items: start;
+  }
+}
+.rd-form-grid[data-cols='key'] > .sk-btn {
+  align-self: start;
+  min-height: var(--ctl-h-lg);
+}
+
+.rd-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.rd-buttons[data-align='start'] {
+  justify-content: flex-start;
+}
+
+.rd-text {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+.rd-muted {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+}
+.rd-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sky);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.rd-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rd-strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.rd-faint {
+  color: var(--fg-faint);
+}
+
+/* ── Callouts (terms banner, paused store, a verdict) ────────────────── */
+.rd-callout {
+  display: flex;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+.rd-callout[data-tone='critical'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.rd-callout[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.rd-callout[data-tone='info'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.rd-callout[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.rd-callout__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.rd-callout__body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--sp-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rd-callout__body p {
+  margin: 0;
+}
+.rd-callout .rd-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.rd-banner {
+  margin-bottom: var(--sp-4);
+}
+
+/* ── Description list ─────────────────────────────────────────────────── */
+.rd-dl {
+  display: grid;
+  grid-template-columns: minmax(84px, 38%) minmax(0, 1fr);
+  gap: var(--sp-3) var(--sp-3);
+  align-items: center;
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+@media (min-width: 640px) {
+  .rd-dl {
+    grid-template-columns: 11rem minmax(0, 1fr);
+    column-gap: var(--sp-6);
+  }
+  .rd-dl[data-cols='2'] {
+    grid-template-columns: 9rem minmax(0, 1fr) 9rem minmax(0, 1fr);
+  }
+}
+.rd-dl dt {
+  color: var(--fg-muted);
+}
+.rd-dl dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--fg-body);
+  overflow-wrap: anywhere;
+}
+
+/* ── One-time secret ──────────────────────────────────────────────────── */
+.rd-reveal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-lg);
+  background: var(--accent-tint);
+}
+.rd-reveal__title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.rd-reveal__chip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+}
+.rd-reveal__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.rd-reveal__code {
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-input);
+  color: var(--fg-strong);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* ── Table cells ──────────────────────────────────────────────────────── */
+.rd-cell-strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.rd-cell-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.rd-cell-muted {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.rd-cell-ident {
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.rd-cell-warn {
+  color: var(--red-text);
+  font-size: var(--fs-xs);
+}
+.rd-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+.rd-role-select {
+  min-width: 10rem;
+}
+.rd-you {
+  color: var(--fg-muted);
+}
+
+/* ── Webhook events ───────────────────────────────────────────────────── */
+.rd-events {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.rd-events legend {
+  padding: 0 var(--sp-1);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.rd-events__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .rd-events__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.rd-events .sk-check__label {
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+/* ── Logo ─────────────────────────────────────────────────────────────── */
+.rd-logo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.rd-logo__frame {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+.rd-logo__frame[data-empty] {
+  border-style: dashed;
+  border-color: var(--line-strong);
+}
+.rd-logo__frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.rd-logo__controls {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.rd-file {
+  position: relative;
+  cursor: pointer;
+}
+.rd-file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.rd-file:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+.rd-file[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.rd-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

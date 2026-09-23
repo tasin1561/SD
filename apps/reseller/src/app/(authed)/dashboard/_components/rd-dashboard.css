@@ -1,0 +1,101 @@
+/* Reseller dashboard — layout and the dashboard-only pieces. Tokens only.
+   The primitives (KpiCard, PageHeader, StatusChip …) carry their own CSS. */
+
+.rd-db-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rd-db-skel {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.rd-db-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rd-db-shortcut {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 44px;
+  padding: var(--sp-4);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  color: var(--fg-body);
+  text-decoration: none;
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+@media (hover: hover) {
+  .rd-db-shortcut:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent-line);
+    box-shadow: var(--elev-2);
+  }
+}
+.rd-db-shortcut:focus-visible {
+  border-color: var(--accent-line);
+  box-shadow: var(--elev-2);
+}
+.rd-db-shortcut__chip {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  color: var(--sky);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.rd-db-shortcut:hover .rd-db-shortcut__chip,
+.rd-db-shortcut:focus-visible .rd-db-shortcut__chip {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+}
+.rd-db-shortcut__title {
+  display: block;
+  margin-top: var(--sp-3);
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.rd-db-shortcut__body {
+  display: block;
+  margin: var(--sp-1) 0 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.rd-db-shortcut__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-end;
+  margin-top: auto;
+  padding-top: var(--sp-3);
+  color: var(--sky);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.rd-db-shortcut:hover .rd-db-shortcut__go,
+.rd-db-shortcut:focus-visible .rd-db-shortcut__go {
+  transform: translateX(3px);
+}
