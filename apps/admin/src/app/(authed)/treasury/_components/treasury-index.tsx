@@ -2,32 +2,26 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, ShieldCheck } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  Section,
-  Stat,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { AlertTriangle, ArrowLeftRight, BookMarked, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { Table, TBody, THead, TableEmpty, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { useBankEntries, useMarkOpeningBalance, useTreasuryOverview } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { MoSection, Notice } from './money-parts';
 import { OwnerMoneyModal } from './owner-money-modal';
 import { ReconcileModal } from './reconcile-modal';
 import { TransferModal } from './transfer-modal';
+import './treasury.css';
 
 /**
  * What we hold, where, and how much of it is somebody else's.
@@ -61,6 +55,14 @@ export function isZeroAmount(v: string): boolean {
   return /^-?0*(\.0*)?$/.test(v.trim());
 }
 
+interface OpeningTarget {
+  readonly id: string;
+  readonly accountLabel: string;
+  readonly signedAmount: string;
+  readonly currency: 'INR' | 'BDT';
+  readonly occurredAt: string;
+}
+
 export function TreasuryIndex(): ReactElement {
   const canManage = usePermission('money.treasury.manage');
   const overview = useTreasuryOverview();
@@ -81,32 +83,46 @@ export function TreasuryIndex(): ReactElement {
   const entries = useBankEntries({ limit: 50 }, true);
   const markOpening = useMarkOpeningBalance();
   const [markError, setMarkError] = useState<string | null>(null);
+  // The entry being marked, while its reason is asked for. This used to
+  // be a `window.prompt`; the dialog asks the same question and sends the
+  // same request.
+  const [marking, setMarking] = useState<OpeningTarget | null>(null);
+  const [markReason, setMarkReason] = useState('');
 
   // An account whose real opening balance was written before the mark
   // existed (or by a flow) counts it as income on the P&L. The operator
   // says which entry it was; the server checks it is eligible, that the
   // account has none marked yet, and audits it.
-  async function markAsOpening(entryId: string): Promise<void> {
+  function askToMark(target: OpeningTarget): void {
     setMarkError(null);
-    const reason = window.prompt(
-      'Why is this the money the account already had when the book started? (at least 10 characters)',
-    );
-    if (reason === null) return;
+    setMarkReason('');
+    setMarking(target);
+  }
+
+  async function markAsOpening(entryId: string, reason: string): Promise<void> {
+    setMarkError(null);
     try {
       await markOpening.mutateAsync({ entryId, reason: reason.trim() });
+      setMarking(null);
     } catch (err) {
       setMarkError(serverVerdict(err));
+      throw err;
     }
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mo-page">
       <PageHeader
         title="Treasury"
         subtitle="Which account holds what, how much of it is ours, and whether what we owe sellers is covered."
         action={
           canManage ? (
-            <Button size="sm" onClick={() => setTransferring(true)}>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<ArrowLeftRight size={14} />}
+              onClick={() => setTransferring(true)}
+            >
               Move money
             </Button>
           ) : undefined
@@ -114,7 +130,15 @@ export function TreasuryIndex(): ReactElement {
       />
 
       {overview.isLoading ? (
-        <LoadingState />
+        <div className="mo-stack">
+          <div className="tr-kpi-skel" aria-hidden>
+            <Skeleton rounded="md" />
+            <Skeleton rounded="md" />
+            <Skeleton rounded="md" />
+            <Skeleton rounded="md" />
+          </div>
+          <SkeletonRows rows={4} cols={7} label="Loading the treasury" />
+        </div>
       ) : overview.isError || overview.data === undefined ? (
         <ErrorState
           message={overview.error?.message ?? 'Could not read the treasury.'}
@@ -124,16 +148,16 @@ export function TreasuryIndex(): ReactElement {
         <>
           {/* Client-money coverage first, because it is the one number
               on this page that can mean we are in trouble. */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat
+          <div className="mo-kpis">
+            <KpiCard
               label="Owed to sellers"
-              value={<Money amount={overview.data.clientMoney.owedToSellersInr} currency="INR" />}
+              figure={<Money amount={overview.data.clientMoney.owedToSellersInr} currency="INR" />}
               hint="Sum of positive wallet balances — what they could ask for"
-              tone="warn"
+              tone="pending"
             />
-            <Stat
+            <KpiCard
               label="Held for sellers"
-              value={<Money amount={overview.data.clientMoney.heldForSellersInr} currency="INR" />}
+              figure={<Money amount={overview.data.clientMoney.heldForSellersInr} currency="INR" />}
               hint="Cash in our accounts marked as theirs"
             />
             {/* The label and the number have to describe the SAME thing.
@@ -142,9 +166,9 @@ export function TreasuryIndex(): ReactElement {
                 figure on screen in the good case ("Covered ₹0.00"), and
                 a real surplus read as "Covered −₹5,000.00". Show the
                 magnitude, and let the label say which direction it is. */}
-            <Stat
+            <KpiCard
               label={overview.data.clientMoney.covered ? 'Surplus held' : 'Shortfall'}
-              value={
+              figure={
                 // Magnitude WITHOUT a float round-trip: money is carried
                 // as a string everywhere in this codebase precisely so it
                 // is never handed to a binary float, and `Number(x)` here
@@ -159,7 +183,14 @@ export function TreasuryIndex(): ReactElement {
                     : 'Held for sellers over and above what we owe them'
                   : 'We owe more than we hold — money in transit is a normal cause, but check'
               }
-              tone={overview.data.clientMoney.covered ? 'good' : 'bad'}
+              tone={overview.data.clientMoney.covered ? 'credit' : 'debit'}
+              icon={
+                overview.data.clientMoney.covered ? (
+                  <ShieldCheck size={16} />
+                ) : (
+                  <AlertTriangle size={16} />
+                )
+              }
             />
             {/* Not in any bank account, and easy to forget it is ours
                 at all: the recharge debited the account when it was
@@ -168,10 +199,10 @@ export function TreasuryIndex(): ReactElement {
                 its own page and its own question. */}
             {Number(overview.data.courierWallets.totalInr) > 0 ||
             overview.data.courierWallets.accounts.length > 0 ? (
-              <Link href="/courier-wallet">
-                <Stat
+              <Link href="/courier-wallet" className="tr-kpi-link">
+                <KpiCard
                   label="In courier wallets"
-                  value={
+                  figure={
                     <Money
                       amount={overview.data.courierWallets.totalInr}
                       currency="INR"
@@ -179,14 +210,15 @@ export function TreasuryIndex(): ReactElement {
                     />
                   }
                   hint="Prepaid float — ours, held on their system"
+                  tone="info"
                 />
               </Link>
             ) : null}
             {overview.data.totals.byCurrency.map((c) => (
-              <Stat
+              <KpiCard
                 key={c.currency}
                 label={`Total ${c.currency}`}
-                value={<Money amount={c.total} currency={c.currency} convert={false} />}
+                figure={<Money amount={c.total} currency={c.currency} convert={false} />}
                 hint={
                   // Through Money, like every other figure on the page.
                   // Interpolated into the string these rendered as bare
@@ -202,27 +234,41 @@ export function TreasuryIndex(): ReactElement {
             ))}
           </div>
 
-          <Section
+          {!overview.data.clientMoney.covered && (
+            <Notice tone="bad" icon={<AlertTriangle size={16} />} role="status">
+              <p>
+                We owe sellers more than we are holding for them. That is not automatically wrong —
+                COD the courier has collected but not yet settled shows up exactly like this — but
+                it is the gap to be able to explain.
+              </p>
+            </Notice>
+          )}
+
+          <MoSection
             title="Accounts"
-            subtitle="Open one to see whose money is inside it. A balance is the sum of its entries, so it cannot lag behind them."
+            note="Open one to see whose money is inside it. A balance is the sum of its entries, so it cannot lag behind them."
+            flush
           >
-            <Table>
+            <Table caption="Our bank accounts">
               <THead>
                 <Tr>
                   <Th>Account</Th>
                   <Th>Purpose</Th>
                   <Th>Settles from</Th>
-                  <Th>Ours</Th>
-                  <Th>Held for sellers</Th>
-                  <Th>Total</Th>
+                  <Th align="right">Ours</Th>
+                  <Th align="right">Held for sellers</Th>
+                  <Th align="right">Total</Th>
                   <Th align="right">Actions</Th>
                 </Tr>
               </THead>
               <TBody>
                 {overview.data.accounts.length === 0 ? (
                   <TableEmpty colSpan={7}>
-                    No bank accounts yet. Add one on the Bank accounts page, with its opening
-                    balance.
+                    <EmptyState
+                      bare
+                      title="No bank accounts yet"
+                      description="Add one on the Bank accounts page, with its opening balance."
+                    />
                   </TableEmpty>
                 ) : (
                   overview.data.accounts.map((a) => (
@@ -230,62 +276,56 @@ export function TreasuryIndex(): ReactElement {
                       <Td>
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1.5 text-left"
+                          className="tr-account"
+                          aria-expanded={openAccount === a.accountId}
                           onClick={() =>
                             setOpenAccount(openAccount === a.accountId ? null : a.accountId)
                           }
                         >
-                          {openAccount === a.accountId ? (
-                            <ChevronDown size={14} aria-hidden />
-                          ) : (
-                            <ChevronRight size={14} aria-hidden />
-                          )}
+                          <ChevronRight size={14} aria-hidden className="tr-account__chev" />
                           <span>
-                            <span className="text-text-bright block">{a.label}</span>
-                            <span className="text-text-faint text-xs">
+                            <span className="tr-account__name">{a.label}</span>
+                            <span className="tr-account__sub">
                               {a.bankName} · {a.currency}
                             </span>
                           </span>
                         </button>
-                        {openAccount === a.accountId && (
-                          <div className="mt-2 pl-5">
-                            {a.bySeller.length === 0 ? (
-                              <p className="text-text-faint text-xs">
-                                Nothing in here belongs to a seller.
-                              </p>
-                            ) : (
-                              <dl className="space-y-1">
-                                {a.bySeller.map((s) => (
-                                  <div key={s.sellerId} className="flex justify-between gap-3">
-                                    <dt className="text-text-muted text-xs">{s.companyName}</dt>
-                                    <dd className="text-text-body text-xs">
-                                      <Money
-                                        amount={s.amount}
-                                        currency={a.currency}
-                                        convert={false}
-                                      />
-                                    </dd>
-                                  </div>
-                                ))}
-                              </dl>
-                            )}
-                          </div>
-                        )}
+                        {openAccount === a.accountId &&
+                          (a.bySeller.length === 0 ? (
+                            <p className="mo-faint tr-holders">
+                              Nothing in here belongs to a seller.
+                            </p>
+                          ) : (
+                            <dl className="tr-holders">
+                              {a.bySeller.map((s) => (
+                                <div key={s.sellerId} className="tr-holders__row">
+                                  <dt>{s.companyName}</dt>
+                                  <dd>
+                                    <Money
+                                      amount={s.amount}
+                                      currency={a.currency}
+                                      convert={false}
+                                    />
+                                  </dd>
+                                </div>
+                              ))}
+                            </dl>
+                          ))}
                       </Td>
-                      <Td className="text-text-muted text-sm">{a.purpose ?? '—'}</Td>
-                      <Td className="text-text-muted text-sm">{a.courierAccountLabel ?? '—'}</Td>
-                      <Td>
+                      <Td className="mo-muted">{a.purpose ?? '—'}</Td>
+                      <Td className="mo-muted">{a.courierAccountLabel ?? '—'}</Td>
+                      <Td align="right">
                         <Money amount={a.capital} currency={a.currency} convert={false} />
                       </Td>
-                      <Td>
+                      <Td align="right">
                         <Money amount={a.sellerHeld} currency={a.currency} convert={false} />
                       </Td>
-                      <Td>
+                      <Td align="right">
                         <Money amount={a.total} currency={a.currency} convert={false} />
                       </Td>
                       <Td align="right">
                         {canManage ? (
-                          <div className="flex justify-end gap-1">
+                          <div className="tr-actions">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -316,7 +356,7 @@ export function TreasuryIndex(): ReactElement {
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-text-faint">—</span>
+                          <span className="mo-faint">—</span>
                         )}
                       </Td>
                     </Tr>
@@ -324,60 +364,69 @@ export function TreasuryIndex(): ReactElement {
                 )}
               </TBody>
             </Table>
-          </Section>
+          </MoSection>
 
-          <Section
+          <MoSection
             title="Recent movements"
-            subtitle="Append-only. A correction is a new entry saying who corrected it and by how much — never an edit."
+            note="Append-only. A correction is a new entry saying who corrected it and by how much — never an edit."
+            flush
           >
-            {markError !== null && <p className="text-danger mb-2 text-sm">{markError}</p>}
             {entries.isError ? (
-              <ErrorState
-                message={entries.error?.message ?? 'Could not read the ledger.'}
-                retry={() => void entries.refetch()}
-              />
+              <div className="mo-card__pad">
+                <ErrorState
+                  message={entries.error?.message ?? 'Could not read the ledger.'}
+                  retry={() => void entries.refetch()}
+                />
+              </div>
+            ) : entries.isLoading ? (
+              <div className="mo-card__pad">
+                <SkeletonRows rows={5} cols={6} label="Loading recent movements" />
+              </div>
             ) : (
-              <Table>
+              <Table caption="Recent bank movements">
                 <THead>
                   <Tr>
                     <Th>When</Th>
                     <Th>Account</Th>
                     <Th>What</Th>
                     <Th>Whose</Th>
-                    <Th>Amount</Th>
+                    <Th align="right">Amount</Th>
                     <Th align="right">Opening balance</Th>
                   </Tr>
                 </THead>
                 <TBody>
                   {(entries.data?.items ?? []).length === 0 ? (
                     <TableEmpty colSpan={6}>
-                      Nothing recorded yet. Settlements, top-ups and payouts will appear here as
-                      they are wired in.
+                      <EmptyState
+                        bare
+                        title="Nothing recorded yet"
+                        description="Settlements, top-ups and payouts will appear here as they are wired in."
+                      />
                     </TableEmpty>
                   ) : (
                     (entries.data?.items ?? []).map((e) => (
                       <Tr key={e.id}>
-                        <Td className="text-text-muted text-sm">
+                        <Td className="mo-muted mo-nowrap">
                           {new Date(e.occurredAt).toLocaleString()}
                         </Td>
-                        <Td className="text-sm">{e.accountLabel}</Td>
-                        <Td className="text-sm">
+                        <Td>{e.accountLabel}</Td>
+                        <Td>
                           {e.type.replaceAll('_', ' ').toLowerCase()}
                           {e.categoryName !== null && (
-                            <span className="text-text-faint"> · {e.categoryName}</span>
+                            <span className="mo-faint"> · {e.categoryName}</span>
                           )}
                         </Td>
-                        <Td className="text-text-muted text-sm">
+                        <Td className="mo-muted">
                           {e.ownerKind === 'CAPITAL' ? 'Ours' : (e.sellerName ?? 'A seller')}
                         </Td>
-                        <Td>
+                        <Td align="right">
                           {/* Sign carries the direction, so a debit and a
                               credit cannot be told apart by colour alone. */}
                           <Money amount={e.signedAmount} currency={e.currency} convert={false} />
                         </Td>
                         <Td align="right">
                           {e.isOpeningBalance ? (
-                            <StatusBadge kind="confirmed" label="Opening balance" />
+                            <StatusChip kind="confirmed" label="Opening balance" size="sm" />
                           ) : canManage &&
                             e.ownerKind === 'CAPITAL' &&
                             (e.type === 'RECONCILIATION_ADJUSTMENT' ||
@@ -385,8 +434,17 @@ export function TreasuryIndex(): ReactElement {
                             <Button
                               size="sm"
                               variant="ghost"
+                              icon={<BookMarked size={14} />}
                               disabled={markOpening.isPending}
-                              onClick={() => void markAsOpening(e.id)}
+                              onClick={() =>
+                                askToMark({
+                                  id: e.id,
+                                  accountLabel: e.accountLabel,
+                                  signedAmount: e.signedAmount,
+                                  currency: e.currency,
+                                  occurredAt: e.occurredAt,
+                                })
+                              }
                             >
                               Mark as opening balance
                             </Button>
@@ -398,36 +456,79 @@ export function TreasuryIndex(): ReactElement {
                 </TBody>
               </Table>
             )}
-          </Section>
-
-          {!overview.data.clientMoney.covered && (
-            <Card>
-              <CardBody>
-                <div className="flex items-start gap-2">
-                  <AlertTriangle
-                    className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-danger)]"
-                    aria-hidden
-                  />
-                  <p className="text-text-muted text-sm">
-                    We owe sellers more than we are holding for them. That is not automatically
-                    wrong — COD the courier has collected but not yet settled shows up exactly like
-                    this — but it is the gap to be able to explain.
-                  </p>
-                </div>
-              </CardBody>
-            </Card>
-          )}
+          </MoSection>
 
           {overview.data.clientMoney.covered && overview.data.accounts.length > 0 && (
-            <p className="text-text-faint inline-flex items-center gap-1.5 text-xs">
+            <p className="tr-covered">
               <ShieldCheck size={14} aria-hidden />
               Client money is covered by what we hold.
             </p>
           )}
 
-          <StatusBadge kind="draft" label="Phase 1B" />
+          <div>
+            <StatusChip kind="draft" label="Phase 1B" size="sm" />
+          </div>
         </>
       )}
+
+      <Dialog
+        open={marking !== null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setMarking(null);
+            setMarkError(null);
+          }
+        }}
+        icon={<BookMarked size={18} />}
+        title="Mark as the opening balance?"
+        description="The P&L leaves the marked entry off its reconciliation line, so money the business already had never reads as income. Once per account."
+        locked={markOpening.isPending}
+        footer={
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setMarking(null)}
+              disabled={markOpening.isPending}
+            >
+              Cancel
+            </Button>
+            <AsyncButton
+              labels={{ idle: 'Mark as opening balance', busy: 'Marking…', done: 'Marked' }}
+              onAction={() =>
+                marking === null ? Promise.resolve() : markAsOpening(marking.id, markReason)
+              }
+            />
+          </DialogFooter>
+        }
+      >
+        {marking !== null && (
+          <div className="mo-fields">
+            <dl className="mo-facts">
+              <dt>Account</dt>
+              <dd>{marking.accountLabel}</dd>
+              <dt>Entry</dt>
+              <dd>
+                <Money amount={marking.signedAmount} currency={marking.currency} convert={false} />
+                <span className="mo-sub">{new Date(marking.occurredAt).toLocaleString()}</span>
+              </dd>
+            </dl>
+            <TextArea
+              id="treasury-opening-reason"
+              label="Why is this the money the account already had when the book started?"
+              hint="At least 10 characters. Kept with the audit record."
+              value={markReason}
+              onChange={(ev) => setMarkReason(ev.target.value)}
+              rows={3}
+              autoFocus
+            />
+            {markError !== null && (
+              <p className="mo-error" role="alert">
+                {markError}
+              </p>
+            )}
+          </div>
+        )}
+      </Dialog>
 
       <TransferModal open={transferring} onOpenChange={setTransferring} />
       <OwnerMoneyModal

@@ -1,0 +1,34 @@
+/* /reports — the date range and the KPI groups, on top of the area's
+   money.css. Tokens only; every grid declares minmax columns. */
+.rp-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .rp-range {
+    grid-template-columns: minmax(0, 14rem) minmax(0, 14rem) minmax(0, 1fr);
+  }
+}
+.rp-utc {
+  align-self: center;
+}
+.rp-skeletons {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .rp-skeletons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.rp-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}

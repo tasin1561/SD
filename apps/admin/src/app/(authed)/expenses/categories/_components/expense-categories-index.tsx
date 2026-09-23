@@ -1,26 +1,16 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { ArrowLeft, Plus } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { Table, TBody, THead, Td, Th, TableEmpty, Tr } from '@skydrop/ui/app/data-table';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useExpenseCategories,
   useUpdateExpenseCategory,
@@ -29,6 +19,8 @@ import {
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { CategoryModal } from '../../_components/category-modal';
+import { BackLink, MoCard } from '../../../treasury/_components/money-parts';
+import '../../_components/expenses.css';
 
 /**
  * What a spend can be filed as.
@@ -52,28 +44,26 @@ export function ExpenseCategoriesIndex(): ReactElement {
   const categories = useExpenseCategories(showInactive);
 
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Spending categories"
-        subtitle="What a cost can be filed as, so a quarter's spending can be broken down rather than read as one number."
-        action={
-          canWrite ? (
-            <Button size="sm" onClick={() => setAdding(true)}>
-              New category
-            </Button>
-          ) : undefined
-        }
-      />
-
-      <Link
-        href="/expenses"
-        className="text-text-muted hover:text-text inline-flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="size-3.5" /> Back to spending
-      </Link>
+    <div className="mo-page">
+      <div className="mo-stack mo-stack--tight">
+        <BackLink href="/expenses" icon={<ArrowLeft size={14} aria-hidden />}>
+          Back to spending
+        </BackLink>
+        <PageHeader
+          title="Spending categories"
+          subtitle="What a cost can be filed as, so a quarter's spending can be broken down rather than read as one number."
+          action={
+            canWrite ? (
+              <Button variant="primary" icon={<Plus size={16} />} onClick={() => setAdding(true)}>
+                New category
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
 
       {categories.isLoading ? (
-        <LoadingState />
+        <SkeletonRows rows={5} cols={canWrite ? 5 : 4} label="Loading categories" />
       ) : categories.isError || categories.data === undefined ? (
         <ErrorState
           message={serverVerdict(categories.error, 'Could not read the categories.')}
@@ -81,22 +71,14 @@ export function ExpenseCategoriesIndex(): ReactElement {
         />
       ) : (
         <>
-          <Card>
-            <CardBody>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showInactive}
-                  onChange={(e) => setShowInactive(e.target.checked)}
-                />
-                Show retired categories
-              </label>
-              <p className="text-text-muted mt-1 text-xs">
-                Categories are retired, never deleted — a category is the only thing that says what
-                its past entries were for.
-              </p>
-            </CardBody>
-          </Card>
+          <MoCard>
+            <Checkbox
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              label="Show retired categories"
+              description="Categories are retired, never deleted — a category is the only thing that says what its past entries were for."
+            />
+          </MoCard>
 
           <Table>
             <THead>
@@ -105,30 +87,34 @@ export function ExpenseCategoriesIndex(): ReactElement {
                 <Th>Name</Th>
                 <Th>What goes here</Th>
                 <Th>State</Th>
-                {canWrite && <Th className="text-right">Actions</Th>}
+                {canWrite && <Th align="right">Actions</Th>}
               </Tr>
             </THead>
             <TBody>
               {categories.data.length === 0 ? (
                 <TableEmpty colSpan={canWrite ? 5 : 4}>
-                  No categories yet. Add one before recording an expense, so the spend can be told
-                  apart later.
+                  <EmptyState
+                    bare
+                    title="No categories yet."
+                    description="Add one before recording an expense, so the spend can be told apart later."
+                  />
                 </TableEmpty>
               ) : (
                 categories.data.map((c) => (
                   <Tr key={c.id}>
-                    <Td className="font-mono text-xs">{c.code}</Td>
+                    <Td className="sk-ident">{c.code}</Td>
                     <Td>{c.name}</Td>
-                    <Td className="text-text-muted text-xs">{c.hint ?? '—'}</Td>
+                    <Td className="mo-muted">{c.hint ?? '—'}</Td>
                     <Td>
-                      <StatusBadge
+                      <StatusChip
+                        size="sm"
                         kind={c.isActive ? 'confirmed' : 'cancelled'}
                         label={c.isActive ? 'Active' : 'Retired'}
                       />
                     </Td>
                     {canWrite && (
-                      <Td className="text-right">
-                        <div className="flex flex-wrap justify-end gap-2">
+                      <Td align="right">
+                        <div className="mo-row mo-row--end">
                           <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>
                             Edit
                           </Button>
@@ -171,6 +157,7 @@ function RetireCategoryModal({
   readonly onClose: () => void;
 }): ReactElement {
   const update = useUpdateExpenseCategory();
+  const toast = useToast();
   const [error, setError] = useState<string | null>(null);
   const retiring = category?.isActive ?? true;
 
@@ -180,13 +167,16 @@ function RetireCategoryModal({
     try {
       await update.mutateAsync({ categoryId: category.id, isActive: !category.isActive });
       onClose();
+      toast.success(retiring ? 'Category retired' : 'Category restored');
     } catch (err) {
       setError(serverVerdict(err));
+      // Keeps the confirm open with the verdict on it, to read and retry.
+      throw err;
     }
   }
 
   return (
-    <Modal
+    <ConfirmDialog
       open={category !== null}
       onOpenChange={(next) => {
         if (!next) {
@@ -195,25 +185,17 @@ function RetireCategoryModal({
         }
       }}
       title={retiring ? `Retire ${category?.name ?? ''}?` : `Restore ${category?.name ?? ''}?`}
-      description={
+      entity={category?.code ?? ''}
+      entityIsIdentifier
+      consequence={
         retiring
           ? 'New spending can no longer be filed under it. Everything already filed keeps it, so past breakdowns do not change.'
           : 'It will be offered again when recording spending.'
       }
-    >
-      {error !== null && <p className="text-critical text-sm">{error}</p>}
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant={retiring ? 'destructive' : 'primary'}
-          onClick={() => void confirm()}
-          disabled={update.isPending}
-        >
-          {update.isPending ? 'Saving…' : retiring ? 'Retire category' : 'Restore category'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      confirmLabel={retiring ? 'Retire category' : 'Restore category'}
+      destructive={retiring}
+      onConfirm={confirm}
+      error={error ?? undefined}
+    />
   );
 }

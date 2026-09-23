@@ -1,25 +1,16 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import {
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { ArrowLeft, Info } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, THead, TableEmpty, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { useBankAccountHistory, type BankAccountChangeView } from '@/lib/bank-account-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { BackLink, MoCard, Notice } from '../../../treasury/_components/money-parts';
+import './bank-account-history.css';
 
 /**
  * Every change to the accounts sellers pay into.
@@ -60,7 +51,7 @@ function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactE
 
   if (row.action.endsWith('.created')) {
     return (
-      <span className="text-text-muted text-xs">
+      <span className="mo-muted">
         {String(after?.['label'] ?? 'Account')} · {String(after?.['currency'] ?? '')}
         {row.metadata?.openingBalance != null && row.metadata.openingBalance !== '' && (
           <> · opening balance {row.metadata.openingBalance}</>
@@ -70,21 +61,21 @@ function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactE
   }
   if (row.action.endsWith('.retired')) {
     return (
-      <span className="text-text-muted text-xs">
+      <span className="mo-muted">
         {String(before?.['label'] ?? 'Account')} — no longer offered to sellers
       </span>
     );
   }
   if (changed.length === 0) {
-    return <span className="text-text-faint text-xs">Saved with no field changed</span>;
+    return <span className="mo-faint">Saved with no field changed</span>;
   }
   return (
-    <ul className="space-y-0.5 text-xs">
+    <ul className="bh-changes">
       {changed.map((f) => (
         <li key={f}>
-          <span className="text-text-muted">{f}</span>{' '}
-          <span className="text-text-faint line-through">{String(before?.[f] ?? '—')}</span>{' '}
-          <span className="text-text-body">→ {String(after?.[f] ?? '—')}</span>
+          <span className="bh-changes__field">{f}</span>{' '}
+          <del className="bh-changes__before">{String(before?.[f] ?? '—')}</del>{' '}
+          <span className="bh-changes__after">→ {String(after?.[f] ?? '—')}</span>
         </li>
       ))}
     </ul>
@@ -95,21 +86,17 @@ export function BankAccountHistoryIndex(): ReactElement {
   const history = useBankAccountHistory(usePermission('money.view'));
 
   return (
-    <div className="space-y-4">
+    <div className="mo-page">
+      <BackLink href="/bank-accounts" icon={<ArrowLeft size={14} aria-hidden />}>
+        Back to bank accounts
+      </BackLink>
       <PageHeader
         title="Bank account history"
         subtitle="Every account added, edited or retired — who did it, when, and exactly what changed."
       />
 
-      <Link
-        href="/bank-accounts"
-        className="text-text-muted hover:text-text inline-flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="size-3.5" /> Back to bank accounts
-      </Link>
-
       {history.isLoading ? (
-        <LoadingState />
+        <SkeletonRows rows={5} cols={4} label="Loading the history" />
       ) : history.isError || history.data === undefined ? (
         <ErrorState
           message={history.error?.message ?? 'Could not read the history.'}
@@ -117,62 +104,66 @@ export function BankAccountHistoryIndex(): ReactElement {
         />
       ) : (
         <>
-          <Card>
-            <CardBody>
-              <p className="text-text-muted text-xs">
-                Recording began on 7 September 2026. Changes made before that were never captured —
-                this list is empty for them rather than complete, which is worth knowing before
-                reading it as the whole story.
-              </p>
-            </CardBody>
-          </Card>
+          <Notice tone="info" icon={<Info size={16} />}>
+            <p>
+              Recording began on 7 September 2026. Changes made before that were never captured —
+              this list is empty for them rather than complete, which is worth knowing before
+              reading it as the whole story.
+            </p>
+          </Notice>
 
-          <Table>
-            <THead>
-              <Tr>
-                <Th>When</Th>
-                <Th>What</Th>
-                <Th>Changed</Th>
-                <Th>By</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {history.data.length === 0 ? (
-                <TableEmpty colSpan={4}>
-                  Nothing recorded yet. Every add, edit and retirement from here on appears in this
-                  list.
-                </TableEmpty>
-              ) : (
-                history.data.map((r) => (
-                  <Tr key={r.id}>
-                    <Td className="whitespace-nowrap text-xs">
-                      {new Date(r.at).toLocaleString('en-IN')}
-                    </Td>
-                    <Td>
-                      <StatusBadge
-                        // An account-number change is the one that
-                        // redirects money, and it is audited CRITICAL —
-                        // shown here as a failure tone so it does not
-                        // read like an ordinary edit.
-                        kind={
-                          r.severity === 'CRITICAL'
-                            ? 'failed'
-                            : r.action.endsWith('.retired')
-                              ? 'cancelled'
-                              : 'confirmed'
-                        }
-                        label={actionLabel(r.action)}
-                      />
-                    </Td>
-                    <Td>
-                      <ChangeSummary row={r} />
-                    </Td>
-                    <Td className="text-text-muted text-xs">{r.byName ?? 'System'}</Td>
-                  </Tr>
-                ))
-              )}
-            </TBody>
-          </Table>
+          <MoCard flush>
+            <Table caption="Bank account changes">
+              <THead>
+                <Tr>
+                  <Th>When</Th>
+                  <Th>What</Th>
+                  <Th>Changed</Th>
+                  <Th>By</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {history.data.length === 0 ? (
+                  <TableEmpty colSpan={4}>
+                    <EmptyState
+                      bare
+                      title="Nothing recorded yet"
+                      description="Every add, edit and retirement from here on appears in this list."
+                    />
+                  </TableEmpty>
+                ) : (
+                  history.data.map((r) => (
+                    <Tr key={r.id}>
+                      <Td className="mo-nowrap mo-muted">
+                        {new Date(r.at).toLocaleString('en-IN')}
+                      </Td>
+                      <Td>
+                        <StatusChip
+                          // An account-number change is the one that
+                          // redirects money, and it is audited CRITICAL —
+                          // shown here as a failure tone so it does not
+                          // read like an ordinary edit.
+                          kind={
+                            r.severity === 'CRITICAL'
+                              ? 'failed'
+                              : r.action.endsWith('.retired')
+                                ? 'cancelled'
+                                : 'confirmed'
+                          }
+                          label={actionLabel(r.action)}
+                          size="sm"
+                        />
+                      </Td>
+                      <Td>
+                        <ChangeSummary row={r} />
+                      </Td>
+                      <Td className="mo-muted">{r.byName ?? 'System'}</Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </MoCard>
         </>
       )}
     </div>

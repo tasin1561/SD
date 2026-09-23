@@ -1,20 +1,21 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-} from '@skydrop/ui/components';
+import { PiggyBank } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import { usePlaceInvestment } from '@/lib/ops-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { localNow } from '@/lib/datetime-local';
+import '../../treasury/_components/money.css';
+import './expenses.css';
 
 export function InvestmentModal({
   open,
@@ -33,6 +34,9 @@ export function InvestmentModal({
   const [placedAt, setPlacedAt] = useState(localNow);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // The checked form waits here for a confirm that restates it.
+  const [confirming, setConfirming] = useState(false);
+  const toast = useToast();
   // One key per opening of the form, reused on every retry: a
   // double-click or a retried timeout places the capital ONCE.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
@@ -42,7 +46,8 @@ export function InvestmentModal({
 
   const account = (accounts.data ?? []).find((a) => a.id === fromAccountId);
 
-  async function save(): Promise<void> {
+  /** The form's own checks, unchanged; passing them opens the confirm. */
+  function review(): void {
     setError(null);
     if (label.trim() === '' || counterparty.trim() === '' || fromAccountId === '') {
       setError('What it is, who holds it, and which account it left');
@@ -53,6 +58,12 @@ export function InvestmentModal({
       setError('Enter the principal');
       return;
     }
+    setConfirming(true);
+  }
+
+  async function save(): Promise<void> {
+    setError(null);
+    const n = Number(amount);
     try {
       await place.mutateAsync({
         label: label.trim(),
@@ -68,40 +79,60 @@ export function InvestmentModal({
       setAmount('');
       setNote('');
       onOpenChange(false);
+      toast.success('Capital placed');
     } catch (err) {
       setError(serverVerdict(err));
+      // Keeps the confirm open with the verdict on it, to read and retry.
+      throw err;
     }
   }
 
   return (
-    <Modal
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) setError(null);
-      }}
-      title="Place capital"
-      description="Ours only. Client money is not ours to place, and the server refuses it."
-    >
-      <div className="space-y-3">
-        <FormField label="What" required>
-          <Input
+    <>
+      <Dialog
+        open={open && !confirming}
+        onOpenChange={(next) => {
+          onOpenChange(next);
+          if (!next) setError(null);
+        }}
+        icon={<PiggyBank size={18} />}
+        title="Place capital"
+        description="Ours only. Client money is not ours to place, and the server refuses it."
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={review} disabled={place.isPending}>
+              {place.isPending ? 'Placing…' : 'Place'}
+            </Button>
+          </DialogFooter>
+        }
+      >
+        <div className="mo-fields">
+          <TextField
+            label="What"
+            requiredMark
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="e.g. 6-month fixed deposit"
             maxLength={120}
+            showCount
           />
-        </FormField>
-        <FormField label="With whom" required>
-          <Input
+          <TextField
+            label="With whom"
+            requiredMark
             value={counterparty}
             onChange={(e) => setCounterparty(e.target.value)}
             placeholder="e.g. HDFC Bank"
             maxLength={200}
           />
-        </FormField>
-        <FormField label="From account" required>
-          <Select value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)}>
+          <Select
+            label="From account"
+            requiredMark
+            value={fromAccountId}
+            onChange={(e) => setFromAccountId(e.target.value)}
+          >
             <option value="">Select an account…</option>
             {(accounts.data ?? [])
               .filter((a) => a.isActive)
@@ -111,39 +142,64 @@ export function InvestmentModal({
                 </option>
               ))}
           </Select>
-        </FormField>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label={`Principal${account ? ` (${account.currency})` : ''}`} required>
-            <Input
+          <div className="mo-fields" data-cols="2">
+            <TextField
+              label={`Principal${account ? ` (${account.currency})` : ''}`}
+              requiredMark
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
             />
-          </FormField>
-          <FormField label="Placed on" required>
-            <Input
+            <DateField
+              label="Placed on"
+              requiredMark
               type="datetime-local"
               value={placedAt}
               onChange={(e) => setPlacedAt(e.target.value)}
             />
-          </FormField>
+          </div>
+          <TextArea label="Note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+          {error !== null && !confirming && (
+            <p className="mo-error" role="alert">
+              {error}
+            </p>
+          )}
         </div>
-        <FormField label="Note">
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
-        </FormField>
-      </div>
-      {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-      <ModalFooter>
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={place.isPending}>
-          {place.isPending ? 'Placing…' : 'Place'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      </Dialog>
+
+      <ConfirmDialog
+        open={open && confirming}
+        onOpenChange={(next) => {
+          setConfirming(next);
+          if (!next) setError(null);
+        }}
+        title="Place this capital?"
+        entity={`${label.trim()} · ${counterparty.trim()}`}
+        amount={
+          <Money
+            amount={Number(amount).toFixed(2)}
+            currency={(account?.currency ?? 'INR') as 'INR' | 'BDT'}
+            convert={false}
+          />
+        }
+        consequence="The principal leaves our account and is held as an investment until a return is recorded against it."
+        confirmLabel="Place"
+        onConfirm={save}
+        error={confirming ? (error ?? undefined) : undefined}
+      >
+        <div className="ex-confirm-lines">
+          <span>
+            From: {account === undefined ? '—' : `${account.label} · ${account.bankName}`}
+          </span>
+          <span>
+            Placed on: {placedAt === '' ? '—' : new Date(placedAt).toLocaleString('en-IN')}
+          </span>
+        </div>
+      </ConfirmDialog>
+    </>
   );
 }

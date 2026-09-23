@@ -1,28 +1,19 @@
 'use client';
 
-import Link from 'next/link';
-import { Fragment, useMemo, useState, type ReactElement } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronRight } from 'lucide-react';
-import {
-  Card,
-  CardBody,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Money,
-  PageHeader,
-  Section,
-  Stat,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { useMemo, useState, type ReactElement } from 'react';
+import { AlertTriangle, CheckCircle2, LineChart } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { Accordion, AccordionItem } from '@skydrop/ui/app/accordion';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { usePnl, usePnlLineItems, type PnlBasisPartView } from '@/lib/ops-hooks';
 import { istDateLabel, istDay, istDayRange } from '@/lib/ist-day';
+import { LinkButton, MoCard, Notice } from '../../treasury/_components/money-parts';
+import './pnl.css';
 
 /**
  * Where the money is actually made.
@@ -54,34 +45,35 @@ export function PnlIndex(): ReactElement {
   const pnl = usePnl(params);
 
   return (
-    <div className="space-y-4">
+    <div className="mo-page">
       <PageHeader
         title="Profit & loss"
         subtitle="What each part of the business earns, against what it costs — and how much of that we can actually see."
         action={
           // The same figures frozen month by month — for a month that must
           // not move after it has been reported (PNL-CF-1).
-          <Link href="/pnl/carry-forward" className="text-accent text-sm hover:underline">
+          <LinkButton href="/pnl/carry-forward" variant="ghost" size="sm">
             Carry-forward P&amp;L
-          </Link>
+          </LinkButton>
         }
       />
 
-      <Card>
-        <CardBody>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
-            <FormField label="From">
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </FormField>
-            <FormField label="To">
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </FormField>
-          </div>
-        </CardBody>
-      </Card>
+      <MoCard>
+        <div className="pl-dates">
+          <DateField label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <DateField label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+        </div>
+      </MoCard>
 
       {pnl.isLoading ? (
-        <LoadingState />
+        <div className="mo-stack">
+          <div className="mo-kpis">
+            <Skeleton height={112} rounded="md" />
+            <Skeleton height={112} rounded="md" />
+            <Skeleton height={112} rounded="md" />
+          </div>
+          <SkeletonRows rows={5} cols={6} label="Loading the report" />
+        </div>
       ) : pnl.isError || pnl.data === undefined ? (
         <ErrorState
           message={pnl.error?.message ?? 'Could not build the report.'}
@@ -89,175 +81,169 @@ export function PnlIndex(): ReactElement {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Stat
+          <div className="mo-kpis">
+            <KpiCard
               label="Gross margin"
-              tone={Number(pnl.data.grossMarginInr) >= 0 ? 'good' : 'bad'}
-              value={<Money amount={pnl.data.grossMarginInr} currency="INR" convert={false} />}
+              tone={Number(pnl.data.grossMarginInr) >= 0 ? 'credit' : 'debit'}
+              figure={<Money amount={pnl.data.grossMarginInr} currency="INR" convert={false} />}
               hint="The four sources, before what it costs to exist"
             />
-            <Stat
+            <KpiCard
               label="Operating expenses"
-              value={
+              figure={
                 <Money amount={pnl.data.operatingExpensesInr} currency="INR" convert={false} />
               }
               hint="Rent, salaries, software — everything booked as an expense"
             />
-            <Stat
+            <KpiCard
               label="Net"
-              tone={Number(pnl.data.netInr) >= 0 ? 'good' : 'bad'}
-              value={<Money amount={pnl.data.netInr} currency="INR" convert={false} />}
+              tone={Number(pnl.data.netInr) >= 0 ? 'credit' : 'debit'}
+              figure={<Money amount={pnl.data.netInr} currency="INR" convert={false} />}
               hint={pnl.data.complete ? 'Fully measured' : 'Partly estimated — see coverage'}
             />
           </div>
 
           {pnl.data.unattributedLegCosts !== null && (
-            <Card>
-              <CardBody>
-                {/* Different from the coverage warning above: that one
-                    says a cost is MISSING. This says a cost is recorded
-                    but filed where the leg it belongs to cannot see it,
-                    so that leg reads better than it is. */}
-                <div className="flex gap-2 text-sm text-warning">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
-                  <p>
-                    <strong>
-                      <Money
-                        amount={pnl.data.unattributedLegCosts.amountInr}
-                        currency="INR"
-                        convert={false}
-                      />
-                    </strong>{' '}
-                    of leg costs across {pnl.data.unattributedLegCosts.count}{' '}
-                    {pnl.data.unattributedLegCosts.count === 1 ? 'entry' : 'entries'} sit in
-                    operating expenses with nothing to attribute them to.{' '}
-                    {pnl.data.unattributedLegCosts.note}
-                  </p>
-                </div>
-              </CardBody>
-            </Card>
+            // Different from the coverage warning above: that one says a
+            // cost is MISSING. This says a cost is recorded but filed where
+            // the leg it belongs to cannot see it, so that leg reads better
+            // than it is.
+            <Notice tone="warn" icon={<AlertTriangle size={16} />}>
+              <p>
+                <strong>
+                  <Money
+                    amount={pnl.data.unattributedLegCosts.amountInr}
+                    currency="INR"
+                    convert={false}
+                  />
+                </strong>{' '}
+                of leg costs across {pnl.data.unattributedLegCosts.count}{' '}
+                {pnl.data.unattributedLegCosts.count === 1 ? 'entry' : 'entries'} sit in operating
+                expenses with nothing to attribute them to. {pnl.data.unattributedLegCosts.note}
+              </p>
+            </Notice>
           )}
 
           {(pnl.data.warnings ?? []).length > 0 && (
-            <Card>
-              <CardBody>
-                <div className="flex gap-2 text-sm text-warning">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
-                  <ul className="space-y-1">
-                    {(pnl.data.warnings ?? []).map((w) => (
-                      <li key={w}>{w}</li>
-                    ))}
-                  </ul>
-                </div>
-              </CardBody>
-            </Card>
+            <Notice tone="warn" icon={<AlertTriangle size={16} />}>
+              <ul className="mo-list">
+                {(pnl.data.warnings ?? []).map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </Notice>
           )}
 
           {!pnl.data.complete && (
-            <Card>
-              <CardBody>
-                <div className="flex gap-2 text-sm text-warning">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
-                  <p>
-                    Some cost is not recorded yet, so the margins below read higher than they are.
-                    What is missing is named on each line — nothing here is guessed to fill the gap.
-                  </p>
-                </div>
-              </CardBody>
-            </Card>
+            <Notice tone="warn" icon={<AlertTriangle size={16} />}>
+              <p>
+                Some cost is not recorded yet, so the margins below read higher than they are. What
+                is missing is named on each line — nothing here is guessed to fill the gap.
+              </p>
+            </Notice>
           )}
 
-          <Section title="By source">
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Source</Th>
-                  <Th align="right">Revenue</Th>
-                  <Th align="right">Cost</Th>
-                  <Th align="right">Margin</Th>
-                  <Th align="right">%</Th>
-                  <Th>Measured</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {pnl.data.lines.map((l) => {
-                  const full = l.coverage.priced === l.coverage.total;
-                  const open = expanded === l.key;
-                  return (
-                    <Fragment key={l.key}>
-                      <Tr>
-                        <Td>
-                          <button
-                            type="button"
-                            className="hover:text-text-bright flex items-center gap-1.5 text-left font-medium"
-                            onClick={() => setExpanded(open ? null : l.key)}
-                            aria-expanded={open}
-                          >
-                            <ChevronRight
-                              className={`size-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
-                              aria-hidden
-                            />
-                            {l.label}
-                          </button>
+          <section className="mo-section">
+            <SectionHeading
+              title="By source"
+              note="Open a line to see what it is made of and every record behind it."
+            />
+            <Accordion value={expanded} onValueChange={setExpanded}>
+              {pnl.data.lines.map((l) => {
+                const full = l.coverage.priced === l.coverage.total;
+                const open = expanded === l.key;
+                return (
+                  <AccordionItem
+                    key={l.key}
+                    value={l.key}
+                    icon={<LineChart size={16} />}
+                    title={
+                      <span className="pl-line">
+                        <span>
+                          <span className="pl-line__label">{l.label}</span>
                           {l.coverage.note !== null && (
-                            <div className="text-xs text-muted mt-0.5">{l.coverage.note}</div>
+                            <span className="pl-line__note">{l.coverage.note}</span>
                           )}
-                        </Td>
-                        <Td align="right">
-                          <Money amount={l.revenueInr} currency="INR" convert={false} />
-                        </Td>
-                        <Td align="right">
-                          <Money amount={l.costInr} currency="INR" convert={false} />
-                        </Td>
-                        <Td align="right">
-                          <Money amount={l.marginInr} currency="INR" convert={false} />
-                        </Td>
-                        <Td align="right" className="tabular-nums">
-                          {l.marginPercent === null ? '—' : `${l.marginPercent}%`}
-                        </Td>
-                        <Td>
-                          <span className="inline-flex items-center gap-1 text-xs tabular-nums">
-                            {full ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden />
-                            ) : (
-                              <AlertTriangle className="h-3.5 w-3.5 text-warning" aria-hidden />
-                            )}
-                            {l.coverage.priced}/{l.coverage.total}
-                          </span>
-                        </Td>
-                      </Tr>
-                      {open && (
-                        <Tr>
-                          {/* The arithmetic, so the figure above can be
-                            re-run by hand. A total nobody can split is
-                            a total nobody can check. */}
-                          <Td colSpan={6} className="bg-surface-raised">
-                            <div className="grid gap-4 py-1 sm:grid-cols-2">
-                              <BasisColumn
-                                heading="Revenue is made of"
-                                parts={l.basis.revenue}
-                                totalInr={l.revenueInr}
-                              />
-                              <BasisColumn
-                                heading="Cost is made of"
-                                parts={l.basis.cost}
-                                totalInr={l.costInr}
-                                emptyText="Nothing — this line has no cost side."
-                              />
-                            </div>
-                            <LineItems lineKey={l.key} from={params.from} to={params.to} />
-                          </Td>
-                        </Tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </TBody>
-            </Table>
-          </Section>
+                        </span>
+                        <span className="pl-figs">
+                          <Fig label="Revenue">
+                            <Money amount={l.revenueInr} currency="INR" convert={false} />
+                          </Fig>
+                          <Fig label="Cost">
+                            <Money amount={l.costInr} currency="INR" convert={false} />
+                          </Fig>
+                          <Fig label="Margin">
+                            <Money amount={l.marginInr} currency="INR" convert={false} />
+                          </Fig>
+                          <Fig label="%">
+                            <span className="sk-figure">
+                              {l.marginPercent === null ? '—' : `${l.marginPercent}%`}
+                            </span>
+                          </Fig>
+                        </span>
+                      </span>
+                    }
+                    meta={
+                      <span
+                        className="pl-cover sk-figure"
+                        data-full={full ? '1' : '0'}
+                        title="Measured: records whose cost is recorded"
+                      >
+                        {full ? (
+                          <CheckCircle2 size={13} aria-hidden />
+                        ) : (
+                          <AlertTriangle size={13} aria-hidden />
+                        )}
+                        {l.coverage.priced}/{l.coverage.total}
+                      </span>
+                    }
+                  >
+                    {/* The arithmetic, so the figure above can be re-run by
+                        hand. A total nobody can split is a total nobody can
+                        check. Mounted only while open, so the rows behind a
+                        line are fetched when it is opened, as before. */}
+                    {open && (
+                      <div className="pl-drill">
+                        <div className="pl-basis">
+                          <BasisColumn
+                            heading="Revenue is made of"
+                            parts={l.basis.revenue}
+                            totalInr={l.revenueInr}
+                          />
+                          <BasisColumn
+                            heading="Cost is made of"
+                            parts={l.basis.cost}
+                            totalInr={l.costInr}
+                            emptyText="Nothing — this line has no cost side."
+                          />
+                        </div>
+                        <LineItems lineKey={l.key} from={params.from} to={params.to} />
+                      </div>
+                    )}
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+          </section>
         </>
       )}
     </div>
+  );
+}
+
+/** One labelled figure in a line's header. The value is the caller's own node. */
+function Fig({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactElement;
+}): ReactElement {
+  return (
+    <span className="pl-fig">
+      <span className="pl-fig__label">{label}</span>
+      <span className="pl-fig__value">{children}</span>
+    </span>
   );
 }
 
@@ -284,22 +270,20 @@ function BasisColumn({
 }): ReactElement {
   return (
     <div>
-      <div className="text-text-muted mb-1.5 text-xs font-medium tracking-wide uppercase">
-        {heading}
-      </div>
+      <p className="pl-basis__head">{heading}</p>
       {parts.length === 0 ? (
-        <p className="text-text-faint text-xs">{emptyText ?? 'Nothing in this window.'}</p>
+        <p className="mo-faint">{emptyText ?? 'Nothing in this window.'}</p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="pl-basis__list">
           {parts.map((p) => (
-            <li key={p.source} className="flex items-start justify-between gap-3 text-xs">
-              <div className="min-w-0">
-                <div className="text-text-body">{p.label}</div>
-                <div className="text-text-faint font-mono break-all">{p.source}</div>
+            <li key={p.source} className="pl-basis__item">
+              <div>
+                <div className="mo-body">{p.label}</div>
+                <span className="pl-basis__src sk-ident">{p.source}</span>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="pl-basis__amt">
                 <Money amount={p.amountInr} currency="INR" convert={false} />
-                <div className="text-text-faint tabular-nums">
+                <div className="mo-faint sk-figure">
                   {p.count} {p.count === 1 ? 'row' : 'rows'}
                 </div>
               </div>
@@ -308,7 +292,7 @@ function BasisColumn({
           {/* Restated so the parts can be seen to add up. If they do not,
               that is the bug this whole panel exists to expose. */}
           {parts.length > 1 && (
-            <li className="border-border flex items-center justify-between gap-3 border-t pt-1.5 text-xs font-medium">
+            <li className="pl-basis__item pl-basis__total">
               <span>Total</span>
               <Money amount={totalInr} currency="INR" convert={false} />
             </li>
@@ -340,63 +324,63 @@ function LineItems({
 }): ReactElement {
   const q = usePnlLineItems(lineKey, from, to);
 
-  if (q.isLoading) return <p className="text-text-muted py-2 text-xs">Loading rows…</p>;
+  if (q.isLoading) return <SkeletonRows rows={3} cols={4} label="Loading rows…" />;
   if (q.isError || q.data === undefined) {
-    return <p className="text-danger py-2 text-xs">Could not load the rows behind this line.</p>;
+    return (
+      <p className="pl-state" data-tone="bad" role="alert">
+        Could not load the rows behind this line.
+      </p>
+    );
   }
   if (q.data.items.length === 0) {
-    return <p className="text-text-faint py-2 text-xs">Nothing in this window.</p>;
+    return <p className="pl-state">Nothing in this window.</p>;
   }
 
   return (
-    <div className="border-border mt-3 border-t pt-3">
-      <div className="text-text-muted mb-1.5 text-xs font-medium tracking-wide uppercase">
-        Every row ({q.data.items.length})
-      </div>
-      <div className="max-h-80 overflow-y-auto">
-        <table className="w-full text-xs">
-          <thead className="text-text-faint sticky top-0 bg-[var(--color-surface-raised)] text-left">
-            <tr>
-              <th className="py-1 pr-2 font-medium">Reference</th>
-              <th className="py-1 pr-2 font-medium">Date</th>
-              <th className="py-1 pr-2 text-right font-medium">Revenue</th>
-              <th className="py-1 text-right font-medium">Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {q.data.items.map((it, i) => (
-              <tr key={`${it.ref}-${i}`} className="border-border/60 border-t">
-                <td className="py-1 pr-2">
-                  <span className="font-mono">{it.ref}</span>
-                  {it.subRef !== null && <div className="text-text-faint">{it.subRef}</div>}
-                </td>
-                <td className="text-text-muted py-1 pr-2 whitespace-nowrap">
-                  {/* The IST day, as the window is — not the browser's. */}
-                  {istDateLabel(it.at)}
-                </td>
-                <td className="py-1 pr-2 text-right">
-                  {it.revenueInr === null ? (
-                    <span className="text-text-faint">—</span>
-                  ) : (
-                    <Money amount={it.revenueInr} currency="INR" convert={false} />
-                  )}
-                </td>
-                <td className="py-1 text-right">
-                  {it.costInr === null ? (
-                    // NOT a zero. "Nobody recorded it" and "it cost
-                    // nothing" are opposite facts.
-                    <span className="text-warning">not recorded</span>
-                  ) : (
-                    <Money amount={it.costInr} currency="INR" convert={false} />
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="pl-rows">
+      <p className="pl-rows__head">Every row ({q.data.items.length})</p>
+      <Table maxHeight="20rem">
+        <THead>
+          <Tr>
+            <Th>Reference</Th>
+            <Th>Date</Th>
+            <Th align="right">Revenue</Th>
+            <Th align="right">Cost</Th>
+          </Tr>
+        </THead>
+        <TBody>
+          {q.data.items.map((it, i) => (
+            <Tr key={`${it.ref}-${i}`}>
+              <Td>
+                <span className="sk-ident">{it.ref}</span>
+                {it.subRef !== null && <div className="mo-faint">{it.subRef}</div>}
+              </Td>
+              <Td className="mo-nowrap">
+                {/* The IST day, as the window is — not the browser's. */}
+                {istDateLabel(it.at)}
+              </Td>
+              <Td align="right">
+                {it.revenueInr === null ? (
+                  <span className="mo-faint">—</span>
+                ) : (
+                  <Money amount={it.revenueInr} currency="INR" convert={false} />
+                )}
+              </Td>
+              <Td align="right">
+                {it.costInr === null ? (
+                  // NOT a zero. "Nobody recorded it" and "it cost
+                  // nothing" are opposite facts.
+                  <span className="mo-warn">not recorded</span>
+                ) : (
+                  <Money amount={it.costInr} currency="INR" convert={false} />
+                )}
+              </Td>
+            </Tr>
+          ))}
+        </TBody>
+      </Table>
       {q.data.truncated && (
-        <p className="text-warning mt-2 text-xs">
+        <p className="pl-state" data-tone="warn">
           Only the first {q.data.items.length} rows are shown, so these will not add up to the total
           above. Narrow the date range to see the rest.
         </p>

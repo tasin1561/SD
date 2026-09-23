@@ -1,0 +1,131 @@
+/* /expenses and /expenses/categories. Tokens only; layout from money.css
+   (mo-). This file draws the consignment search results, the picked
+   consignment card and the loud border on a link that should not be left
+   empty. Every grid declares minmax columns. */
+
+.ex-prompt {
+  --f-edge: var(--saffron-fill);
+}
+
+.ex-results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-height: 11rem;
+  margin-top: var(--sp-1);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.ex-results__note {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.ex-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-height: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.ex-result:last-child {
+  border-bottom: 0;
+}
+.ex-result:hover {
+  background: var(--surface-3);
+}
+.ex-result:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.ex-result__title {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.ex-result__sub {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.ex-picked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.ex-picked__label {
+  margin: 0 0 var(--sp-1);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.ex-picked__title {
+  overflow: hidden;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ex-picked__sub {
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-note {
+  display: block;
+  max-width: 20rem;
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: normal;
+}
+.ex-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.ex-summary__count {
+  color: var(--fg-muted);
+}
+.ex-ref {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.ex-attributed {
+  color: var(--green-text);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.ex-filter {
+  min-width: min(100%, 14rem);
+}
+.ex-confirm-lines {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}

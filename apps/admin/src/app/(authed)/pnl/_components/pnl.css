@@ -1,0 +1,271 @@
+/* P&L (/pnl and /pnl/carry-forward). Tokens only; the page frame, cards,
+   notices and fact lists come from treasury/_components/money.css (mo-).
+   This file draws the P&L-only pieces: a line's figure strip inside an
+   accordion header, the "made of" basis columns and the drill-down blocks.
+   Every grid declares minmax columns so nothing sizes to its content. */
+
+/* ── A P&L line, as an accordion title ────────────────────────────────── */
+.pl-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.pl-line__label {
+  display: block;
+  color: inherit;
+  font-weight: var(--fw-semibold);
+}
+.pl-line__note {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+.pl-figs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-1) var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .pl-figs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .pl-figs[data-cols='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.pl-fig {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.pl-fig__label {
+  display: block;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+.pl-fig__value {
+  display: block;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+/* ── Coverage chip (priced / total) ───────────────────────────────────── */
+.pl-cover {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+.pl-cover[data-full='1'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.pl-cover[data-full='0'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+
+/* ── What a side is made of ───────────────────────────────────────────── */
+.pl-basis {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .pl-basis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.pl-basis__head {
+  margin: 0 0 var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.pl-basis__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pl-basis__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--sp-3);
+  min-width: 0;
+  font-size: var(--fs-xs);
+}
+.pl-basis__src {
+  display: block;
+  color: var(--fg-faint);
+  overflow-wrap: anywhere;
+}
+.pl-basis__amt {
+  text-align: right;
+}
+.pl-basis__total {
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+
+/* ── Drill-down blocks ────────────────────────────────────────────────── */
+.pl-drill {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.pl-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.pl-rows__head {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.pl-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-2) 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.pl-state[data-tone='bad'] {
+  color: var(--red-text);
+}
+.pl-state[data-tone='warn'] {
+  color: var(--saffron-text);
+}
+
+/* ── Nightly jobs / failed jobs list ──────────────────────────────────── */
+.pl-jobs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pl-jobs li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-2);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+}
+.pl-jobs svg {
+  margin-top: 2px;
+}
+.pl-ok {
+  color: var(--green-text);
+}
+.pl-warn {
+  color: var(--saffron-text);
+}
+
+/* ── Month status line and the net row ────────────────────────────────── */
+.pl-closed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.pl-net {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.pl-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.pl-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.pl-group__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.pl-count {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+.pl-month-pick {
+  max-width: 24rem;
+}
+.pl-dates {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  max-width: 28rem;
+}
+@media (min-width: 640px) {
+  .pl-dates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.pl-through {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+.pl-through > .sk-field {
+  min-width: min(100%, 14rem);
+}
+.pl-god-typed .sk-field__input {
+  font-family: var(--app-mono);
+}

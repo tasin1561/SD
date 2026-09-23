@@ -1,0 +1,37 @@
+/* /courier-wallet — area-only pieces on top of the Money 2 area sheet
+   (treasury/_components/money.css). Tokens only. */
+.cw-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.cw-name svg {
+  flex: none;
+  color: var(--fg-muted);
+}
+.cw-name[data-tone='bad'] svg {
+  color: var(--red-text);
+}
+.cw-ident {
+  font-size: var(--fs-xs);
+}
+.cw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.cw-note {
+  display: block;
+  max-width: 20rem;
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.cw-filter {
+  min-width: min(100%, 14rem);
+}

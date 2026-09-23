@@ -2,26 +2,17 @@
 
 import type { ReactElement } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ShieldCheck } from 'lucide-react';
-import {
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  Section,
-  Stat,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { TBody, THead, Table, TableEmpty, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { useLiabilities, type LedgerLineView } from '@/lib/ops-hooks';
+import { MoSection, Notice } from '../../treasury/_components/money-parts';
+import './liabilities.css';
 
 /**
  * What we owe, and what is owed to us.
@@ -58,36 +49,36 @@ function LineTable({
           lines.flatMap((l) => [
             <Tr key={l.key}>
               <Td>
-                <div className="font-medium">{l.label}</div>
-                <div className="text-text-muted mt-0.5 text-xs">{l.meaning}</div>
+                <span className="li-label">{l.label}</span>
+                <span className="mo-sub">{l.meaning}</span>
               </Td>
               <Td align="right">
                 <Money amount={l.amountInr} currency="INR" convert={false} />
               </Td>
-              <Td align="right" className="tabular-nums">
+              <Td align="right" className="mo-num">
                 {l.count}
               </Td>
             </Tr>,
             // The halves of a line that need different responses. They add
             // up to the line above and are already inside its total.
             ...(l.parts ?? []).map((p) => (
-              <Tr key={p.key}>
-                <Td className="pl-8">
-                  <div className="text-sm">
+              <Tr key={p.key} className="li-part-row">
+                <Td>
+                  <span className="li-part">
                     {p.key === 'courier_float_instant_pay' ? (
-                      <Link href="/liabilities/instant-pay" className="text-accent hover:underline">
-                        {p.label} →
+                      <Link href="/liabilities/instant-pay" className="mo-link">
+                        {p.label} <ArrowRight size={13} aria-hidden />
                       </Link>
                     ) : (
                       p.label
                     )}
-                  </div>
-                  <div className="text-text-faint mt-0.5 text-xs">{p.meaning}</div>
+                    <span className="mo-sub">{p.meaning}</span>
+                  </span>
                 </Td>
-                <Td align="right" className="text-text-muted">
+                <Td align="right">
                   <Money amount={p.amountInr} currency="INR" convert={false} />
                 </Td>
-                <Td align="right" className="text-text-muted tabular-nums">
+                <Td align="right" className="mo-num">
                   {p.count}
                 </Td>
               </Tr>
@@ -131,7 +122,18 @@ function humanCause(direction: string): string {
 export function LiabilitiesIndex(): ReactElement {
   const q = useLiabilities();
 
-  if (q.isLoading) return <LoadingState />;
+  if (q.isLoading) {
+    return (
+      <div className="mo-page">
+        <div className="mo-kpis">
+          <Skeleton height={112} rounded="md" />
+          <Skeleton height={112} rounded="md" />
+          <Skeleton height={112} rounded="md" />
+        </div>
+        <SkeletonRows rows={6} cols={3} />
+      </div>
+    );
+  }
   if (q.isError || q.data === undefined) {
     return (
       <ErrorState
@@ -145,79 +147,68 @@ export function LiabilitiesIndex(): ReactElement {
   const uncovered = d.sellerDebts.filter((s) => !s.covered);
 
   return (
-    <div className="space-y-4">
+    <div className="mo-page">
       <PageHeader
         title="What we owe"
         subtitle="Our position right now — against what is owed to us, and what stands behind it."
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat
+      <div className="mo-kpis">
+        <KpiCard
           label="We owe"
-          tone="warn"
-          value={<Money amount={d.owedTotalInr} currency="INR" convert={false} />}
+          tone="pending"
+          figure={<Money amount={d.owedTotalInr} currency="INR" convert={false} />}
           hint="Sellers and the tax authority"
         />
-        <Stat
+        <KpiCard
           label="Owed to us"
-          value={<Money amount={d.dueTotalInr} currency="INR" convert={false} />}
+          figure={<Money amount={d.dueTotalInr} currency="INR" convert={false} />}
           hint="Couriers, sellers, freight not yet recovered"
         />
-        <Stat
+        <KpiCard
           label="Net position"
-          tone={Number(d.netInr) >= 0 ? 'good' : 'bad'}
-          value={<Money amount={d.netInr} currency="INR" convert={false} />}
+          tone={Number(d.netInr) >= 0 ? 'credit' : 'debit'}
+          figure={<Money amount={d.netInr} currency="INR" convert={false} />}
           hint="A number to read alongside the lines, not instead of them"
         />
       </div>
 
-      <Card>
-        <CardBody>
-          <p className="text-text-muted text-sm">
-            The two sides do not cancel. What we owe is largely callable on request; what is owed to
-            us arrives on somebody else&apos;s cycle. A healthy net can still be a month that cannot
-            pay.
-          </p>
-        </CardBody>
-      </Card>
+      <Notice tone="info">
+        <p>
+          The two sides do not cancel. What we owe is largely callable on request; what is owed to
+          us arrives on somebody else&apos;s cycle. A healthy net can still be a month that cannot
+          pay.
+        </p>
+      </Notice>
 
-      <Section title="We owe">
+      <MoSection title="We owe" flush>
         <LineTable lines={d.owed} emptyText="Nothing owed." />
-      </Section>
+      </MoSection>
 
-      <Section title="Owed to us">
+      <MoSection title="Owed to us" flush>
         <LineTable lines={d.due} emptyText="Nothing outstanding." />
-      </Section>
+      </MoSection>
 
-      <Section title="Sellers in the red">
+      <section className="mo-section">
+        <SectionHeading title="Sellers in the red" />
         {d.sellerDebts.length === 0 ? (
-          <Card>
-            <CardBody>
-              <div className="flex gap-2 text-sm">
-                <ShieldCheck className="text-success mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                <p>No seller is carrying a negative balance.</p>
-              </div>
-            </CardBody>
-          </Card>
+          <Notice tone="good" icon={<ShieldCheck size={16} />}>
+            <p>No seller is carrying a negative balance.</p>
+          </Notice>
         ) : (
           <>
             {uncovered.length > 0 && (
-              <Card>
-                <CardBody>
-                  <div className="text-warning flex gap-2 text-sm">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                    <p>
-                      {uncovered.length === 1
-                        ? 'One seller owes more than their stock is worth'
-                        : `${uncovered.length} sellers owe more than their stock is worth`}
-                      . A debt covered by goods in our building clears as they sell; an uncovered
-                      one is money we may not see again.
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
+              <Notice tone="warn" icon={<AlertTriangle size={16} />}>
+                <p>
+                  {uncovered.length === 1
+                    ? 'One seller owes more than their stock is worth'
+                    : `${uncovered.length} sellers owe more than their stock is worth`}
+                  . A debt covered by goods in our building clears as they sell; an uncovered one is
+                  money we may not see again.
+                </p>
+              </Notice>
             )}
-            <Table>
+            <Table caption="Sellers in the red">
               <THead>
                 <Tr>
                   <Th>Seller</Th>
@@ -231,10 +222,7 @@ export function LiabilitiesIndex(): ReactElement {
                 {d.sellerDebts.map((s) => (
                   <Tr key={s.sellerId}>
                     <Td>
-                      <Link
-                        href={`/seller-wallets/${s.sellerId}`}
-                        className="text-accent hover:underline"
-                      >
+                      <Link href={`/seller-wallets/${s.sellerId}`} className="mo-link">
                         {s.companyName}
                       </Link>
                     </Td>
@@ -247,12 +235,12 @@ export function LiabilitiesIndex(): ReactElement {
                           clears itself, or delivery fees on delivered
                           orders, which do not. */}
                       {s.causes.length === 0 ? (
-                        <span className="text-text-faint text-xs">—</span>
+                        <span className="mo-faint">—</span>
                       ) : (
-                        <ul className="space-y-0.5">
+                        <ul className="li-causes">
                           {s.causes.map((c) => (
-                            <li key={c.direction} className="text-xs">
-                              <span className="text-text-muted">{humanCause(c.direction)}</span>{' '}
+                            <li key={c.direction}>
+                              <span className="mo-muted">{humanCause(c.direction)}</span>{' '}
                               <Money amount={c.amountInr} currency="INR" convert={false} />
                             </li>
                           ))}
@@ -263,7 +251,7 @@ export function LiabilitiesIndex(): ReactElement {
                               fees — but the reader has to see that money
                               came in. */}
                           {(Number(s.paidSinceInr) > 0 || Number(s.openingBalanceInr) > 0) && (
-                            <li className="text-text-faint border-border mt-1 space-y-0.5 border-t pt-1 text-xs">
+                            <li className="li-causes__paid">
                               {Number(s.openingBalanceInr) > 0 && (
                                 <div>
                                   started with{' '}
@@ -289,7 +277,7 @@ export function LiabilitiesIndex(): ReactElement {
                       <Money amount={s.stockValueInr} currency="INR" convert={false} />
                     </Td>
                     <Td>
-                      <StatusBadge
+                      <StatusChip
                         kind={s.covered ? 'confirmed' : 'failed'}
                         label={s.covered ? 'Covered by stock' : 'Uncovered'}
                       />
@@ -300,7 +288,7 @@ export function LiabilitiesIndex(): ReactElement {
             </Table>
           </>
         )}
-      </Section>
+      </section>
     </div>
   );
 }

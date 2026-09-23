@@ -2,25 +2,28 @@
 
 import { useMemo, useState, type ReactElement } from 'react';
 import Link from 'next/link';
+import { ArrowLeft, Building2, Store } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
 import {
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  Select,
   SortableTh,
-  Stat,
   TBody,
   THead,
   Table,
   TableEmpty,
   Td,
   Th,
-  Toolbar,
   Tr,
   type SortDirection,
-} from '@skydrop/ui/components';
+} from '@skydrop/ui/app/data-table';
+import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
+import { Select } from '@skydrop/ui/app/select';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { useInstantPayAdvances, type InstantPayAdvanceRowView } from '@/lib/ops-hooks';
+import { AgeChip, LinkButton } from '../../../treasury/_components/money-parts';
+import '../../_components/liabilities.css';
 
 /**
  * Money we advanced to sellers under Instant Pay, still owed to us by
@@ -68,19 +71,19 @@ export function InstantPayAdvances({
   const filtered = sellerId !== '' || courierAccountId !== '';
 
   return (
-    <div className="space-y-4">
+    <div className="mo-page">
       <PageHeader
         title="Instant Pay advances"
         subtitle="Paid to sellers at delivery out of our money, not yet paid to us by the courier."
         action={
-          <Link href="/liabilities" className="text-accent text-sm hover:underline">
-            ← What we owe
-          </Link>
+          <LinkButton href="/liabilities" variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
+            What we owe
+          </LinkButton>
         }
       />
 
       {q.isLoading ? (
-        <LoadingState label="Reading the ledgers…" />
+        <SkeletonRows rows={6} cols={8} label="Reading the ledgers…" />
       ) : q.isError || q.data === undefined ? (
         <ErrorState
           message={q.error?.message ?? 'Could not read the advances.'}
@@ -88,57 +91,65 @@ export function InstantPayAdvances({
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Stat
+          <div className="mo-kpis">
+            <KpiCard
               label="COD awaiting the courier"
-              tone="warn"
-              value={<Money amount={q.data.totalCodInr} currency="INR" convert={false} />}
+              tone="pending"
+              figure={<Money amount={q.data.totalCodInr} currency="INR" convert={false} />}
               hint={`${q.data.count} ${q.data.count === 1 ? 'order' : 'orders'}`}
             />
-            <Stat
+            <KpiCard
               label="Cash we fronted"
-              value={<Money amount={q.data.totalFrontedInr} currency="INR" convert={false} />}
+              figure={<Money amount={q.data.totalFrontedInr} currency="INR" convert={false} />}
               hint="Out of capital — less than the COD where it cleared a seller's debt"
             />
-            <Stat
+            <KpiCard
               label="Credited to sellers"
-              value={<Money amount={q.data.totalNetCreditedInr} currency="INR" convert={false} />}
+              figure={<Money amount={q.data.totalNetCreditedInr} currency="INR" convert={false} />}
               hint="COD less tax and fees"
             />
           </div>
 
-          <div>
-            <Toolbar>
-              <Select
-                aria-label="Seller"
-                value={sellerId}
-                onChange={(e) => setSellerId(e.target.value)}
-                className="sm:w-60"
-              >
-                <option value="">All sellers</option>
-                {(all.data?.bySeller ?? []).map((g) => (
-                  <option key={g.key ?? ''} value={g.key ?? ''}>
-                    {g.label} ({g.count})
-                  </option>
-                ))}
-              </Select>
-              <Select
-                aria-label="Courier account"
-                value={courierAccountId}
-                onChange={(e) => setCourierAccountId(e.target.value)}
-                className="sm:w-60"
-              >
-                <option value="">All courier accounts</option>
-                {(all.data?.byCourierAccount ?? [])
-                  .filter((g) => g.key !== null)
-                  .map((g) => (
+          <div className="mo-stack">
+            <FilterBar
+              activeCount={(sellerId === '' ? 0 : 1) + (courierAccountId === '' ? 0 : 1)}
+              onReset={() => {
+                setSellerId('');
+                setCourierAccountId('');
+              }}
+            >
+              <FilterField icon={<Store size={16} />}>
+                <Select
+                  label="Seller"
+                  value={sellerId}
+                  onChange={(e) => setSellerId(e.target.value)}
+                >
+                  <option value="">All sellers</option>
+                  {(all.data?.bySeller ?? []).map((g) => (
                     <option key={g.key ?? ''} value={g.key ?? ''}>
                       {g.label} ({g.count})
                     </option>
                   ))}
-              </Select>
-            </Toolbar>
-            <Table>
+                </Select>
+              </FilterField>
+              <FilterField icon={<Building2 size={16} />}>
+                <Select
+                  label="Courier account"
+                  value={courierAccountId}
+                  onChange={(e) => setCourierAccountId(e.target.value)}
+                >
+                  <option value="">All courier accounts</option>
+                  {(all.data?.byCourierAccount ?? [])
+                    .filter((g) => g.key !== null)
+                    .map((g) => (
+                      <option key={g.key ?? ''} value={g.key ?? ''}>
+                        {g.label} ({g.count})
+                      </option>
+                    ))}
+                </Select>
+              </FilterField>
+            </FilterBar>
+            <Table caption="Instant Pay advances awaiting the courier">
               <THead>
                 <Tr>
                   <Th>Order</Th>
@@ -180,7 +191,7 @@ export function InstantPayAdvances({
                         Nothing outstanding for this filter.{' '}
                         <button
                           type="button"
-                          className="text-accent hover:underline"
+                          className="mo-link li-inline-btn"
                           onClick={() => {
                             setSellerId('');
                             setCourierAccountId('');
@@ -192,7 +203,7 @@ export function InstantPayAdvances({
                     ) : (
                       <>
                         Every Instant Pay credit has been paid by its courier.{' '}
-                        <Link href="/settlements" className="text-accent hover:underline">
+                        <Link href="/settlements" className="mo-link">
                           See courier payouts
                         </Link>
                       </>
@@ -202,33 +213,31 @@ export function InstantPayAdvances({
                   rows.map((r) => (
                     <Tr key={r.orderId}>
                       <Td>
-                        <Link
-                          href={`/orders/${r.orderId}`}
-                          className="text-accent font-mono hover:underline"
-                        >
+                        <Link href={`/orders/${r.orderId}`} className="mo-link sk-ident">
                           {r.orderNumber}
                         </Link>
-                        <div className="text-text-faint text-xs">
+                        <span className="mo-sub">
                           delivered{' '}
                           {new Date(r.deliveredAt ?? r.creditedAt).toLocaleDateString('en-IN')}
-                        </div>
+                        </span>
                       </Td>
                       <Td>
-                        <Link
-                          href={`/seller-wallets/${r.sellerId}`}
-                          className="text-accent hover:underline"
-                        >
+                        <Link href={`/seller-wallets/${r.sellerId}`} className="mo-link">
                           {r.sellerName}
                         </Link>
                       </Td>
-                      <Td className="text-xs">
-                        {r.courierAccountLabel ?? r.courierCode ?? '—'}
+                      <Td>
+                        <span className="mo-muted">
+                          {r.courierAccountLabel ?? r.courierCode ?? '—'}
+                        </span>
                         {r.courierAccountLabel !== null && r.courierCode !== null && (
-                          <div className="text-text-faint">{r.courierCode}</div>
+                          <span className="mo-sub">{r.courierCode}</span>
                         )}
                       </Td>
-                      <Td align="right" className="tabular-nums">
-                        {r.ageDays} {r.ageDays === 1 ? 'day' : 'days'}
+                      <Td align="right">
+                        <AgeChip>
+                          {r.ageDays} {r.ageDays === 1 ? 'day' : 'days'}
+                        </AgeChip>
                       </Td>
                       <Td align="right">
                         <Money amount={r.codInr} currency="INR" convert={false} />
@@ -239,7 +248,9 @@ export function InstantPayAdvances({
                       <Td align="right">
                         <Money amount={r.frontedInr} currency="INR" convert={false} />
                       </Td>
-                      <Td className="text-text-muted text-xs">{r.frontAccountLabel ?? '—'}</Td>
+                      <Td>
+                        <span className="mo-muted">{r.frontAccountLabel ?? '—'}</span>
+                      </Td>
                     </Tr>
                   ))
                 )}
