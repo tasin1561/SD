@@ -2,9 +2,15 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { TicketType } from '@skydrop/db';
-import { Button, FormField, Input, Select, Textarea } from '@skydrop/ui/components';
+import { LifeBuoy, Send, Store } from 'lucide-react';
+import { AsyncButton, type AsyncPhase } from '@skydrop/ui/app/async-button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 import { storeTicketKind } from '@/lib/ticket-kind';
+import '../../_components/tickets.css';
 
 export type TicketAudience = 'seller' | 'skydrop';
 
@@ -107,137 +113,136 @@ export function NewTicketForm({
     }
   }
 
-  return (
-    <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
-      <fieldset>
-        <legend className="text-text-strong mb-2 text-sm font-medium">Who is this for?</legend>
-        <div className="space-y-2">
-          <label className="border-border hover:bg-surface-hover flex cursor-pointer items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2">
-            <input
-              type="radio"
-              name="ticket-audience"
-              className="mt-1"
-              checked={audience === 'seller'}
-              onChange={() => setAudience('seller')}
-            />
-            <span>
-              <span className="text-text-strong block text-sm">Your seller</span>
-              <span className="text-text-muted block text-xs leading-relaxed">
-                {withSeller.blurb}
-              </span>
-            </span>
-          </label>
-          {offerSkydrop ? (
-            <label className="border-border hover:bg-surface-hover flex cursor-pointer items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2">
-              <input
-                type="radio"
-                name="ticket-audience"
-                className="mt-1"
-                checked={audience === 'skydrop'}
-                onChange={() => setAudience('skydrop')}
-              />
-              <span>
-                <span className="text-text-strong block text-sm">Skydrop</span>
-                <span className="text-text-muted block text-xs leading-relaxed">
-                  {heldForSeller
-                    ? 'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your seller approves these first: it reaches Skydrop only once Seller staff say yes.'
-                    : withSkydrop.blurb}
-                </span>
-              </span>
-            </label>
-          ) : null}
-        </div>
-      </fieldset>
+  // The button shows the REAL request's state: busy while the caller's
+  // mutation runs, the refusal once the server has answered with one.
+  const phase: AsyncPhase = pending ? 'busy' : error !== null ? 'error' : 'idle';
+  const submitLabel =
+    audience === 'skydrop'
+      ? heldForSeller
+        ? 'Send it to your seller to approve'
+        : 'Raise it with Skydrop'
+      : 'Raise it with your seller';
 
-      <FormField label="Order" htmlFor="ticket-order" hint="The order this is about.">
-        <Input
-          id="ticket-order"
-          value={orderId}
-          onChange={(e) => setOrderId(e.target.value)}
-          required
-        />
-      </FormField>
+  return (
+    <form onSubmit={(e) => void onSubmit(e)} className="rc-tkt-form">
+      <ChoiceCards
+        label="Who is this for?"
+        name="ticket-audience"
+        columns={offerSkydrop ? 2 : 1}
+        value={audience}
+        onChange={(v) => setAudience(v === 'skydrop' ? 'skydrop' : 'seller')}
+        options={[
+          {
+            value: 'seller',
+            icon: <Store size={16} />,
+            title: 'Your seller',
+            description: withSeller.blurb,
+          },
+          ...(offerSkydrop
+            ? [
+                {
+                  value: 'skydrop',
+                  icon: <LifeBuoy size={16} />,
+                  title: 'Skydrop',
+                  description: heldForSeller
+                    ? 'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your seller approves these first: it reaches Skydrop only once Seller staff say yes.'
+                    : withSkydrop.blurb,
+                },
+              ]
+            : []),
+        ]}
+      />
+
+      <TextField
+        id="ticket-order"
+        label="Order"
+        hint="The order this is about."
+        value={orderId}
+        onChange={(e) => setOrderId(e.target.value)}
+        required
+      />
       {audience === 'seller' ? (
-        <div className="border-border space-y-3 rounded-[var(--radius-2)] border px-3 py-2.5">
-          <label className="flex cursor-pointer items-start gap-2">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={correction}
-              onChange={(e) => setCorrection(e.target.checked)}
-            />
-            <span>
-              <span className="text-text-strong block text-sm">
-                This is about the money worked out on the order
-              </span>
-              <span className="text-text-muted block text-xs leading-relaxed">
+        <div className="rc-tkt-correction">
+          <Checkbox
+            checked={correction}
+            onChange={(e) => setCorrection(e.target.checked)}
+            label="This is about the money worked out on the order"
+            description={
+              <>
                 Say what you think is owed and who owes it. Skydrop checks it against the figures
                 that were on the order when you raised this, and settles it between your wallet and
                 your seller&rsquo;s.
-              </span>
-            </span>
-          </label>
+              </>
+            }
+          />
           {correction ? (
-            <div className="flex flex-wrap items-end gap-2.5">
-              <FormField
+            <div className="rc-tkt-claim">
+              <TextField
+                id="ticket-claim-amount"
                 label="How much"
-                htmlFor="ticket-claim-amount"
                 hint="₹, up to 2 decimals"
-                className="w-[160px]"
+                inputMode="decimal"
+                value={claimAmount}
+                onChange={(e) => setClaimAmount(e.target.value)}
+                placeholder="120.00"
+                required
+              />
+              <Select
+                id="ticket-claim-payer"
+                label="Who owes it"
+                value={claimPayer}
+                onChange={(e) => setClaimPayer(e.target.value === 'STORE' ? 'STORE' : 'SELLER')}
               >
-                <Input
-                  id="ticket-claim-amount"
-                  inputMode="decimal"
-                  value={claimAmount}
-                  onChange={(e) => setClaimAmount(e.target.value)}
-                  placeholder="120.00"
-                  required
-                />
-              </FormField>
-              <FormField label="Who owes it" htmlFor="ticket-claim-payer" className="w-[180px]">
-                <Select
-                  id="ticket-claim-payer"
-                  value={claimPayer}
-                  onChange={(e) => setClaimPayer(e.target.value === 'STORE' ? 'STORE' : 'SELLER')}
-                >
-                  <option value="SELLER">The seller owes us</option>
-                  <option value="STORE">We owe the seller</option>
-                </Select>
-              </FormField>
+                <option value="SELLER">The seller owes us</option>
+                <option value="STORE">We owe the seller</option>
+              </Select>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      <FormField label="What is wrong" htmlFor="ticket-subject">
-        <Input
-          id="ticket-subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          maxLength={200}
-          required
-        />
-      </FormField>
-      <FormField label="Tell us more" htmlFor="ticket-description">
-        <Textarea
-          id="ticket-description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          maxLength={4000}
-        />
-      </FormField>
+      <TextField
+        id="ticket-subject"
+        label="What is wrong"
+        // The accessible name without the required mark the field draws
+        // beside its label — the same words the old label carried.
+        aria-label="What is wrong"
+        value={subject}
+        onChange={(e) => setSubject(e.target.value)}
+        maxLength={200}
+        showCount
+        required
+      />
+      <TextArea
+        id="ticket-description"
+        label="Tell us more"
+        rows={4}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        maxLength={4000}
+        showCount
+      />
       {error !== null ? (
-        <p role="alert" className="text-critical text-sm">
+        <p role="alert" className="rc-tkt-error">
           {error}
         </p>
       ) : null}
-      <Button type="submit" disabled={pending}>
-        {audience === 'skydrop'
-          ? heldForSeller
-            ? 'Send it to your seller to approve'
-            : 'Raise it with Skydrop'
-          : 'Raise it with your seller'}
-      </Button>
+      <div className="rc-tkt-actions">
+        <AsyncButton
+          type="submit"
+          variant="primary"
+          size="md"
+          icon={<Send size={15} />}
+          state={phase}
+          disabled={pending}
+          labels={{
+            idle: submitLabel,
+            busy: audience === 'skydrop' && heldForSeller ? 'Sending…' : 'Raising…',
+            done: 'Raised',
+            error: 'Not raised',
+          }}
+        />
+      </div>
     </form>
   );
 }

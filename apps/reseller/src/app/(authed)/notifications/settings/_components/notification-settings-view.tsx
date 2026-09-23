@@ -1,18 +1,13 @@
 'use client';
 
-import { useMemo, useState, type ReactElement } from 'react';
+import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, BellOff, Lock, ShieldCheck, Store, UserRound } from 'lucide-react';
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  LoadingState,
-  PageHeader,
-  Section,
-  Switch,
-  notificationKindStyle,
-} from '@skydrop/ui/components';
+import { BellOff, BellRing, Lock, ShieldCheck, Store, UserRound } from 'lucide-react';
+import { notificationKindStyle } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Switch } from '@skydrop/ui/app/switch';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import {
@@ -26,6 +21,7 @@ import {
   type TopicDef,
 } from '@/lib/notification-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import '../../_components/notifications.css';
 
 /** What each category means, in words a person reads. */
 const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
@@ -102,15 +98,10 @@ export function NotificationSettingsView(): ReactElement {
   const lockedCount = allTopics.filter((t) => t.mutable === false).length;
 
   return (
-    <Section>
-      <Link
-        href="/notifications"
-        className="text-text-muted hover:text-text-body mb-4 inline-flex items-center gap-1.5 text-xs transition-colors"
-      >
-        <ArrowLeft size={12} /> Back to notifications
-      </Link>
-
+    <div className="rc-ntf-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Notifications', href: '/notifications' }, { label: 'Settings' }]}
+        Link={Link}
         title="Notification settings"
         subtitle={
           mayReadStoreHalf
@@ -119,31 +110,34 @@ export function NotificationSettingsView(): ReactElement {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <Stat
+      <div className="rc-ntf-kpis">
+        <KpiCard
           label="Reaching you"
-          value={topics.isLoading ? '—' : `${onCount} of ${allTopics.length}`}
-          note="topics you have not silenced"
-          tone="confirmed"
+          icon={<BellRing size={14} />}
+          figure={topics.isLoading ? '—' : `${onCount} of ${allTopics.length}`}
+          hint="topics you have not silenced"
+          tone="credit"
         />
         {mayReadStoreHalf && (
-          <Stat
+          <KpiCard
             label="Store-wide"
-            value={categories.isLoading ? '—' : String(categories.data?.length ?? 0)}
-            note="categories, set for everybody here"
-            tone="in-transit"
+            icon={<Store size={14} />}
+            figure={categories.isLoading ? '—' : String(categories.data?.length ?? 0)}
+            hint="categories, set for everybody here"
+            tone="info"
           />
         )}
-        <Stat
+        <KpiCard
           label="Always sent"
-          value={topics.isLoading ? '—' : String(lockedCount)}
-          note="answers, money and order changes"
-          tone="failed"
+          icon={<Lock size={14} />}
+          figure={topics.isLoading ? '—' : String(lockedCount)}
+          hint="answers, money and order changes"
+          tone="pending"
         />
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="flex flex-col gap-4">
+      <div className="rc-ntf-layout">
+        <div className="rc-ntf-stack">
           <YourTopics topics={allTopics} loading={topics.isLoading} muted={muted} />
           {mayReadStoreHalf && (
             <StoreCategories
@@ -155,40 +149,35 @@ export function NotificationSettingsView(): ReactElement {
         </div>
         <AlwaysOn />
       </div>
-    </Section>
+    </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  note,
-  tone,
+/** A settings card: an icon chip, a title, whose decision it is. */
+function SettingsCard({
+  icon,
+  title,
+  subtitle,
+  children,
 }: {
-  readonly label: string;
-  readonly value: string;
-  readonly note: string;
-  readonly tone: string;
+  readonly icon: ReactNode;
+  readonly title: string;
+  readonly subtitle: string;
+  readonly children: ReactNode;
 }): ReactElement {
   return (
-    <div
-      className="rounded-[8px] border px-3 py-2.5"
-      style={{
-        borderColor: `var(--status-${tone}-bg)`,
-        background: `color-mix(in srgb, var(--status-${tone}-bg), transparent 55%)`,
-      }}
-    >
-      <div className="text-text-muted text-[11px] font-semibold tracking-wide uppercase">
-        {label}
+    <section className="rc-ntf-card">
+      <div className="rc-ntf-card__head">
+        <h2 className="rc-ntf-card__title">
+          <span className="rc-ntf-card__chip" aria-hidden>
+            {icon}
+          </span>
+          {title}
+        </h2>
+        <p className="rc-ntf-card__sub">{subtitle}</p>
       </div>
-      <div
-        className="mt-1 truncate text-lg font-semibold"
-        style={{ color: `var(--status-${tone}-fg)` }}
-      >
-        {value}
-      </div>
-      <div className="text-text-faint mt-0.5 text-xs">{note}</div>
-    </div>
+      {children}
+    </section>
   );
 }
 
@@ -213,89 +202,81 @@ function YourTopics({
   }, {});
 
   return (
-    <Card>
-      <CardHeader
-        tone="accent"
-        title={
-          <span className="inline-flex items-center gap-2">
-            <UserRound size={14} aria-hidden />
-            What reaches you
-          </span>
-        }
-        subtitle="Your own choices, for your own inbox and email. Nobody else at this store sees them, and changing one here does not change what your colleagues receive."
-      />
-      <CardBody>
-        {error !== null && <p className="text-critical mb-3 text-sm">{error}</p>}
-        {loading ? (
-          <LoadingState label="Loading topics…" rows={3} />
-        ) : (
-          Object.entries(grouped).map(([group, defs]) => {
-            const { Icon } = notificationKindStyle(group);
-            const on = defs.filter((d) => !muted.has(d.topic)).length;
-            return (
-              <div key={group} className="mt-5 first:mt-0">
-                <div className="border-border-subtle mb-1 flex items-center justify-between gap-3 border-b pb-1.5">
-                  <span className="text-accent inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase">
-                    <Icon size={14} />
-                    {group}
-                  </span>
-                  <span className="text-text-faint text-xs tabular-nums">
-                    {on} of {defs.length} on
-                  </span>
-                </div>
-                <ul className="divide-border-subtle divide-y">
-                  {defs.map((d) => {
-                    const isOn = !muted.has(d.topic);
-                    const locked = d.mutable === false;
-                    return (
-                      <li key={d.topic} className="flex items-start justify-between gap-4 py-2.5">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-baseline gap-x-2">
-                            <span className="text-text-bright text-sm font-medium">{d.label}</span>
-                            {/* The REAL topic key — what a support
-                                conversation needs to name, and what the
-                                mute is actually stored against. */}
-                            <span className="text-text-faint font-mono text-[11px]">{d.topic}</span>
-                          </div>
-                          <div className="text-text-muted mt-0.5 text-xs">{d.description}</div>
-                          {locked ? (
-                            /* Locked ON with the SERVER's own reason
-                               beside it. Cosmetic — the API refuses the
-                               mute either way (FE-2). */
-                            <div className="text-warning mt-1 inline-flex items-start gap-1.5 text-xs">
-                              <Lock size={12} className="mt-0.5 shrink-0" aria-hidden />
-                              <span>Always sent. {d.immutableReason ?? ''}</span>
-                            </div>
-                          ) : null}
-                        </div>
-                        <Switch
-                          checked={isOn}
-                          disabled={locked}
-                          label={`Notify me about: ${d.label}`}
-                          onChange={() => {
-                            setError(null);
-                            if (isOn) {
-                              setSub.mutate(
-                                { topic: d.topic, mode: 'MUTED' },
-                                { onError: (e) => setError(serverVerdict(e)) },
-                              );
-                            } else {
-                              clearSub.mutate(d.topic, {
-                                onError: (e) => setError(serverVerdict(e)),
-                              });
-                            }
-                          }}
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
+    <SettingsCard
+      icon={<UserRound size={14} />}
+      title="What reaches you"
+      subtitle="Your own choices, for your own inbox and email. Nobody else at this store sees them, and changing one here does not change what your colleagues receive."
+    >
+      {error !== null && <p className="rc-ntf-error">{error}</p>}
+      {loading ? (
+        <SkeletonRows rows={3} cols={2} label="Loading topics…" />
+      ) : (
+        Object.entries(grouped).map(([group, defs]) => {
+          const { Icon } = notificationKindStyle(group);
+          const on = defs.filter((d) => !muted.has(d.topic)).length;
+          return (
+            <div key={group} className="rc-ntf-group">
+              <div className="rc-ntf-group__head">
+                <span className="rc-ntf-group__name">
+                  <Icon size={14} aria-hidden />
+                  {group}
+                </span>
+                <span className="rc-ntf-group__count sk-figure">
+                  {on} of {defs.length} on
+                </span>
               </div>
-            );
-          })
-        )}
-      </CardBody>
-    </Card>
+              <ul className="rc-ntf-rows">
+                {defs.map((d) => {
+                  const isOn = !muted.has(d.topic);
+                  const locked = d.mutable === false;
+                  return (
+                    <li key={d.topic} className="rc-ntf-row">
+                      <div className="rc-ntf-row__text">
+                        <div className="rc-ntf-row__name">
+                          <span className="rc-ntf-row__label">{d.label}</span>
+                          {/* The REAL topic key — what a support
+                              conversation needs to name, and what the
+                              mute is actually stored against. */}
+                          <span className="rc-ntf-row__key sk-ident">{d.topic}</span>
+                        </div>
+                        <div className="rc-ntf-row__desc">{d.description}</div>
+                        {locked ? (
+                          /* Locked ON with the SERVER's own reason
+                             beside it. Cosmetic — the API refuses the
+                             mute either way (FE-2). */
+                          <div className="rc-ntf-row__lock">
+                            <Lock size={12} aria-hidden />
+                            <span>Always sent. {d.immutableReason ?? ''}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                      <Switch
+                        checked={isOn}
+                        disabled={locked}
+                        aria-label={`Notify me about: ${d.label}`}
+                        onCheckedChange={() => {
+                          setError(null);
+                          if (isOn) {
+                            setSub.mutate(
+                              { topic: d.topic, mode: 'MUTED' },
+                              { onError: (e) => setError(serverVerdict(e)) },
+                            );
+                          } else {
+                            clearSub.mutate(d.topic, {
+                              onError: (e) => setError(serverVerdict(e)),
+                            });
+                          }
+                        }}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })
+      )}
+    </SettingsCard>
   );
 }
 
@@ -314,95 +295,85 @@ function StoreCategories({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <Card>
-      <CardHeader
-        tone="accent"
-        title={
-          <span className="inline-flex items-center gap-2">
-            <Store size={14} aria-hidden />
-            What this store is told
-          </span>
-        }
-        subtitle={
-          mayManage
-            ? 'Applies to EVERYBODY here, not only you — switching a category off stops it reaching your colleagues too. Changes save instantly.'
-            : 'Set for the whole store. Somebody who can edit the store profile can change these.'
-        }
-      />
-      <CardBody>
-        {error !== null && <p className="text-critical mb-3 text-sm">{error}</p>}
-        {loading ? (
-          <LoadingState label="Loading categories…" rows={3} />
-        ) : (
-          <ul className="divide-border-subtle divide-y">
-            {rows.map((row) => {
-              const label = CATEGORY_LABEL[row.category] ?? {
-                title: row.category,
-                description: '',
-              };
-              return (
-                <li key={row.category} className="py-2.5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="text-text-bright text-sm font-medium">{label.title}</div>
-                      <div className="text-text-muted mt-0.5 text-xs">{label.description}</div>
-                      {!row.mutable && (
-                        <div className="text-warning mt-1 inline-flex items-start gap-1.5 text-xs">
-                          <Lock size={12} className="mt-0.5 shrink-0" aria-hidden />
-                          <span>
-                            {row.lockedTopics.length === 0
-                              ? 'Nothing is sent under this yet, so there is nothing to switch off.'
-                              : 'Everything here is something Skydrop never silences, so there is nothing to switch off.'}
-                          </span>
-                        </div>
-                      )}
+    <SettingsCard
+      icon={<Store size={14} />}
+      title="What this store is told"
+      subtitle={
+        mayManage
+          ? 'Applies to EVERYBODY here, not only you — switching a category off stops it reaching your colleagues too. Changes save instantly.'
+          : 'Set for the whole store. Somebody who can edit the store profile can change these.'
+      }
+    >
+      {error !== null && <p className="rc-ntf-error">{error}</p>}
+      {loading ? (
+        <SkeletonRows rows={3} cols={2} label="Loading categories…" />
+      ) : (
+        <ul className="rc-ntf-rows">
+          {rows.map((row) => {
+            const label = CATEGORY_LABEL[row.category] ?? {
+              title: row.category,
+              description: '',
+            };
+            return (
+              <li key={row.category} className="rc-ntf-row">
+                <div className="rc-ntf-row__text">
+                  <div className="rc-ntf-row__label">{label.title}</div>
+                  <div className="rc-ntf-row__desc">{label.description}</div>
+                  {!row.mutable && (
+                    <div className="rc-ntf-row__lock">
+                      <Lock size={12} aria-hidden />
+                      <span>
+                        {row.lockedTopics.length === 0
+                          ? 'Nothing is sent under this yet, so there is nothing to switch off.'
+                          : 'Everything here is something Skydrop never silences, so there is nothing to switch off.'}
+                      </span>
                     </div>
-                    <div className="flex shrink-0 items-center gap-4">
-                      <Switch
-                        checked={row.emailEnabled}
-                        disabled={!mayManage || !row.mutable}
-                        label={`Email the store about ${label.title}`}
-                        onChange={(v) => {
-                          setError(null);
-                          set.mutate(
-                            {
-                              category: row.category,
-                              emailEnabled: v,
-                              inAppEnabled: row.inAppEnabled,
-                            },
-                            { onError: (e) => setError(serverVerdict(e)) },
-                          );
-                        }}
-                      />
-                      <Switch
-                        checked={row.inAppEnabled}
-                        disabled={!mayManage || !row.mutable}
-                        label={`Show ${label.title} in the store's inboxes`}
-                        onChange={(v) => {
-                          setError(null);
-                          set.mutate(
-                            {
-                              category: row.category,
-                              emailEnabled: row.emailEnabled,
-                              inAppEnabled: v,
-                            },
-                            { onError: (e) => setError(serverVerdict(e)) },
-                          );
-                        }}
-                      />
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <p className="text-text-faint mt-4 text-xs">
-          Left switch: email. Right switch: the bell. A message has to pass BOTH this and your own
-          choice above to reach you.
-        </p>
-      </CardBody>
-    </Card>
+                  )}
+                </div>
+                <div className="rc-ntf-row__switches">
+                  <Switch
+                    checked={row.emailEnabled}
+                    disabled={!mayManage || !row.mutable}
+                    aria-label={`Email the store about ${label.title}`}
+                    onCheckedChange={(v) => {
+                      setError(null);
+                      set.mutate(
+                        {
+                          category: row.category,
+                          emailEnabled: v,
+                          inAppEnabled: row.inAppEnabled,
+                        },
+                        { onError: (e) => setError(serverVerdict(e)) },
+                      );
+                    }}
+                  />
+                  <Switch
+                    checked={row.inAppEnabled}
+                    disabled={!mayManage || !row.mutable}
+                    aria-label={`Show ${label.title} in the store's inboxes`}
+                    onCheckedChange={(v) => {
+                      setError(null);
+                      set.mutate(
+                        {
+                          category: row.category,
+                          emailEnabled: row.emailEnabled,
+                          inAppEnabled: v,
+                        },
+                        { onError: (e) => setError(serverVerdict(e)) },
+                      );
+                    }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="rc-ntf-foot">
+        Left switch: email. Right switch: the bell. A message has to pass BOTH this and your own
+        choice above to reach you.
+      </p>
+    </SettingsCard>
   );
 }
 
@@ -436,30 +407,24 @@ function AlwaysOn(): ReactElement {
     },
   ];
   return (
-    <Card>
-      <CardHeader
-        tone="accent"
-        title={
-          <span className="inline-flex items-center gap-2">
-            <Lock size={14} aria-hidden />
-            Cannot be switched off
-          </span>
-        }
-        subtitle="Neither by you nor store-wide. A warning you can silence is one you find out about too late."
-      />
-      <CardBody className="flex flex-col gap-3">
+    <SettingsCard
+      icon={<Lock size={14} />}
+      title="Cannot be switched off"
+      subtitle="Neither by you nor store-wide. A warning you can silence is one you find out about too late."
+    >
+      <ul className="rc-ntf-always">
         {items.map(({ Icon, title, body }) => (
-          <div key={title} className="flex items-start gap-2.5">
-            <span className="text-text-muted mt-0.5 shrink-0">
-              <Icon size={15} aria-hidden />
+          <li key={title} className="rc-ntf-always__item">
+            <span className="rc-ntf-always__icon" aria-hidden>
+              <Icon size={15} />
             </span>
-            <div className="min-w-0">
-              <div className="text-text-body text-sm font-medium">{title}</div>
-              <div className="text-text-muted text-xs leading-relaxed">{body}</div>
+            <div>
+              <div className="rc-ntf-always__title">{title}</div>
+              <div className="rc-ntf-always__body">{body}</div>
             </div>
-          </div>
+          </li>
         ))}
-      </CardBody>
-    </Card>
+      </ul>
+    </SettingsCard>
   );
 }
