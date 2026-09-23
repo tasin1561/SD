@@ -2,7 +2,7 @@
 
 import { useState, type ReactElement } from 'react';
 import { AdminRequestReturnDialog } from './admin-request-return-dialog';
-import { ShieldAlert } from 'lucide-react';
+import { Check, ShieldAlert, X } from 'lucide-react';
 import {
   type ForceMutationResult,
   type OrderView,
@@ -11,17 +11,12 @@ import {
 import { OrderCancellationReason, OrderStatus } from '@skydrop/db';
 import { usePermission } from '@/lib/use-permission';
 import { useCancelOrder } from '@/lib/api-hooks';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  FormField,
-  Select,
-  Textarea,
-  Modal,
-  ModalFooter,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { Facts, Notice, OoCard } from './order-ops-parts';
+import './order-core.css';
 import { ForceMutationDialog } from './force-mutation-dialog';
 import { ReleaseReservationsDialog } from './release-reservations-dialog';
 import { RestoreReservationsDialog } from './restore-reservations-dialog';
@@ -104,143 +99,141 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
       closeCancel();
     } catch (err) {
       setServerError(serverVerdict(err, 'Failed to cancel order.'));
+      throw err;
     }
   }
 
   return (
-    <Card>
-      <CardHeader
-        title="Lifecycle actions"
-        subtitle="State-machine-guarded transitions. The server enforces legal moves; the UI shows the action and surfaces the server's verdict."
-      />
-      <CardBody className="space-y-4">
-        <div>
-          <div className="text-text-faint text-xs uppercase tracking-wide mb-2">Sane actions</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="destructive"
-              size="md"
-              disabled={inTerminalState || cancel.isPending || !canCancel}
-              onClick={() => setCancelOpen(true)}
-              title={
-                inTerminalState
-                  ? `Already in a terminal state (${order.status.toLowerCase()})`
-                  : 'Cancel via the matrix (releases stock if reserved)'
-              }
-            >
-              Cancel order
-            </Button>
-
-            {/* DELIVERED is terminal for everything else, which is why
-                this sits outside the terminal-state guard above: a
-                customer return is the one lifecycle move a finished
-                order still has. The call-centre case — the customer
-                rings us rather than the seller. */}
-            {order.status === 'DELIVERED' && canCancel && (
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setReturnOpen(true)}
-                title="The customer wants to send it back — charged to the seller as a second delivery"
-              >
-                Request return
-              </Button>
-            )}
-          </div>
-          {inTerminalState && (
-            <div className="text-text-faint text-xs mt-2">
-              This order is in a terminal state; further sane lifecycle actions aren&apos;t
-              available. God-mode override below is the extraordinary-correction path.
-            </div>
-          )}
-        </div>
-
-        <div
-          className="rounded-[5px] px-3 py-3 space-y-2"
-          style={{
-            background: 'var(--color-critical-tint)',
-            border: '1px solid var(--color-critical-ring)',
-          }}
-        >
-          <div className="flex items-center gap-1.5 text-critical text-xs uppercase tracking-wide font-medium">
-            <ShieldAlert size={12} />
-            God-mode (ORD-2)
-          </div>
-          <p className="text-text-body text-xs leading-snug">
-            Bypass the state machine and edit rules. Audited{' '}
-            <span className="font-mono uppercase">CRITICAL</span>. The order will be marked with{' '}
-            <span className="font-mono">hasAdminOverride</span> permanently — a flag that is set
-            once and never cleared.
+    <OoCard>
+      <div className="oo-card__head">
+        <div className="oo-stack oo-stack--tight">
+          <p className="oo-card__title">Lifecycle actions</p>
+          <p className="oo-p">
+            State-machine-guarded transitions. The server enforces legal moves; the UI shows the
+            action and surfaces the server&apos;s verdict.
           </p>
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Button
-              variant="override"
-              size="md"
-              onClick={() => setOverrideOpen(true)}
-              disabled={!canOverride}
-              title={canOverride ? undefined : 'Requires the god-mode override permission'}
-            >
-              <ShieldAlert size={14} /> Force-mutate…
-            </Button>
-            <Button
-              variant="destructive"
-              size="md"
-              onClick={() => setReleaseOpen(true)}
-              disabled={!canOverride}
-              title={
-                canOverride
-                  ? 'Release every ACTIVE reservation (cleanup after a god-mode move). Idempotent.'
-                  : 'Requires SUPER_ADMIN role'
-              }
-            >
-              Release reservations…
-            </Button>
-            {/* The mirror. Sits beside the release because they are the
-                two halves of one question — this order's stock claim —
-                and looking for one while only the other exists is how a
-                stuck order stays stuck. */}
+        </div>
+      </div>
+
+      <div className="oc-group">
+        <p className="oc-group__label">Sane actions</p>
+        <div className="oo-row">
+          <Button
+            variant="destructive"
+            size="md"
+            disabled={inTerminalState || cancel.isPending || !canCancel}
+            onClick={() => setCancelOpen(true)}
+            title={
+              inTerminalState
+                ? `Already in a terminal state (${order.status.toLowerCase()})`
+                : 'Cancel via the matrix (releases stock if reserved)'
+            }
+          >
+            Cancel order
+          </Button>
+
+          {/* DELIVERED is terminal for everything else, which is why
+              this sits outside the terminal-state guard above: a
+              customer return is the one lifecycle move a finished
+              order still has. The call-centre case — the customer
+              rings us rather than the seller. */}
+          {order.status === 'DELIVERED' && canCancel && (
             <Button
               variant="secondary"
               size="md"
-              onClick={() => setRestoreOpen(true)}
-              disabled={!canOverride}
-              title={
-                canOverride
-                  ? 'Re-reserve stock for an order that lost its claim to an expired reservation. Refused if it already holds one.'
-                  : 'Requires SUPER_ADMIN role'
-              }
+              onClick={() => setReturnOpen(true)}
+              title="The customer wants to send it back — charged to the seller as a second delivery"
             >
-              Restore stock claim…
+              Request return
             </Button>
-          </div>
-          {!canOverride && (
-            <div className="text-text-faint text-xs">
-              Your role does not include the god-mode override permission. Ask a super admin if an
-              extraordinary correction is required.
-            </div>
           )}
         </div>
+        {inTerminalState && (
+          <p className="oo-faint">
+            This order is in a terminal state; further sane lifecycle actions aren&apos;t available.
+            God-mode override below is the extraordinary-correction path.
+          </p>
+        )}
+      </div>
 
-        {restoreNote !== null && (
-          <div className="border-border bg-surface-raised text-text-body rounded-[6px] border px-3 py-2 text-xs">
+      <div className="oc-god-panel">
+        <p className="oc-god-panel__title">
+          <ShieldAlert size={14} aria-hidden />
+          God-mode (ORD-2)
+        </p>
+        <p className="oc-god-panel__body">
+          Bypass the state machine and edit rules. Audited{' '}
+          <span className="sk-ident">CRITICAL</span>. The order will be marked with{' '}
+          <span className="sk-ident">hasAdminOverride</span> permanently — a flag that is set once
+          and never cleared.
+        </p>
+        <div className="oo-row">
+          <Button
+            variant="destructive"
+            size="md"
+            icon={<ShieldAlert size={14} />}
+            onClick={() => setOverrideOpen(true)}
+            disabled={!canOverride}
+            title={canOverride ? undefined : 'Requires the god-mode override permission'}
+          >
+            Force-mutate…
+          </Button>
+          <Button
+            variant="destructive"
+            size="md"
+            onClick={() => setReleaseOpen(true)}
+            disabled={!canOverride}
+            title={
+              canOverride
+                ? 'Release every ACTIVE reservation (cleanup after a god-mode move). Idempotent.'
+                : 'Requires SUPER_ADMIN role'
+            }
+          >
+            Release reservations…
+          </Button>
+          {/* The mirror. Sits beside the release because they are the
+              two halves of one question — this order's stock claim —
+              and looking for one while only the other exists is how a
+              stuck order stays stuck. */}
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => setRestoreOpen(true)}
+            disabled={!canOverride}
+            title={
+              canOverride
+                ? 'Re-reserve stock for an order that lost its claim to an expired reservation. Refused if it already holds one.'
+                : 'Requires SUPER_ADMIN role'
+            }
+          >
+            Restore stock claim…
+          </Button>
+        </div>
+        {!canOverride && (
+          <p className="oo-faint">
+            Your role does not include the god-mode override permission. Ask a super admin if an
+            extraordinary correction is required.
+          </p>
+        )}
+      </div>
+
+      {restoreNote !== null && (
+        <Notice tone="info" role="status">
+          <p>
             {restoreNote}{' '}
-            <button
-              type="button"
-              className="text-text-faint hover:text-text-body underline underline-offset-2"
-              onClick={() => setRestoreNote(null)}
-            >
+            <button type="button" className="oo-link" onClick={() => setRestoreNote(null)}>
               dismiss
             </button>
-          </div>
-        )}
+          </p>
+        </Notice>
+      )}
 
-        {lastOverride && (
-          <OverrideResultPanel result={lastOverride} onDismiss={() => setLastOverride(null)} />
-        )}
-        {lastRelease && (
-          <ReleaseResultPanel result={lastRelease} onDismiss={() => setLastRelease(null)} />
-        )}
-      </CardBody>
+      {lastOverride && (
+        <OverrideResultPanel result={lastOverride} onDismiss={() => setLastOverride(null)} />
+      )}
+      {lastRelease && (
+        <ReleaseResultPanel result={lastRelease} onDismiss={() => setLastRelease(null)} />
+      )}
 
       <AdminRequestReturnDialog
         orderId={order.id}
@@ -249,83 +242,58 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
         onClose={() => setReturnOpen(false)}
       />
 
-      {/* Sane cancel modal */}
-      <Modal
+      {/* Sane cancel — the reason and note travel with the confirm. */}
+      <ConfirmDialog
         open={cancelOpen}
-        onOpenChange={(o) => !o && closeCancel()}
-        title={
-          <>
-            Cancel order <span className="font-mono">{order.orderNumber}</span>?
-          </>
-        }
-        description="Sane admin cancel — drives the order through the state machine to CANCELLED_BY_ADMIN. Any active stock reservation will be released by the saga."
+        onOpenChange={(o) => {
+          if (!o) closeCancel();
+        }}
+        title="Cancel this order?"
+        entity={order.orderNumber}
+        entityIsIdentifier
+        consequence="Sane admin cancel — drives the order through the state machine to CANCELLED_BY_ADMIN. Any active stock reservation will be released by the saga."
+        confirmLabel="Confirm cancel"
+        cancelLabel="Keep order"
+        destructive
+        onConfirm={confirmCancel}
+        error={serverError}
       >
-        <div className="space-y-3">
+        <div className="oo-stack oo-stack--tight">
           {/* Money moves here, and the operator should know before they
               press it rather than field the seller's question later.
               Stated as a rule, not a figure: the panel does not know
               whether this particular order was charged, and inventing a
               number would be worse than naming the condition. */}
-          <p className="text-text-muted text-xs">
+          <p className="oo-faint">
             If a delivery fee has already been charged for this order and the parcel has not been
             dispatched, it is credited back to the seller&apos;s wallet automatically. Once
             dispatched, the fee stands — the courier already has the parcel.
           </p>
-          <FormField label="Cancellation reason" htmlFor="cancel-reason" required>
-            <Select
-              id="cancel-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value as OrderCancellationReason)}
-              disabled={cancel.isPending}
-            >
-              {CANCELLATION_REASONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField
-            label="Internal note (optional)"
-            htmlFor="cancel-note"
-            hint="Recorded in the order event + audit log; not visible to the seller."
-          >
-            <Textarea
-              id="cancel-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={500}
-              disabled={cancel.isPending}
-            />
-          </FormField>
-          {serverError && (
-            <div
-              className="px-2.5 py-1.5 rounded-[5px] text-critical text-xs"
-              style={{
-                background: 'var(--color-critical-tint)',
-                border: '1px solid var(--color-critical-ring)',
-              }}
-            >
-              {serverError}
-            </div>
-          )}
-        </div>
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={closeCancel} disabled={cancel.isPending}>
-            Keep order
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            onClick={() => {
-              void confirmCancel();
-            }}
+          <Select
+            id="cancel-reason"
+            label="Cancellation reason"
+            requiredMark
+            value={reason}
+            onChange={(e) => setReason(e.target.value as OrderCancellationReason)}
             disabled={cancel.isPending}
           >
-            {cancel.isPending ? 'Cancelling…' : 'Confirm cancel'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+            {CANCELLATION_REASONS.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </Select>
+          <TextArea
+            id="cancel-note"
+            label="Internal note (optional)"
+            hint="Recorded in the order event + audit log; not visible to the seller."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={500}
+            disabled={cancel.isPending}
+          />
+        </div>
+      </ConfirmDialog>
 
       <ForceMutationDialog
         open={overrideOpen}
@@ -338,6 +306,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
         open={releaseOpen}
         onOpenChange={setReleaseOpen}
         orderId={order.id}
+        orderNumber={order.orderNumber}
         onSuccess={(result) => setLastRelease(result)}
       />
 
@@ -345,6 +314,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
         open={restoreOpen}
         onOpenChange={setRestoreOpen}
         orderId={order.id}
+        orderNumber={order.orderNumber}
         onSuccess={(result) => {
           setRestoreNote(
             result.shortfall === null
@@ -353,7 +323,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
           );
         }}
       />
-    </Card>
+    </OoCard>
   );
 }
 
@@ -375,70 +345,70 @@ function OverrideResultPanel({
   readonly onDismiss: () => void;
 }): ReactElement {
   return (
-    <div
-      className="rounded-[5px] px-3 py-3"
-      style={{
-        background: 'var(--color-critical-tint)',
-        border: '1px solid var(--color-critical-ring)',
-      }}
-    >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="text-critical text-xs uppercase tracking-wide font-medium">
-          Force-mutation applied
-        </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="text-text-faint hover:text-text-body text-xs"
-        >
+    <div className="oc-result" data-tone="critical" role="status">
+      <div className="oc-result__head">
+        <p className="oc-result__title">Force-mutation applied</p>
+        <button type="button" onClick={onDismiss} className="oo-link">
           Dismiss
         </button>
       </div>
-      <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 text-xs">
-        <dt className="text-text-muted">Status</dt>
-        <dd className="text-text-body font-mono">
-          {result.fromStatus !== result.status
-            ? `${result.fromStatus} → ${result.status}`
-            : `unchanged (${result.status})`}
-        </dd>
-        <dt className="text-text-muted">Fields applied</dt>
-        <dd className="text-text-body font-mono">
-          {result.fieldChangesApplied.length === 0 ? '—' : result.fieldChangesApplied.join(', ')}
-        </dd>
-        <dt className="text-text-muted">hasAdminOverride</dt>
-        <dd className="text-critical font-mono">true (permanent)</dd>
-      </dl>
+      <Facts
+        items={[
+          {
+            label: 'Status',
+            value: (
+              <span className="sk-ident">
+                {result.fromStatus !== result.status
+                  ? `${result.fromStatus} → ${result.status}`
+                  : `unchanged (${result.status})`}
+              </span>
+            ),
+          },
+          {
+            label: 'Fields applied',
+            value: (
+              <span className="sk-ident">
+                {result.fieldChangesApplied.length === 0
+                  ? '—'
+                  : result.fieldChangesApplied.join(', ')}
+              </span>
+            ),
+          },
+          {
+            label: 'hasAdminOverride',
+            value: <span className="oo-bad">true (permanent)</span>,
+          },
+        ]}
+      />
 
       {result.resellerMoney?.refusal != null && (
-        <div className="mt-2 pt-2 border-t border-[var(--color-critical-ring)]">
-          <div className="text-text-muted text-xs uppercase tracking-wide mb-1">
-            The money on this reseller order did NOT follow the change
-          </div>
-          <p className="text-xs text-critical leading-snug">
+        <div className="oc-result__rule">
+          <p className="oo-strong">The money on this reseller order did NOT follow the change</p>
+          <p className="oo-bad oo-p">
             {result.resellerMoney.refusal === 'ALREADY_PAID'
               ? 'A credit on this order had already been paid, so it could not be worked out again. The order now says one figure and the wallets say another.'
               : 'Re-pricing this order failed. The stale figures are what would be paid until it succeeds.'}
           </p>
-          <div className="text-text-faint text-xs mt-1.5 leading-snug">
+          <p className="oo-faint">
             This is open on /system-issues (MONEY, HIGH) and the store and seller staff have been
             told. Settle the difference on the order’s ticket, or call the order off and place it
             again.
-          </div>
+          </p>
         </div>
       )}
 
       {result.reserveOutcomes && result.reserveOutcomes.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-[var(--color-critical-ring)]">
-          <div className="text-text-muted text-xs uppercase tracking-wide mb-1">
-            Reserve attempts (attempted, NOT blocking)
-          </div>
-          <ul className="space-y-0.5">
+        <div className="oc-result__rule">
+          <p className="oo-strong">Reserve attempts (attempted, NOT blocking)</p>
+          <ul className="oc-outcomes">
             {result.reserveOutcomes.map((o) => (
-              <li key={o.orderItemId} className="text-xs font-mono flex items-start gap-2">
-                <span className={o.ok ? 'text-delivered' : 'text-critical'}>
-                  {o.ok ? '✓' : '✗'}
-                </span>
-                <span className="text-text-body truncate flex-1">
+              <li key={o.orderItemId}>
+                {o.ok ? (
+                  <Check size={14} className="oo-good" aria-label="Reserved" />
+                ) : (
+                  <X size={14} className="oo-bad" aria-label="Failed" />
+                )}
+                <span className="oc-outcomes__text sk-ident">
                   {o.orderItemId.slice(0, 8)}…{' '}
                   {o.ok
                     ? `reserved (${o.reservationId?.slice(0, 8)}…)`
@@ -447,10 +417,10 @@ function OverrideResultPanel({
               </li>
             ))}
           </ul>
-          <div className="text-text-faint text-xs mt-1.5 leading-snug">
+          <p className="oo-faint">
             Some attempts may have failed (e.g., insufficient stock); the saga did NOT block or
             compensate. Use the release-reservations action above if cleanup is needed.
-          </div>
+          </p>
         </div>
       )}
     </div>
@@ -465,30 +435,25 @@ function ReleaseResultPanel({
   readonly onDismiss: () => void;
 }): ReactElement {
   return (
-    <div className="rounded-[5px] px-3 py-3 border border-border bg-bg">
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <div className="text-text-bright text-xs uppercase tracking-wide font-medium">
-          Reservations released
-        </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="text-text-faint hover:text-text-body text-xs"
-        >
+    <div className="oc-result" role="status">
+      <div className="oc-result__head">
+        <p className="oc-result__title">Reservations released</p>
+        <button type="button" onClick={onDismiss} className="oo-link">
           Dismiss
         </button>
       </div>
-      <div className="text-text-body text-sm">
-        Released <span className="font-mono">{result.releasedCount}</span> reservation(s).
-      </div>
+      <p className="oo-p">
+        Released <span className="sk-figure oo-strong">{result.releasedCount}</span> reservation(s).
+      </p>
       {result.released.length > 0 && (
-        <ul className="mt-1.5 space-y-0.5">
+        <ul className="oc-outcomes">
           {result.released.map((r) => (
-            <li key={r.reservationId} className="text-xs font-mono text-text-muted">
-              {r.reservationId.slice(0, 8)}… · qty {r.qtyReleased}
-              {r.alreadyInactive && (
-                <span className="text-text-faint ml-1">(already inactive)</span>
-              )}
+            <li key={r.reservationId} className="oo-muted">
+              <span className="oc-outcomes__text">
+                <span className="sk-ident">{r.reservationId.slice(0, 8)}…</span> · qty{' '}
+                <span className="sk-figure">{r.qtyReleased}</span>
+                {r.alreadyInactive && <span className="oo-faint"> (already inactive)</span>}
+              </span>
             </li>
           ))}
         </ul>

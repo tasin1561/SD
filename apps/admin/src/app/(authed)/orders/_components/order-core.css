@@ -1,0 +1,309 @@
+/* Orders core (list, detail body, lifecycle actions, god mode, charges,
+   reseller panels). Tokens only; arranges primitives and adds the few
+   pieces order-ops.css does not carry. Every grid declares minmax
+   columns so nothing sizes to its content. */
+
+/* ── List ─────────────────────────────────────────────────────────────── */
+.oc-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.oc-order-link {
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+}
+.oc-order-link:hover {
+  text-decoration: underline;
+}
+.oc-order-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.oc-source {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+
+/* ── Detail header ────────────────────────────────────────────────────── */
+.oc-head-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.oc-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.oc-flag[data-tone='warn'] {
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.oc-flag[data-tone='bad'] {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.oc-override {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-pill);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.oc-note-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+.oc-note-block__label {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.oc-footnote {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+
+/* ── Lifecycle actions ────────────────────────────────────────────────── */
+.oc-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.oc-group__label {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.oc-god-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-md);
+  background: var(--red-tint);
+  box-shadow: inset 3px 0 0 var(--red-fill);
+}
+.oc-god-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.oc-god-panel__body {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+.oc-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.oc-result[data-tone='critical'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+}
+.oc-result__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.oc-result__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.oc-result[data-tone='critical'] .oc-result__title {
+  color: var(--red-on-tint);
+}
+.oc-result__rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--red-line);
+}
+.oc-outcomes {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-xs);
+}
+.oc-outcomes li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.oc-outcomes__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── God mode dialog ──────────────────────────────────────────────────── */
+.oc-wl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.oc-wl__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.oc-wl__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.oc-wl__count {
+  color: var(--saffron-text);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.oc-wl__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+}
+.oc-wl__row + .oc-wl__row {
+  border-top: 1px solid var(--line);
+}
+.oc-wl__row[data-on='1'] {
+  background: var(--red-tint);
+}
+@media (min-width: 640px) {
+  .oc-wl__row {
+    grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+    align-items: center;
+  }
+}
+.oc-wl__was {
+  display: block;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-critical-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-md);
+  background: var(--red-tint);
+}
+.oc-counter {
+  display: block;
+  margin-top: var(--sp-1);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+.oc-counter[data-ok='1'] {
+  color: var(--green-text);
+}
+.oc-typed-word {
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--red-text);
+  font-family: var(--app-mono);
+}
+.oc-summary {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.oc-summary li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.oc-summary li svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--red-text);
+}
+.oc-verdict {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-md);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* ── Charges ──────────────────────────────────────────────────────────── */
+.oc-charges-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.oc-total-row .sk-td {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}

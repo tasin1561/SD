@@ -3,23 +3,13 @@
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Truck } from 'lucide-react';
-import {
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  Section,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AgeChip, OoSection, type AgeTone } from '../../orders/_components/order-ops-parts';
+import './courier-decisions.css';
 import {
   useChooseCourier,
   useCourierDecisionQueue,
@@ -49,10 +39,10 @@ import { serverVerdict } from '@/lib/server-verdict';
  * past the TTL the system books the cheapest itself and says so, which
  * is stated on the page rather than left to be discovered.
  */
-function waitTone(hours: number): 'draft' | 'pending' | 'failed' {
-  if (hours >= 6) return 'failed';
-  if (hours >= 2) return 'pending';
-  return 'draft';
+function waitTone(hours: number): AgeTone {
+  if (hours >= 6) return 'late';
+  if (hours >= 2) return 'aging';
+  return 'fresh';
 }
 
 function hoursSince(iso: string): number {
@@ -73,15 +63,10 @@ function OptionButton({
   busy: boolean;
 }): ReactElement {
   return (
-    <button
-      type="button"
-      onClick={onPick}
-      disabled={busy}
-      className="flex w-full items-baseline justify-between gap-3 rounded-md border border-border px-2.5 py-1.5 text-left transition-colors hover:border-accent disabled:opacity-50"
-    >
-      <span className="min-w-0">
-        <span className="block truncate text-sm">{option.courierName}</span>
-        <span className="text-xs text-text-muted">
+    <button type="button" onClick={onPick} disabled={busy} className="oq-option">
+      <span className="oq-option__main">
+        <span className="oq-option__name">{option.courierName}</span>
+        <span className="oo-faint">
           {option.estimatedDays === null
             ? 'no estimate given'
             : `${option.estimatedDays} day${option.estimatedDays === 1 ? '' : 's'}`}
@@ -89,7 +74,7 @@ function OptionButton({
           {fastest && ' · fastest'}
         </span>
       </span>
-      <span className="shrink-0 tabular-nums text-sm">
+      <span className="oq-option__rate sk-figure">
         <Money amount={option.rateInr} />
       </span>
     </button>
@@ -118,33 +103,33 @@ function Row({ row }: { row: WaitingCourierChoice }): ReactElement {
   return (
     <Tr>
       <Td>
-        <Link href={`/orders/${row.orderId}`} className="font-medium">
+        <Link href={`/orders/${row.orderId}`} className="oo-link sk-ident">
           {row.orderNumber}
         </Link>
-        <div className="text-xs text-text-muted">{row.sellerCompanyName}</div>
+        <span className="oo-sub">{row.sellerCompanyName}</span>
       </Td>
       <Td>
-        <div>{row.destCity || '—'}</div>
-        <div className="text-xs text-text-muted tabular-nums">{row.destPostalCode}</div>
+        <span>{row.destCity || '—'}</span>
+        <span className="oo-sub sk-figure">{row.destPostalCode}</span>
       </Td>
       <Td>
-        <div className="tabular-nums text-sm">{(row.totalWeightGrams / 1000).toFixed(2)} kg</div>
+        <span className="sk-figure">{(row.totalWeightGrams / 1000).toFixed(2)} kg</span>
         {row.codAmountInr !== null && (
-          <div className="text-xs text-text-muted">
+          <span className="oo-sub">
             COD <Money amount={row.codAmountInr} />
-          </div>
+          </span>
         )}
       </Td>
       <Td>
-        <StatusBadge kind={waitTone(waited)} label={waited < 1 ? 'just now' : `${waited}h`} />
+        <AgeChip tone={waitTone(waited)}>{waited < 1 ? 'just now' : `${waited}h`}</AgeChip>
       </Td>
       <Td>
         {row.options.length === 0 ? (
-          <div className="text-xs text-text-muted">
+          <p className="oo-faint">
             No carriers were recorded for this parcel. Booking it will let the aggregator choose.
-          </div>
+          </p>
         ) : (
-          <div className="flex max-w-md flex-col gap-1.5">
+          <div className="oq-options">
             {row.options.map((o) => (
               <OptionButton
                 key={o.courierCompanyId}
@@ -168,7 +153,11 @@ function Row({ row }: { row: WaitingCourierChoice }): ReactElement {
             ))}
           </div>
         )}
-        {error !== null && <div className="mt-1.5 text-xs text-status-failed">{error}</div>}
+        {error !== null && (
+          <p className="oo-error" role="alert">
+            {error}
+          </p>
+        )}
       </Td>
     </Tr>
   );
@@ -176,54 +165,58 @@ function Row({ row }: { row: WaitingCourierChoice }): ReactElement {
 
 export function CourierDecisionIndex(): ReactElement {
   const queue = useCourierDecisionQueue();
+  const rows = queue.data ?? [];
 
   return (
-    <Section>
+    <div className="oo-page">
       <PageHeader
         title="Courier decisions"
         subtitle="Confirmed parcels waiting for somebody to pick which carrier ships them. Their stock is already reserved and their customers have been told they are coming, so the wait is real — if nobody chooses, the cheapest option is booked automatically and an issue is raised saying so."
       />
 
-      <Card>
-        <CardBody>
-          {queue.isLoading ? (
-            <LoadingState label="Loading the queue…" />
-          ) : queue.isError ? (
+      <OoSection
+        title="Waiting for a carrier"
+        note={queue.data === undefined ? undefined : `${rows.length} waiting`}
+        flush
+      >
+        {queue.isLoading ? (
+          <div className="oo-card__pad">
+            <SkeletonRows rows={4} cols={5} label="Loading the queue…" />
+          </div>
+        ) : queue.isError ? (
+          <div className="oo-card__pad">
             <ErrorState
               message={queue.error?.message ?? 'Could not load the queue.'}
               retry={() => void queue.refetch()}
             />
-          ) : (
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Order</Th>
-                  <Th>Destination</Th>
-                  <Th>Parcel</Th>
-                  <Th>Waiting</Th>
-                  <Th>Pick a carrier</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {(queue.data ?? []).length === 0 ? (
-                  <TableEmpty colSpan={5}>
-                    <div className="flex flex-col items-center gap-1.5 py-2">
-                      <Truck size={20} className="text-text-muted" />
-                      <div className="font-medium">Nothing waiting on a decision</div>
-                      <div className="text-xs text-text-muted">
-                        Orders appear here only for sellers whose courier policy is set to Manual,
-                        and only when the aggregator offered more than one carrier.
-                      </div>
-                    </div>
-                  </TableEmpty>
-                ) : (
-                  (queue.data ?? []).map((row) => <Row key={row.shipmentId} row={row} />)
-                )}
-              </TBody>
-            </Table>
-          )}
-        </CardBody>
-      </Card>
-    </Section>
+          </div>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            bare
+            tone="positive"
+            icon={<Truck size={20} />}
+            title="Nothing waiting on a decision"
+            description="Orders appear here only for sellers whose courier policy is set to Manual, and only when the aggregator offered more than one carrier."
+          />
+        ) : (
+          <Table caption="Parcels waiting for a carrier">
+            <THead>
+              <Tr>
+                <Th>Order</Th>
+                <Th>Destination</Th>
+                <Th>Parcel</Th>
+                <Th>Waiting</Th>
+                <Th>Pick a carrier</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {rows.map((row) => (
+                <Row key={row.shipmentId} row={row} />
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </OoSection>
+    </div>
   );
 }

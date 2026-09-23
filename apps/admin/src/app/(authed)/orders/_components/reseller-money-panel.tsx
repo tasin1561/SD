@@ -8,21 +8,13 @@ import type {
 } from '@skydrop/api-client';
 import { ApiError } from '@skydrop/api-client';
 import type { StoreWalletEntryDirection, WalletEntryDirection } from '@skydrop/db';
-import {
-  Card,
-  CardBody,
-  ErrorState,
-  Money,
-  Section,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { Table, TableEmpty, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Facts, OoCard, OoSection } from './order-ops-parts';
+import './order-core.css';
 import {
   resellerCreditStatusKind,
   resellerCreditStatusLabel,
@@ -72,35 +64,35 @@ function Lines({
   readonly label: (l: ResellerMoneyLineView) => string;
 }): ReactElement {
   return (
-    <Table>
-      <THead>
-        <Tr>
-          <Th>{title}</Th>
-          <Th>When</Th>
-          <Th align="right">Amount</Th>
-        </Tr>
-      </THead>
-      <TBody>
-        {lines.length === 0 ? (
+    <OoCard flush>
+      <Table caption={title}>
+        <THead>
           <Tr>
-            <Td className="text-text-muted" colSpan={3}>
-              No lines yet.
-            </Td>
+            <Th>{title}</Th>
+            <Th>When</Th>
+            <Th align="right">Amount</Th>
           </Tr>
-        ) : (
-          lines.map((l) => (
-            <Tr key={l.id}>
-              <Td>
-                <div className="text-text-body">{label(l)}</div>
-                {l.note !== null ? <div className="text-text-faint text-xs">{l.note}</div> : null}
-              </Td>
-              <Td className="text-text-muted text-xs">{new Date(l.createdAt).toLocaleString()}</Td>
-              <Td align="right">{signed(l.amountInr)}</Td>
-            </Tr>
-          ))
-        )}
-      </TBody>
-    </Table>
+        </THead>
+        <TBody>
+          {lines.length === 0 ? (
+            <TableEmpty colSpan={3}>No lines yet.</TableEmpty>
+          ) : (
+            lines.map((l) => (
+              <Tr key={l.id}>
+                <Td>
+                  <span className="oo-body">{label(l)}</span>
+                  {l.note !== null ? <span className="oo-sub">{l.note}</span> : null}
+                </Td>
+                <Td className="oo-muted">
+                  <span className="sk-figure">{new Date(l.createdAt).toLocaleString()}</span>
+                </Td>
+                <Td align="right">{signed(l.amountInr)}</Td>
+              </Tr>
+            ))
+          )}
+        </TBody>
+      </Table>
+    </OoCard>
   );
 }
 
@@ -121,55 +113,56 @@ export function ResellerMoneyPanel({
   if (!enabled) return null;
   if (money.isLoading) {
     return (
-      <Section title="Reseller order money">
-        <SkeletonRows rows={4} cols={5} />
-      </Section>
+      <OoSection title="Reseller order money">
+        <SkeletonRows rows={4} cols={5} label="Loading the reseller split…" />
+      </OoSection>
     );
   }
   if (money.isError) {
     if (money.error instanceof ApiError && money.error.status === 404) return null;
     return (
-      <Section title="Reseller order money">
+      <OoSection title="Reseller order money">
         <ErrorState message={serverVerdict(money.error)} retry={() => void money.refetch()} />
-      </Section>
+      </OoSection>
     );
   }
   const v: ResellerOrderMoneyView | undefined = money.data;
   if (v === undefined) return null;
   return (
-    <Section
-      title="Reseller order money"
-      subtitle="Each party's credit at its own trigger, every Skydrop fee split by the order's snapshot, and both wallets' lines. Skydrop's take is the same as an identical channel order's."
-    >
-      <Card>
-        <CardBody>
-          <dl className="grid grid-cols-[minmax(84px,40%)_1fr] gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[200px_1fr] sm:gap-x-6">
-            <dt className="text-text-muted">Payment</dt>
-            <dd className="text-text-body">{v.paymentMode}</dd>
-            <dt className="text-text-muted">COD</dt>
-            <dd>{v.codInr === null ? '—' : <Money amount={v.codInr} convert={false} />}</dd>
-            <dt className="text-text-muted">Retail total</dt>
-            <dd>
-              <Money amount={v.retailTotalInr} convert={false} />
-            </dd>
-            <dt className="text-text-muted">Transfer total</dt>
-            <dd>
-              <Money amount={v.transferTotalInr} convert={false} />
-            </dd>
-            <dt className="text-text-muted">Terms version</dt>
-            <dd className="text-text-body font-mono text-xs">{v.termsVersionId}</dd>
-            <dt className="text-text-muted">Store pays</dt>
-            <dd className="text-text-body text-xs">
-              {Object.entries(v.storePercents)
-                .map(([k, pct]) => `${k.replace(/StorePercent$/, '')} ${pct}%`)
-                .join(' · ')}
-            </dd>
-          </dl>
-        </CardBody>
-      </Card>
+    <section className="oo-section">
+      <OoSection
+        title="Reseller order money"
+        note="Each party's credit at its own trigger, every Skydrop fee split by the order's snapshot, and both wallets' lines. Skydrop's take is the same as an identical channel order's."
+      >
+        <Facts
+          items={[
+            { label: 'Payment', value: v.paymentMode },
+            {
+              label: 'COD',
+              value: v.codInr === null ? '—' : <Money amount={v.codInr} convert={false} />,
+            },
+            { label: 'Retail total', value: <Money amount={v.retailTotalInr} convert={false} /> },
+            {
+              label: 'Transfer total',
+              value: <Money amount={v.transferTotalInr} convert={false} />,
+            },
+            { label: 'Terms version', value: <span className="sk-ident">{v.termsVersionId}</span> },
+            {
+              label: 'Store pays',
+              value: (
+                <span className="oo-muted">
+                  {Object.entries(v.storePercents)
+                    .map(([k, pct]) => `${k.replace(/StorePercent$/, '')} ${pct}%`)
+                    .join(' · ')}
+                </span>
+              ),
+            },
+          ]}
+        />
+      </OoSection>
 
-      <div className="mt-3">
-        <Table>
+      <OoCard flush>
+        <Table caption="Credits by party">
           <THead>
             <Tr>
               <Th>Party</Th>
@@ -185,28 +178,27 @@ export function ResellerMoneyPanel({
           </THead>
           <TBody>
             {v.parties.length === 0 ? (
-              <Tr>
-                <Td className="text-text-muted" colSpan={9}>
-                  Not planned yet — the plan is made when the order is confirmed.
-                </Td>
-              </Tr>
+              <TableEmpty colSpan={9}>
+                Not planned yet — the plan is made when the order is confirmed.
+              </TableEmpty>
             ) : (
               v.parties.map((p) => (
                 <Tr key={p.party}>
                   <Td>
-                    <div className="text-text-body">{p.party === 'STORE' ? 'Store' : 'Seller'}</div>
-                    <div className="text-text-faint text-xs">{p.timing}</div>
+                    <span className="oo-body">{p.party === 'STORE' ? 'Store' : 'Seller'}</span>
+                    <span className="oo-sub">{p.timing}</span>
                   </Td>
                   <Td>
-                    <StatusBadge
+                    <StatusChip
                       kind={resellerCreditStatusKind(p.status)}
                       label={resellerCreditStatusLabel(p.status)}
+                      size="sm"
                     />
                     {p.skippedReason !== null ? (
-                      <div className="text-text-faint font-mono text-xs">{p.skippedReason}</div>
+                      <span className="oo-sub sk-ident">{p.skippedReason}</span>
                     ) : null}
                   </Td>
-                  <Td className="text-text-muted text-xs">{when(p)}</Td>
+                  <Td className="oo-muted">{when(p)}</Td>
                   <Td align="right">
                     <Money amount={p.grossInr} convert={false} />
                   </Td>
@@ -230,11 +222,11 @@ export function ResellerMoneyPanel({
             )}
           </TBody>
         </Table>
-      </div>
+      </OoCard>
 
       {v.fees.length > 0 ? (
-        <div className="mt-3">
-          <Table>
+        <OoCard flush>
+          <Table caption="Fees billed">
             <THead>
               <Tr>
                 <Th>Fee billed</Th>
@@ -260,35 +252,35 @@ export function ResellerMoneyPanel({
               ))}
             </TBody>
           </Table>
-        </div>
+        </OoCard>
       ) : null}
 
-      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div>
+      <div className="oo-split">
+        <div className="oo-stack oo-stack--tight">
           <Lines
             title="Store wallet"
             lines={v.storeLines ?? []}
             label={(l) => storeWalletDirectionLabel(l.direction as StoreWalletEntryDirection)}
           />
           {v.storeNetInr !== null ? (
-            <p className="text-text-muted mt-2 text-right text-sm">
+            <p className="oo-muted oo-row oo-row--end">
               Store net: <Money amount={v.storeNetInr} convert={false} />
             </p>
           ) : null}
         </div>
-        <div>
+        <div className="oo-stack oo-stack--tight">
           <Lines
             title="Seller wallet"
             lines={v.sellerLines ?? []}
             label={(l) => walletDirectionLabel(l.direction as WalletEntryDirection)}
           />
           {v.sellerNetInr !== null ? (
-            <p className="text-text-muted mt-2 text-right text-sm">
+            <p className="oo-muted oo-row oo-row--end">
               Seller net: <Money amount={v.sellerNetInr} convert={false} />
             </p>
           ) : null}
         </div>
       </div>
-    </Section>
+    </section>
   );
 }

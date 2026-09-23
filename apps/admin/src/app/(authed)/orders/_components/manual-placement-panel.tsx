@@ -1,19 +1,17 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Ban, Send } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useCancelManualPlacement, usePlaceManualAwb } from '@/lib/api-hooks';
+import { Notice } from './order-ops-parts';
+import './order-shipping.css';
 
 /**
  * The fallback when no integrated courier will carry a parcel (CUR-8).
@@ -124,23 +122,30 @@ export function ManualPlacementPanel({
   const reasonTooShort = reason.trim().length < 10;
 
   return (
-    <div className="mt-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" size="sm" onClick={() => setPlacing(true)} disabled={hasAwb}>
+    <div className="os-panel">
+      <div className="os-tools">
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Send size={14} />}
+          onClick={() => setPlacing(true)}
+          disabled={hasAwb}
+        >
           Place with another courier
         </Button>
-        <Button variant="destructive" size="sm" onClick={() => setCancelling(true)}>
+        <Button
+          variant="destructive"
+          size="sm"
+          icon={<Ban size={14} />}
+          onClick={() => setCancelling(true)}
+        >
           Cannot be fulfilled
         </Button>
-        {hasAwb && (
-          <span className="text-text-faint text-xs">
-            Already has an AWB — nothing further to place.
-          </span>
-        )}
+        {hasAwb && <span className="os-note">Already has an AWB — nothing further to place.</span>}
       </div>
 
       {/* ── Place ─────────────────────────────────────────────────── */}
-      <Modal
+      <Dialog
         open={placing}
         onOpenChange={(next) => {
           if (!next) {
@@ -148,69 +153,77 @@ export function ManualPlacementPanel({
             reset();
           }
         }}
-        title={`Record a manual AWB — ${shipmentNumber}`}
+        icon={<Send size={18} />}
+        title={
+          <>
+            Record a manual AWB — <span className="sk-ident">{shipmentNumber}</span>
+          </>
+        }
+        footer={
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                setPlacing(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <AsyncButton
+              variant="primary"
+              size="md"
+              labels={{ idle: 'Record AWB and dispatch', busy: 'Recording…' }}
+              state={place.isPending ? 'busy' : 'idle'}
+              disabled={awbTooShort || carrierMissing || place.isPending}
+              onClick={() => void onPlace()}
+            />
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          You have booked this parcel with a courier outside Skydrop. Recording the waybill
-          dispatches the order and takes the stock off hand — do it once the parcel is actually with
-          them.
-        </p>
+        <div className="os-fields">
+          <p className="oo-p">
+            You have booked this parcel with a courier outside Skydrop. Recording the waybill
+            dispatches the order and takes the stock off hand — do it once the parcel is actually
+            with them.
+          </p>
 
-        {error !== null && <ErrorNote message={error} />}
+          {error !== null && (
+            <p className="oo-error" role="alert">
+              {error}
+            </p>
+          )}
 
-        <div className="space-y-3">
-          <FormField label="AWB number" required>
-            <Input
-              value={awbNumber}
-              onChange={(e) => setAwbNumber(e.target.value)}
-              maxLength={64}
-              placeholder="As printed on their label"
-            />
-          </FormField>
-          <FormField
+          <TextField
+            label="AWB number"
+            requiredMark
+            value={awbNumber}
+            onChange={(e) => setAwbNumber(e.target.value)}
+            maxLength={64}
+            placeholder="As printed on their label"
+            inputClassName="sk-ident"
+          />
+          <TextField
             label="Courier"
-            required
+            requiredMark
             hint="Bluedart, DTDC, whoever has it. The seller and the customer both see this name on their tracking — leave it blank and they are told their parcel is with a courier called “manual”."
-          >
-            <Input
-              value={courierName}
-              onChange={(e) => setCourierName(e.target.value)}
-              maxLength={80}
-            />
-          </FormField>
-          <FormField label="Service type" hint="Their service tier, if it matters later. Optional.">
-            <Input
-              value={serviceType}
-              onChange={(e) => setServiceType(e.target.value)}
-              maxLength={40}
-            />
-          </FormField>
+            value={courierName}
+            onChange={(e) => setCourierName(e.target.value)}
+            maxLength={80}
+          />
+          <TextField
+            label="Service type"
+            hint="Their service tier, if it matters later. Optional."
+            value={serviceType}
+            onChange={(e) => setServiceType(e.target.value)}
+            maxLength={40}
+          />
         </div>
-
-        <ModalFooter>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => {
-              setPlacing(false);
-              reset();
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={awbTooShort || carrierMissing || place.isPending}
-            onClick={() => void onPlace()}
-          >
-            {place.isPending ? 'Recording…' : 'Record AWB and dispatch'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+      </Dialog>
 
       {/* ── Cancel ────────────────────────────────────────────────── */}
-      <Modal
+      <Dialog
         open={cancelling}
         onOpenChange={(next) => {
           if (!next) {
@@ -218,48 +231,64 @@ export function ManualPlacementPanel({
             reset();
           }
         }}
-        title={`Cancel as unfulfillable — ${shipmentNumber}`}
+        icon={<Ban size={18} />}
+        title={
+          <>
+            Cancel as unfulfillable — <span className="sk-ident">{shipmentNumber}</span>
+          </>
+        }
         tone="critical"
+        footer={
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                setCancelling(false);
+                reset();
+              }}
+            >
+              Keep the order
+            </Button>
+            <AsyncButton
+              variant="destructive"
+              size="md"
+              labels={{ idle: 'Cancel the order', busy: 'Cancelling…' }}
+              state={cancel.isPending ? 'busy' : 'idle'}
+              disabled={reasonTooShort || cancel.isPending}
+              onClick={() => void onCancel()}
+            />
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          No courier will carry this parcel. Cancelling releases the stock back to inventory and
-          voids the shipment. The seller sees a cancelled order, so say why in terms they would
-          recognise.
-        </p>
+        <div className="os-fields">
+          <Notice tone="bad" icon={<Ban size={16} />}>
+            <p>
+              No courier will carry this parcel. Cancelling releases the stock back to inventory and
+              voids the shipment. The seller sees a cancelled order, so say why in terms they would
+              recognise.
+            </p>
+          </Notice>
 
-        {error !== null && <ErrorNote message={error} />}
+          {error !== null && (
+            <p className="oo-error" role="alert">
+              {error}
+            </p>
+          )}
 
-        <FormField label="Reason" required hint="At least 10 characters — it is kept on the order.">
-          <Textarea
+          <TextArea
+            label="Reason"
+            requiredMark
+            hint="At least 10 characters — it is kept on the order."
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             maxLength={500}
+            showCount
             rows={3}
             placeholder="e.g. No courier serves this PIN; customer contacted and agrees to cancel."
           />
-        </FormField>
-
-        <ModalFooter>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => {
-              setCancelling(false);
-              reset();
-            }}
-          >
-            Keep the order
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={reasonTooShort || cancel.isPending}
-            onClick={() => void onCancel()}
-          >
-            {cancel.isPending ? 'Cancelling…' : 'Cancel the order'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+        </div>
+      </Dialog>
     </div>
   );
 }

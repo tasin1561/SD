@@ -1,0 +1,354 @@
+/* Call centre (agent station, supervisor queue, agent roster). Tokens only.
+   Arranges the app primitives and the shared `oo-*` pieces from the order
+   operations area; draws only what is call-centre specific: the "why this
+   call" card, the customer risk strip, the recipient panel and the item
+   lines. Nothing here animates anything an agent is about to act on. */
+
+.cc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* ── Availability bar ─────────────────────────────────────────────────── */
+.cc-avail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.cc-avail__state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* ── The held call ────────────────────────────────────────────────────── */
+.cc-call-head {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cc-call-head__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+
+/* Why this call — first on the card and deliberately loud. */
+.cc-purpose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-md);
+  background: var(--red-tint);
+  box-shadow: inset 3px 0 0 var(--red-fill);
+}
+.cc-purpose__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.cc-purpose__headline {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.cc-purpose__said {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.cc-purpose__tickets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cc-purpose__ticket {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-size: var(--fs-sm);
+}
+.cc-purpose__ticket > p {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Customer risk strip: one line, read while the phone rings. */
+.cc-risk {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  font-size: var(--fs-sm);
+}
+.cc-risk[data-tone='pending'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+}
+.cc-risk[data-tone='critical'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+}
+.cc-risk__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+}
+.cc-risk__lead {
+  color: var(--fg-strong);
+}
+.cc-risk[data-tone='pending'] .cc-risk__lead {
+  color: var(--saffron-on-tint);
+}
+.cc-risk[data-tone='critical'] .cc-risk__lead,
+.cc-risk__flag {
+  color: var(--red-on-tint);
+}
+.cc-risk__flag {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.cc-risk__note {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.cc-risk__note--quote {
+  font-style: italic;
+}
+
+/* Recipient panel. */
+.cc-recipient {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  font-size: var(--fs-sm);
+}
+.cc-recipient__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+}
+.cc-recipient__order {
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+.cc-recipient__from {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.cc-recipient__from strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.cc-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--violet-line);
+  border-radius: var(--r-pill);
+  background: var(--violet-tint);
+  color: var(--violet-on-tint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.cc-recipient .oo-facts dd {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+
+/* Item lines. */
+.cc-items {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-3) 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+.cc-items__label {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.cc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.cc-item__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cc-item__name {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.cc-item__meta {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.cc-item__desc {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Prior calls. */
+.cc-prior {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.cc-prior__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.cc-prior__count {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+.cc-prior__group {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.cc-prior__promise {
+  display: block;
+  margin-top: 2px;
+  color: var(--saffron-text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.cc-prior__notes {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.cc-prior__none {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  font-style: italic;
+}
+
+/* The outcome form. */
+.cc-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding-top: var(--sp-2);
+}
+.cc-form__helper {
+  margin: calc(var(--sp-2) * -1) 0 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.cc-form__submit {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Queue ────────────────────────────────────────────────────────────── */
+.cc-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .cc-filters {
+    grid-template-columns: minmax(0, 14rem) minmax(0, 18rem);
+  }
+}
+.cc-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+.cc-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.cc-pager {
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--line);
+}
+
+/* ── History ──────────────────────────────────────────────────────────── */
+.cc-history-pager {
+  padding-top: var(--sp-3);
+}

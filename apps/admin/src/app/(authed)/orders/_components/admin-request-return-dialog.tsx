@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, ErrorNote, FormField, Modal, Textarea, useToast } from '@skydrop/ui/components';
+import { Undo2 } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
+import './order-ops.css';
 import { useAdminRequestReturn } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -57,49 +62,56 @@ export function AdminRequestReturnDialog({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title={`Bring ${orderNumber} back?`}
-    >
-      <div className="flex flex-col gap-3">
-        <p className="text-text-muted text-sm leading-relaxed">
-          The courier collects it from the customer and returns it to the warehouse. It travels the
-          same distance again, so{' '}
-          <span className="text-text-bright font-medium">the seller is charged ₹200</span> — a
-          second delivery, on top of the one they already paid. Charged when the parcel arrives, not
-          now.
-        </p>
-
-        <FormField
-          label="Why is it coming back?"
-          hint="The warehouse reads this on arrival; it decides whether the stock can be resold."
-        >
-          <Textarea
-            className="min-h-20"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            maxLength={500}
-          />
-        </FormField>
-
-        {request.isError && <ErrorNote message={serverVerdict(request.error)} />}
-
-        <div className="mt-1 flex justify-end gap-2">
+      icon={<Undo2 size={18} />}
+      title={
+        <>
+          Bring <span className="sk-ident">{orderNumber}</span> back?
+        </>
+      }
+      footer={
+        <DialogFooter>
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
           <Button
             variant="primary"
             onClick={submit}
+            loading={request.isPending}
             disabled={request.isPending || reason.trim().length < 5}
           >
-            {request.isPending ? 'Requesting…' : 'Request return'}
+            Request return
           </Button>
-        </div>
+        </DialogFooter>
+      }
+    >
+      <div className="oo-stack oo-stack--tight">
+        <p className="oo-p">
+          The courier collects it from the customer and returns it to the warehouse. It travels the
+          same distance again, so <span className="oo-strong">the seller is charged ₹200</span> — a
+          second delivery, on top of the one they already paid. Charged when the parcel arrives, not
+          now.
+        </p>
+
+        <TextArea
+          label="Why is it coming back?"
+          hint="The warehouse reads this on arrival; it decides whether the stock can be resold."
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          maxLength={500}
+          rows={3}
+        />
+
+        {request.isError && (
+          <p className="oo-error" role="alert">
+            {serverVerdict(request.error)}
+          </p>
+        )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

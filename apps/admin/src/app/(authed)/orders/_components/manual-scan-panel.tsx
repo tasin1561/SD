@@ -3,17 +3,15 @@
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-} from '@skydrop/ui/components';
+import { ScanLine } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import './order-shipping.css';
 
 /**
  * Record a courier scan by hand (TRK-9).
@@ -112,136 +110,133 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
 
   const isNdr = status === 'DELIVERY_ATTEMPTED';
 
+  function submit(): void {
+    record.mutate(
+      {
+        shipmentId,
+        body: {
+          status,
+          eventAtIso: new Date(eventAt).toISOString(),
+          ...(description.trim() === '' ? {} : { description: description.trim() }),
+          ...(locationCity.trim() === '' ? {} : { locationCity: locationCity.trim() }),
+          ...(isNdr && failureReason.trim() !== '' ? { failureReason: failureReason.trim() } : {}),
+        },
+      },
+      { onSuccess: (r) => setResult(r) },
+    );
+  }
+
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+      <Button variant="ghost" size="sm" icon={<ScanLine size={14} />} onClick={() => setOpen(true)}>
         Record a scan manually
       </Button>
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next) close();
         }}
         size="lg"
+        icon={<ScanLine size={18} />}
         title="Record a courier scan"
         description="For when the courier's webhook never reached us. This drives the order exactly as a real scan would."
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" onClick={close}>
+              {result === null ? 'Cancel' : 'Done'}
+            </Button>
+            {result === null && (
+              <AsyncButton
+                labels={{ idle: 'Record scan', busy: 'Recording…' }}
+                state={record.isPending ? 'busy' : 'idle'}
+                disabled={eventAt === ''}
+                onClick={submit}
+              />
+            )}
+          </DialogFooter>
+        }
       >
-        <FormField
-          label="What happened"
-          htmlFor="ms-status"
-          hint="Only scans a courier can report are listed. RTO received is a warehouse action, not a scan."
-        >
-          <Select id="ms-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <div className="os-fields">
+          <Select
+            id="ms-status"
+            label="What happened"
+            hint="Only scans a courier can report are listed. RTO received is a warehouse action, not a scan."
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
             {SCAN_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s.replace(/_/g, ' ').toLowerCase()}
               </option>
             ))}
           </Select>
-        </FormField>
 
-        <FormField
-          label="When it happened"
-          htmlFor="ms-when"
-          hint="The time of the SCAN, not now. Backdating puts it in the right place in the customer's timeline."
-        >
-          <Input
+          <DateField
             id="ms-when"
             type="datetime-local"
+            label="When it happened"
+            hint="The time of the SCAN, not now. Backdating puts it in the right place in the customer's timeline."
             value={eventAt}
             onChange={(e) => setEventAt(e.target.value)}
           />
-        </FormField>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField label="City" htmlFor="ms-city" hint="Optional. Shown to the customer.">
-            <Input
+          <div className="os-fields" data-cols="2">
+            <TextField
               id="ms-city"
+              label="City"
+              hint="Optional. Shown to the customer."
               value={locationCity}
               onChange={(e) => setLocationCity(e.target.value)}
             />
-          </FormField>
-          {isNdr && (
-            <FormField
-              label="Why delivery failed"
-              htmlFor="ms-fail"
-              hint="Recorded as the NDR reason."
-            >
-              <Input
+            {isNdr && (
+              <TextField
                 id="ms-fail"
+                label="Why delivery failed"
+                hint="Recorded as the NDR reason."
                 value={failureReason}
                 onChange={(e) => setFailureReason(e.target.value)}
                 placeholder="Customer unreachable"
               />
-            </FormField>
-          )}
-        </div>
+            )}
+          </div>
 
-        <FormField
-          label="Description"
-          htmlFor="ms-desc"
-          hint="Optional. What the courier's panel said, so the next person can check it."
-        >
-          <Textarea
+          <TextArea
             id="ms-desc"
+            label="Description"
+            hint="Optional. What the courier's panel said, so the next person can check it."
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-        </FormField>
 
-        {record.error !== null && <ErrorNote message={serverVerdict(record.error)} />}
-
-        {result !== null && (
-          <p className="text-sm">
-            {result.orderTransitioned ? (
-              <span className="text-[var(--color-good)]">
-                Scan recorded and the order moved forward.
-              </span>
-            ) : (
-              <span className="text-text-muted">
-                Scan recorded on the timeline. The order did not move
-                {result.skipReason === null || result.skipReason === undefined
-                  ? ''
-                  : ` — ${result.skipReason.replace(/_/g, ' ').toLowerCase()}`}
-                . That is normal when it is already at or past this point.
-              </span>
-            )}
-          </p>
-        )}
-
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={close}>
-            {result === null ? 'Cancel' : 'Done'}
-          </Button>
-          {result === null && (
-            <Button
-              size="md"
-              disabled={eventAt === '' || record.isPending}
-              onClick={() =>
-                record.mutate(
-                  {
-                    shipmentId,
-                    body: {
-                      status,
-                      eventAtIso: new Date(eventAt).toISOString(),
-                      ...(description.trim() === '' ? {} : { description: description.trim() }),
-                      ...(locationCity.trim() === '' ? {} : { locationCity: locationCity.trim() }),
-                      ...(isNdr && failureReason.trim() !== ''
-                        ? { failureReason: failureReason.trim() }
-                        : {}),
-                    },
-                  },
-                  { onSuccess: (r) => setResult(r) },
-                )
-              }
-            >
-              {record.isPending ? 'Recording…' : 'Record scan'}
-            </Button>
+          {record.error !== null && (
+            <p className="oo-error" role="alert">
+              {serverVerdict(record.error)}
+            </p>
           )}
-        </ModalFooter>
-      </Modal>
+
+          {result !== null && (
+            <p
+              className="os-result"
+              data-ok={result.orderTransitioned ? '1' : undefined}
+              role="status"
+            >
+              {result.orderTransitioned ? (
+                <>Scan recorded and the order moved forward.</>
+              ) : (
+                <>
+                  Scan recorded on the timeline. The order did not move
+                  {result.skipReason === null || result.skipReason === undefined
+                    ? ''
+                    : ` — ${result.skipReason.replace(/_/g, ' ').toLowerCase()}`}
+                  . That is normal when it is already at or past this point.
+                </>
+              )}
+            </p>
+          )}
+        </div>
+      </Dialog>
     </>
   );
 }

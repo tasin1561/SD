@@ -2,23 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { CustomerRiskStrip } from './customer-risk-strip';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  Money,
-  FormField,
-  Input,
-  Select,
-  useToast,
-} from '@skydrop/ui/components';
+import { Money, ProductThumb } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { Select } from '@skydrop/ui/app/select';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { Timeline, type TimelineStep } from '@skydrop/ui/app/timeline';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useQuery } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import type { CallOrderSnapshot, PulledAssignment } from '@skydrop/api-client';
 import { callBrandLine } from '@/lib/call-brand';
 import { PhoneToCall } from '@/components/phone-to-call';
-import { ProductThumb } from '@skydrop/ui/components';
 import {
   usePullNextCall,
   useRecordCallAttempt,
@@ -31,8 +29,11 @@ import { MyCallHistory } from './my-call-history';
 import { useServiceabilityCheck } from '@/lib/ops-hooks';
 import { useTransitionTicket } from '@/lib/ops-hooks';
 import Link from 'next/link';
+import { MessageCircleWarning, PhoneCall, TriangleAlert } from 'lucide-react';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { Facts, Notice, OoCard } from '../../orders/_components/order-ops-parts';
+import './call-center.css';
 
 const OUTCOME_OPTIONS: ReadonlyArray<{
   value: CallOutcome;
@@ -453,46 +454,49 @@ export function CallCenterStation(): ReactElement {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="oo-stack">
       {/* First, because it is the thing an agent changes most often and
           the thing that costs most when it is left wrong. */}
       <MyAvailability />
 
-      <div className="flex items-center gap-2">
+      <div className="cc-actions">
         {/* Calls arrive on their own while available; this is the
-            manual nudge for "the queue was empty, try now". */}
-        <Button
+            manual nudge for "the queue was empty, try now". The rolling
+            label is driven by the real pull (controlled state), so it
+            never delays one. */}
+        <AsyncButton
           variant="primary"
           size="md"
+          icon={<PhoneCall size={16} />}
+          state={pull.isPending ? 'busy' : 'idle'}
+          labels={{
+            idle: assignment ? 'Active call' : 'Check for a call now',
+            busy: 'Finding next call…',
+          }}
           onClick={() => void advance(true)}
           disabled={pull.isPending || assignment !== null || !isAvailable}
-        >
-          {pull.isPending
-            ? 'Finding next call…'
-            : assignment
-              ? 'Active call'
-              : 'Check for a call now'}
-        </Button>
+        />
         {assignment && (
-          <Button
+          <AsyncButton
             variant="ghost"
             size="md"
+            state={release.isPending ? 'busy' : 'idle'}
+            labels={{ idle: 'Release without attempt', busy: 'Releasing…' }}
             onClick={() => void onRelease()}
             disabled={release.isPending}
-          >
-            {release.isPending ? 'Releasing…' : 'Release without attempt'}
-          </Button>
+          />
         )}
       </div>
 
       {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-          {error}
-        </div>
+        <Notice tone="bad" icon={<TriangleAlert size={16} />}>
+          <p className="oo-error">{error}</p>
+        </Notice>
       )}
 
       {!assignment ? (
         <EmptyState
+          tone={isAvailable && queueEmpty ? 'positive' : 'neutral'}
           title={isAvailable ? 'Waiting for the next call' : 'You are marked unavailable'}
           description={
             !isAvailable
@@ -503,184 +507,171 @@ export function CallCenterStation(): ReactElement {
           }
         />
       ) : (
-        <Card>
-          <CardBody>
-            {changedUnderMe ? (
-              /* The seller or the reseller store changed this order while
-                 it was in your hand (owner decision 4, 2026-09-18). The
-                 panel below is already showing the NEW one — this is here
-                 so the agent knows to read it again rather than carry on
-                 from memory. Dismissible, because after they have looked
-                 it is just noise. */
-              <div
-                role="status"
-                className="mb-3 rounded border border-warning/40 bg-warning/10 p-3 text-sm"
-              >
-                <div className="text-text-bright font-medium">
-                  This order changed while you were on the call
-                </div>
-                <p className="text-text-muted mt-1 text-xs">
-                  The seller or the store that sold it has just changed something. What is on this
-                  screen is the new version — read the address and the items again before you
-                  confirm anything.
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => setChangedUnderMe(false)}
-                >
+        <OoCard>
+          {changedUnderMe ? (
+            /* The seller or the reseller store changed this order while
+               it was in your hand (owner decision 4, 2026-09-18). The
+               panel below is already showing the NEW one — this is here
+               so the agent knows to read it again rather than carry on
+               from memory. Dismissible, because after they have looked
+               it is just noise. */
+            <Notice
+              tone="warn"
+              role="status"
+              icon={<TriangleAlert size={16} />}
+              title="This order changed while you were on the call"
+            >
+              <p className="oo-p">
+                The seller or the store that sold it has just changed something. What is on this
+                screen is the new version — read the address and the items again before you confirm
+                anything.
+              </p>
+              <div>
+                <Button variant="ghost" size="sm" onClick={() => setChangedUnderMe(false)}>
                   I have read it
                 </Button>
               </div>
-            ) : null}
-            <div className="mb-3">
-              <div className="text-text-bright font-medium text-sm">
-                Assignment {assignment.assignmentId.slice(0, 8)}
-              </div>
-              <div className="text-text-faint text-xs mt-0.5">
-                {/* NOT +1: scheduledAttempts is incremented by pullNext
-                    itself, so it already counts this claim. The old
-                    expression said "attempt #2" on an agent's first
-                    call. It counts claims rather than conversations —
-                    an expiry and re-pull raises it without anyone
-                    having phoned — so it is worded as such. */}
-                Order {assignment.orderId} · pull #{assignment.scheduledAttempts}
-              </div>
-            </div>
+            </Notice>
+          ) : null}
+          <div className="cc-call-head">
+            <p className="cc-call-head__title">
+              Assignment <span className="sk-ident">{assignment.assignmentId.slice(0, 8)}</span>
+            </p>
+            <span className="oo-faint">
+              {/* NOT +1: scheduledAttempts is incremented by pullNext
+                  itself, so it already counts this claim. The old
+                  expression said "attempt #2" on an agent's first
+                  call. It counts claims rather than conversations —
+                  an expiry and re-pull raises it without anyone
+                  having phoned — so it is worded as such. */}
+              Order <span className="sk-ident">{assignment.orderId}</span> · pull #
+              <span className="sk-figure">{assignment.scheduledAttempts}</span>
+            </span>
+          </div>
 
-            {/* Above the customer's details, not below them: an agent
-                reads top-down with the phone already ringing, and a
-                warning under the address is a warning read after the
-                call has started. Renders nothing for a first-time
-                customer. */}
-            {/* FIRST thing on the card, above the customer's history and
-                the parcel itself. The agent's opening sentence depends
-                on this and nothing else on the page says it: the queue
-                entry carries an order id, so "confirm your order" and
-                "the seller asked us to ring you" looked identical here
-                until now. Opening with the wrong one tells a customer
-                whose parcel is already out for delivery that we have
-                lost track of it. */}
-            <CallPurposeBanner purpose={assignment.callPurpose} tickets={assignment.openTickets} />
-            <CustomerRiskStrip orderId={assignment.orderId} />
-            <RecipientPanel
-              order={assignment.order}
-              seller={assignment.seller}
-              customerBrand={assignment.customerBrand ?? null}
-              itemDisplay={assignment.itemDisplay}
+          {/* FIRST thing on the card, above the customer's history and
+              the parcel itself. The agent's opening sentence depends
+              on this and nothing else on the page says it: the queue
+              entry carries an order id, so "confirm your order" and
+              "the seller asked us to ring you" looked identical here
+              until now. Opening with the wrong one tells a customer
+              whose parcel is already out for delivery that we have
+              lost track of it. */}
+          <CallPurposeBanner purpose={assignment.callPurpose} tickets={assignment.openTickets} />
+          {/* Above the customer's details, not below them: an agent
+              reads top-down with the phone already ringing, and a
+              warning under the address is a warning read after the
+              call has started. Renders nothing for a first-time
+              customer. */}
+          <CustomerRiskStrip orderId={assignment.orderId} />
+          <RecipientPanel
+            order={assignment.order}
+            seller={assignment.seller}
+            customerBrand={assignment.customerBrand ?? null}
+            itemDisplay={assignment.itemDisplay}
+          />
+          {/* Above the outcome form on purpose: the agent needs the
+              last conversation BEFORE they dial, not after they have
+              opened with the wrong sentence. */}
+          <PriorAttempts attempts={assignment.priorAttempts} />
+
+          <div className="cc-form">
+            <Select
+              label="Outcome"
+              requiredMark
+              value={outcome}
+              onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
+            >
+              <option value="">Select an outcome…</option>
+              {/*
+                On a follow-up the confirmation pair sinks to the
+                bottom: they are the only two that move an order, and
+                on a shipped parcel neither can. Ordering, not
+                hiding — an agent who needs one can still reach it
+                (FE-2: the UI does not pre-empt the server).
+              */}
+              {orderedOutcomes.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+
+            {/*
+              The nine outcomes are the CONFIRMATION vocabulary, and
+              two of them move the order. On a parcel that has already
+              shipped those two do nothing — the state machine has no
+              edge from OUT_FOR_DELIVERY back to confirmed or
+              cancelled, so the transition is refused and swallowed
+              (CC-3) while the attempt is still recorded. Saying so is
+              better than letting an agent pick one and assume it
+              worked.
+            */}
+            {outcome && (
+              <p className="cc-form__helper">
+                {orderedOutcomes.find((o) => o.value === outcome)?.helper}
+              </p>
+            )}
+
+            {outcome === 'CALLBACK_REQUESTED' && (
+              <DateField
+                label="Callback scheduled for"
+                requiredMark
+                type="datetime-local"
+                value={callbackTime}
+                onChange={(e) => setCallbackTime(e.target.value)}
+              />
+            )}
+
+            {/*
+              This field is the ANSWER to whatever the seller asked.
+              It was labelled "Notes / free-form (audited)", which told
+              an agent it was a private scratchpad — so the one thing
+              the seller is waiting for was the thing least likely to
+              get written.
+            */}
+            <TextField
+              label={hasOpenIssues ? 'What the customer told you' : 'Notes'}
+              hint={
+                hasOpenIssues
+                  ? 'Written onto the seller’s open issue word for word — this is how they find out what happened.'
+                  : 'Free-form, audited.'
+              }
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={
+                hasOpenIssues
+                  ? 'e.g. Customer will be home after 6pm and asked us to try again tomorrow'
+                  : 'Free-form notes (audited)'
+              }
             />
-            {/* Above the outcome form on purpose: the agent needs the
-                last conversation BEFORE they dial, not after they have
-                opened with the wrong sentence. */}
-            <PriorAttempts attempts={assignment.priorAttempts} />
 
-            <div className="grid grid-cols-1 gap-3 mt-4">
-              <FormField label="Outcome" required>
-                <Select
-                  value={outcome}
-                  onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
-                >
-                  <option value="">Select an outcome…</option>
-                  {/*
-                    On a follow-up the confirmation pair sinks to the
-                    bottom: they are the only two that move an order, and
-                    on a shipped parcel neither can. Ordering, not
-                    hiding — an agent who needs one can still reach it
-                    (FE-2: the UI does not pre-empt the server).
-                  */}
-                  {orderedOutcomes.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-
-              {/*
-                The nine outcomes are the CONFIRMATION vocabulary, and
-                two of them move the order. On a parcel that has already
-                shipped those two do nothing — the state machine has no
-                edge from OUT_FOR_DELIVERY back to confirmed or
-                cancelled, so the transition is refused and swallowed
-                (CC-3) while the attempt is still recorded. Saying so is
-                better than letting an agent pick one and assume it
-                worked.
-              */}
-              {outcome && (
-                <div className="text-text-faint -mt-2 text-xs">
-                  {orderedOutcomes.find((o) => o.value === outcome)?.helper}
-                </div>
-              )}
-
-              {outcome === 'CALLBACK_REQUESTED' && (
-                <FormField label="Callback scheduled for" required>
-                  <Input
-                    type="datetime-local"
-                    value={callbackTime}
-                    onChange={(e) => setCallbackTime(e.target.value)}
-                  />
-                </FormField>
-              )}
-
-              {/*
-                This field is the ANSWER to whatever the seller asked.
-                It was labelled "Notes / free-form (audited)", which told
-                an agent it was a private scratchpad — so the one thing
-                the seller is waiting for was the thing least likely to
-                get written.
-              */}
-              <FormField
-                label={hasOpenIssues ? 'What the customer told you' : 'Notes'}
-                hint={
-                  hasOpenIssues
-                    ? 'Written onto the seller’s open issue word for word — this is how they find out what happened.'
-                    : 'Free-form, audited.'
-                }
-              >
-                <Input
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder={
-                    hasOpenIssues
-                      ? 'e.g. Customer will be home after 6pm and asked us to try again tomorrow'
-                      : 'Free-form notes (audited)'
-                  }
-                />
-              </FormField>
-
-              {hasOpenIssues && canResolveTickets ? (
-                <label className="text-text-body flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={closeIssues}
-                    onChange={(e) => setCloseIssues(e.target.checked)}
-                  />
-                  <span>
+            {hasOpenIssues && canResolveTickets ? (
+              <Checkbox
+                checked={closeIssues}
+                onChange={(e) => setCloseIssues(e.target.checked)}
+                label={
+                  <>
                     Close the seller’s {assignment.openTickets.length === 1 ? 'issue' : 'issues'}{' '}
                     after recording
-                    <span className="text-text-muted block text-xs">
-                      Untick it if you still owe them something — a re-attempt to arrange, or
-                      another call.
-                    </span>
-                  </span>
-                </label>
-              ) : null}
+                  </>
+                }
+                description="Untick it if you still owe them something — a re-attempt to arrange, or another call."
+              />
+            ) : null}
 
-              <div className="flex justify-end">
-                <Button
-                  variant="primary"
-                  size="md"
-                  disabled={record.isPending || !outcome}
-                  onClick={() => void onRecord()}
-                >
-                  {record.isPending ? 'Recording…' : 'Record outcome'}
-                </Button>
-              </div>
+            <div className="cc-form__submit">
+              <AsyncButton
+                variant="primary"
+                size="md"
+                state={record.isPending ? 'busy' : 'idle'}
+                labels={{ idle: 'Record outcome', busy: 'Recording…' }}
+                disabled={record.isPending || !outcome}
+                onClick={() => void onRecord()}
+              />
             </div>
-          </CardBody>
-        </Card>
+          </div>
+        </OoCard>
       )}
 
       {/* Between calls, not during one — collapsed so the live call
@@ -717,9 +708,11 @@ function RecipientPanel({
     // listCurrent/pullNext log this server-side; the agent still needs
     // to be told rather than shown a card of dashes.
     return (
-      <div className="rounded-[6px] border border-border p-3 text-sm text-text-muted">
-        This order could not be loaded. Release the call and tell a supervisor.
-      </div>
+      <Notice tone="warn" icon={<TriangleAlert size={16} />}>
+        <p className="oo-p">
+          This order could not be loaded. Release the call and tell a supervisor.
+        </p>
+      </Notice>
     );
   }
 
@@ -731,22 +724,90 @@ function RecipientPanel({
   // RS-10 — whom this call is on behalf of (a reseller store or the seller).
   const { orderedFrom, isReseller } = callBrandLine(seller, customerBrand);
 
+  const facts: Array<{ label: ReactNode; value: ReactNode }> = [
+    { label: 'Name', value: r.name || '—' },
+    {
+      label: 'Address',
+      value: [r.addressLine1, r.addressLine2, r.landmark].filter(Boolean).join(', ') || '—',
+    },
+    // Surfaced here, not enforced. An agent who learns the pin is not
+    // deliverable can ask for another address while the customer is
+    // still on the phone — which is the entire value. Blocking the
+    // confirmation instead would leave them holding a refusal with
+    // nowhere to put it.
+    ...(serviceability.data?.known === true && !serviceability.data.serviceable
+      ? [
+          {
+            label: 'Delivery',
+            value: (
+              <span className="oo-warn">
+                {serviceability.data.reason ??
+                  'Our courier may not deliver to this PIN — ask for an alternative address.'}
+              </span>
+            ),
+          },
+        ]
+      : []),
+    {
+      label: 'City / state / PIN',
+      // Filtering on EMPTY STRING, not nullishness: city/state are
+      // stored as '' for orders whose seller never supplied them
+      // (ORD-5). An agent reading "· · 560001" aloud is the failure.
+      value:
+        [r.city, r.stateProvince, r.postalCode].filter((v) => v.trim() !== '').join(' · ') || '—',
+    },
+    ...(isReseller &&
+    customerBrand !== null &&
+    (customerBrand.storeContactPhone !== null || customerBrand.storeContactEmail !== null)
+      ? [
+          {
+            label: 'Store contact',
+            value: [customerBrand.storeContactPhone, customerBrand.storeContactEmail]
+              .filter((v): v is string => v !== null && v.trim() !== '')
+              .join(' · '),
+          },
+        ]
+      : []),
+    ...(seller !== null
+      ? [
+          {
+            label: isReseller ? 'Seller contact (not for the customer)' : 'Seller contact',
+            // For the questions an agent cannot answer — a substitution,
+            // a discount the customer says they were promised. Reaching
+            // the shop takes a call, not a support ticket.
+            value: `${seller.contactPersonName} · ${seller.phone}`,
+          },
+        ]
+      : []),
+    {
+      label: 'Payment',
+      value:
+        order.paymentMode === 'COD' && order.codAmountInr !== null ? (
+          // The agent reads this figure aloud to the customer, so it
+          // is grouped the way they expect to hear it: ₹12,34,567.
+          <span>
+            COD <Money amount={order.codAmountInr} />
+          </span>
+        ) : (
+          order.paymentMode || '—'
+        ),
+    },
+  ];
+
   return (
-    <div className="rounded-[6px] border border-border p-3 text-sm">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="text-text-bright text-base font-semibold">{order.orderNumber}</span>
+    <div className="cc-recipient">
+      <div className="cc-recipient__head">
+        <span className="cc-recipient__order sk-ident">{order.orderNumber}</span>
         {orderedFrom !== null && (
           // The agent opens with this: "calling about your order from
           // <store>". A customer phoned by a company they do not
           // recognise hangs up, and in a COD market that is a refusal.
           // RS-10: for a reseller-store order that is THE STORE's name.
-          <span className="text-text-muted text-sm" data-testid="ordered-from">
-            Ordered from <span className="text-text-bright font-medium">{orderedFrom}</span>
-            {isReseller && (
-              <span className="border-border text-text-muted ml-2 rounded-[4px] border px-1.5 py-0.5 text-xs">
-                Reseller store
-              </span>
-            )}
+          <span className="cc-recipient__from" data-testid="ordered-from">
+            <span>
+              Ordered from <strong>{orderedFrom}</strong>
+            </span>
+            {isReseller && <span className="cc-tag">Reseller store</span>}
           </span>
         )}
       </div>
@@ -755,115 +816,48 @@ function RecipientPanel({
         // RS-10 — the script. The customer bought from the store and
         // has never heard of the seller behind it; naming the seller
         // on the phone reads as a stranger calling about their parcel.
-        <p className="text-text-muted mb-2 text-sm" data-testid="reseller-script">
-          Say you are calling about their order from{' '}
-          <span className="text-text-bright font-medium">{orderedFrom}</span>. Do not mention the
-          seller behind the store.
+        <p className="oo-script" data-testid="reseller-script">
+          Say you are calling about their order from <strong>{orderedFrom}</strong>. Do not mention
+          the seller behind the store.
         </p>
       )}
 
-      <div className="mb-2">
+      <div>
         <PhoneToCall phone={r.phoneE164} altPhone={r.altPhoneE164} />
       </div>
 
-      {/* text-sm, not text-xs: an agent reads this card for a whole
-          shift while talking, and 12px of grey is where a digit or a
-          house number gets misread. */}
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-        <Field label="Name" value={r.name || '—'} />
-        <Field
-          label="Address"
-          value={[r.addressLine1, r.addressLine2, r.landmark].filter(Boolean).join(', ') || '—'}
-        />
-        {/* Surfaced here, not enforced. An agent who learns the pin is
-            not deliverable can ask for another address while the
-            customer is still on the phone — which is the entire value.
-            Blocking the confirmation instead would leave them holding a
-            refusal with nowhere to put it. */}
-        {serviceability.data?.known === true && !serviceability.data.serviceable && (
-          <Field
-            label="Delivery"
-            value={
-              serviceability.data.reason ??
-              'Our courier may not deliver to this PIN — ask for an alternative address.'
-            }
-          />
-        )}
-        <Field
-          label="City / state / PIN"
-          // Filtering on EMPTY STRING, not nullishness: city/state are
-          // stored as '' for orders whose seller never supplied them
-          // (ORD-5). An agent reading "· · 560001" aloud is the failure.
-          value={
-            [r.city, r.stateProvince, r.postalCode].filter((v) => v.trim() !== '').join(' · ') ||
-            '—'
-          }
-        />
-        {isReseller &&
-          customerBrand !== null &&
-          (customerBrand.storeContactPhone !== null ||
-            customerBrand.storeContactEmail !== null) && (
-            <Field
-              label="Store contact"
-              value={[customerBrand.storeContactPhone, customerBrand.storeContactEmail]
-                .filter((v): v is string => v !== null && v.trim() !== '')
-                .join(' · ')}
-            />
-          )}
-        {seller !== null && (
-          <Field
-            label={isReseller ? 'Seller contact (not for the customer)' : 'Seller contact'}
-            // For the questions an agent cannot answer — a substitution,
-            // a discount the customer says they were promised. Reaching
-            // the shop takes a call, not a support ticket.
-            value={`${seller.contactPersonName} · ${seller.phone}`}
-          />
-        )}
-        <Field
-          label="Payment"
-          value={
-            order.paymentMode === 'COD' && order.codAmountInr !== null ? (
-              // The agent reads this figure aloud to the customer, so it
-              // is grouped the way they expect to hear it: ₹12,34,567.
-              <span>
-                COD <Money amount={order.codAmountInr} />
-              </span>
-            ) : (
-              order.paymentMode || '—'
-            )
-          }
-        />
-      </div>
+      {/* 14px, not 12: an agent reads this card for a whole shift while
+          talking, and small grey text is where a digit or a house
+          number gets misread. The VALUE carries the weight. */}
+      <Facts items={facts} columns={2} />
+
       {order.items.length > 0 && (
-        <div className="border-border mt-3 border-t pt-2 text-sm">
-          <div className="text-text-faint mb-1">Items</div>
-          <ul className="space-y-0.5">
+        <div>
+          <div className="cc-items__label">Items</div>
+          <ul className="cc-items">
             {order.items.map((it, idx) => {
               // Live catalogue read, keyed on variant — the snapshot's
               // own imageUrl is a canonical object URL that has resolved
               // for nobody since the bucket went private.
               const display = itemDisplay[it.variantId];
               return (
-                <li key={`${it.skuCode}-${idx}`} className="flex items-start gap-3 py-1">
+                <li key={`${it.skuCode}-${idx}`} className="cc-item">
                   <ProductThumb src={display?.thumbnailUrl ?? null} size={44} />
-                  <div className="min-w-0">
-                    <div>
-                      <span className="text-text-bright font-medium">
-                        {it.productName}
-                        {it.variantLabel ? ` · ${it.variantLabel}` : ''}
-                      </span>{' '}
-                      <span className="text-text-faint font-mono text-xs">
-                        ×{it.quantity} · {it.skuCode}
-                      </span>
-                    </div>
+                  <div className="cc-item__text">
+                    <span className="cc-item__name">
+                      {it.productName}
+                      {it.variantLabel ? ` · ${it.variantLabel}` : ''}
+                    </span>
+                    <span className="cc-item__meta">
+                      <span className="sk-figure">×{it.quantity}</span> ·{' '}
+                      <span className="sk-ident">{it.skuCode}</span>
+                    </span>
                     {display?.description !== null && display?.description !== undefined && (
                       // Clamped: a product description can run to
                       // paragraphs, and the agent needs the gist while
                       // the customer is on the line, not an essay
                       // pushing the outcome form off the screen.
-                      <p className="text-text-muted mt-0.5 line-clamp-2 text-xs leading-snug">
-                        {display.description}
-                      </p>
+                      <p className="cc-item__desc">{display.description}</p>
                     )}
                   </div>
                 </li>
@@ -876,13 +870,21 @@ function RecipientPanel({
   );
 }
 
+const WHEN: Intl.DateTimeFormatOptions = {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+};
+
 /**
  * What happened the last times this order was called.
  *
  * Distinct from "My calls" at the bottom of the page, which is the
  * AGENT's own log across every order — useful for reviewing your shift,
  * useless for the customer in front of you. This is the customer's
- * thread: attempt two should open where attempt one left off.
+ * thread: attempt two should open where attempt one left off. Drawn as
+ * the u17 timeline because it IS an event history.
  */
 function PriorAttempts({
   attempts,
@@ -896,68 +898,62 @@ function PriorAttempts({
   const thisOrder = attempts.filter((a) => a.isThisOrder);
   const earlier = attempts.filter((a) => !a.isThisOrder);
 
-  function Entry({ a }: { readonly a: (typeof attempts)[number] }): ReactElement {
-    return (
-      <li className="border-border bg-surface-raised rounded-[4px] border p-2.5">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="text-text-bright text-sm font-semibold">
-            {OUTCOME_OPTIONS.find((o) => o.value === a.outcome)?.label ?? a.outcome}
-          </span>
-          <span className="text-text-muted text-xs">
-            {new Date(a.startedAt).toLocaleString('en-IN', {
-              day: '2-digit',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
+  function step(a: (typeof attempts)[number]): TimelineStep {
+    return {
+      id: a.attemptId,
+      state: 'done',
+      label: (
+        <>
+          {OUTCOME_OPTIONS.find((o) => o.value === a.outcome)?.label ?? a.outcome}
           {!a.isThisOrder && (
-            <span className="text-text-faint font-mono text-xs">on {a.orderNumber}</span>
+            <>
+              {' '}
+              <span className="oo-faint">
+                on <span className="sk-ident">{a.orderNumber}</span>
+              </span>
+            </>
           )}
-          {a.agentEmail !== null && (
-            <span className="text-text-faint ml-auto text-xs">{a.agentEmail}</span>
+        </>
+      ),
+      time: new Date(a.startedAt).toLocaleString('en-IN', WHEN),
+      ...(a.agentEmail !== null ? { location: a.agentEmail } : {}),
+      description: (
+        <>
+          {a.rescheduledFor !== null && (
+            // The promise the customer was given. Breaking it is worse
+            // than never having made it.
+            <span className="cc-prior__promise">
+              Promised callback: {new Date(a.rescheduledFor).toLocaleString('en-IN', WHEN)}
+            </span>
           )}
-        </div>
-        {a.rescheduledFor !== null && (
-          // The promise the customer was given. Breaking it is worse
-          // than never having made it.
-          <div className="text-pending mt-1 text-sm font-medium">
-            Promised callback:{' '}
-            {new Date(a.rescheduledFor).toLocaleString('en-IN', {
-              day: '2-digit',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </div>
-        )}
-        {a.notes !== null && a.notes !== '' ? (
-          <p className="text-text-body mt-1 text-sm leading-snug">{a.notes}</p>
-        ) : (
-          // Said out loud rather than left blank: "nobody wrote anything
-          // down" and "the notes failed to load" look identical
-          // otherwise, and only one of them means stop looking.
-          <p className="text-text-faint mt-1 text-xs italic">No notes recorded</p>
-        )}
-      </li>
-    );
+          {a.notes !== null && a.notes !== '' ? (
+            <span className="cc-prior__notes">{a.notes}</span>
+          ) : (
+            // Said out loud rather than left blank: "nobody wrote anything
+            // down" and "the notes failed to load" look identical
+            // otherwise, and only one of them means stop looking.
+            <span className="cc-prior__none">No notes recorded</span>
+          )}
+        </>
+      ),
+    };
   }
 
   return (
-    <div className="border-border rounded-[6px] border p-3">
-      <h3 className="text-text-bright mb-2 text-sm font-semibold">
+    <div className="cc-prior">
+      <h3 className="cc-prior__title">
         What this customer was told before
-        <span className="text-text-muted ml-2 text-xs font-normal">
+        <span className="cc-prior__count">
           {attempts.length} previous {attempts.length === 1 ? 'call' : 'calls'}
         </span>
       </h3>
 
       {thisOrder.length > 0 && (
-        <ul className="space-y-2">
-          {thisOrder.map((a) => (
-            <Entry key={a.attemptId} a={a} />
-          ))}
-        </ul>
+        <Timeline
+          label="Previous calls about this order"
+          stateWords={{ done: 'Logged' }}
+          steps={thisOrder.map(step)}
+        />
       )}
 
       {earlier.length > 0 && (
@@ -966,33 +962,14 @@ function PriorAttempts({
               different parcel is still context — "she always asks for
               after seven" — but it is not about the one being discussed,
               and an agent must not confuse the two on the phone. */}
-          <div className="text-text-faint mt-3 mb-1.5 text-[11px] tracking-wide uppercase">
-            Earlier orders by the same customer
-          </div>
-          <ul className="space-y-2">
-            {earlier.map((a) => (
-              <Entry key={a.attemptId} a={a} />
-            ))}
-          </ul>
+          <p className="cc-prior__group">Earlier orders by the same customer</p>
+          <Timeline
+            label="Previous calls about this customer's other orders"
+            stateWords={{ done: 'Logged' }}
+            steps={earlier.map(step)}
+          />
         </>
       )}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-}: {
-  readonly label: string;
-  readonly value: ReactNode;
-}): ReactElement {
-  return (
-    <div className="leading-relaxed">
-      <span className="text-text-faint">{label}:</span>{' '}
-      {/* The VALUE is what gets read aloud, so it carries the weight;
-          the label only has to be findable. */}
-      <span className="text-text-bright font-medium">{value}</span>
     </div>
   );
 }
@@ -1012,40 +989,33 @@ function CallPurposeBanner({
   readonly tickets: PulledAssignment['openTickets'];
 }): ReactElement {
   return (
-    <div className="border-danger/60 bg-danger/10 mb-3 rounded-lg border-2 p-3">
-      <p className="text-danger text-xs font-semibold tracking-wide uppercase">Why this call</p>
-      <p className="text-text-bright mt-1 text-sm font-semibold">{purpose.headline}</p>
+    <div className="cc-purpose">
+      <p className="cc-purpose__kicker">
+        <MessageCircleWarning size={15} aria-hidden />
+        Why this call
+      </p>
+      <p className="cc-purpose__headline">{purpose.headline}</p>
 
       {purpose.sellerAsked !== null ? (
-        <p className="text-text-body mt-1 text-sm">
-          <span className="text-text-muted">They told us: </span>
+        <p className="cc-purpose__said">
+          <span className="oo-muted">They told us: </span>
           &ldquo;{purpose.sellerAsked}&rdquo;
         </p>
       ) : null}
 
       {tickets.length > 0 ? (
-        <ul className="mt-3 space-y-2">
+        <ul className="cc-purpose__tickets">
           {tickets.map((t) => (
-            <li
-              key={t.ticketId}
-              className="border-border/60 flex flex-wrap items-start gap-2 rounded border p-2"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="text-text-body text-xs">
-                  <span className="font-medium">{t.subject}</span>
-                  {t.detail === null || t.detail.trim() === '' ? null : (
-                    <span className="text-text-muted">: {t.detail}</span>
-                  )}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Link
-                  href={`/tickets?ticketId=${t.ticketId}`}
-                  className="text-accent text-xs hover:underline"
-                >
-                  Open
-                </Link>
-              </div>
+            <li key={t.ticketId} className="cc-purpose__ticket">
+              <p>
+                <span className="oo-strong">{t.subject}</span>
+                {t.detail === null || t.detail.trim() === '' ? null : (
+                  <span className="oo-muted">: {t.detail}</span>
+                )}
+              </p>
+              <Link href={`/tickets?ticketId=${t.ticketId}`} className="oo-link">
+                Open
+              </Link>
             </li>
           ))}
         </ul>
@@ -1058,7 +1028,7 @@ function CallPurposeBanner({
         raised in error.
       */}
       {tickets.length > 0 ? (
-        <p className="text-text-muted mt-2 text-xs">
+        <p className="oo-faint">
           Answer these on the call, then record the outcome below — it is written onto the issue and
           can close it in the same step.
         </p>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { AlertTriangle, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ChevronRight, ShieldAlert } from 'lucide-react';
 import { OrderCancellationReason, OrderStatus, PackageType, PaymentMode } from '@skydrop/db';
 import {
   type ForceMutationFields,
@@ -10,15 +10,12 @@ import {
   type OrderView,
 } from '@skydrop/api-client';
 import { useForceMutation } from '@/lib/api-hooks';
-import {
-  Button,
-  FormField,
-  Input,
-  Select,
-  Textarea,
-  Modal,
-  ModalFooter,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import './order-core.css';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -228,24 +225,83 @@ export function ForceMutationDialog({
     }
   }
 
+  const editFooter = (
+    <DialogFooter>
+      <Button
+        variant="ghost"
+        size="md"
+        onClick={() => onOpenChange(false)}
+        disabled={mutate.isPending}
+      >
+        Cancel
+      </Button>
+      <Button
+        variant="destructive"
+        size="md"
+        onClick={() => setStage('typed-confirm')}
+        disabled={!canSubmit}
+        title={
+          !reasonOk
+            ? `Reason must be at least ${MIN_REASON_LEN} characters`
+            : !ack
+              ? 'You must acknowledge the data-integrity risk'
+              : !hasAtLeastOneMutation
+                ? 'Either change a field or change the status (or both)'
+                : undefined
+        }
+      >
+        Continue → confirmation
+      </Button>
+    </DialogFooter>
+  );
+
+  const typedOk = typed === TYPED_CONFIRM;
+  const confirmFooter = (
+    <DialogFooter>
+      <Button
+        variant="ghost"
+        size="md"
+        onClick={() => {
+          setTyped('');
+          setStage('edit');
+        }}
+        disabled={mutate.isPending}
+      >
+        ← Back
+      </Button>
+      <Button
+        variant="destructive"
+        size="md"
+        icon={<ShieldAlert size={14} />}
+        loading={mutate.isPending}
+        onClick={() => {
+          if (typed === TYPED_CONFIRM) {
+            void submitToServer();
+          }
+        }}
+        disabled={!typedOk || mutate.isPending}
+      >
+        Force-mutate this order
+      </Button>
+    </DialogFooter>
+  );
+
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(o) => {
         if (!o && !mutate.isPending) onOpenChange(false);
       }}
+      locked={mutate.isPending}
       tone="critical"
       size="lg"
-      title={
-        <span className="inline-flex items-center gap-2">
-          <ShieldAlert size={16} />
-          God-mode override
-        </span>
-      }
+      icon={<ShieldAlert size={18} />}
+      title="God-mode override"
       description="ORD-2. Bypasses the state machine and the standard edit rules. Audited CRITICAL. Marks the order with hasAdminOverride permanently."
+      footer={stage === 'edit' ? editFooter : confirmFooter}
     >
       {stage === 'edit' ? (
-        <div className="space-y-4">
+        <div className="oo-god">
           <CriticalNotice />
 
           {FIELD_GROUPS.map((group) => (
@@ -261,125 +317,76 @@ export function ForceMutationDialog({
             />
           ))}
 
-          <div className="rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-2">
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={changeStatus}
-                onChange={(e) => setChangeStatus(e.target.checked)}
-                disabled={mutate.isPending}
-                className="mt-1 accent-[var(--color-critical)]"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-text-bright text-sm font-medium">Force order status</div>
-                <div className="text-text-muted text-xs mt-0.5 mb-2">
+          <div className="oc-critical-box">
+            <Checkbox
+              checked={changeStatus}
+              onChange={(e) => setChangeStatus(e.target.checked)}
+              disabled={mutate.isPending}
+              label="Force order status"
+              description={
+                <>
                   Bypasses the state-machine matrix. Currently:{' '}
-                  <span className="font-mono">{order.status}</span>
-                </div>
-                {changeStatus && (
-                  <Select
-                    value={targetStatus}
-                    onChange={(e) => setTargetStatus(e.target.value as OrderStatus)}
-                    disabled={mutate.isPending}
-                    className="w-full"
-                  >
-                    {ORDER_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </div>
-            </label>
+                  <span className="sk-ident">{order.status}</span>
+                </>
+              }
+            />
+            {changeStatus && (
+              <Select
+                label="Target status"
+                value={targetStatus}
+                onChange={(e) => setTargetStatus(e.target.value as OrderStatus)}
+                disabled={mutate.isPending}
+              >
+                {ORDER_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Select>
+            )}
           </div>
 
-          <FormField
-            label={
-              <div className="flex items-center justify-between gap-2">
-                <span>
-                  Justification <span className="text-critical">*</span>
-                </span>
-                <span
-                  className={
-                    'text-xs font-mono ' + (reasonOk ? 'text-delivered' : 'text-text-faint')
-                  }
-                >
-                  {reasonLen} / {MIN_REASON_LEN} min
-                </span>
-              </div>
-            }
-            htmlFor="god-reason"
+          <TextArea
+            id="god-reason"
+            label="Justification"
+            requiredMark
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder="Explain why the state machine + edit rules must be bypassed. Be specific — this is the only audit-time record of intent."
+            disabled={mutate.isPending}
             hint="Recorded in the audit log + order event. Visible forever."
-          >
-            <Textarea
-              id="god-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              placeholder="Explain why the state machine + edit rules must be bypassed. Be specific — this is the only audit-time record of intent."
-              disabled={mutate.isPending}
-            />
-          </FormField>
+            after={
+              <span className="oc-counter sk-figure" data-ok={reasonOk ? '1' : undefined}>
+                {reasonLen} / {MIN_REASON_LEN} min
+              </span>
+            }
+          />
 
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input
-              type="checkbox"
+          <div className="oc-critical-box">
+            <Checkbox
               checked={ack}
               onChange={(e) => setAck(e.target.checked)}
               disabled={mutate.isPending}
-              className="mt-0.5 accent-[var(--color-critical)]"
+              label={
+                <>
+                  I acknowledge the data-integrity risk: this bypass opts OUT of the saga&apos;s
+                  compensation guarantee. Stock side-effects on{' '}
+                  <span className="sk-ident">→ CONFIRMED</span> are attempted but not enforced;
+                  transitioning away from <span className="sk-ident">CONFIRMED</span> leaves
+                  reservations intact (cleanup is the separate{' '}
+                  <span className="sk-ident">release-reservations</span> action). The order will
+                  carry <span className="sk-ident">hasAdminOverride: true</span> permanently.
+                </>
+              }
             />
-            <span className="text-sm text-text-body">
-              I acknowledge the data-integrity risk: this bypass opts OUT of the saga&apos;s
-              compensation guarantee. Stock side-effects on{' '}
-              <span className="font-mono">→ CONFIRMED</span> are attempted but not enforced;
-              transitioning away from <span className="font-mono">CONFIRMED</span> leaves
-              reservations intact (cleanup is the separate{' '}
-              <span className="font-mono">release-reservations</span> action). The order will carry{' '}
-              <span className="font-mono">hasAdminOverride: true</span> permanently.
-            </span>
-          </label>
+          </div>
 
           {serverError && (
-            <div
-              className="px-2.5 py-1.5 rounded-[5px] text-critical text-xs"
-              style={{
-                background: 'var(--color-critical-tint)',
-                border: '1px solid var(--color-critical-ring)',
-              }}
-            >
+            <p className="oc-verdict" role="alert">
               {serverError}
-            </div>
+            </p>
           )}
-
-          <ModalFooter>
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={() => onOpenChange(false)}
-              disabled={mutate.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="override"
-              size="md"
-              onClick={() => setStage('typed-confirm')}
-              disabled={!canSubmit}
-              title={
-                !reasonOk
-                  ? `Reason must be at least ${MIN_REASON_LEN} characters`
-                  : !ack
-                    ? 'You must acknowledge the data-integrity risk'
-                    : !hasAtLeastOneMutation
-                      ? 'Either change a field or change the status (or both)'
-                      : undefined
-              }
-            >
-              Continue → confirmation
-            </Button>
-          </ModalFooter>
         </div>
       ) : (
         <TypedConfirmStep
@@ -390,42 +397,26 @@ export function ForceMutationDialog({
           onTypedChange={setTyped}
           serverError={serverError}
           pending={mutate.isPending}
-          onBack={() => {
-            setTyped('');
-            setStage('edit');
-          }}
-          onConfirm={() => {
-            if (typed === TYPED_CONFIRM) {
-              void submitToServer();
-            }
-          }}
         />
       )}
-    </Modal>
+    </Dialog>
   );
 }
 
 function CriticalNotice(): ReactElement {
   return (
-    <div
-      className="flex items-start gap-2 px-3 py-2 rounded-[5px]"
-      style={{
-        background: 'var(--color-critical-tint)',
-        border: '1px solid var(--color-critical-ring)',
-        color: 'var(--color-critical)',
-      }}
-    >
-      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-      <div className="text-xs leading-snug">
-        <strong className="font-semibold">This is a deliberate bypass.</strong> The order&apos;s
-        state machine, edit rules, and saga compensation are all opted out of. Use it only when
-        normal flows can&apos;t reach the required state — and document why. A forced status has the
-        same consequences as any other change except stock: customer and seller emails, seller
-        webhooks, invoices and delivery-time billing fire for the status it lands on; it joins or
-        leaves the call queue; a forced CONFIRMED gets a shipment (so it can be picked and booked);
-        and a cancel voids an unpicked shipment and returns the delivery fee if the parcel never
-        left with a courier. A waybill already issued is NOT cancelled with the courier.
-      </div>
+    <div className="oo-god__banner" role="note">
+      <AlertTriangle size={16} aria-hidden />
+      <p className="oo-p oo-bad">
+        <strong>This is a deliberate bypass.</strong> The order&apos;s state machine, edit rules,
+        and saga compensation are all opted out of. Use it only when normal flows can&apos;t reach
+        the required state — and document why. A forced status has the same consequences as any
+        other change except stock: customer and seller emails, seller webhooks, invoices and
+        delivery-time billing fire for the status it lands on; it joins or leaves the call queue; a
+        forced CONFIRMED gets a shipment (so it can be picked and booked); and a cancel voids an
+        unpicked shipment and returns the delivery fee if the parcel never left with a courier. A
+        waybill already issued is NOT cancelled with the courier.
+      </p>
     </div>
   );
 }
@@ -454,70 +445,66 @@ function FieldGroupBlock({
 }): ReactElement {
   const enabledCount = fields.filter((f) => fieldStates[f.key]?.enabled).length;
   return (
-    <div className="rounded-[5px] border border-border bg-bg">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <div className="text-text-bright text-xs font-medium uppercase tracking-wide">{title}</div>
-        {enabledCount > 0 && <span className="text-pending text-xs">{enabledCount} change(s)</span>}
+    <div className="oc-wl">
+      <div className="oc-wl__head">
+        <p className="oc-wl__title">{title}</p>
+        {enabledCount > 0 && <span className="oc-wl__count">{enabledCount} change(s)</span>}
       </div>
-      <div className="divide-y divide-border">
-        {fields.map((f) => {
-          const state = fieldStates[f.key];
-          const enabled = state?.enabled ?? false;
-          const currentValue = (order as unknown as Record<string, unknown>)[f.key];
-          return (
-            <div key={f.key} className="px-3 py-2">
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={() => onToggle(f.key, currentValue)}
-                  disabled={disabled}
-                  className="mt-1 accent-[var(--color-critical)]"
-                />
-                <div className="flex-1 min-w-0 grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[140px_1fr] items-center gap-3">
-                  <div>
-                    <div className="text-text-body text-sm">{f.label}</div>
-                    {currentValue !== null && currentValue !== undefined && (
-                      <div className="text-text-faint text-xs font-mono truncate">
-                        was: {String(currentValue)}
-                      </div>
-                    )}
-                  </div>
-                  {enabled && (
-                    <FieldInput
-                      kind={f.kind}
-                      {...(f.options !== undefined ? { options: f.options } : {})}
-                      value={state?.value ?? ''}
-                      disabled={disabled}
-                      onChange={(v) => onChange(f.key, v)}
-                    />
-                  )}
-                </div>
-              </label>
-            </div>
-          );
-        })}
-      </div>
+      {fields.map((f) => {
+        const state = fieldStates[f.key];
+        const enabled = state?.enabled ?? false;
+        const currentValue = (order as unknown as Record<string, unknown>)[f.key];
+        return (
+          <div key={f.key} className="oc-wl__row" data-on={enabled ? '1' : undefined}>
+            <Checkbox
+              checked={enabled}
+              onChange={() => onToggle(f.key, currentValue)}
+              disabled={disabled}
+              label={f.label}
+              description={
+                currentValue !== null && currentValue !== undefined ? (
+                  <span className="oc-wl__was sk-ident">was: {String(currentValue)}</span>
+                ) : undefined
+              }
+            />
+            {enabled && (
+              <FieldInput
+                kind={f.kind}
+                label={f.label}
+                {...(f.options !== undefined ? { options: f.options } : {})}
+                value={state?.value ?? ''}
+                disabled={disabled}
+                onChange={(v) => onChange(f.key, v)}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 function FieldInput({
   kind,
+  label,
   options,
   value,
   disabled,
   onChange,
 }: {
   readonly kind: 'text' | 'long-text' | 'number' | 'bool' | 'select';
+  /** The field's name, so the new-value control is announced as such. */
+  readonly label: string;
   readonly options?: ReadonlyArray<string>;
   readonly value: string | number | boolean;
   readonly disabled: boolean;
   readonly onChange: (v: string | number | boolean) => void;
 }): ReactElement {
+  const name = `New ${label.toLowerCase()}`;
   if (kind === 'bool') {
     return (
       <Select
+        aria-label={name}
         value={value ? 'true' : 'false'}
         onChange={(e) => onChange(e.target.value === 'true')}
         disabled={disabled}
@@ -529,7 +516,12 @@ function FieldInput({
   }
   if (kind === 'select') {
     return (
-      <Select value={String(value)} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+      <Select
+        aria-label={name}
+        value={String(value)}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      >
         {(options ?? []).map((o) => (
           <option key={o} value={o}>
             {o}
@@ -540,7 +532,8 @@ function FieldInput({
   }
   if (kind === 'long-text') {
     return (
-      <Textarea
+      <TextArea
+        aria-label={name}
         rows={2}
         value={String(value)}
         onChange={(e) => onChange(e.target.value)}
@@ -549,7 +542,8 @@ function FieldInput({
     );
   }
   return (
-    <Input
+    <TextField
+      aria-label={name}
       type={kind === 'number' ? 'number' : 'text'}
       value={String(value)}
       onChange={(e) => onChange(kind === 'number' ? Number(e.target.value) : e.target.value)}
@@ -566,8 +560,6 @@ function TypedConfirmStep({
   onTypedChange,
   serverError,
   pending,
-  onBack,
-  onConfirm,
 }: {
   readonly fieldChangeCount: number;
   readonly changedFields: ReadonlyArray<string>;
@@ -576,12 +568,9 @@ function TypedConfirmStep({
   readonly onTypedChange: (v: string) => void;
   readonly serverError: string | null;
   readonly pending: boolean;
-  readonly onBack: () => void;
-  readonly onConfirm: () => void;
 }): ReactElement {
-  const typedOk = typed === TYPED_CONFIRM;
   return (
-    <div className="space-y-3">
+    <div className="oo-god">
       <CriticalNotice />
 
       <Summary
@@ -594,15 +583,13 @@ function TypedConfirmStep({
         ].filter((r): r is string => r !== null)}
       />
 
-      <div className="rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-3">
-        <label className="block text-text-bright text-xs font-medium mb-1.5">
-          Type{' '}
-          <span className="font-mono px-1 py-0.5 rounded-[3px] bg-bg text-critical">
-            {TYPED_CONFIRM}
-          </span>{' '}
-          to confirm
-        </label>
-        <Input
+      <div className="oc-critical-box">
+        <p className="oo-p">
+          Type <span className="oc-typed-word">{TYPED_CONFIRM}</span> to confirm
+        </p>
+        <TextField
+          className="oo-god__typed"
+          aria-label={`Type ${TYPED_CONFIRM} to confirm`}
           value={typed}
           onChange={(e) => onTypedChange(e.target.value)}
           placeholder={TYPED_CONFIRM}
@@ -611,30 +598,14 @@ function TypedConfirmStep({
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          className="font-mono"
         />
       </div>
 
       {serverError && (
-        <div
-          className="px-2.5 py-1.5 rounded-[5px] text-critical text-xs"
-          style={{
-            background: 'var(--color-critical-tint)',
-            border: '1px solid var(--color-critical-ring)',
-          }}
-        >
+        <p className="oc-verdict" role="alert">
           {serverError}
-        </div>
+        </p>
       )}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={onBack} disabled={pending}>
-          ← Back
-        </Button>
-        <Button variant="override" size="md" onClick={onConfirm} disabled={!typedOk || pending}>
-          {pending ? 'Submitting…' : 'Force-mutate this order'}
-        </Button>
-      </ModalFooter>
     </div>
   );
 }
@@ -647,13 +618,13 @@ function Summary({
   readonly rows: ReadonlyArray<string>;
 }): ReactElement {
   return (
-    <div className="rounded-[5px] border border-border px-3 py-2 bg-bg">
-      <div className="text-text-muted text-xs uppercase tracking-wide mb-1.5">{title}</div>
-      <ul className="space-y-1">
+    <div className="oc-result">
+      <p className="oc-result__title">{title}</p>
+      <ul className="oc-summary">
         {rows.map((r, i) => (
-          <li key={i} className="text-text-body text-sm flex items-start gap-2">
-            <span className="text-critical">▸</span>
-            <span className="flex-1 min-w-0 font-mono text-xs leading-relaxed">{r}</span>
+          <li key={i}>
+            <ChevronRight size={14} aria-hidden />
+            <span className="sk-ident">{r}</span>
           </li>
         ))}
       </ul>

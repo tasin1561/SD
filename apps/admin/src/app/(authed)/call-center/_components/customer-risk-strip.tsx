@@ -2,6 +2,7 @@
 
 import type { ReactElement } from 'react';
 import { useOrderCustomerReputation } from '@/lib/api-hooks';
+import './call-center.css';
 
 /**
  * Who the agent is about to phone.
@@ -45,48 +46,34 @@ export function CustomerRiskStrip({ orderId }: { readonly orderId: string }): Re
   // Quiet unless there is something to say. A normal returning customer
   // gets a neutral line; only a real signal gets colour.
   const tone = severe || flagged ? 'critical' : elevated ? 'pending' : 'neutral';
-  const border =
-    tone === 'critical'
-      ? 'var(--color-critical-ring)'
-      : tone === 'pending'
-        ? 'var(--status-pending-fg)'
-        : 'var(--color-border)';
-
   return (
-    <div
-      className="mb-3 rounded-[5px] border px-3 py-2 text-sm"
-      style={{ borderColor: border }}
-      role={tone === 'critical' ? 'alert' : undefined}
-    >
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+    <div className="cc-risk" data-tone={tone} role={tone === 'critical' ? 'alert' : undefined}>
+      <div className="cc-risk__line">
         {pct !== null ? (
-          <span className={tone === 'neutral' ? 'text-text-bright' : 'text-critical'}>
-            <span className="font-semibold tabular-nums">{platform.returnRatePercent}%</span> of
-            this customer&apos;s parcels came back
+          <span className="cc-risk__lead">
+            <span className="sk-figure oo-strong">{platform.returnRatePercent}%</span> of this
+            customer&apos;s parcels came back
           </span>
         ) : (
-          <span className="text-text-bright">
-            {platform.totalOrders} previous order{platform.totalOrders === 1 ? '' : 's'}
+          <span className="cc-risk__lead">
+            <span className="sk-figure">{platform.totalOrders}</span> previous order
+            {platform.totalOrders === 1 ? '' : 's'}
           </span>
         )}
-        <span className="text-text-muted text-xs">
+        <span className="cc-risk__note sk-figure">
           {platform.delivered} delivered · {platform.returned} returned
           {platform.refusedOnCall > 0 && ` · declined on a call ${platform.refusedOnCall}×`}
         </span>
         {yours.totalOrders > 0 && (
-          <span className="text-text-faint text-xs">({yours.totalOrders} with this seller)</span>
+          <span className="oo-faint">({yours.totalOrders} with this seller)</span>
         )}
-        {flagged && (
-          <span className="text-critical text-xs font-medium">
-            Flagged {riskLevel.toLowerCase()}
-          </span>
-        )}
+        {flagged && <span className="cc-risk__flag">Flagged {riskLevel.toLowerCase()}</span>}
       </div>
       {riskNotes !== null && riskNotes.trim().length > 0 && (
-        <div className="text-text-muted mt-1 text-xs italic">{riskNotes}</div>
+        <div className="cc-risk__note cc-risk__note--quote">{riskNotes}</div>
       )}
       {yours.openOrders.length > 1 && (
-        <div className="text-text-muted mt-1 text-xs">
+        <div className="cc-risk__note">
           {yours.openOrders.length} orders from this seller are open at once — worth asking whether
           they meant to place them all.
         </div>

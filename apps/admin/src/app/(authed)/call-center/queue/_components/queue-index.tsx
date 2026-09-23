@@ -2,31 +2,23 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Ident,
-  Input,
-  Modal,
-  ModalFooter,
-  Num,
-  PageHeader,
-  Select,
-  SkeletonRows,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  TablePaginator,
-  Td,
-  THead,
-  Th,
-  Toolbar,
-  Tr,
-} from '@skydrop/ui/components';
+import { Ident, Num } from '@skydrop/ui/components';
+import { ArrowLeftRight, Clock3, Headset, PhoneCall, Users } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Select } from '@skydrop/ui/app/select';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AgeChip, LinkButton, OoCard } from '../../../orders/_components/order-ops-parts';
+import '../../_components/call-center.css';
 import {
   useAgents,
   useCallQueue,
@@ -91,170 +83,196 @@ export function QueueIndex(): ReactElement {
   }
 
   return (
-    <div>
+    <div className="oo-page">
       <PageHeader
         title="Call queue"
         subtitle="What is waiting to be confirmed, and who is holding it."
         action={
-          <Link href="/call-center">
-            <Button variant="ghost" size="md">
-              Agent station
-            </Button>
-          </Link>
+          <LinkButton href="/call-center" variant="ghost" icon={<Headset size={15} />}>
+            Agent station
+          </LinkButton>
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-4">
-        <Stat
+      {/* A value is ABSENT rather than 0 while loading: a tile reading
+          "0 open" that then becomes 8 has said something false in
+          between. The count-up runs once, when the figure first lands. */}
+      <div className="oo-kpis">
+        <KpiCard
           label="Open"
           hint="Waiting or assigned — not yet resolved"
-          value={<Num value={stats.data?.openTotal ?? 0} />}
-          tone={(stats.data?.openTotal ?? 0) > 0 ? 'warn' : 'neutral'}
+          icon={<PhoneCall size={14} />}
+          tone={(stats.data?.openTotal ?? 0) > 0 ? 'pending' : 'neutral'}
+          {...(stats.data === undefined
+            ? { figure: <span className="oo-faint">—</span> }
+            : { value: stats.data.openTotal })}
         />
-        <Stat label="Pending" value={<Num value={byStatus.PENDING ?? 0} />} />
-        <Stat label="Assigned" value={<Num value={byStatus.ASSIGNED ?? 0} />} />
-        <Stat
+        <KpiCard
+          label="Pending"
+          icon={<Clock3 size={14} />}
+          {...(stats.data === undefined
+            ? { figure: <span className="oo-faint">—</span> }
+            : { value: byStatus.PENDING ?? 0 })}
+        />
+        <KpiCard
+          label="Assigned"
+          icon={<ArrowLeftRight size={14} />}
+          {...(stats.data === undefined
+            ? { figure: <span className="oo-faint">—</span> }
+            : { value: byStatus.ASSIGNED ?? 0 })}
+        />
+        <KpiCard
           label="Agents holding work"
-          value={<Num value={stats.data?.assignedByAgent.length ?? 0} />}
+          icon={<Users size={14} />}
+          {...(stats.data === undefined
+            ? { figure: <span className="oo-faint">—</span> }
+            : { value: stats.data.assignedByAgent.length })}
         />
       </div>
 
-      <Toolbar>
-        <FormField label="Status" htmlFor="q-status" className="w-48">
-          <Select
-            id="q-status"
-            value={status}
-            onChange={(e) => change(() => setStatus(e.target.value))}
-          >
-            <option value="OPEN">Open — waiting or assigned</option>
-            <option value="">All, including finished attempts</option>
-            {['PENDING', 'ASSIGNED', 'COMPLETED', 'EXPIRED'].map((s) => (
-              <option key={s} value={s}>
-                {s.toLowerCase()}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Agent" htmlFor="q-agent" className="w-64">
-          <Select
-            id="q-agent"
-            value={agentId}
-            onChange={(e) => change(() => setAgentId(e.target.value))}
-          >
-            <option value="">All agents</option>
-            {(agents.data ?? []).map((a) => (
-              <option key={a.agentId} value={a.agentId}>
-                {a.email}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-      </Toolbar>
+      <div className="cc-filters">
+        <Select
+          id="q-status"
+          label="Status"
+          value={status}
+          onChange={(e) => change(() => setStatus(e.target.value))}
+        >
+          <option value="OPEN">Open — waiting or assigned</option>
+          <option value="">All, including finished attempts</option>
+          {['PENDING', 'ASSIGNED', 'COMPLETED', 'EXPIRED'].map((s) => (
+            <option key={s} value={s}>
+              {s.toLowerCase()}
+            </option>
+          ))}
+        </Select>
+        <Select
+          id="q-agent"
+          label="Agent"
+          value={agentId}
+          onChange={(e) => change(() => setAgentId(e.target.value))}
+        >
+          <option value="">All agents</option>
+          {(agents.data ?? []).map((a) => (
+            <option key={a.agentId} value={a.agentId}>
+              {a.email}
+            </option>
+          ))}
+        </Select>
+      </div>
 
-      <Card>
-        {list.isLoading ? (
-          <SkeletonRows rows={6} />
-        ) : list.isError ? (
-          <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
-        ) : items.length === 0 ? (
-          <EmptyState
-            title="Queue is empty"
-            description="Orders enter the queue when they reach pending confirmation, and leave when an agent records an outcome."
-          />
-        ) : (
-          <>
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Order</Th>
-                  <Th>Waiting since</Th>
-                  <Th>Available</Th>
-                  <Th align="right">Calls</Th>
-                  <Th align="right">Pulls</Th>
-                  <Th>Assigned to</Th>
-                  <Th>Status</Th>
-                  <Th align="right" />
-                </Tr>
-              </THead>
-              <TBody>
-                {items.map((e) => (
-                  <Tr key={e.id} onActivate={() => router.push(`/orders/${e.orderId}`)}>
-                    <Td>
-                      {e.order === null ? (
-                        <Ident value={e.orderId} />
-                      ) : (
-                        <Link href={`/orders/${e.orderId}`} className="text-accent hover:underline">
-                          {e.order.orderNumber}
-                        </Link>
+      {list.isLoading ? (
+        <SkeletonRows rows={6} cols={8} label="Loading the call queue…" />
+      ) : list.isError ? (
+        <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+      ) : items.length === 0 ? (
+        <EmptyState
+          tone="positive"
+          title="Queue is empty"
+          description="Orders enter the queue when they reach pending confirmation, and leave when an agent records an outcome."
+        />
+      ) : (
+        <OoCard flush>
+          <Table caption="Call queue">
+            <THead>
+              <Tr>
+                <Th>Order</Th>
+                <Th>Waiting since</Th>
+                <Th>Available</Th>
+                <Th align="right">Calls</Th>
+                <Th align="right">Pulls</Th>
+                <Th>Assigned to</Th>
+                <Th>Status</Th>
+                <Th align="right" />
+              </Tr>
+            </THead>
+            <TBody>
+              {items.map((e) => (
+                <Tr key={e.id} onActivate={() => router.push(`/orders/${e.orderId}`)}>
+                  <Td>
+                    {e.order === null ? (
+                      <Ident value={e.orderId} />
+                    ) : (
+                      <Link href={`/orders/${e.orderId}`} className="oo-link sk-ident">
+                        {e.order.orderNumber}
+                      </Link>
+                    )}
+                  </Td>
+                  <Td>
+                    <AgeChip>{waitedFor(e.createdAt)}</AgeChip>
+                  </Td>
+                  <Td className="sk-figure">
+                    {new Date(e.availableAt) > new Date()
+                      ? `in ${waitedFor(new Date().toISOString(), e.availableAt)}`
+                      : 'now'}
+                  </Td>
+                  <Td align="right">
+                    {/* Calls LOGGED, and of those the ones the NDR cap
+                        is judged on. This column used to show the pull
+                        counter, which reads 1 the moment an agent
+                        claims the row — so an order nobody had phoned
+                        yet showed "Attempts 1". */}
+                    <span className="sk-figure">
+                      {e.attemptsCounting}
+                      <span className="oo-faint">/{e.maxAttempts}</span>
+                      {e.attemptsLogged > e.attemptsCounting && (
+                        <span className="oo-faint"> ({e.attemptsLogged} logged)</span>
                       )}
-                    </Td>
-                    <Td>{waitedFor(e.createdAt)}</Td>
-                    <Td>
-                      {new Date(e.availableAt) > new Date()
-                        ? `in ${waitedFor(new Date().toISOString(), e.availableAt)}`
-                        : 'now'}
-                    </Td>
-                    <Td align="right">
-                      {/* Calls LOGGED, and of those the ones the NDR cap
-                          is judged on. This column used to show the pull
-                          counter, which reads 1 the moment an agent
-                          claims the row — so an order nobody had phoned
-                          yet showed "Attempts 1". */}
-                      <span className="tabular-nums">
-                        {e.attemptsCounting}
-                        <span className="text-text-faint">/{e.maxAttempts}</span>
-                        {e.attemptsLogged > e.attemptsCounting && (
-                          <span className="text-text-faint text-xs">
-                            {' '}
-                            ({e.attemptsLogged} logged)
-                          </span>
-                        )}
-                      </span>
-                    </Td>
-                    <Td align="right">
-                      <Num value={e.scheduledAttempts} />
-                    </Td>
-                    <Td>
-                      {e.agent !== null ? (
-                        <span>{e.agent.name}</span>
-                      ) : e.assignedAgentId === null ? (
-                        <span className="text-text-faint">—</span>
-                      ) : (
-                        agentEmail(agents.data, e.assignedAgentId)
-                      )}
-                    </Td>
-                    <Td>
-                      <StatusBadge kind={queueKind(e.status)} label={e.status.toLowerCase()} />
-                    </Td>
-                    <Td align="right">
-                      <div className="flex items-center justify-end gap-1">
-                        {e.status === 'ASSIGNED' && (
-                          <Button variant="ghost" size="sm" onClick={() => setReassigning(e)}>
-                            Reassign
-                          </Button>
-                        )}
-                        {/* Timing, not outcome. Force-outcome was the
-                            only lever on a call parked hours out, and it
-                            works by RECORDING a conversation that did
-                            not happen. */}
-                        <Button variant="ghost" size="sm" onClick={() => setRescheduling(e)}>
-                          Reschedule
+                    </span>
+                  </Td>
+                  <Td align="right">
+                    <Num value={e.scheduledAttempts} />
+                  </Td>
+                  <Td>
+                    {e.agent !== null ? (
+                      <span>{e.agent.name}</span>
+                    ) : e.assignedAgentId === null ? (
+                      <span className="oo-faint">—</span>
+                    ) : (
+                      agentEmail(agents.data, e.assignedAgentId)
+                    )}
+                  </Td>
+                  <Td>
+                    <StatusChip
+                      size="sm"
+                      kind={queueKind(e.status)}
+                      label={e.status.toLowerCase()}
+                    />
+                  </Td>
+                  <Td align="right">
+                    <div className="cc-row-actions">
+                      {e.status === 'ASSIGNED' && (
+                        <Button variant="ghost" size="sm" onClick={() => setReassigning(e)}>
+                          Reassign
                         </Button>
-                        <ForceOutcomePanel
-                          entryId={e.id}
-                          entryStatus={e.status}
-                          orderLabel={e.order?.orderNumber ?? e.orderId}
-                        />
-                      </div>
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-            <TablePaginator page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
-          </>
-        )}
-      </Card>
+                      )}
+                      {/* Timing, not outcome. Force-outcome was the
+                          only lever on a call parked hours out, and it
+                          works by RECORDING a conversation that did
+                          not happen. */}
+                      <Button variant="ghost" size="sm" onClick={() => setRescheduling(e)}>
+                        Reschedule
+                      </Button>
+                      <ForceOutcomePanel
+                        entryId={e.id}
+                        entryStatus={e.status}
+                        orderLabel={e.order?.orderNumber ?? e.orderId}
+                      />
+                    </div>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+          <Pagination
+            className="cc-pager"
+            label="Call queue pages"
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            onPageChange={setPage}
+          />
+        </OoCard>
+      )}
 
       <Reassign entry={reassigning} onClose={() => setReassigning(null)} />
       <Reschedule entry={rescheduling} onClose={() => setRescheduling(null)} />
@@ -329,114 +347,113 @@ function Reschedule({
   }
 
   return (
-    <Modal
+    <Dialog
       open={entry !== null}
       onOpenChange={(next) => {
         if (!next) close();
       }}
       title="When should this call become callable?"
       description="Timing only — the attempt count and the order are untouched. A time in the past means it can be picked up straight away."
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={close}>
+            Cancel
+          </Button>
+          <AsyncButton
+            size="md"
+            state={reschedule.isPending ? 'busy' : 'idle'}
+            labels={{ idle: 'Reschedule', busy: 'Rescheduling…' }}
+            disabled={when === '' || reasonShort > 0 || reschedule.isPending}
+            onClick={() => {
+              if (entry !== null) {
+                reschedule.mutate(
+                  {
+                    entryId: entry.id,
+                    // `datetime-local` has no zone; the Date constructor
+                    // reads it as LOCAL, which is what the operator typed.
+                    availableAt: new Date(when).toISOString(),
+                    reason: reason.trim(),
+                  },
+                  { onSuccess: close },
+                );
+              }
+            }}
+          />
+        </DialogFooter>
+      }
     >
-      <FormField
-        label="Callable from"
-        htmlFor="q-when"
-        hint={
-          entry === null
-            ? undefined
-            : `Currently ${new Date(entry.availableAt).toLocaleString('en-IN')}`
-        }
-      >
-        <Input
+      <div className="oo-stack">
+        <DateField
           id="q-when"
           type="datetime-local"
+          label="Callable from"
+          hint={
+            entry === null
+              ? undefined
+              : `Currently ${new Date(entry.availableAt).toLocaleString('en-IN')}`
+          }
           value={when}
           onChange={(e) => setWhen(e.target.value)}
         />
-      </FormField>
 
-      <div className="mt-2 flex flex-wrap gap-2">
-        {/* The two real cases: the customer rang back, or they asked for
-            later. Typing a datetime for "now" is friction on the more
-            urgent of the two. */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setWhen(toLocalInput(new Date().toISOString()))}
-        >
-          Now
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setWhen(toLocalInput(new Date(Date.now() + 60 * 60_000).toISOString()))}
-        >
-          In 1 hour
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            setWhen(toLocalInput(new Date(Date.now() + 24 * 60 * 60_000).toISOString()))
-          }
-        >
-          Tomorrow
-        </Button>
-      </div>
+        <div className="cc-presets">
+          {/* The two real cases: the customer rang back, or they asked for
+              later. Typing a datetime for "now" is friction on the more
+              urgent of the two. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setWhen(toLocalInput(new Date().toISOString()))}
+          >
+            Now
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setWhen(toLocalInput(new Date(Date.now() + 60 * 60_000).toISOString()))}
+          >
+            In 1 hour
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              setWhen(toLocalInput(new Date(Date.now() + 24 * 60 * 60_000).toISOString()))
+            }
+          >
+            Tomorrow
+          </Button>
+        </div>
 
-      <FormField
-        label="Why"
-        htmlFor="q-why"
-        // Same reasoning as the seller's re-attempt dialog: a disabled
-        // button with no stated minimum leaves someone typing and
-        // guessing.
-        hint={
-          <>
-            Moving when a customer gets called is a decision someone should be able to account for
-            later.{' '}
-            {reasonShort > 0 && (
-              <span className="text-pending">
-                {reasonShort} more {reasonShort === 1 ? 'character' : 'characters'} needed.
-              </span>
-            )}
-          </>
-        }
-      >
-        <Input
+        <TextField
           id="q-why"
+          label="Why"
+          // Same reasoning as the seller's re-attempt dialog: a disabled
+          // button with no stated minimum leaves someone typing and
+          // guessing.
+          hint={
+            <>
+              Moving when a customer gets called is a decision someone should be able to account for
+              later.{' '}
+              {reasonShort > 0 && (
+                <span className="oo-warn">
+                  {reasonShort} more {reasonShort === 1 ? 'character' : 'characters'} needed.
+                </span>
+              )}
+            </>
+          }
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Customer rang back and asked to be called now"
         />
-      </FormField>
 
-      {reschedule.error !== null && <ErrorNote message={serverVerdict(reschedule.error)} />}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Cancel
-        </Button>
-        <Button
-          size="md"
-          disabled={when === '' || reasonShort > 0 || reschedule.isPending}
-          onClick={() => {
-            if (entry !== null) {
-              reschedule.mutate(
-                {
-                  entryId: entry.id,
-                  // `datetime-local` has no zone; the Date constructor
-                  // reads it as LOCAL, which is what the operator typed.
-                  availableAt: new Date(when).toISOString(),
-                  reason: reason.trim(),
-                },
-                { onSuccess: close },
-              );
-            }
-          }}
-        >
-          {reschedule.isPending ? 'Rescheduling…' : 'Reschedule'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {reschedule.error !== null && (
+          <p className="oo-error" role="alert">
+            {serverVerdict(reschedule.error)}
+          </p>
+        )}
+      </div>
+    </Dialog>
   );
 }
 
@@ -462,20 +479,40 @@ function Reassign({
   );
 
   return (
-    <Modal
+    <Dialog
       open={entry !== null}
       onOpenChange={(next) => {
         if (!next) close();
       }}
       title="Move this call to another agent"
       description="The order keeps its place and its attempt history — only who is holding it changes."
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={close}>
+            Cancel
+          </Button>
+          <AsyncButton
+            size="md"
+            state={reassign.isPending ? 'busy' : 'idle'}
+            labels={{ idle: 'Reassign', busy: 'Moving…' }}
+            disabled={toAgentId === '' || reassign.isPending}
+            onClick={() => {
+              if (entry !== null) {
+                reassign.mutate({ entryId: entry.id, toAgentId }, { onSuccess: close });
+              }
+            }}
+          />
+        </DialogFooter>
+      }
     >
-      <FormField
-        label="Give it to"
-        htmlFor="q-to"
-        hint="Only agents currently marked available are listed."
-      >
-        <Select id="q-to" value={toAgentId} onChange={(e) => setToAgentId(e.target.value)}>
+      <div className="oo-stack">
+        <Select
+          id="q-to"
+          label="Give it to"
+          hint="Only agents currently marked available are listed."
+          value={toAgentId}
+          onChange={(e) => setToAgentId(e.target.value)}
+        >
           <option value="">Select an agent…</option>
           {available.map((a) => (
             <option key={a.agentId} value={a.agentId}>
@@ -483,29 +520,18 @@ function Reassign({
             </option>
           ))}
         </Select>
-      </FormField>
 
-      {available.length === 0 && (
-        <ErrorNote message="No other agent is marked available. Set someone available on the Agents screen first." />
-      )}
-      {reassign.error !== null && <ErrorNote message={serverVerdict(reassign.error)} />}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Cancel
-        </Button>
-        <Button
-          size="md"
-          disabled={toAgentId === '' || reassign.isPending}
-          onClick={() => {
-            if (entry !== null) {
-              reassign.mutate({ entryId: entry.id, toAgentId }, { onSuccess: close });
-            }
-          }}
-        >
-          {reassign.isPending ? 'Moving…' : 'Reassign'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {available.length === 0 && (
+          <p className="oo-error" role="alert">
+            No other agent is marked available. Set someone available on the Agents screen first.
+          </p>
+        )}
+        {reassign.error !== null && (
+          <p className="oo-error" role="alert">
+            {serverVerdict(reassign.error)}
+          </p>
+        )}
+      </div>
+    </Dialog>
   );
 }

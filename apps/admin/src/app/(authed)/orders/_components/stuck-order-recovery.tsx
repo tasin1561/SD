@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, Card, CardBody, ErrorNote, useToast } from '@skydrop/ui/components';
+import { PackageSearch, RotateCcw } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Notice, OoCard } from './order-ops-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useRetryStock, useReturnToPick } from '@/lib/api-hooks';
@@ -40,9 +44,12 @@ import { useRetryStock, useReturnToPick } from '@/lib/api-hooks';
 export function StuckOrderRecovery({
   orderId,
   orderStatus,
+  orderNumber,
 }: {
   readonly orderId: string;
   readonly orderStatus: string;
+  /** For the confirm's restatement; the id stands in when it is not passed. */
+  readonly orderNumber?: string | undefined;
 }): ReactElement | null {
   const toast = useToast();
   // Cosmetic (FE-2). /orders is gated on orders.view; these two write.
@@ -50,6 +57,7 @@ export function StuckOrderRecovery({
   const retry = useRetryStock(orderId);
   const returnToPick = useReturnToPick(orderId);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<'retry' | 'return' | null>(null);
 
   const isOutOfStock = orderStatus === 'OUT_OF_STOCK';
   const isManualPlacement = orderStatus === 'PENDING_MANUAL_PLACEMENT';
@@ -70,6 +78,7 @@ export function StuckOrderRecovery({
       );
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -80,46 +89,87 @@ export function StuckOrderRecovery({
       toast.success(`Back on the pick floor — order is now ${r.status}.`);
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
+  const entity = orderNumber ?? orderId;
+
   return (
-    <Card className="mb-4">
-      <CardBody>
-        <h2 className="text-text-bright mb-1 text-sm font-medium">
-          {isOutOfStock ? 'Waiting on stock' : 'Stuck at manual placement'}
-        </h2>
-        <p className="text-text-muted mb-3 text-sm">
+    <OoCard tone="warn">
+      <Notice
+        tone="warn"
+        icon={isOutOfStock ? <PackageSearch size={16} /> : <RotateCcw size={16} />}
+        title={isOutOfStock ? 'Waiting on stock' : 'Stuck at manual placement'}
+      >
+        <p>
           {isOutOfStock
             ? 'The call was confirmed but there was nothing to reserve. Retry once the stock has landed — if there is still none, the order simply stays here.'
             : 'If this order was never picked, manual placement will refuse it. Send it back to the pick floor and it can be picked normally.'}
         </p>
+      </Notice>
 
-        {error !== null && <ErrorNote message={error} />}
+      {error !== null && confirming === null && (
+        <p className="oo-error" role="alert">
+          {error}
+        </p>
+      )}
 
-        <div className="flex flex-wrap gap-2">
-          {isOutOfStock && (
-            <Button
-              variant="primary"
-              size="md"
-              disabled={retry.isPending}
-              onClick={() => void onRetry()}
-            >
-              {retry.isPending ? 'Retrying…' : 'Retry — stock has arrived'}
-            </Button>
-          )}
-          {isManualPlacement && (
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={returnToPick.isPending}
-              onClick={() => void onReturn()}
-            >
-              {returnToPick.isPending ? 'Returning…' : 'Send back to the pick floor'}
-            </Button>
-          )}
-        </div>
-      </CardBody>
-    </Card>
+      <div className="oo-row">
+        {isOutOfStock && (
+          <Button
+            variant="primary"
+            size="md"
+            loading={retry.isPending}
+            onClick={() => {
+              setError(null);
+              setConfirming('retry');
+            }}
+          >
+            Retry — stock has arrived
+          </Button>
+        )}
+        {isManualPlacement && (
+          <Button
+            variant="secondary"
+            size="md"
+            loading={returnToPick.isPending}
+            onClick={() => {
+              setError(null);
+              setConfirming('return');
+            }}
+          >
+            Send back to the pick floor
+          </Button>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirming === 'retry'}
+        onOpenChange={(o) => {
+          if (!o) setConfirming(null);
+        }}
+        title="Retry the stock reservation?"
+        entity={entity}
+        entityIsIdentifier
+        consequence="The order is sent back to confirmed and stock is reserved for it if any has landed; if there is still none, it stays out of stock."
+        confirmLabel="Retry — stock has arrived"
+        onConfirm={onRetry}
+        error={confirming === 'retry' ? error : null}
+      />
+      <ConfirmDialog
+        open={confirming === 'return'}
+        onOpenChange={(o) => {
+          if (!o) setConfirming(null);
+        }}
+        title="Send this order back to the pick floor?"
+        entity={entity}
+        entityIsIdentifier
+        consequence="The order leaves manual placement and goes back to pending pick, so the warehouse picks it again."
+        confirmLabel="Send back to the pick floor"
+        onConfirm={onReturn}
+        error={confirming === 'return' ? error : null}
+      />
+    </OoCard>
   );
 }

@@ -3,23 +3,13 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { PackageSearch } from 'lucide-react';
-import {
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  Section,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AgeChip, OoSection, type AgeTone } from '../../orders/_components/order-ops-parts';
 import { useManualPlacementQueue, type ManualPlacementQueueRow } from '@/lib/api-hooks';
 import { ManualPlacementPanel } from '../../orders/_components/manual-placement-panel';
 
@@ -54,12 +44,12 @@ import { ManualPlacementPanel } from '../../orders/_components/manual-placement-
  * on the next fetch, which both mutations trigger. There is no separate
  * "done" state to get out of step with the orders themselves.
  */
-function waitTone(hours: number): 'draft' | 'pending' | 'failed' {
+function waitTone(hours: number): AgeTone {
   // A parcel here is not moving, so age is the only thing that gets
   // worse on its own. Half a day is a working day gone.
-  if (hours >= 24) return 'failed';
-  if (hours >= 12) return 'pending';
-  return 'draft';
+  if (hours >= 24) return 'late';
+  if (hours >= 12) return 'aging';
+  return 'fresh';
 }
 
 function reasonLabel(code: string | null): string {
@@ -81,37 +71,34 @@ function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
   return (
     <Tr>
       <Td>
-        <Link href={`/orders/${row.orderId}`} className="font-medium">
+        <Link href={`/orders/${row.orderId}`} className="oo-link sk-ident">
           {row.orderNumber}
         </Link>
-        <div className="text-xs text-text-muted">{row.sellerCompanyName ?? row.sellerId}</div>
+        <span className="oo-sub">{row.sellerCompanyName ?? row.sellerId}</span>
       </Td>
       <Td>
-        <div>{row.destCity || '—'}</div>
-        <div className="text-xs text-text-muted tabular-nums">{row.destPostalCode}</div>
+        <span>{row.destCity || '—'}</span>
+        <span className="oo-sub sk-figure">{row.destPostalCode}</span>
       </Td>
       <Td>{row.codAmountInr === null ? '—' : <Money amount={row.codAmountInr} />}</Td>
       <Td>
-        <div className="text-sm">{reasonLabel(row.reasonCode)}</div>
+        <span className="oo-strong">{reasonLabel(row.reasonCode)}</span>
         {/* The courier's own sentence, verbatim. A paraphrase of
             "[ER0005] suspicious order/consignee" loses the only part
             that tells an operator what to actually check. */}
-        {row.reason !== null && (
-          <div className="mt-0.5 max-w-md text-xs text-text-muted">{row.reason}</div>
-        )}
+        {row.reason !== null && <span className="oo-sub oo-clip">{row.reason}</span>}
       </Td>
       <Td>
         {row.needsPicking ? (
-          <StatusBadge kind="pending" label="Needs picking" />
+          <StatusChip size="sm" kind="pending" label="Needs picking" />
         ) : (
-          <StatusBadge kind="confirmed" label="Ready to go" />
+          <StatusChip size="sm" kind="confirmed" label="Ready to go" />
         )}
       </Td>
       <Td>
-        <StatusBadge
-          kind={waitTone(row.waitingHours)}
-          label={row.waitingHours < 1 ? 'just now' : `${row.waitingHours}h`}
-        />
+        <AgeChip tone={waitTone(row.waitingHours)}>
+          {row.waitingHours < 1 ? 'just now' : `${row.waitingHours}h`}
+        </AgeChip>
       </Td>
       <Td>
         <ManualPlacementPanel
@@ -126,56 +113,60 @@ function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
 
 export function ManualPlacementIndex(): ReactElement {
   const queue = useManualPlacementQueue();
+  const rows = queue.data ?? [];
 
   return (
-    <Section>
+    <div className="oo-page">
       <PageHeader
         title="Manual placement"
         subtitle="Parcels no integrated courier would carry. Each one is waiting on a person to arrange carriage and type the waybill back in — nothing here moves on its own."
       />
 
-      <Card>
-        <CardBody>
-          {queue.isLoading ? (
-            <LoadingState label="Loading the worklist…" />
-          ) : queue.isError ? (
+      <OoSection
+        title="Waiting for a waybill"
+        note={queue.data === undefined ? undefined : `${rows.length} waiting`}
+        flush
+      >
+        {queue.isLoading ? (
+          <div className="oo-card__pad">
+            <SkeletonRows rows={4} cols={7} label="Loading the worklist…" />
+          </div>
+        ) : queue.isError ? (
+          <div className="oo-card__pad">
             <ErrorState
               message={queue.error?.message ?? 'Could not load the worklist.'}
               retry={() => void queue.refetch()}
             />
-          ) : (
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Order</Th>
-                  <Th>Destination</Th>
-                  <Th>COD</Th>
-                  <Th>Why it is here</Th>
-                  <Th>After the waybill</Th>
-                  <Th>Waiting</Th>
-                  <Th>Place it</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {(queue.data ?? []).length === 0 ? (
-                  <TableEmpty colSpan={7}>
-                    <div className="flex flex-col items-center gap-1.5 py-2">
-                      <PackageSearch size={20} className="text-text-muted" />
-                      <div className="font-medium">Nothing waiting on manual placement</div>
-                      <div className="text-xs text-text-muted">
-                        Every confirmed parcel has a courier. Orders appear here when one refuses to
-                        carry them.
-                      </div>
-                    </div>
-                  </TableEmpty>
-                ) : (
-                  (queue.data ?? []).map((row) => <Row key={row.shipmentId} row={row} />)
-                )}
-              </TBody>
-            </Table>
-          )}
-        </CardBody>
-      </Card>
-    </Section>
+          </div>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            bare
+            tone="positive"
+            icon={<PackageSearch size={20} />}
+            title="Nothing waiting on manual placement"
+            description="Every confirmed parcel has a courier. Orders appear here when one refuses to carry them."
+          />
+        ) : (
+          <Table caption="Parcels waiting on manual placement">
+            <THead>
+              <Tr>
+                <Th>Order</Th>
+                <Th>Destination</Th>
+                <Th>COD</Th>
+                <Th>Why it is here</Th>
+                <Th>After the waybill</Th>
+                <Th>Waiting</Th>
+                <Th>Place it</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {rows.map((row) => (
+                <Row key={row.shipmentId} row={row} />
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </OoSection>
+    </div>
   );
 }
