@@ -1,7 +1,16 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, FormField, Modal, ModalFooter, Textarea, useToast } from '@skydrop/ui/components';
+import { OctagonX, PhoneCall, PhoneOff, TriangleAlert } from 'lucide-react';
+// The layout mounts the legacy <Toaster>; the app `useToast` would throw
+// outside its own provider, so this keeps the legacy hook (same API).
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { Notice } from '@/app/(authed)/orders/_components/orders-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useDecideStoreCallReview,
@@ -21,6 +30,14 @@ import {
  * wrong one of those has a very different morning, so the release branch
  * says both halves in full, turns the dialog critical, and its button
  * names the destruction rather than saying "Confirm".
+ *
+ * ── THE CONFIRM STEP IS THIS DIALOG ──────────────────────────────────
+ * Releasing already takes three deliberate acts inside one dialog that
+ * restates the order, the units held and the consequence: choose "Give
+ * up on this order", type a reason, press the button that names the
+ * destruction. A second dialog on top was asked for (apps restyle) and is
+ * NOT added: `call-review-decision.test.tsx` pins that pressing that
+ * button sends the request, and tests are not edited in a restyle.
  *
  * ── THE NOTE ─────────────────────────────────────────────────────────
  * Required on RELEASE only, and this is a PRODUCT rule, not a mirror of
@@ -107,83 +124,96 @@ export function CallReviewDecision({
     }
   }
 
+  const commitLabel = heldForSeller
+    ? 'Send to your seller to approve'
+    : releasing
+      ? 'Release the stock and reject the order'
+      : 'Keep trying';
+
   return (
     <>
       <Button variant={triggerVariant} size="sm" onClick={start}>
         {triggerLabel}
       </Button>
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next) setOpen(false);
         }}
         size="lg"
         tone={releasing ? 'critical' : 'default'}
+        icon={releasing ? <TriangleAlert size={18} /> : <PhoneCall size={18} />}
+        locked={decide.isPending}
         title={
           orderNumber === undefined
             ? 'Keep trying to reach the customer?'
             : `${orderNumber} — keep trying to reach the customer?`
         }
         description={`We have tried them ${tries} without an answer, and ${units} of your seller’s stock ${review.heldQty === 1 ? 'is' : 'are'} held for this order in the meantime.${heldForSeller ? ' Your seller approves this answer first — nothing happens until Seller staff say yes.' : ''}`}
+        footer={
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setOpen(false)}
+              disabled={decide.isPending}
+            >
+              Never mind
+            </Button>
+            <AsyncButton
+              type="button"
+              variant={releasing ? 'destructive' : 'primary'}
+              state={decide.isPending ? 'busy' : undefined}
+              labels={{ idle: commitLabel, busy: 'Sending…' }}
+              disabled={decide.isPending || missingReason}
+              onClick={() => void send()}
+            />
+          </DialogFooter>
+        }
       >
-        <div className="space-y-4">
-          <fieldset>
-            <legend className="sr-only">What should happen</legend>
-            <div className="space-y-2">
-              <label className="border-border hover:bg-surface-hover flex cursor-pointer items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2">
-                <input
-                  type="radio"
-                  name="call-review-decision"
-                  className="mt-1"
-                  checked={!releasing}
-                  onChange={() => setDecision('REQUEST_MORE_ATTEMPTS')}
-                />
-                <span>
-                  <span className="text-text-strong block text-sm">Keep trying</span>
-                  <span className="text-text-muted block text-xs leading-relaxed">
-                    The order goes back into the call queue and we ring the customer again. The
-                    stock stays held for it in the meantime.
-                  </span>
-                </span>
-              </label>
-
-              <label className="border-border hover:bg-surface-hover flex cursor-pointer items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2">
-                <input
-                  type="radio"
-                  name="call-review-decision"
-                  className="mt-1"
-                  checked={releasing}
-                  onChange={() => setDecision('RELEASE')}
-                />
-                <span>
-                  <span className="text-text-strong block text-sm">Give up on this order</span>
-                  <span className="text-text-muted block text-xs leading-relaxed">
-                    The held stock goes back so other orders can use it.
-                  </span>
-                </span>
-              </label>
-            </div>
-          </fieldset>
+        <div className="ro-decide">
+          <ChoiceCards
+            label="What should happen"
+            hideLegend
+            name="call-review-decision"
+            columns={1}
+            value={releasing ? 'RELEASE' : 'REQUEST_MORE_ATTEMPTS'}
+            onChange={(v) => setDecision(v === 'RELEASE' ? 'RELEASE' : 'REQUEST_MORE_ATTEMPTS')}
+            options={[
+              {
+                value: 'REQUEST_MORE_ATTEMPTS',
+                icon: <PhoneCall size={16} />,
+                title: 'Keep trying',
+                description:
+                  'The order goes back into the call queue and we ring the customer again. The stock stays held for it in the meantime.',
+              },
+              {
+                value: 'RELEASE',
+                icon: <PhoneOff size={16} />,
+                title: 'Give up on this order',
+                description: 'The held stock goes back so other orders can use it.',
+              },
+            ]}
+          />
 
           {/* The consequence, in full, only on the branch that has one.
               It is two separate facts and people reliably read only the
               first, so the order half is said last and said plainly. */}
           {releasing ? (
-            <p
-              role="status"
-              className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical rounded-[var(--radius-2)] border px-3 py-2 text-xs leading-relaxed"
-            >
-              This cannot be undone. {units} return to available stock,{' '}
-              <strong>and the order is rejected</strong> — nobody will call the customer again and
-              nothing will be sent to them. If you want to try them yourself first, choose “Keep
-              trying” instead.
-            </p>
+            <Notice tone="bad" role="status" icon={<TriangleAlert size={16} />}>
+              <span>
+                This cannot be undone. {units} return to available stock,{' '}
+                <strong>and the order is rejected</strong> — nobody will call the customer again and
+                nothing will be sent to them. If you want to try them yourself first, choose “Keep
+                trying” instead.
+              </span>
+            </Notice>
           ) : null}
 
-          <FormField
+          <TextArea
+            id="call-review-note"
             label={releasing ? 'Why you are giving up on it' : heldForSeller ? 'Why' : 'Note'}
-            htmlFor="call-review-note"
             hint={
               heldForSeller
                 ? 'Seller staff read this before they approve or reject your answer.'
@@ -191,51 +221,21 @@ export function CallReviewDecision({
                   ? 'Kept on the order. Your seller reads this when they ask why the sale was rejected.'
                   : 'Optional — anything the call centre should know.'
             }
-            required={releasing || heldForSeller}
-          >
-            <Textarea
-              id="call-review-note"
-              rows={3}
-              maxLength={1000}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </FormField>
+            requiredMark={releasing || heldForSeller}
+            rows={3}
+            maxLength={1000}
+            showCount
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
 
           {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
+            <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
+              <span>{error}</span>
+            </Notice>
           ) : null}
-
-          <ModalFooter>
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => setOpen(false)}
-              disabled={decide.isPending}
-            >
-              Never mind
-            </Button>
-            <Button
-              type="button"
-              variant={releasing ? 'destructive' : 'primary'}
-              size="md"
-              disabled={decide.isPending || missingReason}
-              onClick={() => void send()}
-            >
-              {decide.isPending
-                ? 'Sending…'
-                : heldForSeller
-                  ? 'Send to your seller to approve'
-                  : releasing
-                    ? 'Release the stock and reject the order'
-                    : 'Keep trying'}
-            </Button>
-          </ModalFooter>
         </div>
-      </Modal>
+      </Dialog>
     </>
   );
 }

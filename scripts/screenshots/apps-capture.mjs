@@ -60,7 +60,11 @@ const FILL = {
     '/warehouse/manifests/[id]': () => `/warehouse/manifests/${IDS.manifest}`,
     '/reseller-stores/[storeId]': () => `/reseller-stores/${IDS.store}`,
   },
-  reseller: {},
+  reseller: {
+    '/orders/[id]': () => `/orders/${IDS.storeOrder}`,
+    '/tickets/[id]': () => `/tickets/${IDS.storeTicket}`,
+    '/customers/[id]': () => `/customers/${IDS.storeCustomer}`,
+  },
   track: {
     '/[awb]': () => `/${IDS.awb}`,
   },

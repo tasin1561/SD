@@ -1,30 +1,22 @@
 'use client';
 
 import type { ReactElement } from 'react';
+import { Wallet } from 'lucide-react';
 import type { ResellerOrderMoneyView } from '@skydrop/api-client';
 import type { StoreWalletEntryDirection, WalletEntryDirection } from '@skydrop/db';
-import {
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Money,
-  Section,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
 import {
   resellerCreditStatusKind,
   resellerCreditStatusLabel,
   storeWalletDirectionLabel,
 } from '@skydrop/ui/status';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useStoreOrderMoney } from '@/lib/order-hooks';
+import { Facts, Notice, RoSection } from '../../_components/orders-parts';
 
 function when(iso: string | null): string {
   return iso === null
@@ -67,15 +59,15 @@ function feeName(fee: WalletEntryDirection): string {
 export function OrderMoney({ orderId }: { orderId: string }): ReactElement {
   const money = useStoreOrderMoney(orderId);
   return (
-    <Section title="What this order earns you">
+    <RoSection title="What this order earns you" bare>
       {money.isPending ? (
-        <LoadingState label="Loading the money" rows={4} />
+        <SkeletonRows rows={4} cols={2} label="Loading the money" />
       ) : money.isError ? (
         <ErrorState message={serverVerdict(money.error)} retry={() => void money.refetch()} />
       ) : (
         <MoneyBody m={money.data} />
       )}
-    </Section>
+    </RoSection>
   );
 }
 
@@ -83,131 +75,150 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
   const store = m.parties.find((p) => p.party === 'STORE') ?? null;
   const lines = m.storeLines ?? [];
   return (
-    <div className="space-y-4">
+    <div className="ro-stack">
       {store !== null ? (
-        <Card>
-          <CardBody>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <StatusBadge
+        <div className="ro-card">
+          <div className="ro-stack ro-stack--tight">
+            <div className="ro-row">
+              <StatusChip
                 kind={resellerCreditStatusKind(store.status)}
                 label={resellerCreditStatusLabel(store.status)}
+                size="sm"
               />
-              <span className="text-text-muted text-sm">{store.timing}</span>
+              <span className="ro-muted">{store.timing}</span>
             </div>
-            <dl className="grid grid-cols-[minmax(120px,50%)_1fr] gap-x-3 gap-y-1.5 text-sm">
-              <dt className="text-text-muted">COD collected for you</dt>
-              <dd className="text-right">
-                <Money amount={store.grossInr} convert={false} />
-              </dd>
-              <dt className="text-text-muted">Goods at the seller’s transfer price</dt>
-              <dd className="text-right">
-                <Money amount={store.transferInr} direction="debit" convert={false} />
-              </dd>
-              <dt className="text-text-muted">Your share of the COD tax</dt>
-              <dd className="text-right">
-                <Money amount={store.taxShareInr} direction="debit" convert={false} />
-              </dd>
-              <dt className="text-text-muted">Your share of the COD fee</dt>
-              <dd className="text-right">
-                <Money amount={store.codFeeShareInr} direction="debit" convert={false} />
-              </dd>
-              <dt className="text-text-muted">Your share of the Instant Pay fee</dt>
-              <dd className="text-right">
-                <Money amount={store.instantFeeShareInr} direction="debit" convert={false} />
-              </dd>
-              <dt className="text-text-body font-medium">You are credited</dt>
-              <dd className="text-right font-medium">
-                <Signed amount={store.netInr} />
-              </dd>
-              {store.dueAt !== null ? (
-                <>
-                  <dt className="text-text-muted">Due</dt>
-                  <dd className="text-right">{when(store.dueAt)}</dd>
-                </>
-              ) : null}
-              {store.creditedAt !== null ? (
-                <>
-                  <dt className="text-text-muted">Credited</dt>
-                  <dd className="text-right">{when(store.creditedAt)}</dd>
-                </>
-              ) : null}
-              {store.reversedAt !== null ? (
-                <>
-                  <dt className="text-text-muted">Taken back</dt>
-                  <dd className="text-right">{when(store.reversedAt)}</dd>
-                </>
-              ) : null}
-            </dl>
-          </CardBody>
-        </Card>
+            <Facts
+              alignEnd
+              items={[
+                {
+                  label: 'COD collected for you',
+                  value: <Money amount={store.grossInr} convert={false} />,
+                },
+                {
+                  label: 'Goods at the seller’s transfer price',
+                  value: <Money amount={store.transferInr} direction="debit" convert={false} />,
+                },
+                {
+                  label: 'Your share of the COD tax',
+                  value: <Money amount={store.taxShareInr} direction="debit" convert={false} />,
+                },
+                {
+                  label: 'Your share of the COD fee',
+                  value: <Money amount={store.codFeeShareInr} direction="debit" convert={false} />,
+                },
+                {
+                  label: 'Your share of the Instant Pay fee',
+                  value: (
+                    <Money amount={store.instantFeeShareInr} direction="debit" convert={false} />
+                  ),
+                },
+                {
+                  label: 'You are credited',
+                  value: <Signed amount={store.netInr} />,
+                  total: true,
+                },
+                ...(store.dueAt !== null
+                  ? [
+                      {
+                        label: 'Due',
+                        value: <span className="sk-figure">{when(store.dueAt)}</span>,
+                      },
+                    ]
+                  : []),
+                ...(store.creditedAt !== null
+                  ? [
+                      {
+                        label: 'Credited',
+                        value: <span className="sk-figure">{when(store.creditedAt)}</span>,
+                      },
+                    ]
+                  : []),
+                ...(store.reversedAt !== null
+                  ? [
+                      {
+                        label: 'Taken back',
+                        value: <span className="sk-figure">{when(store.reversedAt)}</span>,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </div>
+        </div>
       ) : m.paymentMode === 'PREPAID' ? (
-        <p className="text-text-muted text-sm">
-          A prepaid order is paid from your wallet at confirmation: the goods at the seller’s
-          transfer price and your share of the delivery fee. The lines are below.
-        </p>
+        <Notice tone="info" icon={<Wallet size={16} />}>
+          <span>
+            A prepaid order is paid from your wallet at confirmation: the goods at the seller’s
+            transfer price and your share of the delivery fee. The lines are below.
+          </span>
+        </Notice>
       ) : (
-        <p className="text-text-muted text-sm">
-          The money for this order is worked out once it is confirmed.
-        </p>
+        <Notice tone="neutral" icon={<Wallet size={16} />}>
+          <span>The money for this order is worked out once it is confirmed.</span>
+        </Notice>
       )}
 
       {m.fees.length > 0 ? (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Skydrop fee</Th>
-              <Th align="right">Your share</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {m.fees.map((f) => (
-              <Tr key={f.fee}>
-                <Td>{feeName(f.fee)}</Td>
-                <Td align="right">
-                  <Money amount={f.storeInr} direction="debit" convert={false} />
-                </Td>
+        <div className="ro-card" data-flush="1">
+          <Table caption="Skydrop fees and your share">
+            <THead>
+              <Tr>
+                <Th>Skydrop fee</Th>
+                <Th align="right">Your share</Th>
               </Tr>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {m.fees.map((f) => (
+                <Tr key={f.fee}>
+                  <Td>{feeName(f.fee)}</Td>
+                  <Td align="right">
+                    <Money amount={f.storeInr} direction="debit" convert={false} />
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
       ) : null}
 
       {lines.length === 0 ? (
-        <p className="text-text-faint text-xs">
-          Nothing has moved in your wallet for this order yet.
-        </p>
+        <p className="ro-faint">Nothing has moved in your wallet for this order yet.</p>
       ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>When</Th>
-              <Th>In your wallet</Th>
-              <Th align="right">Amount</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {lines.map((l) => (
-              <Tr key={l.id}>
-                <Td className="text-text-muted text-xs">{when(l.createdAt)}</Td>
-                <Td>
-                  <div>
-                    {storeWalletDirectionLabel(
-                      l.direction as StoreWalletEntryDirection,
-                      'the seller',
-                    )}
-                  </div>
-                  {l.note !== null ? <div className="text-text-faint text-xs">{l.note}</div> : null}
-                </Td>
-                <Td align="right">
-                  <Signed amount={l.amountInr} />
-                </Td>
+        <div className="ro-card" data-flush="1">
+          <Table caption="Your wallet lines for this order">
+            <THead>
+              <Tr>
+                <Th>When</Th>
+                <Th>In your wallet</Th>
+                <Th align="right">Amount</Th>
               </Tr>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {lines.map((l) => (
+                <Tr key={l.id}>
+                  <Td>
+                    <span className="ro-muted sk-figure">{when(l.createdAt)}</span>
+                  </Td>
+                  <Td>
+                    <div>
+                      {storeWalletDirectionLabel(
+                        l.direction as StoreWalletEntryDirection,
+                        'the seller',
+                      )}
+                    </div>
+                    {l.note !== null ? <span className="ro-sub">{l.note}</span> : null}
+                  </Td>
+                  <Td align="right">
+                    <Signed amount={l.amountInr} />
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
       )}
       {m.storeNetInr !== null && lines.length > 0 ? (
-        <p className="text-sm">
+        <p className="ro-body">
           Net in your wallet for this order: <Signed amount={m.storeNetInr} />
         </p>
       ) : null}

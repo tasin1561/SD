@@ -2,32 +2,22 @@
 
 import Link from 'next/link';
 import type { ReactElement } from 'react';
+import { ArrowRight, Boxes, PhoneOff, PhoneMissed } from 'lucide-react';
 import { ApiError } from '@skydrop/api-client';
 import { OrderStatus } from '@skydrop/db';
 import { useStoreIdentity } from '@skydrop/auth/client';
-import {
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorState,
-  Ident,
-  LoadingState,
-  Num,
-  PageHeader,
-  Section,
-  Stat,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Ident, Num } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useStoreCallReviews, type StoreCallReview } from '@/lib/review-hooks';
 import { useStoreActionPolicy, useStoreOrders, type StoreOrderListItem } from '@/lib/order-hooks';
 import { CallReviewDecision } from '@/components/call-review-decision';
+import { LinkButton, Notice, RoSection } from '../_components/orders-parts';
 
 const CONTEXT_PAGE_SIZE = 100;
 
@@ -85,47 +75,48 @@ export default function CallReviewsPage(): ReactElement {
   const heldUnits = rows.reduce((sum, r) => sum + r.heldQty, 0);
 
   return (
-    <div className="space-y-6">
+    <div className="ro-page">
       <PageHeader
         title="Customers we could not reach"
         subtitle="Orders where we rang the customer as often as your seller allows and never got through. Until you answer, the stock stays held and nothing is sent."
         action={
-          <Link href="/orders" className="text-accent text-sm hover:underline">
-            All orders →
-          </Link>
+          <LinkButton href="/orders" variant="ghost" icon={<ArrowRight size={15} />}>
+            All orders
+          </LinkButton>
         }
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Stat
+      <div className="ro-kpis">
+        <KpiCard
           label="Units held waiting on you"
-          value={reviews.isPending ? '—' : <Num value={heldUnits} />}
-          tone={heldUnits > 0 ? 'warn' : 'good'}
+          icon={<Boxes size={14} />}
+          tone={heldUnits > 0 ? 'pending' : 'credit'}
+          figure={reviews.isPending ? '—' : <Num value={heldUnits} />}
           hint="Your seller cannot sell these to anyone else meanwhile"
         />
-        <Stat
+        <KpiCard
           label="Orders waiting on an answer"
-          value={reviews.isPending ? '—' : <Num value={rows.length} />}
+          icon={<PhoneMissed size={14} />}
+          tone="neutral"
+          figure={reviews.isPending ? '—' : <Num value={rows.length} />}
           hint="Each has a customer who has not heard from you"
         />
       </div>
 
-      <Section title="Waiting on you">
+      <RoSection title="Waiting on you" bare>
         {answeredBySeller || isAnsweredBySeller(reviews.error) ? (
           // NOT an error (2026-09-17): the seller keeps these questions for
           // themselves. A red box read as something broken. The server's
           // own sentence is used when it gave one — it names who answers.
-          <Card>
-            <CardBody>
-              <p className="text-text-muted text-sm">
-                {reviews.error instanceof ApiError
-                  ? serverVerdictMessage(reviews.error)
-                  : 'The seller answers call-attempt questions for this store. Ask them whether to keep trying.'}
-              </p>
-            </CardBody>
-          </Card>
+          <Notice tone="info" icon={<PhoneOff size={16} />}>
+            <span>
+              {reviews.error instanceof ApiError
+                ? serverVerdictMessage(reviews.error)
+                : 'The seller answers call-attempt questions for this store. Ask them whether to keep trying.'}
+            </span>
+          </Notice>
         ) : reviews.isPending ? (
-          <LoadingState label="Loading the orders we could not confirm" rows={4} />
+          <SkeletonRows rows={4} cols={6} label="Loading the orders we could not confirm" />
         ) : reviews.isError ? (
           // Verbatim (FE-2). The common one here is not a fault:
           // STORE_ACTION_NOT_ALLOWED says the seller answers these, and
@@ -133,39 +124,42 @@ export default function CallReviewsPage(): ReactElement {
           <ErrorState message={serverVerdict(reviews.error)} retry={() => void reviews.refetch()} />
         ) : rows.length === 0 ? (
           <EmptyState
+            tone="positive"
             title="Nothing waiting"
             description="When we run out of call attempts on one of your orders without reaching the customer, it appears here for you to decide: keep trying, or give the stock back."
             action={
-              <Link href="/orders" className="text-accent text-sm hover:underline">
+              <LinkButton href="/orders" variant="secondary">
                 Go to your orders
-              </Link>
+              </LinkButton>
             }
           />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Order</Th>
-                <Th>Customer</Th>
-                <Th align="right">Units held</Th>
-                <Th align="right">Calls made</Th>
-                <Th>Waiting</Th>
-                <Th align="right">Your answer</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((r) => (
-                <ReviewRow
-                  key={r.id}
-                  review={r}
-                  order={orders.get(r.orderId)}
-                  mode={policy.data?.callCapDecision}
-                />
-              ))}
-            </TBody>
-          </Table>
+          <div className="ro-card" data-flush="1">
+            <Table caption="Orders waiting on your answer">
+              <THead>
+                <Tr>
+                  <Th>Order</Th>
+                  <Th>Customer</Th>
+                  <Th align="right">Units held</Th>
+                  <Th align="right">Calls made</Th>
+                  <Th>Waiting</Th>
+                  <Th align="right">Your answer</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {rows.map((r) => (
+                  <ReviewRow
+                    key={r.id}
+                    review={r}
+                    order={orders.get(r.orderId)}
+                    mode={policy.data?.callCapDecision}
+                  />
+                ))}
+              </TBody>
+            </Table>
+          </div>
         )}
-      </Section>
+      </RoSection>
     </div>
   );
 }
@@ -198,25 +192,25 @@ function ReviewRow({
   return (
     <Tr>
       <Td>
-        <Link href={`/orders/${review.orderId}`} className="text-accent hover:underline">
+        <Link href={`/orders/${review.orderId}`} className="ro-order-link">
           {order === undefined ? (
             // The order is not in the parked list — it has moved on, or
             // there are more than a page of them. The id still opens it.
             <Ident value={`${review.orderId.slice(0, 8)}…`} />
           ) : (
-            <span className="font-mono text-xs">{order.orderNumber}</span>
+            <span className="sk-ident">{order.orderNumber}</span>
           )}
         </Link>
       </Td>
       <Td>
         {order === undefined ? (
-          <span className="text-text-faint text-xs">Open the order</span>
+          <span className="ro-faint">Open the order</span>
         ) : (
           <>
-            <div className="text-text-body">{order.recipientName}</div>
-            <div className="text-text-faint mt-0.5 text-xs">
+            <div>{order.recipientName}</div>
+            <span className="ro-sub">
               {[order.recipientPhoneE164, order.recipientCity].filter((v) => v !== '').join(' · ')}
-            </div>
+            </span>
           </>
         )}
       </Td>
@@ -226,7 +220,9 @@ function ReviewRow({
       <Td align="right">
         <Num value={review.attemptCount} />
       </Td>
-      <Td className="text-text-muted text-xs">{waitedFor(review.createdAt)}</Td>
+      <Td>
+        <span className="ro-muted">{waitedFor(review.createdAt)}</span>
+      </Td>
       <Td align="right">
         <CallReviewDecision
           review={review}

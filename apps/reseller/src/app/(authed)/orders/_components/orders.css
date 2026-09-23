@@ -1,0 +1,467 @@
+/* Reseller orders area (list, place an order, detail, CSV import, the
+   call-cap queue). Tokens only. The primitives (PageHeader, Table,
+   Timeline, Dialog …) carry their own CSS; this file arranges them and
+   draws the few order-only pieces. Every layout grid declares its columns
+   as minmax(0, …) so nothing sizes to its content and the page never
+   scrolls sideways at 320–390 px. */
+
+.ro-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.ro-page > .sk-ph {
+  margin-bottom: 0;
+}
+.ro-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.ro-stack--tight {
+  gap: var(--sp-3);
+}
+.ro-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.ro-row--between {
+  justify-content: space-between;
+}
+.ro-grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .ro-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.ro-grid-3 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .ro-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.ro-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .ro-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.ro-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* ── Section: a plain heading over one bordered card ─────────────────── */
+.ro-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  scroll-margin-top: calc(var(--sk-sticky-top, 0px) + 72px);
+}
+.ro-card {
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.ro-card[data-flush='1'] {
+  padding: 0;
+}
+.ro-card[data-flush='1'] .sk-table-wrap {
+  border: 0;
+  border-radius: inherit;
+  box-shadow: none;
+  background: transparent;
+}
+.ro-table-foot {
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--line);
+}
+
+/* ── Text ─────────────────────────────────────────────────────────────── */
+.ro-p {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+.ro-body {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-md);
+}
+.ro-muted {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.ro-faint {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.ro-strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.ro-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.ro-nowrap {
+  white-space: nowrap;
+}
+.ro-link {
+  color: var(--sky);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.ro-link:hover {
+  text-decoration: underline;
+}
+.ro-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.ro-order-link {
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+}
+.ro-order-link:hover {
+  text-decoration: underline;
+}
+.ro-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+  justify-self: start;
+}
+.ro-back:hover {
+  color: var(--fg-strong);
+}
+.ro-back:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.ro-error {
+  margin: 0;
+  color: var(--red-text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.ro-tone-bad {
+  color: var(--red-text);
+}
+.ro-tone-warn {
+  color: var(--saffron-text);
+}
+.ro-quote {
+  margin: var(--sp-1) 0 0;
+  padding-left: var(--sp-3);
+  border-left: 2px solid var(--line-strong);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-style: italic;
+}
+
+/* ── Fact list (label / value) ────────────────────────────────────────── */
+.ro-facts {
+  display: grid;
+  grid-template-columns: minmax(84px, 38%) minmax(0, 1fr);
+  gap: var(--sp-2) var(--sp-3);
+  margin: 0;
+  font-size: var(--fs-md);
+}
+@media (min-width: 640px) {
+  .ro-facts {
+    grid-template-columns: 150px minmax(0, 1fr);
+    column-gap: var(--sp-6);
+  }
+}
+.ro-facts[data-align='end'] {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.ro-facts[data-align='end'] dd {
+  text-align: right;
+}
+.ro-facts dt {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.ro-facts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-body);
+  overflow-wrap: anywhere;
+}
+.ro-facts .ro-facts__total {
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+
+/* ── Notices: a tinted note with an icon (colour is never the only signal) */
+.ro-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.ro-notice__icon {
+  flex: none;
+  margin-top: 2px;
+}
+.ro-notice__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ro-notice__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.ro-notice[data-tone='info'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+}
+.ro-notice[data-tone='info'] .ro-notice__icon {
+  color: var(--blue-text);
+}
+.ro-notice[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+}
+.ro-notice[data-tone='warn'] .ro-notice__icon {
+  color: var(--saffron-text);
+}
+.ro-notice[data-tone='bad'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+}
+.ro-notice[data-tone='bad'] .ro-notice__icon,
+.ro-notice[data-tone='bad'] .ro-notice__title {
+  color: var(--red-on-tint);
+}
+.ro-notice[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+}
+.ro-notice[data-tone='good'] .ro-notice__icon {
+  color: var(--green-text);
+}
+
+/* ── Orders list ──────────────────────────────────────────────────────── */
+.ro-search-btn {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  min-height: var(--tap);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.ro-search-btn:hover {
+  color: var(--sky);
+}
+.ro-search-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.ro-prepaid {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+
+/* ── Product lines (place an order) ───────────────────────────────────── */
+.ro-lines {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ro-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+@media (min-width: 720px) {
+  .ro-line {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 150px) minmax(0, 170px) auto;
+    align-items: start;
+  }
+  .ro-line__note {
+    grid-column: 1 / -1;
+  }
+}
+.ro-line__remove {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  min-height: 100%;
+}
+.ro-line__note {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.ro-thumb-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* ── Sticky submit bar (place an order) ───────────────────────────────── */
+.ro-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-2);
+}
+.ro-bar__summary {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.ro-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+@media (max-width: 639px) {
+  .ro-bar__summary,
+  .ro-bar__actions {
+    width: 100%;
+  }
+  .ro-bar__actions > * {
+    flex: 1 1 auto;
+  }
+}
+
+/* ── Action rows (delivery trouble, corrections) ──────────────────────── */
+.ro-offers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ro-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+}
+.ro-offer__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.ro-changes {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-xs);
+}
+
+/* ── Consignee change log ─────────────────────────────────────────────── */
+.ro-log {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: var(--sp-4) 0 0;
+  padding: var(--sp-3) 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+/* ── Import ───────────────────────────────────────────────────────────── */
+.ro-file-name {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* ── Call-cap answer (radio cards + the consequence) ──────────────────── */
+.ro-decide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
