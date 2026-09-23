@@ -7,7 +7,7 @@ import './password-field.css';
 
 /**
  * PasswordField (u13). A text field with a show/hide toggle
- * (`aria-pressed`, named "Show password" / "Hide password") and, when
+ * (ONE stable name, "Show password", with `aria-pressed` saying whether it is shown) and, when
  * `criteria` are given, a four-step strength meter with a word beside it
  * and one chip per criterion that ticks as it is met. There is NO built-in
  * policy: the caller passes the rules (the server's rules are the ones that
@@ -67,7 +67,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
         type="button"
         className="sk-field__btn sk-pw__toggle"
         aria-pressed={shown}
-        aria-label={shown ? 'Hide password' : 'Show password'}
+        aria-label="Show password"
         aria-controls={id}
         disabled={disabled}
         onMouseDown={(e) => e.preventDefault()}

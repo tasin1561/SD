@@ -1,0 +1,10 @@
+/* The lazily loaded map fades in once its chunk has arrived. */
+.sk-lazymap__canvas {
+  opacity: 0;
+  animation: sk-lazymap-in var(--dur-slow) var(--ease-out) forwards;
+}
+@keyframes sk-lazymap-in {
+  to {
+    opacity: 1;
+  }
+}

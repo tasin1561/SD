@@ -32,6 +32,10 @@
       "types": "./dist/status/index.d.ts",
       "default": "./dist/status/index.js"
     },
+    "./status/public-tracking": {
+      "types": "./dist/status/public-tracking.d.ts",
+      "default": "./dist/status/public-tracking.js"
+    },
     "./components": {
       "types": "./dist/components/index.d.ts",
       "default": "./dist/components/index.js"

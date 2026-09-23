@@ -18,13 +18,13 @@ import { Button, ButtonLink } from '../button';
 import { ConfirmDialog, Dialog, DialogFooter, SuccessDialog } from '../dialog';
 import { LabelIntoParcel } from '../label-into-parcel';
 import { MotionSwitch } from '../motion-switch';
-import { PaperPlaneSend } from '../paper-plane-send';
+import { PaperPlaneSendButton } from '../paper-plane-send';
 import { ParachuteProgress } from '../parachute-progress';
 import { Snackbar } from '../snackbar';
 import { ThemeSwitch } from '../theme-switch';
 import { ToastProvider, useToast } from '../toast';
 import { GlossaryTerm, TooltipCard } from '../tooltip-card';
-import { VanDriveOff } from '../van-drive-off';
+import { VanDriveOffButton } from '../van-drive-off';
 import type { GalleryEntry } from './types';
 
 /**
@@ -82,32 +82,31 @@ function AsyncDemo({ ok }: { ok: boolean }): ReactElement {
 }
 
 // ── Storytelling: van, plane ─────────────────────────────────────────
-function VanDemo(): ReactElement {
-  const [count, setCount] = useState(0);
-  const [busy, setBusy] = useState(false);
+/** DEMO ONLY: the storytelling buttons get a 700 ms fake request. */
+function storyRequest(ok: boolean): Promise<string> {
+  return new Promise((resolve, reject) => {
+    window.setTimeout(() => {
+      if (ok) resolve('ok');
+      else reject(new Error('Demo: the server refused'));
+    }, 700);
+  });
+}
+
+function VanDemo({ ok }: { ok: boolean }): ReactElement {
   return (
-    <VanDriveOff play={count} message={`Order SD-2026-38-00010${count} created (demo)`}>
-      <Button
-        icon={<Truck size={16} />}
-        loading={busy}
-        onClick={() => {
-          setBusy(true);
-          void demoRequest(true).then(() => {
-            setBusy(false);
-            setCount((c) => c + 1);
-          });
-        }}
-      >
-        Create order
-      </Button>
-    </VanDriveOff>
+    <VanDriveOffButton
+      icon={<Truck size={16} />}
+      label="Create order"
+      busyLabel="Creating…"
+      doneLabel="Order created"
+      errorLabel="Not created, retry"
+      onAction={() => storyRequest(ok)}
+    />
   );
 }
 
-function PlaneDemo(): ReactElement {
-  const [count, setCount] = useState(0);
+function PlaneDemo({ ok }: { ok: boolean }): ReactElement {
   const [text, setText] = useState('Thanks — the parcel was re-attempted today.');
-  const [busy, setBusy] = useState(false);
   return (
     <div style={{ display: 'grid', gap: 8, maxWidth: 420 }}>
       <textarea
@@ -117,26 +116,24 @@ function PlaneDemo(): ReactElement {
         aria-label="Reply"
         style={{ font: 'inherit', padding: 8, borderRadius: 8 }}
       />
-      <PaperPlaneSend play={count} message="Reply sent (demo)">
-        <Button
-          icon={<Send size={16} />}
-          loading={busy}
-          disabled={text.trim() === ''}
-          onClick={() => {
-            setBusy(true);
-            void demoRequest(true).then(() => {
-              setBusy(false);
-              setText('');
-              setCount((c) => c + 1);
-            });
-          }}
-        >
-          Send reply
-        </Button>
-      </PaperPlaneSend>
+      <PaperPlaneSendButton
+        icon={<Send size={16} />}
+        label="Send reply"
+        busyLabel="Sending…"
+        doneLabel="Reply sent"
+        errorLabel="Not sent, retry"
+        disabled={text.trim() === ''}
+        onAction={() => storyRequest(ok)}
+        onSettled={(outcome) => {
+          if (outcome.ok) setText('');
+        }}
+      />
     </div>
   );
 }
+
+const reducedNote =
+  'Reduced motion (Motion: reduced, or the OS setting): no morph — the button returns at once and a small green pill appears beside it.';
 
 function ParachuteDemo(): ReactElement {
   const [value, setValue] = useState(0);
@@ -412,20 +409,23 @@ export const ACTION_ENTRIES: readonly GalleryEntry[] = [
     id: 'van-drive-off',
     name: 'Van drive-off',
     patterns: ['van-drive-off'],
-    usedFor: '"Create order" success — plays only after the real request succeeds.',
+    usedFor: '"Create order" — the button becomes a van, only after the real request succeeds.',
     states: [
-      {
-        label: 'Click: demo request, then the van (button stays usable)',
-        render: () => <VanDemo />,
-      },
+      { label: 'Success: 700 ms demo request, then the van', render: () => <VanDemo ok /> },
+      { label: 'Error: shake + red, no van', render: () => <VanDemo ok={false} /> },
+      { label: 'Reduced motion', render: () => <p style={{ maxWidth: 320 }}>{reducedNote}</p> },
     ],
   },
   {
     id: 'paper-plane-send',
     name: 'Paper-plane send',
     patterns: ['paper-plane-send'],
-    usedFor: 'Ticket reply sent.',
-    states: [{ label: 'Send: demo request, then the plane', render: () => <PlaneDemo /> }],
+    usedFor: 'Ticket reply sent — the button folds into a plane after the real send.',
+    states: [
+      { label: 'Success: 700 ms demo send, then the plane', render: () => <PlaneDemo ok /> },
+      { label: 'Error: shake + red, no plane', render: () => <PlaneDemo ok={false} /> },
+      { label: 'Reduced motion', render: () => <p style={{ maxWidth: 320 }}>{reducedNote}</p> },
+    ],
   },
   {
     id: 'parachute-progress',
