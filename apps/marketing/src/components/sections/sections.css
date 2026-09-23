@@ -1,7 +1,10 @@
 /* ── Shared section chrome (Phase 4) ─────────────────────────────────── */
 .sec {
   position: relative;
-  padding-block: 4rem;
+  /* 3rem / 4rem, not 4 / 6: two sections meeting put both paddings
+     between the last card and the next eyebrow, and at 6rem that read as
+     a dozen rem of empty page (owner, 2026-09-23). */
+  padding-block: 3rem;
   border-top: 1px solid var(--line);
   background: var(--page);
   /* Off-screen sections are not styled, laid out or painted until they
@@ -22,7 +25,7 @@
 }
 @media (min-width: 1024px) {
   .sec {
-    padding-block: 6rem;
+    padding-block: 4rem;
   }
 }
 .sec__inner {

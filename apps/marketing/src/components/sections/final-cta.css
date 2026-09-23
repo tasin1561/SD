@@ -13,7 +13,7 @@
 .sec.cta {
   border-top: 0;
   background: var(--corridor-gradient);
-  padding-block: 4.5rem;
+  padding-block: 3.5rem;
   /* `clip`, not `hidden`: no scroll container, and the drifting glyphs
      can hang past the edge without widening the document (the 320 px
      horizontal-overflow failure the responsive spec pins). */
@@ -21,7 +21,7 @@
 }
 @media (min-width: 1024px) {
   .sec.cta {
-    padding-block: 6.5rem;
+    padding-block: 4.5rem;
   }
 }
 
