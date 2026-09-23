@@ -1,15 +1,16 @@
 import type { ReactElement } from 'react';
-import { PageHeader } from '@skydrop/ui/components';
+import { AreaPage, StockPageHeader } from '../../inventory/_components/stock-kit';
 import { ManifestsIndex } from './_components/manifests-index';
 
 export default function ManifestsPage(): ReactElement {
   return (
-    <div>
-      <PageHeader
+    <AreaPage>
+      <StockPageHeader
+        breadcrumbs={[{ label: 'Warehouse', href: '/warehouse' }, { label: 'Manifests' }]}
         title="Manifests"
-        subtitle="A record of which parcels went out together. Closing and courier handoff are automatic once a box is packed \u2014 nothing here needs doing unless something went wrong."
+        subtitle="A record of which parcels went out together. Closing and courier handoff are automatic once a box is packed — nothing here needs doing unless something went wrong."
       />
       <ManifestsIndex />
-    </div>
+    </AreaPage>
   );
 }

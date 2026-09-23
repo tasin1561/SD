@@ -2,7 +2,12 @@
 
 import { useState, type ReactElement } from 'react';
 import { useStaffIdentity } from '@skydrop/auth/client';
-import { Button, ErrorNote, Input, StatusBadge, useToast } from '@skydrop/ui/components';
+import { useToast } from '@skydrop/ui/components';
+import { Check, Printer, X } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Actions, Code, InlineError, Note } from '../../../../inventory/_components/stock-kit';
 import { labelReprintStateKind } from '@skydrop/ui/status';
 import type { LabelReprintRequestView, LabelReprintState, LabelSheet } from '@skydrop/api-client';
 import {
@@ -57,6 +62,10 @@ export function LabelReprintRequests({
   const [error, setError] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
+  // Approve and print are confirmed first (owner): an approval lets a
+  // serial be printed a second time, and a print uses the approval up.
+  const [approving, setApproving] = useState<LabelReprintRequestView | null>(null);
+  const [printing, setPrinting] = useState<LabelReprintRequestView | null>(null);
 
   const rows = requests.data ?? [];
   if (rows.length === 0 && !requests.isError) return null;
@@ -94,30 +103,33 @@ export function LabelReprintRequests({
     }
   }
 
+  const rejecting = rejectingId === null ? null : (rows.find((x) => x.id === rejectingId) ?? null);
+
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-text-muted text-xs font-medium">Label reprint requests</p>
+    <div className="stk-stack stk-stack--tight">
+      <p className="cns-requests__title">Label reprint requests</p>
       {requests.isError && (
-        <ErrorNote
+        <InlineError
           message={`Could not load the reprint requests: ${serverVerdict(requests.error)}`}
           retry={() => void requests.refetch()}
         />
       )}
-      {error !== null && <ErrorNote message={error} />}
-      <ul className="flex flex-col gap-2">
+      {error !== null && <InlineError message={error} />}
+      <ul className="cns-requests">
         {rows.map((r) => {
           const mine = me !== null && r.requestedBy.id === me.id;
           return (
-            <li
-              key={r.id}
-              className="border-border-subtle flex flex-col gap-1 rounded border p-2 text-xs"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge kind={labelReprintStateKind(r.state)} label={STATE_LABEL[r.state]} />
-                <span className="font-mono">{r.serials.join(', ')}</span>
+            <li key={r.id} className="cns-request">
+              <div className="cns-request__head">
+                <StatusChip
+                  size="sm"
+                  kind={labelReprintStateKind(r.state)}
+                  label={STATE_LABEL[r.state]}
+                />
+                <Code>{r.serials.join(', ')}</Code>
               </div>
-              <p className="text-text-muted">{r.reason}</p>
-              <p className="text-text-faint">
+              <p className="stk-note">{r.reason}</p>
+              <p className="stk-note" data-tone="faint">
                 Asked by {r.requestedBy.email ?? 'a colleague'} · {when(r.requestedAt)}
                 {r.decidedBy !== null && r.decidedAt !== null && (
                   <>
@@ -129,67 +141,111 @@ export function LabelReprintRequests({
               </p>
 
               {r.state === 'PENDING' && mine && (
-                <p className="text-text-faint">
+                <Note tone="faint">
                   Somebody else holding the reprint permission has to approve this.
-                </p>
+                </Note>
               )}
               {r.state === 'PENDING' && !mine && mayDecide && (
-                <div className="flex flex-col gap-2">
-                  {rejectingId === r.id ? (
-                    <>
-                      <Input
-                        aria-label="Why not"
-                        value={rejectNote}
-                        placeholder="Why not? The person who asked reads this."
-                        onChange={(e) => setRejectNote(e.target.value)}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="destructive"
-                          disabled={reject.isPending}
-                          onClick={() => void onReject(r)}
-                        >
-                          {reject.isPending ? 'Rejecting…' : 'Reject'}
-                        </Button>
-                        <Button variant="ghost" onClick={() => setRejectingId(null)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      <Button disabled={approve.isPending} onClick={() => void onApprove(r)}>
-                        {approve.isPending ? 'Approving…' : 'Approve'}
-                      </Button>
-                      <Button variant="ghost" onClick={() => setRejectingId(r.id)}>
-                        Reject…
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                <Actions>
+                  <Button
+                    size="sm"
+                    icon={<Check size={14} />}
+                    disabled={approve.isPending}
+                    onClick={() => setApproving(r)}
+                  >
+                    {approve.isPending ? 'Approving…' : 'Approve'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<X size={14} />}
+                    onClick={() => setRejectingId(r.id)}
+                  >
+                    Reject…
+                  </Button>
+                </Actions>
               )}
               {r.state === 'APPROVED' && mine && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button disabled={print.isPending} onClick={() => void onPrint(r)}>
+                <Actions>
+                  <Button
+                    size="sm"
+                    icon={<Printer size={14} />}
+                    disabled={print.isPending}
+                    onClick={() => setPrinting(r)}
+                  >
                     {print.isPending ? 'Preparing…' : 'Print these labels'}
                   </Button>
                   {r.approvalExpiresAt !== null && (
-                    <span className="text-text-faint">
+                    <span className="stk-faint stk-note">
                       Prints once, until {when(r.approvalExpiresAt)}
                     </span>
                   )}
-                </div>
+                </Actions>
               )}
               {r.state === 'APPROVED' && !mine && (
-                <p className="text-text-faint">
+                <Note tone="faint">
                   Only {r.requestedBy.email ?? 'the person who asked'} can print this
                   {r.approvalExpiresAt !== null && <>, until {when(r.approvalExpiresAt)}</>}.
-                </p>
+                </Note>
               )}
             </li>
           );
         })}
       </ul>
+
+      <ConfirmDialog
+        open={approving !== null}
+        onOpenChange={(next) => {
+          if (!next) setApproving(null);
+        }}
+        title="Approve this reprint?"
+        entity={approving?.serials.join(', ') ?? ''}
+        entityIsIdentifier
+        consequence={`${approving?.requestedBy.email ?? 'The person who asked'} can then print these labels once, and each reprint is recorded on the unit's own ledger.`}
+        confirmLabel="Approve"
+        onConfirm={async () => {
+          if (approving !== null) await onApprove(approving);
+        }}
+      />
+
+      <ConfirmDialog
+        open={rejecting !== null}
+        onOpenChange={(next) => {
+          if (!next) setRejectingId(null);
+        }}
+        title="Reject this reprint?"
+        entity={rejecting?.serials.join(', ') ?? ''}
+        entityIsIdentifier
+        consequence="Nothing is printed, and the person who asked reads your reason."
+        confirmLabel="Reject"
+        destructive
+        onConfirm={async () => {
+          if (rejecting !== null) await onReject(rejecting);
+        }}
+      >
+        <input
+          className="stk-input"
+          aria-label="Why not"
+          value={rejectNote}
+          placeholder="Why not? The person who asked reads this."
+          onChange={(e) => setRejectNote(e.target.value)}
+        />
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={printing !== null}
+        onOpenChange={(next) => {
+          if (!next) setPrinting(null);
+        }}
+        title="Print these labels?"
+        entity={printing?.serials.join(', ') ?? ''}
+        entityIsIdentifier
+        consequence="The approval is used up by this print: the same labels cannot be printed again without a new request."
+        confirmLabel="Print these labels"
+        onConfirm={async () => {
+          if (printing !== null) await onPrint(printing);
+        }}
+      />
     </div>
   );
 }

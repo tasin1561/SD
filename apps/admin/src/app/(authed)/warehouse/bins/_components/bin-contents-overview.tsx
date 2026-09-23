@@ -2,27 +2,12 @@
 
 import Link from 'next/link';
 import { useMemo, useState, type ReactElement } from 'react';
-import {
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Ident,
-  Input,
-  Num,
-  ProductThumb,
-  Section,
-  Select,
-  SkeletonRows,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Toolbar,
-  Tr,
-} from '@skydrop/ui/components';
+import { Ident, Num, ProductThumb } from '@skydrop/ui/components';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TextField } from '@skydrop/ui/app/text-field';
 import {
   useBinOverview,
   type BinStockLine,
@@ -30,7 +15,18 @@ import {
   type WarehouseWithBins,
 } from '@/lib/bin-contents-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  AreaSection,
+  Code,
+  InlineError,
+  Panel,
+  Stack,
+  TextLink,
+  ToneText,
+  Toolbar,
+} from '../../../inventory/_components/stock-kit';
 import { BinNote, binTypeLabel } from './bin-note';
+import './bins.css';
 
 /**
  * Every bin, and what is in it — the answer to "where can I see what
@@ -86,59 +82,68 @@ export function BinContentsOverview(): ReactElement {
     .filter((g) => g.bins.length > 0);
 
   return (
-    <Section
+    <AreaSection
       title="What's in every bin"
-      subtitle="Each bin with the product, seller and batch on it. Returns-hold, damaged and in-transit stock is shown but cannot be sold."
+      note="Each bin with the product, seller and batch on it. Returns-hold, damaged and in-transit stock is shown but cannot be sold."
     >
       <Toolbar>
         {all.length > 1 && (
-          <FormField label="Warehouse" htmlFor="bc-wh" className="w-56">
-            <Select id="bc-wh" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-              <option value="">All warehouses</option>
-              {all.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code} — {w.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+          <Select
+            id="bc-wh"
+            label="Warehouse"
+            value={warehouseId}
+            onChange={(e) => setWarehouseId(e.target.value)}
+          >
+            <option value="">All warehouses</option>
+            {all.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.code} — {w.name}
+              </option>
+            ))}
+          </Select>
         )}
-        <FormField label="Bin type" htmlFor="bc-type" className="w-48">
-          <Select id="bc-type" value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="">All types</option>
-            {types.map((t) => (
-              <option key={t} value={t}>
-                {binTypeLabel(t)}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Seller" htmlFor="bc-seller" className="w-56">
-          <Select id="bc-seller" value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
-            <option value="">All sellers</option>
-            {sellers.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Product, SKU or batch" htmlFor="bc-search" className="w-64">
-          <Input
-            id="bc-search"
-            value={search}
-            placeholder="e.g. KRT-RED-L"
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </FormField>
+        <Select
+          id="bc-type"
+          label="Bin type"
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+        >
+          <option value="">All types</option>
+          {types.map((t) => (
+            <option key={t} value={t}>
+              {binTypeLabel(t)}
+            </option>
+          ))}
+        </Select>
+        <Select
+          id="bc-seller"
+          label="Seller"
+          value={sellerId}
+          onChange={(e) => setSellerId(e.target.value)}
+        >
+          <option value="">All sellers</option>
+          {sellers.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+        </Select>
+        <TextField
+          id="bc-search"
+          label="Product, SKU or batch"
+          value={search}
+          placeholder="e.g. KRT-RED-L"
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </Toolbar>
 
       {overview.isLoading ? (
-        <Card>
-          <SkeletonRows rows={6} />
-        </Card>
+        <SkeletonRows rows={6} cols={6} />
       ) : overview.isError ? (
-        <ErrorNote message={serverVerdict(overview.error)} retry={() => void overview.refetch()} />
+        <InlineError
+          message={serverVerdict(overview.error)}
+          retry={() => void overview.refetch()}
+        />
       ) : shown.length === 0 ? (
         <EmptyState
           title={all.length === 0 ? 'No warehouses yet' : 'Nothing matches'}
@@ -149,13 +154,13 @@ export function BinContentsOverview(): ReactElement {
           }
         />
       ) : (
-        <div className="space-y-6">
+        <Stack>
           {shown.map(({ warehouse, bins }) => (
-            <div key={warehouse.id} className="space-y-3">
-              <h3 className="text-text-body text-sm font-semibold">
+            <Stack key={warehouse.id} tight>
+              <h3 className="stk-group-title">
                 {warehouse.code} — {warehouse.name}
                 {!warehouse.binTrackingEnabled && (
-                  <span className="text-text-faint ml-2 font-normal">
+                  <span className="stk-faint">
                     location tracking off — stock with no recorded shelf is in FLOOR
                   </span>
                 )}
@@ -163,11 +168,11 @@ export function BinContentsOverview(): ReactElement {
               {bins.map((b) => (
                 <BinCard key={b.id} bin={b} lineFilterOn={lineFilterOn} />
               ))}
-            </div>
+            </Stack>
           ))}
-        </div>
+        </Stack>
       )}
-    </Section>
+    </AreaSection>
   );
 }
 
@@ -180,57 +185,52 @@ function BinCard({
 }): ReactElement {
   const empty = bin.lineCount === 0;
   return (
-    <Card>
-      <CardBody className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <Link
-              href={`/warehouse/bins/${bin.id}`}
-              className="font-mono text-base font-semibold underline-offset-2 hover:underline"
-            >
-              {bin.code}
-            </Link>
-            <span className="text-text-muted text-sm">{binTypeLabel(bin.type)}</span>
-            <span className="text-text-faint text-sm">zone {bin.zoneCode ?? '—'}</span>
-            {bin.pickable ? (
-              <span className="text-text-faint text-sm">pickable</span>
-            ) : (
-              <span className="text-sm text-[var(--status-rto-fg)]">not pickable</span>
-            )}
-          </div>
-          <div className="text-sm" data-testid={`bin-total-${bin.code}`}>
-            {empty ? (
-              <span className="text-text-faint">Empty</span>
-            ) : (
-              <>
-                <Num value={bin.unitsOnHand} suffix=" units" /> ·{' '}
-                <Num value={bin.skuCount} suffix={bin.skuCount === 1 ? ' SKU' : ' SKUs'} />
-                {bin.unitsReserved > 0 && (
-                  <span className="text-text-muted">
-                    {' '}
-                    · <Num value={bin.unitsReserved} /> reserved for picks
-                  </span>
-                )}
-              </>
-            )}
-          </div>
+    <Panel>
+      <div className="bin-card__head">
+        <div className="bin-card__id">
+          <Link href={`/warehouse/bins/${bin.id}`} className="stk-link sk-ident bin-card__code">
+            {bin.code}
+          </Link>
+          <ToneText tone="muted">{binTypeLabel(bin.type)}</ToneText>
+          <ToneText tone="faint">zone {bin.zoneCode ?? '—'}</ToneText>
+          {bin.pickable ? (
+            <ToneText tone="faint">pickable</ToneText>
+          ) : (
+            <ToneText tone="bad">not pickable</ToneText>
+          )}
         </div>
+        <div className="bin-card__total sk-figure" data-testid={`bin-total-${bin.code}`}>
+          {empty ? (
+            <ToneText tone="faint">Empty</ToneText>
+          ) : (
+            <>
+              <Num value={bin.unitsOnHand} suffix=" units" /> ·{' '}
+              <Num value={bin.skuCount} suffix={bin.skuCount === 1 ? ' SKU' : ' SKUs'} />
+              {bin.unitsReserved > 0 && (
+                <ToneText tone="muted">
+                  {' '}
+                  · <Num value={bin.unitsReserved} /> reserved for picks
+                </ToneText>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
-        {/* Said even when empty: "what is R-01-01 for" is half the question. */}
-        <BinNote type={bin.type} />
+      {/* Said even when empty: "what is R-01-01 for" is half the question. */}
+      <BinNote type={bin.type} />
 
-        {!empty && bin.lines.length > 0 && <LinesTable lines={bin.lines} />}
+      {!empty && bin.lines.length > 0 && <LinesTable lines={bin.lines} />}
 
-        {bin.linesNotShown > 0 && (
-          <p className="text-text-muted text-sm">
-            {lineFilterOn ? 'Filters apply to the lines shown here. ' : ''}
-            <Link href={`/warehouse/bins/${bin.id}`} className="underline">
-              {bin.linesNotShown} more line{bin.linesNotShown === 1 ? '' : 's'} — open {bin.code}
-            </Link>
-          </p>
-        )}
-      </CardBody>
-    </Card>
+      {bin.linesNotShown > 0 && (
+        <p className="stk-note">
+          {lineFilterOn ? 'Filters apply to the lines shown here. ' : ''}
+          <TextLink href={`/warehouse/bins/${bin.id}`}>
+            {bin.linesNotShown} more line{bin.linesNotShown === 1 ? '' : 's'} — open {bin.code}
+          </TextLink>
+        </p>
+      )}
+    </Panel>
   );
 }
 
@@ -254,15 +254,17 @@ export function LinesTable({ lines }: { readonly lines: readonly BinStockLine[] 
             <Td>
               <ProductCell line={l} />
             </Td>
-            <Td>{l.skuCode === null ? '—' : <span className="font-mono">{l.skuCode}</span>}</Td>
+            <Td>{l.skuCode === null ? '—' : <Code>{l.skuCode}</Code>}</Td>
             <Td>{l.sellerName ?? <Ident value={l.sellerId} />}</Td>
             <Td>
               <BatchCell line={l} />
             </Td>
-            <Td align="right">
+            <Td align="right" className="sk-figure">
               <Num value={l.qtyOnHand} />
             </Td>
-            <Td align="right">{l.qtyReserved > 0 ? <Num value={l.qtyReserved} /> : '—'}</Td>
+            <Td align="right" className="sk-figure">
+              {l.qtyReserved > 0 ? <Num value={l.qtyReserved} /> : '—'}
+            </Td>
           </Tr>
         ))}
       </TBody>
@@ -272,19 +274,17 @@ export function LinesTable({ lines }: { readonly lines: readonly BinStockLine[] 
 
 export function ProductCell({ line }: { readonly line: BinStockLine }): ReactElement {
   return (
-    <span className="flex items-center gap-2">
+    <span className="bin-product">
       <ProductThumb src={line.thumbnailUrl} size={36} alt={line.productName ?? ''} />
       {line.productName === null ? (
         // The variant was deleted from the catalogue; the stock is still real.
-        <span className="text-text-muted">
+        <span className="stk-muted">
           Deleted product <Ident value={line.variantId} />
         </span>
       ) : (
         <span>
           {line.productName}
-          {line.variantLabel !== null && (
-            <span className="text-text-muted block text-xs">{line.variantLabel}</span>
-          )}
+          {line.variantLabel !== null && <span className="stk-sub">{line.variantLabel}</span>}
         </span>
       )}
     </span>
@@ -294,9 +294,9 @@ export function ProductCell({ line }: { readonly line: BinStockLine }): ReactEle
 export function BatchCell({ line }: { readonly line: BinStockLine }): ReactElement {
   return (
     <span>
-      <span className="font-mono">{line.batchCode}</span>
+      <Code>{line.batchCode}</Code>
       {line.batchExpiresAt !== null && (
-        <span className="text-text-muted block text-xs">
+        <span className="stk-sub">
           expires {new Date(line.batchExpiresAt).toLocaleDateString('en-IN')}
         </span>
       )}

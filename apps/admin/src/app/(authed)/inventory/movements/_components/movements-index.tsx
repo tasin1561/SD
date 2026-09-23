@@ -1,30 +1,26 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Card,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Ident,
-  Input,
-  Num,
-  PageHeader,
-  Select,
-  SkeletonRows,
-  TBody,
-  Table,
-  TablePaginator,
-  Td,
-  THead,
-  Th,
-  Toolbar,
-  Tr,
-} from '@skydrop/ui/components';
+import { Ident, Num } from '@skydrop/ui/components';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { useWarehouseOptions } from '@/lib/ops-hooks';
 import { useBinOptions } from '@/lib/bin-contents-hooks';
 import { useMovementsList, type StockMovementView } from '@/lib/inventory-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  AreaPage,
+  InlineError,
+  PanelPad,
+  Stack,
+  ToneText,
+  Toolbar,
+} from '../../_components/stock-kit';
 
 const PAGE_SIZE = 50;
 
@@ -84,24 +80,26 @@ export function MovementsIndex({
   }
 
   return (
-    <div>
+    <AreaPage>
       <PageHeader
+        breadcrumbs={[{ label: 'Inventory' }, { label: 'Movements' }]}
         title="Stock movements"
         subtitle="Append-only. Every change to a quantity, and what caused it. Read this when a number does not add up."
       />
 
-      <Toolbar>
-        <FormField label="Variant id" htmlFor="mv-variant" className="w-72">
-          <Input
+      <Stack>
+        <Toolbar>
+          <TextField
             id="mv-variant"
+            label="Variant id"
+            inputClassName="sk-ident"
             value={variantId}
             onChange={(e) => change(() => setVariantId(e.target.value))}
             placeholder="Paste a variant id to trace one SKU"
           />
-        </FormField>
-        <FormField label="Warehouse" htmlFor="mv-wh" className="w-56">
           <Select
             id="mv-wh"
+            label="Warehouse"
             value={warehouseId}
             onChange={(e) =>
               change(() => {
@@ -119,10 +117,9 @@ export function MovementsIndex({
               </option>
             ))}
           </Select>
-        </FormField>
-        <FormField label="Bin" htmlFor="mv-bin" className="w-48">
           <Select
             id="mv-bin"
+            label="Bin"
             value={binId}
             disabled={warehouseId === '' && binId === ''}
             onChange={(e) => change(() => setBinId(e.target.value))}
@@ -135,9 +132,12 @@ export function MovementsIndex({
               </option>
             ))}
           </Select>
-        </FormField>
-        <FormField label="Type" htmlFor="mv-type" className="w-56">
-          <Select id="mv-type" value={type} onChange={(e) => change(() => setType(e.target.value))}>
+          <Select
+            id="mv-type"
+            label="Type"
+            value={type}
+            onChange={(e) => change(() => setType(e.target.value))}
+          >
             <option value="">All types</option>
             {MOVEMENT_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -145,14 +145,12 @@ export function MovementsIndex({
               </option>
             ))}
           </Select>
-        </FormField>
-      </Toolbar>
+        </Toolbar>
 
-      <Card>
         {list.isLoading ? (
-          <SkeletonRows rows={8} />
+          <SkeletonRows rows={8} cols={8} />
         ) : list.isError ? (
-          <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
         ) : items.length === 0 ? (
           <EmptyState
             title="No movements match"
@@ -176,7 +174,9 @@ export function MovementsIndex({
               <TBody>
                 {items.map((m) => (
                   <Tr key={m.id}>
-                    <Td>{new Date(m.createdAt).toLocaleString('en-IN')}</Td>
+                    <Td className="sk-figure stk-nowrap">
+                      {new Date(m.createdAt).toLocaleString('en-IN')}
+                    </Td>
                     <Td>{m.type.replace(/_/g, ' ').toLowerCase()}</Td>
                     <Td>
                       <Ident value={m.variantId} />
@@ -184,35 +184,43 @@ export function MovementsIndex({
                     <Td>
                       <BinCell m={m} />
                     </Td>
-                    <Td align="right">
-                      <span className={m.qtyChange < 0 ? 'text-[var(--color-bad)]' : ''}>
-                        {m.qtyChange > 0 ? '+' : ''}
-                        {m.qtyChange}
-                      </span>
+                    <Td align="right" className="sk-figure">
+                      {m.qtyChange < 0 ? (
+                        <ToneText tone="bad">{m.qtyChange}</ToneText>
+                      ) : (
+                        <span>
+                          {m.qtyChange > 0 ? '+' : ''}
+                          {m.qtyChange}
+                        </span>
+                      )}
                     </Td>
-                    <Td align="right">{m.qtyAfter === null ? '—' : <Num value={m.qtyAfter} />}</Td>
+                    <Td align="right" className="sk-figure">
+                      {m.qtyAfter === null ? '—' : <Num value={m.qtyAfter} />}
+                    </Td>
                     <Td>{m.reasonCode ?? '—'}</Td>
                     <Td>{cause(m)}</Td>
                   </Tr>
                 ))}
               </TBody>
             </Table>
-            <TablePaginator page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+            <PanelPad>
+              <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+            </PanelPad>
           </>
         )}
-      </Card>
-    </div>
+      </Stack>
+    </AreaPage>
   );
 }
 
 /** "R-01-01 · CCU-01" — the code somebody can walk to, not a uuid. */
 function BinCell({ m }: { readonly m: StockMovementView }): ReactElement {
-  if (m.binId === null) return <span className="text-text-faint">—</span>;
+  if (m.binId === null) return <span className="stk-faint">—</span>;
   if (m.binCode === null) return <Ident value={m.binId} />;
   return (
     <span>
-      <span className="font-mono">{m.binCode}</span>
-      {m.warehouseCode !== null && <span className="text-text-muted"> · {m.warehouseCode}</span>}
+      <span className="sk-ident">{m.binCode}</span>
+      {m.warehouseCode !== null && <span className="stk-muted"> · {m.warehouseCode}</span>}
     </span>
   );
 }
@@ -226,7 +234,7 @@ function cause(m: {
   if (m.orderId !== null) return <Ident value={m.orderId} />;
   if (m.shipmentId !== null) return <Ident value={m.shipmentId} />;
   if (m.adjustmentId !== null) return <Ident value={m.adjustmentId} />;
-  return <span className="text-text-faint">—</span>;
+  return <span className="stk-faint">—</span>;
 }
 
 const MOVEMENT_TYPES = [

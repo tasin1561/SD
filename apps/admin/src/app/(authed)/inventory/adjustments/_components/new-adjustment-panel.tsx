@@ -1,22 +1,25 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Plus } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { ADJUSTMENT_REASON_CODES, type AdjustmentPrefill } from '@/lib/adjustment-prefill';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useCreateAdjustment } from '@/lib/inventory-hooks';
+import {
+  FieldGrid,
+  InlineError,
+  Note,
+  Panel,
+  Stack,
+  mutationPhase,
+} from '../../_components/stock-kit';
 
 /**
  * Raising a stock correction.
@@ -131,11 +134,11 @@ export function NewAdjustmentPanel({
 
   return (
     <>
-      <Button variant="primary" size="md" onClick={() => setOpen(true)}>
+      <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setOpen(true)}>
         New adjustment
       </Button>
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next) {
@@ -144,102 +147,118 @@ export function NewAdjustmentPanel({
           }
         }}
         title="Raise a stock adjustment"
+        footer={
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                setOpen(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <AsyncButton
+              variant="primary"
+              size="md"
+              state={mutationPhase(create)}
+              labels={{ idle: 'Raise adjustment', busy: 'Raising…' }}
+              disabled={!complete || create.isPending}
+              onClick={() => void onSubmit()}
+            />
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          Corrects counted stock for one batch in one bin. Below the value threshold it applies
-          straight away; above it, it waits here for a second person.
-        </p>
+        <Stack>
+          <Note>
+            Corrects counted stock for one batch in one bin. Below the value threshold it applies
+            straight away; above it, it waits here for a second person.
+          </Note>
 
-        {error !== null && (
-          <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical mb-3 rounded-md border px-3 py-2 text-sm">
-            {error}
-          </div>
-        )}
+          {error !== null && <InlineError message={error} />}
 
-        <div className="space-y-3">
-          <FormField label="Seller id" required>
-            <Input value={sellerId} onChange={(e) => setSellerId(e.target.value)} />
-          </FormField>
+          <TextField
+            label="Seller id"
+            requiredMark
+            inputClassName="sk-ident"
+            value={sellerId}
+            onChange={(e) => setSellerId(e.target.value)}
+          />
 
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Direction" required>
-              <Select
-                value={type}
-                onChange={(e) => setType(e.target.value as 'INCREASE' | 'DECREASE')}
-              >
-                <option value="DECREASE">Remove stock</option>
-                <option value="INCREASE">Add stock</option>
-              </Select>
-            </FormField>
-            <FormField label="Quantity" required hint="How many units, unsigned.">
-              <Input inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} />
-            </FormField>
-          </div>
-
-          <FormField label="Reason" required>
-            <Select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>
-              {REASON_CODES.map((c) => (
-                <option key={c} value={c}>
-                  {c.replace(/_/g, ' ').toLowerCase()}
-                </option>
-              ))}
+          <FieldGrid columns={2}>
+            <Select
+              label="Direction"
+              requiredMark
+              value={type}
+              onChange={(e) => setType(e.target.value as 'INCREASE' | 'DECREASE')}
+            >
+              <option value="DECREASE">Remove stock</option>
+              <option value="INCREASE">Add stock</option>
             </Select>
-          </FormField>
+            <TextField
+              label="Quantity"
+              requiredMark
+              hint="How many units, unsigned."
+              inputMode="numeric"
+              inputClassName="sk-figure"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+            />
+          </FieldGrid>
 
-          <Card>
-            <CardBody>
-              <p className="text-text-faint mb-2 text-xs">
-                Stock is held per batch per bin, so all three are needed — read them off the count
-                sheet or the movements report.
-              </p>
-              <div className="space-y-3">
-                <FormField label="Variant id" required>
-                  <Input value={variantId} onChange={(e) => setVariantId(e.target.value)} />
-                </FormField>
-                <FormField label="Bin id" required>
-                  <Input value={binId} onChange={(e) => setBinId(e.target.value)} />
-                </FormField>
-                <FormField label="Batch id" required>
-                  <Input value={batchId} onChange={(e) => setBatchId(e.target.value)} />
-                </FormField>
-              </div>
-            </CardBody>
-          </Card>
+          <Select
+            label="Reason"
+            requiredMark
+            value={reasonCode}
+            onChange={(e) => setReasonCode(e.target.value)}
+          >
+            {REASON_CODES.map((c) => (
+              <option key={c} value={c}>
+                {c.replace(/_/g, ' ').toLowerCase()}
+              </option>
+            ))}
+          </Select>
 
-          <FormField
+          <Panel>
+            <Note tone="faint">
+              Stock is held per batch per bin, so all three are needed — read them off the count
+              sheet or the movements report.
+            </Note>
+            <TextField
+              label="Variant id"
+              requiredMark
+              inputClassName="sk-ident"
+              value={variantId}
+              onChange={(e) => setVariantId(e.target.value)}
+            />
+            <TextField
+              label="Bin id"
+              requiredMark
+              inputClassName="sk-ident"
+              value={binId}
+              onChange={(e) => setBinId(e.target.value)}
+            />
+            <TextField
+              label="Batch id"
+              requiredMark
+              inputClassName="sk-ident"
+              value={batchId}
+              onChange={(e) => setBatchId(e.target.value)}
+            />
+          </Panel>
+
+          <TextArea
             label="What happened"
             hint="Kept on the adjustment. The approver reads this and nothing else."
-          >
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              maxLength={2000}
-            />
-          </FormField>
-        </div>
-
-        <ModalFooter>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => {
-              setOpen(false);
-              reset();
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={!complete || create.isPending}
-            onClick={() => void onSubmit()}
-          >
-            {create.isPending ? 'Raising…' : 'Raise adjustment'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            showCount
+          />
+        </Stack>
+      </Dialog>
     </>
   );
 }

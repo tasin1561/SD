@@ -2,29 +2,29 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import {
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  Ident,
-  Num,
-  PageHeader,
-  SkeletonRows,
-  Table,
-  TablePaginator,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+import { Ident, Num } from '@skydrop/ui/components';
+import { ArrowLeft, History } from 'lucide-react';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { adjustmentHref } from '@/lib/adjustment-prefill';
 import { useBinContents } from '@/lib/bin-contents-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { BatchCell, ProductCell } from '../../_components/bin-contents-overview';
 import { BinNote, binTypeLabel } from '../../_components/bin-note';
+import {
+  Actions,
+  AreaPage,
+  Code,
+  InlineError,
+  LinkButton,
+  Panel,
+  PanelPad,
+  TextLink,
+} from '../../../../inventory/_components/stock-kit';
 
 const PAGE_SIZE = 50;
 
@@ -42,8 +42,14 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
   const bin = contents.data?.bin;
 
   return (
-    <div className="space-y-4">
+    <AreaPage>
       <PageHeader
+        Link={Link}
+        breadcrumbs={[
+          { label: 'Warehouse', href: '/warehouse' },
+          { label: 'Bins', href: '/warehouse/bins' },
+          { label: bin === undefined ? 'Bin' : bin.code },
+        ]}
         title={bin === undefined ? 'Bin' : `Bin ${bin.code}`}
         subtitle={
           bin === undefined
@@ -51,34 +57,36 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
             : `${bin.warehouseCode} — ${bin.warehouseName} · zone ${bin.zoneCode ?? '—'} · ${binTypeLabel(bin.type)} · ${bin.pickable ? 'pickable' : 'not pickable'}`
         }
         action={
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <Link href="/warehouse/bins" className="underline">
+          <Actions>
+            <LinkButton href="/warehouse/bins" variant="ghost" icon={<ArrowLeft size={15} />}>
               All bins
-            </Link>
+            </LinkButton>
             {canSeeMovements && bin !== undefined && (
-              <Link
+              <LinkButton
                 href={`/inventory/movements?warehouse=${bin.warehouseId}&bin=${bin.id}`}
-                className="underline"
+                variant="secondary"
+                icon={<History size={15} />}
               >
                 Movements for this bin
-              </Link>
+              </LinkButton>
             )}
-          </div>
+          </Actions>
         }
       />
 
       {contents.isLoading ? (
-        <Card>
-          <SkeletonRows rows={6} />
-        </Card>
+        <SkeletonRows rows={6} cols={7} />
       ) : contents.isError ? (
-        <ErrorNote message={serverVerdict(contents.error)} retry={() => void contents.refetch()} />
+        <InlineError
+          message={serverVerdict(contents.error)}
+          retry={() => void contents.refetch()}
+        />
       ) : bin === undefined || bin.lineCount === 0 ? (
         <EmptyState title="This bin is empty" description="Nothing is on hand or reserved here." />
       ) : (
-        <Card>
-          <CardBody className="space-y-3">
-            <p className="text-sm">
+        <Panel flush>
+          <PanelPad>
+            <p className="stk-note sk-figure">
               <Num value={bin.unitsOnHand} suffix=" units" /> ·{' '}
               <Num value={bin.skuCount} suffix={bin.skuCount === 1 ? ' SKU' : ' SKUs'} />
               {bin.unitsReserved > 0 && (
@@ -89,73 +97,74 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
               )}
             </p>
             <BinNote type={bin.type} />
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Product</Th>
-                  <Th>SKU</Th>
-                  <Th>Seller</Th>
-                  <Th>Batch</Th>
-                  <Th align="right">On hand</Th>
-                  <Th align="right">Reserved</Th>
-                  <Th>Last moved</Th>
-                  {canAdjust && <Th>Adjust</Th>}
+          </PanelPad>
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Product</Th>
+                <Th>SKU</Th>
+                <Th>Seller</Th>
+                <Th>Batch</Th>
+                <Th align="right">On hand</Th>
+                <Th align="right">Reserved</Th>
+                <Th>Last moved</Th>
+                {canAdjust && <Th>Adjust</Th>}
+              </Tr>
+            </THead>
+            <TBody>
+              {(contents.data?.items ?? []).map((l) => (
+                <Tr key={l.stockLevelId}>
+                  <Td>
+                    <ProductCell line={l} />
+                  </Td>
+                  <Td>{l.skuCode === null ? '—' : <Code>{l.skuCode}</Code>}</Td>
+                  <Td>{l.sellerName ?? <Ident value={l.sellerId} />}</Td>
+                  <Td>
+                    <BatchCell line={l} />
+                  </Td>
+                  <Td align="right" className="sk-figure">
+                    <Num value={l.qtyOnHand} />
+                  </Td>
+                  <Td align="right" className="sk-figure">
+                    {l.qtyReserved > 0 ? <Num value={l.qtyReserved} /> : '—'}
+                  </Td>
+                  <Td>
+                    {l.lastMovementAt === null
+                      ? '—'
+                      : new Date(l.lastMovementAt).toLocaleString('en-IN')}
+                  </Td>
+                  {canAdjust && (
+                    <Td>
+                      {/* The way stock leaves a bin by hand — for the
+                          Damaged bin, back to the seller or scrapped. */}
+                      <TextLink
+                        href={adjustmentHref({
+                          sellerId: l.sellerId,
+                          variantId: l.variantId,
+                          batchId: l.batchId,
+                          binId: bin.id,
+                          binType: bin.type,
+                        })}
+                        aria-label={`Adjust ${l.skuCode ?? 'this line'} in bin ${bin.code}`}
+                      >
+                        {bin.type === 'DAMAGED' ? 'Return or scrap' : 'Adjust'}
+                      </TextLink>
+                    </Td>
+                  )}
                 </Tr>
-              </THead>
-              <TBody>
-                {(contents.data?.items ?? []).map((l) => (
-                  <Tr key={l.stockLevelId}>
-                    <Td>
-                      <ProductCell line={l} />
-                    </Td>
-                    <Td>
-                      {l.skuCode === null ? '—' : <span className="font-mono">{l.skuCode}</span>}
-                    </Td>
-                    <Td>{l.sellerName ?? <Ident value={l.sellerId} />}</Td>
-                    <Td>
-                      <BatchCell line={l} />
-                    </Td>
-                    <Td align="right">
-                      <Num value={l.qtyOnHand} />
-                    </Td>
-                    <Td align="right">{l.qtyReserved > 0 ? <Num value={l.qtyReserved} /> : '—'}</Td>
-                    <Td>
-                      {l.lastMovementAt === null
-                        ? '—'
-                        : new Date(l.lastMovementAt).toLocaleString('en-IN')}
-                    </Td>
-                    {canAdjust && (
-                      <Td>
-                        {/* The way stock leaves a bin by hand — for the
-                            Damaged bin, back to the seller or scrapped. */}
-                        <Link
-                          href={adjustmentHref({
-                            sellerId: l.sellerId,
-                            variantId: l.variantId,
-                            batchId: l.batchId,
-                            binId: bin.id,
-                            binType: bin.type,
-                          })}
-                          className="underline"
-                          aria-label={`Adjust ${l.skuCode ?? 'this line'} in bin ${bin.code}`}
-                        >
-                          {bin.type === 'DAMAGED' ? 'Return or scrap' : 'Adjust'}
-                        </Link>
-                      </Td>
-                    )}
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-            <TablePaginator
+              ))}
+            </TBody>
+          </Table>
+          <PanelPad>
+            <Pagination
               page={page}
               pageSize={PAGE_SIZE}
               total={contents.data?.total ?? 0}
               onPageChange={setPage}
             />
-          </CardBody>
-        </Card>
+          </PanelPad>
+        </Panel>
       )}
-    </div>
+    </AreaPage>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { Check } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 
 /**
@@ -8,31 +9,48 @@ import type { ReactElement, ReactNode } from 'react';
  * Numbered because the order is real — a consignment cannot be dispatched
  * before it is counted, or labelled before there is anything to label —
  * which is the one case where numbering encodes something true rather
- * than decorating a list.
+ * than decorating a list. The number sits in a node that turns solid with
+ * a check once the stop is behind the consignment, so the rail reads the
+ * same way as the stepper above it.
  */
 export function Step({
   n,
+  id,
   title,
   state,
+  phase = 'todo',
   children,
 }: {
   readonly n: number;
+  /** The anchor the journey stepper names. */
+  readonly id?: string | undefined;
   readonly title: string;
   /** A short factual line: what happened here, or what is waiting. */
   readonly state: ReactNode;
+  /** Where the consignment is relative to this stop — presentation only. */
+  readonly phase?: 'done' | 'current' | 'todo';
   readonly children?: ReactNode;
 }): ReactElement {
   return (
-    <section className="border-border-subtle border-t py-4 first:border-t-0">
-      <div className="flex items-start gap-3">
-        <span className="text-text-muted mt-0.5 font-mono text-xs tabular-nums">
-          {String(n).padStart(2, '0')}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-text-bright text-sm font-medium">{title}</h3>
-          <p className="text-text-muted mt-0.5 text-sm">{state}</p>
-          {children !== undefined && <div className="mt-3">{children}</div>}
-        </div>
+    <section
+      id={id}
+      className="cns-step"
+      data-phase={phase}
+      aria-labelledby={id ? `${id}-title` : undefined}
+    >
+      <span className="cns-step__node" aria-hidden>
+        {phase === 'done' ? (
+          <Check size={14} strokeWidth={3} />
+        ) : (
+          <span className="sk-figure">{n}</span>
+        )}
+      </span>
+      <div className="cns-step__body">
+        <h3 id={id ? `${id}-title` : undefined} className="cns-step__title">
+          {title}
+        </h3>
+        <p className="cns-step__state">{state}</p>
+        {children !== undefined && <div className="cns-step__content">{children}</div>}
       </div>
     </section>
   );
@@ -58,25 +76,16 @@ export function Variance({
   readonly overWord?: string;
 }): ReactElement {
   if (counted === null) {
-    return (
-      <span className="text-text-muted tabular-nums">{expected} expected, not yet counted</span>
-    );
+    return <span className="stk-muted sk-figure">{expected} expected, not yet counted</span>;
   }
   const diff = counted - expected;
   return (
-    <span className="tabular-nums">
+    <span className="sk-figure">
       {counted} of {expected}
       {diff === 0 ? (
         ''
       ) : (
-        <span
-          // Arbitrary-value token reference, the same shape feedback.tsx
-          // uses. Not a hardcoded hex (FE-6) — the value still comes from
-          // tokens.css and follows the theme.
-          className={
-            diff < 0 ? 'text-[var(--status-failed-fg)]' : 'text-[var(--status-pending-fg)]'
-          }
-        >
+        <span className="stk-tone" data-tone={diff < 0 ? 'bad' : 'warn'}>
           {' '}
           — {Math.abs(diff)} {diff < 0 ? shortWord : overWord}
         </span>

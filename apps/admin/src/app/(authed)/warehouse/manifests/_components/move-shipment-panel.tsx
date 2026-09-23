@@ -1,20 +1,24 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Modal,
-  ModalFooter,
-  Select,
-  useToast,
-} from '@skydrop/ui/components';
+import { ArrowRightLeft } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { useToast } from '@skydrop/ui/app/toast';
 import type { ManifestDetail } from '@skydrop/api-client';
 import { ManifestStatus } from '@skydrop/db';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useManifestsList, useMoveShipment } from '@/lib/api-hooks';
+import {
+  Actions,
+  InlineError,
+  Note,
+  Stack,
+  mutationPhase,
+} from '../../../inventory/_components/stock-kit';
 
 /**
  * WMS-7 — reassign a packed parcel from one DRAFT manifest to another.
@@ -100,12 +104,17 @@ export function MoveShipmentPanel({
   if (status !== ManifestStatus.DRAFT || shipments.length === 0) return null;
 
   return (
-    <div className="mt-3">
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+    <Actions>
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={<ArrowRightLeft size={14} />}
+        onClick={() => setOpen(true)}
+      >
         Move a shipment to another manifest
       </Button>
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next) {
@@ -115,26 +124,52 @@ export function MoveShipmentPanel({
         }}
         title={`Move a shipment off ${manifestNumber}`}
         description="Only possible while both manifests are still DRAFT."
+        footer={
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                setOpen(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <AsyncButton
+              variant="primary"
+              size="md"
+              state={mutationPhase(move)}
+              labels={{ idle: 'Move shipment', busy: 'Moving…' }}
+              disabled={shipmentId === '' || targetManifestId === '' || move.isPending}
+              onClick={() => void onMove()}
+            />
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          The parcel leaves this manifest and joins the one you pick. Do it before either is closed
-          — a closed manifest has already been sealed and its AWBs queued, and the driver signs for
-          what is on the sheet.
-        </p>
+        <Stack>
+          <Note>
+            The parcel leaves this manifest and joins the one you pick. Do it before either is
+            closed — a closed manifest has already been sealed and its AWBs queued, and the driver
+            signs for what is on the sheet.
+          </Note>
 
-        {error !== null && <ErrorNote message={error} />}
+          {error !== null && <InlineError message={error} />}
 
-        <div className="space-y-3">
-          <FormField label="Shipment" required hint="Parcels currently attached to this manifest.">
-            <Select value={shipmentId} onChange={(e) => setShipmentId(e.target.value)}>
-              <option value="">Select a shipment…</option>
-              {shipments.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.shipmentNumber} · {s.status}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+          <Select
+            label="Shipment"
+            requiredMark
+            hint="Parcels currently attached to this manifest."
+            value={shipmentId}
+            onChange={(e) => setShipmentId(e.target.value)}
+          >
+            <option value="">Select a shipment…</option>
+            {shipments.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.shipmentNumber} · {s.status}
+              </option>
+            ))}
+          </Select>
 
           {/* Mounted only while the modal is open (Radix unmounts the
               portal when closed), so nobody spends a manifest-list round
@@ -146,30 +181,9 @@ export function MoveShipmentPanel({
             value={targetManifestId}
             onChange={setTargetManifestId}
           />
-        </div>
-
-        <ModalFooter>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => {
-              setOpen(false);
-              reset();
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={shipmentId === '' || targetManifestId === '' || move.isPending}
-            onClick={() => void onMove()}
-          >
-            {move.isPending ? 'Moving…' : 'Move shipment'}
-          </Button>
-        </ModalFooter>
-      </Modal>
-    </div>
+        </Stack>
+      </Dialog>
+    </Actions>
   );
 }
 
@@ -205,22 +219,21 @@ function TargetManifestPicker({
 
   if (list.isLoading) {
     return (
-      <FormField label="Target manifest" required>
-        <Select disabled>
-          <option>Loading manifests…</option>
-        </Select>
-      </FormField>
+      <Select label="Target manifest" requiredMark disabled>
+        <option>Loading manifests…</option>
+      </Select>
     );
   }
 
   if (list.isError) {
     return (
-      <FormField label="Target manifest" required>
-        <ErrorNote
+      <div>
+        <span className="stk-field-label">Target manifest</span>
+        <InlineError
           message={serverVerdict(list.error, 'Could not load manifests.')}
           retry={() => void list.refetch()}
         />
-      </FormField>
+      </div>
     );
   }
 
@@ -228,30 +241,31 @@ function TargetManifestPicker({
 
   if (targets.length === 0) {
     return (
-      <FormField label="Target manifest" required>
-        <p className="text-text-faint text-xs">
+      <div>
+        <span className="stk-field-label">Target manifest</span>
+        <Note tone="faint">
           No other DRAFT manifest for {courierCode} at this warehouse. A second one appears once
           another manifest is open for the same courier and building — until then there is nowhere
           to move this parcel.
-        </p>
-      </FormField>
+        </Note>
+      </div>
     );
   }
 
   return (
-    <FormField
+    <Select
       label="Target manifest"
-      required
+      requiredMark
       hint="DRAFT manifests for the same courier and warehouse. The server refuses anything else."
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
     >
-      <Select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Select a manifest…</option>
-        {targets.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.manifestNumber} · {m.shipmentCount} shipment(s)
-          </option>
-        ))}
-      </Select>
-    </FormField>
+      <option value="">Select a manifest…</option>
+      {targets.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.manifestNumber} · {m.shipmentCount} shipment(s)
+        </option>
+      ))}
+    </Select>
   );
 }

@@ -34,11 +34,11 @@ export function BinNote({ type }: { readonly type: string }): ReactElement | nul
   switch (type) {
     case 'RTO_HOLD':
       return (
-        <p className="text-sm text-[var(--status-rto-fg)]">
+        <p className="stk-note bin-note" data-tone="bad">
           Returns received but not yet decided — waiting to be inspected, or marked &ldquo;decide
           later&rdquo;. Not sellable. Finalising each return moves it on (back into stock, to the
           damaged bin, or written off) —{' '}
-          <Link href="/warehouse/rto?tab=bench" className="underline">
+          <Link href="/warehouse/rto?tab=bench" className="stk-link">
             decide them at the RTO station (On the bench)
           </Link>
           .
@@ -46,19 +46,19 @@ export function BinNote({ type }: { readonly type: string }): ReactElement | nul
       );
     case 'DAMAGED':
       return (
-        <p className="text-sm text-[var(--status-rto-fg)]">
+        <p className="stk-note bin-note" data-tone="bad">
           Held back from sale. Nothing is picked from a damaged bin.
         </p>
       );
     case 'QUARANTINE':
       return (
-        <p className="text-sm text-[var(--status-rto-fg)]">
+        <p className="stk-note bin-note" data-tone="bad">
           Held back from sale until somebody decides what happens to it.
         </p>
       );
     case 'TRANSIT':
       return (
-        <p className="text-text-muted text-sm">
+        <p className="stk-note bin-note">
           On its way from another warehouse. Counted here so neither building&rsquo;s count finds it
           missing; sellable once it arrives and is received.
         </p>
