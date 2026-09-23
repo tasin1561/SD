@@ -1,7 +1,17 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
-import { PageHeader, Card, CardBody } from '@skydrop/ui/components';
-import { Layers, RotateCcw, Inbox, Grid3x3, Ship, Printer, ScanLine } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import {
+  ChevronRight,
+  Layers,
+  RotateCcw,
+  Inbox,
+  Grid3x3,
+  Ship,
+  Printer,
+  ScanLine,
+} from 'lucide-react';
+import './_components/benches.css';
 
 /**
  * Warehouse hub — links to the four station workspaces.
@@ -9,12 +19,12 @@ import { Layers, RotateCcw, Inbox, Grid3x3, Ship, Printer, ScanLine } from 'luci
  */
 export default function WarehouseHubPage(): ReactElement {
   return (
-    <div>
+    <div className="wh-page">
       <PageHeader
         title="Warehouse"
         subtitle="Consignment → Receive → Print → Pick → Pack → Handover → Dispatch. RTO handled separately."
       />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="wh-hub">
         <Tile
           href="/warehouse/bins"
           icon={<Grid3x3 size={20} />}
@@ -74,18 +84,15 @@ function Tile({
   readonly subtitle: string;
 }): ReactElement {
   return (
-    <Link href={href} className="block">
-      <Card className="hover:border-border-strong transition-colors">
-        <CardBody>
-          <div className="flex items-start gap-3">
-            <div className="text-accent">{icon}</div>
-            <div>
-              <div className="text-text-bright font-medium text-sm">{title}</div>
-              <div className="text-text-muted text-xs mt-0.5">{subtitle}</div>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
+    <Link href={href} className="wh-tile">
+      <span className="wh-tile__chip" aria-hidden>
+        {icon}
+      </span>
+      <span className="wh-tile__text">
+        <span className="wh-tile__title">{title}</span>
+        <span className="wh-tile__sub">{subtitle}</span>
+      </span>
+      <ChevronRight size={16} className="wh-tile__arrow" aria-hidden />
     </Link>
   );
 }

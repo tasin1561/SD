@@ -2,18 +2,10 @@
 
 import type { ReactElement } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Table, TBody, TableEmpty, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import '../../_components/benches.css';
 import { useOpenRtoShipments } from '@/lib/api-hooks';
 
 /**
@@ -40,21 +32,17 @@ export function OpenReturns({
   return (
     <>
       {open.isLoading ? (
-        <Card>
-          <CardBody>
-            <p className="text-text-muted text-sm">Reading the bench…</p>
-          </CardBody>
-        </Card>
+        <section className="wh-card">
+          <SkeletonRows rows={3} cols={5} label="Reading the bench…" />
+        </section>
       ) : open.isError || open.data === undefined ? (
-        <Card>
-          <CardBody>
-            <p className="text-text-muted text-sm">
-              Could not read open returns. The station below still works if you have an AWB.
-            </p>
-          </CardBody>
-        </Card>
+        <section className="wh-card">
+          <p className="wh-note">
+            Could not read open returns. The station below still works if you have an AWB.
+          </p>
+        </section>
       ) : (
-        <Table>
+        <Table caption="Returns on the bench">
           <THead>
             <Tr>
               <Th>Parcel</Th>
@@ -74,30 +62,30 @@ export function OpenReturns({
               open.data.items.map((r) => (
                 <Tr key={r.shipmentId}>
                   <Td>
-                    <div className="font-mono text-xs">{r.awbNumber ?? r.shipmentNumber}</div>
-                    <div className="text-text-faint text-xs">{r.orderNumber ?? ''}</div>
+                    <div className="sk-ident wh-item__name">{r.awbNumber ?? r.shipmentNumber}</div>
+                    <div className="sk-ident wh-faint">{r.orderNumber ?? ''}</div>
                   </Td>
-                  <Td className="text-text-muted">{r.sellerName ?? '—'}</Td>
-                  <Td className="text-text-muted whitespace-nowrap text-xs">
+                  <Td className="wh-note">{r.sellerName ?? '—'}</Td>
+                  <Td className="sk-figure wh-note wh-nowrap">
                     {r.rtoReceivedAt === null
                       ? '—'
                       : new Date(r.rtoReceivedAt).toLocaleDateString()}
                   </Td>
-                  <Td className="text-xs">
-                    <span className="tabular-nums">{r.itemCount}</span>
+                  <Td>
+                    <span className="sk-figure">{r.itemCount}</span>
                     {r.uninspectedCount > 0 && (
-                      <span className="text-text-muted"> · {r.uninspectedCount} uninspected</span>
+                      <span className="wh-note"> · {r.uninspectedCount} uninspected</span>
                     )}
                     {r.undecidedCount > 0 && (
-                      <span className="text-warning inline-flex items-center gap-1">
+                      <span className="wh-warn">
                         {' · '}
-                        <AlertTriangle className="h-3 w-3" aria-hidden />
+                        <AlertTriangle size={12} aria-hidden />
                         {r.undecidedCount} undecided
                       </span>
                     )}
                   </Td>
                   <Td align="right">
-                    <Button variant="ghost" size="sm" onClick={() => onPick(r.shipmentId)}>
+                    <Button variant="secondary" size="sm" onClick={() => onPick(r.shipmentId)}>
                       Work it
                     </Button>
                   </Td>

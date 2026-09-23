@@ -3,7 +3,9 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { PackageCheck, Truck } from 'lucide-react';
-import { StatusBadge, TBody, THead, Table, TableEmpty, Td, Th, Tr } from '@skydrop/ui/components';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, TableEmpty, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import '../../_components/benches.css';
 import type { AwaitingRtoRow } from '@/lib/api-hooks';
 
 /**
@@ -75,7 +77,7 @@ function Row({
           type="button"
           onClick={() => onPick !== undefined && row.awbNumber !== null && onPick(row.awbNumber)}
           disabled={onPick === undefined || row.awbNumber === null}
-          className="hover:text-accent text-left font-mono text-xs disabled:cursor-default disabled:hover:text-inherit"
+          className="wh-awb-pick sk-ident"
           title={
             onPick === undefined || row.awbNumber === null
               ? undefined
@@ -84,24 +86,27 @@ function Row({
         >
           {row.awbNumber ?? row.shipmentNumber}
         </button>
-        <div className="text-text-muted text-xs">{row.courierCode}</div>
+        <div className="wh-faint">{row.courierCode}</div>
       </Td>
       <Td>
         {row.orderId === null ? (
-          <span className="text-text-muted">—</span>
+          <span className="wh-faint">—</span>
         ) : (
-          <Link href={`/orders/${row.orderId}`} className="font-medium">
+          <Link href={`/orders/${row.orderId}`} className="sk-ident wh-cell-link">
             {row.orderNumber}
           </Link>
         )}
-        <div className="text-text-muted text-xs">{row.sellerName ?? '—'}</div>
+        <div className="wh-faint">{row.sellerName ?? '—'}</div>
       </Td>
-      <Td className="tabular-nums">{row.itemCount}</Td>
-      <Td className="text-text-muted text-xs">{courierStage(row.shipmentStatus)}</Td>
+      <Td align="right" className="sk-figure">
+        {row.itemCount}
+      </Td>
+      <Td className="wh-note">{courierStage(row.shipmentStatus)}</Td>
       <Td>
-        <StatusBadge
+        <StatusChip
           kind={waitTone(row.waitingHours, row.stage)}
           label={row.waitingHours < 1 ? 'just now' : `${row.waitingHours}h`}
+          size="sm"
         />
       </Td>
     </Tr>
@@ -123,7 +128,7 @@ export function AtOurDoorList({
     <ReturnsTable
       rows={rows}
       onPick={onPick}
-      emptyIcon={<PackageCheck size={20} className="text-text-muted" />}
+      emptyIcon={<PackageCheck size={22} className="wh-empty-cell__icon" />}
       emptyTitle="Nothing waiting to be received"
       emptyHint="Every parcel a courier has marked returned has been received here."
     />
@@ -141,7 +146,7 @@ export function StillWithCourierList({
       // Nothing to click: the courier still has these, so there is no
       // parcel to receive and a clickable AWB would promise an action
       // that cannot be taken yet.
-      emptyIcon={<Truck size={20} className="text-text-muted" />}
+      emptyIcon={<Truck size={22} className="wh-empty-cell__icon" />}
       emptyTitle="No returns in transit"
       emptyHint="Nothing is currently on its way back to the warehouse."
     />
@@ -162,12 +167,12 @@ function ReturnsTable({
   readonly emptyHint: string;
 }): ReactElement {
   return (
-    <Table>
+    <Table caption="Returns">
       <THead>
         <Tr>
           <Th>Parcel</Th>
           <Th>Order</Th>
-          <Th>Items</Th>
+          <Th align="right">Items</Th>
           <Th>Courier says</Th>
           <Th>Waiting</Th>
         </Tr>
@@ -175,10 +180,10 @@ function ReturnsTable({
       <TBody>
         {rows.length === 0 ? (
           <TableEmpty colSpan={5}>
-            <div className="flex flex-col items-center gap-1.5 py-2">
+            <div className="wh-empty-cell">
               {emptyIcon}
-              <div className="font-medium">{emptyTitle}</div>
-              <div className="text-text-muted text-xs">{emptyHint}</div>
+              <div className="wh-empty-cell__title">{emptyTitle}</div>
+              <div className="wh-note">{emptyHint}</div>
             </div>
           </TableEmpty>
         ) : (

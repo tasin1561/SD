@@ -1,15 +1,11 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  FormField,
-  Input,
-  useToast,
-} from '@skydrop/ui/components';
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Check } from 'lucide-react';
 import {
   usePullNextPick,
   useStartPick,
@@ -20,6 +16,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { ForceExpirePick } from './force-expire';
+import '../../_components/benches.css';
 
 /**
  * Picker workspace — one parcel at a time. Flow:
@@ -151,8 +148,8 @@ export function PickStation(): ReactElement {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
+    <div className="wh-stack">
+      <div className="wh-row">
         <Button
           variant="primary"
           size="md"
@@ -174,10 +171,7 @@ export function PickStation(): ReactElement {
       </div>
 
       {error && (
-        <div
-          role="alert"
-          className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]"
-        >
+        <div role="alert" className="wh-alert">
           {error}
         </div>
       )}
@@ -188,138 +182,129 @@ export function PickStation(): ReactElement {
           description="Click Pull next to claim the next confirmed parcel from the queue."
         />
       ) : (
-        <Card>
-          <CardBody>
-            <div className="flex items-baseline justify-between mb-3">
-              <div>
-                <div className="text-text-bright font-medium text-sm">
-                  Shipment {pick.shipmentNumber}
-                </div>
-                <div className="text-text-faint text-xs mt-0.5">
-                  Started {new Date(pick.pickStartedAt).toLocaleTimeString()} · expires{' '}
-                  {new Date(pick.pickExpiresAt).toLocaleTimeString()}
-                </div>
+        <section className="wh-card wh-stack">
+          <div className="wh-row wh-row--between">
+            <div>
+              <div className="wh-title">
+                Shipment <span className="sk-ident">{pick.shipmentNumber}</span>
               </div>
-              {started && (
-                <div className="text-accent text-xs uppercase tracking-wide">In progress</div>
-              )}
+              <div className="wh-faint sk-figure">
+                Started {new Date(pick.pickStartedAt).toLocaleTimeString()} · expires{' '}
+                {new Date(pick.pickExpiresAt).toLocaleTimeString()}
+              </div>
             </div>
+            {started && <span className="wh-tag">In progress</span>}
+          </div>
 
-            <div className="space-y-2">
-              {pick.items.map((it) => {
-                const done = recordedItems.has(it.shipmentItemId);
-                const strict = it.inventoryMode === 'STRICT';
-                const serials = serialsByItem[it.shipmentItemId] ?? [];
-                // The count target is the server's — exactly `quantity`
-                // serials or the record 409s. This only decides whether
-                // the button is live; the refusal that counts is the API's.
-                const serialsReady = !strict || scanCountMet(serials.length, it.quantity);
-                return (
-                  <div
-                    key={it.shipmentItemId}
-                    className={
-                      'p-3 rounded-[6px] border ' +
-                      (done
-                        ? 'border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)]'
-                        : 'border-border')
-                    }
-                  >
-                    <div className="flex items-baseline justify-between mb-2">
-                      <div>
-                        <div className="text-text-bright text-sm">
-                          {it.productName}
-                          {it.variantLabel ? (
-                            <span className="text-text-muted"> · {it.variantLabel}</span>
-                          ) : null}
-                        </div>
-                        <div className="text-text-faint text-xs mt-0.5 font-mono">
-                          {it.skuCode} · qty {it.quantity}
-                          {it.unitWeightGrams !== null
-                            ? ` · ${it.unitWeightGrams * it.quantity}g`
-                            : ''}
-                        </div>
+          <div className="wh-stack wh-stack--tight">
+            {pick.items.map((it) => {
+              const done = recordedItems.has(it.shipmentItemId);
+              const strict = it.inventoryMode === 'STRICT';
+              const serials = serialsByItem[it.shipmentItemId] ?? [];
+              // The count target is the server's — exactly `quantity`
+              // serials or the record 409s. This only decides whether
+              // the button is live; the refusal that counts is the API's.
+              const serialsReady = !strict || scanCountMet(serials.length, it.quantity);
+              return (
+                <div key={it.shipmentItemId} className="wh-item" data-done={done ? '1' : undefined}>
+                  <div className="wh-item__head">
+                    <div className="wh-min0">
+                      <div className="wh-item__name">
+                        {it.productName}
+                        {it.variantLabel ? (
+                          <span className="wh-note"> · {it.variantLabel}</span>
+                        ) : null}
                       </div>
-                      {strict && (
-                        <div className="text-accent shrink-0 text-xs uppercase tracking-wide">
-                          Per-unit tracked
-                        </div>
-                      )}
-                    </div>
-                    {!done && (
-                      <>
-                        {strict && (
-                          <div className="mb-2">
-                            <SerialScanner
-                              id={`pick-serials-${it.shipmentItemId}`}
-                              label={`Scan ${it.quantity} unit serial(s) for ${it.skuCode}`}
-                              required={it.quantity}
-                              serials={serials}
-                              disabled={!started || busyId === it.shipmentItemId}
-                              onChange={(next) =>
-                                setSerialsByItem({ ...serialsByItem, [it.shipmentItemId]: next })
-                              }
-                              hint="This SKU is tracked per unit — the serial on each item, not the SKU barcode."
-                            />
-                          </div>
+                      <div className="wh-item__sub">
+                        <span className="sk-ident">{it.skuCode}</span> ·{' '}
+                        <span className="sk-figure">qty {it.quantity}</span>
+                        {it.unitWeightGrams !== null ? (
+                          <span className="sk-figure">
+                            {` · ${it.unitWeightGrams * it.quantity}g`}
+                          </span>
+                        ) : (
+                          ''
                         )}
-                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
-                          <FormField label="Bin">
-                            <Input
-                              value={binByItem[it.shipmentItemId] ?? ''}
-                              onChange={(e) =>
-                                setBinByItem({
-                                  ...binByItem,
-                                  [it.shipmentItemId]: e.target.value,
-                                })
-                              }
-                              disabled={!started || busyId === it.shipmentItemId}
-                              placeholder="bin-A1"
-                            />
-                          </FormField>
-                          <FormField label="Batch">
-                            <Input
-                              value={batchByItem[it.shipmentItemId] ?? ''}
-                              onChange={(e) =>
-                                setBatchByItem({
-                                  ...batchByItem,
-                                  [it.shipmentItemId]: e.target.value,
-                                })
-                              }
-                              disabled={!started || busyId === it.shipmentItemId}
-                              placeholder="batch-2026-06-01"
-                            />
-                          </FormField>
-                          <Button
-                            variant="secondary"
-                            size="md"
-                            disabled={!started || busyId === it.shipmentItemId || !serialsReady}
-                            onClick={() => void onRecord(it.shipmentItemId)}
-                          >
-                            {busyId === it.shipmentItemId ? 'Saving…' : 'Record'}
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                    {done && <div className="text-accent text-xs">✓ Recorded</div>}
+                      </div>
+                    </div>
+                    {strict && <span className="wh-tag">Per-unit tracked</span>}
                   </div>
-                );
-              })}
-            </div>
+                  {!done && (
+                    <>
+                      {strict && (
+                        <SerialScanner
+                          id={`pick-serials-${it.shipmentItemId}`}
+                          label={`Scan ${it.quantity} unit serial(s) for ${it.skuCode}`}
+                          required={it.quantity}
+                          serials={serials}
+                          disabled={!started || busyId === it.shipmentItemId}
+                          onChange={(next) =>
+                            setSerialsByItem({ ...serialsByItem, [it.shipmentItemId]: next })
+                          }
+                          hint="This SKU is tracked per unit — the serial on each item, not the SKU barcode."
+                        />
+                      )}
+                      <div className="wh-fields" data-cols="pick">
+                        <TextField
+                          label="Bin"
+                          inputClassName="sk-ident"
+                          value={binByItem[it.shipmentItemId] ?? ''}
+                          onChange={(e) =>
+                            setBinByItem({
+                              ...binByItem,
+                              [it.shipmentItemId]: e.target.value,
+                            })
+                          }
+                          disabled={!started || busyId === it.shipmentItemId}
+                          placeholder="bin-A1"
+                        />
+                        <TextField
+                          label="Batch"
+                          inputClassName="sk-ident"
+                          value={batchByItem[it.shipmentItemId] ?? ''}
+                          onChange={(e) =>
+                            setBatchByItem({
+                              ...batchByItem,
+                              [it.shipmentItemId]: e.target.value,
+                            })
+                          }
+                          disabled={!started || busyId === it.shipmentItemId}
+                          placeholder="batch-2026-06-01"
+                        />
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          disabled={!started || busyId === it.shipmentItemId || !serialsReady}
+                          onClick={() => void onRecord(it.shipmentItemId)}
+                        >
+                          {busyId === it.shipmentItemId ? 'Saving…' : 'Record'}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                  {done && (
+                    <div className="wh-good">
+                      <Check size={14} aria-hidden /> Recorded
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-            {started && recordedItems.size === pick.items.length && (
-              <div className="mt-4 flex justify-end">
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => void onComplete()}
-                  disabled={busyId === 'complete'}
-                >
-                  {busyId === 'complete' ? 'Completing…' : 'Complete pick'}
-                </Button>
-              </div>
-            )}
-          </CardBody>
-        </Card>
+          {started && recordedItems.size === pick.items.length && (
+            <div className="wh-row wh-row--end">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => void onComplete()}
+                disabled={busyId === 'complete'}
+              >
+                {busyId === 'complete' ? 'Completing…' : 'Complete pick'}
+              </Button>
+            </div>
+          )}
+        </section>
       )}
 
       {/* Supervisor escape hatch when a claim outlives the picker. */}

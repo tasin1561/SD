@@ -1,6 +1,8 @@
 'use client';
 
 import type { ReactElement, ReactNode } from 'react';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import '../../_components/benches.css';
 
 export type RtoTab = 'door' | 'transit' | 'bench' | 'receive';
 
@@ -20,6 +22,11 @@ export type RtoTab = 'door' | 'transit' | 'bench' | 'receive';
  * reads left to right and that is the sequence a parcel actually moves
  * through, which is also why the station is last: it is where you land
  * from a row, rather than somewhere you start.
+ *
+ * The bar is the shared liquid-bead `Tabs` (a real tablist: roving
+ * tabindex, arrow keys). It carries no panels — the station keeps its
+ * own, because the Receive panel stays MOUNTED while hidden so an
+ * inspection half-typed survives a look at another tab.
  */
 export function RtoTabs({
   active,
@@ -30,47 +37,24 @@ export function RtoTabs({
   readonly onChange: (tab: RtoTab) => void;
   readonly counts: Readonly<Record<Exclude<RtoTab, 'receive'>, number>>;
 }): ReactElement {
-  const tabs: ReadonlyArray<{ key: RtoTab; label: string; count?: number; urgent?: boolean }> = [
-    // Only this one is urgent: these parcels are here, and every hour
-    // is an hour a seller is being told their goods are still moving.
-    { key: 'door', label: 'At our door', count: counts.door, urgent: counts.door > 0 },
-    { key: 'transit', label: 'Still with the courier', count: counts.transit },
-    { key: 'bench', label: 'On the bench', count: counts.bench },
-    { key: 'receive', label: 'Receive & inspect' },
-  ];
+  const shown = (n: number): number | undefined => (n > 0 ? n : undefined);
+  // Only "At our door" is urgent: these parcels are here, and every hour
+  // is an hour a seller is being told their goods are still moving.
+  const doorUrgent = counts.door > 0;
 
   return (
-    <div role="tablist" aria-label="RTO views" className="border-border mb-4 flex gap-1 border-b">
-      {tabs.map((t) => {
-        const isActive = t.key === active;
-        return (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onChange(t.key)}
-            className={
-              isActive
-                ? 'border-accent text-text-body -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium'
-                : 'text-text-muted hover:text-text-body -mb-px flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm'
-            }
-          >
-            {t.label}
-            {t.count !== undefined && t.count > 0 && (
-              <span
-                className={
-                  t.urgent === true
-                    ? 'bg-[var(--color-critical-tint)] text-critical rounded-full px-1.5 py-0.5 text-[11px] tabular-nums'
-                    : 'bg-surface-raised text-text-muted rounded-full px-1.5 py-0.5 text-[11px] tabular-nums'
-                }
-              >
-                {t.count}
-              </span>
-            )}
-          </button>
-        );
-      })}
+    <div className="wh-rto-tabs" data-door-urgent={doorUrgent ? '1' : undefined}>
+      <Tabs
+        label="RTO views"
+        value={active}
+        onChange={(id) => onChange(id as RtoTab)}
+        items={[
+          { id: 'door', label: 'At our door', count: shown(counts.door) },
+          { id: 'transit', label: 'Still with the courier', count: shown(counts.transit) },
+          { id: 'bench', label: 'On the bench', count: shown(counts.bench) },
+          { id: 'receive', label: 'Receive & inspect' },
+        ]}
+      />
     </div>
   );
 }
@@ -85,8 +69,8 @@ export function RtoTabPanel({
   readonly children: ReactNode;
 }): ReactElement {
   return (
-    <div role="tabpanel">
-      <p className="text-text-muted mb-3 text-xs">{subtitle}</p>
+    <div role="tabpanel" className="wh-rto-panel">
+      <p className="wh-note">{subtitle}</p>
       {children}
     </div>
   );

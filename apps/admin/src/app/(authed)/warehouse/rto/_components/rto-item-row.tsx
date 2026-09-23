@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, FormField, Input, ProductThumb, Select } from '@skydrop/ui/components';
+import { Check } from 'lucide-react';
+import { ProductThumb } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Select } from '@skydrop/ui/app/select';
+import { TextField } from '@skydrop/ui/app/text-field';
+import '../../_components/benches.css';
 
 export interface RtoItemRowInspection {
   readonly quantity: number;
@@ -66,7 +71,7 @@ export function RtoLineThumb({
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`Open the picture of ${productName} in a new tab`}
-      className="shrink-0 rounded-[4px]"
+      className="wh-thumb-link"
     >
       <ProductThumb src={src} size={THUMB_PX} alt={productName} />
     </a>
@@ -237,156 +242,137 @@ export function RtoItemRow({
   }
 
   return (
-    <div
-      className={
-        'p-3 rounded-[6px] border ' +
-        (inspected
-          ? 'border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)]'
-          : 'border-border')
-      }
-    >
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex min-w-0 items-start gap-3">
+    <div className="wh-item" data-done={inspected ? '1' : undefined}>
+      <div className="wh-item__head">
+        <div className="wh-item__who">
           <RtoLineThumb src={item.thumbnailUrl} productName={item.productName} />
-          <div className="min-w-0">
-            <div className="text-text-bright text-sm break-words">
+          <div className="wh-min0">
+            <div className="wh-item__name">
               {item.productName}
-              {item.variantLabel ? (
-                <span className="text-text-muted"> · {item.variantLabel}</span>
-              ) : null}
+              {item.variantLabel ? <span className="wh-note"> · {item.variantLabel}</span> : null}
             </div>
-            <div className="text-text-faint text-xs font-mono break-all">
-              {item.skuCode} · qty {item.quantity}
+            <div className="wh-item__sub">
+              <span className="sk-ident">{item.skuCode}</span> ·{' '}
+              <span className="sk-figure">qty {item.quantity}</span>
             </div>
           </div>
         </div>
-        {inspected && <div className="text-accent text-xs shrink-0">✓ Inspected</div>}
+        {inspected && (
+          <span className="wh-tag" data-tone="good">
+            <Check size={12} aria-hidden /> Inspected
+          </span>
+        )}
       </div>
 
       {split === null ? (
         <>
-          <div className="grid grid-cols-1 gap-2 mb-2 sm:grid-cols-2">
-            <FormField
+          <div className="wh-fields" data-cols="2">
+            <Select
               label="Condition"
               hint="What you found in the box. Damaged or Missing opens a damage ticket to the seller, which is where any refund is decided."
-            >
-              <Select
-                value={condition}
-                onChange={(e) => setCondition(e.target.value)}
-                disabled={saving}
-                aria-label="Condition"
-              >
-                <option value="">—</option>
-                {CONDITION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField
-              label="What happens to it"
-              hint={DISPOSITION_HINT}
-              {...(mismatch === null ? {} : { notice: mismatch })}
-            >
-              <Select
-                value={disposition}
-                onChange={(e) => setDisposition(e.target.value)}
-                disabled={saving}
-                aria-label="What happens to it"
-              >
-                <option value="">—</option>
-                {DISPOSITION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
-          {selected === undefined ? null : (
-            <p className="text-text-muted mb-2 text-xs">{selected.effect}</p>
-          )}
-          <FormField label="Notes">
-            <Input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              maxLength={1000}
-              placeholder="Optional inspection notes"
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
               disabled={saving}
-            />
-          </FormField>
+              aria-label="Condition"
+            >
+              <option value="">—</option>
+              {CONDITION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              label="What happens to it"
+              {...(mismatch === null ? {} : { notice: mismatch })}
+              value={disposition}
+              onChange={(e) => setDisposition(e.target.value)}
+              disabled={saving}
+              aria-label="What happens to it"
+            >
+              <option value="">—</option>
+              {DISPOSITION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {selected === undefined ? null : <p className="wh-note">{selected.effect}</p>}
+          <details className="wh-details">
+            <summary>What each choice does</summary>
+            <p>{DISPOSITION_HINT}</p>
+          </details>
+          <TextField
+            label="Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            maxLength={1000}
+            placeholder="Optional inspection notes"
+            disabled={saving}
+          />
         </>
       ) : (
-        <div className="space-y-2" aria-label="Split by quantity">
-          <p className="text-text-muted text-xs" role="status" aria-live="polite">
+        <div className="wh-stack wh-stack--tight" aria-label="Split by quantity">
+          <p className="wh-note" role="status" aria-live="polite">
             {remainingLabel(item.quantity, split)}
           </p>
           {split.map((row, i) => {
             const rowMismatch = dispositionMismatch(row.condition, row.disposition);
             const rowEffect = DISPOSITION_OPTIONS.find((o) => o.value === row.disposition);
             return (
-              <div key={i} className="rounded-[5px] border border-border p-2">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[6rem_1fr_1fr]">
-                  <FormField label={`Units (row ${i + 1})`}>
-                    <Input
-                      inputMode="numeric"
-                      value={row.quantity}
-                      onChange={(e) => updateRow(i, { quantity: e.target.value })}
-                      disabled={saving}
-                      aria-label={`Units in row ${i + 1}`}
-                    />
-                  </FormField>
-                  <FormField label="Condition">
-                    <Select
-                      value={row.condition}
-                      onChange={(e) => updateRow(i, { condition: e.target.value })}
-                      disabled={saving}
-                      aria-label={`Condition, row ${i + 1}`}
-                    >
-                      <option value="">—</option>
-                      {CONDITION_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                  <FormField
+              <div key={i} className="wh-split-row">
+                <div className="wh-fields" data-cols="split">
+                  <TextField
+                    label={`Units (row ${i + 1})`}
+                    inputMode="numeric"
+                    inputClassName="sk-figure"
+                    value={row.quantity}
+                    onChange={(e) => updateRow(i, { quantity: e.target.value })}
+                    disabled={saving}
+                    aria-label={`Units in row ${i + 1}`}
+                  />
+                  <Select
+                    label="Condition"
+                    value={row.condition}
+                    onChange={(e) => updateRow(i, { condition: e.target.value })}
+                    disabled={saving}
+                    aria-label={`Condition, row ${i + 1}`}
+                  >
+                    <option value="">—</option>
+                    {CONDITION_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
                     label="What happens to them"
                     {...(rowMismatch === null ? {} : { notice: rowMismatch })}
+                    value={row.disposition}
+                    onChange={(e) => updateRow(i, { disposition: e.target.value })}
+                    disabled={saving}
+                    aria-label={`What happens to them, row ${i + 1}`}
                   >
-                    <Select
-                      value={row.disposition}
-                      onChange={(e) => updateRow(i, { disposition: e.target.value })}
-                      disabled={saving}
-                      aria-label={`What happens to them, row ${i + 1}`}
-                    >
-                      <option value="">—</option>
-                      {DISPOSITION_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
+                    <option value="">—</option>
+                    {DISPOSITION_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
                 </div>
-                {rowEffect === undefined ? null : (
-                  <p className="text-text-muted mt-1 text-xs">{rowEffect.effect}</p>
-                )}
-                <div className="mt-2 flex items-end gap-2">
-                  <div className="min-w-0 flex-1">
-                    <FormField label="Notes">
-                      <Input
-                        value={row.notes}
-                        onChange={(e) => updateRow(i, { notes: e.target.value })}
-                        maxLength={1000}
-                        placeholder="Optional"
-                        disabled={saving}
-                        aria-label={`Notes, row ${i + 1}`}
-                      />
-                    </FormField>
-                  </div>
+                {rowEffect === undefined ? null : <p className="wh-note">{rowEffect.effect}</p>}
+                <div className="wh-fields wh-split-notes">
+                  <TextField
+                    label="Notes"
+                    value={row.notes}
+                    onChange={(e) => updateRow(i, { notes: e.target.value })}
+                    maxLength={1000}
+                    placeholder="Optional"
+                    disabled={saving}
+                    aria-label={`Notes, row ${i + 1}`}
+                  />
                   {split.length > 1 && (
                     <Button
                       variant="ghost"
@@ -401,7 +387,7 @@ export function RtoItemRow({
               </div>
             );
           })}
-          <div className="flex flex-wrap gap-2">
+          <div className="wh-row">
             {split.length < item.quantity && (
               <Button
                 variant="secondary"
@@ -421,7 +407,7 @@ export function RtoItemRow({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-2 mt-2">
+      <div className="wh-row wh-row--end">
         {split === null && item.quantity > 1 && (
           <Button variant="ghost" size="sm" disabled={saving} onClick={startSplit}>
             Split by quantity

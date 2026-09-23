@@ -1,8 +1,12 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { Card, CardBody, EmptyState, ErrorState, SkeletonRows } from '@skydrop/ui/components';
-import { Check } from 'lucide-react';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ListRow } from '@skydrop/ui/app/list-row';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Package } from 'lucide-react';
+import '../../_components/benches.css';
 import { useHandoverQueue, type WaitingHandover } from '@/lib/ops-hooks';
 
 /**
@@ -24,11 +28,9 @@ export function HandoverQueue(): ReactElement {
 
   if (q.isLoading) {
     return (
-      <Card>
-        <CardBody>
-          <SkeletonRows rows={4} />
-        </CardBody>
-      </Card>
+      <section className="wh-card">
+        <SkeletonRows rows={4} cols={3} label="Loading what is waiting" />
+      </section>
     );
   }
   if (q.isError) {
@@ -39,6 +41,7 @@ export function HandoverQueue(): ReactElement {
   if (waiting.length === 0) {
     return (
       <EmptyState
+        tone="positive"
         title="Nothing waiting for a van"
         description="Parcels appear here once they are packed. Scan a label above when a driver arrives."
       />
@@ -48,51 +51,46 @@ export function HandoverQueue(): ReactElement {
   const scanned = waiting.filter((w) => w.handoverScannedAtIso !== null).length;
 
   return (
-    <Card>
-      <CardBody className="p-0">
-        <div className="border-border flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-3">
-          <div className="text-text-bright text-sm font-medium">
-            {waiting.length} waiting for a van
-          </div>
-          <div className="text-text-faint text-xs">
-            {scanned > 0 ? `${scanned} already checked · ` : ''}oldest first
-          </div>
+    <section className="wh-card" data-flush="1">
+      <div className="wh-card__head">
+        <h2 className="wh-card__title">
+          <span className="sk-figure">{waiting.length}</span> waiting for a van
+        </h2>
+        <div className="wh-card__sub">
+          {scanned > 0 ? `${scanned} already checked · ` : ''}oldest first
         </div>
-        <ul className="divide-border divide-y">
-          {waiting.map((w) => (
-            <WaitingRow key={w.shipmentId} pack={w} />
-          ))}
-        </ul>
-      </CardBody>
-    </Card>
+      </div>
+      <ul className="wh-list">
+        {waiting.map((w) => (
+          <WaitingRow key={w.shipmentId} pack={w} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
 function WaitingRow({ pack }: { pack: WaitingHandover }): ReactElement {
   const checked = pack.handoverScannedAtIso !== null;
   return (
-    <li
-      className={
-        'flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 ' +
-        (checked ? 'text-text-faint' : '')
-      }
-    >
-      <div className="min-w-0">
-        <div className={'font-mono text-sm ' + (checked ? '' : 'text-text-bright')}>
-          {pack.awbNumber}
-        </div>
-        <div className="text-text-faint truncate text-xs">
-          {pack.shipmentNumber} · {pack.orderNumber ?? '—'}
-          {pack.recipientName === null ? '' : ` · ${pack.recipientName}`} · {pack.courierCode}
-        </div>
-      </div>
-      {checked ? (
-        <span className="text-status-delivered-fg flex shrink-0 items-center gap-1 text-xs">
-          <Check size={13} /> checked
-        </span>
-      ) : (
-        <span className="text-text-muted shrink-0 text-xs">not scanned</span>
-      )}
+    <li className={checked ? 'wh-quiet' : undefined}>
+      <ListRow
+        icon={<Package size={16} />}
+        title={<span className="sk-ident">{pack.awbNumber}</span>}
+        description={
+          <>
+            <span className="sk-ident">{pack.shipmentNumber}</span> ·{' '}
+            <span className="sk-ident">{pack.orderNumber ?? '—'}</span>
+            {pack.recipientName === null ? '' : ` · ${pack.recipientName}`} · {pack.courierCode}
+          </>
+        }
+        status={
+          checked ? (
+            <StatusChip kind="delivered" label="checked" size="sm" />
+          ) : (
+            <StatusChip kind="neutral" label="not scanned" size="sm" />
+          )
+        }
+      />
     </li>
   );
 }

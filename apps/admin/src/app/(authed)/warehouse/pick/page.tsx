@@ -1,7 +1,9 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
-import { PageHeader } from '@skydrop/ui/components';
+import { ArrowRight } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
 import { PickStation } from './_components/pick-station';
+import '../_components/benches.css';
 
 /**
  * The per-parcel pick station — RETIRED as the ordinary path
@@ -24,15 +26,15 @@ import { PickStation } from './_components/pick-station';
  */
 export default function PickPage(): ReactElement {
   return (
-    <div>
+    <div className="wh-page">
       <PageHeader
         title="Pick station"
         subtitle="One parcel at a time. The everyday path is batch picking — this is for serialised stock, which must be scanned unit by unit, and for one-off parcels."
       />
-      <div className="border-border bg-surface-raised mb-4 rounded-lg border p-3 text-sm">
-        <span className="text-text-body">Picking a normal batch? </span>
-        <Link href="/warehouse/printing" className="text-accent font-medium">
-          Go to Printing →
+      <div className="wh-banner">
+        <span>Picking a normal batch? </span>
+        <Link href="/warehouse/printing">
+          Go to Printing <ArrowRight size={14} aria-hidden />
         </Link>
       </div>
       <PickStation />
