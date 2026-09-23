@@ -1,20 +1,16 @@
 /*
- * apps/seller global stylesheet — mirrors apps/admin (FE-6).
+ * apps/reseller global stylesheet — the brand skin (apps restyle, Phase 4).
  *
- * Layer order:
- *   1. @skydrop/ui tokens.css — every CSS variable (color, type,
- *      spacing, radii) lives here. Dark theme primary; light theme
- *      under [data-theme='light'].
- *   2. Tailwind v4 — utilities layered on top, configured to use
- *      our tokens via @theme.
- *   3. A small set of base resets / element styles.
- *
- * The token .css import is side-effectful (declared in the
- * @skydrop/ui package.json sideEffects). It's the ONLY route to
- * body-color etc. Apps NEVER hardcode hex.
+ * Layer order: the brand (raw scales + the four-block marketing theme,
+ * byte copies CI-checked + the app layer with the legacy alias layer) →
+ * legacy.css (only while screens still render the legacy
+ * `@skydrop/ui/components`) → Tailwind v4 → base resets.
  */
 
-@import '@skydrop/ui/tokens.css';
+@import '@skydrop/ui/brand/scales.css';
+@import '@skydrop/ui/brand/theme.css';
+@import '@skydrop/ui/brand/app.css';
+@import '@skydrop/ui/brand/legacy.css';
 @import 'tailwindcss';
 
 /*

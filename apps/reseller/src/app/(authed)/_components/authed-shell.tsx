@@ -5,7 +5,10 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
-import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
+import { Toaster } from '@skydrop/ui/components';
+import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
+import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { ToastProvider } from '@skydrop/ui/app/toast';
 import {
   BarChart3,
   Contact,
@@ -29,7 +32,7 @@ import { useStoreCallReviews } from '@/lib/review-hooks';
 import { TermsBanner } from './terms-banner';
 
 /**
- * The reseller shell — the SAME `AppShell` as the seller and admin apps
+ * The reseller shell — the brand `Shell` (apps restyle, Phase 4), as in seller;
  * (FE-7); only the nav, the brand line and the two identity fields
  * differ. The store is named first, because that is whose portal this is.
  */
@@ -127,27 +130,30 @@ export function AuthedShell({
 
   return (
     <Toaster>
-      <AppShell
-        subtitle="Reseller"
-        sectionLabel="Reseller portal"
-        navGroups={visible}
-        identityPrimary={identity.store.displayName ?? identity.store.name}
-        identitySecondary={identity.emailDisplay}
-        pathname={pathname}
-        Link={Link}
-        // The bell, at every width (FE-7's `headerAlways`): the one
-        // thing that says "something needs you" must not be the one
-        // thing a phone cannot see.
-        headerAlways={<NotificationBellContainer />}
-        onSignOut={() => {
-          void signOut();
-        }}
-        signingOut={signingOut}
-      >
-        {/* RS-4: stays until the terms in force are accepted. */}
-        <TermsBanner enabled={can(identity, 'terms.view')} />
-        {children}
-      </AppShell>
+      <ToastProvider>
+        <Shell
+          subtitle="Reseller"
+          sectionLabel="Reseller portal"
+          navGroups={visible}
+          identityPrimary={identity.store.displayName ?? identity.store.name}
+          identitySecondary={identity.emailDisplay}
+          pathname={pathname}
+          Link={Link}
+          // The bell, at every width (FE-7's `headerAlways`): the one
+          // thing that says "something needs you" must not be the one
+          // thing a phone cannot see.
+          headerAlways={<NotificationBellContainer />}
+          onSignOut={() => {
+            void signOut();
+          }}
+          signingOut={signingOut}
+          themeControl={<ThemeSwitch />}
+        >
+          {/* RS-4: stays until the terms in force are accepted. */}
+          <TermsBanner enabled={can(identity, 'terms.view')} />
+          {children}
+        </Shell>
+      </ToastProvider>
     </Toaster>
   );
 }

@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { pinnedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
+import { motionInitScript } from '@skydrop/ui/app/motion-init';
 import localFont from 'next/font/local';
 import './globals.css';
 
 /**
- * Root layout — applies the design tokens + Geist typography to every
+ * Root layout — applies the brand skin and Plus Jakarta Sans to every
  * page. Same shape as apps/admin (FE-6 token system shared from
  * @skydrop/ui; per-app shell deferred until the (authed) layout).
  * Dark is the default; the ThemeToggle in the app shell pins
@@ -28,28 +29,30 @@ import './globals.css';
  * what latin actually covers, which is what the CDN's own @font-face
  * carried and is otherwise lost when self-hosting.
  */
-const geistSans = localFont({
-  src: './fonts/geist-latin.woff2',
-  variable: '--font-geist-sans',
+const sans = localFont({
+  src: './fonts/plus-jakarta-sans-latin.woff2',
+  variable: '--font-sans-face',
   display: 'swap',
   declarations: [
     {
       prop: 'unicode-range',
       value:
-        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
     },
   ],
 });
 
-const geistMono = localFont({
-  src: './fonts/geist-mono-latin.woff2',
-  variable: '--font-geist-mono',
+// Mono is for identifiers only (order no, AWB, SKU): not preloaded.
+const mono = localFont({
+  src: './fonts/jetbrains-mono-latin.woff2',
+  variable: '--font-mono-face',
   display: 'swap',
+  preload: false,
   declarations: [
     {
       prop: 'unicode-range',
       value:
-        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
     },
   ],
 });
@@ -82,7 +85,7 @@ export default async function RootLayout({
       lang="en"
       suppressHydrationWarning
       data-theme={theme}
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={`${sans.variable} ${mono.variable}`}
     >
       <head>
         {/* `suppressHydrationWarning` on the SCRIPT, not just on
@@ -95,6 +98,13 @@ export default async function RootLayout({
           nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
+        {/* The per-user "Reduce motion" choice (localStorage only), applied
+            before first paint like the theme. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: motionInitScript }}
         />
       </head>
       <body>{children}</body>
