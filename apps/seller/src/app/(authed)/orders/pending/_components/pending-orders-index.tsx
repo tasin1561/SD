@@ -4,22 +4,16 @@ import Link from 'next/link';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { canSeePath } from '@/lib/page-access';
 import { useState, type ReactElement } from 'react';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Input,
-  LoadingState,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  Stat,
-  useToast,
-} from '@skydrop/ui/components';
-import { CopyCheck, FileWarning, ListChecks } from 'lucide-react';
+import { CopyCheck, FileWarning, Inbox, ListChecks, Upload } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useDiscardPendingRow,
   useImportPendingRow,
@@ -28,6 +22,7 @@ import {
   type StagedRow,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { LinkButton, MetaFact, Notice, OrdSection } from '../../_components/orders-parts';
 
 /**
  * The rows your upload could not turn into orders.
@@ -77,6 +72,8 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
     Object.fromEntries(FIELDS.map((f) => [f.key, String(row.data[f.key] ?? '')])),
   );
   const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<'import' | 'discard' | null>(null);
+  const [discardError, setDiscardError] = useState<string | null>(null);
 
   const problemFor = (key: string): string | undefined =>
     row.problems.find((p) => p.field === key)?.reason;
@@ -90,6 +87,9 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
       toast.success(`Row ${row.rowNumber} updated`);
     } catch (err) {
       setError(serverVerdict(err));
+      // Re-thrown so the button's rolling label ends on the failure it
+      // really was; the verdict above is what the seller reads.
+      throw err;
     }
   }
 
@@ -108,102 +108,131 @@ function RowCard({ row }: { readonly row: StagedRow }): ReactElement {
     }
   }
 
+  // The row as the seller knows it — the number in their spreadsheet and
+  // their own reference — restated in both confirmations below.
+  const rowName = draft['externalRef']
+    ? `Row ${row.rowNumber} · ${draft['externalRef']}`
+    : `Row ${row.rowNumber}`;
+
   return (
-    <div>
-      <SectionBand
-        index={String(row.rowNumber).padStart(2, '0')}
-        title={
-          draft['externalRef']
-            ? `Row ${row.rowNumber} · ${draft['externalRef']}`
-            : `Row ${row.rowNumber}`
-        }
-        note={
-          isDuplicate ? (
-            <span className="text-[var(--status-pending-fg)]">Possible duplicate</span>
-          ) : (
-            <span className="text-critical">
-              {row.problems.length} value{row.problems.length === 1 ? '' : 's'} to fix
-            </span>
-          )
-        }
-      />
-      <BandBody className="space-y-3">
+    <OrdSection
+      title={rowName}
+      note={
+        isDuplicate ? (
+          <span className="ord-tone-warn">Possible duplicate</span>
+        ) : (
+          <span className="ord-tone-bad">
+            {row.problems.length} value{row.problems.length === 1 ? '' : 's'} to fix
+          </span>
+        )
+      }
+    >
+      <div className="ord-stack ord-stack--tight">
         {isDuplicate && row.duplicateOf !== null && row.duplicateOf.length > 0 && (
-          <div className="border-border rounded-[5px] border px-3 py-2">
-            <div className="text-text-muted mb-1 text-xs">
+          <Notice tone="warn" icon={<CopyCheck size={16} />}>
+            <span>
               This customer already has {row.duplicateOf.length} order
               {row.duplicateOf.length === 1 ? '' : 's'} not yet packed. Import only if this is a
               separate parcel.
-            </div>
-            <ul className="space-y-0.5">
+            </span>
+            <ul className="ord-mini-list">
               {row.duplicateOf.map((o) => (
-                <li key={o.orderId} className="text-xs">
-                  <Link
-                    href={`/orders/${o.orderId}`}
-                    target="_blank"
-                    className="font-mono hover:underline"
-                  >
+                <li key={o.orderId}>
+                  <Link href={`/orders/${o.orderId}`} target="_blank" className="ord-link sk-ident">
                     {o.orderNumber}
                   </Link>
-                  <span className="text-text-faint">
-                    {' '}
-                    · {o.status.replaceAll('_', ' ').toLowerCase()}
-                  </span>
+                  <span className="ord-faint">{o.status.replaceAll('_', ' ').toLowerCase()}</span>
                 </li>
               ))}
             </ul>
-          </div>
+          </Notice>
         )}
 
-        {error !== null && <ErrorNote message={error} />}
+        {error !== null && (
+          <Notice tone="bad" role="alert" icon={<FileWarning size={16} />}>
+            <span>{error}</span>
+          </Notice>
+        )}
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="ord-grid-3">
           {FIELDS.map((f) => {
             const problem = problemFor(f.key);
             return (
-              <FormField
+              <TextField
                 key={f.key}
                 label={f.label}
+                value={draft[f.key] ?? ''}
+                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
                 {...(problem !== undefined ? { error: problem } : {})}
                 {...(f.hint !== undefined ? { hint: f.hint } : {})}
-              >
-                <Input
-                  value={draft[f.key] ?? ''}
-                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-                />
-              </FormField>
+              />
             );
           })}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button
+        <div className="ord-row">
+          <AsyncButton
             variant="primary"
-            size="md"
+            state={importRow.isPending ? 'busy' : undefined}
             disabled={importRow.isPending || patch.isPending}
-            onClick={() => void doImport()}
-          >
-            {importRow.isPending ? 'Importing…' : isDuplicate ? 'Import anyway' : 'Import as order'}
-          </Button>
-          <Button
+            labels={{
+              idle: isDuplicate ? 'Import anyway' : 'Import as order',
+              busy: 'Importing…',
+            }}
+            onClick={() => setConfirm('import')}
+          />
+          <AsyncButton
             variant="ghost"
-            size="md"
             disabled={!dirty || patch.isPending}
-            onClick={() => void save()}
-          >
-            Save without importing
-          </Button>
+            labels={{ idle: 'Save without importing', busy: 'Saving…', done: 'Saved' }}
+            onAction={() => save()}
+          />
           <Button
             variant="ghost"
-            size="md"
             disabled={discard.isPending}
-            onClick={() => void discard.mutateAsync(row.id)}
+            onClick={() => {
+              setDiscardError(null);
+              setConfirm('discard');
+            }}
           >
             Discard
           </Button>
         </div>
-      </BandBody>
-    </div>
+      </div>
+
+      <ConfirmDialog
+        open={confirm === 'import'}
+        onOpenChange={(next) => setConfirm(next ? 'import' : null)}
+        title={isDuplicate ? 'Import this row anyway?' : 'Import this row as an order?'}
+        entity={rowName}
+        consequence={
+          isDuplicate
+            ? 'It becomes a new order even though this customer already has one waiting. Any changes you typed are saved first.'
+            : 'It becomes an order and leaves this list. Any changes you typed are saved first.'
+        }
+        confirmLabel={isDuplicate ? 'Import anyway' : 'Import as order'}
+        onConfirm={() => doImport()}
+      />
+      <ConfirmDialog
+        open={confirm === 'discard'}
+        onOpenChange={(next) => setConfirm(next ? 'discard' : null)}
+        title="Discard this row?"
+        entity={rowName}
+        consequence="It is removed from this list and no order is made from it."
+        confirmLabel="Discard"
+        destructive
+        error={discardError}
+        onConfirm={async () => {
+          setDiscardError(null);
+          try {
+            await discard.mutateAsync(row.id);
+          } catch (err) {
+            setDiscardError(serverVerdict(err));
+            throw err;
+          }
+        }}
+      />
+    </OrdSection>
   );
 }
 
@@ -216,38 +245,34 @@ export function PendingOrdersIndex(): ReactElement {
   const broken = list.length - duplicates;
 
   return (
-    <div>
+    <div className="ord-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Fulfilment' },
-              { label: 'Orders', href: '/orders' },
-              { label: 'Pending' },
-            ]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Fulfilment' },
+          { label: 'Orders', href: '/orders' },
+          { label: 'Pending' },
+        ]}
+        Link={Link}
         title="Pending orders"
         subtitle="Rows from a CSV upload that need a decision before they can become orders. Everything else in your upload has already imported."
         meta={
           rows.isLoading ? undefined : list.length === 0 ? (
-            <MetaChip>Nothing waiting</MetaChip>
+            <span className="ord-meta">
+              <MetaFact>Nothing waiting</MetaFact>
+            </span>
           ) : (
-            <>
-              <MetaChip tone="warn">{list.length} waiting</MetaChip>
-              {duplicates > 0 && <MetaChip dot>{duplicates} look like duplicates</MetaChip>}
-            </>
+            <span className="ord-meta">
+              <MetaFact tone="warn">{list.length} waiting</MetaFact>
+              {duplicates > 0 && <MetaFact dot>{duplicates} look like duplicates</MetaFact>}
+            </span>
           )
         }
         action={
           canSeePath(identity, '/orders/import') ? (
-            <Link href="/orders/import">
-              <Button variant="ghost" size="md">
-                Upload a CSV
-              </Button>
-            </Link>
+            <LinkButton href="/orders/import" variant="ghost" icon={<Upload size={15} />}>
+              Upload a CSV
+            </LinkButton>
           ) : undefined
         }
       />
@@ -257,52 +282,52 @@ export function PendingOrdersIndex(): ReactElement {
           The comps put an "auto-fix" rate here; nothing auto-fixes a
           row, so there is no rate to report. */}
       {!rows.isLoading && list.length > 0 && (
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Stat
+        <div className="ord-kpis">
+          <KpiCard
             label="Waiting on you"
-            icon={<ListChecks size={13} aria-hidden />}
+            icon={<ListChecks size={14} />}
             value={list.length}
             unit={list.length === 1 ? 'row' : 'rows'}
-            tone="warn"
+            tone="pending"
             hint="None of these is an order yet."
           />
-          <Stat
+          <KpiCard
             label="Values to fix"
-            icon={<FileWarning size={13} aria-hidden />}
+            icon={<FileWarning size={14} />}
             value={broken}
             unit={broken === 1 ? 'row' : 'rows'}
-            tone={broken > 0 ? 'bad' : 'neutral'}
+            tone={broken > 0 ? 'debit' : 'neutral'}
             hint="Something is missing or unreadable."
           />
-          <Stat
+          <KpiCard
             label="Look like duplicates"
-            icon={<CopyCheck size={13} aria-hidden />}
+            icon={<CopyCheck size={14} />}
             value={duplicates}
             unit={duplicates === 1 ? 'row' : 'rows'}
-            tone={duplicates > 0 ? 'warn' : 'neutral'}
+            tone={duplicates > 0 ? 'pending' : 'neutral'}
             hint="This customer already has a parcel on the way."
           />
         </div>
       )}
 
       {rows.isLoading ? (
-        <LoadingState label="Loading pending rows" />
+        <SkeletonRows rows={4} cols={3} label="Loading pending rows" />
       ) : list.length === 0 ? (
         <EmptyState
+          tone="positive"
+          icon={<Inbox size={20} />}
           title="Nothing waiting"
           description="Every row from your uploads became an order. New uploads only land here if something is missing or looks like a duplicate."
           action={
             canSeePath(identity, '/orders/import') ? (
-              <Link href="/orders/import">
-                <Button variant="primary" size="md">
-                  Upload a CSV
-                </Button>
-              </Link>
+              <LinkButton href="/orders/import" variant="primary" icon={<Upload size={15} />}>
+                Upload a CSV
+              </LinkButton>
             ) : undefined
           }
         />
       ) : (
-        <div className="space-y-4">
+        <div className="ord-stack">
           {list.map((r) => (
             <RowCard key={r.id} row={r} />
           ))}

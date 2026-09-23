@@ -2,33 +2,21 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { PackageX, RotateCcw, Truck } from 'lucide-react';
-import {
-  BandBody,
-  Crumbs,
-  ErrorState,
-  FilterChip,
-  Ident,
-  Input,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  ShipmentStatusBadge,
-  SkeletonRows,
-  Stat,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
-import { courierLabel } from '@skydrop/ui/status';
+import { ChevronDown, PackageSearch, PackageX, RotateCcw, Search, Truck } from 'lucide-react';
+import { Ident } from '@skydrop/ui/components';
+import { courierLabel, shipmentStatusKind, statusLabel } from '@skydrop/ui/status';
 import type { ShipmentStatus } from '@skydrop/db';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Table, TBody, THead, TableEmpty, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useTrackedShipment, useTrackedShipments } from '@/lib/api-hooks';
+import { MetaFact, OrdSection } from '../../orders/_components/orders-parts';
 import { ParcelTimeline } from './parcel-timeline';
-
 /**
  * Every parcel that has left, and where it got to.
  *
@@ -78,55 +66,51 @@ export function TrackingIndex(): ReactElement {
   ).length;
 
   return (
-    <div>
+    <div className="ord-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Selling' }, { label: 'Tracking' }]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[{ label: 'Seller console' }, { label: 'Selling' }, { label: 'Tracking' }]}
+        Link={Link}
         title="Tracking"
         subtitle="Where your parcels are, and why any of them have not arrived."
         meta={
           list.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">{rows.length} shown</MetaChip>
-              {failed > 0 && <MetaChip tone="bad">{failed} failed delivery</MetaChip>}
-              {comingBack > 0 && <MetaChip tone="warn">{comingBack} coming back</MetaChip>}
-            </>
+            <span className="ord-meta">
+              <MetaFact tone="accent">{rows.length} shown</MetaFact>
+              {failed > 0 && <MetaFact tone="bad">{failed} failed delivery</MetaFact>}
+              {comingBack > 0 && <MetaFact tone="warn">{comingBack} coming back</MetaFact>}
+            </span>
           )
         }
       />
 
       {unfiltered && rows.length > 0 && (
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Stat
+        <div className="ord-kpis">
+          <KpiCard
             label="On the move"
-            icon={<Truck size={13} aria-hidden />}
+            icon={<Truck size={14} />}
             value={moving}
             unit="parcels"
-            tone="neutral"
+            tone="info"
             hint="In transit or out for delivery, of the parcels shown."
           />
-          <Stat
+          <KpiCard
             label="Delivery failed"
-            icon={<PackageX size={13} aria-hidden />}
+            icon={<PackageX size={14} />}
             value={failed}
             unit="parcels"
-            tone={failed > 0 ? 'bad' : 'neutral'}
+            tone={failed > 0 ? 'debit' : 'neutral'}
             hint={
               failed > 0
                 ? 'The courier tried and could not hand it over.'
                 : 'Nothing shown has failed a delivery.'
             }
           />
-          <Stat
+          <KpiCard
             label="Coming back"
-            icon={<RotateCcw size={13} aria-hidden />}
+            icon={<RotateCcw size={14} />}
             value={comingBack}
             unit="parcels"
-            tone={comingBack > 0 ? 'warn' : 'neutral'}
+            tone={comingBack > 0 ? 'pending' : 'neutral'}
             hint={
               comingBack > 0
                 ? 'On their way to our warehouse. You pay the leg home.'
@@ -136,134 +120,126 @@ export function TrackingIndex(): ReactElement {
         </div>
       )}
 
-      <SectionBand
-        index="01"
-        title="Parcel register"
-        note={
-          list.data === undefined
-            ? undefined
-            : `${rows.length} ${rows.length === 1 ? 'parcel' : 'parcels'}`
-        }
-        action={
-          <Input
-            placeholder="AWB, parcel number or recipient…"
-            aria-label="Search parcels by waybill, number or recipient"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:w-64"
-          />
-        }
-      />
-
-      <BandBody flush>
-        {/* Chips rather than a <select>: six values, and the two a seller
+      <section className="ord-section">
+        <SectionHeading
+          title="Parcel register"
+          note={
+            list.data === undefined
+              ? undefined
+              : `${rows.length} ${rows.length === 1 ? 'parcel' : 'parcels'}`
+          }
+        />
+        <TextField
+          label="Search parcels"
+          icon={<Search size={16} />}
+          placeholder="AWB, parcel number or recipient…"
+          aria-label="Search parcels by waybill, number or recipient"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {/* Tabs rather than a <select>: six values, and the two a seller
             comes here for are worth being visible without opening
             anything. */}
-        <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-3 py-2.5">
-          {FILTERS.map(([value, label]) => (
-            <FilterChip
-              key={value === '' ? 'all' : value}
-              label={label}
-              active={status === value}
-              onClick={() => {
-                setStatus(value);
-                setOpen(null);
-              }}
-            />
-          ))}
-        </div>
+        <Tabs
+          label="Filter parcels by status"
+          size="sm"
+          items={FILTERS.map(([value, label]) => ({ id: value === '' ? 'all' : value, label }))}
+          value={status === '' ? 'all' : status}
+          onChange={(id) => {
+            setStatus(id === 'all' ? '' : id);
+            setOpen(null);
+          }}
+        />
 
         {list.isLoading ? (
-          <div className="p-3">
-            <SkeletonRows rows={6} cols={5} />
-          </div>
+          <SkeletonRows rows={6} cols={5} label="Loading parcels…" />
         ) : list.isError ? (
-          <div className="p-3">
-            <ErrorState
-              message={list.error?.message ?? 'Failed to load.'}
-              retry={() => void list.refetch()}
-            />
-          </div>
+          <ErrorState
+            message={list.error?.message ?? 'Failed to load.'}
+            retry={() => void list.refetch()}
+          />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Parcel</Th>
-                <Th>Going to</Th>
-                <Th>Status</Th>
-                <Th>Last update</Th>
-                <Th align="right" aria-label="History" />
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.length === 0 ? (
-                <TableEmpty colSpan={5}>
-                  {status === '' && search.trim() === ''
-                    ? 'Nothing on its way yet. A parcel appears here once it has been handed to the courier.'
-                    : 'No parcel matches that. Try another filter, or clear the search.'}
-                </TableEmpty>
-              ) : (
-                rows.map((r) => (
-                  <Tr key={r.shipmentId}>
-                    <Td>
-                      <Ident value={r.awbNumber ?? r.shipmentNumber} />
-                      <div className="text-text-faint mt-0.5 text-xs">
-                        <Link
-                          href={`/orders/${r.orderId}`}
-                          className="text-accent font-mono hover:underline"
+          <div className="ord-card" data-flush="1">
+            <Table caption="Parcels">
+              <THead>
+                <Tr>
+                  <Th>Parcel</Th>
+                  <Th>Going to</Th>
+                  <Th>Status</Th>
+                  <Th>Last update</Th>
+                  <Th align="right" aria-label="History" />
+                </Tr>
+              </THead>
+              <TBody>
+                {rows.length === 0 ? (
+                  <TableEmpty colSpan={5}>
+                    {status === '' && search.trim() === ''
+                      ? 'Nothing on its way yet. A parcel appears here once it has been handed to the courier.'
+                      : 'No parcel matches that. Try another filter, or clear the search.'}
+                  </TableEmpty>
+                ) : (
+                  rows.map((r) => (
+                    <Tr key={r.shipmentId} selected={open === r.shipmentId}>
+                      <Td>
+                        <Ident value={r.awbNumber ?? r.shipmentNumber} />
+                        <span className="ord-sub">
+                          <Link href={`/orders/${r.orderId}`} className="ord-link sk-ident">
+                            {r.orderNumber}
+                          </Link>{' '}
+                          · {courierLabel(r.courierCode, r.manualCourierName)}
+                        </span>
+                      </Td>
+                      <Td>
+                        {r.recipientName}
+                        {r.recipientCity !== '' && (
+                          <span className="ord-sub">{r.recipientCity}</span>
+                        )}
+                      </Td>
+                      <Td>
+                        <StatusChip
+                          kind={shipmentStatusKind(r.status as ShipmentStatus)}
+                          label={statusLabel(r.status as ShipmentStatus)}
+                          size="sm"
+                        />
+                        {r.failedAttempts > 0 && (
+                          <span className="ord-sub">
+                            {r.failedAttempts} failed attempt
+                            {r.failedAttempts === 1 ? '' : 's'}
+                          </span>
+                        )}
+                      </Td>
+                      <Td>
+                        {r.lastScanAt === null ? (
+                          <span className="ord-faint">No scans yet</span>
+                        ) : (
+                          <>
+                            <div>{r.lastScanDescription ?? r.lastScanStatus}</div>
+                            <span className="ord-sub sk-figure">
+                              {new Date(r.lastScanAt).toLocaleString()}
+                              {r.lastScanLocation !== null ? ` · ${r.lastScanLocation}` : ''}
+                            </span>
+                          </>
+                        )}
+                      </Td>
+                      <Td align="right">
+                        <button
+                          type="button"
+                          aria-expanded={open === r.shipmentId}
+                          className="ord-expand"
+                          onClick={() => setOpen(open === r.shipmentId ? null : r.shipmentId)}
                         >
-                          {r.orderNumber}
-                        </Link>{' '}
-                        · {courierLabel(r.courierCode, r.manualCourierName)}
-                      </div>
-                    </Td>
-                    <Td className="text-text-body text-sm">
-                      {r.recipientName}
-                      {r.recipientCity !== '' && (
-                        <div className="text-text-faint text-xs">{r.recipientCity}</div>
-                      )}
-                    </Td>
-                    <Td>
-                      <ShipmentStatusBadge status={r.status as ShipmentStatus} />
-                      {r.failedAttempts > 0 && (
-                        <div className="text-text-faint mt-0.5 text-xs">
-                          {r.failedAttempts} failed attempt
-                          {r.failedAttempts === 1 ? '' : 's'}
-                        </div>
-                      )}
-                    </Td>
-                    <Td className="text-xs">
-                      {r.lastScanAt === null ? (
-                        <span className="text-text-faint">No scans yet</span>
-                      ) : (
-                        <>
-                          <div className="text-text-body">
-                            {r.lastScanDescription ?? r.lastScanStatus}
-                          </div>
-                          <div className="text-text-faint font-mono">
-                            {new Date(r.lastScanAt).toLocaleString()}
-                            {r.lastScanLocation !== null ? ` · ${r.lastScanLocation}` : ''}
-                          </div>
-                        </>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      <button
-                        type="button"
-                        aria-expanded={open === r.shipmentId}
-                        className="text-accent min-h-[32px] text-xs underline"
-                        onClick={() => setOpen(open === r.shipmentId ? null : r.shipmentId)}
-                      >
-                        {open === r.shipmentId ? 'Hide' : 'History'}
-                      </button>
-                    </Td>
-                  </Tr>
-                ))
-              )}
-            </TBody>
-          </Table>
+                          {open === r.shipmentId ? 'Hide' : 'History'}
+                          <ChevronDown size={14} aria-hidden />
+                        </button>
+                      </Td>
+                    </Tr>
+                  ))
+                )}
+              </TBody>
+            </Table>
+          </div>
         )}
-      </BandBody>
+      </section>
 
       {open !== null && <ExpandedParcel shipmentId={open} />}
     </div>
@@ -280,33 +256,31 @@ export function TrackingIndex(): ReactElement {
 function ExpandedParcel({ shipmentId }: { readonly shipmentId: string }): ReactElement {
   const detail = useTrackedShipment(shipmentId);
   return (
-    <div className="mt-4">
-      <SectionBand
-        index="02"
-        title="Parcel history"
-        note={
-          detail.data === undefined
-            ? undefined
-            : `${courierLabel(detail.data.courierCode, detail.data.manualCourierName)} · ${detail.data.recipientName}`
-        }
-      />
-      <BandBody>
-        {detail.isLoading ? (
-          <SkeletonRows rows={4} cols={1} />
-        ) : detail.isError || detail.data === undefined ? (
-          <ErrorState
-            message={detail.error?.message ?? 'Failed to load.'}
-            retry={() => void detail.refetch()}
-          />
-        ) : (
-          <>
-            <div className="mb-3">
-              <Ident value={detail.data.awbNumber ?? detail.data.shipmentNumber} />
-            </div>
-            <ParcelTimeline parcel={detail.data} />
-          </>
-        )}
-      </BandBody>
-    </div>
+    <OrdSection
+      title="Parcel history"
+      note={
+        detail.data === undefined
+          ? undefined
+          : `${courierLabel(detail.data.courierCode, detail.data.manualCourierName)} · ${detail.data.recipientName}`
+      }
+    >
+      {detail.isLoading ? (
+        <SkeletonRows rows={4} cols={1} label="Loading the parcel history…" />
+      ) : detail.isError || detail.data === undefined ? (
+        <ErrorState
+          message={detail.error?.message ?? 'Failed to load.'}
+          retry={() => void detail.refetch()}
+        />
+      ) : (
+        <ParcelTimeline
+          parcel={detail.data}
+          header={{
+            icon: <PackageSearch size={16} />,
+            title: 'Parcel',
+            id: detail.data.awbNumber ?? detail.data.shipmentNumber,
+          }}
+        />
+      )}
+    </OrdSection>
   );
 }

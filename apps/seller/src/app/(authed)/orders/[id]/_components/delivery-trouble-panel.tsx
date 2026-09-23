@@ -1,19 +1,14 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { AlertTriangle, PhoneCall } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  FormField,
-  Modal,
-  ModalFooter,
-  Select,
-  StatusBadge,
-  Textarea,
-} from '@skydrop/ui/components';
+import { AlertTriangle, OctagonX, PhoneCall, Truck } from 'lucide-react';
+import { Dialog, DialogFooter, ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Notice, OrdSection } from '../../_components/orders-parts';
 import {
   useCallHistory,
   useDeliveryActions,
@@ -76,11 +71,14 @@ const ACTIONS: ReadonlyArray<{ value: DeliveryActionKind; label: string; hint: s
 
 export function DeliveryTroublePanel({
   orderId,
+  orderNumber,
   orderStatus,
   open,
   onOpenChange,
 }: {
   readonly orderId: string;
+  /** Restated when a send-back is confirmed. */
+  readonly orderNumber?: string | undefined;
   readonly orderStatus: string;
   /**
    * The ask dialog, driven from the page header.
@@ -103,6 +101,9 @@ export function DeliveryTroublePanel({
   const [action, setAction] = useState<DeliveryActionKind>('REATTEMPT');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // A send-back reaches the courier on the click and cannot be undone,
+  // so it is confirmed once more, naming the order, before it is sent.
+  const [confirmRto, setConfirmRto] = useState(false);
 
   const hasHistory = (actions.data?.items.length ?? 0) > 0 || (calls.data?.items.length ?? 0) > 0;
   // Shown while the parcel is in trouble, and afterwards only if
@@ -125,156 +126,171 @@ export function DeliveryTroublePanel({
   }
 
   return (
-    <Card>
-      <CardHeader
-        title={orderStatus === 'DELIVERY_FAILED' ? 'Delivery did not succeed' : 'Out for delivery'}
-      />
-      <CardBody>
-        <div className="space-y-4">
-          {orderStatus === 'DELIVERY_FAILED' && (
-            <div className="text-warning flex gap-2 text-sm">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              <p>
-                The courier could not hand this over. We have queued a call to your customer to find
-                out why — you can also tell us what to do below.
-              </p>
-            </div>
-          )}
+    <OrdSection
+      title={orderStatus === 'DELIVERY_FAILED' ? 'Delivery did not succeed' : 'Out for delivery'}
+    >
+      <div className="ord-stack">
+        {orderStatus === 'DELIVERY_FAILED' && (
+          <Notice tone="warn" icon={<AlertTriangle size={16} />}>
+            <span>
+              The courier could not hand this over. We have queued a call to your customer to find
+              out why — you can also tell us what to do below.
+            </span>
+          </Notice>
+        )}
 
-          {/* What we said to their customer. The reason this panel is
-              worth reading: "no answer, twice" and "they moved house"
-              lead to opposite decisions. */}
-          {(calls.data?.items.length ?? 0) > 0 && (
-            <div>
-              <h3 className="text-text-bright mb-2 text-sm font-medium">
-                What we discussed with your customer
-              </h3>
-              <ul className="space-y-2">
-                {calls.data?.items.map((c) => (
-                  <li
-                    key={c.id}
-                    className="border-accent/40 bg-accent/5 rounded-md border p-2.5 text-sm"
-                  >
-                    <div className="flex items-center gap-2">
-                      <PhoneCall className="text-accent h-3.5 w-3.5 shrink-0" aria-hidden />
-                      <span className="text-accent font-medium">{humanOutcome(c.outcome)}</span>
-                      <span className="text-text-faint ml-auto text-xs">
-                        {new Date(c.calledAt).toLocaleString()}
-                      </span>
-                    </div>
-                    {/*
-                      What the customer actually said. This is the answer
-                      to whatever the seller asked for, and it was set in
-                      muted grey under the outcome label — the least
-                      prominent thing in a block that exists for it.
-                    */}
-                    {c.notes !== null && c.notes !== '' && (
-                      <p className="text-text-bright mt-1.5 font-medium">{c.notes}</p>
-                    )}
-                    {c.customerSaidAddress !== null && (
-                      <p className="text-text-muted mt-1 text-xs">
-                        Customer gave a different address: {c.customerSaidAddress}
-                      </p>
-                    )}
-                    {c.rescheduledFor !== null && (
-                      <p className="text-text-muted mt-1 text-xs">
-                        Asked us to call back {new Date(c.rescheduledFor).toLocaleString()}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+        {/* What we said to their customer. The reason this panel is
+            worth reading: "no answer, twice" and "they moved house"
+            lead to opposite decisions. */}
+        {(calls.data?.items.length ?? 0) > 0 && (
+          <div>
+            <h3 className="ord-h3">What we discussed with your customer</h3>
+            <ul className="ord-cards">
+              {calls.data?.items.map((c) => (
+                <li key={c.id} className="ord-callcard" data-tone="accent">
+                  <div className="ord-callcard__head">
+                    <PhoneCall size={14} aria-hidden />
+                    <span className="ord-callcard__title">{humanOutcome(c.outcome)}</span>
+                    <span className="ord-callcard__time sk-figure">
+                      {new Date(c.calledAt).toLocaleString()}
+                    </span>
+                  </div>
+                  {/*
+                    What the customer actually said. This is the answer
+                    to whatever the seller asked for, so it is the
+                    strongest line in the card.
+                  */}
+                  {c.notes !== null && c.notes !== '' && (
+                    <p className="ord-callcard__said">{c.notes}</p>
+                  )}
+                  {c.customerSaidAddress !== null && (
+                    <span className="ord-faint">
+                      Customer gave a different address: {c.customerSaidAddress}
+                    </span>
+                  )}
+                  {c.rescheduledFor !== null && (
+                    <span className="ord-faint">
+                      Asked us to call back {new Date(c.rescheduledFor).toLocaleString()}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
-          {(actions.data?.items.length ?? 0) > 0 && (
-            <div>
-              <h3 className="text-text-bright mb-2 text-sm font-medium">What you asked for</h3>
-              <ul className="space-y-2">
-                {actions.data?.items.map((a) => (
-                  <li key={a.id} className="border-border rounded-md border p-2.5 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        {ACTIONS.find((x) => x.value === a.action)?.label ?? a.action}
-                      </span>
-                      <span className="ml-auto">
-                        <StatusBadge kind={statusKind(a.status)} label={a.status.toLowerCase()} />
-                      </span>
-                    </div>
-                    <p className="text-text-muted mt-1.5">{a.reason}</p>
-                    {a.decisionNote !== null && (
-                      <p className="text-text-muted mt-1 text-xs">Our reply: {a.decisionNote}</p>
-                    )}
-                    {a.executionError !== null && (
-                      <p className="text-danger mt-1 text-xs">
-                        Could not be carried out: {a.executionError}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </CardBody>
+        {(actions.data?.items.length ?? 0) > 0 && (
+          <div>
+            <h3 className="ord-h3">What you asked for</h3>
+            <ul className="ord-cards">
+              {actions.data?.items.map((a) => (
+                <li key={a.id} className="ord-callcard">
+                  <div className="ord-callcard__head">
+                    <span className="ord-callcard__title">
+                      {ACTIONS.find((x) => x.value === a.action)?.label ?? a.action}
+                    </span>
+                    <span className="ord-callcard__time">
+                      <StatusChip
+                        kind={statusKind(a.status)}
+                        label={humanOutcome(a.status)}
+                        size="sm"
+                      />
+                    </span>
+                  </div>
+                  <p className="ord-p">{a.reason}</p>
+                  {a.decisionNote !== null && (
+                    <span className="ord-faint">Our reply: {a.decisionNote}</span>
+                  )}
+                  {a.executionError !== null && (
+                    <span className="ord-error">Could not be carried out: {a.executionError}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) setError(null);
         }}
         title="What should we do?"
+        icon={<Truck size={18} />}
         description={
           action === 'RTO'
             ? 'Returning your own parcel is your decision, so this reaches the courier immediately.'
             : 'An operator reads this and acts on it — nothing reaches the courier automatically.'
         }
+        locked={request.isPending}
+        footer={
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={request.isPending}>
+              Cancel
+            </Button>
+            <AsyncButton
+              variant={action === 'RTO' ? 'destructive' : 'primary'}
+              state={request.isPending ? 'busy' : undefined}
+              labels={{
+                idle: action === 'RTO' ? 'Send it back now' : 'Send request',
+                busy: 'Sending…',
+              }}
+              disabled={request.isPending}
+              onClick={() => {
+                // A send-back is confirmed first; submit() still owns the
+                // "tell us what you know" check, so a short reason is
+                // refused by it exactly as before.
+                if (action === 'RTO' && reason.trim().length >= 10) setConfirmRto(true);
+                else void submit();
+              }}
+            />
+          </DialogFooter>
+        }
       >
-        <div className="space-y-3">
-          <FormField
+        <div className="ord-stack ord-stack--tight">
+          <Select
             label="What would you like"
             required
             hint={ACTIONS.find((a) => a.value === action)?.hint}
+            value={action}
+            onChange={(e) => setAction(e.target.value as DeliveryActionKind)}
           >
-            <Select
-              value={action}
-              onChange={(e) => setAction(e.target.value as DeliveryActionKind)}
-            >
-              {ACTIONS.map((a) => (
-                <option key={a.value} value={a.value}>
-                  {a.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField
+            {ACTIONS.map((a) => (
+              <option key={a.value} value={a.value}>
+                {a.label}
+              </option>
+            ))}
+          </Select>
+          <TextArea
             label="What do you know"
             required
             hint="Anything that helps — the customer called you, they'll be home Saturday, the address was wrong."
-          >
-            <Textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              maxLength={2000}
-            />
-          </FormField>
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            maxLength={2000}
+          />
+          {error !== null && (
+            <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
+              <span>{error}</span>
+            </Notice>
+          )}
         </div>
-        {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-        <ModalFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button onClick={() => void submit()} disabled={request.isPending}>
-            {request.isPending
-              ? 'Sending…'
-              : action === 'RTO'
-                ? 'Send it back now'
-                : 'Send request'}
-          </Button>
-        </ModalFooter>
-      </Modal>
-    </Card>
+      </Dialog>
+
+      <ConfirmDialog
+        open={confirmRto}
+        onOpenChange={setConfirmRto}
+        title="Send this parcel back now?"
+        entity={orderNumber ?? 'This order'}
+        entityIsIdentifier={orderNumber !== undefined}
+        consequence="The courier is told straight away and it cannot be undone. The parcel returns to our warehouse, the sale ends, and a return fee applies."
+        confirmLabel="Send it back now"
+        destructive
+        onConfirm={() => submit()}
+      />
+    </OrdSection>
   );
 }

@@ -4,18 +4,12 @@ import type { ReactElement } from 'react';
 import type { OrderChargeView } from '@skydrop/api-client';
 import { useOrderCharges } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
-import {
-  EmptyState,
-  ErrorState,
-  Money,
-  SkeletonRows,
-  TBody,
-  Table,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Receipt } from 'lucide-react';
+import './orders.css';
 
 /**
  * Seller order-charges section (Module 17). Reads from
@@ -45,14 +39,14 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
 
   if (charges.isLoading) {
     return (
-      <div className="p-3">
-        <SkeletonRows rows={4} cols={2} />
+      <div className="ord-card__pad">
+        <SkeletonRows rows={4} cols={2} label="Loading charges…" />
       </div>
     );
   }
   if (charges.isError) {
     return (
-      <div className="p-3">
+      <div className="ord-card__pad">
         <ErrorState
           message={serverVerdict(charges.error, 'Failed to load charges.')}
           retry={() => void charges.refetch()}
@@ -62,8 +56,10 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
   }
   if (!charges.data || charges.data.length === 0) {
     return (
-      <div className="p-3">
+      <div className="ord-card__pad">
         <EmptyState
+          bare
+          icon={<Receipt size={20} />}
           title="No charges persisted yet"
           description="Pricing breakdowns appear here once charges are computed for the order."
         />
@@ -74,7 +70,7 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
   const total = charges.data.reduce((sum, c) => sum + Number(c.totalAmountInr), 0);
 
   return (
-    <Table>
+    <Table caption="Charges">
       <THead>
         <Tr>
           <Th>Charge</Th>
@@ -85,10 +81,14 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
         {charges.data.map((c) => (
           <ChargeRow key={c.id} charge={c} />
         ))}
-        <Tr className="bg-surface-raised">
-          <Td className="text-text-bright font-medium">Total</Td>
-          <Td align="right" className="text-text-bright font-medium">
-            <Money amount={total} />
+        <Tr>
+          <Td>
+            <span className="ord-strong">Total</span>
+          </Td>
+          <Td align="right">
+            <span className="ord-strong">
+              <Money amount={total} />
+            </span>
           </Td>
         </Tr>
       </TBody>
@@ -99,11 +99,11 @@ export function OrderChargesSection({ orderId }: { orderId: string }): ReactElem
 function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
   return (
     <Tr>
-      <Td className="text-text-body">
-        <div className="text-sm">{charge.description ?? humanizeType(charge.type)}</div>
-        <div className="text-text-faint mt-0.5 font-mono text-[11px] tracking-wide uppercase">
+      <Td>
+        <div>{charge.description ?? humanizeType(charge.type)}</div>
+        <span className="ord-sub">
           {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
-        </div>
+        </span>
       </Td>
       <Td align="right">
         <Money amount={charge.totalAmountInr} />

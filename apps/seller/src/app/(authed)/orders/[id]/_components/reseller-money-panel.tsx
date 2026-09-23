@@ -5,22 +5,14 @@ import type { ResellerOrderMoneyView, ResellerPartyCreditView } from '@skydrop/a
 import { ApiError } from '@skydrop/api-client';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import type { StoreWalletEntryDirection, WalletEntryDirection } from '@skydrop/db';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  Money,
-  Section,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Scale } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, THead, TableEmpty, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Facts, OrdSection } from '../../_components/orders-parts';
 import {
   resellerCreditStatusKind,
   resellerCreditStatusLabel,
@@ -90,7 +82,7 @@ function DisputeFiguresAction({ orderId }: { readonly orderId: string }): ReactE
   if (!can(identity, 'tickets.create')) return null;
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+      <Button variant="ghost" size="sm" icon={<Scale size={14} />} onClick={() => setOpen(true)}>
         Raise with the store
       </Button>
       <DisputeFiguresModal open={open} onOpenChange={setOpen} orderId={orderId} />
@@ -116,158 +108,151 @@ export function ResellerMoneyPanel({
   if (!enabled) return null;
   if (money.isLoading) {
     return (
-      <Section title="Reseller store money">
-        <SkeletonRows rows={3} cols={4} />
-      </Section>
+      <OrdSection title="Reseller store money">
+        <SkeletonRows rows={3} cols={4} label="Loading the store money…" />
+      </OrdSection>
     );
   }
   if (money.isError) {
     // A channel order has no reseller money — nothing to show, not an error.
     if (money.error instanceof ApiError && money.error.status === 404) return null;
     return (
-      <Section title="Reseller store money">
+      <OrdSection title="Reseller store money">
         <ErrorState message={serverVerdict(money.error)} retry={() => void money.refetch()} />
-      </Section>
+      </OrdSection>
     );
   }
   const view: ResellerOrderMoneyView | undefined = money.data;
   if (view === undefined) return null;
   const mine = view.parties.find((p) => p.party === 'SELLER');
   return (
-    <Section
+    <OrdSection
       title="Reseller store money"
-      subtitle="Your transfer price for the goods, your share of Skydrop's fees on this order, and when it reaches your wallet."
+      note="Your transfer price for the goods, your share of Skydrop's fees on this order, and when it reaches your wallet."
       action={<DisputeFiguresAction orderId={orderId} />}
     >
-      <Card>
-        <CardBody>
-          {mine === undefined ? (
-            <p className="text-text-muted text-sm">
-              Nothing planned yet — the plan is made when the order is confirmed.
-            </p>
-          ) : (
-            <dl className="grid grid-cols-[minmax(84px,40%)_1fr] gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[200px_1fr] sm:gap-x-6">
-              <dt className="text-text-muted">Status</dt>
-              <dd>
-                <StatusBadge
-                  kind={resellerCreditStatusKind(mine.status)}
-                  label={resellerCreditStatusLabel(mine.status)}
-                />
-              </dd>
-              <dt className="text-text-muted">When</dt>
-              <dd className="text-text-body">{mine.timing}</dd>
-              <dt className="text-text-muted">Date</dt>
-              <dd className="text-text-body">{when(mine)}</dd>
-              {skippedReasonWords(mine.skippedReason) !== null ? (
-                <>
-                  <dt className="text-text-muted">Why</dt>
-                  <dd className="text-text-body">{skippedReasonWords(mine.skippedReason)}</dd>
-                </>
-              ) : null}
-              <dt className="text-text-muted">Transfer price</dt>
-              <dd>
-                <Money amount={mine.grossInr} direction="credit" convert={false} />
-              </dd>
-              <dt className="text-text-muted">Your share of the COD tax</dt>
-              <dd>
-                <Money amount={mine.taxShareInr} direction="debit" convert={false} />
-              </dd>
-              <dt className="text-text-muted">Your share of the COD fee</dt>
-              <dd>
-                <Money amount={mine.codFeeShareInr} direction="debit" convert={false} />
-              </dd>
-              <dt className="text-text-muted">Your share of the Instant Pay fee</dt>
-              <dd>
-                <Money amount={mine.instantFeeShareInr} direction="debit" convert={false} />
-              </dd>
-              <dt className="text-text-muted font-medium">You receive</dt>
-              <dd className="font-medium">
-                <Money amount={mine.netInr} convert={false} />
-              </dd>
-            </dl>
-          )}
-        </CardBody>
-      </Card>
+      <div className="ord-stack">
+        {mine === undefined ? (
+          <p className="ord-p">
+            Nothing planned yet — the plan is made when the order is confirmed.
+          </p>
+        ) : (
+          <Facts
+            items={[
+              {
+                label: 'Status',
+                value: (
+                  <StatusChip
+                    kind={resellerCreditStatusKind(mine.status)}
+                    label={resellerCreditStatusLabel(mine.status)}
+                    size="sm"
+                  />
+                ),
+              },
+              { label: 'When', value: mine.timing },
+              { label: 'Date', value: when(mine) },
+              ...(skippedReasonWords(mine.skippedReason) !== null
+                ? [{ label: 'Why', value: skippedReasonWords(mine.skippedReason) }]
+                : []),
+              {
+                label: 'Transfer price',
+                value: <Money amount={mine.grossInr} direction="credit" convert={false} />,
+              },
+              {
+                label: 'Your share of the COD tax',
+                value: <Money amount={mine.taxShareInr} direction="debit" convert={false} />,
+              },
+              {
+                label: 'Your share of the COD fee',
+                value: <Money amount={mine.codFeeShareInr} direction="debit" convert={false} />,
+              },
+              {
+                label: 'Your share of the Instant Pay fee',
+                value: <Money amount={mine.instantFeeShareInr} direction="debit" convert={false} />,
+              },
+              {
+                label: 'You receive',
+                value: <Money amount={mine.netInr} convert={false} />,
+                total: true,
+              },
+            ]}
+          />
+        )}
 
-      {view.fees.length > 0 ? (
-        <div className="mt-3">
-          <Table>
+        {view.fees.length > 0 ? (
+          <div className="ord-card" data-flush="1">
+            <Table caption="Fees on this order">
+              <THead>
+                <Tr>
+                  <Th>Fee billed</Th>
+                  <Th align="right">Yours</Th>
+                  <Th align="right">Paid by the store</Th>
+                  <Th align="right">Total</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {view.fees.map((f) => (
+                  <Tr key={f.fee}>
+                    <Td>{feeLabel(f.fee)}</Td>
+                    <Td align="right">
+                      <Money amount={f.sellerInr} convert={false} />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={f.storeInr} convert={false} />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={f.totalInr} convert={false} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        ) : null}
+
+        <div className="ord-card" data-flush="1">
+          <Table caption="Your wallet on this order">
             <THead>
               <Tr>
-                <Th>Fee billed</Th>
-                <Th align="right">Yours</Th>
-                <Th align="right">Paid by the store</Th>
-                <Th align="right">Total</Th>
+                <Th>Your wallet on this order</Th>
+                <Th>When</Th>
+                <Th align="right">Amount</Th>
               </Tr>
             </THead>
             <TBody>
-              {view.fees.map((f) => (
-                <Tr key={f.fee}>
-                  <Td>{feeLabel(f.fee)}</Td>
-                  <Td align="right">
-                    <Money amount={f.sellerInr} convert={false} />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={f.storeInr} convert={false} />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={f.totalInr} convert={false} />
-                  </Td>
-                </Tr>
-              ))}
+              {(view.sellerLines ?? []).length === 0 ? (
+                <TableEmpty colSpan={3}>Nothing in your wallet from this order yet.</TableEmpty>
+              ) : (
+                (view.sellerLines ?? []).map((l) => (
+                  <Tr key={l.id}>
+                    <Td>
+                      <div>{walletDirectionLabel(l.direction as WalletEntryDirection)}</div>
+                      {l.note !== null ? <span className="ord-sub">{l.note}</span> : null}
+                    </Td>
+                    <Td>
+                      <span className="sk-figure ord-muted">
+                        {new Date(l.createdAt).toLocaleString()}
+                      </span>
+                    </Td>
+                    <Td align="right">
+                      <Money
+                        amount={l.amountInr.replace(/^-/, '')}
+                        direction={l.amountInr.startsWith('-') ? 'debit' : 'credit'}
+                        convert={false}
+                      />
+                    </Td>
+                  </Tr>
+                ))
+              )}
             </TBody>
           </Table>
         </div>
-      ) : null}
-
-      <div className="mt-3">
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Your wallet on this order</Th>
-              <Th>When</Th>
-              <Th align="right">Amount</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {(view.sellerLines ?? []).length === 0 ? (
-              <Tr>
-                <Td className="text-text-muted" colSpan={3}>
-                  Nothing in your wallet from this order yet.
-                </Td>
-              </Tr>
-            ) : (
-              (view.sellerLines ?? []).map((l) => (
-                <Tr key={l.id}>
-                  <Td>
-                    <div className="text-text-body">
-                      {walletDirectionLabel(l.direction as WalletEntryDirection)}
-                    </div>
-                    {l.note !== null ? (
-                      <div className="text-text-faint text-xs">{l.note}</div>
-                    ) : null}
-                  </Td>
-                  <Td className="text-text-muted text-xs">
-                    {new Date(l.createdAt).toLocaleString()}
-                  </Td>
-                  <Td align="right">
-                    <Money
-                      amount={l.amountInr.replace(/^-/, '')}
-                      direction={l.amountInr.startsWith('-') ? 'debit' : 'credit'}
-                      convert={false}
-                    />
-                  </Td>
-                </Tr>
-              ))
-            )}
-          </TBody>
-        </Table>
         {view.sellerNetInr !== null ? (
-          <p className="text-text-muted mt-2 text-right text-sm">
+          <p className="ord-p ord-row ord-row--end">
             Net to you so far: <Money amount={view.sellerNetInr} convert={false} />
           </p>
         ) : null}
       </div>
-    </Section>
+    </OrdSection>
   );
 }

@@ -6,25 +6,31 @@ import {
   ArrowLeft,
   Download,
   FileSpreadsheet,
+  FileWarning,
   PackagePlus,
   SkipForward,
+  Upload,
   XCircle,
 } from 'lucide-react';
 import type { BulkUploadStatus } from '@skydrop/db';
-import {
-  BandBody,
-  Button,
-  Crumbs,
-  DescriptionList,
-  ErrorNote,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  Skeleton,
-  Stat,
-} from '@skydrop/ui/components';
+import { uploadStatusKind, uploadStatusLabel } from '@skydrop/ui/status';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ParachuteProgress, type ParachuteState } from '@skydrop/ui/app/parachute-progress';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { serverVerdict } from '@/lib/server-verdict';
 import { isOrderImportRunning, useOrderImport } from '@/lib/order-import-hooks';
+import {
+  BackLink,
+  Facts,
+  LinkButton,
+  MetaFact,
+  Notice,
+  OrdSection,
+} from '../../_components/orders-parts';
 
 /**
  * One order CSV import, by id.
@@ -83,6 +89,12 @@ function duration(startedAt: string | null, completedAt: string | null): string 
   return `${Math.floor(secs / 60)}m ${secs % 60}s`;
 }
 
+/** Where the parachute line stands, from the status alone. */
+function runState(status: BulkUploadStatus, running: boolean): ParachuteState {
+  if (running) return 'running';
+  return status === 'FAILED' || status === 'CANCELLED' ? 'failed' : 'done';
+}
+
 export function OrderImportDetail({ importId }: { readonly importId: string }): ReactElement {
   const detail = useOrderImport(importId);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -112,92 +124,117 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
       URL.revokeObjectURL(url);
     } catch (err) {
       setDownloadError(serverVerdict(err, 'Could not download the error report.'));
+      // Re-thrown so the button's label ends on the real outcome; the
+      // verdict above is what the seller reads.
+      throw err;
     }
   }
 
+  // Rows the worker has dealt with so far — made an order, refused, or
+  // skipped as already sent. The same three counts as the tiles.
+  const handled = job === undefined ? 0 : job.ordersCreated + job.rowsFailed + job.rowsSkipped;
+
   return (
-    <div>
-      <Link
-        href="/orders/import"
-        className="text-text-muted hover:text-text-body mb-4 inline-flex items-center gap-1.5 text-xs transition-colors"
-      >
-        <ArrowLeft size={12} /> Bulk order import
-      </Link>
+    <div className="ord-page">
+      <BackLink href="/orders/import" icon={<ArrowLeft size={14} aria-hidden />}>
+        Bulk order import
+      </BackLink>
 
       {detail.isLoading ? (
         // Shaped like the page that is coming — four tiles over a card
         // — so nothing jumps when the numbers land.
-        <div role="status" aria-live="polite" aria-label="Loading import…">
-          <Skeleton className="mb-5 h-6 w-[40%]" />
-          <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="ord-stack" role="status" aria-live="polite" aria-label="Loading import…">
+          <Skeleton width="40%" height={24} />
+          <div className="ord-kpis">
             {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-[86px]" />
+              <Skeleton key={i} height={86} rounded="md" />
             ))}
           </div>
-          <Skeleton className="h-[140px]" />
+          <Skeleton height={140} rounded="md" />
         </div>
       ) : detail.isError ? (
-        <ErrorNote
+        <ErrorState
           message={serverVerdict(detail.error, 'Failed to load this import.')}
           retry={() => void detail.refetch()}
         />
       ) : job === undefined ? (
-        <ErrorNote message="This import could not be found." />
+        <ErrorState message="This import could not be found." />
       ) : (
         <>
           <PageHeader
-            breadcrumb={
-              <Crumbs
-                items={[
-                  { label: 'Seller console' },
-                  { label: 'Fulfilment' },
-                  { label: 'Orders', href: '/orders' },
-                  { label: 'CSV import', href: '/orders/import' },
-                  { label: job.fileName },
-                ]}
-                Link={Link}
-              />
-            }
-            title={<span className="font-mono">{job.fileName}</span>}
+            breadcrumbs={[
+              { label: 'Seller console' },
+              { label: 'Fulfilment' },
+              { label: 'Orders', href: '/orders' },
+              { label: 'CSV import', href: '/orders/import' },
+              { label: job.fileName },
+            ]}
+            Link={Link}
+            title={<span className="sk-ident">{job.fileName}</span>}
             subtitle={outcomeProse(job.status)}
             meta={
-              <>
-                <MetaChip tone="accent">
+              <span className="ord-meta">
+                <StatusChip
+                  kind={uploadStatusKind(job.status)}
+                  label={uploadStatusLabel(job.status)}
+                  pulse={running}
+                  size="sm"
+                />
+                <MetaFact tone="accent">
                   {job.rowCount} {job.rowCount === 1 ? 'row' : 'rows'}
-                </MetaChip>
-                {running && <MetaChip dot>Running now</MetaChip>}
-                {job.rowsFailed > 0 && <MetaChip tone="bad">{job.rowsFailed} refused</MetaChip>}
-              </>
+                </MetaFact>
+                {job.rowsFailed > 0 && <MetaFact tone="bad">{job.rowsFailed} refused</MetaFact>}
+              </span>
             }
           />
 
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat
+          {/* The run itself, drawn from the same record the tiles read.
+              The fill is rows handled over rows in the file; a queued run
+              has handled nothing yet, so it shows no number at all. */}
+          <div className="ord-card">
+            <ParachuteProgress
+              label={`Importing ${job.fileName}`}
+              state={runState(job.status, running)}
+              value={
+                !running
+                  ? 100
+                  : job.status === 'PENDING' || job.rowCount === 0
+                    ? null
+                    : Math.min(100, Math.max(0, (handled / job.rowCount) * 100))
+              }
+              doneLabel="Import finished"
+              failedLabel="Import stopped"
+              detail={`${handled} of ${job.rowCount} ${job.rowCount === 1 ? 'row' : 'rows'} handled`}
+            />
+          </div>
+
+          <div className="ord-kpis">
+            <KpiCard
               label="Rows in file"
-              icon={<FileSpreadsheet size={13} aria-hidden />}
+              icon={<FileSpreadsheet size={14} />}
               value={job.rowCount}
               unit={job.rowCount === 1 ? 'row' : 'rows'}
               tone="neutral"
             />
-            <Stat
+            <KpiCard
               label="Orders created"
-              icon={<PackagePlus size={13} aria-hidden />}
+              icon={<PackagePlus size={14} />}
               value={job.ordersCreated}
               unit={job.ordersCreated === 1 ? 'order' : 'orders'}
-              tone={job.ordersCreated > 0 ? 'good' : 'neutral'}
+              tone={job.ordersCreated > 0 ? 'credit' : 'neutral'}
               hint={running ? 'Still counting.' : undefined}
             />
-            <Stat
+            <KpiCard
               label="Rows refused"
-              icon={<XCircle size={13} aria-hidden />}
+              icon={<XCircle size={14} />}
               value={job.rowsFailed}
               unit={job.rowsFailed === 1 ? 'row' : 'rows'}
-              tone={job.rowsFailed > 0 ? 'bad' : 'neutral'}
+              tone={job.rowsFailed > 0 ? 'debit' : 'neutral'}
               hint={job.rowsFailed > 0 ? 'Listed in the error report.' : undefined}
             />
-            <Stat
+            <KpiCard
               label="Rows skipped"
-              icon={<SkipForward size={13} aria-hidden />}
+              icon={<SkipForward size={14} />}
               value={job.rowsSkipped}
               unit={job.rowsSkipped === 1 ? 'row' : 'rows'}
               tone="neutral"
@@ -209,57 +246,56 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
             />
           </div>
 
-          <div className="mb-4">
-            <SectionBand index="01" title="This run" note="When it ran, and for how long." />
-            <BandBody>
-              <DescriptionList
-                columns={3}
-                items={[
-                  { label: 'Status', value: <span className="uppercase">{job.status}</span> },
-                  { label: 'Uploaded', value: stamp(job.createdAt) },
-                  { label: 'Started', value: stamp(job.startedAt) },
-                  { label: 'Finished', value: stamp(job.completedAt) },
-                  {
-                    label: running ? 'Running for' : 'Took',
-                    value: duration(job.startedAt, job.completedAt),
-                  },
-                  {
-                    label: 'Import ID',
-                    value: <span className="font-mono text-xs break-all">{job.id}</span>,
-                  },
-                ]}
-              />
-            </BandBody>
-          </div>
+          <OrdSection title="This run" note="When it ran, and for how long.">
+            <Facts
+              columns={2}
+              items={[
+                { label: 'Status', value: <span className="sk-ident">{job.status}</span> },
+                { label: 'Uploaded', value: stamp(job.createdAt) },
+                { label: 'Started', value: stamp(job.startedAt) },
+                { label: 'Finished', value: stamp(job.completedAt) },
+                {
+                  label: running ? 'Running for' : 'Took',
+                  value: duration(job.startedAt, job.completedAt),
+                },
+                {
+                  label: 'Import ID',
+                  value: <span className="sk-ident">{job.id}</span>,
+                },
+              ]}
+            />
+          </OrdSection>
 
           {downloadError !== null && (
-            <ErrorNote
-              className="mb-4"
-              message={downloadError}
-              retry={() => void downloadErrorReport()}
-            />
+            <Notice tone="bad" role="alert" icon={<FileWarning size={16} />}>
+              <span>{downloadError}</span>
+            </Notice>
           )}
 
           {/* Every terminal state needs somewhere to go next: the
                   orders this made, the rows it refused, or another file. */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="ord-row">
             {job.errorReportKey !== null && (
-              <Button variant="secondary" size="md" onClick={() => void downloadErrorReport()}>
-                <Download size={12} /> Error report CSV
-              </Button>
+              <AsyncButton
+                variant="secondary"
+                icon={<Download size={14} />}
+                labels={{
+                  idle: 'Error report CSV',
+                  busy: 'Downloading…',
+                  done: 'Downloaded',
+                  error: 'Download failed',
+                }}
+                onAction={() => downloadErrorReport()}
+              />
             )}
             {job.ordersCreated > 0 && (
-              <Link href="/orders">
-                <Button variant="ghost" size="md">
-                  View orders
-                </Button>
-              </Link>
+              <LinkButton href="/orders" variant="ghost">
+                View orders
+              </LinkButton>
             )}
-            <Link href="/orders/import">
-              <Button variant="ghost" size="md">
-                Import another file
-              </Button>
-            </Link>
+            <LinkButton href="/orders/import" variant="ghost" icon={<Upload size={15} />}>
+              Import another file
+            </LinkButton>
           </div>
         </>
       )}

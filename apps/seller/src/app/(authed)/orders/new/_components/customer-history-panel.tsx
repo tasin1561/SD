@@ -3,7 +3,10 @@
 import Link from 'next/link';
 import { Copy } from 'lucide-react';
 import type { ReactElement } from 'react';
-import { Card, CardBody, Skeleton, Button } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import '../../_components/orders.css';
 import { useCustomerLookup, type CustomerOrderSummary } from '@/lib/api-hooks';
 
 /**
@@ -27,23 +30,23 @@ import { useCustomerLookup, type CustomerOrderSummary } from '@/lib/api-hooks';
 const HIGH_RETURN_RATE = 30;
 const ELEVATED_RETURN_RATE = 15;
 
-function rateTone(pct: number): { fg: string; label: string } {
+function rateTone(pct: number): { tone: 'bad' | 'warn' | 'good'; label: string } {
   if (pct >= HIGH_RETURN_RATE) {
-    return { fg: 'var(--status-rto-fg)', label: 'Well above average' };
+    return { tone: 'bad', label: 'Well above average' };
   }
   if (pct >= ELEVATED_RETURN_RATE) {
-    return { fg: 'var(--status-pending-fg)', label: 'Above average' };
+    return { tone: 'warn', label: 'Above average' };
   }
-  return { fg: 'var(--status-delivered-fg)', label: 'Normal' };
+  return { tone: 'good', label: 'Normal' };
 }
 
 function OrderLine({ o }: { readonly o: CustomerOrderSummary }): ReactElement {
   return (
-    <li className="flex items-center justify-between gap-3 py-1">
-      <Link href={`/orders/${o.orderId}`} className="font-mono text-xs hover:underline">
+    <li>
+      <Link href={`/orders/${o.orderId}`} className="ord-link sk-ident">
         {o.orderNumber}
       </Link>
-      <span className="text-text-faint text-xs">
+      <span className="ord-faint">
         {o.status.replaceAll('_', ' ').toLowerCase()} · {new Date(o.placedAt).toLocaleDateString()}
       </span>
     </li>
@@ -69,11 +72,9 @@ export function CustomerHistoryPanel({
 
   if (q.isLoading) {
     return (
-      <Card>
-        <CardBody>
-          <Skeleton className="h-4 w-48" />
-        </CardBody>
-      </Card>
+      <div className="ord-card">
+        <Skeleton width={192} height={16} />
+      </div>
     );
   }
   // A failed lookup must never block order entry — it is advice, not a
@@ -94,101 +95,94 @@ export function CustomerHistoryPanel({
     // mid-form where a plain card reads as more chrome. The accent is
     // the neutral one — a returning customer is not a warning, and the
     // risk tone below is what carries alarm when there is any.
-    <Card className="border-accent/40 bg-accent/5 border">
-      <CardBody className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-text-bright text-sm font-medium">
-            {customerName ?? 'Returning customer'}
+    <div className="ord-history" role="region" aria-label="This customer's history">
+      <div className="ord-row ord-row--between">
+        <span className="ord-strong">{customerName ?? 'Returning customer'}</span>
+        {riskLevel !== 'NONE' && (
+          <StatusChip kind="failed" label={`Flagged ${riskLevel.toLowerCase()}`} size="sm" />
+        )}
+      </div>
+
+      {/* The rate first — it is the only figure that changes a decision. */}
+      {tone !== null && pct !== null ? (
+        <div className="ord-history__rate">
+          <span className="ord-history__pct sk-figure" data-tone={tone.tone}>
+            {platform.returnRatePercent}%
           </span>
-          {riskLevel !== 'NONE' && (
-            <span className="text-critical text-xs font-medium">
-              Flagged {riskLevel.toLowerCase()}
-            </span>
-          )}
+          <span className="ord-p">
+            came back — {platform.returned} of {platform.delivered + platform.returned} delivered
+            attempts
+          </span>
+          <span className="ord-faint">({tone.label})</span>
         </div>
+      ) : (
+        <p className="ord-p">
+          {platform.totalOrders} order{platform.totalOrders === 1 ? '' : 's'} across Skydrop — too
+          few concluded to give a return rate yet.
+        </p>
+      )}
 
-        {/* The rate first — it is the only figure that changes a decision. */}
-        {tone !== null && pct !== null ? (
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-semibold tabular-nums" style={{ color: tone.fg }}>
-              {platform.returnRatePercent}%
-            </span>
-            <span className="text-text-muted text-sm">
-              came back — {platform.returned} of {platform.delivered + platform.returned} delivered
-              attempts
-            </span>
-            <span className="text-text-faint text-xs">({tone.label})</span>
-          </div>
-        ) : (
-          <div className="text-text-muted text-sm">
-            {platform.totalOrders} order{platform.totalOrders === 1 ? '' : 's'} across Skydrop — too
-            few concluded to give a return rate yet.
-          </div>
+      <div className="ord-history__counts">
+        <span>
+          Across Skydrop: {platform.totalOrders} orders · {platform.delivered} delivered ·{' '}
+          {platform.returned} returned
+        </span>
+        <span>
+          With you: {yours.totalOrders} orders · {yours.delivered} delivered · {yours.returned}{' '}
+          returned
+        </span>
+        {platform.refusedOnCall > 0 && (
+          <span>
+            Declined on the confirmation call {platform.refusedOnCall}×{' '}
+            <span className="ord-faint">(no shipping cost)</span>
+          </span>
         )}
+      </div>
 
-        <div className="text-text-muted grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-          <span>
-            Across Skydrop: {platform.totalOrders} orders · {platform.delivered} delivered ·{' '}
-            {platform.returned} returned
-          </span>
-          <span>
-            With you: {yours.totalOrders} orders · {yours.delivered} delivered · {yours.returned}{' '}
-            returned
-          </span>
-          {platform.refusedOnCall > 0 && (
-            <span>
-              Declined on the confirmation call {platform.refusedOnCall}×{' '}
-              <span className="text-text-faint">(no shipping cost)</span>
-            </span>
-          )}
+      {riskNotes !== null && riskNotes.trim().length > 0 && (
+        <p className="ord-quote">{riskNotes}</p>
+      )}
+
+      {yours.recentOrders.length > 0 && (
+        <div>
+          <span className="ord-faint">Your orders to this customer</span>
+          <ul className="ord-mini-list">
+            {yours.recentOrders.slice(0, 5).map((o) => (
+              <OrderLine key={o.orderId} o={o} />
+            ))}
+          </ul>
         </div>
+      )}
 
-        {riskNotes !== null && riskNotes.trim().length > 0 && (
-          <div className="text-text-muted border-border border-l-2 pl-3 text-xs italic">
-            {riskNotes}
-          </div>
-        )}
-
-        {yours.recentOrders.length > 0 && (
-          <div>
-            <div className="text-text-faint mb-1 text-xs">Your orders to this customer</div>
-            <ul className="divide-border divide-y">
-              {yours.recentOrders.slice(0, 5).map((o) => (
-                <OrderLine key={o.orderId} o={o} />
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {last !== null && onUseLastDetails !== undefined && (
-          // Offered only when there IS something to fill: a customer who
-          // has ordered across Skydrop but never from this seller has no
-          // address we may hand over.
-          <div className="border-border/60 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() =>
-                onUseLastDetails({
-                  name: last.name,
-                  addressLine1: last.addressLine1,
-                  addressLine2: last.addressLine2,
-                  landmark: last.landmark,
-                  postalCode: last.postalCode,
-                })
-              }
-            >
-              <Copy size={12} /> Use these delivery details
-            </Button>
-            <span className="text-text-muted text-xs">
-              {last.addressLine1}
-              {last.postalCode === '' ? '' : ` · ${last.postalCode}`} — from {last.fromOrderNumber},{' '}
-              {new Date(last.placedAt).toLocaleDateString('en-IN')}
-            </span>
-          </div>
-        )}
-      </CardBody>
-    </Card>
+      {last !== null && onUseLastDetails !== undefined && (
+        // Offered only when there IS something to fill: a customer who
+        // has ordered across Skydrop but never from this seller has no
+        // address we may hand over.
+        <div className="ord-history__fill">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            icon={<Copy size={14} />}
+            onClick={() =>
+              onUseLastDetails({
+                name: last.name,
+                addressLine1: last.addressLine1,
+                addressLine2: last.addressLine2,
+                landmark: last.landmark,
+                postalCode: last.postalCode,
+              })
+            }
+          >
+            Use these delivery details
+          </Button>
+          <span className="ord-faint">
+            {last.addressLine1}
+            {last.postalCode === '' ? '' : ` · ${last.postalCode}`} — from {last.fromOrderNumber},{' '}
+            {new Date(last.placedAt).toLocaleDateString('en-IN')}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

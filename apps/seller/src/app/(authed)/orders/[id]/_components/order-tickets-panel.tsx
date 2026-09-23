@@ -2,7 +2,13 @@
 
 import Link from 'next/link';
 import { type ReactElement } from 'react';
-import { Card, CardBody, SkeletonRows, TicketStatusBadge } from '@skydrop/ui/components';
+import { LifeBuoy } from 'lucide-react';
+import { ticketStatusKind, ticketStatusLabel } from '@skydrop/ui/status';
+import { ListRow, ListRows } from '@skydrop/ui/app/list-row';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { OrdSection } from '../../_components/orders-parts';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { RaiseTicketModal } from '../../../tickets/_components/raise-ticket-modal';
 
@@ -38,44 +44,42 @@ export function OrderTicketsPanel({
   const rows = tickets.data ?? [];
 
   return (
-    <Card className="mt-4">
-      <CardBody>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium">Issues raised on this order</h2>
-        </div>
-
-        {tickets.isLoading ? (
-          <SkeletonRows rows={2} cols={1} />
-        ) : rows.length === 0 ? (
-          <p className="text-text-muted text-sm">
-            Nothing raised yet. If something is wrong with this parcel, tell us and we will take it
-            up with the courier.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {rows.map((t) => (
-              <li key={t.id}>
-                <Link
-                  href={`/tickets/${t.id}`}
-                  className="border-border hover:border-accent flex flex-wrap items-center gap-2 rounded-lg border p-2 text-sm"
-                >
-                  <TicketStatusBadge status={t.status} />
-                  <span className="flex-1">{t.subject}</span>
-                  <span className="text-text-muted text-xs tabular-nums">
-                    {new Date(t.createdAt).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                    })}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardBody>
+    <OrdSection title="Issues raised on this order">
+      {tickets.isLoading ? (
+        <SkeletonRows rows={2} cols={1} label="Loading issues…" />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          bare
+          icon={<LifeBuoy size={20} />}
+          title="Nothing raised yet"
+          description="If something is wrong with this parcel, tell us and we will take it up with the courier."
+        />
+      ) : (
+        <ListRows label="Issues raised on this order">
+          {rows.map((t) => (
+            <ListRow
+              key={t.id}
+              href={`/tickets/${t.id}`}
+              Link={Link}
+              title={t.subject}
+              status={
+                <StatusChip
+                  kind={ticketStatusKind(t.status)}
+                  label={ticketStatusLabel(t.status)}
+                  size="sm"
+                />
+              }
+              age={new Date(t.createdAt).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+              })}
+            />
+          ))}
+        </ListRows>
+      )}
 
       {/* The order is already known, so it is not asked for again. */}
       <RaiseTicketModal open={raising} onOpenChange={setRaising} orderId={orderId} />
-    </Card>
+    </OrdSection>
   );
 }

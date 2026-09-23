@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
-import { Crumbs, PageHeader } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
 import { EditOrderForm } from './_components/edit-order-form';
 
 /**
@@ -17,20 +17,16 @@ export default async function EditOrderPage({
 }): Promise<ReactElement> {
   const { id } = await params;
   return (
-    <div>
+    <div className="ord-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Fulfilment' },
-              { label: 'Orders', href: '/orders' },
-              { label: 'Order', href: `/orders/${id}` },
-              { label: 'Edit' },
-            ]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Fulfilment' },
+          { label: 'Orders', href: '/orders' },
+          { label: 'Order', href: `/orders/${id}` },
+          { label: 'Edit' },
+        ]}
+        Link={Link}
         title="Edit order"
         subtitle="A draft can be changed in full. Once it is waiting on the call centre, the recipient and the notes are still yours to correct."
       />
