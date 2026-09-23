@@ -2,7 +2,9 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, type ReactElement, type ReactNode } from 'react';
-import { Button, EmptyState, PageHeader } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
 import { canSeePath, permissionForPath, FALLBACK_PATH } from '@/lib/page-access';
 
 /**

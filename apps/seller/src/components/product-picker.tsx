@@ -2,7 +2,8 @@
 
 import { useMemo, useState, type ReactElement } from 'react';
 
-import { Input, Money, ProductThumb } from '@skydrop/ui/components';
+import { Money, ProductThumb } from '@skydrop/ui/components';
+import { TextField } from '@skydrop/ui/app/text-field';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
 import { Check, Minus, Plus, Search, Star, X } from 'lucide-react';
 import { useSetVariantFavourite, useVariantSearch } from '@/lib/api-hooks';
@@ -81,17 +82,12 @@ export function ProductCatalogue({
     <div>
       <div className="flex items-center gap-2 px-4 py-3">
         <div className="relative min-w-0 flex-1">
-          <Search
-            size={15}
-            aria-hidden
-            className="text-text-faint pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2"
-          />
-          <Input
+          <TextField
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by SKU, product name or variant…"
             aria-label="Search the catalogue"
-            className="pl-8"
+            icon={<Search size={15} />}
           />
         </div>
         <button
